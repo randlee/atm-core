@@ -401,6 +401,38 @@ pub fn write_mail_with_runtime(
     prepared.finish_and_mark(runtime, observability)
 }
 
+/// Writes one terminal-provenance message after trusted Herdr escalation
+/// admission has selected its daemon-owned recipient.
+///
+/// Marker construction stays inside `atm-core`; ordinary callers can only
+/// construct unmarked [`WriteRequest`] values and retain normal nudges.
+#[allow(clippy::too_many_arguments)]
+pub fn write_herdr_escalation_mail_with_runtime(
+    home_dir: std::path::PathBuf,
+    team: TeamName,
+    recipient: &str,
+    body: String,
+    summary: String,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<WriteOutcome, AtmError> {
+    let request = WriteRequest::new(
+        home_dir.clone(),
+        home_dir,
+        AgentName::from_validated(boundary::DAEMON_ACTOR_NAME),
+        recipient,
+        team,
+        SendMessageSource::Inline(body),
+        Some(summary),
+        false,
+        None,
+        false,
+    )?
+    .with_internal_daemon_escalation_provenance()
+    .with_nudge_mode(NudgeMode::Deferred);
+    write_mail_with_runtime(request, observability, runtime)
+}
+
 pub fn send_mail_with_runtime(
     request: SendRequest,
     observability: &dyn ObservabilityPort,

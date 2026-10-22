@@ -25,7 +25,10 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::NullObservability;
 use atm_core::protocol::{RuntimeMemberState, RuntimeObservationAvailability};
 use atm_core::schema::AtmMessageId;
-use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+use atm_core::send::{
+    NudgeMode, SendMessageSource, WriteRequest, write_herdr_escalation_mail_with_runtime,
+    write_mail_with_runtime,
+};
 use atm_core::test_support as atm_storage;
 use atm_core::types::{IsoTimestamp, ModelName, TaskId, TeamName};
 use atm_herdr::{
@@ -344,24 +347,12 @@ fn queue_trusted_daemon_escalation_message(
 ) -> AtmMessageId {
     let home = root.join("home");
     std::fs::create_dir_all(&home).expect("home");
-    write_mail_with_runtime(
-        WriteRequest::new(
-            home.clone(),
-            home,
-            atm_core::boundary::DAEMON_ACTOR_NAME
-                .parse()
-                .expect("daemon actor"),
-            &format!("{agent}@{team}"),
-            team.clone(),
-            SendMessageSource::Inline("daemon escalation".to_owned()),
-            Some("escalation:offline_escalated:subject@test-team".to_owned()),
-            false,
-            None,
-            false,
-        )
-        .expect("daemon escalation request")
-        .with_internal_daemon_escalation_provenance()
-        .with_nudge_mode(NudgeMode::Deferred),
+    write_herdr_escalation_mail_with_runtime(
+        home,
+        team.clone(),
+        &format!("{agent}@{team}"),
+        "daemon escalation".to_owned(),
+        "escalation:offline_escalated:subject@test-team".to_owned(),
         &NullObservability,
         runtime,
     )

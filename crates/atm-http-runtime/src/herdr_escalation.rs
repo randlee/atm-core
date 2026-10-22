@@ -13,7 +13,7 @@ use atm_core::boundary::{
 };
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
-use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+use atm_core::send::write_herdr_escalation_mail_with_runtime;
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 use crate::herdr_queue_wake::herdr_request_deadline;
@@ -367,31 +367,16 @@ async fn write_escalation_mail_with_summary(
     let summary = summary.to_owned();
     blocking_bridge
         .run(herdr_request_deadline(), move || {
-            let request = WriteRequest::new(
-                daemon_home.clone(),
+            write_herdr_escalation_mail_with_runtime(
                 daemon_home,
-                DAEMON_ACTOR.clone(),
-                &recipient,
                 team,
-                SendMessageSource::Inline(body),
-                Some(summary),
-                false,
-                None,
-                false,
-            )?
-            // This non-wire marker is set only after Herdr has selected a
-            // daemon-owned escalation recipient. The canonical writer
-            // persists it for queue handoff classification.
-            .with_internal_daemon_escalation_provenance()
-            // Immediate delivery only runs the Inline plan, which never
-            // emits the herdr received hook (that hook is emitted only by
-            // `StorageAndNudgeRouter::emit_received_hook` and by the
-            // queue-wake pump). Deferred sets the durable pending-queue
-            // marker instead, so the pump nudges the recipient's pane on its
-            // next idle pass.
-            .with_nudge_mode(NudgeMode::Deferred);
-            write_mail_with_runtime(request, &NullObservability, &runtime)
-                .map(|outcome| outcome.persisted_message_id())
+                &recipient,
+                body,
+                summary,
+                &NullObservability,
+                &runtime,
+            )
+            .map(|outcome| outcome.persisted_message_id())
         })
         .await
 }

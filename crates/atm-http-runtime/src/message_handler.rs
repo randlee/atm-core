@@ -1408,8 +1408,9 @@ mod tests {
     async fn local_and_peer_use_identical_write_json_and_one_dispatch() {
         let mut request = write_request();
         request.authenticated_source_host = Some("forged.example.test".parse().expect("host"));
-        request = request.with_internal_daemon_escalation_provenance();
-        let body = serde_json::to_vec(&request).expect("typed write JSON");
+        let mut body: serde_json::Value = serde_json::to_value(&request).expect("typed write JSON");
+        body["peer_daemon_escalation_provenance"] = serde_json::Value::Bool(true);
+        let body = serde_json::to_vec(&body).expect("wire-carried marker JSON");
         let response = sent_response();
         let expected = match &response {
             ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) => {
@@ -1446,7 +1447,6 @@ mod tests {
         assert_eq!(peer_response.status(), StatusCode::CREATED);
         assert_eq!(response_body(peer_response).await, expected);
 
-        assert_eq!(body, serde_json::to_vec(&request).expect("same typed JSON"));
         let local_calls = local_calls.lock().expect("local calls");
         let peer_calls = peer_calls.lock().expect("peer calls");
         assert_eq!(local_calls.len(), 1, "local request has one core dispatch");
@@ -1480,8 +1480,10 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn peer_socket_ingress_clears_a_forged_daemon_escalation_carrier() {
-        let request = write_request().with_internal_daemon_escalation_provenance();
-        let body = serde_json::to_vec(&request).expect("typed write JSON");
+        let mut body: serde_json::Value =
+            serde_json::to_value(write_request()).expect("typed write JSON");
+        body["peer_daemon_escalation_provenance"] = serde_json::Value::Bool(true);
+        let body = serde_json::to_vec(&body).expect("wire-carried marker JSON");
         let calls = Arc::new(Mutex::new(Vec::new()));
         let app = canonical_message_router(
             Arc::new(RecordingRouter {

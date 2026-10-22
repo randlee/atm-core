@@ -77,8 +77,8 @@ pub fn preflight_template_send(
 // public entry points so external paths are unchanged.
 pub use crate::write::{
     PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
-    prepare_write_with_runtime, send_mail, send_mail_with_runtime, write_mail,
-    write_mail_with_runtime,
+    prepare_write_with_runtime, send_mail, send_mail_with_runtime,
+    write_herdr_escalation_mail_with_runtime, write_mail, write_mail_with_runtime,
 };
 
 #[cfg(test)]
@@ -310,7 +310,7 @@ impl WriteRequest {
     /// The flag is not represented on the wire; production calls this only
     /// after Herdr has selected a daemon-owned escalation recipient.
     #[must_use]
-    pub fn with_internal_daemon_escalation_provenance(mut self) -> Self {
+    pub(crate) fn with_internal_daemon_escalation_provenance(mut self) -> Self {
         self.daemon_escalation_provenance = true;
         self.peer_daemon_escalation_provenance = true;
         self
