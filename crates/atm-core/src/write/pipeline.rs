@@ -450,20 +450,6 @@ pub fn write_herdr_escalation_mail_with_runtime(
             "Herdr escalation episode must be blocked or offline",
         ));
     }
-    let Some(current) = runtime.roster_ephemeral_state(source_member.team(), source_member.agent())
-    else {
-        return Err(AtmError::validation(
-            "Herdr escalation admission member is absent from the runtime roster",
-        ));
-    };
-    if current.runtime.state != episode_state
-        || current.runtime.state_changed_at != Some(episode_started_at)
-    {
-        return Err(AtmError::validation(
-            "Herdr escalation admission no longer matches the authoritative runtime episode",
-        ));
-    }
-
     let recipient = recipient.parse::<crate::address::AgentAddress>()?;
     if recipient.host().is_some()
         || recipient
@@ -512,7 +498,25 @@ pub fn write_herdr_escalation_mail_with_runtime(
     )?
     .with_internal_daemon_escalation_provenance()
     .with_nudge_mode(NudgeMode::Deferred);
-    write_mail_with_runtime(request, observability, runtime)
+    runtime.with_roster_member_runtime_admission(
+        source_member.team(),
+        source_member.agent(),
+        |current| {
+            let Some(current) = current else {
+                return Err(AtmError::validation(
+                    "Herdr escalation admission member is absent from the runtime roster",
+                ));
+            };
+            if current.runtime.state != episode_state
+                || current.runtime.state_changed_at != Some(episode_started_at)
+            {
+                return Err(AtmError::validation(
+                    "Herdr escalation admission no longer matches the authoritative runtime episode",
+                ));
+            }
+            write_mail_with_runtime(request, observability, runtime)
+        },
+    )
 }
 
 pub fn send_mail_with_runtime(

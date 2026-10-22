@@ -709,6 +709,30 @@ impl LocalServiceRuntime {
         self.roster_runtime.ephemeral_state(team, agent)
     }
 
+    /// Runs a terminal escalation admission while holding the source member's
+    /// roster read guard. Accepted roster observations take the paired write
+    /// guard, preventing a kind or epoch transition from racing the durable
+    /// terminal-marker write.
+    pub(crate) fn with_roster_member_runtime_admission<T>(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        operation: impl FnOnce(Option<RosterMemberEphemeralState>) -> Result<T, AtmError>,
+    ) -> Result<T, AtmError> {
+        let mut operation = Some(operation);
+        let mut outcome = None;
+        self.roster_runtime
+            .with_member_runtime_admission(team, agent, &mut |state| {
+                outcome = Some(operation
+                    .take()
+                    .expect("roster admission operation runs exactly once")(
+                    state
+                ));
+                Ok(())
+            })?;
+        outcome.expect("roster admission operation must run")
+    }
+
     /// Applies a batch of accepted runtime observations to the canonical
     /// ephemeral master-roster record. Missing members produce no outcome.
     pub fn apply_roster_runtime_observations(

@@ -1146,6 +1146,18 @@ pub trait RosterRuntimeMirror: sealed::Sealed + Send + Sync {
         team: &TeamName,
         agent: &AgentName,
     ) -> Option<RosterMemberEphemeralState>;
+    /// Runs one terminal-admission operation while holding the member team's
+    /// roster read guard. Runtime observations and roster replacements take
+    /// the paired write guard, so they cannot change an admitted state or
+    /// epoch before the operation finishes its durable marker write.
+    ///
+    /// The operation must not re-enter this mirror for the same team.
+    fn with_member_runtime_admission(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        operation: &mut dyn FnMut(Option<RosterMemberEphemeralState>) -> Result<(), AtmError>,
+    ) -> Result<(), AtmError>;
     /// Applies one accepted-order batch of runtime observations under the
     /// team's roster lock. Missing members produce no outcome.
     fn apply_runtime_observations(
