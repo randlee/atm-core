@@ -15,7 +15,8 @@ Own `events.py`, `delivery.py`, `test_events.py`, and `test_delivery.py` in the 
 
 1. Implement pure `derive_transitions(snapshot, previous) -> tuple[EventRequest, ...]` for held, dispatch, and alert transitions. Retained held rows carry bead, task, reason, and source timestamp.
 2. Persist and enqueue derived or supplied `EventRequest`s through `enqueue_event_request`; aggregate/debounce by `debounce_key` and preserve delivery history. `enqueue-event --request <json>` is owned here and returns exactly `{version,status,request_id,error}` with `status` `acknowledged` or `rejected`; neither bl-5 nor bl-12 defines that CLI behaviour.
-3. Implement `due_requests(clock)` and `deliver_due(clock, sender)`; only `deliver_due` may invoke sender.
+3. Evaluate, enqueue and fire are separate calls: no single call performs more than one stage. The queue and delivery history are JSON files in the atm-bd state directory; no database is added.
+3a. Implement `due_requests(clock)` and `deliver_due(clock, sender)`; only `deliver_due` may invoke sender.
 4. Persist request identity and attempt state before send. A failed typed sender result remains due for controlled-clock retry; restart recovery reloads it; acknowledged success is persisted before it becomes ineligible for redelivery.
 5. Schedule production ATM delivery from persisted due requests only, using the request recipients, and record each typed outcome. The proposed 60-second delivery cadence/debounce remains a documented proposal pending Rand confirmation; no sender runs on cron/TUI collection.
 
@@ -33,6 +34,8 @@ Own `events.py`, `delivery.py`, `test_events.py`, and `test_delivery.py` in the 
 - [ ] `test_restart_recovers_pending_delivery_request`
 - [ ] `test_acknowledged_success_is_never_redelivered`
 - [ ] `test_due_delivery_uses_persisted_recipients_and_controlled_schedule`
+- [ ] `test_evaluate_enqueue_fire_are_separate_calls`
+- [ ] `test_queue_and_history_are_json_files_no_database`
 
 No source-read or TUI assertion is made here; bl-12 owns collector/TUI no-send integration proof.
 

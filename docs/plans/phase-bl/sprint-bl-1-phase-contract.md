@@ -81,7 +81,7 @@ BD_WINDOW_S = 60; ATM_WINDOW_S = 60; GITHUB_WINDOW_S = 600
 ```
 
 3. Supply versioned round-trip codec fixtures named `collector_record.v1.json`, `state_snapshot.v1.json`, `qa_run.v1.json`, `jev_results.v1.json`, `dag_input.v1.json`, and `event_request.v1.json` for `CollectorRecord`, `StateSnapshot`, held rows, QA/Jev/DAG inputs, `Transition`, and `EventRequest`; registry doubles cover every consumer boundary. bl-2, bl-3, bl-4, bl-5, bl-7, and bl-13 consume these fixture artifacts at their boundary rather than inventing untyped payloads.
-4. `atm_bd_console` is the real Python import path. Plugin scripts never import console implementation modules: they call `atm-bd-console enqueue-event --request <json>` and receive `{"version":1,"status":"acknowledged|rejected","request_id":...,"error":...}`; fixture/CLI tests cover enqueue, sender, and deriver doubles. `DeliveryOutcome.RETRY` is valid only with `RequestState.RETRY`, while `DeliveryOutcome.SENT` requires `RequestState.ACKNOWLEDGED`; the codec rejects every other combination.
+4. `atm_bd_console` is the real Python import path. Plugin scripts never import console implementation modules: they call `atm-bd console enqueue-event --request <json>` and receive `{"version":1,"status":"acknowledged|rejected","request_id":...,"error":...}`; fixture/CLI tests cover enqueue, sender, and deriver doubles. Every persisted type serialises to a JSON file in the atm-bd state directory; no database type exists in the contract. `DeliveryOutcome.RETRY` is valid only with `RequestState.RETRY`, while `DeliveryOutcome.SENT` requires `RequestState.ACKNOWLEDGED`; the codec rejects every other combination.
 
 ## Authoritative acceptance criteria
 

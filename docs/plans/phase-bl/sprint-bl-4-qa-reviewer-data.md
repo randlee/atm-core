@@ -75,7 +75,7 @@ reviewer, which alone verifies the fix):
    filing reviewer first; `finding-bead.json.j2` takes a `reviewers` var.
 3. Step i (close): `bd update <qa bead> --metadata` writes
    `metadata.reviewers[]` with each reviewer's finding bead ids; a reviewer
-   whose findings did not survive triage has `findings: []`.
+   whose findings did not survive triage has `findings: []`. These per-reviewer entries feed the bottom-pane reviewer rows (status icon and elapsed) that bl-7 renders, and each finding bead lists its contributing reviewers once, so a shared finding appears once.
 
 ## Authoritative acceptance criteria
 

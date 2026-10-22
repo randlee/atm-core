@@ -14,6 +14,8 @@ Own `runs.py`, `icons.py`, and their tests. It presents persisted Quality/Jev da
 1. Keep the aligned Quality/Sanity table: time, sprint, result, elapsed, dev, reviewer status; preserve reviewer selection, contributors, filing reviewer, typed details, and `nf-fa-ban` API failure glyph.
 2. Render the never-loaded text exactly `Open QA runs: not loaded yet`; distinguish a Sanity API failure from an ordinary `no` result and from absent metadata.
 3. Implement #347's 60/40 two-panel layout: the most-recent QA run is the upper pane; selecting a run exposes reviewer status at lower left and rendered Markdown findings at lower right.
+4. `icons.py` returns one fixed icon per agent type regardless of harness or model: qa U+F029B (#4A5AF8 running, #2EA043 pass, #F85149 fail) and sanity U+F01A6 (#E551BA); model icons match the lower-case name by contains over sol, luna, terra, astra, haiku, sonnet, opus, fable, with fallback sonnet for claude-code and terra for codex-cli.
+5. The Sanity line has a pass/fail column and an elapsed column each for Jev and LLM plus a dev name-and-icon column, newest run on top; the Quality line has a status and elapsed column per reviewer and for the dev checked, with no vertical-bar separators; the detail view shows the retry count only for an API-busy error (at most three retries).
 
 ## Authoritative acceptance criteria
 
@@ -27,7 +29,9 @@ Own `runs.py`, `icons.py`, and their tests. It presents persisted Quality/Jev da
 - [ ] `test_quality_two_panel_60_40_layout`
 - [ ] `test_quality_selection_renders_markdown_findings_in_lower_right`
 - [ ] `test_quality_no_vertical_bars`
-- [ ] `test_jev_detail_shows_typed_error_and_retry_count`
+- [ ] `test_jev_detail_shows_typed_error_and_retry_count` (asserts a retry count for API-busy and none for other errors)
+- [ ] `test_icons_fixed_per_agent_type_and_model_contains_rule`
+- [ ] `test_sanity_line_columns_jev_llm_dev`
 
 ## Authoritative validation
 ```bash

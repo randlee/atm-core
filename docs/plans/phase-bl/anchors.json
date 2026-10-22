@@ -974,6 +974,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-2",
+          "reason": "bl-2 is the Jev client and sc-sanity-jev prompt; console agent icons belong to bl-7",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "qa/sanity agent icons are console rendering, not reviewer metadata",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; agent icons are rendered by bl-7",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-2",
+          "reason": "bl-2 is the Jev client and sc-sanity-jev prompt; console agent icons belong to bl-7"
+        },
+        {
+          "item": "bl-4",
+          "reason": "qa/sanity agent icons are console rendering, not reviewer metadata"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; agent icons are rendered by bl-7"
         }
       ]
     },
@@ -1091,6 +1126,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:25:59+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -1136,6 +1184,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:25:59+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -1199,6 +1260,52 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:04+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines QaState only; QA icon rendering lands in the console render sprints",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-2",
+          "reason": "bl-2 is the Jev client; QA agent icon colours are console work",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "QA agent icon colours are console rendering owned by bl-7",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:59+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines QaState only; QA icon rendering lands in the console render sprints"
+        },
+        {
+          "item": "bl-2",
+          "reason": "bl-2 is the Jev client; QA agent icon colours are console work"
+        },
+        {
+          "item": "bl-4",
+          "reason": "QA agent icon colours are console rendering owned by bl-7"
+        },
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -1326,6 +1433,34 @@
           "item": "atm-bj-3",
           "reason": "bj-3 ships agent prompts for sanity-stack and dev-sanity; it does not name, install or run any atm-bd subcommand",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-2",
+          "reason": "bl-2 does not touch the atm-bd-console command or the atm-bd console subcommand",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "the atm-bd console subcommand is not touched by reviewer metadata",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 neither adds nor invokes an atm-bd subcommand or the old atm-bd-console command",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:15+00:00",
+          "event": "excluded",
+          "item": "bl-10",
+          "reason": "bl-10 derives problem records over codec fixtures and does not touch the atm-bd console command",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1340,6 +1475,22 @@
         {
           "item": "atm-bj-3",
           "reason": "bj-3 ships agent prompts for sanity-stack and dev-sanity; it does not name, install or run any atm-bd subcommand"
+        },
+        {
+          "item": "bl-2",
+          "reason": "bl-2 does not touch the atm-bd-console command or the atm-bd console subcommand"
+        },
+        {
+          "item": "bl-4",
+          "reason": "the atm-bd console subcommand is not touched by reviewer metadata"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 neither adds nor invokes an atm-bd subcommand or the old atm-bd-console command"
+        },
+        {
+          "item": "bl-10",
+          "reason": "bl-10 derives problem records over codec fixtures and does not touch the atm-bd console command"
         }
       ]
     },
@@ -1402,6 +1553,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:25:26+00:00",
+          "event": "excluded",
+          "item": "bl-7",
+          "reason": "icon-left-of-name placement across console views is composed in bl-12",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:59+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-7",
+          "reason": "icon-left-of-name placement across console views is composed in bl-12"
+        },
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -1555,6 +1730,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "sanity agent icon is console rendering, not reviewer metadata",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:59+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-4",
+          "reason": "sanity agent icon is console rendering, not reviewer metadata"
+        },
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -1629,12 +1828,23 @@
           "item": "atm-bi-5.group-anc-f1",
           "reason": "two-entry icon fix (conflict, CI fail) under bi-5; it touches no bead-status icon; ANC-027 is judged on bi-5 itself (satisfied 2026-10-18); the plan gate returned an unstable near-threshold verdict on this item",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:59+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bi-5.group-anc-f1",
           "reason": "two-entry icon fix (conflict, CI fail) under bi-5; it touches no bead-status icon; ANC-027 is judged on bi-5 itself (satisfied 2026-10-18); the plan gate returned an unstable near-threshold verdict on this item"
+        },
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -1708,6 +1918,13 @@
           "item": "atm-bj-1",
           "reason": "bj-1 edits the close hook script and its templates and renders no bead, sprint, PR or CI state in the console; ANC-028 scope is console rendering (relevance no at 0.56 and 0.79, leaning not_applicable, same applicability-noise class as the other phase-bi exclusions)",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:00+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1718,6 +1935,10 @@
         {
           "item": "atm-bj-1",
           "reason": "bj-1 edits the close hook script and its templates and renders no bead, sprint, PR or CI state in the console; ANC-028 scope is console rendering (relevance no at 0.56 and 0.79, leaning not_applicable, same applicability-noise class as the other phase-bi exclusions)"
+        },
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -1814,6 +2035,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:00+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -1956,12 +2190,23 @@
           "item": "atm-bj-1",
           "reason": "BJ-1 does not own console PR status-table rendering; it changes only the close hook and its templates.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:00+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-1",
           "reason": "BJ-1 does not own console PR status-table rendering; it changes only the close hook and its templates."
+        },
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -2014,12 +2259,34 @@
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:04+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 ships no status-table rendering",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:26+00:00",
+          "event": "excluded",
+          "item": "bl-7",
+          "reason": "unknown-member glyph belongs to the markdown status table in bl-6",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 ships no status-table rendering"
+        },
+        {
+          "item": "bl-7",
+          "reason": "unknown-member glyph belongs to the markdown status table in bl-6"
         }
       ]
     },
@@ -2072,6 +2339,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:00+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -2124,12 +2404,23 @@
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:00+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
+        },
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -2183,6 +2474,19 @@
             "statement"
           ],
           "previous_statement": "The status table's ci cell must hold exactly one icon, pass, fail, running or none, for the sprint's shown PR head: pass U+F062C #2EA043, running U+F0898 #58A6FF, none U+F01D8 #2D81E0 only when no CI run exists for that head, and fail per ANC-030."
+        },
+        {
+          "at": "2026-10-22T07:26:00+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -2374,12 +2678,34 @@
           "item": "atm-bj-4",
           "reason": "the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:26+00:00",
+          "event": "excluded",
+          "item": "bl-7",
+          "reason": "status-table header and alignment row belong to bl-6",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:00+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-4",
           "reason": "the status table and its markdown export are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
+        },
+        {
+          "item": "bl-7",
+          "reason": "status-table header and alignment row belong to bl-6"
+        },
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -2432,12 +2758,23 @@
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:26+00:00",
+          "event": "excluded",
+          "item": "bl-7",
+          "reason": "markdown status table rendering is owned by bl-6",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
+        },
+        {
+          "item": "bl-7",
+          "reason": "markdown status table rendering is owned by bl-6"
         }
       ]
     },
@@ -2483,6 +2820,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:01+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -2891,6 +3241,48 @@
           "item": "atm-bj-1",
           "reason": "BJ-1 does not own cached console error logging or PR display; its scope is the close hook.",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 ships no logging; failure logging lands in bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-2",
+          "reason": "bl-2 plans no logging of failures or cached sheet status",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 does not touch per-tick error collection in the model or runner",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:07+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "failure logging is owned by bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:27+00:00",
+          "event": "excluded",
+          "item": "bl-7",
+          "reason": "failure logging is owned by bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:01+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "failure logging is owned by bl-8",
+          "replaced": true
         }
       ],
       "exclude": [
@@ -2905,6 +3297,26 @@
         {
           "item": "atm-bj-1",
           "reason": "BJ-1 does not own cached console error logging or PR display; its scope is the close hook."
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 ships no logging; failure logging lands in bl-8"
+        },
+        {
+          "item": "bl-2",
+          "reason": "bl-2 plans no logging of failures or cached sheet status"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 does not touch per-tick error collection in the model or runner"
+        },
+        {
+          "item": "bl-7",
+          "reason": "failure logging is owned by bl-8"
+        },
+        {
+          "item": "bl-6",
+          "reason": "failure logging is owned by bl-8"
         }
       ]
     },
@@ -2950,6 +3362,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; GitHub poll interval and paging are collector behaviour owned by bl-8",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; GitHub poll interval and paging are collector behaviour owned by bl-8"
         }
       ]
     },
@@ -3009,6 +3434,13 @@
           "item": "atm-bj-3",
           "reason": "atm-bd's GitHub quota read is atm-bd tool code; bj-3 edits agent prompts only",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; GitHub quota guard is collector behaviour owned by bl-8",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -3019,6 +3451,10 @@
         {
           "item": "atm-bj-3",
           "reason": "atm-bd's GitHub quota read is atm-bd tool code; bj-3 edits agent prompts only"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; GitHub quota guard is collector behaviour owned by bl-8"
         }
       ]
     },
@@ -3071,12 +3507,30 @@
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:07+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "agent task rows are owned by the console app composition in bl-12",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:01+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)",
+          "replaced": true
         }
       ],
       "exclude": [
         {
           "item": "atm-bj-4",
           "reason": "the status table, the dashboard task rows and their icons are phase-bi code that bj-4 does not edit; the runs tabs are two new panes"
+        },
+        {
+          "item": "bl-6",
+          "reason": "status-table cell and icon definitions are unchanged by phase-bl; bl-6 changes only header, age and show rendering (icons.py is bl-7)"
         }
       ]
     },
@@ -5303,6 +5757,20 @@
           "item": "atm-bj-2",
           "reason": "the runs pages and the sanity ledger are bj-4; bj-2 ships the stack bead schema and the pour only",
           "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "console runs pages are bl-7",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; sanity/quality run pages are bl-5 data and bl-7 rendering",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -5313,6 +5781,14 @@
         {
           "item": "atm-bj-2",
           "reason": "the runs pages and the sanity ledger are bj-4; bj-2 ships the stack bead schema and the pour only"
+        },
+        {
+          "item": "bl-4",
+          "reason": "console runs pages are bl-7"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; sanity/quality run pages are bl-5 data and bl-7 rendering"
         }
       ]
     },
@@ -7026,6 +7502,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "the Jev busy-retry rule is owned by the Jev client in bl-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; the Jev busy-retry rule is owned by the Jev client in bl-2",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-5",
+          "reason": "the Jev busy-retry rule is owned by the Jev client in bl-2"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; the Jev busy-retry rule is owned by the Jev client in bl-2"
         }
       ]
     },
@@ -7071,6 +7571,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 types the persisted artifacts; stage separation behaviour is owned by bl-3, bl-8 and proven in bl-12",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 emits a request through the enqueue seam; stage separation is owned by bl-3 and proven in bl-12",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 types the persisted artifacts; stage separation behaviour is owned by bl-3, bl-8 and proven in bl-12"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 emits a request through the enqueue seam; stage separation is owned by bl-3 and proven in bl-12"
         }
       ]
     },
@@ -7116,6 +7640,59 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "bl-4 writes bead metadata via bd update; state-directory JSON persistence is bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:07+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 only reads persisted state; persistence is owned by bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:15+00:00",
+          "event": "excluded",
+          "item": "bl-10",
+          "reason": "bl-10 is pure in-memory derivation over fixtures and persists nothing",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:27+00:00",
+          "event": "excluded",
+          "item": "bl-7",
+          "reason": "bl-7 only presents persisted data; persistence is bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:01+00:00",
+          "event": "excluded",
+          "item": "bl-6",
+          "reason": "bl-6 only reads persisted state; persistence is bl-8",
+          "replaced": true
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-4",
+          "reason": "bl-4 writes bead metadata via bd update; state-directory JSON persistence is bl-8"
+        },
+        {
+          "item": "bl-10",
+          "reason": "bl-10 is pure in-memory derivation over fixtures and persists nothing"
+        },
+        {
+          "item": "bl-7",
+          "reason": "bl-7 only presents persisted data; persistence is bl-8"
+        },
+        {
+          "item": "bl-6",
+          "reason": "bl-6 only reads persisted state; persistence is bl-8"
         }
       ]
     },
@@ -7161,6 +7738,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:04+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 only types EventSender; sending on a schedule is bl-3",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "bl-5 only enqueues an EventRequest via the seam; delivery scheduling is bl-3",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 only types EventSender; sending on a schedule is bl-3"
+        },
+        {
+          "item": "bl-5",
+          "reason": "bl-5 only enqueues an EventRequest via the seam; delivery scheduling is bl-3"
         }
       ]
     },
@@ -7206,6 +7807,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:07+00:00",
+          "event": "excluded",
+          "item": "bl-5",
+          "reason": "debounce and aggregation are owned by bl-3",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; debounce and aggregation are bl-3",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-5",
+          "reason": "debounce and aggregation are owned by bl-3"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; debounce and aggregation are bl-3"
         }
       ]
     },
@@ -7251,6 +7876,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; transition-based request raising is bl-3 and bl-10",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; transition-based request raising is bl-3 and bl-10"
         }
       ]
     },
@@ -7296,6 +7934,41 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-3",
+          "reason": "bl-3 owns event dispatch and does not implement collectors; bl-8 owns them",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:16+00:00",
+          "event": "excluded",
+          "item": "bl-10",
+          "reason": "collector modules, rate limits and timeouts are owned by bl-8; bl-10 only derives from persisted records",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; separate collector modules are bl-8",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-3",
+          "reason": "bl-3 owns event dispatch and does not implement collectors; bl-8 owns them"
+        },
+        {
+          "item": "bl-10",
+          "reason": "collector modules, rate limits and timeouts are owned by bl-8; bl-10 only derives from persisted records"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; separate collector modules are bl-8"
         }
       ]
     },
@@ -7386,6 +8059,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; cron/console equal collection is composed and proven in bl-12",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; cron/console equal collection is composed and proven in bl-12"
         }
       ]
     },
@@ -7476,6 +8162,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:25:16+00:00",
+          "event": "excluded",
+          "item": "bl-10",
+          "reason": "refresh accounting and last_success belong to bl-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:14+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; refresh accounting is bl-8",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-10",
+          "reason": "refresh accounting and last_success belong to bl-8"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; refresh accounting is bl-8"
         }
       ]
     },
@@ -7521,6 +8231,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "cron status printing is not contract types; it lands in bl-12",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "cron status printing is not contract types; it lands in bl-12"
         }
       ]
     },
@@ -7566,6 +8289,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:25:16+00:00",
+          "event": "excluded",
+          "item": "bl-10",
+          "reason": "retaining last-good data and its age is owned by bl-8 and displayed by bl-12",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:26:15+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; last-good retention is bl-8 and its display is bl-6",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-10",
+          "reason": "retaining last-good data and its age is owned by bl-8 and displayed by bl-12"
+        },
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; last-good retention is bl-8 and its display is bl-6"
         }
       ]
     },
@@ -7656,6 +8403,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:15+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; reviewer rows are rendered by bl-7",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; reviewer rows are rendered by bl-7"
         }
       ]
     },
@@ -7701,6 +8461,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:15+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; reviewer findings rendering is bl-7",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; reviewer findings rendering is bl-7"
         }
       ]
     },
@@ -7746,6 +8519,30 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bead writing by quality-mgr is outside the contract types; bl-4 owns it",
+          "replaced": false
+        },
+        {
+          "at": "2026-10-22T07:25:27+00:00",
+          "event": "excluded",
+          "item": "bl-7",
+          "reason": "quality-mgr writing reviewer metadata is bl-4; bl-7 only reads it",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bead writing by quality-mgr is outside the contract types; bl-4 owns it"
+        },
+        {
+          "item": "bl-7",
+          "reason": "quality-mgr writing reviewer metadata is bl-4; bl-7 only reads it"
         }
       ]
     },
@@ -7791,6 +8588,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-2",
+          "reason": "bl-2 draws nothing in the console, DAG or atm-bd show; icon colouring is bl-6, bl-7 and bl-13",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-2",
+          "reason": "bl-2 draws nothing in the console, DAG or atm-bd show; icon colouring is bl-6, bl-7 and bl-13"
         }
       ]
     },
@@ -7836,6 +8646,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:15+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; DAG cell content is bl-13",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; DAG cell content is bl-13"
         }
       ]
     },
@@ -7881,6 +8704,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:05+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "outline colour is DAG rendering, owned by bl-13",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "outline colour is DAG rendering, owned by bl-13"
         }
       ]
     },
@@ -7926,6 +8762,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:26:15+00:00",
+          "event": "excluded",
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; DAG ready/blocked icons are bl-13",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-1",
+          "reason": "bl-1 defines contract types only; DAG ready/blocked icons are bl-13"
         }
       ]
     },
@@ -8016,6 +8865,19 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-22T07:24:06+00:00",
+          "event": "excluded",
+          "item": "bl-4",
+          "reason": "Quality tab rendering is the bl-7 console half; bl-4 only produces metadata.reviewers",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "bl-4",
+          "reason": "Quality tab rendering is the bl-7 console half; bl-4 only produces metadata.reviewers"
         }
       ]
     }

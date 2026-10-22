@@ -9,7 +9,7 @@ Own `agents/dev-sanity.md`, `templates/dev-sanity-template.xml.j2`, `templates/s
 
 ## Authoritative deliverables
 
-1. Pack context for the LLM and write the `JevRequest[]` array into `dev-sanity.md`; persist the exact JSONL/result array in the sanity-run log with typed error context (#365, #497).
+1. Pack context for the LLM and write the `JevRequest[]` array into `dev-sanity.md`; persist the exact JSONL/result array in the sanity-run log with typed error context (#365, #497). Each record is a JSON file in the atm-bd state directory (no database) carrying pass/fail, separate Jev and LLM elapsed, and the dev name and icon, so the sanity-runs page can render them.
 2. Select deterministic sanity transitions and emit a contract-codec `EventRequest` through the named `enqueue_event_request` seam; bl-12 proves its arrival in bl-3's durable queue.
 3. Fold bl-11 mechanics here: `sanity-stack-link` records the stack/rebase link, and `atm-task-close.py` makes a not-reproducible close explicit, auditable, and linked (#498, #126); this sprint consumes only the sole DAG at `docs/plans/phase-bl/phase-bl.jsonl`.
 4. Apply D5 mechanically: `select_iteration(iteration, deliverable_id, jev_lines, llm) -> SelectedEvaluation | IterationFailure | TriageRoute`. Jev unavailable uses LLM; at iteration 1 either negative response fails; later negative routes sanity-agent triage. Records retain ordered arrays, reject unknown error kinds, and sum only numeric elapsed/retry values.
@@ -29,6 +29,7 @@ Own `agents/dev-sanity.md`, `templates/dev-sanity-template.xml.j2`, `templates/s
 - [ ] `test_d5_selection_is_mechanical_from_current_state`
 - [ ] `test_record_round_trips_ordered_arrays_and_closed_error_kinds`
 - [ ] `test_numeric_elapsed_and_retry_summing_ignores_non_numeric_fields`
+- [ ] `test_sanity_record_is_json_file_with_pass_fail_elapsed_and_dev`
 
 Tests use saved records and a fake enqueue/close seam; no live daemon, sleep, or race.
 

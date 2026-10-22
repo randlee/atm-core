@@ -11,7 +11,9 @@ Own `render.py`, `status.py`, `show.py`, their tests, and console README. Render
 
 1. Render header/status from persisted `content_at`, carried age, oldest typed error, and never-read state.
 2. Tick time cannot make carried content fresh: fresh data has no carried age, carried data retains its carried-since status. Render members-source failure as `agents unavailable` with its typed reason.
-3. `show.py` emits ANSI only on a TTY and plain text otherwise; document Nerd Font Mono alignment.
+3. `show.py` emits each icon in its anchored colour as ANSI only on a TTY and plain text otherwise; document Nerd Font Mono alignment.
+4. An unknown member (unknown sprint, ci or pr state, or GitHub data off, rate-limited or truncated) renders as `?` in #2D81E0, never as the no-PR dash or ci none glyph.
+5. Rendering the same snapshot twice yields byte-identical Markdown table output.
 
 > "if you don't have valid data, don't force an error."
 
@@ -27,6 +29,8 @@ Own `render.py`, `status.py`, `show.py`, their tests, and console README. Render
 - [ ] `test_status_bar_carried_since`
 - [ ] `test_show_ansi_on_tty_plain_otherwise`
 - [ ] `test_readme_documents_nerd_font_mono_alignment`
+- [ ] `test_unknown_member_renders_question_mark_in_2d81e0`
+- [ ] `test_markdown_table_render_is_byte_identical_twice`
 
 ## Authoritative validation
 ```bash

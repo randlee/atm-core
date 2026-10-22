@@ -15,10 +15,11 @@ Own `refresh.py`, `state.py`, `adapters/{bd,atm,github}.py`, `cli.py`, `command.
 
 ## Authoritative deliverables
 
-1. Implement sole source reads in `adapters/{__init__,bd,atm,github}.py`, with atomic persisted JSON `CollectorRecord`s and short nonblocking per-source locks. Due windows are BD/dolt 60 seconds, ATM 60 seconds, GitHub 600 seconds; only successful data advances `last_success`.
-2. Implement `build_snapshot(records, clock, derive_problem_records) -> StateSnapshot` in `state.py`. It calls bl-10's pure fixture/codec-backed `derive_problem_records` seam, carries last-good data and typed reason, derives oldest valid `content_at`, and labels never-read state.
+1. Implement sole source reads in `adapters/{__init__,bd,atm,github}.py`, with atomic persisted JSON `CollectorRecord`s and short nonblocking per-source locks. Due windows are BD/dolt 60 seconds, ATM 60 seconds, GitHub 600 seconds; only successful data advances `last_success`. The GitHub window is configurable in repository configuration and on the command line; `github.py` reads live quota via `gh api rate_limit` before each refresh, skips below the configured threshold (default 50 percent) keeping cached data with a paused status, fetches up to 100 PRs per GraphQL page with few fields and pages past 100 without dropping PRs.
+2. Implement `build_snapshot(records, clock, derive_problem_records) -> StateSnapshot` in `state.py`. It calls bl-10's pure fixture/codec-backed `derive_problem_records` seam, carries last-good data and typed reason, derives oldest valid `content_at`, and labels never-read state. It reads only persisted records and writes only the `StateSnapshot`; collection writes only `CollectorRecord`s and event firing is the later bl-3 stage, so no call performs more than one stage; `build_snapshot` raises no event request because a run read fresh data.
 3. Implement `r` as a force request: it bypasses only due eligibility, respects an existing source lock and consumes its result without a second query; success restarts only that source timer and failure remains due.
-4. Keep D1 deadline input gated in `command.py`: only the Rand-supplied D1 value permits command dispatch; D2/#492 remains open and no value is invented.
+4. When cron skips collection because no source is due, `cli.py` prints the same status information built from the persisted snapshot as when it collected.
+5. Keep D1 deadline input gated in `command.py`: only the Rand-supplied D1 value permits command dispatch; D2/#492 remains open and no value is invented.
 
 ## Authoritative acceptance criteria
 
@@ -33,6 +34,9 @@ Own `refresh.py`, `state.py`, `adapters/{bd,atm,github}.py`, `cli.py`, `command.
 - [ ] `test_command_and_each_adapter_rejects_missing_or_non_d1_deadline`
 - [ ] `test_atomic_record_and_snapshot_persistence`
 - [ ] `test_atomic_record_replacement_returns_last_good_snapshot`
+- [ ] `test_each_call_performs_one_stage_only`
+- [ ] `test_github_window_configurable_quota_pause_and_paging_past_100`
+- [ ] `test_cron_skipped_collection_prints_same_status_from_snapshot`
 
 Tests inject clocks, storage, source responses, locks, and the derivation function; no test uses sleep, scheduling, load, or a live source.
 

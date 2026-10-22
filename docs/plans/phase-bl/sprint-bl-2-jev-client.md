@@ -145,7 +145,7 @@ terminated; no surrounding array):
    `Retry-After` through the injected `sleep`. A connection or timeout error
    raises `TRANSPORT` at once (today it is retried, `:172-175`). Any other
    non-200 raises `HTTP_REJECTED`; 413 raises `CONTEXT_TOO_LARGE`. The busy
-   budget exhausted raises `BUSY_EXHAUSTED`. `OUT_OF_TOKENS` is emitted only when Jev returns its documented
+   budget exhausted raises `BUSY_EXHAUSTED`; at most three busy retries are made (`MAX_JEV_ATTEMPTS` 4), and only API-busy statuses count as retries. `OUT_OF_TOKENS` is emitted only when Jev returns its documented
    `out_of_tokens` response code; the recorded response fixture defines that
    mapping and the PR cites it.
 3. **Delete Python splitting (#497).** Remove `split_request`,

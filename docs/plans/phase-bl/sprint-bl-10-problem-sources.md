@@ -17,7 +17,7 @@ Own only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_b
 
 1. Implement `derive_problem_records(records) -> tuple[ActionableProblem, ...]`, a pure decoder/deriver over bl-1 JSON fixtures. bl-8 passes it into `build_snapshot`; therefore `StateSnapshot.problems` is populated from failed/superseded-check fixtures without a plugin-to-console implementation import.
 2. Preserve latest non-cancelled-check selection, direct-branch then sprint-container fallback, sprint labels, and `--exclude-label anchor` in pure `problem_sources.py` helpers.
-3. Preserve typed source failure as source status, never an invented actionable problem.
+3. Preserve typed source failure as source status, never an invented actionable problem. `derive_problem_records` is the evaluation stage only: it reads persisted collector records, returns problems for persistence, and raises no ATM message request (transition-based firing from persisted state is bl-3).
 
 ## Authoritative acceptance criteria
 
@@ -26,6 +26,7 @@ Own only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_b
 - [ ] `test_sprint_labels_and_anchor_exclusion_are_preserved`
 - [ ] `test_failed_source_decodes_to_typed_status_not_forced_problem`
 - [ ] `test_derive_problem_records_is_pure_over_contract_fixture`
+- [ ] `test_derive_problem_records_raises_no_event_request`
 
 Use fixture JSON and pure functions only; run plugin pytest/lint with no network, clock, or source reads.
 
