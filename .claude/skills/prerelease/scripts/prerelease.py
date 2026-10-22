@@ -22,7 +22,7 @@ from typing import Any, Sequence
 
 STABLE_VERSION_PARTS = 3
 ARCHIVE_WORKFLOW = "prerelease-archive.yml"
-ARCHIVE_WAIT_SECONDS = 20 * 60
+ARCHIVE_WAIT_SECONDS = 60 * 60
 ARCHIVE_POLL_SECONDS = 60
 
 

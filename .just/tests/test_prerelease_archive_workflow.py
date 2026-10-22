@@ -152,7 +152,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
 
         sleep.assert_not_called()
 
-    def test_wait_for_archive_raises_after_twenty_minutes_without_real_sleep(self) -> None:
+    def test_wait_for_archive_raises_after_sixty_minutes_without_real_sleep(self) -> None:
         prerelease = prerelease_script()
         clock = [0.0]
         sleeps: list[float] = []
@@ -171,12 +171,12 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 SystemExit,
-                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.17 after 20.0 minutes",
+                "timed out waiting for prerelease-archive.yml for prerelease/v1.5.17 after 60.0 minutes",
             ):
                 prerelease.wait_for_archive("prerelease/v1.5.17", "source-sha")
 
-        self.assertEqual(clock, [20 * 60])
-        self.assertEqual(sleeps, [60] * 20)
+        self.assertEqual(clock, [60 * 60])
+        self.assertEqual(sleeps, [60] * 60)
 
     def test_consumer_input_is_the_prerelease_manifest_source_of_truth(self) -> None:
         root = discover_repo_root()
@@ -391,6 +391,13 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertIn("concurrent run converged", workflow)
         self.assertNotIn('gh release upload "$tag" --clobber', workflow)
         self.assertNotIn("randlee/atm-core", workflow)
+        release_step = workflow.split(
+            "      - name: Generate checksums and publish GitHub prerelease assets\n", 1
+        )[1]
+        self.assertRegex(release_step, r"find assets/hermes-atm-wheels-\*.*atm_graft\*\.whl")
+        self.assertRegex(release_step, r"find assets/hermes-atm-wheels-\*.*atm_query\*\.whl")
+        self.assertRegex(release_step, r"find assets/hermes-atm-wheels-linux-x86_64.*hermes_atm\*\.whl")
+        self.assertNotRegex(release_step, r"assets/hermes-atm-wheels-linux-x86_64.*atm_query")
 
     def test_checksums_are_an_explicit_github_release_asset(self) -> None:
         workflow = workflow_text("prerelease-archive.yml")
