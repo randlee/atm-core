@@ -21,6 +21,7 @@ from enum import Enum
 from typing import Any, Mapping, Protocol
 
 class SourceErrorKind(str, Enum): TIMEOUT = "timeout"; RATE_LIMIT = "rate_limit"; API_FAILURE = "api_failure"
+class RequestState(str, Enum): PENDING = "pending"; ACKNOWLEDGED = "acknowledged"; RETRY = "retry"
 class TransitionName(str, Enum): ENTER = "enter"; EXIT = "exit"; UPDATE = "update"
 class DeliveryOutcome(str, Enum): SENT = "sent"; FAILED = "failed"; RETRY = "retry"
 @dataclass(frozen=True)
@@ -30,26 +31,34 @@ class CollectorRecord: source: str; payload: Mapping[str, Any] | None; stamp: So
 @dataclass(frozen=True)
 class ActionableProblem: check: str; branch: str | None; sprint_labels: tuple[str, ...]; source_status: SourceErrorKind | None
 @dataclass(frozen=True)
-class StateSnapshot: records: tuple[CollectorRecord, ...]; content_at: float | None; carried_reason: str | None; problems: tuple[ActionableProblem, ...]
+class HeldRow: bead: str; task: str; reason: str; source_timestamp: float
 @dataclass(frozen=True)
-class Transition: name: TransitionName; from_state: str; to_state: str
+class QaRunInput: reviewers: tuple[Mapping[str, Any], ...]
 @dataclass(frozen=True)
-class EventRequest: transition: Transition; recipients: tuple[str, ...]; payload: Mapping[str, Any]; created_at: float; debounce_key: str
+class JevInput: lines: tuple[Mapping[str, Any], ...]
 @dataclass(frozen=True)
-class DeliveryHistoryEntry: request_id: str; outcome: DeliveryOutcome; at: float; error: str | None
+class DagInput: nodes: tuple[Mapping[str, Any], ...]
+@dataclass(frozen=True)
+class StateSnapshot: phase_id: str; records: tuple[CollectorRecord, ...]; content_at: float | None; carried_reason: str | None; problems: tuple[ActionableProblem, ...]; held_rows: tuple[HeldRow, ...]; qa: QaRunInput; jev: JevInput; dag: DagInput
+@dataclass(frozen=True)
+class Transition: name: TransitionName; from_state: str; to_state: str; previous: StateSnapshot | None
+@dataclass(frozen=True)
+class EventRequest: request_id: str; transition: Transition; recipients: tuple[str, ...]; payload: Mapping[str, Any]; created_at: float; due_at: float; debounce_key: str; attempt_state: RequestState
+@dataclass(frozen=True)
+class DeliveryHistoryEntry: request_id: str; outcome: DeliveryOutcome; attempt_state: RequestState; at: float; error: str | None
 class CollectorRequest(Protocol):
     def request(self, source: str, *, force: bool, clock: float) -> CollectorRecord: ...
 class EventEnqueue(Protocol):
-    def enqueue_event_request(self, request: EventRequest) -> None: ...
+    def enqueue_event_request(self, request: EventRequest) -> Mapping[str, Any]: ...
 class EventSender(Protocol):
-    def send(self, request: EventRequest) -> None: ...
+    def send(self, request: EventRequest) -> DeliveryOutcome: ...
 class ProblemDeriver(Protocol):
     def derive_problem_records(self, records: tuple[CollectorRecord, ...]) -> tuple[ActionableProblem, ...]: ...
 BD_WINDOW_S = 60; ATM_WINDOW_S = 60; GITHUB_WINDOW_S = 600
 ```
 
-3. Supply codec schema and fixtures for `CollectorRecord`, `StateSnapshot`, `ActionableProblem`, and `EventRequest`; plugin fixture decoding is the durable console/plugin seam.
-4. `atm_bd_console` is the real Python import path. Plugin scripts never import console implementation modules: they exchange codec JSON through files/CLI; bl-5 invokes the `enqueue_event_request` CLI seam, while doubles implement all three Protocols in `registry.py` tests.
+3. Supply versioned round-trip codec fixtures for `CollectorRecord`, `StateSnapshot`, held rows, QA/Jev/DAG inputs, `Transition`, and `EventRequest`; registry doubles cover every consumer boundary.
+4. `atm_bd_console` is the real Python import path. Plugin scripts never import console implementation modules: they call `atm-bd-console enqueue-event --request <json>` and receive `{\"status\":\"acknowledged|rejected\",\"request_id\":...,\"error\":...}`; fixture/CLI tests cover enqueue, sender, and deriver doubles.
 
 ## Deterministic acceptance
 
