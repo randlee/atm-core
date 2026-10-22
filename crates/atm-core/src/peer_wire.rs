@@ -9,7 +9,8 @@
 /// `Mtls` is the normal process mode. `PlaintextTest` is an explicit,
 /// non-durable diagnostic and benchmark mode; it never represents peer
 /// authentication or authorization.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum PeerWireSecurity {
     /// Normal cross-host transport: mutual TLS and exact peer authorization.
     #[default]

@@ -100,6 +100,13 @@ migration functions directly.
 
 ### D5. HTTP API version record
 
+- **2026-10-22 — HTTP compatibility peer security:** `HTTP_API_VERSION`
+  moves from `1.14.0` to `1.15.0`. Cross-host `WriteRequest` gains optional
+  `peer_wire_security`; omitted values default to the receiver's established
+  connector mode, while peer ingress rejects a mode mismatch before dispatch.
+  This is an additive minor change: existing mTLS and explicit plaintext-test
+  peers omit the field and keep communicating unchanged.
+
 - **2026-10-20 — Phase BK.8 task active limit rejection:** `HTTP_API_VERSION`
   moves from `1.13.0` to `1.14.0`. The stable error-code surface gains
   `ATM_TASK_MAX_ACTIVE_REACHED` for a task start rejected at the member's

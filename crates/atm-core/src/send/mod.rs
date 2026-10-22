@@ -155,6 +155,10 @@ pub struct WriteRequest {
     /// compatible with the deployed 1.x baseline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub peer_http_api_version: Option<crate::protocol::HttpApiVersion>,
+    /// Security mode selected by the sending daemon for a peer write. Peer
+    /// ingress compares this with its adapter mode before the writer runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_wire_security: Option<crate::peer_wire::PeerWireSecurity>,
     /// The immutable identity assigned by the origin canonical writer.
     /// Authenticated peer ingress preserves it so both hosts store one ULID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -241,6 +245,7 @@ impl WriteRequest {
             activity_observation: None,
             authenticated_source_host: None,
             peer_http_api_version: None,
+            peer_wire_security: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: Some(to.parse()?),
@@ -313,6 +318,12 @@ impl WriteRequest {
     #[must_use]
     pub fn with_peer_http_api_version(mut self) -> Self {
         self.peer_http_api_version = Some(crate::protocol::HttpApiVersion::current());
+        self
+    }
+
+    #[must_use]
+    pub fn with_peer_wire_security(mut self, security: crate::peer_wire::PeerWireSecurity) -> Self {
+        self.peer_wire_security = Some(security);
         self
     }
 

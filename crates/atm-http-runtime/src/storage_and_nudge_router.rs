@@ -434,10 +434,16 @@ impl StorageAndNudgeRouter {
                 None => crate::client::direct_peer_tcp_client(host.clone(), port, remaining)?,
             },
         };
+        let security = if self.peer_connection_pool.is_some() {
+            atm_core::peer_wire::PeerWireSecurity::Mtls
+        } else {
+            atm_core::peer_wire::PeerWireSecurity::PlaintextTest
+        };
         let request = request
             .clone()
             .with_origin_metadata(message_id, timestamp)
-            .with_peer_http_api_version();
+            .with_peer_http_api_version()
+            .with_peer_wire_security(security);
         match client
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
             .await?

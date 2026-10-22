@@ -65,6 +65,7 @@ impl AckRequest {
             activity_observation: self.activity_observation,
             authenticated_source_host: None,
             peer_http_api_version: None,
+            peer_wire_security: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: None,

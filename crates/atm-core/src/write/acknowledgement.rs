@@ -447,6 +447,7 @@ pub(crate) fn canonical_ack_write_request(
         activity_observation: request.activity_observation.clone(),
         authenticated_source_host: None,
         peer_http_api_version: None,
+        peer_wire_security: None,
         origin_message_id: None,
         origin_timestamp: None,
         to: Some(crate::address::AgentAddress::new(

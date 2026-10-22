@@ -16,6 +16,7 @@ use atm_core::api::{
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::peer_wire::PeerWireSecurity;
 use atm_core::protocol::{
     CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRefreshRequest,
     GraftReceiverRegistration, GraftReceiverUnregistration, HttpApiVersion, QueueGetNextRequest,
@@ -174,6 +175,10 @@ impl AuthenticatedConnector {
             }
             Self::Peer { source_host } => {
                 validate_peer_write_version(request.peer_http_api_version.take())?;
+                validate_peer_write_security(
+                    request.peer_wire_security.take(),
+                    PeerWireSecurity::Mtls,
+                )?;
                 request.authenticated_source_host = Some(source_host.clone());
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
@@ -200,6 +205,10 @@ impl AuthenticatedConnector {
                 // without accepting a JSON-forged value.
                 request.authenticated_source_host = Some(source_host.clone());
                 validate_peer_write_version(request.peer_http_api_version.take())?;
+                validate_peer_write_security(
+                    request.peer_wire_security.take(),
+                    PeerWireSecurity::PlaintextTest,
+                )?;
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
                 }
@@ -224,6 +233,27 @@ impl AuthenticatedConnector {
             },
         }
     }
+}
+
+fn validate_peer_write_security(
+    peer_security: Option<PeerWireSecurity>,
+    local_security: PeerWireSecurity,
+) -> Result<(), AtmError> {
+    // The field is additive. An older sender omitted it while using the
+    // receiver's established connector mode, so omission defaults to that
+    // mode for both authenticated mTLS and explicit plaintext-test smoke.
+    let peer_security = peer_security.unwrap_or(local_security);
+    if peer_security == local_security {
+        return Ok(());
+    }
+    Err(AtmError::new(
+        AtmErrorCode::ClientDaemonVersionIncompatible,
+        format!(
+            "peer wire-security mismatch: sender {}, receiver {}",
+            peer_security.as_launch_value(),
+            local_security.as_launch_value()
+        ),
+    ))
 }
 
 fn validate_peer_write_version(peer_version: Option<HttpApiVersion>) -> Result<(), AtmError> {
@@ -917,6 +947,7 @@ mod tests {
 
     use atm_core::api::HttpRequest;
     use atm_core::error::{AtmError, AtmErrorCode};
+    use atm_core::peer_wire::PeerWireSecurity;
     use atm_core::protocol::{HttpApiVersion, ResponseEnvelope};
     use atm_core::search::{SearchRequest, SearchResponse};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
@@ -1871,6 +1902,51 @@ mod tests {
                 .message()
                 .contains(&format!("receiver {}", atm_core::api::HTTP_API_VERSION))
         );
+    }
+
+    #[test]
+    fn peer_write_security_requires_the_same_mode() {
+        super::validate_peer_write_security(Some(PeerWireSecurity::Mtls), PeerWireSecurity::Mtls)
+            .expect("matching mTLS modes are compatible");
+        super::validate_peer_write_security(None, PeerWireSecurity::Mtls)
+            .expect("an older mTLS peer may omit the additive field");
+        super::validate_peer_write_security(
+            Some(PeerWireSecurity::PlaintextTest),
+            PeerWireSecurity::PlaintextTest,
+        )
+        .expect("matching explicit plaintext-test modes are compatible");
+        super::validate_peer_write_security(None, PeerWireSecurity::PlaintextTest)
+            .expect("an older plaintext-test peer may omit the additive field");
+
+        let error = super::validate_peer_write_security(
+            Some(PeerWireSecurity::PlaintextTest),
+            PeerWireSecurity::Mtls,
+        )
+        .expect_err("different peer security modes are incompatible");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(error.message().contains("peer wire-security mismatch"));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn authenticated_peer_rejects_a_security_mismatch_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::peer("trusted.example.test".parse().expect("host")),
+            limits(4096, 2),
+            timeouts(),
+        );
+        let request = write_request().with_peer_wire_security(PeerWireSecurity::PlaintextTest);
+        let response = post(app, serde_json::to_vec(&request).expect("typed write JSON")).await;
+        let status = response.status();
+        let error: AtmError = serde_json::from_slice(&response_body(response).await)
+            .expect("typed mismatch response");
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{error:?}");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(calls.lock().expect("record calls").is_empty());
     }
 
     #[test]
