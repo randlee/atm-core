@@ -99,14 +99,6 @@ impl StorageAndNudgeRouter {
         )
     }
 
-    pub(crate) async fn list_messages(
-        &self,
-        query: ListQuery,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        self.list_messages_impl(query, deadline).await
-    }
-
     pub(super) async fn peek_messages(
         &self,
         query: PeekQuery,
@@ -121,6 +113,14 @@ impl StorageAndNudgeRouter {
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         self.receive_messages_impl(query, deadline).await
+    }
+
+    pub(crate) async fn list_messages(
+        &self,
+        query: ListQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        self.list_messages_impl(query, deadline).await
     }
 
     #[must_use]
@@ -909,17 +909,7 @@ impl StorageAndNudgeRouter {
     }
 
     fn reload_runtime_view(&self, ingress: AuthenticatedIngress) -> Result<ApiResponse, AtmError> {
-        if ingress != AuthenticatedIngress::Local {
-            return Err(AtmError::validation(
-                "runtime reload is available only through authenticated local HTTP adapters",
-            ));
-        }
-        // Write-through already keeps the RAM roster mirror synchronized
-        // with every durable mutation; this re-hydration is not the
-        // synchronization mechanism, it only re-derives RAM from durable
-        // state for the rare case of an out-of-band durable change.
-        self.service_runtime.reload_roster_from_durable_store()?;
-        Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
+        self.reload_runtime_view_impl(ingress)
     }
 }
 

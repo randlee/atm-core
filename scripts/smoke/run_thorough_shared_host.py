@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 import tempfile
 from pathlib import Path
 
@@ -167,6 +169,51 @@ def assert_replacement_runtime_status(payload: dict[str, object], *, label: str)
     return owner_pid
 
 
+def start_smoke_daemon(daemon_binary: str, env: dict[str, str]) -> subprocess.Popen[str]:
+    """Start the fixture daemon and wait for its explicit post-bind ready signal."""
+    require_clean_host_daemon_state(smoke_label="shared-host smoke daemon launch")
+    daemon_env = env.copy()
+    daemon_env["ATM_DAEMON_READY_STDOUT"] = "1"
+    process = subprocess.Popen(
+        [daemon_binary],
+        env=daemon_env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert process.stdout is not None
+    ready_output: queue.Queue[str] = queue.Queue(maxsize=1)
+
+    def read_ready_signal() -> None:
+        try:
+            ready_output.put(process.stdout.readline().strip())
+        except OSError as error:
+            ready_output.put(f"<read failed: {error}>")
+
+    threading.Thread(target=read_ready_signal, daemon=True).start()
+    try:
+        ready = ready_output.get(timeout=CLI_SUBPROCESS_TIMEOUT_SECONDS)
+        if ready != "ATM_DAEMON_READY":
+            status = process.poll()
+            raise RuntimeError(
+                "shared-host smoke daemon exited before its ready signal "
+                f"(status={status}, output={ready!r})"
+            )
+    except (queue.Empty, RuntimeError):
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        raise
+    return process
+
+
 def verify_af1_preflight_contract() -> None:
     source = Path(__file__).read_text(encoding="utf-8")
     missing = [marker for marker in AF1_REQUIRED_MARKERS if marker not in source]
@@ -219,17 +266,21 @@ def main() -> int:
     shared_b = shared_host_fixture_pair.workspace_b
     shared_env_a = smoke_env(shared_a, identity=shared_a.operator, root=root)
     shared_env_b = smoke_env(shared_b, identity=shared_b.operator, root=root)
-    debug_daemon = str(smoke_binary(root, "atm-daemon"))
-    shared_env_a["ATM_DAEMON_BIN"] = debug_daemon
-    shared_env_b["ATM_DAEMON_BIN"] = debug_daemon
+    daemon_binary = str(smoke_binary(root, "atm-daemon"))
+    shared_env_a["ATM_DAEMON_BIN"] = daemon_binary
+    shared_env_b["ATM_DAEMON_BIN"] = daemon_binary
     shared_daemon_pid: int | None = None
     injected_leak_child = maybe_inject_leaked_child()
     try:
         verify_removed_cli_flags_stay_rejected(root, shared_env_a, shared_a.workspace_dir)
-        # `doctor` is the first CLI invocation that may auto-start a daemon.
-        # Recheck here so no process can appear during the build/fixture setup
-        # window after the initial fail-closed check.
+        # The replacement runtime is an explicitly managed host singleton;
+        # `doctor` reports it but does not launch it. Recheck here so no process
+        # can appear during the build/fixture setup window, then wait for the
+        # daemon's post-bind readiness signal before querying through either
+        # workspace.
         require_clean_host_daemon_state(smoke_label="shared-host smoke")
+        daemon = start_smoke_daemon(daemon_binary, shared_env_a)
+        shared_daemon_pid = daemon.pid
         shared_doctor_a = parse_json_output(
             run_atm(root, shared_env_a, shared_a.workspace_dir, "doctor", "--json")
         )

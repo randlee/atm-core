@@ -1194,8 +1194,21 @@ pub(crate) mod tests {
                 graft_requests
                     .lock()
                     .expect("graft request log")
-                    .push(request);
-                Ok(response.clone())
+                    .push(request.clone());
+                match request {
+                    RequestEnvelope::CompatibilityPreflight(_) => {
+                        Ok(ResponseEnvelope::CompatibilityVerdict(
+                            atm_core::protocol::CompatibilityVerdict::Compatible {
+                                daemon_release: atm_core::protocol::ReleaseVersion::current(),
+                                daemon_schema_version: atm_core::protocol::CLI_SCHEMA_VERSION,
+                                daemon_http_api_version:
+                                    atm_core::protocol::HttpApiVersion::current(),
+                            },
+                        ))
+                    }
+                    RequestEnvelope::Write(_) => Ok(response.clone()),
+                    unexpected => panic!("unexpected graft request: {unexpected:?}"),
+                }
             }
         }));
         atm_graft::GraftClient::from_fake_transport_for_test(graft_transport)
