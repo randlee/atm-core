@@ -119,7 +119,7 @@ pub enum ResponseEnvelope {
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.14.0";
+pub const HTTP_API_VERSION: &str = "1.16.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskMoveRequest {
@@ -1287,6 +1287,8 @@ mod tests {
                 all_teams: false,
                 caller_team: Some(team.clone()),
                 caller_identity: Some(sender.clone()),
+                peer_http_api_version: None,
+                peer_wire_security: None,
             }),
             RequestEnvelope::Search(Box::new(SearchRequest {
                 query: SearchInput::default(),

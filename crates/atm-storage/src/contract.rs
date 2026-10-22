@@ -1146,6 +1146,18 @@ pub trait RosterRuntimeMirror: sealed::Sealed + Send + Sync {
         team: &TeamName,
         agent: &AgentName,
     ) -> Option<RosterMemberEphemeralState>;
+    /// Runs one terminal-admission operation while holding the member team's
+    /// roster read guard. Runtime observations and roster replacements take
+    /// the paired write guard, so they cannot change an admitted state or
+    /// epoch before the operation finishes its durable marker write.
+    ///
+    /// The operation must not re-enter this mirror for the same team.
+    fn with_member_runtime_admission(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        operation: &mut dyn FnMut(Option<RosterMemberEphemeralState>) -> Result<(), AtmError>,
+    ) -> Result<(), AtmError>;
     /// Applies one accepted-order batch of runtime observations under the
     /// team's roster lock. Missing members produce no outcome.
     fn apply_runtime_observations(
@@ -1296,6 +1308,23 @@ pub trait PendingNudgeStore: sealed::Sealed + Send + Sync {
         next_due: IsoTimestamp,
     ) -> Result<(), AtmError>;
 
+    /// Reserves a terminal queue item before its one-shot handoff by clearing
+    /// its marker while leaving the mailbox item visible and unread. The
+    /// caller must not hand off when this returns `false`.
+    fn complete_pending_before_terminal_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<bool, AtmError>;
+
+    /// Restores a terminal queue item's marker after the handoff reports a
+    /// failure whose contract guarantees that no input was accepted.
+    fn restore_pending_after_failed_terminal_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<bool, AtmError>;
+
     /// Enumerates members holding at least one eligible pending marker.
     ///
     /// # Errors
@@ -1346,6 +1375,26 @@ impl PendingNudgeStore for DummyPendingNudgeStore {
         }
         self.inner().map_or(Ok(()), |inner| {
             inner.rearm_pending_after_handoff(member, msg, next_due)
+        })
+    }
+
+    fn complete_pending_before_terminal_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<bool, AtmError> {
+        self.inner().map_or(Ok(true), |inner| {
+            inner.complete_pending_before_terminal_handoff(member, claim)
+        })
+    }
+
+    fn restore_pending_after_failed_terminal_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<bool, AtmError> {
+        self.inner().map_or(Ok(true), |inner| {
+            inner.restore_pending_after_failed_terminal_handoff(member, claim)
         })
     }
 

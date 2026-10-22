@@ -99,14 +99,6 @@ impl StorageAndNudgeRouter {
         )
     }
 
-    pub(crate) async fn list_messages(
-        &self,
-        query: ListQuery,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        self.list_messages_impl(query, deadline).await
-    }
-
     pub(super) async fn peek_messages(
         &self,
         query: PeekQuery,
@@ -121,6 +113,14 @@ impl StorageAndNudgeRouter {
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         self.receive_messages_impl(query, deadline).await
+    }
+
+    pub(crate) async fn list_messages(
+        &self,
+        query: ListQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        self.list_messages_impl(query, deadline).await
     }
 
     #[must_use]
@@ -434,10 +434,16 @@ impl StorageAndNudgeRouter {
                 None => crate::client::direct_peer_tcp_client(host.clone(), port, remaining)?,
             },
         };
+        let security = if self.peer_connection_pool.is_some() {
+            atm_core::peer_wire::PeerWireSecurity::Mtls
+        } else {
+            atm_core::peer_wire::PeerWireSecurity::PlaintextTest
+        };
         let request = request
             .clone()
             .with_origin_metadata(message_id, timestamp)
-            .with_peer_http_api_version();
+            .with_peer_http_api_version()
+            .with_peer_wire_security(security);
         match client
             .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
             .await?
@@ -903,17 +909,7 @@ impl StorageAndNudgeRouter {
     }
 
     fn reload_runtime_view(&self, ingress: AuthenticatedIngress) -> Result<ApiResponse, AtmError> {
-        if ingress != AuthenticatedIngress::Local {
-            return Err(AtmError::validation(
-                "runtime reload is available only through authenticated local HTTP adapters",
-            ));
-        }
-        // Write-through already keeps the RAM roster mirror synchronized
-        // with every durable mutation; this re-hydration is not the
-        // synchronization mechanism, it only re-derives RAM from durable
-        // state for the rare case of an out-of-band durable change.
-        self.service_runtime.reload_roster_from_durable_store()?;
-        Ok(ApiResponse::new(ResponseEnvelope::RuntimeViewReloaded))
+        self.reload_runtime_view_impl(ingress)
     }
 }
 
@@ -6102,8 +6098,12 @@ pub(crate) mod tests {
     async fn selected_router_reuses_one_opaque_peer_connection_across_three_loopback_writes() {
         let adapter = Arc::new(CountingPassthroughPeerAdapter::default());
         let remote = fixture(true, None, None);
+        // The pooled sender marks these writes as mTLS. Configure the receiver
+        // for the same authenticated-peer mode; the pass-through adapter here
+        // exercises connection reuse, while the live peer gate covers TLS.
         let remote_runtime = HttpRuntimeBuilder::new(
-            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
+            direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test())
+                .with_peer_stream_adapter(Arc::new(CountingPassthroughPeerAdapter::default())),
             Arc::new(remote.router.clone()),
         )
         .build()

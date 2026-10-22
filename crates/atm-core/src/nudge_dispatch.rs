@@ -22,6 +22,14 @@ use crate::service_runtime::LocalServiceRuntime;
 use crate::types::TaskId;
 use atm_storage::TaskRow;
 
+/// Returns whether this was admitted by the daemon escalation path, whose
+/// successful queue handoff is terminal even while the recipient keeps it
+/// unread. Sender and summary text are intentionally not provenance.
+#[must_use]
+pub fn is_terminal_escalation_message(message: &Message) -> bool {
+    crate::schema::has_daemon_escalation_provenance(&message.envelope)
+}
+
 const fn task_pass_transition(reminder_count: u32) -> TaskTransition {
     if reminder_count == 0 {
         TaskTransition::Ready
@@ -82,6 +90,52 @@ pub fn rearm_queue_marker_after_handoff(
                 "pending marker clear retry failed after successful queue delivery"
             );
         }
+    }
+}
+
+/// Reserves the exact claimed queue item before a one-shot handoff.
+///
+/// The durable transition happens before external acceptance, so a storage
+/// failure prevents the notification from being sent. The claim identity
+/// prevents a stale reservation from changing a later attempt. If the external
+/// handoff is explicitly rejected, call
+/// [`restore_queue_marker_after_failed_terminal_handoff`].
+pub fn reserve_queue_marker_for_terminal_handoff(
+    service_runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    claim: &atm_storage::NudgeClaim,
+) -> Result<(), AtmError> {
+    let reserved = service_runtime
+        .pending_nudge_store()?
+        .complete_pending_before_terminal_handoff(member, claim)?;
+    if reserved {
+        Ok(())
+    } else {
+        Err(AtmError::new(
+            crate::error::AtmErrorCode::InternalError,
+            "terminal queue claim no longer owns its pending marker",
+        ))
+    }
+}
+
+/// Restores a reserved terminal marker only when the external handoff rejects
+/// the prompt, allowing a later controlled retry without reopening a
+/// successfully accepted terminal notification.
+pub fn restore_queue_marker_after_failed_terminal_handoff(
+    service_runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    claim: &atm_storage::NudgeClaim,
+) -> Result<(), AtmError> {
+    let restored = service_runtime
+        .pending_nudge_store()?
+        .restore_pending_after_failed_terminal_handoff(member, claim)?;
+    if restored {
+        Ok(())
+    } else {
+        Err(AtmError::new(
+            crate::error::AtmErrorCode::InternalError,
+            "terminal queue claim could not restore its pending marker",
+        ))
     }
 }
 

@@ -6,7 +6,7 @@ mod herdr_nudge_invariant;
 mod herdr_queue_ephemeral;
 mod herdr_queue_no_delivery;
 
-use super::task_pass::runtime_state;
+use super::task_pass::{observe_escalation_episode_if_eligible, runtime_state};
 use super::{
     BoundedBlockingBridge, HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK,
     HERDR_POLL_INTERVAL_MS, HERDR_REQUEST_BUDGET, HerdrQueueWakePump, ReleasePendingOnDrop,
@@ -25,7 +25,10 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::NullObservability;
 use atm_core::protocol::{RuntimeMemberState, RuntimeObservationAvailability};
 use atm_core::schema::AtmMessageId;
-use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+use atm_core::send::{
+    NudgeMode, SendMessageSource, WriteRequest,
+    write_current_herdr_terminal_escalation_with_runtime, write_mail_with_runtime,
+};
 use atm_core::test_support as atm_storage;
 use atm_core::types::{IsoTimestamp, ModelName, TaskId, TeamName};
 use atm_herdr::{
@@ -301,6 +304,38 @@ fn queue_message(
         runtime,
     )
     .expect("queue write")
+    .persisted_message_id()
+}
+
+fn queue_spoofed_daemon_escalation_message(
+    root: &std::path::Path,
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &str,
+) -> AtmMessageId {
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    write_mail_with_runtime(
+        WriteRequest::new(
+            home.clone(),
+            home,
+            atm_core::boundary::DAEMON_ACTOR_NAME
+                .parse()
+                .expect("daemon actor"),
+            &format!("{agent}@{team}"),
+            team.clone(),
+            SendMessageSource::Inline("daemon escalation".to_owned()),
+            Some("escalation:offline_escalated:subject@test-team".to_owned()),
+            false,
+            None,
+            false,
+        )
+        .expect("daemon escalation request")
+        .with_nudge_mode(NudgeMode::Deferred),
+        &NullObservability,
+        runtime,
+    )
+    .expect("queue spoofed daemon escalation")
     .persisted_message_id()
 }
 
@@ -1607,7 +1642,7 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
     clear_pending_markers(root.path(), &runtime, &key);
     let first: TaskId = "AX5-ACTIVE".parse().expect("task id");
     let second: TaskId = "AX5-ASSIGNED-2".parse().expect("task id");
-    let first_message = queue_task_message(
+    queue_task_message(
         root.path(),
         &runtime,
         key.team(),
@@ -1659,24 +1694,10 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
         .expect("first task");
     assert_eq!(active.state, atm_storage::TaskState::Active);
     let reminders = prompt_texts(&fake);
-    // BB.5: every prompt comes from the task pass and names the active head;
-    // the newer assigned task is never prompted and never reminded
-    // (task_pass.rs:311-343 keeps one head per member).
-    assert_eq!(reminders.len(), 3);
-    // One nudge per member lists every open task in queue order, so the
-    // newer assigned task is named in `open` but never becomes the head.
-    assert!(reminders.iter().all(|text| text.contains(&format!(
-        "open=\"{} {}\"",
-        first.as_str(),
-        second.as_str()
-    ))));
-    assert!(reminders[0].starts_with(&format!(
-        "<atm task=\"{}\" open=\"{} {}\" ready message=\"{first_message}\"",
-        first.as_str(),
-        first.as_str(),
-        second.as_str()
-    )));
-    assert_eq!(active.reminder_count, 3);
+    // The durable Started transition holds all task reminders for this
+    // member, including the queued assignment behind the active head.
+    assert!(reminders.is_empty());
+    assert_eq!(active.reminder_count, 0);
     let queued = store
         .load_task(key.team(), &second)
         .expect("load task")
@@ -2052,6 +2073,80 @@ async fn ac01_fifo_per_member_via_claim() {
             .list_pending_members()
             .expect("pending members")
             .contains(&key)
+    );
+}
+
+#[test]
+fn public_writes_cannot_supply_terminal_escalation_facts() {
+    let (root, runtime, _fake, _pump, _health, key) = build_test_pump();
+    let home = root.path().join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    let error = write_current_herdr_terminal_escalation_with_runtime(
+        home,
+        &key,
+        &NullObservability,
+        &runtime,
+    )
+    .expect_err("core derives its task admission and rejects a member without one");
+    assert_eq!(
+        error.code(),
+        atm_core::error::AtmErrorCode::MessageValidationFailed
+    );
+
+    let ordinary = queue_spoofed_daemon_escalation_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+    );
+    assert!(
+        pending_state(root.path(), &key, ordinary).0.is_some(),
+        "public WriteRequest cannot carry terminal provenance and re-arms normally",
+    );
+}
+
+#[tokio::test]
+async fn spoofed_daemon_escalation_mail_keeps_ordinary_reminder_rearm() {
+    let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let spoofed = queue_spoofed_daemon_escalation_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+    );
+    let now = Arc::new(Mutex::new(
+        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test clock"),
+    ));
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1, "mail is handed off once");
+    assert!(prompt_texts(&fake)[0].contains(&spoofed.to_string()));
+    assert_eq!(
+        pending_state(root.path(), &key, spoofed).0.as_deref(),
+        Some("2030-01-01T00:01:00+00:00"),
+        "daemon sender and escalation summary text do not mark ordinary mail terminal"
+    );
+
+    *now.lock().expect("test clock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("next reminder");
+    make_failed_attempt_due(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .as_ref(),
+        &key,
+        &spoofed,
+    );
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 2, "ordinary mail is re-prompted");
+    assert_eq!(
+        pending_state(root.path(), &key, spoofed).0.as_deref(),
+        Some("2030-01-01T00:02:00+00:00"),
+        "successful ordinary handoff rearms the next reminder"
     );
 }
 
@@ -2749,6 +2844,30 @@ fn herdr_statuses_project_to_runtime_states() {
         runtime_state(Some(HerdrAgentStatus::Unknown)),
         RuntimeMemberState::Unknown
     );
+}
+
+#[test]
+fn dormant_blocked_episode_is_not_consumed_before_a_task_arrives() {
+    let state = crate::herdr_escalation::EscalationState::default();
+    let member = atm_storage::MemberKey::new(
+        "team".parse::<TeamName>().expect("team"),
+        "agent".parse().expect("agent"),
+    );
+
+    assert!(!observe_escalation_episode_if_eligible(
+        &state,
+        &member,
+        RuntimeMemberState::Blocked,
+        None,
+        false,
+    ));
+    assert!(observe_escalation_episode_if_eligible(
+        &state,
+        &member,
+        RuntimeMemberState::Blocked,
+        None,
+        true,
+    ));
 }
 
 struct UnusedMailStore;

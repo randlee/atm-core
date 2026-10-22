@@ -13,7 +13,10 @@ pub use agent_member::{
 pub use atm_storage::contract::AgentType;
 pub(crate) use inbox_message::{
     AckIntentFields, authenticated_source_host, clear_transport_delivery_metadata,
-    peer_delivery_target, set_authenticated_source_host, set_peer_delivery_target,
+    peer_delivery_target, set_authenticated_source_host, set_daemon_escalation_provenance,
+    set_peer_delivery_target,
 };
-pub use inbox_message::{AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode};
+pub use inbox_message::{
+    AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode, has_daemon_escalation_provenance,
+};
 pub use team_config::TeamConfig;

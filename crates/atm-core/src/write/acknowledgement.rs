@@ -447,6 +447,7 @@ pub(crate) fn canonical_ack_write_request(
         activity_observation: request.activity_observation.clone(),
         authenticated_source_host: None,
         peer_http_api_version: None,
+        peer_wire_security: None,
         origin_message_id: None,
         origin_timestamp: None,
         to: Some(crate::address::AgentAddress::new(
@@ -468,6 +469,8 @@ pub(crate) fn canonical_ack_write_request(
         acknowledges_message_id: Some(request.message_id),
         dry_run: false,
         nudge_mode: crate::send::NudgeMode::default(),
+        daemon_escalation_provenance: false,
+        peer_daemon_escalation_provenance: false,
     })
 }
 

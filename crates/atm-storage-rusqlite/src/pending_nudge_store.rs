@@ -179,6 +179,77 @@ impl PendingNudgeStore for SqlitePendingNudgeStore {
         })
     }
 
+    fn complete_pending_before_terminal_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<bool, AtmError> {
+        // A message key is immutable. Matching the current claim attempt
+        // prevents an old successful handoff from clearing a marker that a
+        // retry/requeue has since replaced for that same message. Duplicate
+        // admissions are classified before the deferred write pipeline, so
+        // they cannot call mark_pending to create another episode for this ID.
+        let message_key = MessageKey::from(claim.msg);
+        let now_raw = IsoTimestamp::now().to_string();
+        self.db.with_transaction(|connection| {
+            let changed = connection
+                .execute(
+                    &format!(
+                        "UPDATE mail_message_states
+                     SET nudge_pending_at = NULL, updated_at = ?4
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3
+                       AND nudge_pending_at IS NOT NULL AND nudge_attempts = ?5
+                       AND {OPEN_ITEM_SQL};"
+                    ),
+                    params![
+                        member.team().as_str(),
+                        member.agent().as_str(),
+                        message_key.as_str(),
+                        &now_raw,
+                        claim.attempt,
+                    ],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to reserve terminal nudge before handoff", error)
+                })?;
+            Ok(changed == 1)
+        })
+    }
+
+    fn restore_pending_after_failed_terminal_handoff(
+        &self,
+        member: &MemberKey,
+        claim: &NudgeClaim,
+    ) -> Result<bool, AtmError> {
+        let message_key = MessageKey::from(claim.msg);
+        let now_raw = IsoTimestamp::now().to_string();
+        self.db.with_transaction(|connection| {
+            let changed = connection
+                .execute(
+                    &format!(
+                        "UPDATE mail_message_states
+                     SET nudge_pending_at = ?4, updated_at = ?4
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3
+                       AND nudge_pending_at IS NULL AND nudge_attempts = ?5
+                       AND {OPEN_ITEM_SQL};"
+                    ),
+                    params![
+                        member.team().as_str(),
+                        member.agent().as_str(),
+                        message_key.as_str(),
+                        &now_raw,
+                        claim.attempt,
+                    ],
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to restore rejected terminal nudge handoff", error)
+                })?;
+            Ok(changed == 1)
+        })
+    }
+
     fn list_pending_members(&self) -> Result<Vec<MemberKey>, AtmError> {
         let db = Arc::clone(&self.db);
         self.db.read(move |connection| {
@@ -223,6 +294,7 @@ mod tests {
     use atm_storage::types::{AgentName, IsoTimestamp, MemberKey, TeamName};
     use chrono::Utc;
     use serde_json::Map;
+    use std::str::FromStr;
     use std::sync::{Arc, Barrier};
     use std::thread;
 
@@ -522,6 +594,128 @@ mod tests {
         let (_, marker, _, _, attempts) = state_row(&backend, msg);
         assert_eq!(marker, Some(next_due.to_string()));
         assert_eq!(attempts, i64::from(retry.attempt));
+    }
+
+    #[test]
+    fn terminal_reservation_clears_only_the_matching_claim_marker() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        let due = IsoTimestamp::from_str("2000-01-01T00:00:00Z").expect("fixed past due time");
+        seed_message(&backend, msg, false);
+        let store = backend.pending_nudge_store();
+        store.mark_pending(&member, &msg, due).expect("mark");
+        let claim = store
+            .claim_next_pending(&member)
+            .expect("claim")
+            .expect("claimed");
+
+        store
+            .requeue_pending(&member, &claim)
+            .expect("requeue after a failed first handoff");
+        set_marker(&backend, msg, due);
+        let retry = store
+            .claim_next_pending(&member)
+            .expect("retry claim")
+            .expect("retry claimed");
+        assert!(
+            !store
+                .complete_pending_before_terminal_handoff(&member, &claim)
+                .expect("late completion is safe")
+        );
+        assert!(
+            state_row(&backend, msg).1.is_some(),
+            "an old claim cannot clear the retried marker"
+        );
+        assert!(
+            store
+                .complete_pending_before_terminal_handoff(&member, &retry)
+                .expect("complete retry marker")
+        );
+        assert!(state_row(&backend, msg).1.is_none());
+    }
+
+    #[test]
+    fn rejected_terminal_handoff_restores_its_reserved_marker() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        let store = backend.pending_nudge_store();
+        store
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        let claim = store
+            .claim_next_pending(&member)
+            .expect("claim")
+            .expect("claimed");
+
+        assert!(
+            store
+                .complete_pending_before_terminal_handoff(&member, &claim)
+                .expect("reserve one-shot handoff")
+        );
+        assert!(state_row(&backend, msg).1.is_none());
+        assert!(
+            store
+                .claim_next_pending(&member)
+                .expect("no duplicate claim while reserved")
+                .is_none()
+        );
+
+        assert!(
+            store
+                .restore_pending_after_failed_terminal_handoff(&member, &claim)
+                .expect("restore rejected handoff")
+        );
+        let retry = store
+            .claim_next_pending(&member)
+            .expect("claim restored handoff")
+            .expect("restored marker is eligible");
+        assert_eq!(retry.msg, msg);
+        assert_eq!(retry.attempt, claim.attempt);
+    }
+
+    #[test]
+    fn failed_terminal_reservation_leaves_the_inflight_marker_claimed() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let member = member();
+        let msg = AtmMessageId::new();
+        seed_message(&backend, msg, false);
+        let store = backend.pending_nudge_store();
+        store
+            .mark_pending(&member, &msg, IsoTimestamp::now())
+            .expect("mark");
+        let claim = store
+            .claim_next_pending(&member)
+            .expect("claim")
+            .expect("claimed");
+
+        let db = backend.shared_db_for_test();
+        db.with_connection(|connection| {
+            connection
+                .execute_batch(
+                    "CREATE TRIGGER fail_terminal_reservation
+                     BEFORE UPDATE OF nudge_pending_at ON mail_message_states
+                     WHEN NEW.nudge_pending_at IS NULL
+                     BEGIN SELECT RAISE(ABORT, 'injected terminal reservation failure'); END;",
+                )
+                .map_err(|error| db.error("install reservation failure trigger", error))
+        })
+        .expect("install deterministic failure");
+
+        assert!(
+            store
+                .complete_pending_before_terminal_handoff(&member, &claim)
+                .is_err()
+        );
+        assert!(state_row(&backend, msg).1.is_some());
+        assert!(
+            store
+                .claim_next_pending(&member)
+                .expect("the in-flight claim remains protected")
+                .is_none()
+        );
     }
 
     #[tokio::test]

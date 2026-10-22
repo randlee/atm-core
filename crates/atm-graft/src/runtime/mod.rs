@@ -800,7 +800,10 @@ mod tests {
         GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
         GraftReceiverListener, deliver_graft_post_send,
     };
-    use atm_core::protocol::{LocalCapability, OwnerGeneration, RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{
+        CLI_SCHEMA_VERSION, CompatibilityVerdict, HttpApiVersion, LocalCapability, OwnerGeneration,
+        ReleaseVersion, RequestEnvelope, ResponseEnvelope,
+    };
     use atm_core::schema::AtmMessageId;
     use atm_core::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
     use atm_core::transport::testing::FakeClientTransport;
@@ -830,6 +833,14 @@ mod tests {
 
     const DELIVER_CONNECT_DEADLINE: Duration = Duration::from_secs(2);
     const DELIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
+
+    fn compatible_response() -> ResponseEnvelope {
+        ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::current(),
+            daemon_schema_version: CLI_SCHEMA_VERSION,
+            daemon_http_api_version: HttpApiVersion::current(),
+        })
+    }
 
     #[derive(Debug, Default)]
     struct RecordingInjector {
@@ -1534,7 +1545,11 @@ mod tests {
 
         fn handle(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
             if !self.online.load(Ordering::SeqCst) {
-                if matches!(request, RequestEnvelope::GraftReceiverRefresh(_)) {
+                if matches!(
+                    request,
+                    RequestEnvelope::GraftReceiverRefresh(_)
+                        | RequestEnvelope::CompatibilityPreflight(_)
+                ) {
                     self.refresh_failures.fetch_add(1, Ordering::SeqCst);
                 }
                 return Err(AtmError::daemon_unavailable(
@@ -1542,6 +1557,7 @@ mod tests {
                 ));
             }
             match request {
+                RequestEnvelope::CompatibilityPreflight(_) => Ok(compatible_response()),
                 RequestEnvelope::GraftReceiverRegister(registration) => {
                     self.registrations.fetch_add(1, Ordering::SeqCst);
                     self.leases.lock().expect("leases").insert(
@@ -1723,6 +1739,7 @@ mod tests {
         let handler_store = Arc::clone(&store);
         let client = GraftClient::from_fake_transport_for_test(Arc::new(FakeClientTransport::new(
             move |request| match request {
+                RequestEnvelope::CompatibilityPreflight(_) => Ok(compatible_response()),
                 RequestEnvelope::GraftReceiverRegister(registration) => handler_store
                     .lock()
                     .expect("store")
@@ -2078,6 +2095,7 @@ mod tests {
         let handler_calls = Arc::clone(&stalled_calls);
         let client = GraftClient::from_fake_transport_for_test(Arc::new(FakeClientTransport::new(
             move |request| match request {
+                RequestEnvelope::CompatibilityPreflight(_) => Ok(compatible_response()),
                 RequestEnvelope::GraftReceiverRegister(_) => {
                     Ok(ResponseEnvelope::GraftReceiverRegister)
                 }

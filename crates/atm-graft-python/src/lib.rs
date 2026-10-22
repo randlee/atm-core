@@ -911,7 +911,10 @@ mod tests {
     use atm_core::boundary::{NudgeKind, PostSendHookEvent, TaskTransition};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::list::ListOutcome;
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+    use atm_core::protocol::{
+        CLI_SCHEMA_VERSION, CompatibilityVerdict, HttpApiVersion, ReleaseVersion, RequestEnvelope,
+        ResponseEnvelope, SendResponseEnvelope,
+    };
     use atm_core::read::{BucketCounts, ReadOutcome};
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendCommandOutcome, SendOutcome};
@@ -1040,13 +1043,15 @@ mod tests {
             .expect("caller");
         PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
-            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                with_compatible_preflight(initial),
+            ))),
             receiver: Mutex::new(None),
             fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
                 atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
             )),
             reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
-                replacement,
+                with_compatible_preflight(replacement),
             ))),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1062,17 +1067,39 @@ mod tests {
         let caller = PyAgentAddress::new(sender, TEST_TEAM.to_string(), None).expect("caller");
         PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
-            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                with_compatible_preflight(initial),
+            ))),
             receiver: Mutex::new(None),
             fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
                 fallback_path.to_owned(),
             )),
             reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
-                replacement,
+                with_compatible_preflight(replacement),
             ))),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
         }
+    }
+
+    /// Model the daemon's explicit compatibility preflight once for every
+    /// Python session operation; the inner fake sees only the operation under
+    /// test, with no event-loop or network behavior.
+    fn with_compatible_preflight(transport: Arc<FakeClientTransport>) -> Arc<FakeClientTransport> {
+        Arc::new(FakeClientTransport::new(Box::new(
+            move |request| match request {
+                RequestEnvelope::CompatibilityPreflight(_) => Ok(
+                    ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+                        daemon_release: ReleaseVersion::current(),
+                        daemon_schema_version: CLI_SCHEMA_VERSION,
+                        daemon_http_api_version: HttpApiVersion::current(),
+                    }),
+                ),
+                request => transport
+                    .execute_for_test(atm_core::api::ApiRequest::new(request))
+                    .map(atm_core::api::ApiResponse::into_inner),
+            },
+        )))
     }
 
     #[test]
@@ -2297,7 +2324,9 @@ mod tests {
         })));
         let session = PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
-            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(transport))),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                with_compatible_preflight(transport),
+            ))),
             receiver: Mutex::new(None),
             fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
                 atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
@@ -2350,17 +2379,19 @@ mod tests {
         .expect("caller");
         let session = PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
-            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(Arc::new(
-                FakeClientTransport::new(Box::new(|request| match request {
-                    RequestEnvelope::GraftReceiverRegister(_) => {
-                        Ok(ResponseEnvelope::GraftReceiverRegister)
-                    }
-                    RequestEnvelope::GraftReceiverUnregister(_) => {
-                        Ok(ResponseEnvelope::GraftReceiverUnregister)
-                    }
-                    _ => panic!("receiver activation sent an unexpected daemon request"),
-                })),
-            )))),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                with_compatible_preflight(Arc::new(FakeClientTransport::new(Box::new(
+                    |request| match request {
+                        RequestEnvelope::GraftReceiverRegister(_) => {
+                            Ok(ResponseEnvelope::GraftReceiverRegister)
+                        }
+                        RequestEnvelope::GraftReceiverUnregister(_) => {
+                            Ok(ResponseEnvelope::GraftReceiverUnregister)
+                        }
+                        _ => panic!("receiver activation sent an unexpected daemon request"),
+                    },
+                )))),
+            ))),
             receiver: Mutex::new(None),
             fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
                 atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),

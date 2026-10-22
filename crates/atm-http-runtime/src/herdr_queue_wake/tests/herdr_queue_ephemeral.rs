@@ -502,9 +502,7 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
         1
     );
 
-    // Idle nudging to the assignee resumes on the next tick instead of
-    // holding "stalled" forever; the lead is not escalated again until the
-    // next full budget of reminders (20).
+    // An unstarted assignment stays held after one stall escalation.
     *now.lock().expect("test clock lock") =
         IsoTimestamp::from_str("2020-01-01T00:11:00Z").expect("test timestamp");
     queue_idle_result(&fake, &key);
@@ -513,11 +511,11 @@ async fn unread_assignment_counts_to_stall_and_escalates_at_ten() {
         .load_task(key.team(), &task_id)
         .expect("load task")
         .expect("task row");
-    assert_eq!(terminal.reminder_count, 11);
+    assert_eq!(terminal.reminder_count, 10);
     assert_eq!(terminal.lead_notified_count, 1);
     assert_eq!(
         prompt_texts(&fake).len(),
-        11,
+        10,
         "the assignment itself never enters the queue drain"
     );
     assert_eq!(
@@ -848,4 +846,41 @@ async fn blocked_member_with_open_item_escalates_not_reminded() {
     assert!(prompt_texts(&fake).is_empty());
     assert!(pending_state(root.path(), &key, message_id).0.is_none());
     assert_eq!(task_store.row(&key, &task_id).state, TaskState::Assigned);
+}
+
+#[tokio::test]
+async fn recovered_member_is_not_escalated_from_a_stale_episode_observation() {
+    let (_root, runtime, _fake, pump, task_store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    let key = keys[0].clone();
+    let task_id: atm_core::types::TaskId = "stale-episode-task".parse().expect("task id");
+    add_lead_roster_member(&runtime, key.team(), "sender");
+    let since = *now.lock().expect("clock");
+    runtime.apply_roster_runtime_observations(
+        key.team(),
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                key.agent().clone(),
+                atm_core::protocol::RuntimeMemberState::Idle,
+                atm_core::protocol::RuntimeObservationSource::HerdrPoll,
+                since,
+                None,
+            ),
+        ],
+    );
+
+    let task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync> = task_store;
+    let mut stats = crate::herdr_queue_wake::HerdrQueueWakeStats::default();
+    crate::herdr_queue_wake_escalation::escalate_episode(
+        &pump,
+        &task_store,
+        &key,
+        &task_id,
+        crate::herdr_task_disposition::EpisodeKind::Blocked,
+        since,
+        &mut stats,
+    )
+    .await;
+
+    assert_eq!(stats.blocked_escalations, 0);
 }

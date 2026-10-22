@@ -19,6 +19,8 @@ use crate::boundary::{ConfigDoctor, MailStoreDoctor, RosterStoreDoctor};
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
+use crate::peer_wire::PeerWireSecurity;
+use crate::protocol::HttpApiVersion;
 #[cfg(test)]
 use crate::roles::ROLE_TEAM_LEAD;
 #[cfg(test)]
@@ -104,6 +106,12 @@ pub struct DoctorQuery {
     /// Caller's `ATM_IDENTITY`, captured in the invoking CLI process.
     #[serde(default)]
     pub caller_identity: Option<AgentName>,
+    /// Cross-host HTTP API version supplied by an authenticated peer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_http_api_version: Option<HttpApiVersion>,
+    /// Cross-host transport mode supplied by an authenticated peer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_wire_security: Option<PeerWireSecurity>,
 }
 
 impl DoctorQuery {
@@ -2809,6 +2817,8 @@ mod tests {
             all_teams: false,
             caller_team: Some(TEST_TEAM.parse().expect("team")),
             caller_identity: Some(TEST_SENDER.parse().expect("identity")),
+            peer_http_api_version: None,
+            peer_wire_security: None,
         };
 
         let report =
@@ -2876,6 +2886,8 @@ mod tests {
             all_teams: false,
             caller_team: Some(TEST_TEAM.parse().expect("team")),
             caller_identity: Some(TEST_SENDER.parse().expect("identity")),
+            peer_http_api_version: None,
+            peer_wire_security: None,
         };
 
         let report =

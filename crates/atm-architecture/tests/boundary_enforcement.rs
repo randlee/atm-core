@@ -2704,8 +2704,23 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
         assert!(
             send.contains(
                 "atm_http_runtime::selected_write_transport(&request, &self.async_transport)?"
-            ) && send.contains(".execute(ApiRequest::new(RequestEnvelope::Write"),
-            "AL.9 {consumer} send must await the runtime-selected DaemonApiClient write path"
+            ),
+            "AL.9 {consumer} send must select its write client through atm-http-runtime"
+        );
+        let uses_selected_client = if consumer == "graft" {
+            send.contains(
+                "Self::execute_transport_request(&transport, RequestEnvelope::Write(Box::new(request)))",
+            ) && graft
+                .split("async fn execute_transport_request(")
+                .nth(1)
+                .and_then(|source| source.split("async fn verify_transport_compatibility(").next())
+                .is_some_and(|helper| helper.contains(".execute(ApiRequest::new(request))"))
+        } else {
+            send.contains(".execute(ApiRequest::new(RequestEnvelope::Write")
+        };
+        assert!(
+            uses_selected_client,
+            "AL.9 {consumer} send must execute its write through the selected DaemonApiClient"
         );
         assert!(
             !send.contains("legacy_dispatch")

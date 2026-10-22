@@ -65,6 +65,7 @@ impl AckRequest {
             activity_observation: self.activity_observation,
             authenticated_source_host: None,
             peer_http_api_version: None,
+            peer_wire_security: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: None,
@@ -83,6 +84,8 @@ impl AckRequest {
             // Acknowledgements always emit their receiver nudge immediately;
             // deferred (queue) mode is caller-selected only for `atm send`.
             nudge_mode: crate::send::NudgeMode::default(),
+            daemon_escalation_provenance: false,
+            peer_daemon_escalation_provenance: false,
         }
     }
 
@@ -192,8 +195,8 @@ mod pipeline;
 
 pub use pipeline::{
     PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
-    prepare_write_with_runtime, send_mail, send_mail_with_runtime, write_mail,
-    write_mail_with_runtime,
+    prepare_write_with_runtime, send_mail, send_mail_with_runtime,
+    write_current_herdr_terminal_escalation_with_runtime, write_mail, write_mail_with_runtime,
 };
 
 #[cfg(test)]

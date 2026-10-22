@@ -1383,7 +1383,7 @@ async fn refusal_run_reads_the_trailing_run() {
 }
 
 #[test]
-fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
+fn reset_reminders_zeroes_budget_but_preserves_lead_latch() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let member = MemberKey::new(h.team.clone(), "alice".parse().unwrap());
@@ -1415,7 +1415,7 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
         .reset_reminders(&member, &task_id, reset_at)
         .expect("reset reminders");
     assert_eq!(reset.row.reminder_count, 0);
-    assert_eq!(reset.row.lead_notified_count, 0);
+    assert_eq!(reset.row.lead_notified_count, 1);
     assert!(reset.row.last_reminded_at.is_none());
     assert_eq!(reset.row.updated_at, reset_at);
     assert_eq!(

@@ -217,6 +217,19 @@ impl RosterRuntimeState {
         true
     }
 
+    fn with_member_runtime_admission(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        operation: &mut dyn FnMut(Option<RosterMemberEphemeralState>) -> Result<(), AtmError>,
+    ) -> Result<(), AtmError> {
+        let Some(team_lock) = self.team_lock(team) else {
+            return operation(None);
+        };
+        let record = team_lock.read().unwrap_or_else(recover_poison);
+        operation(record.ephemeral.get(agent).cloned())
+    }
+
     fn apply_runtime_observations(
         &self,
         team: &TeamName,
@@ -415,6 +428,16 @@ impl RosterRuntimeMirror for WriteThroughRosterView {
         agent: &AgentName,
     ) -> Option<RosterMemberEphemeralState> {
         self.state.ephemeral_state(team, agent)
+    }
+
+    fn with_member_runtime_admission(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        operation: &mut dyn FnMut(Option<RosterMemberEphemeralState>) -> Result<(), AtmError>,
+    ) -> Result<(), AtmError> {
+        self.state
+            .with_member_runtime_admission(team, agent, operation)
     }
 
     fn apply_runtime_observations(
@@ -702,6 +725,45 @@ mod tests {
                 herdr_wake_pending: true,
                 ..RosterMemberEphemeralState::default()
             })
+        );
+    }
+
+    #[test]
+    fn runtime_admission_holds_the_epoch_until_the_operation_finishes() {
+        let state = RosterRuntimeState::default();
+        let team = TeamName::from_validated(TEST_TEAM);
+        let agent = AgentName::from_validated(TEST_AGENT);
+        state.replace_roster(&team, &[member(TEST_TEAM, TEST_AGENT)]);
+        let blocked_at: IsoTimestamp = "2030-01-01T00:00:00Z".parse().expect("blocked epoch");
+        state.apply_runtime_observations(
+            &team,
+            &[RosterRuntimeObservationUpdate::observed(
+                agent.clone(),
+                RuntimeMemberState::Blocked,
+                RuntimeObservationSource::HerdrPoll,
+                blocked_at,
+                None,
+            )],
+        );
+
+        state
+            .with_member_runtime_admission(&team, &agent, &mut |runtime| {
+                let runtime = runtime.expect("member remains present");
+                assert_eq!(runtime.runtime.state, RuntimeMemberState::Blocked);
+                assert_eq!(runtime.runtime.state_changed_at, Some(blocked_at));
+                let team_lock = state.team_lock(&team).expect("team lock");
+                assert!(
+                    team_lock.try_write().is_err(),
+                    "a recovery mutation cannot interleave with terminal admission"
+                );
+                Ok(())
+            })
+            .expect("admission");
+
+        let team_lock = state.team_lock(&team).expect("team lock");
+        assert!(
+            team_lock.try_write().is_ok(),
+            "the recovery mutation may proceed after terminal admission"
         );
     }
 

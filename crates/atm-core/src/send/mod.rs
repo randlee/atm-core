@@ -77,8 +77,8 @@ pub fn preflight_template_send(
 // public entry points so external paths are unchanged.
 pub use crate::write::{
     PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
-    prepare_write_with_runtime, send_mail, send_mail_with_runtime, write_mail,
-    write_mail_with_runtime,
+    prepare_write_with_runtime, send_mail, send_mail_with_runtime,
+    write_current_herdr_terminal_escalation_with_runtime, write_mail, write_mail_with_runtime,
 };
 
 #[cfg(test)]
@@ -155,6 +155,10 @@ pub struct WriteRequest {
     /// compatible with the deployed 1.x baseline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub peer_http_api_version: Option<crate::protocol::HttpApiVersion>,
+    /// Security mode selected by the sending daemon for a peer write. Peer
+    /// ingress compares this with its adapter mode before the writer runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_wire_security: Option<crate::peer_wire::PeerWireSecurity>,
     /// The immutable identity assigned by the origin canonical writer.
     /// Authenticated peer ingress preserves it so both hosts store one ULID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -196,6 +200,15 @@ pub struct WriteRequest {
     /// deferred to durable at-most-once queue delivery.
     #[serde(default)]
     pub nudge_mode: NudgeMode,
+    /// Internal-only provenance set by the daemon escalation admission path.
+    /// This is skipped by serde so a client write payload cannot claim it.
+    #[serde(skip)]
+    pub(crate) daemon_escalation_provenance: bool,
+    /// Transport-only carrier for the marker. The HTTP adapter clears it for
+    /// local and untrusted-socket writes, and promotes it only after an
+    /// authenticated peer admission.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) peer_daemon_escalation_provenance: bool,
 }
 
 impl WriteRequest {
@@ -241,6 +254,7 @@ impl WriteRequest {
             activity_observation: None,
             authenticated_source_host: None,
             peer_http_api_version: None,
+            peer_wire_security: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: Some(to.parse()?),
@@ -259,6 +273,8 @@ impl WriteRequest {
             acknowledges_message_id: None,
             dry_run,
             nudge_mode: NudgeMode::default(),
+            daemon_escalation_provenance: false,
+            peer_daemon_escalation_provenance: false,
         })
     }
 
@@ -295,6 +311,34 @@ impl WriteRequest {
         self
     }
 
+    /// Stamps a write admitted by the internal Herdr escalation path.
+    /// The flag is not represented on the wire; production calls this only
+    /// after Herdr has selected a daemon-owned escalation recipient.
+    #[must_use]
+    pub(crate) fn with_internal_daemon_escalation_provenance(mut self) -> Self {
+        self.daemon_escalation_provenance = true;
+        self.peer_daemon_escalation_provenance = true;
+        self
+    }
+
+    /// Removes any wire-carried marker before a local or untrusted admission.
+    pub fn clear_untrusted_daemon_escalation_provenance(&mut self) {
+        self.daemon_escalation_provenance = false;
+        self.peer_daemon_escalation_provenance = false;
+    }
+
+    /// Promotes the transport carrier after authenticated peer admission.
+    pub fn admit_authenticated_peer_daemon_escalation_provenance(&mut self) {
+        self.daemon_escalation_provenance = self.peer_daemon_escalation_provenance;
+    }
+
+    /// Returns whether this request carries provenance admitted by the local
+    /// escalation path or authenticated peer ingress.
+    #[must_use]
+    pub const fn has_daemon_escalation_provenance(&self) -> bool {
+        self.daemon_escalation_provenance
+    }
+
     #[must_use]
     pub fn with_activity_observation(
         mut self,
@@ -313,6 +357,12 @@ impl WriteRequest {
     #[must_use]
     pub fn with_peer_http_api_version(mut self) -> Self {
         self.peer_http_api_version = Some(crate::protocol::HttpApiVersion::current());
+        self
+    }
+
+    #[must_use]
+    pub fn with_peer_wire_security(mut self, security: crate::peer_wire::PeerWireSecurity) -> Self {
+        self.peer_wire_security = Some(security);
         self
     }
 
@@ -339,6 +389,10 @@ impl WriteRequest {
         self.origin_timestamp = Some(timestamp);
         self
     }
+}
+
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Compatibility name for existing callers.  There is one write payload;
@@ -662,6 +716,10 @@ fn build_send_envelope(
     };
     insert_classification_metadata(&mut envelope, &request.classification);
     set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
+    crate::schema::set_daemon_escalation_provenance(
+        &mut envelope,
+        request.daemon_escalation_provenance,
+    );
     envelope
 }
 

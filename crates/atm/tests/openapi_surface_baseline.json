@@ -562,6 +562,13 @@
       ],
       "required": []
     },
+    "DoctorQuery": {
+      "properties": [
+        "peer_http_api_version",
+        "peer_wire_security"
+      ],
+      "required": []
+    },
     "DoctorResponse": {
       "properties": [
         "herdr",
@@ -1168,6 +1175,7 @@
         "from",
         "message_id",
         "peer_http_api_version",
+        "peer_wire_security",
         "requires_ack",
         "to"
       ],
