@@ -1,0 +1,35 @@
+{
+  "id": "atm-bl-10",
+  "parent": "atm-phase-bl",
+  "phase": "bl",
+  "sprint": "bl-10",
+  "title": "problem-source derivation",
+  "stack": "phase-bl",
+  "layer": 9,
+  "branch": "sprint/bl-10-problem-sources",
+  "pr_target": "integrate/phase-bl",
+  "worktree": "/Users/randlee/github/atm-bd-orchestration-worktrees/sprint/bl-10-problem-sources",
+  "relation": "must_follow",
+  "closure_type": "boundary",
+  "target_boundary": "ProblemSources",
+  "owned_paths": [
+    "plugins/atm-bd-orchestration/atm_bd_orchestration/github_source.py",
+    "plugins/atm-bd-orchestration/atm_bd_orchestration/atm_bd.py",
+    "plugins/atm-bd-orchestration/atm_bd_orchestration/problem_sources.py",
+    "plugins/atm-bd-orchestration/atm_bd_orchestration/__init__.py",
+    "plugins/atm-bd-orchestration/pyproject.toml",
+    "plugins/atm-bd-orchestration/uv.lock",
+    "plugins/atm-bd-orchestration/manifest.yaml",
+    "plugins/atm-bd-orchestration/tests/gen_manifest.py"
+  ],
+  "description": "Implementation repository/worktree: `randlee/atm-bd-orchestration`; branch/PR target: `integrate/phase-bl`.\n\nclosure_type: boundary; target_boundary: ProblemSources; branch: sprint/bl-10-problem-sources; PR target: integrate/phase-bl; wave: 2; external_ref: #375, #372; recommended_agent: trinity; recommended_model: gpt-6.1-sol; must_follow: bl-1 (versioned collector-record fixtures and `ActionableProblem` codec); parallel_safe: bl-2, bl-3, bl-4, bl-5, bl-6, bl-7, bl-8, bl-13.\n\n## Scope boundary\nOwn only `plugins/atm-bd-orchestration/atm_bd_orchestration/{github_source,atm_bd,problem_sources}.py`, `plugins/atm-bd-orchestration/{pyproject.toml,uv.lock,atm_bd_orchestration/__init__.py,manifest.yaml}`, `tests/gen_manifest.py`, and matching tests. bl-8 is the sole source-read/filter owner; this sprint is pure derivation over persisted codec fixtures and never calls GitHub, BD, ATM, or delivery. `gen_manifest.py --check` is the manifest ownership proof.\n\n## Deliverables\n1. Implement `derive_problem_records(records) -> tuple[ActionableProblem, ...]`, a pure decoder/deriver over bl-1 JSON fixtures. bl-8 passes it into `build_snapshot`; therefore `StateSnapshot.problems` is populated from failed/superseded-check fixtures without a plugin-to-console implementation import.\n2. Preserve latest non-cancelled-check selection, direct-branch then sprint-container fallback, sprint labels, and `--exclude-label anchor` in pure `problem_sources.py` helpers.\n3. Preserve typed source failure as source status, never an invented actionable problem. `derive_problem_records` is the evaluation stage only: it reads persisted collector records, returns problems for persistence, and raises no ATM message request (transition-based firing from persisted state is bl-3).\n\n## Non-closure\nIt does not collect source data (bl-8), queue or deliver events (bl-3), or render rows. bl-12 owns integrated source-to-display proof.",
+  "design": "Dependency rationale: bl-1 (versioned collector-record fixtures and `ActionableProblem` codec)\n\nExact owned paths: plugins/atm-bd-orchestration/atm_bd_orchestration/github_source.py; plugins/atm-bd-orchestration/atm_bd_orchestration/atm_bd.py; plugins/atm-bd-orchestration/atm_bd_orchestration/problem_sources.py; plugins/atm-bd-orchestration/atm_bd_orchestration/__init__.py; plugins/atm-bd-orchestration/pyproject.toml; plugins/atm-bd-orchestration/uv.lock; plugins/atm-bd-orchestration/manifest.yaml; plugins/atm-bd-orchestration/tests/gen_manifest.py\n\n## Governing text (verbatim)\n> \"multiple collectors each in separate module governed by it's own rules (i.e. gh rate limited, dolt timeouts, atm no limits today). state evaluation based on current state. specific state transitions would trigger 'atm message request'.\"\n\n> \"if you don't have valid data, don't force an error.\"\n\n```bash\ncd plugins/atm-bd-orchestration && python3 tests/gen_manifest.py --check && python3 -m pytest -q -rs\n```",
+  "acceptance_criteria": "## Authoritative acceptance criteria\n- [ ] `test_latest_non_cancelled_check_per_name_wins`\n- [ ] `test_branch_falls_back_from_problem_to_sprint_container`\n- [ ] `test_sprint_labels_and_anchor_exclusion_are_preserved`\n- [ ] `test_failed_source_decodes_to_typed_status_not_forced_problem`\n- [ ] `test_derive_problem_records_is_pure_over_contract_fixture`\n- [ ] `test_derive_problem_records_raises_no_event_request`\n\nUse fixture JSON and pure functions only; run plugin pytest/lint with no network, clock, or source reads.\n\n## Authoritative validation\n```bash\ncd plugins/atm-bd-orchestration && python3 tests/gen_manifest.py --check && python3 -m pytest -q -rs\n```",
+  "requirements": [
+    "NONE"
+  ],
+  "adrs": [
+    "NONE"
+  ],
+  "difficulty": "normal"
+}

@@ -18,7 +18,7 @@ plan only; it is handed to the implementation repository before Wave 1.
 ## Pre-Wave-1 handoff
 
 bl-1 owns the handoff gate. Before its implementation branch opens, copy this
-plan, `design.md`, `phase-bl.jsonl`, all `sprint-bl-*.md` files, and
+plan, `design.md`, `phase-bl.jsonl`, the `beads/` render, and
 `.sprints/BL/structure.ttl` into `randlee/atm-bd-orchestration` at
 `docs/plans/phase-bl/`; record both the atm-core plan SHA and destination SHA
 in `phase-bl-handoff.json`. Dispatch/QA parses the copied JSONL and registry,
