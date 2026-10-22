@@ -245,6 +245,7 @@ benchmark-bootstrap:
 # only. The runner rejects ambient daemon/database state and writes one
 # report-compatible JSON artifact per run.
 benchmark *args:
+    # Local mode delegates `cargo build --release -p agent-team-mail -p atm-daemon` to the wrapper.
     # With --bin-dir the wrapper uses GitHub prerelease binaries and never builds locally.
     # The wrapper preserves the runner verdict while rebuilding reports on both shells.
     {{python_cmd}} .just/run_benchmark.py {{args}}
