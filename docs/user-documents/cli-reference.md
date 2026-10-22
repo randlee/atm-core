@@ -1,6 +1,6 @@
 # ATM CLI Reference
 
-Version: `1.6.4`
+Version: `1.6.5`
 
 This document is generated from the live `clap` command tree. Do not hand-edit it — regenerate with `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs` (see `crates/atm/src/cli_surface.rs`).
 
