@@ -402,121 +402,229 @@ pub fn write_mail_with_runtime(
     prepared.finish_and_mark(runtime, observability)
 }
 
-/// Writes a terminal-provenance message only after core has re-read the
-/// authoritative task and, for an episode escalation, the exact current
-/// runtime state and epoch. The marker is derived here; no public write
-/// request carries a terminal-provenance field.
-#[allow(clippy::too_many_arguments)]
-pub fn write_herdr_escalation_mail_with_runtime(
-    home_dir: std::path::PathBuf,
-    team: TeamName,
-    recipient: &str,
-    body: String,
-    summary: String,
+/// Outcome of a core-owned terminal Herdr escalation admission.
+///
+/// The caller receives durable message identifiers for audit only. It never
+/// supplies a task, runtime episode, recipient, body, summary, or provenance
+/// marker; those are derived from the authoritative runtime while its roster
+/// admission guard is held.
+#[derive(Debug, Clone, Default)]
+pub struct TerminalHerdrEscalationOutcome {
+    pub deliveries: Vec<(AgentName, AtmMessageId)>,
+    pub recipients_failed: u32,
+}
+
+impl TerminalHerdrEscalationOutcome {
+    #[must_use]
+    pub fn recipients_written(&self) -> u32 {
+        self.deliveries.len().try_into().unwrap_or(u32::MAX)
+    }
+}
+
+/// Emits the current member's terminal Blocked or Offline escalation.
+///
+/// This is deliberately the only public terminal-provenance entry point. Its
+/// member key selects authoritative state; core derives the episode, open
+/// tasks, escalation recipients, rendered body and summary before it stamps
+/// the internal marker. Ordinary [`WriteRequest`] values cannot enter this
+/// path and always retain normal queue-marker behaviour.
+pub fn write_current_herdr_terminal_escalation_with_runtime(
+    daemon_home: std::path::PathBuf,
     source_member: &MemberKey,
-    task_id: &TaskId,
-    episode_state: Option<crate::protocol::RuntimeMemberState>,
-    episode_started_at: Option<IsoTimestamp>,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
-) -> Result<WriteOutcome, AtmError> {
-    if source_member.team() != &team {
-        return Err(AtmError::validation(
-            "Herdr escalation member is outside the recipient team",
-        ));
-    }
-    let (episode_state, episode_started_at) = match (episode_state, episode_started_at) {
-        (Some(state), Some(started_at)) => (state, started_at),
-        _ => {
-            return Err(AtmError::validation(
-                "terminal Herdr escalation admission requires a runtime episode state and epoch",
-            ));
-        }
-    };
+) -> Result<TerminalHerdrEscalationOutcome, AtmError> {
+    let team = source_member.team().clone();
     let task_store = runtime.task_store()?;
-    let task = task_store.load_task(&team, task_id)?.ok_or_else(|| {
-        AtmError::validation("Herdr escalation admission requires an authoritative task")
-    })?;
-    if task.assignee != *source_member.agent() || !task.state.is_open() {
-        return Err(AtmError::validation(
-            "Herdr escalation admission requires an open task for the source member",
-        ));
-    }
-    if !matches!(
-        episode_state,
-        crate::protocol::RuntimeMemberState::Blocked | crate::protocol::RuntimeMemberState::Offline
-    ) {
-        return Err(AtmError::validation(
-            "Herdr escalation episode must be blocked or offline",
-        ));
-    }
-    let recipient = recipient.parse::<crate::address::AgentAddress>()?;
-    if recipient.host().is_some()
-        || recipient
-            .team()
-            .is_some_and(|recipient_team| recipient_team != &team)
-    {
-        return Err(AtmError::validation(
-            "Herdr escalation recipient must be a local member of the task team",
-        ));
-    }
-    let roster = runtime.shared_roster_store_arc().load_roster(&team)?;
-    let recipient_is_lead = roster.members.iter().any(|member| {
-        member.agent_name == *recipient.agent()
-            && member.agent_type == crate::schema::AgentType::Lead
-    });
-    let recipient_is_member = roster
-        .members
-        .iter()
-        .any(|member| member.agent_name == *recipient.agent());
-    if !recipient_is_member {
-        return Err(AtmError::validation(
-            "Herdr escalation recipient is not a member of the task team",
-        ));
-    }
-    let recipient_is_configured = task_store
-        .effective_escalation_recipients(&team)?
-        .iter()
-        .any(|configured| configured == &recipient);
-    if !recipient_is_lead && !recipient_is_configured {
-        return Err(AtmError::validation(
-            "Herdr escalation recipient is not an authoritative escalation target",
-        ));
-    }
-
-    let request = WriteRequest::new(
-        home_dir.clone(),
-        home_dir,
-        AgentName::from_validated(boundary::DAEMON_ACTOR_NAME),
-        &recipient.to_string(),
-        team,
-        SendMessageSource::Inline(body),
-        Some(summary),
-        false,
-        None,
-        false,
-    )?
-    .with_internal_daemon_escalation_provenance()
-    .with_nudge_mode(NudgeMode::Deferred);
     runtime.with_roster_member_runtime_admission(
         source_member.team(),
         source_member.agent(),
         |current| {
-            let Some(current) = current else {
-                return Err(AtmError::validation(
+            let current = current.ok_or_else(|| {
+                AtmError::validation(
                     "Herdr escalation admission member is absent from the runtime roster",
-                ));
-            };
-            if current.runtime.state != episode_state
-                || current.runtime.state_changed_at != Some(episode_started_at)
-            {
-                return Err(AtmError::validation(
-                    "Herdr escalation admission no longer matches the authoritative runtime episode",
-                ));
-            }
-            write_mail_with_runtime(request, observability, runtime)
+                )
+            })?;
+            let (state_name, started_at) = terminal_episode(&current.runtime)?;
+            let (recipients, summary, body) = terminal_escalation_details(
+                runtime,
+                task_store.as_ref(),
+                source_member,
+                &team,
+                state_name,
+                started_at,
+            )?;
+            write_terminal_escalations(
+                daemon_home,
+                recipients,
+                team,
+                TerminalEscalationMail {
+                    body,
+                    summary,
+                    started_at,
+                },
+                observability,
+                runtime,
+            )
         },
     )
+}
+
+fn terminal_episode(
+    runtime: &atm_storage::RosterRuntimeObservation,
+) -> Result<(&'static str, IsoTimestamp), AtmError> {
+    let started_at = runtime.state_changed_at.ok_or_else(|| {
+        AtmError::validation("Herdr escalation admission requires a runtime episode epoch")
+    })?;
+    match runtime.state {
+        crate::protocol::RuntimeMemberState::Blocked => Ok(("blocked", started_at)),
+        crate::protocol::RuntimeMemberState::Offline => Ok(("offline", started_at)),
+        _ => Err(AtmError::validation(
+            "Herdr escalation admission requires blocked or offline runtime state",
+        )),
+    }
+}
+
+fn terminal_escalation_details(
+    runtime: &LocalServiceRuntime,
+    task_store: &dyn atm_storage::TaskStore,
+    source_member: &MemberKey,
+    team: &TeamName,
+    state_name: &str,
+    started_at: IsoTimestamp,
+) -> Result<(Vec<crate::address::AgentAddress>, String, String), AtmError> {
+    let tasks = task_store.open_tasks(source_member)?;
+    if tasks.is_empty() {
+        return Err(AtmError::validation(
+            "Herdr escalation admission requires an authoritative open task",
+        ));
+    }
+    let roster = runtime.shared_roster_store_arc().load_roster(team)?;
+    let recipients = terminal_escalation_recipients(task_store, team, &roster)?;
+    let task_ids = tasks
+        .iter()
+        .map(|task| task.task_id.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let summary = format!("escalation:{state_name}_escalated:{source_member}");
+    let body = format!(
+        "{state_name} member {} has been in this state since {}\nOpen tasks: {}\nRun: atm members --team {}",
+        source_member.agent(),
+        started_at,
+        task_ids,
+        team,
+    );
+    Ok((recipients, summary, body))
+}
+
+fn terminal_escalation_recipients(
+    task_store: &dyn atm_storage::TaskStore,
+    team: &TeamName,
+    roster: &atm_storage::RosterSnapshot,
+) -> Result<Vec<crate::address::AgentAddress>, AtmError> {
+    let leads: Vec<_> = roster
+        .members
+        .iter()
+        .filter(|member| member.agent_type == crate::schema::AgentType::Lead)
+        .map(|member| member.agent_name.clone())
+        .collect();
+    let mut recipients = if leads.len() == 1 {
+        leads
+            .into_iter()
+            .map(|lead| format!("{lead}@{team}").parse())
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        Vec::new()
+    };
+    for recipient in task_store.effective_escalation_recipients(team)? {
+        let is_current_member = roster
+            .members
+            .iter()
+            .any(|member| member.agent_name == *recipient.agent());
+        if recipient.host().is_none()
+            && recipient.team().is_none_or(|t| t == team)
+            && is_current_member
+            && !recipients.iter().any(|known| known == &recipient)
+        {
+            recipients.push(recipient);
+        }
+    }
+    Ok(recipients)
+}
+
+struct TerminalEscalationMail {
+    body: String,
+    summary: String,
+    started_at: IsoTimestamp,
+}
+
+fn write_terminal_escalations(
+    daemon_home: std::path::PathBuf,
+    recipients: Vec<crate::address::AgentAddress>,
+    team: TeamName,
+    mail: TerminalEscalationMail,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<TerminalHerdrEscalationOutcome, AtmError> {
+    let mut outcome = TerminalHerdrEscalationOutcome::default();
+    for recipient in recipients {
+        let recipient_name = recipient.agent().clone();
+        if terminal_recipient_already_reported(
+            runtime,
+            &team,
+            &recipient_name,
+            &mail.summary,
+            mail.started_at,
+        )? {
+            continue;
+        }
+        let request = WriteRequest::new(
+            daemon_home.clone(),
+            daemon_home.clone(),
+            AgentName::from_validated(boundary::DAEMON_ACTOR_NAME),
+            &recipient.to_string(),
+            team.clone(),
+            SendMessageSource::Inline(mail.body.clone()),
+            Some(mail.summary.clone()),
+            false,
+            None,
+            false,
+        )?
+        .with_internal_daemon_escalation_provenance()
+        .with_nudge_mode(NudgeMode::Deferred);
+        match write_mail_with_runtime(request, observability, runtime) {
+            Ok(written) => outcome
+                .deliveries
+                .push((recipient_name, written.persisted_message_id())),
+            Err(error) => {
+                outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "terminal_escalation_mail_write", outcome = "failed", recipient = %recipient, error = %error, "Terminal escalation recipient write failed");
+            }
+        }
+    }
+    Ok(outcome)
+}
+
+fn terminal_recipient_already_reported(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    recipient: &AgentName,
+    summary: &str,
+    started_at: IsoTimestamp,
+) -> Result<bool, AtmError> {
+    let messages = runtime
+        .message_store
+        .list_messages(&atm_storage::MessageQuery {
+            team: team.clone(),
+            agent: recipient.clone(),
+            sender: Some(AgentName::from_validated(boundary::DAEMON_ACTOR_NAME)),
+            task_id: None,
+            limit: None,
+        })?;
+    Ok(messages.iter().any(|message| {
+        message.envelope.summary.as_deref() == Some(summary)
+            && message.envelope.timestamp >= started_at
+    }))
 }
 
 pub fn send_mail_with_runtime(

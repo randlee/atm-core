@@ -46,34 +46,9 @@ pub(crate) async fn escalate_stalled_task(
             return;
         }
     };
-    // The task-pass snapshot may predate a Start, reassignment, or reopen.
-    // Re-read the exact assignment immediately before building outbound
-    // escalation mail; an unreadable row fails closed.
-    let deadline = match ReadDeadline::new(TASK_READ_DEADLINE) {
-        Ok(deadline) => deadline,
-        Err(error) => {
-            tracing::warn!(subsystem = "herdr_queue_wake", action = "task_escalation_verify", outcome = "deadline_invalid", task_id = %row.task_id, error = %error, "Task stall escalation held");
-            return;
-        }
-    };
-    let current = match reader
-        .load_task(row.team.clone(), row.task_id.clone(), deadline)
-        .await
-    {
-        Ok(Some(current)) => current,
-        Ok(None) => return,
-        Err(error) => {
-            tracing::warn!(subsystem = "herdr_queue_wake", action = "task_escalation_verify", outcome = "failed", task_id = %row.task_id, error = %error, "Task stall escalation held because its current state is unavailable");
-            return;
-        }
-    };
-    if current.state != TaskState::Assigned
-        || current.assignee != row.assignee
-        || current.assignment_message_id != row.assignment_message_id
-        || !escalation_due(&current)
-    {
+    let Some(current) = current_stalled_task(reader, row).await else {
         return;
-    }
+    };
     let body = task_escalation_body(&current, now, &events);
     let Ok(outcome) = escalate_mail(
         &pump.blocking_bridge,
@@ -104,6 +79,29 @@ pub(crate) async fn escalate_stalled_task(
         )
     });
     record_stall_audit(pump, task_store, row, now, audit_actor, message_id, stats).await;
+}
+
+async fn current_stalled_task(
+    reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
+    row: &TaskRow,
+) -> Option<TaskRow> {
+    let deadline = ReadDeadline::new(TASK_READ_DEADLINE).ok()?;
+    let current = match reader
+        .load_task(row.team.clone(), row.task_id.clone(), deadline)
+        .await
+    {
+        Ok(Some(current)) => current,
+        Ok(None) => return None,
+        Err(error) => {
+            tracing::warn!(subsystem = "herdr_queue_wake", action = "task_escalation_verify", outcome = "failed", task_id = %row.task_id, error = %error, "Task stall escalation held because its current state is unavailable");
+            return None;
+        }
+    };
+    (current.state == TaskState::Assigned
+        && current.assignee == row.assignee
+        && current.assignment_message_id == row.assignment_message_id
+        && escalation_due(&current))
+    .then_some(current)
 }
 
 async fn reminder_events(
