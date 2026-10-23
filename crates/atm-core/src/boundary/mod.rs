@@ -140,7 +140,9 @@ pub use template_composer::{
     RenderedBody, SourceSpan, TemplateComposer, TemplateInspection, TemplateReference,
     TemplateReferenceKind, TemplateRoot, TemplateSource,
 };
-pub use tool_sender::{SenderClaim, ToolSenderCapability, resolve_sender_claim};
+pub use tool_sender::{
+    SenderClaim, ToolSenderCapability, claim_verified_tool_runtime, resolve_sender_claim,
+};
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
 pub trait StatusSource: sealed::Sealed {

@@ -126,12 +126,13 @@ pub struct RegisteredToolSender {
 }
 
 impl RegisteredToolSender {
-    /// Records the result of a successful registry admission.  This value is
-    /// inspection data only: production composition additionally requires a
-    /// non-serializable daemon capability before it can write mail.
-    /// Registry-only issuance. This is crate-visible so deserialized request data
-    /// cannot manufacture virtual sender authority.
-    pub(crate) fn admitted(principal: ToolPrincipal, address: AgentAddress) -> Self {
+    /// Builds an inspection record from registry-owned state.
+    ///
+    /// This is deliberately not an emission credential. The registry returns a
+    /// [`ToolRuntimeAdmission`] only after it has verified runtime provenance
+    /// and bound the proof nonce to the canonical message.
+    #[allow(dead_code)]
+    pub(crate) fn from_registry_state(principal: ToolPrincipal, address: AgentAddress) -> Self {
         Self { principal, address }
     }
 
@@ -143,6 +144,69 @@ impl RegisteredToolSender {
     #[must_use]
     pub fn address(&self) -> &AgentAddress {
         &self.address
+    }
+}
+
+/// Opaque result of a successful, durable runtime admission.
+///
+/// The private marker is minted only in this module after a registry adapter
+/// has checked immutable registration state and bound the runtime proof to a
+/// message id and digest. It has no serde implementation and cannot be
+/// reconstructed from a resolved sender or a peer/CLI payload.
+#[derive(Debug)]
+pub struct ToolRuntimeAdmission {
+    sender: RegisteredToolSender,
+    binding: VerifiedRuntimeBinding,
+}
+
+/// Immutable runtime proof binding retained inside an admitted sender.
+///
+/// This is intentionally private: it records the exact authenticated sender,
+/// key, generation, host, message id and digest that the registry committed.
+/// It is proof that a later consumer received an admission rather than an
+/// inspection result from [`ToolSenderRegistry::resolve`].
+#[allow(dead_code)]
+#[derive(Debug)]
+struct VerifiedRuntimeBinding {
+    sender: PluginSenderId,
+    runtime_key_id: ToolKeyId,
+    registration_generation: u64,
+    host_id: HostName,
+    message_id: AtmMessageId,
+    message_digest: MessageDigest,
+}
+
+impl ToolRuntimeAdmission {
+    /// Mints an opaque admission after the registry transaction commits.
+    pub(crate) fn verified(
+        sender: RegisteredToolSender,
+        proof: &ToolRuntimeProof,
+        message_id: AtmMessageId,
+        message_digest: MessageDigest,
+    ) -> Result<Self, AtmError> {
+        if proof.message_id != message_id || proof.message_digest != message_digest {
+            return Err(AtmError::validation_with_recovery(
+                "tool runtime proof does not bind the requested message id and digest",
+                "submit the original proof and canonical message unchanged",
+            ));
+        }
+        Ok(Self {
+            sender,
+            binding: VerifiedRuntimeBinding {
+                sender: proof.sender.clone(),
+                runtime_key_id: proof.runtime_key_id.clone(),
+                registration_generation: proof.registration_generation,
+                host_id: proof.host_id.clone(),
+                message_id,
+                message_digest,
+            },
+        })
+    }
+
+    #[must_use]
+    pub fn sender(&self) -> &RegisteredToolSender {
+        let _ = &self.binding;
+        &self.sender
     }
 }
 
@@ -333,7 +397,7 @@ pub trait ToolSenderRegistry: sealed::Sealed + Send + Sync {
         message_id: AtmMessageId,
         digest: MessageDigest,
         now: IsoTimestamp,
-    ) -> Result<RegisteredToolSender, AtmError>;
+    ) -> Result<ToolRuntimeAdmission, AtmError>;
 
     /// Resolves current registry state for inspection only. It does not mint a
     /// daemon emission capability. An absent active registration returns

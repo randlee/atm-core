@@ -9,8 +9,8 @@ use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::tool_sender::{
     MessageDigest, PluginSenderId, RegisteredToolSender, ToolInstallReceipt,
-    ToolInstallerOperation, ToolInstallerRequest, ToolPrincipal, ToolRuntimeProof,
-    ToolSenderFailure, ToolSenderRegistry,
+    ToolInstallerOperation, ToolInstallerRequest, ToolPrincipal, ToolRuntimeAdmission,
+    ToolRuntimeProof, ToolSenderFailure, ToolSenderRegistry,
 };
 use crate::types::IsoTimestamp;
 
@@ -22,7 +22,7 @@ pub struct InMemoryToolSenderRegistry {
 impl InMemoryToolSenderRegistry {
     fn sender(sender: &PluginSenderId) -> Result<RegisteredToolSender, AtmError> {
         let address: AgentAddress = format!("{}@tool", sender.as_str()).parse()?;
-        Ok(RegisteredToolSender::admitted(
+        Ok(RegisteredToolSender::from_registry_state(
             ToolPrincipal::RegisteredPlugin {
                 sender: sender.clone(),
             },
@@ -64,14 +64,9 @@ impl ToolSenderRegistry for InMemoryToolSenderRegistry {
         message_id: AtmMessageId,
         digest: MessageDigest,
         _now: IsoTimestamp,
-    ) -> Result<RegisteredToolSender, AtmError> {
-        if proof.message_id != message_id || proof.message_digest != digest {
-            return Err(AtmError::validation_with_recovery(
-                "tool runtime proof does not bind the requested message id and digest",
-                "submit the original proof and canonical message unchanged",
-            ));
-        }
-        self.resolve(&proof.sender)
+    ) -> Result<ToolRuntimeAdmission, AtmError> {
+        let sender = self.resolve(&proof.sender)?;
+        ToolRuntimeAdmission::verified(sender, &proof, message_id, digest)
     }
 
     fn resolve(&self, sender: &PluginSenderId) -> Result<RegisteredToolSender, AtmError> {

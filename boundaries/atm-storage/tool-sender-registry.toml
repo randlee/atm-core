@@ -29,7 +29,7 @@ forbidden = ["rusqlite::Connection"]
 
 [contracts]
 request_types = ["ToolInstallerRequest", "ToolRuntimeProof", "AtmMessageId", "MessageDigest", "IsoTimestamp"]
-response_types = ["ToolInstallReceipt", "RegisteredToolSender"]
+response_types = ["ToolInstallReceipt", "RegisteredToolSender", "ToolRuntimeAdmission"]
 error_types = ["AtmError"]
 
 [testing]

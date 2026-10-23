@@ -4,19 +4,24 @@
 //! neither serializable nor publicly constructible; daemon composition mints
 //! it only after registry admission.
 
-use atm_storage::{AgentAddress, RegisteredToolSender, TeamName};
+use atm_storage::{AgentAddress, TeamName, ToolRuntimeAdmission};
 
 use crate::caller_context::CallerContext;
 
 #[derive(Debug)]
 pub struct ToolSenderCapability {
-    _private: (),
+    _verified_runtime_admission: ToolRuntimeAdmission,
 }
 
 impl ToolSenderCapability {
-    #[allow(dead_code)]
-    pub(crate) fn admitted_by_daemon() -> Self {
-        Self { _private: () }
+    fn from_verified_runtime_admission(admission: ToolRuntimeAdmission) -> (AgentAddress, Self) {
+        let sender = admission.sender().address().clone();
+        (
+            sender,
+            Self {
+                _verified_runtime_admission: admission,
+            },
+        )
     }
 }
 
@@ -27,9 +32,18 @@ pub enum SenderClaim {
         caller: CallerContext,
     },
     DaemonTool {
-        sender: RegisteredToolSender,
+        sender: AgentAddress,
         proof: ToolSenderCapability,
     },
+}
+
+/// Converts only a successful registry runtime admission into a daemon tool
+/// claim. A resolved [`atm_storage::RegisteredToolSender`] is inspection data
+/// and cannot use this seam.
+#[must_use]
+pub fn claim_verified_tool_runtime(admission: ToolRuntimeAdmission) -> SenderClaim {
+    let (sender, proof) = ToolSenderCapability::from_verified_runtime_admission(admission);
+    SenderClaim::DaemonTool { sender, proof }
 }
 
 /// Resolve an emission sender only after preserving the provenance that
@@ -56,7 +70,7 @@ pub fn resolve_sender_claim(claim: SenderClaim) -> Result<AgentAddress, crate::e
             }
             Ok(address)
         }
-        SenderClaim::DaemonTool { sender, proof: _ } => Ok(sender.address().clone()),
+        SenderClaim::DaemonTool { sender, proof: _ } => Ok(sender),
     }
 }
 
