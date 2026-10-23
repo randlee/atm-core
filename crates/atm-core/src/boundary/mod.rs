@@ -79,7 +79,9 @@ pub mod sealed {
 }
 
 mod cron_hook_runner;
+mod cron_lifecycle_nudge_emitter;
 mod cron_lifecycle_nudger;
+mod cron_module_mail_delivery;
 mod cron_run_permit;
 mod cron_scheduler;
 mod herdr_breaker;
@@ -103,10 +105,15 @@ pub use atm_storage::{
     CronModuleOutput, CronName, CronNoticeIntent, CronNoticeKey, CronOutputBody, CronRunTransition,
     CronSchedule, CronScheduleId, CronScheduleStore, CronSuccess, CronTransitionStore,
     CronTransitionWrite, DeliveryReceipt, HookExitCause, HookName, HookRegistration,
-    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition, TaskHook, stopped_outcome,
+    HookRegistrationStore, NewCronSchedule, PendingCronDelivery, PhaseId, StopCondition, TaskHook,
+    stopped_outcome,
 };
 pub use cron_hook_runner::CronHookRunner;
+pub use cron_lifecycle_nudge_emitter::{
+    CronLifecycleNudge, CronLifecycleNudgeEmitter, CronLifecycleNudgeTarget,
+};
 pub use cron_lifecycle_nudger::CronLifecycleNudger;
+pub use cron_module_mail_delivery::CronModuleMailDelivery;
 pub use cron_run_permit::{CronRunPermit, CronRunPermitIssuer};
 pub use cron_scheduler::{CronScheduler, CronStartSpec};
 pub use hook_action_dispatcher::{DispatchSpec, DispatchedAction, HookActionDispatcher};

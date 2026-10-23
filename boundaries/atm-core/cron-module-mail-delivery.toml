@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-CronModuleMailDelivery"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "CronModuleMailDelivery"
+
+[public]
+trait = "CronModuleMailDelivery"
+notes = "delivers committed module output as ordinary mail under the scheduler-issued generation permit"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["canonical_mail_delivery"]
+io_forbidden = ["sqlite", "direct_database", "post_send_telemetry"]
+
+[dependencies]
+allowed_dependents = ["atm-cron", "atm-http-runtime", "atm-runtime-test-support"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-storage-rusqlite", "atm-core -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["CronModuleMailIntent", "CronRunPermit"]
+response_types = ["DeliveryReceipt"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_runtime_test_support::RecordingCronModuleMailDelivery"]
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CRON-MODULE-MAIL-DELIVERY-REFERENCES"]
+review_gates = ["sealed_trait", "stable_id", "atomic_generation_fence", "deterministic_test_doubles"]
+
+[status]
+state = "concrete_landed"

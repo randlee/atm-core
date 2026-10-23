@@ -351,6 +351,67 @@ pub struct LocalServiceRuntime {
 }
 
 impl LocalServiceRuntime {
+    /// Loads the team override for a built-in nudge template.
+    pub fn load_nudge_template_override(
+        &self,
+        team: &TeamName,
+        kind: crate::boundary::BuiltInNudgeTemplateKind,
+    ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+        self.nudge_template_override_store
+            .load_template_override(team, kind)
+    }
+
+    /// Resolves the current direct transport for a committed cron lifecycle
+    /// prompt using the same roster and lease policy as message delivery.
+    pub fn resolve_cron_lifecycle_nudge_target(
+        &self,
+        team: &TeamName,
+        recipient: &AgentName,
+        rendered_nudge: String,
+    ) -> Result<Option<crate::boundary::CronLifecycleNudgeTarget>, AtmError> {
+        use crate::boundary::{
+            CronLifecycleNudgeTarget as Target, GraftNudgeTarget, HerdrNudgeTarget,
+            LocalTmuxNudgeTarget,
+        };
+
+        let snapshot = crate::delivery_policy::DeliveryPolicyCoordinator::new()
+            .resolve_recipient_snapshot(self, team, recipient)?;
+        if snapshot.local_tmux_post_send {
+            let member = self
+                .load_roster_member(team, recipient)
+                .ok_or_else(|| AtmError::agent_not_found(recipient, team))?;
+            let Some(pane_id) = member.recipient_pane_id.or(snapshot.recipient_pane_id) else {
+                return Ok(None);
+            };
+            return Ok(Some(Target::Tmux(LocalTmuxNudgeTarget {
+                pane_id,
+                rendered_nudge,
+            })));
+        }
+        if snapshot.local_herdr_post_send {
+            let Some(agent) = crate::delivery_channel::resolve_herdr_agent_target(
+                recipient,
+                snapshot.herdr_agent.clone(),
+                "cron_lifecycle_herdr_dispatch",
+            ) else {
+                return Ok(None);
+            };
+            return Ok(Some(Target::Herdr(HerdrNudgeTarget {
+                agent,
+                session: snapshot.herdr_session,
+                rendered_nudge,
+            })));
+        }
+        if snapshot.graft_post_send {
+            return Ok(Some(Target::Graft(GraftNudgeTarget {
+                recipient: recipient.clone(),
+                recipient_team: team.clone(),
+                rendered_nudge,
+            })));
+        }
+        Ok(None)
+    }
+
     ///
     /// `roster` is the indivisible paired handle returned by the storage
     /// composition root's write-through roster factory. Hydration already

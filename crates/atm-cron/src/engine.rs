@@ -2,8 +2,7 @@
 //!
 //! This is deliberately separate from the legacy hook runner path while the
 //! scheduler wiring migrates.  It persists each typed transition before it
-//! attempts a lifecycle nudge; module output intents stay durable work for
-//! the delivery owner.
+//! attempts lifecycle nudges and canonical module-mail delivery.
 
 use std::sync::Arc;
 
@@ -11,9 +10,10 @@ use atm_core::{
     api::RequestDeadline,
     boundary::{
         CronCommitResult, CronDeliveryIntent, CronDeliveryKey, CronDiagnosticDetail, CronFailure,
-        CronFailureKind, CronHookRunner, CronLifecycleNudger, CronRunPermit, CronRunTransition,
-        CronSchedule, CronSuccess, CronTransitionStore, CronTransitionWrite, DispatchSpec,
-        HookName, HookTarget, StopCondition,
+        CronFailureKind, CronHookRunner, CronLifecycleNudger, CronModuleMailDelivery,
+        CronRunPermit, CronRunTransition, CronSchedule, CronSuccess, CronTransitionStore,
+        CronTransitionWrite, DispatchSpec, HookName, HookTarget, PendingCronDelivery,
+        StopCondition,
     },
     error::{AtmError, AtmErrorCode},
     hook::{CronStopReply, CronTickReply, HookAction, HookCaller, HookRequest},
@@ -33,6 +33,7 @@ pub struct CronEngineDeps {
     pub runner: Arc<dyn CronHookRunner>,
     pub transitions: Arc<dyn CronTransitionStore>,
     pub lifecycle_delivery: Arc<dyn CronLifecycleNudger>,
+    pub module_mail_delivery: Arc<dyn CronModuleMailDelivery>,
 }
 
 pub(crate) struct CronEngine {
@@ -56,6 +57,28 @@ impl CronEngine {
         transition: CronRunTransition,
         outputs: Vec<atm_core::boundary::CronModuleOutput>,
     ) -> Result<bool, AtmError> {
+        let pending_store = self.deps.transitions.clone();
+        let pending = tokio::task::spawn_blocking(move || pending_store.pending(128))
+            .await
+            .map_err(|source| {
+                AtmError::new(
+                    AtmErrorCode::InternalError,
+                    "cron pending delivery task failed",
+                )
+                .with_cause(source)
+            })??;
+        let mut intents = pending.into_iter().filter_map(|pending| match pending {
+            PendingCronDelivery::ReadyToSend(intent) => match &intent {
+                CronDeliveryIntent::Lifecycle(notice)
+                    if notice.key().schedule_id == schedule.id
+                        && notice.key().generation == schedule.generation => Some(intent),
+                CronDeliveryIntent::ModuleMail(mail)
+                    if matches!(mail.key, CronDeliveryKey::ModuleMail { schedule_id, generation, .. }
+                        if schedule_id == schedule.id && generation == schedule.generation) => Some(intent),
+                _ => None,
+            },
+            PendingCronDelivery::ReconciliationRequired { .. } => None,
+        }).collect::<Vec<_>>();
         let write = CronTransitionWrite {
             id: schedule.id,
             generation: schedule.generation,
@@ -70,33 +93,66 @@ impl CronEngine {
                 AtmError::new(AtmErrorCode::InternalError, "cron transition task failed")
                     .with_cause(source)
             })??;
-        let CronCommitResult::Applied { intents } = result else {
+        let CronCommitResult::Applied { intents: committed } = result else {
             return Ok(false);
         };
+        intents.extend(committed);
         for intent in intents {
-            let CronDeliveryIntent::Lifecycle(intent) = intent else {
-                continue;
-            };
-            let receipt = match self.deps.lifecycle_delivery.deliver(&intent).await {
-                Ok(receipt) => receipt,
-                Err(error) => {
-                    tracing::error!(subsystem = "atm_cron", action = "lifecycle_delivery_failed", schedule = %schedule.id, %error, "cron lifecycle delivery failed: {error}");
-                    continue;
+            let (key, receipt) = match intent {
+                CronDeliveryIntent::Lifecycle(intent) => {
+                    let key = CronDeliveryKey::Lifecycle(intent.key());
+                    let receipt = match self.deps.lifecycle_delivery.deliver(&intent).await {
+                        Ok(receipt) => receipt,
+                        Err(error) => {
+                            tracing::error!(subsystem = "atm_cron", action = "lifecycle_delivery_failed", schedule = %schedule.id, %error, "cron lifecycle delivery failed: {error}");
+                            continue;
+                        }
+                    };
+                    (key, receipt)
+                }
+                CronDeliveryIntent::ModuleMail(intent) => {
+                    let CronDeliveryKey::ModuleMail {
+                        schedule_id,
+                        generation,
+                        ..
+                    } = intent.key
+                    else {
+                        tracing::error!(subsystem = "atm_cron", action = "module_mail_key_invalid", schedule = %schedule.id, "cron module mail intent has a lifecycle key");
+                        continue;
+                    };
+                    if schedule_id != schedule.id || generation != schedule.generation {
+                        tracing::error!(subsystem = "atm_cron", action = "module_mail_generation_mismatch", schedule = %schedule.id, "cron module mail intent does not match the committed schedule generation");
+                        continue;
+                    }
+                    let issuer = SchedulePermitIssuer::for_schedule(schedule);
+                    let permit = CronRunPermit::from_issuer(&issuer);
+                    let key = intent.key;
+                    let receipt = match self
+                        .deps
+                        .module_mail_delivery
+                        .deliver(&intent, &permit)
+                        .await
+                    {
+                        Ok(receipt) => receipt,
+                        Err(error) => {
+                            tracing::error!(subsystem = "atm_cron", action = "module_mail_delivery_failed", schedule = %schedule.id, message_id = %intent.message_id, %error, "cron module mail delivery failed: {error}");
+                            continue;
+                        }
+                    };
+                    (key, receipt)
                 }
             };
             let transitions = self.deps.transitions.clone();
-            let key = intent.key();
-            let marked = tokio::task::spawn_blocking(move || {
-                transitions.mark_delivered(CronDeliveryKey::Lifecycle(key), receipt)
-            })
-            .await
-            .map_err(|source| {
-                AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "cron delivery receipt task failed",
-                )
-                .with_cause(source)
-            });
+            let marked =
+                tokio::task::spawn_blocking(move || transitions.mark_delivered(key, receipt))
+                    .await
+                    .map_err(|source| {
+                        AtmError::new(
+                            AtmErrorCode::InternalError,
+                            "cron delivery receipt task failed",
+                        )
+                        .with_cause(source)
+                    });
             match marked {
                 Ok(Ok(_)) => {}
                 Ok(Err(error)) => {
@@ -416,8 +472,8 @@ mod tests {
         test_support::TEST_SENDER,
     };
     use atm_runtime_test_support::{
-        InMemoryCronScheduleStore, RecordingCronLifecycleNudger, RecordingHookActionDispatcher,
-        ScriptedCronHookRunner,
+        InMemoryCronScheduleStore, RecordingCronLifecycleNudger, RecordingCronModuleMailDelivery,
+        RecordingHookActionDispatcher, ScriptedCronHookRunner,
     };
     use atm_storage::{CronModuleOutput, CronOutputBody, CronRunTransition};
 
@@ -430,8 +486,21 @@ mod tests {
     async fn typed_cron(
         runner: Arc<ScriptedCronHookRunner>,
         transitions: Arc<atm_storage::testing::InMemoryCronTransitionStore>,
-    ) -> (AtmCron, CronSchedule, Arc<RecordingHookActionDispatcher>) {
+    ) -> (
+        AtmCron,
+        CronSchedule,
+        Arc<RecordingHookActionDispatcher>,
+        Arc<RecordingCronModuleMailDelivery>,
+    ) {
         let dispatcher = Arc::new(RecordingHookActionDispatcher::default());
+        let module_mail = Arc::new(RecordingCronModuleMailDelivery::default());
+        module_mail
+            .replies
+            .lock()
+            .expect("module mail replies")
+            .push_back(Ok(atm_storage::DeliveryReceipt::Accepted {
+                receipt_id: "recorded".to_owned(),
+            }));
         let cron = AtmCron::new(crate::AtmCronDeps {
             store: Arc::new(InMemoryCronScheduleStore::new()),
             runner: Arc::new(atm_runtime_test_support::DummyHookRunner::default()),
@@ -446,6 +515,7 @@ mod tests {
             runner,
             transitions,
             lifecycle_delivery: Arc::new(RecordingCronLifecycleNudger::default()),
+            module_mail_delivery: module_mail.clone(),
         });
         let schedule = cron
             .start(CronStartSpec {
@@ -463,7 +533,7 @@ mod tests {
             })
             .await
             .expect("schedule");
-        (cron, schedule, dispatcher)
+        (cron, schedule, dispatcher, module_mail)
     }
 
     #[tokio::test]
@@ -487,7 +557,32 @@ mod tests {
                 CronStopReply::new(false, None, vec![]).expect("stop reply")
             ));
         let transitions = Arc::new(atm_storage::testing::InMemoryCronTransitionStore::default());
-        let (cron, schedule, _) = typed_cron(runner, transitions.clone()).await;
+        let (cron, schedule, _, module_mail) = typed_cron(runner, transitions.clone()).await;
+        transitions
+            .commit_results
+            .lock()
+            .expect("commit results")
+            .extend([
+                Ok(atm_storage::CronCommitResult::Applied { intents: vec![] }),
+                Ok(atm_storage::CronCommitResult::Applied {
+                    intents: vec![atm_storage::CronDeliveryIntent::ModuleMail(
+                        atm_storage::CronModuleMailIntent {
+                            key: atm_storage::CronDeliveryKey::ModuleMail {
+                                schedule_id: schedule.id,
+                                generation: schedule.generation,
+                                transition_seq: 2,
+                                output_index: 0,
+                            },
+                            message_id: atm_core::schema::AtmMessageId::new(),
+                            team: schedule.team.clone(),
+                            recipient: schedule.created_by.clone(),
+                            name: atm_core::boundary::CronName::parse(&schedule.name)
+                                .expect("cron name"),
+                            output: output("ordered module output"),
+                        },
+                    )],
+                }),
+            ]);
 
         assert_eq!(
             tick::run_one(&cron, &schedule).await,
@@ -504,6 +599,68 @@ mod tests {
             CronRunTransition::Success { .. }
         ));
         assert_eq!(writes[1].outputs, vec![output("ordered module output")]);
+        let delivered = module_mail.delivered.lock().expect("module mail delivered");
+        assert_eq!(delivered.len(), 1);
+        assert_eq!(delivered[0].1, schedule.id);
+        assert_eq!(delivered[0].2, schedule.generation);
+        assert_eq!(transitions.delivered.lock().expect("receipts").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn pending_module_mail_retries_with_same_id_but_unknown_is_not_resent() {
+        let runner = Arc::new(ScriptedCronHookRunner::default());
+        let transitions = Arc::new(atm_storage::testing::InMemoryCronTransitionStore::default());
+        let (cron, schedule, _, module_mail) = typed_cron(runner, transitions.clone()).await;
+        let key = atm_storage::CronDeliveryKey::ModuleMail {
+            schedule_id: schedule.id,
+            generation: schedule.generation,
+            transition_seq: 9,
+            output_index: 0,
+        };
+        let intent = atm_storage::CronModuleMailIntent {
+            key,
+            message_id: atm_core::schema::AtmMessageId::new(),
+            team: schedule.team.clone(),
+            recipient: schedule.created_by.clone(),
+            name: atm_core::boundary::CronName::parse(&schedule.name).expect("cron name"),
+            output: output("retry with stable identity"),
+        };
+        let stable_id = intent.message_id;
+        let mut pending = transitions.pending_intents.lock().expect("pending intents");
+        pending.push(atm_storage::PendingCronDelivery::ReadyToSend(
+            atm_storage::CronDeliveryIntent::ModuleMail(intent.clone()),
+        ));
+        pending.push(atm_storage::PendingCronDelivery::ReconciliationRequired {
+            intent: atm_storage::CronDeliveryIntent::ModuleMail(intent),
+            retry_cause: atm_storage::DeliveryRetryCause::parse("prior handoff uncertain".into())
+                .expect("retry cause"),
+        });
+        drop(pending);
+
+        let engine = cron.typed_engine.as_ref().expect("typed engine");
+        assert!(
+            engine
+                .commit(
+                    &cron,
+                    &schedule,
+                    CronRunTransition::Success {
+                        outcome: atm_storage::CronSuccess::Ok
+                    },
+                    vec![],
+                )
+                .await
+                .expect("commit retries pending work")
+        );
+
+        let delivered = module_mail
+            .delivered
+            .lock()
+            .expect("module mail deliveries");
+        assert_eq!(delivered.len(), 1);
+        assert_eq!(delivered[0].0.message_id, stable_id);
+        let receipts = transitions.delivered.lock().expect("receipts");
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0].0, key);
     }
 
     #[tokio::test]
@@ -535,7 +692,7 @@ mod tests {
                 CronStopReply::new(false, None, vec![]).expect("stop reply")
             ));
         let transitions = Arc::new(atm_storage::testing::InMemoryCronTransitionStore::default());
-        let (cron, schedule, dispatcher) = typed_cron(runner, transitions.clone()).await;
+        let (cron, schedule, dispatcher, _) = typed_cron(runner, transitions.clone()).await;
 
         let outcome = tick::run_one(&cron, &schedule).await;
         assert_eq!(outcome, tick::CronRunOutcome::Actions(1));

@@ -603,3 +603,30 @@ Rules:
   refuses cron dispatch by default.
 - The architecture test `cron_run_permit_issuer_boundary` compares all issuer
   implementations against the exact manifest allowlist.
+
+## CronModuleMailDelivery
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/cron-module-mail-delivery.toml](../../boundaries/atm-core/cron-module-mail-delivery.toml)
+
+Rules:
+- The engine passes only committed module-mail intents and an opaque scheduler
+  permit. The runtime uses canonical writer admission, retaining the intent's
+  stable message ID outside the serialized write request and checking the
+  schedule generation atomically with persistence.
+- Module output is ordinary creator-addressed mail. It cannot create a task or
+  acknowledgement. Pending work may be retried with the same ID;
+  reconciliation-required work is never resent automatically.
+
+## CronLifecycleNudgeEmitter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/cron-lifecycle-nudge-emitter.toml](../../boundaries/atm-core/cron-lifecycle-nudge-emitter.toml)
+
+Rules:
+- Runtime renders only the Cron template family, resolves the current creator
+  transport target, and passes the committed key and rendered prompt to the
+  direct emitter. Disabled templates return `Suppressed`; missing creators
+  return `RecipientUnavailable`.
+- Lifecycle prompts do not write mail, tasks, acknowledgements, or post-send
+  telemetry. Unknown external handoffs remain reconciliation-required.

@@ -29,7 +29,8 @@ use atm_core::protocol::{
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
-    NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_cron_run_permit_async_runtime,
+    NudgeMode, SendMessageSource, WarningEntry, WriteOutcome,
+    prepare_cron_module_mail_async_runtime, prepare_write_with_cron_run_permit_async_runtime,
     prepare_write_with_preflight_async_runtime, prepare_write_with_tool_capability_async_runtime,
 };
 use atm_runtime::{
@@ -193,6 +194,7 @@ impl StorageAndNudgeRouter {
         deadline: RequestDeadline,
         tool_capability: Option<atm_core::boundary::ToolSenderCapability>,
         cron_permit: Option<&atm_core::boundary::CronRunPermit>,
+        stable_message_id: Option<atm_core::schema::AtmMessageId>,
     ) -> Result<CommittedWrite, AtmError> {
         let source_preflight = self
             .write_source_preflight_bridge
@@ -204,14 +206,29 @@ impl StorageAndNudgeRouter {
                     "cron action cannot combine a cron permit with tool sender admission",
                 ));
             }
-            prepare_write_with_cron_run_permit_async_runtime(
-                request,
-                permit,
-                self.observability.as_ref(),
-                &self.service_runtime,
-                source_preflight,
-            )
-            .await?
+            match stable_message_id {
+                Some(message_id) => {
+                    prepare_cron_module_mail_async_runtime(
+                        request,
+                        permit,
+                        message_id,
+                        self.observability.as_ref(),
+                        &self.service_runtime,
+                        source_preflight,
+                    )
+                    .await?
+                }
+                None => {
+                    prepare_write_with_cron_run_permit_async_runtime(
+                        request,
+                        permit,
+                        self.observability.as_ref(),
+                        &self.service_runtime,
+                        source_preflight,
+                    )
+                    .await?
+                }
+            }
         } else if let Some(capability) = tool_capability {
             prepare_write_with_tool_capability_async_runtime(
                 request,
@@ -232,6 +249,78 @@ impl StorageAndNudgeRouter {
         };
         crate::task_telemetry::project_task_events(&self.task_telemetry, &execution.task_events);
         self.commit_write(execution.operation?, deadline).await
+    }
+
+    pub(crate) async fn deliver_cron_module_mail(
+        &self,
+        intent: &atm_core::boundary::CronModuleMailIntent,
+        permit: &atm_core::boundary::CronRunPermit,
+    ) -> Result<atm_core::boundary::DeliveryReceipt, AtmError> {
+        use atm_core::boundary::{CronDeliveryKey, CronModuleOutput};
+
+        let CronDeliveryKey::ModuleMail {
+            schedule_id,
+            generation,
+            ..
+        } = intent.key
+        else {
+            return Err(AtmError::validation(
+                "cron module mail intent has a lifecycle key",
+            ));
+        };
+        if schedule_id != permit.schedule_id() || generation != permit.generation() {
+            return Err(AtmError::validation(
+                "cron module mail intent does not match its run permit",
+            ));
+        }
+        if let Err(error) = self.check_roster_member(&intent.team, &intent.recipient) {
+            if error.code() == atm_core::error::AtmErrorCode::AgentNotFound {
+                return Ok(atm_core::boundary::DeliveryReceipt::RecipientUnavailable);
+            }
+            return Err(error);
+        }
+        let body = match &intent.output {
+            CronModuleOutput::Message { body } | CronModuleOutput::Error { body } => body.as_str(),
+        };
+        let to = format!("{}@{}", intent.recipient, intent.team);
+        let request = atm_core::send::WriteRequest::new(
+            self.daemon_home.clone(),
+            self.daemon_home.clone(),
+            atm_core::types::AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME),
+            &to,
+            intent.team.clone(),
+            SendMessageSource::Inline(body.to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )?;
+        let deadline = RequestDeadline::after(std::time::Duration::from_secs(30));
+        let prepared = self
+            .prepare_and_commit_write(
+                request,
+                deadline,
+                None,
+                Some(permit),
+                Some(intent.message_id),
+            )
+            .await?;
+        let delivered = prepared.newly_persisted;
+        let _ = self
+            .finish_write_delivery(
+                prepared,
+                AuthenticatedIngress::Local,
+                deadline,
+                atm_core::protocol::next_request_id(),
+            )
+            .await?;
+        Ok(if delivered {
+            atm_core::boundary::DeliveryReceipt::Accepted {
+                receipt_id: intent.message_id.to_string(),
+            }
+        } else {
+            atm_core::boundary::DeliveryReceipt::Suppressed
+        })
     }
 
     async fn commit_write(
@@ -966,7 +1055,7 @@ impl StorageAndNudgeRouter {
                     .await?
             };
             let committed = self
-                .prepare_and_commit_write(request, deadline, tool_capability, cron_permit)
+                .prepare_and_commit_write(request, deadline, tool_capability, cron_permit, None)
                 .await?;
             let (outcome, task_rejection) = self
                 .finish_write_delivery(committed, ingress, deadline, request_id)
