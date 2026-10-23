@@ -849,14 +849,23 @@ mod tests {
         super::register_bridge(std::sync::Arc::clone(&bridge));
 
         const CONTENDERS: usize = 8;
-        let barrier = std::sync::Arc::new(std::sync::Barrier::new(CONTENDERS));
-        let contenders = (0..CONTENDERS)
+        // SQLite initializes process-global state while opening a connection. Prepare every
+        // independent backend before creating the attach race so this regression controls only
+        // the ownership transition it is intended to prove.
+        let backends = (0..CONTENDERS)
             .map(|index| {
+                atm_storage_rusqlite::SqliteStorageBackend::new(
+                    log_dir.path().join(format!("contender-{index}.db")),
+                )
+                .expect("contender backend opens")
+            })
+            .collect::<Vec<_>>();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(CONTENDERS));
+        let contenders = backends
+            .into_iter()
+            .map(|backend| {
                 let barrier = std::sync::Arc::clone(&barrier);
-                let database_path = log_dir.path().join(format!("contender-{index}.db"));
                 std::thread::spawn(move || {
-                    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(database_path)
-                        .expect("contender backend opens");
                     barrier.wait();
                     super::try_attach_timeline(backend.diagnostic_timeline())
                 })

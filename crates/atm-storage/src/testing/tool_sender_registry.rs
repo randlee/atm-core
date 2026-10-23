@@ -10,13 +10,42 @@ use crate::schema::AtmMessageId;
 use crate::tool_sender::{
     MessageDigest, PluginSenderId, RegisteredToolSender, ToolInstallReceipt,
     ToolInstallerOperation, ToolInstallerRequest, ToolPrincipal, ToolRuntimeAdmission,
-    ToolRuntimeProof, ToolSenderFailure, ToolSenderRegistry,
+    ToolRuntimeAdmissionIssuer, ToolRuntimeProof, ToolSenderFailure, ToolSenderRegistry,
 };
 use crate::types::IsoTimestamp;
 
 #[derive(Default)]
 pub struct InMemoryToolSenderRegistry {
     senders: Mutex<BTreeMap<PluginSenderId, RegisteredToolSender>>,
+}
+
+/// Private issuer record used only after this deterministic registry has
+/// selected a registered sender for the supplied runtime proof.
+struct InMemoryToolRuntimeAdmissionIssuer {
+    sender: RegisteredToolSender,
+    proof: ToolRuntimeProof,
+    message_id: AtmMessageId,
+    message_digest: MessageDigest,
+}
+
+impl sealed::Sealed for InMemoryToolRuntimeAdmissionIssuer {}
+
+impl ToolRuntimeAdmissionIssuer for InMemoryToolRuntimeAdmissionIssuer {
+    fn sender(&self) -> &RegisteredToolSender {
+        &self.sender
+    }
+
+    fn proof(&self) -> &ToolRuntimeProof {
+        &self.proof
+    }
+
+    fn message_id(&self) -> AtmMessageId {
+        self.message_id
+    }
+
+    fn message_digest(&self) -> &MessageDigest {
+        &self.message_digest
+    }
 }
 
 impl InMemoryToolSenderRegistry {
@@ -66,7 +95,12 @@ impl ToolSenderRegistry for InMemoryToolSenderRegistry {
         _now: IsoTimestamp,
     ) -> Result<ToolRuntimeAdmission, AtmError> {
         let sender = self.resolve(&proof.sender)?;
-        ToolRuntimeAdmission::verified(sender, &proof, message_id, digest)
+        ToolRuntimeAdmission::from_issuer(&InMemoryToolRuntimeAdmissionIssuer {
+            sender,
+            proof,
+            message_id,
+            message_digest: digest,
+        })
     }
 
     fn resolve(&self, sender: &PluginSenderId) -> Result<RegisteredToolSender, AtmError> {
@@ -84,9 +118,12 @@ impl ToolSenderRegistry for InMemoryToolSenderRegistry {
 
 #[cfg(test)]
 mod tests {
-    use super::InMemoryToolSenderRegistry;
+    use std::str::FromStr;
+
+    use super::*;
     use crate::error::AtmErrorCode;
-    use crate::tool_sender::{PluginSenderId, ToolSenderRegistry};
+    use crate::tool_sender::{PluginSenderId, ToolKeyId, ToolNonce, ToolSenderRegistry};
+    use crate::types::HostName;
 
     #[test]
     fn unregistered_sender_uses_stable_failure_code() {
@@ -99,5 +136,40 @@ mod tests {
 
         assert_eq!(error.code(), AtmErrorCode::ToolSenderUnregistered);
         assert!(error.message().contains("authenticated installer"));
+    }
+
+    #[test]
+    fn issuer_rechecks_the_proof_message_binding() {
+        let sender_id = PluginSenderId::parse("plugin").expect("fixed sender");
+        let sender = InMemoryToolSenderRegistry::sender(&sender_id).expect("registered sender");
+        let proof_message_id =
+            AtmMessageId::from_str("01ARZ3NDEKTSV4RRFFQ69G5FAV").expect("fixed message id");
+        let issued_message_id =
+            AtmMessageId::from_str("01ARZ3NDEKTSV4RRFFQ69G5FAW").expect("different message id");
+        let digest = MessageDigest::parse("message-digest").expect("fixed digest");
+        let proof = ToolRuntimeProof {
+            runtime_key_id: ToolKeyId::parse("runtime-key").expect("fixed key"),
+            sender: sender_id,
+            registration_generation: 1,
+            host_id: HostName::from_str("host.example").expect("fixed host"),
+            message_id: proof_message_id,
+            message_digest: digest.clone(),
+            nonce: ToolNonce::parse("message-nonce").expect("fixed nonce"),
+            signature: "opaque-signature".into(),
+        };
+
+        let error = ToolRuntimeAdmission::from_issuer(&InMemoryToolRuntimeAdmissionIssuer {
+            sender,
+            proof,
+            message_id: issued_message_id,
+            message_digest: digest,
+        })
+        .expect_err("an issuer cannot detach a proof from its message");
+
+        assert!(
+            error
+                .message()
+                .contains("does not bind the requested message id and digest")
+        );
     }
 }

@@ -5,7 +5,7 @@ name = "ToolSenderRegistry"
 
 [public]
 trait = "ToolSenderRegistry"
-notes = "sealed storage-neutral admission registry for authenticated virtual tool principals; resolving a sender never mints an emission capability"
+notes = "sealed storage-neutral admission registry for authenticated virtual tool principals; resolving a sender never mints an emission capability. ToolRuntimeAdmissionIssuer is the ADR-001 restricted cross-crate issuance seam: only the SQLite adapter and approved in-memory double may implement it."
 
 [implementation]
 visibility = "trait_only"
@@ -33,7 +33,7 @@ response_types = ["ToolInstallReceipt", "RegisteredToolSender", "ToolRuntimeAdmi
 error_types = ["AtmError"]
 
 [testing]
-allowed_test_double_paths = ["crate::testing::tool_sender_registry::InMemoryToolSenderRegistry"]
+allowed_test_double_paths = ["crate::testing::tool_sender_registry::InMemoryToolSenderRegistry", "crate::testing::tool_sender_registry::InMemoryToolRuntimeAdmissionIssuer"]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
@@ -42,4 +42,4 @@ review_gates = ["sealed_trait", "authenticated_provenance", "deterministic_test_
 
 [status]
 state = "concrete_landed"
-notes = ["BK-9 landed the sealed port and in-memory double; BK-10 implements SQLite verification and nonce persistence."]
+notes = ["BK-9 landed the sealed port and in-memory double; BK-10 implements SQLite verification and nonce persistence.", "ToolRuntimeAdmissionIssuer is an ADR-001 workspace-convention seal. Its authorized production implementation site is crates/atm-storage-rusqlite/src/tool_sender_registry.rs when BK-10 lands; its only current implementation is the private deterministic in-memory issuer."]

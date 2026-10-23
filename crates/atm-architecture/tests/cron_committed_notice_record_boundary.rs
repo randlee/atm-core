@@ -16,6 +16,8 @@ use syn::visit::Visit;
 const MANIFEST: &str = "boundaries/atm-storage/cron-transition-store.toml";
 const TRAIT: &str = "CronCommittedNoticeRecord";
 const SQLITE_IMPLEMENTATION: &str = "crates/atm-storage-rusqlite/src/cron_transition_store.rs";
+const SQLITE_EXTERNAL_FIXTURE: &str =
+    "crates/atm-storage-rusqlite/tests/cron_committed_notice_record_adapter.rs";
 const DOUBLE_IMPLEMENTATION: &str = "crates/atm-storage/src/testing/cron_transition_store.rs";
 
 #[derive(Deserialize)]
@@ -63,6 +65,7 @@ fn only_authorized_sources_implement_the_committed_notice_record() {
         .collect::<BTreeSet<_>>();
     let expected = BTreeSet::from([
         DOUBLE_IMPLEMENTATION.to_owned(),
+        SQLITE_EXTERNAL_FIXTURE.to_owned(),
         SQLITE_IMPLEMENTATION.to_owned(),
     ]);
 

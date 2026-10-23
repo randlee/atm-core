@@ -177,6 +177,24 @@ struct VerifiedRuntimeBinding {
 }
 
 impl ToolRuntimeAdmission {
+    /// Projects an opaque runtime admission from an authorized issuer record.
+    ///
+    /// [`ToolRuntimeAdmissionIssuer`] uses ADR-001's workspace-convention
+    /// seal.  The SQLite registry adapter creates its private issuer record
+    /// only after its verification transaction commits; the deterministic
+    /// in-memory registry owns the corresponding test-only record.  This
+    /// cross-crate seam deliberately has no constructor accepting a resolved
+    /// [`RegisteredToolSender`]: `ToolSenderRegistry::resolve` remains
+    /// inspection-only and cannot mint an emission admission.
+    pub fn from_issuer(issuer: &impl ToolRuntimeAdmissionIssuer) -> Result<Self, AtmError> {
+        Self::verified(
+            issuer.sender().clone(),
+            issuer.proof(),
+            issuer.message_id(),
+            issuer.message_digest().clone(),
+        )
+    }
+
     /// Mints an opaque admission after the registry transaction commits.
     pub(crate) fn verified(
         sender: RegisteredToolSender,
@@ -208,6 +226,27 @@ impl ToolRuntimeAdmission {
         let _ = &self.binding;
         &self.sender
     }
+}
+
+/// Read-only, adapter-produced provenance for one runtime admission.
+///
+/// This is an ADR-001 workspace-convention sealed trait.  Only the documented
+/// SQLite registry adapter and the deterministic in-memory double may
+/// implement it; the architecture test keeps that source allowlist exact.
+/// The record carries the verified sender and the canonical proof/message
+/// binding, so a `resolve` result by itself cannot become an admission.
+pub trait ToolRuntimeAdmissionIssuer: sealed::Sealed {
+    /// Sender selected by the adapter's verified registration state.
+    fn sender(&self) -> &RegisteredToolSender;
+
+    /// Runtime proof accepted by the adapter's verification transaction.
+    fn proof(&self) -> &ToolRuntimeProof;
+
+    /// Canonical durable message identity bound by the proof.
+    fn message_id(&self) -> AtmMessageId;
+
+    /// Canonical message digest bound by the proof.
+    fn message_digest(&self) -> &MessageDigest;
 }
 
 const INSTALL_DOMAIN: &str = "ATM-TOOL-INSTALL-v1";
