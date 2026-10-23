@@ -194,6 +194,7 @@ impl<'de> Deserialize<'de> for ReplyTarget {
 
 mod acknowledgement;
 mod pipeline;
+mod pipeline_terminal_escalation;
 
 pub use pipeline::{
     PreparedWrite, WriteOutcome, cron_run_message_write_origin,

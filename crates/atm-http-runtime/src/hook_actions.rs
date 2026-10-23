@@ -175,9 +175,11 @@ impl HookActionDispatcher for UnhookedRouter {
                     AuthenticatedIngress::Local,
                     deadline,
                     next_request_id(),
-                    &permit,
-                    &spec.team,
-                    &spec.phase,
+                    crate::storage_and_nudge_router::CronPermitContext {
+                        permit: &permit,
+                        team: &spec.team,
+                        phase: &spec.phase,
+                    },
                 )
                 .await;
             log_action(&spec, command, &run_as, result.is_ok(), started);

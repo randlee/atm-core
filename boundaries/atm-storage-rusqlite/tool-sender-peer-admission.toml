@@ -18,7 +18,7 @@ roots = ["atm_storage_rusqlite::SqliteStorageFactory::with_tool_sender_peer_admi
 
 [ownership]
 io_owns = ["sqlite", "origin_signature_verification", "peer_nonce_binding"]
-io_forbidden = ["process_spawn", "socket_io", "mail_delivery"]
+io_forbidden = ["process_spawn", "socket_io", "message_delivery"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
