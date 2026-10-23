@@ -491,3 +491,14 @@ BK-9 introduces `CronLifecycleNudger`, `cron_lifecycle_nudger`, and
 error, and custom notices; they do not add a physical nudge kind or alter the
 existing Steer/Queue taxonomy. These three identifiers are therefore admitted
 to the frozen taxonomy inventory.
+
+## BK-12 amendment — cron lifecycle template helpers
+
+BK-12 adds `render_cron_lifecycle_nudge` and
+`validate_cron_nudge_template_body` in `atm-core` for the cron-only built-in
+template family. The renderer uses committed cron lifecycle event values;
+the validator checks cron override placeholders before storage. Like the
+template override cluster in (g), these helpers use nudge in its umbrella
+sense: neither selects nor introduces a Steer/Queue delivery kind. These two
+exact identifiers are therefore admitted to the frozen taxonomy inventory;
+the kind taxonomy and gate for all other new identifiers remain unchanged.

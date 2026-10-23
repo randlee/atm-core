@@ -420,6 +420,7 @@ dependencies = [
  "atm-runtime",
  "atm-storage",
  "atm-storage-rusqlite",
+ "tokio",
 ]
 
 [[package]]

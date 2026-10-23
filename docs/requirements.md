@@ -1265,7 +1265,7 @@ Global caller-context rules:
 
 | Command | Caller identity required | Caller identity may come from | Caller team required | Caller team may come from | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `atm send` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select caller context; target recipient/team are not caller context |
+| `atm send` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select caller context; target recipient/team are not caller context; the shipped CLI has no `--from` caller override |
 | `atm peek` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | inspection-only; `--from` remains a sender filter |
 | `atm read` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
 | `atm ack` | Yes | `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target preserves the received full source address |
@@ -1302,7 +1302,14 @@ Global caller-context rules:
   and fails before daemon dispatch
 - a chat-qualified recipient is expressed only in canonical `<to>` syntax:
   `<agent>:<chat-id>@<team>[.<host>]`
-- `--from` on `send` is not an accepted caller-identity override
+- the shipped `atm send` CLI declares no `--from` option: both unqualified
+  `--from <name>` and full-address `--from <agent>@<team>` are rejected before
+  dispatch and cannot select a sender or caller context. A later compatible
+  addition may admit only the full-address form, never the unqualified alias;
+  it must be mutually exclusive with `--as` and `--chat-id`, match the
+  invoking shell's authenticated agent and resolved caller team, and require
+  any supplied `--team` to match. It therefore remains a spelling of the
+  authenticated caller, not an impersonation mechanism.
 - `--from` on `read` / `list` is a sender filter only
 - `--as` is accepted on `send` and `read` for the caller agent/chat override,
   and on inspection-only surfaces such as `peek` and `list`
@@ -1508,7 +1515,6 @@ Write one message into one target inbox.
 - `--summary <text>`
 - `--json`
 - `--dry-run`
-- `--from <name>`
 - `--requires-ack`
 - `--task-id <id>`
 - `--task-complete` (requires `--task-id`)
@@ -1519,9 +1525,10 @@ Retired from the current implementation:
 
 ### 6.3 Required Behavior
 
-- resolve sender identity using the defined precedence
-- if sender identity cannot be resolved from `--from` or invoking-shell
-  `ATM_IDENTITY`, fail before daemon dispatch
+- resolve sender identity using the caller-context matrix and its chat-id
+  precedence; the shipped CLI has no send-time `--from` source
+- if sender identity cannot be resolved from `--as`, `--chat-id`, or the
+  invoking-shell caller-context sources, fail before daemon dispatch
 - resolve recipient address using the defined precedence
 - resolve aliases before mailbox lookup
 - when a cross-team alias-oriented sender is projected into `from`, also
@@ -5545,11 +5552,14 @@ Product requirement IDs:
   and nonce. mTLS identifies the peer host but does not by itself authorize a
   virtual sender. Receiving hosts verify the attestation and their sender-host
   allowlist and refuse bare `@tool` strings.
-- `atm send --from <agent>@<team>` is a full-address caller-context spelling,
-  never an impersonation token. It is mutually exclusive with `--as` and
-  `--chat-id`, must equal the authenticated shell identity/team, and if
-  `--team` is present it must match. Read/list `--from` remains a filter.
-  Cron reply `from` is an authenticated action field and is not CLI authority.
+- The shipped `atm send` CLI has no `--from` option. Consequently neither
+  `--from <name>` nor `--from <agent>@<team>` is a current caller-context
+  source; both are rejected before dispatch. If a compatible send-time form
+  is introduced, it must be only the full-address
+  `--from <agent>@<team>` spelling and must follow §4.2's authenticated-caller
+  equality, mutual-exclusion, and `--team`-matching rules. Read/list `--from`
+  remains a filter. Cron reply `from` is an authenticated action field and is
+  not CLI authority.
 - A cron `send` action uses, in order: its explicit full-address ordinary
   `from`; its legacy same-team `as`; then daemon-owned `cron@tool`. `from`
   plus `as`, a foreign team, a different roster member, or explicit `@tool`
@@ -5594,10 +5604,12 @@ remains a bare array.
   end is the same atomic stopped transition; repeat end adds none.
 - Lifecycle intents use a stable `CronNoticeKey`; module mail intents use a
   stable stored `AtmMessageId`. Delivery is `accepted`, `suppressed`,
-  `recipient_unavailable`, or retained for reconciliation when handoff status
-  is unknown. The contract guarantees one durable logical intent, never an
-  unproven exactly-once external nudge. Missing creators are terminal,
-  operator-visible outcomes and never redirect notification.
+  `recipient_unavailable`, or `unknown` with a bounded typed retry cause.
+  Unknown handoffs persist as reconciliation-required pending records, never
+  resendable work: a caller must resolve the prior handoff rather than blindly
+  send the same intent again. The contract guarantees one durable logical
+  intent, never an unproven exactly-once external nudge. Missing creators are
+  terminal, operator-visible outcomes and never redirect notification.
 - A generation-scoped, non-serializable `CronRunPermit` is checked at each
   canonical action admission. Ending or restarting fences the next action but
   cannot roll back an already committed action. The scheduler alone mints it;

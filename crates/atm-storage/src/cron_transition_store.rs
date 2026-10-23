@@ -20,6 +20,7 @@ use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 pub const CRON_OUTPUT_BODY_MAX_BYTES: usize = 65_536;
 pub const CRON_DIAGNOSTIC_MAX_BYTES: usize = 4_096;
+pub const CRON_DELIVERY_RETRY_CAUSE_MAX_BYTES: usize = 1_024;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -292,6 +293,69 @@ pub enum CronDeliveryIntent {
     ModuleMail(CronModuleMailIntent),
 }
 
+/// Bounded, operator-safe reason why an external delivery handoff is unknown.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct DeliveryRetryCause(String);
+
+impl DeliveryRetryCause {
+    pub fn parse(value: String) -> Result<Self, AtmError> {
+        let value = value.split_whitespace().collect::<Vec<_>>().join(" ");
+        if value.trim().is_empty() || value.len() > CRON_DELIVERY_RETRY_CAUSE_MAX_BYTES {
+            return Err(AtmError::hook_malformed(&format!(
+                "cron delivery retry cause must contain 1..={CRON_DELIVERY_RETRY_CAUSE_MAX_BYTES} bytes"
+            )));
+        }
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for DeliveryRetryCause {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(value)
+    }
+}
+
+impl From<DeliveryRetryCause> for String {
+    fn from(value: DeliveryRetryCause) -> Self {
+        value.0
+    }
+}
+
+/// A pending-query record makes the resend decision explicit.
+///
+/// Reconciliation-required records retain the intent for inspection but must
+/// never be retried blindly: the prior external handoff may have succeeded.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PendingCronDelivery {
+    ReadyToSend(CronDeliveryIntent),
+    ReconciliationRequired {
+        intent: CronDeliveryIntent,
+        retry_cause: DeliveryRetryCause,
+    },
+}
+
+impl PendingCronDelivery {
+    #[must_use]
+    pub fn intent(&self) -> &CronDeliveryIntent {
+        match self {
+            Self::ReadyToSend(intent) | Self::ReconciliationRequired { intent, .. } => intent,
+        }
+    }
+
+    #[must_use]
+    pub fn is_safe_to_resend(&self) -> bool {
+        matches!(self, Self::ReadyToSend(_))
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CronTransitionWrite {
     pub id: CronScheduleId,
@@ -312,11 +376,15 @@ pub enum DeliveryReceipt {
     Accepted { receipt_id: String },
     Suppressed,
     RecipientUnavailable,
+    Unknown { retry_cause: DeliveryRetryCause },
 }
 
 pub trait CronTransitionStore: sealed::Sealed + Send + Sync {
     fn commit(&self, write: CronTransitionWrite) -> Result<CronCommitResult, AtmError>;
-    fn pending(&self, limit: usize) -> Result<Vec<CronDeliveryIntent>, AtmError>;
+    /// Returns resendable work and uncertain external handoffs separately.
+    /// Reconciliation-required records must not be resent before their prior
+    /// handoff is resolved.
+    fn pending(&self, limit: usize) -> Result<Vec<PendingCronDelivery>, AtmError>;
     fn mark_delivered(
         &self,
         key: CronDeliveryKey,
@@ -382,6 +450,12 @@ mod tests {
         assert!(
             !source.contains(&public_issue) && !source.contains(&public_record),
             "callers must not mint lifecycle intent provenance"
+    fn delivery_retry_cause_is_bounded_and_normalized() {
+        let cause = DeliveryRetryCause::parse("network\r\ntimeout".into()).expect("cause");
+        assert_eq!(cause.as_str(), "network timeout");
+        assert!(DeliveryRetryCause::parse("\n".into()).is_err());
+        assert!(
+            DeliveryRetryCause::parse("x".repeat(CRON_DELIVERY_RETRY_CAUSE_MAX_BYTES + 1)).is_err()
         );
     }
 }
