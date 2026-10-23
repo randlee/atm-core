@@ -16,7 +16,7 @@ use atm_core::{
         HookName, HookTarget, StopCondition,
     },
     error::{AtmError, AtmErrorCode},
-    hook::{CronHookOutcome, CronStopReply, CronTickReply, HookCaller, HookRequest},
+    hook::{CronStopReply, CronTickReply, HookAction, HookCaller, HookRequest},
 };
 
 use crate::{
@@ -32,7 +32,7 @@ use crate::{
 pub struct CronEngineDeps {
     pub runner: Arc<dyn CronHookRunner>,
     pub transitions: Arc<dyn CronTransitionStore>,
-    pub lifecycle_nudger: Arc<dyn CronLifecycleNudger>,
+    pub lifecycle_delivery: Arc<dyn CronLifecycleNudger>,
 }
 
 pub(crate) struct CronEngine {
@@ -77,10 +77,10 @@ impl CronEngine {
             let CronDeliveryIntent::Lifecycle(intent) = intent else {
                 continue;
             };
-            let receipt = match self.deps.lifecycle_nudger.deliver(&intent).await {
+            let receipt = match self.deps.lifecycle_delivery.deliver(&intent).await {
                 Ok(receipt) => receipt,
                 Err(error) => {
-                    tracing::error!(subsystem = "atm_cron", action = "lifecycle_nudge_failed", schedule = %schedule.id, %error, "cron lifecycle nudge failed: {error}");
+                    tracing::error!(subsystem = "atm_cron", action = "lifecycle_delivery_failed", schedule = %schedule.id, %error, "cron lifecycle delivery failed: {error}");
                     continue;
                 }
             };
@@ -216,7 +216,7 @@ impl CronEngine {
         schedule: &CronSchedule,
         target: &HookTarget,
     ) -> Execution {
-        match self
+        let reply = self
             .deps
             .runner
             .run_cron(
@@ -225,9 +225,19 @@ impl CronEngine {
                 deadline(cron, schedule),
             )
             .await
-        {
+            .map(|outcome| outcome.reply);
+        self.execution_for_reply(cron, schedule, reply).await
+    }
+
+    async fn execution_for_reply(
+        &self,
+        cron: &AtmCron,
+        schedule: &CronSchedule,
+        reply: Result<CronTickReply, AtmError>,
+    ) -> Execution {
+        match reply {
             Err(error) => Execution::new(runner_failure(error), Vec::new()),
-            Ok(CronHookOutcome { reply, .. }) => match reply {
+            Ok(reply) => match reply {
                 CronTickReply::PassThrough { output } => Execution::new(
                     CronRunTransition::Success {
                         outcome: CronSuccess::Ok,
@@ -248,50 +258,58 @@ impl CronEngine {
                     }),
                     Vec::new(),
                 ),
-                CronTickReply::Handled { actions, output } if actions.is_empty() => Execution::new(
-                    CronRunTransition::Success {
-                        outcome: CronSuccess::Actions { count: 0 },
-                    },
-                    output,
-                ),
                 CronTickReply::Handled { actions, output } => {
-                    let count = actions.len();
-                    let issuer = SchedulePermitIssuer::for_schedule(schedule);
-                    match cron
-                        .deps
-                        .dispatcher
-                        .dispatch_cron_actions(
-                            DispatchSpec {
-                                hook: HookName::cron_tick(),
-                                team: schedule.team.clone(),
-                                phase: schedule.phase.clone(),
-                                default_as: schedule.created_by.clone(),
-                                deadline: None,
-                                dry_run: false,
-                            },
-                            CronRunPermit::from_issuer(&issuer),
-                            actions,
-                        )
+                    self.dispatch_handled_actions(cron, schedule, actions, output)
                         .await
-                    {
-                        Ok(_) => Execution::new(
-                            CronRunTransition::Success {
-                                outcome: CronSuccess::Actions { count },
-                            },
-                            output,
-                        ),
-                        Err(error) => Execution::new(
-                            failure(
-                                CronFailureKind::ActionFailed,
-                                Some(error.code()),
-                                "cron action admission failed",
-                            ),
-                            output,
-                        ),
-                    }
                 }
             },
         }
+    }
+
+    async fn dispatch_handled_actions(
+        &self,
+        cron: &AtmCron,
+        schedule: &CronSchedule,
+        actions: Vec<HookAction>,
+        output: Vec<atm_core::boundary::CronModuleOutput>,
+    ) -> Execution {
+        let count = actions.len();
+        if actions.is_empty() {
+            return Execution::new(
+                CronRunTransition::Success {
+                    outcome: CronSuccess::Actions { count },
+                },
+                output,
+            );
+        }
+        let issuer = SchedulePermitIssuer::for_schedule(schedule);
+        let result = cron
+            .deps
+            .dispatcher
+            .dispatch_cron_actions(
+                DispatchSpec {
+                    hook: HookName::cron_tick(),
+                    team: schedule.team.clone(),
+                    phase: schedule.phase.clone(),
+                    default_as: schedule.created_by.clone(),
+                    deadline: None,
+                    dry_run: false,
+                },
+                CronRunPermit::from_issuer(&issuer),
+                actions,
+            )
+            .await;
+        let transition = match result {
+            Ok(_) => CronRunTransition::Success {
+                outcome: CronSuccess::Actions { count },
+            },
+            Err(error) => failure(
+                CronFailureKind::ActionFailed,
+                Some(error.code()),
+                "cron action admission failed",
+            ),
+        };
+        Execution::new(transition, output)
     }
 }
 
@@ -394,7 +412,7 @@ mod tests {
     use super::*;
     use atm_core::{
         boundary::{CronScheduler, CronStartSpec, PhaseId},
-        hook::CronTickReply,
+        hook::{CronHookOutcome, CronTickReply},
         test_support::TEST_SENDER,
     };
     use atm_runtime_test_support::{
@@ -427,7 +445,7 @@ mod tests {
         .with_typed_execution(CronEngineDeps {
             runner,
             transitions,
-            lifecycle_nudger: Arc::new(RecordingCronLifecycleNudger::default()),
+            lifecycle_delivery: Arc::new(RecordingCronLifecycleNudger::default()),
         });
         let schedule = cron
             .start(CronStartSpec {
