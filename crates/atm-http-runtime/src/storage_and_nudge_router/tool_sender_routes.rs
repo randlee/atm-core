@@ -10,6 +10,7 @@ use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
 use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, ToolInstallerRequest};
 use atm_core::send::{ToolInstallerOperation, ToolSenderRegistry, WriteRequest};
+use atm_core::send::{ToolRuntimeProof, ToolSenderAttestation};
 use atm_core::types::IsoTimestamp;
 
 use super::StorageAndNudgeRouter;
@@ -29,90 +30,107 @@ impl StorageAndNudgeRouter {
             (Some(_), Some(_)) => Err(AtmError::validation(
                 "a write cannot combine local runtime proof and peer sender attestation",
             )),
-            (Some(proof), None) => {
-                require_local(ingress)?;
-                if request.origin_message_id.is_some()
-                    || request.origin_timestamp.is_some()
-                    || request.authenticated_source_host.is_some()
-                {
-                    return Err(AtmError::validation(
-                        "local tool runtime proof cannot override peer origin metadata",
-                    ));
-                }
-                let registry = self.hooks.tool_senders.clone().ok_or_else(|| {
-                    AtmError::daemon_unavailable_with_recovery(
-                        "tool sender registry is unavailable for runtime proof admission",
-                        "Install the protected tool sender registry during daemon startup before accepting virtual sender writes.",
-                    )
-                })?;
-                let proof = proof.clone();
-                let admission = self
-                    .control_path_sync_bridge
-                    .run(deadline, move || {
-                        let message_id = proof.message_id;
-                        let digest = proof.message_digest.clone();
-                        registry.admit_signed_message(
-                            proof,
-                            message_id,
-                            digest,
-                            IsoTimestamp::now(),
-                        )
-                    })
-                    .await?;
-                match atm_core::boundary::claim_verified_tool_runtime(admission) {
-                    atm_core::boundary::SenderClaim::DaemonTool { proof, .. } => Ok(Some(proof)),
-                    atm_core::boundary::SenderClaim::Ordinary { .. } => Err(AtmError::new(
-                        atm_core::error::AtmErrorCode::InternalError,
-                        "verified runtime admission produced an ordinary sender claim",
-                    )),
-                }
-            }
-            (None, Some(attestation)) => {
-                if ingress != AuthenticatedIngress::Peer {
-                    return Err(AtmError::validation_with_recovery(
-                        "tool sender attestation is accepted only on authenticated peer ingress",
-                        "forward the attested message through its authenticated origin-host connection",
-                    ));
-                }
-                let source_host = request.authenticated_source_host.clone().ok_or_else(|| {
-                    AtmError::validation("peer tool sender proof has no authenticated source host")
-                })?;
-                let message_id = request.origin_message_id.ok_or_else(|| {
-                    AtmError::validation("peer tool sender proof has no stable origin message id")
-                })?;
-                if request.origin_timestamp.is_none() {
-                    return Err(AtmError::validation(
-                        "peer tool sender proof has no immutable origin timestamp",
-                    ));
-                }
-                let store = self.hooks.tool_sender_peers.clone().ok_or_else(|| {
-                    AtmError::daemon_unavailable_with_recovery(
-                        "peer tool sender admission is unavailable because no origin policy was installed",
-                        "Install protected origin-host attestation policy during daemon startup before accepting peer virtual sender writes.",
-                    )
-                })?;
-                let attestation = attestation.clone();
-                let digest = attestation.message_digest.clone();
-                let admission = self
-                    .control_path_sync_bridge
-                    .run(deadline, move || {
-                        store.admit_attestation(
-                            attestation,
-                            message_id,
-                            digest,
-                            &source_host,
-                            IsoTimestamp::now(),
-                        )
-                    })
-                    .await?;
-                match atm_core::boundary::claim_verified_tool_runtime(admission) {
-                    atm_core::boundary::SenderClaim::DaemonTool { proof, .. } => Ok(Some(proof)),
-                    atm_core::boundary::SenderClaim::Ordinary { .. } => Err(AtmError::new(
-                        atm_core::error::AtmErrorCode::InternalError,
-                        "verified peer admission produced an ordinary sender claim",
-                    )),
-                }
-            }
+            (Some(proof), None) => self
+                .admit_local_tool_write(request, proof, ingress, deadline)
+                .await
+                .map(Some),
+            (None, Some(attestation)) => self
+                .admit_peer_tool_write(request, attestation, ingress, deadline)
+                .await
+                .map(Some),
+        }
+    }
+
+    async fn admit_local_tool_write(
+        &self,
+        request: &WriteRequest,
+        proof: &ToolRuntimeProof,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<atm_core::boundary::ToolSenderCapability, AtmError> {
+        require_local(ingress)?;
+        if request.origin_message_id.is_some()
+            || request.origin_timestamp.is_some()
+            || request.authenticated_source_host.is_some()
+        {
+            return Err(AtmError::validation(
+                "local tool runtime proof cannot override peer origin metadata",
+            ));
+        }
+        let registry = self.hooks.tool_senders.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable_with_recovery(
+                "tool sender registry is unavailable for runtime proof admission",
+                "Install the protected tool sender registry during daemon startup before accepting virtual sender writes.",
+            )
+        })?;
+        let proof = proof.clone();
+        let admission = self
+            .control_path_sync_bridge
+            .run(deadline, move || {
+                let message_id = proof.message_id;
+                let digest = proof.message_digest.clone();
+                registry.admit_signed_message(proof, message_id, digest, IsoTimestamp::now())
+            })
+            .await?;
+        match atm_core::boundary::claim_verified_tool_runtime(admission) {
+            atm_core::boundary::SenderClaim::DaemonTool { proof, .. } => Ok(proof),
+            atm_core::boundary::SenderClaim::Ordinary { .. } => Err(AtmError::new(
+                atm_core::error::AtmErrorCode::InternalError,
+                "verified runtime admission produced an ordinary sender claim",
+            )),
+        }
+    }
+
+    async fn admit_peer_tool_write(
+        &self,
+        request: &WriteRequest,
+        attestation: &ToolSenderAttestation,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<atm_core::boundary::ToolSenderCapability, AtmError> {
+        if ingress != AuthenticatedIngress::Peer {
+            return Err(AtmError::validation_with_recovery(
+                "tool sender attestation is accepted only on authenticated peer ingress",
+                "forward the attested message through its authenticated origin-host connection",
+            ));
+        }
+        let source_host = request.authenticated_source_host.clone().ok_or_else(|| {
+            AtmError::validation("peer tool sender proof has no authenticated source host")
+        })?;
+        let message_id = request.origin_message_id.ok_or_else(|| {
+            AtmError::validation("peer tool sender proof has no stable origin message id")
+        })?;
+        if request.origin_timestamp.is_none() {
+            return Err(AtmError::validation(
+                "peer tool sender proof has no immutable origin timestamp",
+            ));
+        }
+        let store = self.hooks.tool_sender_peers.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable_with_recovery(
+                "peer tool sender admission is unavailable because no origin policy was installed",
+                "Install protected origin-host attestation policy during daemon startup before accepting peer virtual sender writes.",
+            )
+        })?;
+        let attestation = attestation.clone();
+        let digest = attestation.message_digest.clone();
+        let admission = self
+            .control_path_sync_bridge
+            .run(deadline, move || {
+                store.admit_attestation(
+                    attestation,
+                    message_id,
+                    digest,
+                    &source_host,
+                    IsoTimestamp::now(),
+                )
+            })
+            .await?;
+        match atm_core::boundary::claim_verified_tool_runtime(admission) {
+            atm_core::boundary::SenderClaim::DaemonTool { proof, .. } => Ok(proof),
+            atm_core::boundary::SenderClaim::Ordinary { .. } => Err(AtmError::new(
+                atm_core::error::AtmErrorCode::InternalError,
+                "verified peer admission produced an ordinary sender claim",
+            )),
         }
     }
 

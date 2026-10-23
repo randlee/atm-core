@@ -544,43 +544,23 @@ fn decode_framework_request(
     let body = request.body.as_slice();
     let method = request.method.to_ascii_uppercase();
     match http_route_kind(&method, &request.path) {
-        Some(HttpRouteKind::Write) => serde_json::from_slice::<WriteRequest>(body)
-            .map(|value| ApiRequest::Write(Box::new(value)))
-            .map_err(|source| invalid_framework_body("write", source)),
-        Some(HttpRouteKind::List) => serde_json::from_slice(body)
-            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
-            .map_err(|source| invalid_framework_body("messages list", source)),
-        Some(HttpRouteKind::Inspect) => serde_json::from_slice::<PeekQuery>(body)
-            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
-            .map_err(|source| invalid_framework_body("message inspect", source)),
-        Some(HttpRouteKind::Receive) => serde_json::from_slice::<ReadQuery>(body)
-            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
-            .map_err(|source| invalid_framework_body("message read", source)),
-        Some(HttpRouteKind::Clear) => serde_json::from_slice::<ClearQuery>(body)
-            .map(ApiRequest::Clear)
-            .map_err(|source| invalid_framework_body("messages clear", source)),
-        Some(HttpRouteKind::Doctor) => serde_json::from_slice::<DoctorQuery>(body)
-            .map(ApiRequest::Doctor)
-            .map_err(|source| invalid_framework_body("doctor", source)),
-        Some(HttpRouteKind::Search) => decode_search_query(&request.path)
-            .map(Box::new)
-            .map(ApiRequest::Search),
-        Some(HttpRouteKind::Compatibility) => {
-            serde_json::from_slice::<CompatibilityPreflight>(body)
-                .map(ApiRequest::CompatibilityPreflight)
-                .map_err(|source| invalid_framework_body("compatibility", source))
-        }
-        Some(HttpRouteKind::Heartbeat) => {
-            serde_json::from_slice::<TeamMemberHeartbeatRequest>(body)
-                .map(ApiRequest::Heartbeat)
-                .map_err(|source| invalid_framework_body("heartbeat", source))
-        }
-        Some(HttpRouteKind::QueueGetNext) => serde_json::from_slice::<QueueGetNextRequest>(body)
-            .map(ApiRequest::QueueGetNext)
-            .map_err(|source| invalid_framework_body("queue get next", source)),
-        Some(HttpRouteKind::TaskMove) => serde_json::from_slice::<TaskMoveRequest>(body)
-            .map(ApiRequest::TaskMove)
-            .map_err(|source| invalid_framework_body("task move", source)),
+        Some(
+            kind @ (HttpRouteKind::Write
+            | HttpRouteKind::List
+            | HttpRouteKind::Inspect
+            | HttpRouteKind::Receive
+            | HttpRouteKind::Clear
+            | HttpRouteKind::Doctor
+            | HttpRouteKind::Search),
+        ) => decode_framework_message_request(kind, body, &request.path)
+            .expect("message route kind must decode to a message request"),
+        Some(
+            kind @ (HttpRouteKind::Compatibility
+            | HttpRouteKind::Heartbeat
+            | HttpRouteKind::QueueGetNext
+            | HttpRouteKind::TaskMove),
+        ) => decode_framework_control_request(kind, body)
+            .expect("control route kind must decode to a control request"),
         Some(HttpRouteKind::ToolSenderApply) => {
             serde_json::from_slice::<atm_core::protocol::ToolInstallerRequest>(body)
                 .map(ApiRequest::ToolSenderApply)
@@ -615,6 +595,58 @@ fn decode_framework_request(
             "use a method and path from the daemon HTTP route contract and retry",
         )),
     }
+}
+
+fn decode_framework_message_request(
+    kind: HttpRouteKind,
+    body: &[u8],
+    path: &str,
+) -> Option<Result<ApiRequest, AtmError>> {
+    Some(match kind {
+        HttpRouteKind::Write => serde_json::from_slice::<WriteRequest>(body)
+            .map(|value| ApiRequest::Write(Box::new(value)))
+            .map_err(|source| invalid_framework_body("write", source)),
+        HttpRouteKind::List => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
+            .map_err(|source| invalid_framework_body("messages list", source)),
+        HttpRouteKind::Inspect => serde_json::from_slice::<PeekQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
+            .map_err(|source| invalid_framework_body("message inspect", source)),
+        HttpRouteKind::Receive => serde_json::from_slice::<ReadQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
+            .map_err(|source| invalid_framework_body("message read", source)),
+        HttpRouteKind::Clear => serde_json::from_slice::<ClearQuery>(body)
+            .map(ApiRequest::Clear)
+            .map_err(|source| invalid_framework_body("messages clear", source)),
+        HttpRouteKind::Doctor => serde_json::from_slice::<DoctorQuery>(body)
+            .map(ApiRequest::Doctor)
+            .map_err(|source| invalid_framework_body("doctor", source)),
+        HttpRouteKind::Search => decode_search_query(path)
+            .map(Box::new)
+            .map(ApiRequest::Search),
+        _ => return None,
+    })
+}
+
+fn decode_framework_control_request(
+    kind: HttpRouteKind,
+    body: &[u8],
+) -> Option<Result<ApiRequest, AtmError>> {
+    Some(match kind {
+        HttpRouteKind::Compatibility => serde_json::from_slice::<CompatibilityPreflight>(body)
+            .map(ApiRequest::CompatibilityPreflight)
+            .map_err(|source| invalid_framework_body("compatibility", source)),
+        HttpRouteKind::Heartbeat => serde_json::from_slice::<TeamMemberHeartbeatRequest>(body)
+            .map(ApiRequest::Heartbeat)
+            .map_err(|source| invalid_framework_body("heartbeat", source)),
+        HttpRouteKind::QueueGetNext => serde_json::from_slice::<QueueGetNextRequest>(body)
+            .map(ApiRequest::QueueGetNext)
+            .map_err(|source| invalid_framework_body("queue get next", source)),
+        HttpRouteKind::TaskMove => serde_json::from_slice::<TaskMoveRequest>(body)
+            .map(ApiRequest::TaskMove)
+            .map_err(|source| invalid_framework_body("task move", source)),
+        _ => return None,
+    })
 }
 
 /// Decodes one of the six hook and cron routes added in HTTP API 1.13.0.

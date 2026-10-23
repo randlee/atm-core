@@ -188,38 +188,11 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
-        WriteOp::ApplyReadDisplayState {
-            mailbox,
-            message_ids,
-            seen_watermark,
-            provenance,
-        } => super::read_display_state::execute_read_display_state(
-            mailbox,
-            message_ids,
-            *seen_watermark,
-            *provenance,
-            connection,
-            cache,
-            target,
-        ),
+        WriteOp::ApplyReadDisplayState { .. } => {
+            execute_read_display_state_op(op, connection, cache, target)
+        }
         WriteOp::DeleteMessage { key, provenance } => {
-            super::message_admission::validate_cron_generation_fence(*provenance, connection)?;
-            delete_message_projection(connection, target, key.as_str())?;
-            connection
-                .execute(
-                    "DELETE FROM mail_message_states WHERE message_key = ?1;",
-                    params![key.as_ref()],
-                )
-                .map_err(|error| {
-                    sqlite_error(target, "failed to delete sqlite message state", error)
-                })?;
-            connection
-                .execute(
-                    "DELETE FROM mail_messages WHERE message_key = ?1;",
-                    params![key.as_ref()],
-                )
-                .map_err(|error| sqlite_error(target, "failed to delete sqlite message", error))?;
-            Ok(WriteOpResult::MessageDeleted)
+            execute_delete_message(key, *provenance, connection, target)
         }
         WriteOp::UpsertMessage { record, provenance } => {
             super::message_admission::execute_upsert_message(
@@ -231,25 +204,20 @@ pub(crate) fn execute(
             )
         }
         WriteOp::UpsertMessages(records) => {
-            for record in records {
-                let _ = super::message_admission::execute_upsert_message(
-                    record,
-                    MessageWriteOrigin::Local,
-                    connection,
-                    cache,
-                    target,
-                )?;
-            }
-            Ok(WriteOpResult::UpsertMessages)
+            execute_upsert_messages(records, connection, cache, target)
         }
         WriteOp::Acknowledge {
             source,
             builder,
             provenance,
-        } => {
-            super::message_admission::validate_cron_generation_fence(*provenance, connection)?;
-            execute_acknowledgement(source, builder, connection, cache, target)
-        }
+        } => execute_acknowledgement_with_fence(
+            source,
+            builder,
+            *provenance,
+            connection,
+            cache,
+            target,
+        ),
         WriteOp::TaskMove {
             team,
             task_id,
@@ -257,13 +225,16 @@ pub(crate) fn execute(
             target: target_pos,
             at,
             provenance,
-        } => {
-            super::message_admission::validate_cron_generation_fence(*provenance, connection)?;
-            super::task_ops::apply_task_move(
-                team, task_id, actor, target_pos, *at, connection, target,
-            )
-            .map(WriteOpResult::TaskMoved)
-        }
+        } => execute_task_move_with_fence(
+            team,
+            task_id,
+            actor,
+            target_pos,
+            *at,
+            *provenance,
+            connection,
+            target,
+        ),
         WriteOp::RegisterTemplate(request) => {
             execute_template_registration(request, connection, target)
         }
@@ -278,6 +249,100 @@ pub(crate) fn execute(
             execute_diagnostic_prune(*now_unix_ms, connection, target)
         }
     }
+}
+
+fn execute_read_display_state_op(
+    op: &WriteOp,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    let WriteOp::ApplyReadDisplayState {
+        mailbox,
+        message_ids,
+        seen_watermark,
+        provenance,
+    } = op
+    else {
+        unreachable!("read display helper only receives read display operations")
+    };
+    super::read_display_state::execute_read_display_state(
+        mailbox,
+        message_ids,
+        *seen_watermark,
+        *provenance,
+        connection,
+        cache,
+        target,
+    )
+}
+
+fn execute_delete_message(
+    key: &MessageKey,
+    provenance: MessageWriteOrigin,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    super::message_admission::validate_cron_generation_fence(provenance, connection)?;
+    delete_message_projection(connection, target, key.as_str())?;
+    connection
+        .execute(
+            "DELETE FROM mail_message_states WHERE message_key = ?1;",
+            params![key.as_ref()],
+        )
+        .map_err(|error| sqlite_error(target, "failed to delete sqlite message state", error))?;
+    connection
+        .execute(
+            "DELETE FROM mail_messages WHERE message_key = ?1;",
+            params![key.as_ref()],
+        )
+        .map_err(|error| sqlite_error(target, "failed to delete sqlite message", error))?;
+    Ok(WriteOpResult::MessageDeleted)
+}
+
+fn execute_upsert_messages(
+    records: &[Message],
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    for record in records {
+        let _ = super::message_admission::execute_upsert_message(
+            record,
+            MessageWriteOrigin::Local,
+            connection,
+            cache,
+            target,
+        )?;
+    }
+    Ok(WriteOpResult::UpsertMessages)
+}
+
+fn execute_acknowledgement_with_fence(
+    source: &AcknowledgementSource,
+    builder: &Arc<dyn AcknowledgementReplyBuilder>,
+    provenance: MessageWriteOrigin,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    super::message_admission::validate_cron_generation_fence(provenance, connection)?;
+    execute_acknowledgement(source, builder, connection, cache, target)
+}
+
+fn execute_task_move_with_fence(
+    team: &TeamName,
+    task_id: &TaskId,
+    actor: &AgentName,
+    target_pos: &MoveTarget,
+    at: IsoTimestamp,
+    provenance: MessageWriteOrigin,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    super::message_admission::validate_cron_generation_fence(provenance, connection)?;
+    super::task_ops::apply_task_move(team, task_id, actor, target_pos, at, connection, target)
+        .map(WriteOpResult::TaskMoved)
 }
 
 /// Admits a template-sourced message, then persists its decomposition when

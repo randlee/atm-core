@@ -159,14 +159,7 @@ impl ToolSenderPeerAdmissionStore for SqliteToolSenderPeerAdmissionStore {
         now: IsoTimestamp,
     ) -> Result<ToolPeerAdmission, AtmError> {
         let config = self.config.as_ref().ok_or_else(missing_config)?;
-        if attestation.host_id != *authenticated_source_host {
-            return Err(ToolSenderFailure::HostMismatch
-                .into_error("tool attestation host does not match authenticated peer"));
-        }
-        if attestation.message_id != message_id || attestation.message_digest != digest {
-            return Err(ToolSenderFailure::SignatureInvalid
-                .into_error("tool attestation does not bind this canonical message"));
-        }
+        verify_attestation_binding(&attestation, authenticated_source_host, message_id, &digest)?;
         let origin = config
             .origins
             .get(authenticated_source_host)
@@ -174,109 +167,179 @@ impl ToolSenderPeerAdmissionStore for SqliteToolSenderPeerAdmissionStore {
                 ToolSenderFailure::SenderUnauthorized
                     .into_error("authenticated origin host is not enrolled for tool senders")
             })?;
-        if !origin.allowed_senders.contains(&attestation.sender) {
-            return Err(ToolSenderFailure::SenderUnauthorized
-                .into_error("origin host is not authorized for this tool sender"));
-        }
-        verify_signature(
-            &origin.public_key,
-            &attestation.canonical_signing_bytes()?,
-            &attestation.signature,
-        )?;
+        verify_peer_attestation(&attestation, origin)?;
 
         let sender_id = attestation.sender.clone();
         let source_host = authenticated_source_host.clone();
-        let replay_key = (
-            source_host.to_string(),
-            sender_id.to_string(),
-            attestation.nonce.to_string(),
-        );
-        let binding = PeerBindingRecord {
-            origin_host: replay_key.0.clone(),
-            sender: replay_key.1.clone(),
-            registration_generation: attestation.registration_generation,
-            message_id: message_id.to_string(),
-            message_digest: digest.to_string(),
-            signature: attestation.signature.clone(),
-            admitted_at: now.to_string(),
-        };
-        let committed = self.db.with_transaction(|transaction| {
-            let prior: Option<PeerBindingRecord> = transaction
-                .query_row(
-                    "SELECT origin_host, sender, registration_generation, message_id, message_digest, signature, admitted_at FROM tool_sender_peer_binding WHERE origin_host=?1 AND sender=?2 AND nonce=?3",
-                    params![replay_key.0, replay_key.1, replay_key.2],
-                    |row| Ok(PeerBindingRecord {
-                        origin_host: row.get(0)?,
-                        sender: row.get(1)?,
-                        registration_generation: row.get(2)?,
-                        message_id: row.get(3)?,
-                        message_digest: row.get(4)?,
-                        signature: row.get(5)?,
-                        admitted_at: row.get(6)?,
-                    }),
-                )
-                .optional()
-                .map_err(|error| db_error("failed to inspect peer tool replay", error))?;
-            if let Some(prior) = prior {
-                if prior.origin_host != binding.origin_host
-                    || prior.sender != binding.sender
-                    || prior.registration_generation != binding.registration_generation
-                    || prior.message_id != binding.message_id
-                    || prior.message_digest != binding.message_digest
-                    || prior.signature != binding.signature
-                {
-                    return Err(ToolSenderFailure::NonceReplay
-                        .into_error("peer tool nonce was already bound to different message provenance"));
-                }
-                return Ok(prior);
-            }
-            transaction
-                .execute(
-                    "INSERT INTO tool_sender_peer_binding (origin_host, sender, nonce, registration_generation, message_id, message_digest, signature, admitted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                    params![
-                        binding.origin_host,
-                        binding.sender,
-                        replay_key.2,
-                        binding.registration_generation,
-                        binding.message_id,
-                        binding.message_digest,
-                        binding.signature,
-                        binding.admitted_at,
-                    ],
-                )
-                .map_err(|error| db_error("failed to persist peer tool replay binding", error))?;
-            Ok(binding.clone())
-        })?;
-
-        // Capabilities are projected only after the replay transaction commits.
-        if committed.message_id != message_id.to_string()
-            || committed.message_digest != digest.as_str()
-            || committed.origin_host != source_host.as_str()
-            || committed.sender != sender_id.as_str()
-        {
-            return Err(ToolSenderFailure::NonceReplay
-                .into_error("durable peer tool binding differs from the requested message"));
-        }
-        let address: AgentAddress =
-            format!("{}@tool", sender_id.as_str())
-                .parse()
-                .map_err(|error| {
-                    ToolSenderFailure::SenderUnauthorized.into_error(format!(
-                        "registered tool sender address is invalid: {error}"
-                    ))
-                })?;
-        ToolPeerAdmission::from_issuer(&SqliteToolPeerAdmissionIssuer {
-            principal: ToolPrincipal::RegisteredPlugin {
-                sender: sender_id.clone(),
-            },
-            sender: sender_id.clone(),
-            address,
-            attestation,
-            authenticated_source_host: source_host,
-            message_id,
-            digest,
-        })
+        let replay_key = peer_replay_key(&source_host, &sender_id, &attestation);
+        let binding = peer_binding_record(&replay_key, &attestation, message_id, &digest, now);
+        let committed = persist_peer_binding(&self.db, &replay_key, &binding)?;
+        verify_committed_peer_binding(&committed, &source_host, &sender_id, message_id, &digest)?;
+        project_peer_admission(attestation, sender_id, source_host, message_id, digest)
     }
+}
+
+fn verify_peer_attestation(
+    attestation: &ToolSenderAttestation,
+    origin: &TrustedToolOriginKey,
+) -> Result<(), AtmError> {
+    if !origin.allowed_senders.contains(&attestation.sender) {
+        return Err(ToolSenderFailure::SenderUnauthorized
+            .into_error("origin host is not authorized for this tool sender"));
+    }
+    verify_signature(
+        &origin.public_key,
+        &attestation.canonical_signing_bytes()?,
+        &attestation.signature,
+    )
+}
+
+fn verify_attestation_binding(
+    attestation: &ToolSenderAttestation,
+    authenticated_source_host: &HostName,
+    message_id: AtmMessageId,
+    digest: &MessageDigest,
+) -> Result<(), AtmError> {
+    if attestation.host_id != *authenticated_source_host {
+        return Err(ToolSenderFailure::HostMismatch
+            .into_error("tool attestation host does not match authenticated peer"));
+    }
+    if attestation.message_id != message_id || attestation.message_digest != *digest {
+        return Err(ToolSenderFailure::SignatureInvalid
+            .into_error("tool attestation does not bind this canonical message"));
+    }
+    Ok(())
+}
+
+type PeerReplayKey = (String, String, String);
+
+fn peer_replay_key(
+    source_host: &HostName,
+    sender: &PluginSenderId,
+    attestation: &ToolSenderAttestation,
+) -> PeerReplayKey {
+    (
+        source_host.to_string(),
+        sender.to_string(),
+        attestation.nonce.to_string(),
+    )
+}
+
+fn peer_binding_record(
+    replay_key: &PeerReplayKey,
+    attestation: &ToolSenderAttestation,
+    message_id: AtmMessageId,
+    digest: &MessageDigest,
+    now: IsoTimestamp,
+) -> PeerBindingRecord {
+    PeerBindingRecord {
+        origin_host: replay_key.0.clone(),
+        sender: replay_key.1.clone(),
+        registration_generation: attestation.registration_generation,
+        message_id: message_id.to_string(),
+        message_digest: digest.to_string(),
+        signature: attestation.signature.clone(),
+        admitted_at: now.to_string(),
+    }
+}
+
+fn persist_peer_binding(
+    db: &SharedDb,
+    replay_key: &PeerReplayKey,
+    binding: &PeerBindingRecord,
+) -> Result<PeerBindingRecord, AtmError> {
+    db.with_transaction(|transaction| {
+        let prior: Option<PeerBindingRecord> = transaction
+            .query_row(
+                "SELECT origin_host, sender, registration_generation, message_id, message_digest, signature, admitted_at FROM tool_sender_peer_binding WHERE origin_host=?1 AND sender=?2 AND nonce=?3",
+                params![replay_key.0, replay_key.1, replay_key.2],
+                |row| Ok(PeerBindingRecord {
+                    origin_host: row.get(0)?,
+                    sender: row.get(1)?,
+                    registration_generation: row.get(2)?,
+                    message_id: row.get(3)?,
+                    message_digest: row.get(4)?,
+                    signature: row.get(5)?,
+                    admitted_at: row.get(6)?,
+                }),
+            )
+            .optional()
+            .map_err(|error| db_error("failed to inspect peer tool replay", error))?;
+        if let Some(prior) = prior {
+            if prior.origin_host != binding.origin_host
+                || prior.sender != binding.sender
+                || prior.registration_generation != binding.registration_generation
+                || prior.message_id != binding.message_id
+                || prior.message_digest != binding.message_digest
+                || prior.signature != binding.signature
+            {
+                return Err(ToolSenderFailure::NonceReplay
+                    .into_error("peer tool nonce was already bound to different message provenance"));
+            }
+            return Ok(prior);
+        }
+        transaction
+            .execute(
+                "INSERT INTO tool_sender_peer_binding (origin_host, sender, nonce, registration_generation, message_id, message_digest, signature, admitted_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    binding.origin_host,
+                    binding.sender,
+                    replay_key.2,
+                    binding.registration_generation,
+                    binding.message_id,
+                    binding.message_digest,
+                    binding.signature,
+                    binding.admitted_at,
+                ],
+            )
+            .map_err(|error| db_error("failed to persist peer tool replay binding", error))?;
+        Ok(binding.clone())
+    })
+}
+
+fn verify_committed_peer_binding(
+    committed: &PeerBindingRecord,
+    source_host: &HostName,
+    sender: &PluginSenderId,
+    message_id: AtmMessageId,
+    digest: &MessageDigest,
+) -> Result<(), AtmError> {
+    if committed.message_id != message_id.to_string()
+        || committed.message_digest != digest.as_str()
+        || committed.origin_host != source_host.as_str()
+        || committed.sender != sender.as_str()
+    {
+        return Err(ToolSenderFailure::NonceReplay
+            .into_error("durable peer tool binding differs from the requested message"));
+    }
+    Ok(())
+}
+
+fn project_peer_admission(
+    attestation: ToolSenderAttestation,
+    sender: PluginSenderId,
+    source_host: HostName,
+    message_id: AtmMessageId,
+    digest: MessageDigest,
+) -> Result<ToolPeerAdmission, AtmError> {
+    let address: AgentAddress = format!("{}@tool", sender.as_str())
+        .parse()
+        .map_err(|error| {
+            ToolSenderFailure::SenderUnauthorized.into_error(format!(
+                "registered tool sender address is invalid: {error}"
+            ))
+        })?;
+    ToolPeerAdmission::from_issuer(&SqliteToolPeerAdmissionIssuer {
+        principal: ToolPrincipal::RegisteredPlugin {
+            sender: sender.clone(),
+        },
+        sender,
+        address,
+        attestation,
+        authenticated_source_host: source_host,
+        message_id,
+        digest,
+    })
 }
 
 fn verify_signature(

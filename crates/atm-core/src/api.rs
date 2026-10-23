@@ -531,6 +531,14 @@ fn decode_response_body<T: DeserializeOwned>(
     })
 }
 
+fn decode_response_as<T: DeserializeOwned>(
+    body: &[u8],
+    response_kind: &str,
+    wrap: impl FnOnce(T) -> ResponseEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    decode_response_body(body, response_kind).map(wrap)
+}
+
 fn decode_success_response(
     request: &RequestEnvelope,
     body: &[u8],
@@ -544,72 +552,132 @@ fn decode_success_response(
         RequestEnvelope::Write(_) => decode_response_body(body, "write").map(|value| {
             ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value))
         }),
+        RequestEnvelope::List(_)
+        | RequestEnvelope::Peek(_)
+        | RequestEnvelope::Receive(_)
+        | RequestEnvelope::Clear(_)
+        | RequestEnvelope::Doctor(_)
+        | RequestEnvelope::Search(_) => decode_read_success_response(body, request),
+        RequestEnvelope::TaskMove(_)
+        | RequestEnvelope::CompatibilityPreflight(_)
+        | RequestEnvelope::Heartbeat(_)
+        | RequestEnvelope::QueueGetNext(_)
+        | RequestEnvelope::GraftReceiverRegister(_)
+        | RequestEnvelope::GraftReceiverRefresh(_)
+        | RequestEnvelope::GraftReceiverUnregister(_)
+        | RequestEnvelope::GraftReceiverLookup { .. }
+        | RequestEnvelope::ReloadRuntimeView
+        | RequestEnvelope::HookRegister(_)
+        | RequestEnvelope::HookDisable(_)
+        | RequestEnvelope::HookList(_)
+        | RequestEnvelope::CronStart(_)
+        | RequestEnvelope::CronEnd(_)
+        | RequestEnvelope::CronList(_) => decode_control_success_response(body, request),
+        RequestEnvelope::ToolSenderApply(_) | RequestEnvelope::ToolSenderUnregister(_) => {
+            decode_control_success_response(body, request)
+        }
+    }
+}
+
+fn decode_read_success_response(
+    body: &[u8],
+    request: &RequestEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    match request {
+        RequestEnvelope::List(_) => decode_response_as(body, "list", ResponseEnvelope::List),
+        RequestEnvelope::Peek(_) => decode_response_as(body, "peek", |value| {
+            ResponseEnvelope::Peek(Box::new(value))
+        }),
+        RequestEnvelope::Receive(_) => decode_response_as(body, "receive", |value| {
+            ResponseEnvelope::Receive(Box::new(value))
+        }),
+        RequestEnvelope::Clear(_) => decode_response_as(body, "clear", ResponseEnvelope::Clear),
+        RequestEnvelope::Doctor(_) => decode_response_as(body, "doctor", |value| {
+            ResponseEnvelope::Doctor(Box::new(value))
+        }),
+        RequestEnvelope::Search(_) => decode_response_as(body, "search", |value| {
+            ResponseEnvelope::Search(Box::new(value))
+        }),
+        _ => unreachable!("read response helper only receives read requests"),
+    }
+}
+
+fn decode_control_success_response(
+    body: &[u8],
+    request: &RequestEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    match request {
         RequestEnvelope::TaskMove(_) => {
-            decode_response_body(body, "task move").map(ResponseEnvelope::TaskMove)
+            decode_response_as(body, "task move", ResponseEnvelope::TaskMove)
         }
-        RequestEnvelope::CompatibilityPreflight(_) => {
-            decode_response_body(body, "compatibility").map(ResponseEnvelope::CompatibilityVerdict)
-        }
+        RequestEnvelope::CompatibilityPreflight(_) => decode_response_as(
+            body,
+            "compatibility",
+            ResponseEnvelope::CompatibilityVerdict,
+        ),
         RequestEnvelope::Heartbeat(_) => {
-            decode_response_body(body, "heartbeat").map(ResponseEnvelope::Heartbeat)
+            decode_response_as(body, "heartbeat", ResponseEnvelope::Heartbeat)
         }
         RequestEnvelope::QueueGetNext(_) => {
-            decode_response_body(body, "queue get next").map(ResponseEnvelope::QueueGetNext)
+            decode_response_as(body, "queue get next", ResponseEnvelope::QueueGetNext)
         }
-        RequestEnvelope::GraftReceiverRegister(_) => {
-            decode_response_body::<()>(body, "graft receiver register")
-                .map(|()| ResponseEnvelope::GraftReceiverRegister)
-        }
-        RequestEnvelope::GraftReceiverRefresh(_) => {
-            decode_response_body::<()>(body, "graft receiver refresh")
-                .map(|()| ResponseEnvelope::GraftReceiverRefresh)
-        }
-        RequestEnvelope::GraftReceiverUnregister(_) => {
-            decode_response_body::<()>(body, "graft receiver unregister")
-                .map(|()| ResponseEnvelope::GraftReceiverUnregister)
-        }
-        RequestEnvelope::GraftReceiverLookup { .. } => {
-            decode_response_body(body, "graft receiver lookup")
-                .map(ResponseEnvelope::GraftReceiverLookup)
-        }
-        RequestEnvelope::List(_) => decode_response_body(body, "list").map(ResponseEnvelope::List),
-        RequestEnvelope::Peek(_) => {
-            decode_response_body(body, "peek").map(|value| ResponseEnvelope::Peek(Box::new(value)))
-        }
-        RequestEnvelope::Receive(_) => decode_response_body(body, "receive")
-            .map(|value| ResponseEnvelope::Receive(Box::new(value))),
-        RequestEnvelope::Clear(_) => {
-            decode_response_body(body, "clear").map(ResponseEnvelope::Clear)
-        }
-        RequestEnvelope::Doctor(_) => decode_response_body(body, "doctor")
-            .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
-        RequestEnvelope::Search(_) => decode_response_body(body, "search")
-            .map(|value| ResponseEnvelope::Search(Box::new(value))),
+        RequestEnvelope::GraftReceiverRegister(_) => decode_unit_response(
+            body,
+            "graft receiver register",
+            ResponseEnvelope::GraftReceiverRegister,
+        ),
+        RequestEnvelope::GraftReceiverRefresh(_) => decode_unit_response(
+            body,
+            "graft receiver refresh",
+            ResponseEnvelope::GraftReceiverRefresh,
+        ),
+        RequestEnvelope::GraftReceiverUnregister(_) => decode_unit_response(
+            body,
+            "graft receiver unregister",
+            ResponseEnvelope::GraftReceiverUnregister,
+        ),
+        RequestEnvelope::GraftReceiverLookup { .. } => decode_response_as(
+            body,
+            "graft receiver lookup",
+            ResponseEnvelope::GraftReceiverLookup,
+        ),
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
         RequestEnvelope::HookRegister(_) => {
-            decode_response_body(body, "hook register").map(ResponseEnvelope::HookRegistered)
+            decode_response_as(body, "hook register", ResponseEnvelope::HookRegistered)
         }
         RequestEnvelope::HookDisable(_) => {
-            decode_response_body(body, "hook disable").map(ResponseEnvelope::HookDisabled)
+            decode_response_as(body, "hook disable", ResponseEnvelope::HookDisabled)
         }
         RequestEnvelope::HookList(_) => {
-            decode_response_body(body, "hook list").map(ResponseEnvelope::HookList)
+            decode_response_as(body, "hook list", ResponseEnvelope::HookList)
         }
         RequestEnvelope::CronStart(_) => {
-            decode_response_body(body, "cron start").map(ResponseEnvelope::CronStarted)
+            decode_response_as(body, "cron start", ResponseEnvelope::CronStarted)
         }
         RequestEnvelope::CronEnd(_) => {
-            decode_response_body(body, "cron end").map(ResponseEnvelope::CronEnded)
+            decode_response_as(body, "cron end", ResponseEnvelope::CronEnded)
         }
         RequestEnvelope::CronList(_) => {
-            decode_response_body(body, "cron list").map(ResponseEnvelope::CronList)
+            decode_response_as(body, "cron list", ResponseEnvelope::CronList)
         }
         RequestEnvelope::ToolSenderApply(_) | RequestEnvelope::ToolSenderUnregister(_) => {
-            decode_response_body(body, "tool sender operation")
-                .map(ResponseEnvelope::ToolSenderApplied)
+            decode_response_as(
+                body,
+                "tool sender operation",
+                ResponseEnvelope::ToolSenderApplied,
+            )
         }
+        _ => unreachable!("control response helper only receives control requests"),
     }
+}
+
+fn decode_unit_response(
+    body: &[u8],
+    response_kind: &str,
+    wrap: ResponseEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    decode_response_body::<()>(body, response_kind).map(|()| wrap)
 }
 
 fn http_header<'a>(headers: &'a [String], name: &str) -> Option<&'a str> {

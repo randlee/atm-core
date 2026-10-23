@@ -117,43 +117,8 @@ pub(crate) fn prepare_send_context_with_tool_capability<
         request.caller_team = team;
         request.caller_identity = member;
     }
-    let (canonical_sender, canonical_sender_team, canonical_sender_chat_id) = if let Some(
-        capability,
-    ) = tool_capability
-    {
-        let address = capability.sender_address();
-        if address.team() != Some(&crate::types::TeamName::from_validated("tool"))
-            || address.host().is_some()
-            || address.chat_id().is_some()
-        {
-            return Err(AtmError::validation(
-                "verified tool admission contains an invalid virtual sender address",
-            ));
-        }
-        (
-            address.agent().clone(),
-            address.team().expect("validated tool team").clone(),
-            address.chat_id().cloned(),
-        )
-    } else {
-        if request.tool_runtime_proof.is_some() || request.tool_sender_attestation.is_some() {
-            return Err(AtmError::validation_with_recovery(
-                "tool sender proof was not admitted by the daemon",
-                "submit the signed proof through the configured local or authenticated-peer admission route",
-            ));
-        }
-        if request.caller_team == crate::types::TeamName::from_validated("tool") {
-            return Err(AtmError::validation_with_recovery(
-                "virtual tool senders require signed daemon admission",
-                "use an authenticated ordinary sender or submit a verified tool proof",
-            ));
-        }
-        (
-            request.caller_identity.clone(),
-            request.caller_team.clone(),
-            request.caller_chat_id.clone(),
-        )
-    };
+    let (canonical_sender, canonical_sender_team, canonical_sender_chat_id) =
+        canonical_sender_identity(request, tool_capability)?;
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
@@ -201,4 +166,50 @@ pub(crate) fn prepare_send_context_with_tool_capability<
         delivery_family,
         warnings,
     })
+}
+
+fn canonical_sender_identity(
+    request: &SendRequest,
+    tool_capability: Option<&crate::boundary::ToolSenderCapability>,
+) -> Result<
+    (
+        AgentName,
+        crate::types::TeamName,
+        Option<crate::types::ChatId>,
+    ),
+    AtmError,
+> {
+    if let Some(capability) = tool_capability {
+        let address = capability.sender_address();
+        if address.team() != Some(&crate::types::TeamName::from_validated("tool"))
+            || address.host().is_some()
+            || address.chat_id().is_some()
+        {
+            return Err(AtmError::validation(
+                "verified tool admission contains an invalid virtual sender address",
+            ));
+        }
+        return Ok((
+            address.agent().clone(),
+            address.team().expect("validated tool team").clone(),
+            address.chat_id().cloned(),
+        ));
+    }
+    if request.tool_runtime_proof.is_some() || request.tool_sender_attestation.is_some() {
+        return Err(AtmError::validation_with_recovery(
+            "tool sender proof was not admitted by the daemon",
+            "submit the signed proof through the configured local or authenticated-peer admission route",
+        ));
+    }
+    if request.caller_team == crate::types::TeamName::from_validated("tool") {
+        return Err(AtmError::validation_with_recovery(
+            "virtual tool senders require signed daemon admission",
+            "use an authenticated ordinary sender or submit a verified tool proof",
+        ));
+    }
+    Ok((
+        request.caller_identity.clone(),
+        request.caller_team.clone(),
+        request.caller_chat_id.clone(),
+    ))
 }

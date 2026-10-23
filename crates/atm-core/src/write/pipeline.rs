@@ -786,18 +786,8 @@ async fn prepare_write_with_admission_async_runtime(
                 "message write is missing a destination",
             ));
         }
-        return prepare_persisted_write_async(
-            request,
-            observability,
-            runtime,
-            None,
-            source_preflight,
-            tool_capability,
-            cron_run_fence,
-        )
-        .await;
     }
-    if has_authenticated_peer_provenance(&request) {
+    if request.acknowledges_message_id.is_none() || has_authenticated_peer_provenance(&request) {
         return prepare_persisted_write_async(
             request,
             observability,
@@ -1155,7 +1145,7 @@ async fn prepare_persisted_write_async(
     } else {
         request.origin_timestamp.unwrap_or_else(IsoTimestamp::now)
     };
-    let mut persistence = crate::send::async_persistence::persist_send_message_async(
+    let persistence = crate::send::async_persistence::persist_send_message_async(
         runtime,
         &request,
         &context,
@@ -1169,12 +1159,52 @@ async fn prepare_persisted_write_async(
         cron_run_fence,
     )
     .await?;
+    Ok(finish_async_persisted_write(
+        request,
+        observability,
+        runtime,
+        acknowledgement,
+        AsyncPersistedSendCompletion {
+            context,
+            task_id,
+            self_task,
+            is_ack,
+            requires_ack,
+            body,
+            message_id,
+            summary,
+            timestamp,
+        },
+        persistence,
+    ))
+}
+
+fn finish_async_persisted_write(
+    request: SendRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    acknowledgement: Option<ResolvedAcknowledgement>,
+    prepared: AsyncPersistedSendCompletion,
+    mut persistence: crate::send::DeliveryPersistenceResult,
+) -> WriteExecution {
+    let AsyncPersistedSendCompletion {
+        context,
+        task_id,
+        self_task,
+        is_ack,
+        requires_ack,
+        body,
+        message_id,
+        summary,
+        timestamp,
+        ..
+    } = prepared;
     let task_events = std::mem::take(&mut persistence.task_events);
     if let Err(error) = &persistence.operation {
-        return Ok(WriteExecution {
+        return WriteExecution {
             operation: Err(error.clone()),
             task_events,
-        });
+        };
     }
     let received_hook = if self_task {
         Ok(None)
@@ -1194,7 +1224,7 @@ async fn prepare_persisted_write_async(
         &persistence,
         DeliveryExecutionMode::Deferred,
     );
-    Ok(WriteExecution {
+    WriteExecution {
         operation: outcome.map(|outcome| {
             PreparedWrite::from_persistence(
                 outcome,
@@ -1206,7 +1236,19 @@ async fn prepare_persisted_write_async(
             )
         }),
         task_events,
-    })
+    }
+}
+
+struct AsyncPersistedSendCompletion {
+    context: crate::send::SendExecutionContext,
+    task_id: Option<TaskId>,
+    self_task: bool,
+    is_ack: bool,
+    requires_ack: bool,
+    body: String,
+    message_id: AtmMessageId,
+    summary: String,
+    timestamp: IsoTimestamp,
 }
 
 pub(crate) fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
