@@ -75,7 +75,10 @@ pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
     configured_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
 };
-pub use protected_trust_root::{load_protected_tool_sender_trust_root, system_trust_root_path};
+pub use protected_trust_root::{
+    ProtectedToolSenderConfigs, load_protected_tool_sender_configs,
+    load_protected_tool_sender_trust_root, system_trust_root_path,
+};
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
 #[cfg(feature = "benchmark-harness")]
@@ -238,9 +241,12 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 pub fn assemble_daemon_runtime(
     owner: Option<&DaemonObservability>,
 ) -> Result<RuntimeAssembly, AtmError> {
+    let tool_sender_configs = load_protected_tool_sender_configs()?;
     let storage_factory = SqliteStorageFactory::host_scoped()
         .with_observability(Arc::new(sqlite_observability::DaemonSqliteObservability))
-        .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline));
+        .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline))
+        .with_tool_sender_registry_config(tool_sender_configs.registry())
+        .with_tool_sender_peer_admission_config(tool_sender_configs.peer_admission());
     compose_daemon_assembly(storage_factory, owner)
 }
 
