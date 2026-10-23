@@ -4,15 +4,14 @@ owner_crate_path = "atm_core"
 name = "CronRunPermit"
 
 [public]
-type = "CronRunPermit"
-issuer_trait = "CronRunPermitIssuer"
+trait = "CronRunPermitIssuer"
 
 [implementation]
-visibility = "scheduler_issuer_only"
-constructor = "from_issuer"
+visibility = "trait_only"
+constructor = "none"
 
 [composition]
-roots = ["atm-cron::tick::SchedulePermitIssuer"]
+roots = ["atm_cron::tick::SchedulePermitIssuer"]
 
 [ownership]
 io_owns = []
