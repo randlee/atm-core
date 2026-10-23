@@ -53,6 +53,7 @@ pub mod hook_runner;
 mod owner_gate;
 mod peer_launch_config;
 mod process_deadline;
+mod protected_trust_root;
 mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
@@ -74,6 +75,7 @@ pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
     configured_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
 };
+pub use protected_trust_root::{load_protected_tool_sender_trust_root, system_trust_root_path};
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
 #[cfg(feature = "benchmark-harness")]
