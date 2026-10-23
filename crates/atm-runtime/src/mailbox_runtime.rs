@@ -581,11 +581,8 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
         request: MailboxSelectionRequest,
         deadline: RequestDeadline,
     ) -> Result<MailboxSelectionResult, AtmError> {
-        let selection = self
-            .select_single(scope.clone(), key, request, read_deadline(deadline)?)
-            .await?;
-        self.try_handoff_selected(scope, &selection, true, MessageWriteOrigin::Local)?;
-        Ok(selection)
+        self.read_mail_for_local_ingress(scope, key, request, deadline)
+            .await
     }
 }
 
@@ -639,6 +636,20 @@ fn mailbox_filters(scope: &MailboxScope, request: &MailboxSelectionRequest) -> S
 }
 
 impl StorageAsyncMailboxRuntime {
+    async fn read_mail_for_local_ingress(
+        &self,
+        scope: MailboxScope,
+        key: MessageKey,
+        request: MailboxSelectionRequest,
+        deadline: RequestDeadline,
+    ) -> Result<MailboxSelectionResult, AtmError> {
+        let selection = self
+            .select_single(scope.clone(), key, request, read_deadline(deadline)?)
+            .await?;
+        self.try_handoff_selected(scope, &selection, true, MessageWriteOrigin::Local)?;
+        Ok(selection)
+    }
+
     async fn authorize_list(
         &self,
         mut command: AsyncListCommand,

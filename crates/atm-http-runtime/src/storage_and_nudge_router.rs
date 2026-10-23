@@ -111,13 +111,12 @@ impl StorageAndNudgeRouter {
                 .await
             }
             ApiRequest::TaskMove(request) => {
-                self.task_move_with_cron_permit(request, ingress, deadline, Some(permit))
+                self.task_move(request, ingress, deadline, Some(permit))
                     .await
             }
             ApiRequest::Clear(query) => {
                 let origin = atm_core::send::cron_run_message_write_origin(permit);
-                self.clear_messages_with_origin(query, deadline, origin)
-                    .await
+                self.clear_messages(query, deadline, origin).await
             }
             ApiRequest::Messages(request) => match *request {
                 atm_core::api::MessageCollectionRequest::Receive(query) => {
@@ -162,8 +161,10 @@ impl StorageAndNudgeRouter {
         let generation = permit.generation();
         let team = team.clone();
         let phase = phase.clone();
-        self.control_path_sync_bridge
-            .run(deadline, move || {
+        let remaining = deadline.remaining().ok_or_else(|| {
+            AtmError::daemon_unavailable("cron action deadline expired before permit admission")
+        })?;
+        let admission = tokio::time::timeout(remaining, tokio::task::spawn_blocking(move || {
                 let schedules = store.active_all()?;
                 let admitted = schedules.iter().any(|schedule| {
                     schedule.active
@@ -180,8 +181,11 @@ impl StorageAndNudgeRouter {
                         "allow the current cron run to stop and let the scheduler start a fresh generation",
                     ))
                 }
-            })
+            }))
             .await
+            .map_err(|_| AtmError::daemon_unavailable("cron action permit admission timed out"))?
+            .map_err(|_| AtmError::daemon_unavailable("cron action permit admission task failed"))?;
+        admission
     }
 
     pub(crate) fn dispatch(
@@ -423,7 +427,7 @@ impl StorageAndNudgeRouter {
             .await;
     }
 
-    async fn commit_write(
+    async fn prepare_and_commit_write(
         &self,
         request: atm_core::send::WriteRequest,
         deadline: RequestDeadline,
@@ -467,7 +471,15 @@ impl StorageAndNudgeRouter {
             .await?
         };
         crate::task_telemetry::project_task_events(&self.task_telemetry, &execution.task_events);
-        let mut prepared = execution.operation?;
+        self.commit_write(execution.operation?, deadline).await
+    }
+
+    async fn commit_write(
+        &self,
+        prepared: atm_core::send::PreparedWrite,
+        deadline: RequestDeadline,
+    ) -> Result<CommittedWrite, AtmError> {
+        let mut prepared = prepared;
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
@@ -686,15 +698,6 @@ impl StorageAndNudgeRouter {
         &self,
         query: ClearQuery,
         deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        self.clear_messages_with_origin(query, deadline, atm_core::send::MessageWriteOrigin::Local)
-            .await
-    }
-
-    async fn clear_messages_with_origin(
-        &self,
-        query: ClearQuery,
-        deadline: RequestDeadline,
         origin: atm_core::send::MessageWriteOrigin,
     ) -> Result<ApiResponse, AtmError> {
         let runtime = self.service_runtime.clone();
@@ -715,16 +718,6 @@ impl StorageAndNudgeRouter {
     }
 
     pub(crate) async fn task_move(
-        &self,
-        request: atm_core::protocol::TaskMoveRequest,
-        ingress: AuthenticatedIngress,
-        deadline: RequestDeadline,
-    ) -> Result<ApiResponse, AtmError> {
-        self.task_move_with_cron_permit(request, ingress, deadline, None)
-            .await
-    }
-
-    async fn task_move_with_cron_permit(
         &self,
         request: atm_core::protocol::TaskMoveRequest,
         ingress: AuthenticatedIngress,
@@ -1206,60 +1199,77 @@ impl StorageAndNudgeRouter {
                 self.admit_tool_write(&request, ingress.clone(), deadline)
                     .await?
             };
-            let mut committed = self
-                .commit_write(request, deadline, tool_capability, cron_permit)
+            let committed = self
+                .prepare_and_commit_write(request, deadline, tool_capability, cron_permit)
                 .await?;
-            // ACK replies may acquire their host-qualified recipient while the
-            // write is prepared.  These must be forwarded after their local
-            // durable record is created; raw host-qualified sends returned
-            // above and therefore never reach this post-commit path.
-            let is_remote_recipient = ingress == AuthenticatedIngress::Local
-                && committed
-                    .canonical_request
-                    .to
-                    .as_ref()
-                    .and_then(|recipient| recipient.host())
-                    .is_some();
-            if committed.newly_persisted && is_remote_recipient {
-                let _ = self
-                    .dispatch_resolved_peer_write(
-                        &committed.canonical_request,
-                        committed.message_id,
-                        committed.persisted_timestamp,
-                        deadline,
-                        request_id,
-                    )
-                    .await?;
-            }
-            if committed.newly_persisted && !is_remote_recipient {
-                // A host-qualified local admission has already been handed to
-                // its peer above. Its receiver hook belongs to that peer's
-                // ingress, not to this sender's local roster.
-                let hook = self.clone();
-                let hook_task = async move {
-                    hook.emit_received_hook(committed.received_hook_dispatches, deadline)
-                        .await
-                };
-                if matches!(ingress, AuthenticatedIngress::Peer) {
-                    // Peer writes acknowledge durable persistence immediately; a
-                    // receiver hook (tmux nudge, etc.) must not hold the remote
-                    // request open past its absolute budget. The hook still runs
-                    // and its warnings are logged against this request id.
-                    self.detached_received_hooks.observe(
-                        self.runtime_health.clone(),
-                        request_id,
-                        hook_task,
-                    );
-                } else {
-                    let warnings = hook_task.await;
-                    append_warnings(&mut committed.outcome, warnings);
-                }
-            }
-            if let Some(error) = committed.task_rejection {
+            let (outcome, task_rejection) = self
+                .finish_write_delivery(committed, ingress, deadline, request_id)
+                .await?;
+            if let Some(error) = task_rejection {
                 return Err(error);
             }
-            Ok(ApiResponse::new(write_response(committed.outcome)))
+            Ok(ApiResponse::new(write_response(outcome)))
         })
+    }
+
+    async fn finish_write_delivery(
+        &self,
+        mut committed: CommittedWrite,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Result<(WriteOutcome, Option<AtmError>), AtmError> {
+        // ACK replies may acquire their host-qualified recipient while the
+        // write is prepared.  These must be forwarded after their local
+        // durable record is created; raw host-qualified sends returned
+        // above and therefore never reach this post-commit path.
+        let is_remote_recipient = ingress == AuthenticatedIngress::Local
+            && committed
+                .canonical_request
+                .to
+                .as_ref()
+                .and_then(|recipient| recipient.host())
+                .is_some();
+        if committed.newly_persisted && is_remote_recipient {
+            let _ = self
+                .dispatch_resolved_peer_write(
+                    &committed.canonical_request,
+                    committed.message_id,
+                    committed.persisted_timestamp,
+                    deadline,
+                    request_id,
+                )
+                .await?;
+        }
+        if committed.newly_persisted && !is_remote_recipient {
+            // A host-qualified local admission has already been handed to
+            // its peer above. Its receiver hook belongs to that peer's
+            // ingress, not to this sender's local roster.
+            let hook = self.clone();
+            let mut outcome = committed.outcome.clone();
+            let task_rejection = committed.task_rejection.take();
+            let hook_task = async move {
+                hook.emit_received_hook(committed.received_hook_dispatches, deadline)
+                    .await
+            };
+            if matches!(ingress, AuthenticatedIngress::Peer) {
+                // Peer writes acknowledge durable persistence immediately; a
+                // receiver hook (tmux nudge, etc.) must not hold the remote
+                // request open past its absolute budget. The hook still runs
+                // and its warnings are logged against this request id.
+                self.detached_received_hooks.observe(
+                    self.runtime_health.clone(),
+                    request_id,
+                    hook_task,
+                );
+                return Ok((outcome, task_rejection));
+            } else {
+                let warnings = hook_task.await;
+                append_warnings(&mut outcome, warnings);
+                return Ok((outcome, task_rejection));
+            }
+        }
+        Ok((committed.outcome, committed.task_rejection))
     }
 }
 

@@ -9,6 +9,11 @@ use atm_core::protocol::{RequestId, ResponseEnvelope};
 
 use super::{StorageAndNudgeRouter, compatibility_verdict};
 
+enum TaskCommandRoute {
+    Continue(ApiRequest),
+    Complete(ApiResponse),
+}
+
 impl StorageAndNudgeRouter {
     pub(super) async fn dispatch_non_write(
         &self,
@@ -22,17 +27,45 @@ impl StorageAndNudgeRouter {
                 "request deadline expired before replacement route dispatch",
             ));
         }
+        let request = match self
+            .task_command_route(request, ingress.clone(), deadline, request_id)
+            .await?
+        {
+            TaskCommandRoute::Continue(request) => request,
+            TaskCommandRoute::Complete(response) => return Ok(response),
+        };
+        self.dispatch_standard_non_write(request, ingress, deadline)
+            .await
+    }
+
+    async fn task_command_route(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Result<TaskCommandRoute, AtmError> {
         let request = match self.hooks.task_commands.clone() {
             None => request,
             Some(commands) => match TaskCommand::classify(request) {
                 Ok(command) => {
-                    return self
+                    let response = self
                         .call_task_command(&*commands, command, ingress, deadline, request_id)
-                        .await;
+                        .await?;
+                    return Ok(TaskCommandRoute::Complete(response));
                 }
                 Err(request) => request,
             },
         };
+        Ok(TaskCommandRoute::Continue(request))
+    }
+
+    async fn dispatch_standard_non_write(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
         match request {
             ApiRequest::Write(_) => unreachable!("writes use the canonical write path"),
             ApiRequest::Messages(request) => match *request {
@@ -46,7 +79,10 @@ impl StorageAndNudgeRouter {
                     self.receive_messages(query, deadline).await
                 }
             },
-            ApiRequest::Clear(query) => self.clear_messages(query, deadline).await,
+            ApiRequest::Clear(query) => {
+                self.clear_messages(query, deadline, atm_core::send::MessageWriteOrigin::Local)
+                    .await
+            }
             ApiRequest::Doctor(query) => self.doctor(query, deadline).await,
             ApiRequest::Search(request) => self.search(*request, ingress, deadline).await,
             ApiRequest::CompatibilityPreflight(preflight) => Ok(ApiResponse::new(
@@ -56,7 +92,7 @@ impl StorageAndNudgeRouter {
             ApiRequest::QueueGetNext(request) => {
                 self.queue_get_next(request, ingress, deadline).await
             }
-            ApiRequest::TaskMove(request) => self.task_move(request, ingress, deadline).await,
+            ApiRequest::TaskMove(request) => self.task_move(request, ingress, deadline, None).await,
             ApiRequest::GraftReceiverRegister(request) => {
                 self.graft_receiver_register(request, ingress, deadline)
                     .await
