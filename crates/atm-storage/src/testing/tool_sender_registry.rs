@@ -81,3 +81,23 @@ impl ToolSenderRegistry for InMemoryToolSenderRegistry {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::InMemoryToolSenderRegistry;
+    use crate::error::AtmErrorCode;
+    use crate::tool_sender::{PluginSenderId, ToolSenderRegistry};
+
+    #[test]
+    fn unregistered_sender_uses_stable_failure_code() {
+        let registry = InMemoryToolSenderRegistry::default();
+        let sender = PluginSenderId::parse("missing-plugin").expect("valid fixture sender");
+
+        let error = registry
+            .resolve(&sender)
+            .expect_err("sender is not registered");
+
+        assert_eq!(error.code(), AtmErrorCode::ToolSenderUnregistered);
+        assert!(error.message().contains("authenticated installer"));
+    }
+}
