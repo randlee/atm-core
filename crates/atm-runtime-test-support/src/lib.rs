@@ -625,3 +625,81 @@ impl atm_core::boundary::CronLifecycleNudger for RecordingCronLifecycleNudger {
             })
     }
 }
+
+#[derive(Default)]
+pub struct RecordingCronModuleMailDelivery {
+    pub replies: std::sync::Mutex<
+        std::collections::VecDeque<Result<atm_storage::DeliveryReceipt, atm_core::error::AtmError>>,
+    >,
+    pub delivered: std::sync::Mutex<
+        Vec<(
+            atm_storage::CronModuleMailIntent,
+            atm_storage::CronScheduleId,
+            atm_storage::CronGeneration,
+        )>,
+    >,
+}
+
+/// Deterministic direct-prompt double for cron lifecycle adapter tests.
+#[derive(Default)]
+pub struct RecordingCronLifecycleNudgeEmitter {
+    pub replies: std::sync::Mutex<
+        std::collections::VecDeque<Result<atm_storage::DeliveryReceipt, atm_core::error::AtmError>>,
+    >,
+    pub emitted: std::sync::Mutex<
+        Vec<(
+            atm_core::boundary::CronLifecycleNudge,
+            atm_core::boundary::CronLifecycleNudgeTarget,
+        )>,
+    >,
+}
+
+impl atm_core::boundary::sealed::Sealed for RecordingCronLifecycleNudgeEmitter {}
+
+#[async_trait::async_trait]
+impl atm_core::boundary::CronLifecycleNudgeEmitter for RecordingCronLifecycleNudgeEmitter {
+    async fn emit(
+        &self,
+        nudge: &atm_core::boundary::CronLifecycleNudge,
+        target: &atm_core::boundary::CronLifecycleNudgeTarget,
+    ) -> Result<atm_storage::DeliveryReceipt, atm_core::error::AtmError> {
+        self.emitted
+            .lock()
+            .expect("cron lifecycle nudge emitter records")
+            .push((nudge.clone(), target.clone()));
+        self.replies
+            .lock()
+            .expect("cron lifecycle nudge emitter replies")
+            .pop_front()
+            .unwrap_or_else(|| {
+                Err(atm_core::error::AtmError::validation(
+                    "RecordingCronLifecycleNudgeEmitter reply queue is empty",
+                ))
+            })
+    }
+}
+
+impl atm_core::boundary::sealed::Sealed for RecordingCronModuleMailDelivery {}
+
+#[async_trait::async_trait]
+impl atm_core::boundary::CronModuleMailDelivery for RecordingCronModuleMailDelivery {
+    async fn deliver(
+        &self,
+        intent: &atm_storage::CronModuleMailIntent,
+        permit: &atm_core::boundary::CronRunPermit,
+    ) -> Result<atm_storage::DeliveryReceipt, atm_core::error::AtmError> {
+        self.delivered
+            .lock()
+            .expect("cron module mail deliveries mutex")
+            .push((intent.clone(), permit.schedule_id(), permit.generation()));
+        self.replies
+            .lock()
+            .expect("cron module mail replies mutex")
+            .pop_front()
+            .unwrap_or_else(|| {
+                Err(atm_core::error::AtmError::validation(
+                    "RecordingCronModuleMailDelivery reply queue is empty",
+                ))
+            })
+    }
+}

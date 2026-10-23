@@ -534,6 +534,7 @@ pub async fn prepare_write_with_preflight_async_runtime(
         source_preflight,
         None,
         None,
+        None,
     )
     .await
 }
@@ -555,6 +556,7 @@ pub async fn prepare_write_with_tool_capability_async_runtime(
         runtime,
         source_preflight,
         Some(capability),
+        None,
         None,
     )
     .await
@@ -588,6 +590,39 @@ pub async fn prepare_write_with_cron_run_permit_async_runtime(
         source_preflight,
         None,
         Some((permit.schedule_id(), permit.generation())),
+        None,
+    )
+    .await
+}
+
+/// Persists cron module output as ordinary creator-addressed mail, retaining
+/// both the scheduler capability and the id allocated by the transition
+/// store. The stable id never enters the serializable write request.
+pub async fn prepare_cron_module_mail_async_runtime(
+    request: WriteRequest,
+    permit: &crate::boundary::CronRunPermit,
+    message_id: AtmMessageId,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    source_preflight: WriteSourcePreflight,
+) -> Result<WriteExecution, AtmError> {
+    if request.acknowledges_message_id.is_some()
+        || request.task_id.is_some()
+        || request.task_op.is_some()
+        || request.task_complete.is_some()
+    {
+        return Err(AtmError::validation(
+            "cron module output cannot be an acknowledgement or task operation",
+        ));
+    }
+    prepare_write_with_admission_async_runtime(
+        request,
+        observability,
+        runtime,
+        source_preflight,
+        None,
+        Some((permit.schedule_id(), permit.generation())),
+        Some(message_id),
     )
     .await
 }
@@ -599,10 +634,23 @@ async fn prepare_write_with_admission_async_runtime(
     source_preflight: WriteSourcePreflight,
     tool_capability: Option<crate::boundary::ToolSenderCapability>,
     cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
+    stable_message_id: Option<AtmMessageId>,
 ) -> Result<WriteExecution, AtmError> {
     if tool_capability.is_some() && cron_run_fence.is_some() {
         return Err(AtmError::validation(
             "tool sender admission cannot be combined with a cron run permit",
+        ));
+    }
+    if stable_message_id.is_some() && cron_run_fence.is_none() {
+        return Err(AtmError::validation(
+            "a caller-selected stable message id requires a cron run permit",
+        ));
+    }
+    if stable_message_id.is_some()
+        && (request.origin_message_id.is_some() || request.origin_timestamp.is_some())
+    {
+        return Err(AtmError::validation(
+            "cron module mail cannot override canonical origin metadata",
         ));
     }
     if tool_capability.is_some() && request.acknowledges_message_id.is_some() {
@@ -641,6 +689,7 @@ async fn prepare_write_with_admission_async_runtime(
             source_preflight,
             tool_capability,
             cron_run_fence,
+            stable_message_id,
         )
         .await;
     }
@@ -962,6 +1011,7 @@ async fn prepare_persisted_write_async(
     source_preflight: WriteSourcePreflight,
     tool_capability: Option<crate::boundary::ToolSenderCapability>,
     cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
+    stable_message_id: Option<AtmMessageId>,
 ) -> Result<WriteExecution, AtmError> {
     let mut context = crate::send::prepare_send_context_with_tool_capability(
         runtime,
@@ -978,7 +1028,9 @@ async fn prepare_persisted_write_async(
         crate::send::async_persistence::resolve_async_body(&request, source_preflight)?;
     let message_id = match tool_capability.as_ref() {
         Some(capability) => verified_tool_message_id(&request, capability, &body)?,
-        None => request.origin_message_id.unwrap_or_default(),
+        None => stable_message_id
+            .or(request.origin_message_id)
+            .unwrap_or_default(),
     };
     annotate_path_only_body(&mut request, &mut context, &body);
     let summary = crate::send::summary::build_summary(&body, request.summary_override.clone());
@@ -988,7 +1040,9 @@ async fn prepare_persisted_write_async(
     {
         IsoTimestamp::now()
     } else {
-        request.origin_timestamp.unwrap_or_else(IsoTimestamp::now)
+        stable_message_id
+            .map(|id| id.timestamp())
+            .unwrap_or_else(|| request.origin_timestamp.unwrap_or_else(IsoTimestamp::now))
     };
     let persistence = crate::send::async_persistence::persist_send_message_async(
         runtime,

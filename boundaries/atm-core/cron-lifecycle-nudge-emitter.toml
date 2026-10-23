@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-CronLifecycleNudgeEmitter"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "CronLifecycleNudgeEmitter"
+
+[public]
+trait = "CronLifecycleNudgeEmitter"
+notes = "directly emits a rendered committed cron lifecycle prompt to a canonical typed transport target"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["direct_prompt_transport"]
+io_forbidden = ["mailbox_write", "task_write", "ack_write", "post_send_telemetry"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-http-runtime", "atm-runtime-test-support"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-storage-rusqlite", "atm-core -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["CronLifecycleNudge", "CronLifecycleNudgeTarget"]
+response_types = ["DeliveryReceipt"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_runtime_test_support::RecordingCronLifecycleNudgeEmitter"]
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CRON-LIFECYCLE-NUDGE-EMITTER-REFERENCES"]
+review_gates = ["sealed_trait", "direct_transport", "no_mail_or_telemetry", "deterministic_test_doubles"]
+
+[status]
+state = "concrete_landed"

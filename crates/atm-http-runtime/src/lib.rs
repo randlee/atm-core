@@ -52,6 +52,7 @@ use tokio::task::JoinHandle;
 
 mod bare_cli_fifo;
 mod client;
+mod cron_delivery;
 mod diagnostics_route;
 mod doctor_hooks;
 mod doctor_observability;
@@ -113,6 +114,7 @@ pub use client::{
     SAME_HOST_REQUEST_DEADLINE, diagnostics_query, direct_peer_tcp_client, loopback_tcp_client,
     preferred_local_client, selected_write_transport, shared_direct_peer_client,
 };
+pub use cron_delivery::{CronLifecycleNudgerAdapter, CronModuleMailDeliveryAdapter};
 pub use diagnostics_route::{DEFAULT_DIAGNOSTICS_LIMIT, MAX_DIAGNOSTICS_LIMIT};
 pub use herdr_queue_wake::{
     HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK, HERDR_POLL_INTERVAL_MS,
