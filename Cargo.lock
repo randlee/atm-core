@@ -209,6 +209,7 @@ dependencies = [
  "agent-team-mail-core",
  "async-trait",
  "atm-runtime-test-support",
+ "atm-storage",
  "chrono",
  "cron",
  "getrandom 0.3.4",

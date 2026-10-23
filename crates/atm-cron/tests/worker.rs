@@ -318,7 +318,11 @@ fn atm_cron_has_no_unapproved_public_inherent_methods() {
     );
     assert_eq!(
         public_methods,
-        BTreeSet::from(["new".to_owned(), "start_worker".to_owned()])
+        BTreeSet::from([
+            "new".to_owned(),
+            "start_worker".to_owned(),
+            "with_typed_execution".to_owned(),
+        ])
     );
 }
 
@@ -1323,6 +1327,12 @@ async fn three_actions_dispatch_once_in_order_as_created_by() {
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].actions, expected);
     assert_eq!(calls[0].spec.default_as.as_str(), TEST_SENDER);
+    let schedule = fixture.row();
+    assert_eq!(
+        calls[0].cron_permit,
+        Some((schedule.id, schedule.generation)),
+        "cron dispatch carries the active schedule generation fence"
+    );
     let run_deadlines: Vec<_> = fixture
         .runner
         .calls

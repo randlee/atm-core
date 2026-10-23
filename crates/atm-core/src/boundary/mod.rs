@@ -107,7 +107,7 @@ pub use atm_storage::{
 };
 pub use cron_hook_runner::CronHookRunner;
 pub use cron_lifecycle_nudger::CronLifecycleNudger;
-pub use cron_run_permit::CronRunPermit;
+pub use cron_run_permit::{CronRunPermit, CronRunPermitIssuer};
 pub use cron_scheduler::{CronScheduler, CronStartSpec};
 pub use hook_action_dispatcher::{DispatchSpec, DispatchedAction, HookActionDispatcher};
 pub use hook_runner::{HookOutcome, HookRunner};
