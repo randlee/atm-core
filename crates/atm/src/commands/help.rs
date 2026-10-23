@@ -350,7 +350,7 @@ atm cron list --help for command details.
 
 Schedules have a fixed stored jitter offset, do not replay missed ticks, and
 keep ended rows available for listing. Module output becomes ordinary mail;
-daemon lifecycle notices use cron nudge templates.
+daemon lifecycle notices use schedule nudge templates.
 
 Use the installed Cron guide for reply examples, sender rules, nudge templates,
 and recovery steps.
