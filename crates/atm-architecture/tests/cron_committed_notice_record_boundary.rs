@@ -168,10 +168,24 @@ fn read(path: &Path) -> String {
 }
 
 fn relative(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .expect("workspace source path")
-        .to_string_lossy()
-        .into_owned()
+    normalize_path(
+        path.strip_prefix(root)
+            .expect("workspace source path")
+            .to_string_lossy()
+            .as_ref(),
+    )
+}
+
+fn normalize_path(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
+#[test]
+fn normalize_path_uses_manifest_separators_on_windows_style_input() {
+    assert_eq!(
+        normalize_path(r"crates\atm-storage\src\testing\cron_transition_store.rs"),
+        "crates/atm-storage/src/testing/cron_transition_store.rs"
+    );
 }
 
 fn root() -> PathBuf {
