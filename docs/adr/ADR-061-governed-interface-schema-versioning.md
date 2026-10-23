@@ -50,9 +50,9 @@ approved that.
 `HERDR_MINIMUM_VERSION` is `0.8.0` today (`crates/atm-herdr/src/lib.rs`),
 set by Rand on 2026-09-05 from the M5 agents' drift review of Herdr
 v0.8.0..v0.8.2. The phase-ay plan lands the runtime checks around it (AY.1,
-AY.3). `STORAGE_SCHEMA_VERSION` does not exist yet and needs its own planned
-sprint; until it lands, the SQLite rules below are applied against the
-migration functions directly.
+AY.3). `STORAGE_SCHEMA_VERSION` is `2.1.0` in
+`crates/atm-storage-rusqlite/src/schema_version.rs`, persisted in
+`atm_storage_schema_version` after the registered schema migrations.
 
 ### D2. Classification
 
@@ -241,6 +241,15 @@ migration functions directly.
   after both tables exist. Sprint bk-1 owns the store traits, not this
   SQLite schema proof. No
   `STORAGE_SCHEMA_VERSION` is added, for the reason given under Phase BB.1.
+- **2026-10-23 — Phase BK storage-version record:** Following the approved
+  Phase BA SQLite MAJOR schema change, the installed additive hook, cron,
+  sender registry, nonce ledger, and delivery-intent tables are recorded as
+  storage schema `2.1.0`. `atm-storage-rusqlite` persists the version after
+  schema ensures complete. The deterministic pre-BK consumer proof is
+  `crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`.
+  It verifies the five additive tables and recorded version, then replays the
+  frozen pre-BK DDL and confirms the old consumer can still read and write its
+  supported tables.
 - **2026-09-12 — Phase BB.6 (approved):** Fenix, as Phase BB lead, approved
   this additive schema change through ATM on team `atm-dev`. `prompt_handoffs`
   and its task lookup index are additive SQLite MINOR schema objects. The table
@@ -308,10 +317,10 @@ migration functions directly.
 
 ### 2026-10-23 — Phase BK.9 tool/cron contract records
 
-- **SQLite, additive MINOR pending implementation:** `tool_sender_registry`,
-  `tool_sender_nonce_ledger`, and `cron_delivery_intent` are idempotent
-  additive tables. BK-10 must prove a previous consumer can read/write its
-  existing tables after the addition and record the deployed schema version.
+- **SQLite, additive MINOR implemented:** `STORAGE_SCHEMA_VERSION = 2.1.0`
+  records the installed additive hook, cron, sender registry, nonce ledger,
+  and delivery-intent tables after migration. The deterministic previous-
+  consumer proof is `crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`; it opens both empty and seeded frozen pre-BK databases, verifies installed tables and version, and proves the old DDL/column set continues reading and writing its supported tables.
 - **Hook schema, additive MINOR:** cron-only reply schema `1.1.0` adds optional
   `cron-output`; old replies without it remain valid and task-hook reply
   grammar is unchanged. Duplicate-key rejection is a separately reviewed

@@ -708,6 +708,7 @@ pub(crate) fn ensure_schema(
         "https_port",
         "ALTER TABLE peer_trusted_peers ADD COLUMN https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535);",
     )?;
+    crate::schema_version::ensure_schema_version(connection, target)?;
     Ok(())
 }
 

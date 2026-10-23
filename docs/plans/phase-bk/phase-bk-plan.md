@@ -80,9 +80,10 @@ semantic storage capabilities (Rand: "yes, we need storage for cron").
 
 ## Governed interfaces (ADR-061)
 
-- SQLite storage: two additive tables, MINOR; D6 record of 2026-10-18 on
-  `docs/adr/ADR-061-governed-interface-schema-versioning.md` (this PR);
-  bk-6 lands the D3 previous-consumer proof test.
+- SQLite storage: additive hook, cron, sender registry, nonce ledger, and
+  delivery-intent tables are recorded as `STORAGE_SCHEMA_VERSION = 2.1.0`;
+  ADR-061 D6 records the version and the deterministic previous-consumer
+  proof lives in `crates/atm-storage-rusqlite/tests/hook_schema.rs`.
 - HTTP API: six additive `RequestEnvelope` variants, the `HookActions`
   response and the `X-ATM-Hook-Actions` header; `HTTP_API_VERSION`
   `1.12.0` → `1.13.0` in bk-7, with the D5 record line, both

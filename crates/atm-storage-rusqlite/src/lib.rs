@@ -29,6 +29,7 @@ mod reader_pool;
 pub mod roster_runtime;
 mod roster_store;
 mod schema_support;
+mod schema_version;
 mod search_reader;
 mod search_schema;
 mod search_store;
@@ -51,6 +52,7 @@ mod test_support;
 mod writer;
 
 pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};
+pub use schema_version::STORAGE_SCHEMA_VERSION;
 
 pub use crate::analyst_query::open_analyst_query_store;
 #[cfg(feature = "test-support")]

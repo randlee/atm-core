@@ -152,10 +152,13 @@ Purpose:
 - Own the SQLite-backed implementation of the `RosterStoreDoctor` diagnostics
   contract.
 
-## BK-9 pending additive contracts
+## BK-9 additive schema
 
-The hook schema declares additive `tool_sender_registry`,
-`tool_sender_nonce_ledger`, and `cron_delivery_intent` tables for BK-10's
-adapter. They are not a cutover: physical `tool` rows remain readable and no
-new virtual sender is admitted until the protected registry implementation and
-previous-consumer proof land.
+`STORAGE_SCHEMA_VERSION` is `2.1.0` and is persisted in
+`atm_storage_schema_version` by the SQLite migration path after the schema
+ensure functions run. This additive minor covers `hook_registration`,
+`cron_schedule`, `tool_sender_registry`, `tool_sender_nonce_ledger`, and
+`cron_delivery_intent`. The deterministic previous-consumer proof is
+`crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`:
+the frozen pre-BK consumer continues reading and writing its old column set
+after these tables and the version record are installed.

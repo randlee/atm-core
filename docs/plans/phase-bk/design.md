@@ -333,9 +333,10 @@ write in `spawn_blocking` survives a task abort) never writes a restarted
 row. The stores read no clock: every timestamp (`registered_at`,
 `disabled_at`, `created_at`, `ended_at`, run and stop times) is an
 argument, and `AtmCron` stamps from its injected `Clock`. `atm hook list` and `atm cron list` read
-these rows. There is no database-wide schema version constant; the proof
-is a pre-bk DDL test (ADR-061 D3). The schema-reviewer records the minor
-bump at plan review.
+these rows. `STORAGE_SCHEMA_VERSION = 2.1.0` is persisted by the
+`atm-storage-rusqlite` schema ensure path (ADR-061 D1/D3). The deterministic
+pre-BK DDL consumer test records the additive tables and verifies old-column
+reads and writes after migration.
 
 ## 5. Scheduler
 
