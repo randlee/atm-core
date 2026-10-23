@@ -224,3 +224,12 @@ references, and certificate material.
 Browser session authentication/authorization UI, CORS policy, static assets,
 and a web frontend are a later phase. They consume this API; they do not add a
 second application handler or a browser-specific persistence path.
+
+### BK-9 reserved endpoint contract
+
+BK-9 freezes, but does not yet expose, local-only `POST`/`DELETE`
+`/v1/atm/tool-senders`. It accepts authenticated installer envelopes only;
+peer ingress is refused. The associated runtime proof and peer attestation
+remain internal DTOs until BK-14 publishes an additive HTTP version with both
+OpenAPI documents and a previous-consumer fixture. The current HTTP baseline
+therefore remains unchanged.

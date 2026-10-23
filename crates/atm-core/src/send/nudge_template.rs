@@ -159,6 +159,9 @@ pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
         BuiltInNudgeTemplateKind::TaskClosed => {
             "<atm task=\"{{task_id}}\" closed by=\"{{from}}\" outcome=\"{{outcome}}\" message=\"{{message_id}}\"/>"
         }
+        BuiltInNudgeTemplateKind::Cron => {
+            "<atm cron name=\"{{name}}\" event=\"{{event}}\" {{detail_attribute}}>"
+        }
     }
 }
 

@@ -518,3 +518,110 @@ mod tests {
         std::fs::remove_dir_all(root).expect("evicted runtime releases the test root");
     }
 }
+
+/// Scripted deterministic double for the sealed cron-only runner contract.
+#[derive(Default)]
+pub struct ScriptedCronHookRunner {
+    pub tick_replies: std::sync::Mutex<
+        std::collections::VecDeque<
+            Result<atm_core::hook::CronHookOutcome, atm_core::error::AtmError>,
+        >,
+    >,
+    pub stop_replies: std::sync::Mutex<
+        std::collections::VecDeque<
+            Result<atm_core::hook::CronStopReply, atm_core::error::AtmError>,
+        >,
+    >,
+    pub calls: std::sync::Mutex<
+        Vec<(
+            atm_core::boundary::HookTarget,
+            atm_core::hook::HookRequest,
+            atm_core::api::RequestDeadline,
+            bool,
+        )>,
+    >,
+}
+
+impl atm_core::boundary::sealed::Sealed for ScriptedCronHookRunner {}
+
+#[async_trait::async_trait]
+impl atm_core::boundary::CronHookRunner for ScriptedCronHookRunner {
+    async fn run_cron(
+        &self,
+        target: &atm_core::boundary::HookTarget,
+        request: &atm_core::hook::HookRequest,
+        deadline: atm_core::api::RequestDeadline,
+    ) -> Result<atm_core::hook::CronHookOutcome, atm_core::error::AtmError> {
+        self.calls.lock().expect("cron runner calls mutex").push((
+            target.clone(),
+            request.clone(),
+            deadline,
+            false,
+        ));
+        self.tick_replies
+            .lock()
+            .expect("cron tick replies mutex")
+            .pop_front()
+            .unwrap_or_else(|| {
+                Err(atm_core::error::AtmError::validation(
+                    "ScriptedCronHookRunner tick reply queue is empty",
+                ))
+            })
+    }
+
+    async fn stop_cron(
+        &self,
+        target: &atm_core::boundary::HookTarget,
+        request: &atm_core::hook::HookRequest,
+        deadline: atm_core::api::RequestDeadline,
+    ) -> Result<atm_core::hook::CronStopReply, atm_core::error::AtmError> {
+        self.calls.lock().expect("cron runner calls mutex").push((
+            target.clone(),
+            request.clone(),
+            deadline,
+            true,
+        ));
+        self.stop_replies
+            .lock()
+            .expect("cron stop replies mutex")
+            .pop_front()
+            .unwrap_or_else(|| {
+                Err(atm_core::error::AtmError::validation(
+                    "ScriptedCronHookRunner stop reply queue is empty",
+                ))
+            })
+    }
+}
+
+/// Deterministic lifecycle delivery double for cron worker tests.
+#[derive(Default)]
+pub struct RecordingCronLifecycleNudger {
+    pub replies: std::sync::Mutex<
+        std::collections::VecDeque<Result<atm_storage::DeliveryReceipt, atm_core::error::AtmError>>,
+    >,
+    pub delivered: std::sync::Mutex<Vec<atm_storage::CronNoticeIntent>>,
+}
+
+impl atm_core::boundary::sealed::Sealed for RecordingCronLifecycleNudger {}
+
+#[async_trait::async_trait]
+impl atm_core::boundary::CronLifecycleNudger for RecordingCronLifecycleNudger {
+    async fn deliver(
+        &self,
+        intent: &atm_storage::CronNoticeIntent,
+    ) -> Result<atm_storage::DeliveryReceipt, atm_core::error::AtmError> {
+        self.delivered
+            .lock()
+            .expect("cron lifecycle deliveries mutex")
+            .push(intent.clone());
+        self.replies
+            .lock()
+            .expect("cron lifecycle replies mutex")
+            .pop_front()
+            .unwrap_or_else(|| {
+                Err(atm_core::error::AtmError::validation(
+                    "RecordingCronLifecycleNudger reply queue is empty",
+                ))
+            })
+    }
+}

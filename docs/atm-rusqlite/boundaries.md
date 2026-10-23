@@ -151,3 +151,11 @@ Canonical machine-readable boundary source:
 Purpose:
 - Own the SQLite-backed implementation of the `RosterStoreDoctor` diagnostics
   contract.
+
+## BK-9 pending additive contracts
+
+The hook schema declares additive `tool_sender_registry`,
+`tool_sender_nonce_ledger`, and `cron_delivery_intent` tables for BK-10's
+adapter. They are not a cutover: physical `tool` rows remain readable and no
+new virtual sender is admitted until the protected registry implementation and
+previous-consumer proof land.

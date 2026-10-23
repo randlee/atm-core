@@ -73,3 +73,40 @@ are tracked separately so neither waits on the other.
 - A reader of any tool message knows the sender from the address alone.
 - Review check: a tool that reads `ATM_IDENTITY` for its own identity, or
   takes a sender from a flag or environment variable, is a finding.
+
+## BK-9 amendment — reserved virtual namespace and authenticated principals
+
+The historical temporary physical `tool` roster workaround is superseded.
+`tool` is a reserved virtual namespace, not an ordinary `TeamName`; no normal
+team creation, member administration, or agent launch may create `cron@tool`
+or another `<agent>@tool`. `cron@tool` is a built-in daemon principal.
+
+Plug-in principals are fixed authenticated registrations, not a tool-selected
+address. The daemon admits a signed installer request using an administrator
+protected trust root and admits each runtime message using a sender, host,
+generation, message-id/digest, key, and nonce bound proof. It then mints a
+non-serializable internal capability. Environment variables, CLI flags, hook
+JSON, repository config, and an mTLS peer identity are insufficient. A peer
+requires an origin-host attestation for the exact admitted message. These
+rules preserve readable historical `@tool` mail while prohibiting new
+impersonation and do not grant cross-team task ownership.
+
+### BK-9 contract record — proof framing
+
+All proof signing inputs are canonical UTF-8 field frames: every field is
+preceded by its unsigned 32-bit big-endian byte length. Numeric registration
+generation is one unsigned 64-bit big-endian field. The opaque `signature` is
+always excluded. The field order is:
+
+- installer (`ATM-TOOL-INSTALL-v1`): domain, schema version, operation,
+  installer id, installer key id, sender, package digest, registration
+  generation, host id, runtime key id, runtime public key, previous runtime
+  key id (empty when absent), nonce, issued at, expires at;
+- runtime message (`ATM-TOOL-MESSAGE-v1`): domain, runtime key id, sender,
+  registration generation, host id, message id, message digest, nonce;
+- peer attestation (`ATM-TOOL-PEER-v1`): domain, sender, registration
+  generation, host id, message id, message digest, nonce.
+
+BK-9 freezes these value contracts only. BK-11 implements installer validation
+and protected trust-root storage; BK-15 composes the authenticated daemon
+adapter.

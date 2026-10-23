@@ -1,3 +1,8 @@
+> **Plan status (2026-10-23):** This file retains the historical BK-1–BK-8
+> delivery plan. The current BK-9–BK-16 extension is tracked in Beads on
+> `develop` and led by solar; its sprint beads are the authoritative current
+> plan. The historical table below remains for provenance.
+
 # Phase bk — atm task hooks, hook registration, atm cron, doctor hook section
 
 Authority: `design.md` (fenix, PR #1877) over Rand's verbatim rulings on

@@ -237,3 +237,17 @@ ADR-061: an additive change is MINOR and a breaking change is MAJOR.
   registered in `atm-error-codes.md` in the sprint that adds them.
 - An action may name any routed command except the hook and cron registry
   routes, within the registration's team.
+
+## BK-9 amendment — cron replies and mutation JSON
+
+Task `HookReply` remains an exact four-result parser. Cron uses a separate
+`CronHookRunner` and the versioned cron-only reply contract; an optional
+`cron-output` is never accepted on a task reply. The runner clears the child
+environment and supplies cron's fixed identity/team only for `cron.tick` and
+`cron.stop`; that environment is not sender authority.
+
+The hook mutation CLI JSON contract is fixed before downstream implementation:
+register emits `action` plus the eleven-field persisted row; disable emits
+`action`, disabled rows and a count equal to array length, including successful
+zero matches. Existing human output, typed failures, and bare list JSON remain
+unchanged.

@@ -159,3 +159,18 @@ D5) and `CronScheduleStore` (D1, D4).
   `atm-cron` may be depended on by `atm-daemon-bootstrap` only.
 - `cron.stop` is the eighth hook name (six task hooks, `cron.tick`,
   `cron.stop`); `atm hook register` accepts neither cron name.
+
+## BK-9 amendment — transition intents and sender authority
+
+Cron transitions are persisted through a generation-fenced, sealed transition
+store. State and every lifecycle/module-mail intent commit atomically. A stale
+generation changes neither. A logical intent is exactly once per transition;
+unknown external handoffs remain reconcilable rather than being claimed as
+externally exactly once. Lifecycle notices target the persisted creator and
+are rendered by the dedicated `cron` template family.
+
+Cron action sender precedence is explicit ordinary `from`, legacy same-team
+`as`, then daemon-owned `cron@tool`. Mixed `from` and `as`, foreign/different
+senders, and explicit virtual senders are refused. A scheduler-minted permit
+fences each action admission after manual end/restart. No capability is passed
+to a module or represented by child environment values.

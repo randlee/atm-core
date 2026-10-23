@@ -305,3 +305,24 @@ migration functions directly.
   against the previous release binary.
 - Plan documents must list their intended interface changes so phase-end
   drift review has something to diff against.
+
+### 2026-10-23 — Phase BK.9 tool/cron contract records
+
+- **SQLite, additive MINOR pending implementation:** `tool_sender_registry`,
+  `tool_sender_nonce_ledger`, and `cron_delivery_intent` are idempotent
+  additive tables. BK-10 must prove a previous consumer can read/write its
+  existing tables after the addition and record the deployed schema version.
+- **Hook schema, additive MINOR:** cron-only reply schema `1.1.0` adds optional
+  `cron-output`; old replies without it remain valid and task-hook reply
+  grammar is unchanged. Duplicate-key rejection is a separately reviewed
+  validation tightening and requires an explicit coexistence decision before
+  release if old modules can emit duplicates.
+- **HTTP/peer, no version bump in BK-9:** installer/runtime proof DTOs and the
+  local-only `/v1/atm/tool-senders` endpoint are frozen for BK-14. The HTTP
+  version, both OpenAPI documents, and old-consumer fixture change only when
+  that wire surface is implemented. A future optional peer attestation field
+  needs its own minor version record and prior-consumer proof.
+- **Breaking cutover:** retirement of physical `tool` credentials and ingress
+  rejection of newly supplied bare `@tool` addresses require recorded approval,
+  inventory-backed coexistence, and a migration window; this record does not
+  approve cutover.

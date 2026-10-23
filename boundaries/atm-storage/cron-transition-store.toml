@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-CronTransitionStore"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "CronTransitionStore"
+
+[public]
+trait = "CronTransitionStore"
+notes = "sealed durable transition and delivery-intent transaction boundary; exactly one logical intent is committed per applied transition"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["cron_transition_write", "cron_delivery_intent_ledger"]
+io_forbidden = ["direct_sqlite_io", "process_spawn", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-cron", "atm-daemon-bootstrap", "atm-runtime-test-support", "atm-storage-rusqlite"]
+allowed_dependencies = []
+forbidden_edges = ["atm-storage -> atm-core", "atm-cron -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["CronTransitionWrite", "CronDeliveryKey", "DeliveryReceipt"]
+response_types = ["CronCommitResult", "Vec<CronDeliveryIntent>", "bool"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["crate::testing::cron_transition_store::InMemoryCronTransitionStore"]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CRON-TRANSITION-STORE-REFERENCES"]
+review_gates = ["sealed_trait", "generation_fence", "deterministic_test_doubles"]
+
+[status]
+state = "planned"
+notes = ["BK-9 freezes the atomic persistence seam; BK-10 owns its SQLite implementation."]

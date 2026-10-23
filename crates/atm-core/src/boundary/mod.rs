@@ -78,6 +78,9 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
+mod cron_hook_runner;
+mod cron_lifecycle_nudger;
+mod cron_run_permit;
 mod cron_scheduler;
 mod herdr_breaker;
 mod herdr_endpoint;
@@ -88,16 +91,23 @@ mod message_received_hook_emitter;
 mod store;
 mod task_commands;
 mod template_composer;
+mod tool_sender;
 
 pub use crate::hook::HookTarget;
 pub use atm_storage::request_budget::{
     CRON_TIMEOUT_MAX_MS, HOOK_ACTION_RESERVE_MS, HOOK_TIMEOUT_MAX_MS, SERVER_REQUEST_BUDGET,
 };
 pub use atm_storage::{
-    CronGeneration, CronName, CronSchedule, CronScheduleId, CronScheduleStore, HookExitCause,
-    HookName, HookRegistration, HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition,
-    TaskHook, stopped_outcome,
+    CronCommitResult, CronDeliveryIntent, CronDeliveryKey, CronDiagnosticDetail, CronFailure,
+    CronFailureKey, CronFailureKind, CronGeneration, CronLifecycleEvent, CronModuleMailIntent,
+    CronModuleOutput, CronName, CronNoticeIntent, CronNoticeKey, CronOutputBody, CronRunTransition,
+    CronSchedule, CronScheduleId, CronScheduleStore, CronSuccess, CronTransitionStore,
+    CronTransitionWrite, DeliveryReceipt, HookExitCause, HookName, HookRegistration,
+    HookRegistrationStore, NewCronSchedule, PhaseId, StopCondition, TaskHook, stopped_outcome,
 };
+pub use cron_hook_runner::CronHookRunner;
+pub use cron_lifecycle_nudger::CronLifecycleNudger;
+pub use cron_run_permit::CronRunPermit;
 pub use cron_scheduler::{CronScheduler, CronStartSpec};
 pub use hook_action_dispatcher::{DispatchSpec, DispatchedAction, HookActionDispatcher};
 pub use hook_runner::{HookOutcome, HookRunner};
@@ -130,6 +140,7 @@ pub use template_composer::{
     RenderedBody, SourceSpan, TemplateComposer, TemplateInspection, TemplateReference,
     TemplateReferenceKind, TemplateRoot, TemplateSource,
 };
+pub use tool_sender::{SenderClaim, ToolSenderCapability};
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
 pub trait StatusSource: sealed::Sealed {

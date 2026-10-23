@@ -30,6 +30,42 @@ CREATE TABLE IF NOT EXISTS hook_registration (
 );
 "#;
 
+pub(crate) const TOOL_SENDER_REGISTRY_DDL: &str = r#"
+CREATE TABLE IF NOT EXISTS tool_sender_registry (
+    sender TEXT PRIMARY KEY,
+    installer_id TEXT NOT NULL,
+    installer_key_id TEXT NOT NULL,
+    host_id TEXT NOT NULL,
+    runtime_key_id TEXT NOT NULL,
+    runtime_public_key TEXT NOT NULL,
+    registration_generation INTEGER NOT NULL CHECK(registration_generation >= 1),
+    active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0, 1)),
+    installed_at TEXT NOT NULL,
+    revoked_at TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS tool_sender_nonce_ledger (
+    nonce TEXT PRIMARY KEY,
+    sender TEXT NOT NULL,
+    operation_digest TEXT NOT NULL,
+    result_digest TEXT NULL,
+    consumed_at TEXT NOT NULL
+);
+"#;
+
+pub(crate) const CRON_DELIVERY_INTENT_DDL: &str = r#"
+CREATE TABLE IF NOT EXISTS cron_delivery_intent (
+    schedule_id INTEGER NOT NULL,
+    generation INTEGER NOT NULL,
+    transition_seq INTEGER NOT NULL CHECK(transition_seq >= 1),
+    output_index INTEGER NULL,
+    kind TEXT NOT NULL CHECK(kind IN ('lifecycle', 'module_mail')),
+    payload TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending', 'delivered', 'suppressed', 'recipient_unavailable', 'unknown')),
+    receipt TEXT NULL,
+    PRIMARY KEY(schedule_id, generation, transition_seq, output_index)
+);
+"#;
+
 const CRON_SCHEDULE_DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS cron_schedule (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,6 +99,6 @@ pub(crate) fn ensure_schema(
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
     connection
-        .execute_batch(&format!("{HOOK_REGISTRATION_DDL}{CRON_SCHEDULE_DDL}"))
+        .execute_batch(&format!("{HOOK_REGISTRATION_DDL}{CRON_SCHEDULE_DDL}{TOOL_SENDER_REGISTRY_DDL}{CRON_DELIVERY_INTENT_DDL}"))
         .map_err(|error| sqlite_error(target, "failed to initialize hook schema", error))
 }

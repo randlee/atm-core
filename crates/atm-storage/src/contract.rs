@@ -138,6 +138,8 @@ pub enum BuiltInNudgeTemplateKind {
     TaskStarted,
     TaskComplete,
     TaskClosed,
+    /// Cron lifecycle nudge override family; separate from post-send events.
+    Cron,
 }
 
 impl BuiltInNudgeTemplateKind {
@@ -154,6 +156,7 @@ impl BuiltInNudgeTemplateKind {
             Self::TaskStarted => "task_started",
             Self::TaskComplete => "task_complete",
             Self::TaskClosed => "task_closed",
+            Self::Cron => "cron",
         }
     }
 }
@@ -1761,7 +1764,7 @@ mod tests {
     }
 
     #[test]
-    fn eleven_kinds_round_trip_as_str_from_str() {
+    fn twelve_kinds_round_trip_as_str_from_str() {
         let kinds = [
             BuiltInNudgeTemplateKind::Delivery,
             BuiltInNudgeTemplateKind::DeliveryAck,
@@ -1774,6 +1777,7 @@ mod tests {
             BuiltInNudgeTemplateKind::TaskStarted,
             BuiltInNudgeTemplateKind::TaskComplete,
             BuiltInNudgeTemplateKind::TaskClosed,
+            BuiltInNudgeTemplateKind::Cron,
         ];
         for kind in kinds {
             assert_eq!(kind.as_str().parse::<BuiltInNudgeTemplateKind>(), Ok(kind));
