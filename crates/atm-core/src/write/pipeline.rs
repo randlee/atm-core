@@ -685,11 +685,13 @@ async fn prepare_write_with_admission_async_runtime(
             request,
             observability,
             runtime,
-            None,
-            source_preflight,
-            tool_capability,
-            cron_run_fence,
-            stable_message_id,
+            PersistedWritePreparation {
+                acknowledgement: None,
+                source_preflight,
+                tool_capability,
+                cron_run_fence,
+                stable_message_id,
+            },
         )
         .await;
     }
@@ -1003,16 +1005,27 @@ fn verified_tool_message_id(
 }
 
 /// Prepares the canonical write after its one asynchronous durable admission.
-async fn prepare_persisted_write_async(
-    mut request: SendRequest,
-    observability: &(dyn ObservabilityPort + Send + Sync),
-    runtime: &LocalServiceRuntime,
+struct PersistedWritePreparation {
     acknowledgement: Option<ResolvedAcknowledgement>,
     source_preflight: WriteSourcePreflight,
     tool_capability: Option<crate::boundary::ToolSenderCapability>,
     cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
     stable_message_id: Option<AtmMessageId>,
+}
+
+async fn prepare_persisted_write_async(
+    mut request: SendRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    preparation: PersistedWritePreparation,
 ) -> Result<WriteExecution, AtmError> {
+    let PersistedWritePreparation {
+        acknowledgement,
+        source_preflight,
+        tool_capability,
+        cron_run_fence,
+        stable_message_id,
+    } = preparation;
     let mut context = crate::send::prepare_send_context_with_tool_capability(
         runtime,
         &mut request,
