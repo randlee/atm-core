@@ -344,10 +344,70 @@ mod tests {
             assert!(parse(value).unwrap_err().to_string().contains("--until"));
         }
     }
+
+    #[test]
+    fn documented_cron_commands_match_the_live_clap_parser() {
+        let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repo root");
+        let manifest: Value = serde_json::from_slice(
+            &std::fs::read(repo_root.join("docs/user-documents/examples/cron/manifest.json"))
+                .expect("read cron fixture manifest"),
+        )
+        .expect("parse cron fixture manifest");
+        for fixture in manifest["commands"].as_array().expect("commands array") {
+            if fixture["deferred_execution"].as_bool() == Some(true) {
+                continue;
+            }
+            let Some(argv) = fixture["argv"].as_array() else {
+                continue;
+            };
+            let id = fixture["id"].as_str().expect("fixture id");
+            let args = argv
+                .iter()
+                .map(|value| value.as_str().expect("argument").to_owned())
+                .collect::<Vec<_>>();
+            let expected_valid = fixture["valid"].as_bool().expect("valid flag");
+            assert_eq!(
+                CronCommand::try_parse_from(args).is_ok(),
+                expected_valid,
+                "live Clap parser disagrees with command fixture {id}"
+            );
+        }
+
+        let until = manifest["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|fixture| fixture["id"] == "start-until-utc")
+            .expect("RFC3339 fixture");
+        let args = until["argv"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_str().unwrap().to_owned())
+            .collect::<Vec<_>>();
+        let CronSubcommand::Start(start) = CronCommand::try_parse_from(args).unwrap().command
+        else {
+            panic!("start fixture did not parse as start")
+        };
+        assert_eq!(
+            start
+                .until
+                .unwrap()
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            "2030-11-01T00:00:00Z"
+        );
+        assert_eq!(start.cron_expr, "0 0 2 * * * 2030");
+    }
 }
 
 #[derive(Debug, Parser)]
-#[command(about = "Start, end, or list cron schedules")]
+#[command(
+    about = "Manage recurring hook schedules",
+    long_about = "Manage persistent UTC schedules that run a hook module. Schedules belong to a team and phase, survive daemon restarts, and require exactly one stop condition. Use atm help cron for the reply, output, lifecycle, and recovery guide."
+)]
 pub struct CronCommand {
     #[command(subcommand)]
     pub command: CronSubcommand,
@@ -355,56 +415,113 @@ pub struct CronCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum CronSubcommand {
-    #[command(about = "Start a recurring module schedule with a mandatory stop condition")]
+    #[command(
+        about = "Start a recurring hook schedule",
+        long_about = "Start a persistent schedule for a hook module. The expression uses six fields with seconds first, or seven fields with an optional year; the supported aliases are @yearly, @monthly, @weekly, @daily, and @hourly. Five-field expressions are refused. Give exactly one future --until timestamp or --until-hook. The module timeout comes from CRON_TIMEOUT_MS, falling back to TIMEOUT_MS, and is capped at 30 seconds. The daemon stores a fixed jitter offset with the schedule."
+    )]
     Start(CronStartArgs),
-    #[command(about = "End active schedules in a phase")]
+    #[command(
+        about = "End active schedules in a phase",
+        long_about = "End active schedules for the selected phase. Add a schedule name to end only that schedule; omit it to end every active schedule in the phase. Ended rows remain available in atm cron list. Ending a schedule is a manual stop and does not delete its history."
+    )]
     End(CronEndArgs),
-    #[command(about = "List active and inactive schedules")]
+    #[command(
+        about = "List active and ended schedules",
+        long_about = "List schedules for the caller's team, including active and ended rows. Filter by phase when needed. Human output summarizes custom-object keys; --json emits a bare array with the stored schedule fields, including creator, generation, jitter, last run, and outcome."
+    )]
     List(CronListArgs),
 }
 
 #[derive(Debug, Args)]
 #[command(group = clap::ArgGroup::new("stop").required(true).multiple(false).args(["until", "until_hook"]))]
 pub struct CronStartArgs {
-    #[arg(help = "Schedule name within the phase")]
+    #[arg(
+        help = "Schedule name within the phase",
+        long_help = "Unique schedule name within the selected team and phase. An active schedule with the same name is refused; restarting an ended name reuses its stored row."
+    )]
     pub name: String,
     #[arg(
         long = "cron",
-        help = "Six-field UTC cron expression, validated by the daemon"
+        help = "Six- or seven-field UTC cron expression",
+        long_help = "Cron 0.17 expression in UTC: six fields with seconds first, or seven fields with an optional year. The supported aliases are @yearly, @monthly, @weekly, @daily, and @hourly. Five fields, expressions with no future occurrence, and a stop time that is not in the future are rejected before a schedule is stored."
     )]
     pub cron_expr: String,
-    #[arg(long, help = "Python module declaring its timeout")]
+    #[arg(
+        long,
+        help = "Hook module to run",
+        long_help = "Path to the Python hook module. The CLI resolves the module and working directory before sending the start request. The module declares CRON_TIMEOUT_MS, or TIMEOUT_MS when the cron-specific value is absent; the daemon enforces the 30,000 ms maximum."
+    )]
     pub module: PathBuf,
-    #[arg(long, help = "Phase owning the schedule")]
+    #[arg(
+        long,
+        help = "Phase that owns the schedule",
+        long_help = "Phase associated with this schedule. Any roster member of the caller's team may start, end, or list schedules."
+    )]
     pub phase: String,
-    #[arg(long, value_parser = parse_rfc3339_utc, help = "Stop at this RFC 3339 instant")]
+    #[arg(
+        long,
+        value_parser = parse_rfc3339_utc,
+        help = "Stop at a future RFC 3339 instant",
+        long_help = "End the schedule at this future RFC 3339 instant. The stored timestamp is normalized to UTC. This option conflicts with --until-hook; provide exactly one stop condition."
+    )]
     pub until: Option<DateTime<Utc>>,
     #[arg(
         long = "until-hook",
-        help = "Ask the module stop hook before each tick"
+        help = "Ask the module stop hook before each tick",
+        long_help = "Use the module's cron.stop reply as the stop condition before each scheduled tick. Reply {\"stop\":false} to continue or {\"stop\":true,\"reason\":\"...\"} to end. This option conflicts with --until; provide exactly one stop condition."
     )]
     pub until_hook: bool,
-    #[arg(long = "arg", action = clap::ArgAction::Append, allow_hyphen_values = true, help = "Module argument; repeat for each argument, including flags")]
+    #[arg(
+        long = "arg",
+        action = clap::ArgAction::Append,
+        allow_hyphen_values = true,
+        help = "Module argument; repeat for each argument",
+        long_help = "One argument passed in the cron.tick request's args array. Repeat this option for additional values. Values beginning with a hyphen, such as --json, are accepted and are not interpreted as ATM options."
+    )]
     pub args: Vec<String>,
-    #[arg(long, help = "Working directory; defaults to the module directory")]
+    #[arg(
+        long,
+        help = "Working directory; defaults to the module directory",
+        long_help = "Working directory used to resolve and run the module. Relative paths are resolved from the current invocation directory. If omitted, the canonical module directory is used."
+    )]
     pub cwd: Option<PathBuf>,
-    #[arg(long, value_parser = parse_custom_object, help = "Custom JSON object passed to the module")]
+    #[arg(
+        long,
+        value_parser = parse_custom_object,
+        help = "Custom JSON object passed to the module",
+        long_help = "JSON object passed unchanged to the module in the cron.tick and cron.stop request envelopes. Arrays, scalars, and malformed JSON are rejected. The serialized object is limited by the daemon's hook custom-data limit."
+    )]
     pub custom: Option<Map<String, Value>>,
 }
 
 #[derive(Debug, Args)]
 pub struct CronEndArgs {
-    #[arg(long, help = "Phase whose active schedules will be ended")]
+    #[arg(
+        long,
+        help = "Phase whose active schedules will be ended",
+        long_help = "Select the phase whose active schedules are ended. The selected caller must belong to the schedule's team."
+    )]
     pub phase: String,
-    #[arg(help = "End only this schedule; otherwise end every schedule in the phase")]
+    #[arg(
+        help = "End only this schedule; otherwise end every schedule in the phase",
+        long_help = "Optional schedule name. When supplied, only that active schedule is ended; when omitted, every active schedule in the phase is ended."
+    )]
     pub name: Option<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct CronListArgs {
-    #[arg(long, help = "Limit schedules to this phase")]
+    #[arg(
+        long,
+        help = "Limit schedules to this phase",
+        long_help = "Show only schedules associated with this phase. Without this option, all schedules for the caller's team are listed."
+    )]
     pub phase: Option<String>,
-    #[arg(long, help = "Emit full schedules as a bare JSON array")]
+    #[arg(
+        long,
+        help = "Emit full schedules as a bare JSON array",
+        long_help = "Write the stored schedule rows as one JSON array. Each row includes the creator, generation, active state, stop condition, custom object, fixed jitter_s, last_run_at, last_outcome, and ended_at fields. An empty result is []."
+    )]
     pub json: bool,
 }
 

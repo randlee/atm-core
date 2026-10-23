@@ -232,38 +232,137 @@ refuses; each module should quickly decline tasks it does not own. The chain
 shares the request deadline. Register only task hook names here, not
 `cron.tick` or `cron.stop`.
 
-## Cron
+## Hook mutation JSON contract
 
-`atm cron` runs the module's `cron(args)` on a persisted UTC schedule.
-Expressions have six or seven fields, seconds first, with an optional year,
-or use `@yearly`, `@monthly`, `@weekly`, `@daily`, or `@hourly`.
-Five-field expressions and expressions with no future occurrence are refused.
+BK-9 freezes the machine-readable mutation result shapes. The persisted
+registration object has exactly eleven fields and has no synthetic id. The
+examples below are contract fixtures for BK-15; its composed CLI gate executes
+these flags after the hook mutation options land.
 
-```sh
-atm cron start goal --cron "0 */5 * * * *" --module ./task_hook.py --phase bj --until-hook --arg status --arg --json --custom '{"goal":"ship"}'
-atm cron start reminder --cron "0 */5 * * * *" --module ./task_hook.py --phase bj --until 2026-11-01T00:00:00Z
-atm cron list --phase bj --json
-atm cron end --phase bj goal
-atm cron end --phase bj
+<!-- fixture: hook.register-command -->
+```bash
+atm hook register task.close --module ./hooks.py --phase bk --json
 ```
 
-Specify exactly one stop condition: a future RFC 3339 `--until` timestamp
-(normalized to UTC), or `--until-hook`. For the latter, `stop(args)` runs
-before each tick and replies `{"stop": false}` or
-`{"stop": true, "reason": "phase complete"}`. A phase-oriented module can
-return stop when its phase is complete. Stop-check errors skip that tick and
-leave the schedule active. Repeated `--arg` values travel in
-`request.args`, never as extra process arguments; `request.created_by`
-identifies the member who started the schedule.
+<!-- fixture: hook.register-json -->
+```json
+{
+  "action": "hook.register",
+  "registration": {
+    "team": "atm-dev",
+    "phase": "bk",
+    "hook": "task.close",
+    "module_path": "/repo/hooks.py",
+    "cwd": "/repo",
+    "timeout_ms": 2500,
+    "custom": {},
+    "active": true,
+    "registered_by": "trinity",
+    "registered_at": "2026-10-23T00:00:00Z",
+    "disabled_at": null
+  }
+}
+```
 
-No missed ticks are replayed and only one run per schedule is in flight.
-Each job receives a fixed random `jitter_s` when started, stored across
-restarts and shown by `list`. The offset is selected from
-`[0, min(period_s / 2, 1800))`, with at least one slot, preferring offsets
-not held by another active job with the same expression. Ended rows remain
-visible; restarting an ended name reuses it, while an active duplicate is
-refused. Human lists show custom-object key counts; JSON lists are bare row
-arrays, including full `custom`, `jitter_s`, last-run time and outcome.
+Disable one hook, every hook in a phase, or a phase with no matches. The
+disabled array contains the rows changed by the operation, and count always
+equals its length. A no-match operation succeeds with an empty array and a
+zero count.
+
+<!-- fixture: hook.disable-one-command -->
+```bash
+atm hook disable --phase bk task.close --json
+```
+
+<!-- fixture: hook.disable-one -->
+```json
+{
+  "action": "hook.disable",
+  "disabled": [
+    {
+      "team": "atm-dev",
+      "phase": "bk",
+      "hook": "task.close",
+      "module_path": "/repo/hooks.py",
+      "cwd": "/repo",
+      "timeout_ms": 2500,
+      "custom": {},
+      "active": false,
+      "registered_by": "trinity",
+      "registered_at": "2026-10-23T00:00:00Z",
+      "disabled_at": "2026-10-23T01:00:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+<!-- fixture: hook.disable-phase-command -->
+```bash
+atm hook disable --phase bk --json
+```
+
+<!-- fixture: hook.disable-phase -->
+```json
+{
+  "action": "hook.disable",
+  "disabled": [
+    {
+      "team": "atm-dev",
+      "phase": "bk",
+      "hook": "task.close",
+      "module_path": "/repo/hooks.py",
+      "cwd": "/repo",
+      "timeout_ms": 2500,
+      "custom": {},
+      "active": false,
+      "registered_by": "trinity",
+      "registered_at": "2026-10-23T00:00:00Z",
+      "disabled_at": "2026-10-23T01:00:00Z"
+    },
+    {
+      "team": "atm-dev",
+      "phase": "bj",
+      "hook": "task.start",
+      "module_path": "/repo/hooks.py",
+      "cwd": "/repo",
+      "timeout_ms": 2500,
+      "custom": {},
+      "active": false,
+      "registered_by": "trinity",
+      "registered_at": "2026-10-23T00:00:00Z",
+      "disabled_at": "2026-10-23T01:00:00Z"
+    }
+  ],
+  "count": 2
+}
+```
+
+<!-- fixture: hook.disable-no-match-command -->
+```bash
+atm hook disable --phase missing --json
+```
+
+<!-- fixture: hook.disable-no-match -->
+```json
+{
+  "action": "hook.disable",
+  "disabled": [],
+  "count": 0
+}
+```
+
+These result examples do not change the existing human output, typed failures,
+or the bare-array shape of atm hook list --json. See [Cron Schedules](./cron.md)
+for the cron module contract and lifecycle examples.
+
+## Cron
+
+ATM cron runs the module on a persistent UTC schedule. For start, end, and
+list commands, module replies, output mail, lifecycle notices, and recovery,
+see the [Cron Schedules guide](./cron.md). The guide's command and reply
+examples are linked to the shared fixture manifest under
+[examples/cron](./examples/cron/manifest.json).
 
 ## Doctor
 

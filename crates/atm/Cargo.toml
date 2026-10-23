@@ -61,6 +61,10 @@ name = "cli_log_destination"
 path = "tests/cli_log_destination.rs"
 
 [[test]]
+name = "cron_examples"
+path = "tests/cron_examples.rs"
+
+[[test]]
 name = "task_ledger_cli"
 path = "tests/task_ledger_cli.rs"
 
