@@ -62,10 +62,12 @@ pub fn resolve_sender_claim(claim: SenderClaim) -> Result<AgentAddress, crate::e
             }
             if address.team() != Some(&caller.caller_team)
                 || address.agent() != &caller.caller_identity
+                || address.chat_id() != caller.caller_chat_id.as_ref()
+                || address.host().is_some()
             {
                 return Err(crate::error::AtmError::validation_with_recovery(
-                    "ordinary sender claim must match the authenticated caller",
-                    "remove the mismatched sender override",
+                    "ordinary sender claim must exactly match the authenticated caller identity",
+                    "remove the mismatched sender override or unsupported host qualification",
                 ));
             }
             Ok(address)
@@ -78,12 +80,12 @@ pub fn resolve_sender_claim(claim: SenderClaim) -> Result<AgentAddress, crate::e
 mod tests {
     use super::{SenderClaim, resolve_sender_claim};
     use crate::caller_context::CallerContext;
-    use crate::types::{AgentName, TeamName};
+    use crate::types::{AgentName, ChatId, TeamName};
 
-    fn caller() -> CallerContext {
+    fn caller(chat_id: Option<&str>) -> CallerContext {
         CallerContext {
             caller_identity: AgentName::from_validated("alice"),
-            caller_chat_id: None,
+            caller_chat_id: chat_id.map(|value| value.parse::<ChatId>().expect("chat id")),
             caller_team: TeamName::from_validated("team"),
             activity_observation: None,
         }
@@ -95,7 +97,7 @@ mod tests {
         assert_eq!(
             resolve_sender_claim(SenderClaim::Ordinary {
                 address: accepted.clone(),
-                caller: caller()
+                caller: caller(None)
             })
             .expect("matching ordinary sender"),
             accepted
@@ -104,11 +106,48 @@ mod tests {
             assert!(
                 resolve_sender_claim(SenderClaim::Ordinary {
                     address: address.parse().expect("address"),
-                    caller: caller(),
+                    caller: caller(None),
                 })
                 .is_err(),
                 "{address} must not become an ordinary emission sender"
             );
         }
+    }
+
+    #[test]
+    fn ordinary_sender_requires_authenticated_same_chat_identity() {
+        let accepted: atm_storage::AgentAddress = "alice:trusted@team".parse().expect("address");
+        assert_eq!(
+            resolve_sender_claim(SenderClaim::Ordinary {
+                address: accepted.clone(),
+                caller: caller(Some("trusted")),
+            })
+            .expect("matching qualified sender"),
+            accepted
+        );
+
+        for address in ["alice@team", "alice:other@team", "alice:trusted@team.host"] {
+            assert!(
+                resolve_sender_claim(SenderClaim::Ordinary {
+                    address: address.parse().expect("address"),
+                    caller: caller(Some("trusted")),
+                })
+                .is_err(),
+                "{address} must not become an ordinary emission sender"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_sender_rejects_chat_qualification_without_authenticated_chat_identity() {
+        let address: atm_storage::AgentAddress = "alice:trusted@team".parse().expect("address");
+
+        assert!(
+            resolve_sender_claim(SenderClaim::Ordinary {
+                address,
+                caller: caller(None),
+            })
+            .is_err()
+        );
     }
 }
