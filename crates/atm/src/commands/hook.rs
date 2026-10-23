@@ -81,6 +81,7 @@ pub(super) mod tests {
                 phase: TEST_TEAM.into(),
                 cwd: None,
                 custom: None,
+                json: false,
             }),
         }
     }
@@ -120,6 +121,40 @@ pub(super) mod tests {
             assert_eq!(request.cwd, request.module_path.parent().unwrap());
             assert_eq!(request.custom, serde_json::json!({}));
         }
+    }
+
+    #[tokio::test]
+    async fn register_json_returns_the_persisted_registration() {
+        let command = HookCommand::try_parse_from([
+            "hook",
+            "register",
+            "task.close",
+            "--module",
+            fixture("valid_hook.py").to_str().unwrap(),
+            "--phase",
+            TEST_TEAM,
+            "--json",
+        ])
+        .unwrap();
+        let expected_row = row();
+        let (result, requests) = execute(
+            command,
+            ResponseEnvelope::HookRegistered(expected_row.clone()),
+        )
+        .await;
+        let output = result.unwrap();
+        let parsed: Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(parsed["action"], "hook.register");
+        assert_eq!(
+            parsed["registration"],
+            serde_json::to_value(expected_row).unwrap()
+        );
+        assert_eq!(output.matches('\n').count(), 1);
+        assert_eq!(output.lines().count(), 1);
+        assert!(matches!(
+            requests.as_slice(),
+            [RequestEnvelope::HookRegister(_)]
+        ));
     }
 
     #[tokio::test]
@@ -227,12 +262,118 @@ pub(super) mod tests {
                 .unwrap();
         let (result, requests) =
             execute(command, ResponseEnvelope::HookDisabled(vec![row(), row()])).await;
-        assert_eq!(result.unwrap().lines().count(), 2);
+        assert_eq!(
+            result.unwrap(),
+            format!(
+                "disabled task.close for {TEST_TEAM}/{TEST_TEAM}\ndisabled task.close for {TEST_TEAM}/{TEST_TEAM}\n"
+            )
+        );
         let [RequestEnvelope::HookDisable(request)] = requests.as_slice() else {
             panic!("{requests:?}")
         };
         assert_eq!(request.phase.as_str(), TEST_TEAM);
         assert_eq!(request.hook.as_deref(), Some("task.close"));
+    }
+
+    #[tokio::test]
+    async fn disable_json_returns_exact_rows_and_count_for_single_and_phase_requests() {
+        let rows = vec![row(), row()];
+        for command in [
+            HookCommand::try_parse_from([
+                "hook",
+                "disable",
+                "--json",
+                "--phase",
+                TEST_TEAM,
+                "task.close",
+            ])
+            .unwrap(),
+            HookCommand::try_parse_from(["hook", "disable", "--phase", TEST_TEAM, "--json"])
+                .unwrap(),
+        ] {
+            let (result, requests) =
+                execute(command, ResponseEnvelope::HookDisabled(rows.clone())).await;
+            let output = result.unwrap();
+            let parsed: Value = serde_json::from_str(&output).unwrap();
+            assert_eq!(parsed["action"], "hook.disable");
+            assert_eq!(parsed["disabled"], serde_json::to_value(&rows).unwrap());
+            assert_eq!(parsed["count"], rows.len());
+            assert_eq!(output.matches('\n').count(), 1);
+            assert_eq!(output.lines().count(), 1);
+            assert!(matches!(
+                requests.as_slice(),
+                [RequestEnvelope::HookDisable(_)]
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn disable_json_with_no_matches_returns_empty_rows_and_zero_count() {
+        let command =
+            HookCommand::try_parse_from(["hook", "disable", "--phase", TEST_TEAM, "--json"])
+                .unwrap();
+        let (result, _) = execute(command, ResponseEnvelope::HookDisabled(vec![])).await;
+        let output = result.unwrap();
+        let parsed: Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(
+            parsed,
+            serde_json::json!({"action":"hook.disable", "disabled":[], "count":0})
+        );
+        assert_eq!(output.matches('\n').count(), 1);
+        assert_eq!(output.lines().count(), 1);
+    }
+
+    #[tokio::test]
+    async fn json_mutations_preserve_typed_daemon_errors() {
+        let error = atm_core::error::AtmError::hook_module_invalid("daemon refusal");
+        let mut register = register("valid_hook.py", "task.close");
+        let HookSubcommand::Register(args) = &mut register.command else {
+            unreachable!()
+        };
+        args.json = true;
+        let (result, _) = execute(register, ResponseEnvelope::Error(error.clone())).await;
+        let returned = result.unwrap_err();
+        assert_eq!(returned.to_string(), error.to_string());
+        assert_eq!(
+            returned
+                .downcast_ref::<atm_core::error::AtmError>()
+                .unwrap()
+                .code(),
+            atm_core::error::AtmErrorCode::HookModuleInvalid
+        );
+
+        let command =
+            HookCommand::try_parse_from(["hook", "disable", "--phase", TEST_TEAM, "--json"])
+                .unwrap();
+        let (result, _) = execute(command, ResponseEnvelope::Error(error.clone())).await;
+        let returned = result.unwrap_err();
+        assert_eq!(returned.to_string(), error.to_string());
+        assert_eq!(
+            returned
+                .downcast_ref::<atm_core::error::AtmError>()
+                .unwrap()
+                .code(),
+            atm_core::error::AtmErrorCode::HookModuleInvalid
+        );
+    }
+
+    #[tokio::test]
+    async fn register_json_preserves_typed_local_errors_without_sending_a_request() {
+        let mut command = register("no_timeout.py", "task.close");
+        let HookSubcommand::Register(args) = &mut command.command else {
+            unreachable!()
+        };
+        args.json = true;
+        let (result, requests) = execute(command, ResponseEnvelope::HookRegistered(row())).await;
+        let error = result.unwrap_err();
+        assert_eq!(
+            error
+                .downcast_ref::<atm_core::error::AtmError>()
+                .unwrap()
+                .code(),
+            atm_core::error::AtmErrorCode::HookModuleInvalid
+        );
+        assert!(requests.is_empty());
     }
 
     #[tokio::test]
@@ -297,6 +438,8 @@ pub struct HookRegisterArgs {
     pub cwd: Option<PathBuf>,
     #[arg(long, value_parser = parse_custom_object, help = "Custom JSON object passed to the module")]
     pub custom: Option<Map<String, Value>>,
+    #[arg(long, help = "Emit the persisted registration as JSON")]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -305,6 +448,8 @@ pub struct HookDisableArgs {
     pub phase: String,
     #[arg(help = "Disable only this hook; otherwise disable every hook in the phase")]
     pub hook: Option<String>,
+    #[arg(long, help = "Emit the disabled registrations as JSON")]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -370,12 +515,33 @@ impl HookCommand {
     ) -> Result<String> {
         let response = composition.execute_request(request).await?;
         match (&self.command, response) {
-            (HookSubcommand::Register(_), ResponseEnvelope::HookRegistered(row)) => Ok(format!(
-                "registered {} for {}/{} (timeout {} ms)\n",
-                row.hook, row.team, row.phase, row.timeout_ms
-            )),
+            (HookSubcommand::Register(args), ResponseEnvelope::HookRegistered(row)) => {
+                if args.json {
+                    Ok(format!(
+                        "{}\n",
+                        serde_json::to_string(&serde_json::json!({
+                            "action": "hook.register",
+                            "registration": row,
+                        }))?
+                    ))
+                } else {
+                    Ok(format!(
+                        "registered {} for {}/{} (timeout {} ms)\n",
+                        row.hook, row.team, row.phase, row.timeout_ms
+                    ))
+                }
+            }
             (HookSubcommand::Disable(args), ResponseEnvelope::HookDisabled(rows)) => {
-                if rows.is_empty() {
+                if args.json {
+                    Ok(format!(
+                        "{}\n",
+                        serde_json::to_string(&serde_json::json!({
+                            "action": "hook.disable",
+                            "disabled": rows,
+                            "count": rows.len(),
+                        }))?
+                    ))
+                } else if rows.is_empty() {
                     Ok(format!("no active hooks for phase {}\n", args.phase))
                 } else {
                     Ok(rows
