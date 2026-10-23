@@ -168,11 +168,47 @@ pub enum CronLifecycleEvent {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CronNoticeIntent {
-    pub key: CronNoticeKey,
-    pub team: TeamName,
-    pub recipient: AgentName,
-    pub name: CronName,
-    pub event: CronLifecycleEvent,
+    key: CronNoticeKey,
+    team: TeamName,
+    recipient: AgentName,
+    name: CronName,
+    event: CronLifecycleEvent,
+}
+
+impl CronNoticeIntent {
+    /// Returns the durable transition key selected when this notice was
+    /// committed.
+    #[must_use]
+    pub fn key(&self) -> CronNoticeKey {
+        self.key
+    }
+
+    /// Returns the persisted schedule team associated with this notice.
+    #[must_use]
+    pub fn team(&self) -> &TeamName {
+        &self.team
+    }
+
+    /// Returns the creator recipient resolved at the committed transition.
+    ///
+    /// The recipient has no public setter or constructor path: a nudger can
+    /// read the persisted destination but cannot redirect the lifecycle mail.
+    #[must_use]
+    pub fn recipient(&self) -> &AgentName {
+        &self.recipient
+    }
+
+    /// Returns the persisted schedule name.
+    #[must_use]
+    pub fn name(&self) -> &CronName {
+        &self.name
+    }
+
+    /// Returns the committed lifecycle event.
+    #[must_use]
+    pub fn event(&self) -> &CronLifecycleEvent {
+        &self.event
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -237,6 +273,8 @@ pub trait CronTransitionStore: sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
+
     #[test]
     fn output_and_diagnostic_have_different_bounds() {
         assert!(CronOutputBody::parse(String::new()).is_err());
@@ -247,5 +285,29 @@ mod tests {
                 .as_str(),
             "custom mail"
         );
+    }
+
+    #[test]
+    fn committed_lifecycle_intent_exposes_read_only_provenance() {
+        let key = CronNoticeKey {
+            schedule_id: CronScheduleId::new(7),
+            generation: CronGeneration::FIRST,
+            transition_seq: 3,
+        };
+        let intent = CronNoticeIntent {
+            key,
+            team: TeamName::from_str("ops").expect("team"),
+            recipient: AgentName::from_str("creator").expect("recipient"),
+            name: CronName::parse("hourly").expect("name"),
+            event: CronLifecycleEvent::Stopped {
+                message: CronDiagnosticDetail::parse("finished".into()).expect("detail"),
+            },
+        };
+
+        assert_eq!(intent.key(), key);
+        assert_eq!(intent.team().as_str(), "ops");
+        assert_eq!(intent.recipient().as_str(), "creator");
+        assert_eq!(intent.name().as_str(), "hourly");
+        assert!(matches!(intent.event(), CronLifecycleEvent::Stopped { .. }));
     }
 }
