@@ -482,3 +482,12 @@ only Herdr queue/drain mechanism: it polls the Herdr roster and prompts from
 the durable ATM pending-marker store. A prompt being accepted does not mean
 that the message was read. Only `atm read`, which clears the pending marker,
 means read; the durable ATM mailbox remains the source of truth.
+
+## BK-9 amendment — cron lifecycle nudge port
+
+BK-9 introduces `CronLifecycleNudger`, `cron_lifecycle_nudger`, and
+`RecordingCronLifecycleNudger` to select and deliver persisted
+`CronNoticeIntent` records. They are lifecycle plumbing for cron terminal,
+error, and custom notices; they do not add a physical nudge kind or alter the
+existing Steer/Queue taxonomy. These three identifiers are therefore admitted
+to the frozen taxonomy inventory.

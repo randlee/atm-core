@@ -77,6 +77,7 @@ ALLOWED_FORBIDDEN_LITERALS = (
 # need a second pass over the AQ1 contract surface.
 ALLOWED_NUDGE_IDENTIFIERS = frozenset(
     {
+        "CronLifecycleNudger", "cron_lifecycle_nudger", "RecordingCronLifecycleNudger",
         "HerdrNudgeTarget",
         "_enqueue_nudge", "_nudge", "_on_nudge", "acquire_host_nudge_helper_permit",
         "bounded_host_nudge_injector_caps_helper_growth_under_repeated_hangs",

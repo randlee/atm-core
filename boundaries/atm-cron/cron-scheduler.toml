@@ -25,7 +25,7 @@ io_forbidden = ["sqlite", "process_spawn", "http_server"]
 allowed_dependents = ["atm-daemon-bootstrap"]
 allowed_dependencies = ["async-trait", "atm-core", "chrono", "cron", "getrandom", "serde_json", "tokio", "tracing"]
 allowed_dev_dependencies = ["atm-core", "atm-runtime-test-support", "syn", "tokio", "tracing-subscriber"]
-forbidden_edges = []
+forbidden_edges = ["atm-cron -> atm-storage-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"

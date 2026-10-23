@@ -19,7 +19,7 @@ io_owns = ["cron_transition_write", "cron_delivery_intent_ledger"]
 io_forbidden = ["direct_sqlite_io", "process_spawn", "socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm-core", "atm-cron", "atm-daemon-bootstrap", "atm-runtime-test-support", "atm-storage-rusqlite"]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime-test-support", "atm-storage-rusqlite"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-core", "atm-cron -> atm-storage-rusqlite"]
 
