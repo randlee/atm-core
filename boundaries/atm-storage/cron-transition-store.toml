@@ -5,7 +5,7 @@ name = "CronTransitionStore"
 
 [public]
 trait = "CronTransitionStore"
-notes = "sealed durable transition and delivery-intent transaction boundary; exactly one logical intent is committed per applied transition"
+notes = "sealed durable transition and delivery-intent transaction boundary; exactly one logical intent is committed per applied transition. Lifecycle intent construction is internal to the committed-record issuer and is never a caller-selected recipient/body operation."
 
 [implementation]
 visibility = "trait_only"
@@ -37,9 +37,9 @@ allowed_test_double_paths = ["crate::testing::cron_transition_store::InMemoryCro
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
-lint_rules = ["LINT-BOUNDARY-CRON-TRANSITION-STORE-REFERENCES"]
-review_gates = ["sealed_trait", "generation_fence", "deterministic_test_doubles"]
+lint_rules = ["LINT-BOUNDARY-CRON-TRANSITION-STORE-REFERENCES", "SCB-BOUNDARY-003"]
+review_gates = ["sealed_trait", "generation_fence", "deterministic_test_doubles", "committed_lifecycle_intent_issuer"]
 
 [status]
 state = "planned"
-notes = ["BK-9 freezes the atomic persistence seam; BK-10 owns its SQLite implementation."]
+notes = ["BK-9 freezes the atomic persistence seam; BK-10 owns its SQLite implementation.", "CronNoticeIntent is opaque. Its only issuer consumes a private committed-row record and carries boundary.forbid_external_impls so sc-lint rejects unauthorized issuer implementations."]
