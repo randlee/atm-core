@@ -48,6 +48,7 @@ impl CronCommittedNoticeRecord for SqliteCommittedCronNoticeRecord {
 mod tests {
     use std::str::FromStr;
 
+    use atm_storage::roles::TEAM_ATM_DEV;
     use atm_storage::{CronDiagnosticDetail, CronGeneration, CronScheduleId};
 
     use super::*;
@@ -60,7 +61,7 @@ mod tests {
                 generation: CronGeneration::FIRST,
                 transition_seq: 2,
             },
-            team: TeamName::from_str("atm-dev").expect("team"),
+            team: TeamName::from_str(TEAM_ATM_DEV).expect("team"),
             recipient: AgentName::from_str("creator").expect("recipient"),
             name: CronName::parse("nightly").expect("name"),
             event: CronLifecycleEvent::Stopped {
