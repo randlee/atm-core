@@ -125,6 +125,8 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
         "receiver_loop_delivers_direct_nudge_and_returns_ack_under_repeated_load",
         "RecordingNudgeTemplateOverrideStore", "release_pending", "render_built_in_nudge",
         "render_built_in_nudge_for_dispatch", "render_built_in_nudge_populates_placeholders",
+        # ADR-054 BK-12 amendment: cron template rendering is umbrella vocabulary.
+        "render_cron_lifecycle_nudge",
         "render_resolved_built_in_nudge", "rendered_nudge", "request_nudge", "requeue_pending",
         "ResolvedBuiltInNudgeTemplate", "RunErrorNudge", "RunPrimaryNudge",
         "set_nudge_template_build_request_rejects_empty_template_body_before_core",
@@ -140,7 +142,8 @@ ALLOWED_NUDGE_IDENTIFIERS = frozenset(
         "spawn_host_nudge_helper", "SqliteNudgeTemplateOverrideStore", "SqlitePendingNudgeStore",
         "storage_and_nudge_router", "StorageAndNudgeRouter", "team_nudge_template_overrides",
         "TeamNudgeTemplateOverrideMode", "TeamNudgeTemplateOverrideRow", "TmuxNudgeSink",
-        "validate_built_in_nudge_template_body", "validate_nudge_template_body",
+        "validate_built_in_nudge_template_body", "validate_cron_nudge_template_body",
+        "validate_nudge_template_body",
         "validate_nudge_template_override_team",
         "warn_host_nudge_result", "with_default_nudge_template_override_store", "with_nudge_mode",
         "with_pending_nudge_store",
