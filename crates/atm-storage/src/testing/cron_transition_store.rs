@@ -5,10 +5,65 @@ use std::sync::Mutex;
 
 use crate::contract::sealed;
 use crate::cron_transition_store::{
-    CronCommitResult, CronDeliveryKey, CronTransitionStore, CronTransitionWrite, DeliveryReceipt,
-    PendingCronDelivery,
+    CronCommitResult, CronCommittedNoticeRecord, CronDeliveryKey, CronLifecycleEvent,
+    CronNoticeKey, CronTransitionStore, CronTransitionWrite, DeliveryReceipt, PendingCronDelivery,
 };
 use crate::error::AtmError;
+use crate::hook_types::CronName;
+use crate::types::{AgentName, TeamName};
+
+/// Deterministic approved record double for lifecycle-intent contract tests.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InMemoryCommittedCronNoticeRecord {
+    key: CronNoticeKey,
+    team: TeamName,
+    recipient: AgentName,
+    name: CronName,
+    event: CronLifecycleEvent,
+}
+
+impl InMemoryCommittedCronNoticeRecord {
+    #[must_use]
+    pub fn new(
+        key: CronNoticeKey,
+        team: TeamName,
+        recipient: AgentName,
+        name: CronName,
+        event: CronLifecycleEvent,
+    ) -> Self {
+        Self {
+            key,
+            team,
+            recipient,
+            name,
+            event,
+        }
+    }
+}
+
+impl sealed::Sealed for InMemoryCommittedCronNoticeRecord {}
+
+impl CronCommittedNoticeRecord for InMemoryCommittedCronNoticeRecord {
+    fn key(&self) -> CronNoticeKey {
+        self.key
+    }
+
+    fn team(&self) -> &TeamName {
+        &self.team
+    }
+
+    fn recipient(&self) -> &AgentName {
+        &self.recipient
+    }
+
+    fn name(&self) -> &CronName {
+        &self.name
+    }
+
+    fn event(&self) -> &CronLifecycleEvent {
+        &self.event
+    }
+}
 
 #[derive(Default)]
 pub struct InMemoryCronTransitionStore {
@@ -62,27 +117,27 @@ mod tests {
     use super::*;
     use crate::cron_schedule_store::{CronGeneration, CronScheduleId};
     use crate::cron_transition_store::{
-        CronDeliveryIntent, CronDiagnosticDetail, CronLifecycleEvent, CronNoticeIntent,
-        CronNoticeKey, DeliveryRetryCause,
+        CronDeliveryIntent, CronDiagnosticDetail, CronNoticeIntent, DeliveryRetryCause,
     };
     use crate::hook_types::CronName;
     use crate::types::{AgentName, TeamName};
 
     fn reconciling_intent() -> CronDeliveryIntent {
-        CronDeliveryIntent::Lifecycle(CronNoticeIntent {
-            key: CronNoticeKey {
+        let record = InMemoryCommittedCronNoticeRecord::new(
+            CronNoticeKey {
                 schedule_id: CronScheduleId::new(7),
                 generation: CronGeneration::FIRST,
                 transition_seq: 3,
             },
-            team: "ops".parse::<TeamName>().expect("team"),
-            recipient: "operator".parse::<AgentName>().expect("recipient"),
-            name: CronName::parse("nightly").expect("name"),
-            event: CronLifecycleEvent::Stopped {
+            "ops".parse::<TeamName>().expect("team"),
+            "operator".parse::<AgentName>().expect("recipient"),
+            CronName::parse("nightly").expect("name"),
+            CronLifecycleEvent::Stopped {
                 message: CronDiagnosticDetail::parse("stop hook timeout".into())
                     .expect("diagnostic"),
             },
-        })
+        );
+        CronDeliveryIntent::Lifecycle(CronNoticeIntent::from_committed(&record))
     }
 
     #[test]
@@ -91,7 +146,7 @@ mod tests {
         let intent = reconciling_intent();
         let cause = DeliveryRetryCause::parse("handoff response lost".into()).expect("cause");
         let key = match &intent {
-            CronDeliveryIntent::Lifecycle(intent) => CronDeliveryKey::Lifecycle(intent.key),
+            CronDeliveryIntent::Lifecycle(intent) => CronDeliveryKey::Lifecycle(intent.key()),
             CronDeliveryIntent::ModuleMail(intent) => intent.key,
         };
 

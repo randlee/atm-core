@@ -7,7 +7,6 @@
 
 use std::fmt;
 
-use sc_lint_attributes::sc_lint;
 use serde::{Deserialize, Serialize};
 
 use crate::contract::sealed;
@@ -177,60 +176,34 @@ pub struct CronNoticeIntent {
     event: CronLifecycleEvent,
 }
 
-/// A transition row that has already selected its lifecycle recipient.
+/// Read-only provenance selected by the transition transaction.
 ///
-/// This is deliberately private to the storage contract module.  An adapter
-/// obtains it only while materializing a row committed by its transition
-/// transaction; no scheduler, nudger, or caller can provide a recipient or
-/// lifecycle body to the issuer.
-#[allow(
-    dead_code,
-    reason = "BK-9 freezes the issuer seam before BK-10 supplies the SQLite transition adapter"
-)]
-struct CommittedCronNoticeRecord {
-    key: CronNoticeKey,
-    team: TeamName,
-    recipient: AgentName,
-    name: CronName,
-    event: CronLifecycleEvent,
-}
-
-/// Mints a lifecycle intent from a committed transition record.
-///
-/// The issuer is intentionally confined to this module.  It is the one
-/// construction seam for [`CronNoticeIntent`], and the boundary linter
-/// rejects an implementation from any other module.
-#[sc_lint(boundary.forbid_external_impls)]
-#[allow(
-    dead_code,
-    reason = "BK-9 freezes the issuer seam before BK-10 supplies the SQLite transition adapter"
-)]
-trait CronNoticeIntentIssuer: sealed::Sealed {
-    fn issue(&self, record: CommittedCronNoticeRecord) -> CronNoticeIntent;
-}
-
-/// The storage-owned issuer used by approved transition adapters.
-#[allow(
-    dead_code,
-    reason = "BK-9 freezes the issuer seam before BK-10 supplies the SQLite transition adapter"
-)]
-struct CommittedCronNoticeIssuer;
-
-impl sealed::Sealed for CommittedCronNoticeIssuer {}
-
-impl CronNoticeIntentIssuer for CommittedCronNoticeIssuer {
-    fn issue(&self, record: CommittedCronNoticeRecord) -> CronNoticeIntent {
-        CronNoticeIntent {
-            key: record.key,
-            team: record.team,
-            recipient: record.recipient,
-            name: record.name,
-            event: record.event,
-        }
-    }
+/// This uses ADR-001's workspace-convention seal. Only the listed SQLite
+/// adapter and approved in-memory double implementation sites may implement
+/// it; the architecture boundary test verifies that allowlist against source.
+/// Consumers can project an opaque [`CronNoticeIntent`] from this record but
+/// cannot set its recipient or event.
+pub trait CronCommittedNoticeRecord: sealed::Sealed {
+    fn key(&self) -> CronNoticeKey;
+    fn team(&self) -> &TeamName;
+    fn recipient(&self) -> &AgentName;
+    fn name(&self) -> &CronName;
+    fn event(&self) -> &CronLifecycleEvent;
 }
 
 impl CronNoticeIntent {
+    /// Projects an opaque lifecycle intent from a record committed by an
+    /// authorized transition adapter.
+    #[must_use]
+    pub fn from_committed(record: &impl CronCommittedNoticeRecord) -> Self {
+        CronNoticeIntent {
+            key: record.key(),
+            team: record.team().clone(),
+            recipient: record.recipient().clone(),
+            name: record.name().clone(),
+            event: record.event().clone(),
+        }
+    }
     /// Returns the durable transition key selected when this notice was
     /// committed.
     #[must_use]
@@ -246,7 +219,7 @@ impl CronNoticeIntent {
 
     /// Returns the creator recipient resolved at the committed transition.
     ///
-    /// The recipient has no public setter or constructor path: a nudger can
+    /// The recipient has no public setter or constructor path: a delivery
     /// read the persisted destination but cannot redirect the lifecycle mail.
     #[must_use]
     pub fn recipient(&self) -> &AgentName {
@@ -416,41 +389,22 @@ mod tests {
             generation: CronGeneration::FIRST,
             transition_seq: 3,
         };
-        let committed_row = CommittedCronNoticeRecord {
+        let committed_row = crate::testing::InMemoryCommittedCronNoticeRecord::new(
             key,
-            team: TeamName::from_str("ops").expect("team"),
-            recipient: AgentName::from_str("creator").expect("recipient"),
-            name: CronName::parse("hourly").expect("name"),
-            event: CronLifecycleEvent::Stopped {
+            TeamName::from_str("ops").expect("team"),
+            AgentName::from_str("creator").expect("recipient"),
+            CronName::parse("hourly").expect("name"),
+            CronLifecycleEvent::Stopped {
                 message: CronDiagnosticDetail::parse("finished".into()).expect("detail"),
             },
-        };
-        let intent = CommittedCronNoticeIssuer.issue(committed_row);
+        );
+        let intent = CronNoticeIntent::from_committed(&committed_row);
 
         assert_eq!(intent.key(), key);
         assert_eq!(intent.team().as_str(), "ops");
         assert_eq!(intent.recipient().as_str(), "creator");
         assert_eq!(intent.name().as_str(), "hourly");
         assert!(matches!(intent.event(), CronLifecycleEvent::Stopped { .. }));
-    }
-
-    #[test]
-    fn committed_notice_issuer_is_the_only_construction_seam() {
-        let source = include_str!("cron_transition_store.rs");
-        let public_issue = ["pub", "fn", "issue("].join(" ");
-        let public_record = ["pub", "struct", "CommittedCronNoticeRecord"].join(" ");
-        assert!(
-            source.contains("#[sc_lint(boundary.forbid_external_impls)]"),
-            "the issuer must retain executable external-implementation enforcement"
-        );
-        assert!(
-            source.contains("trait CronNoticeIntentIssuer: sealed::Sealed"),
-            "the issuer must remain a sealed adapter capability"
-        );
-        assert!(
-            !source.contains(&public_issue) && !source.contains(&public_record),
-            "callers must not mint lifecycle intent provenance"
-        );
     }
 
     #[test]

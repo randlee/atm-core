@@ -29,7 +29,7 @@ pub mod cron_transition_store;
 pub mod hook_registration_store;
 pub mod tool_sender_registry;
 pub use cron_schedule_store::InMemoryCronScheduleStore;
-pub use cron_transition_store::InMemoryCronTransitionStore;
+pub use cron_transition_store::{InMemoryCommittedCronNoticeRecord, InMemoryCronTransitionStore};
 pub use hook_registration_store::{ActiveAllPause, InMemoryHookRegistrationStore};
 pub use tool_sender_registry::InMemoryToolSenderRegistry;
 

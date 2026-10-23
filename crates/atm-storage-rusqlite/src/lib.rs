@@ -9,6 +9,7 @@
 
 mod analyst_query;
 mod cron_schedule_store;
+mod cron_transition_store;
 mod diagnostic_timeline;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;

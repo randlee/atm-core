@@ -67,11 +67,12 @@ pub use cron_schedule_store::{
     StopCondition, stopped_outcome,
 };
 pub use cron_transition_store::{
-    CRON_DIAGNOSTIC_MAX_BYTES, CRON_OUTPUT_BODY_MAX_BYTES, CronCommitResult, CronDeliveryIntent,
-    CronDeliveryKey, CronDiagnosticDetail, CronFailure, CronFailureKey, CronFailureKind,
-    CronLifecycleEvent, CronModuleMailIntent, CronModuleOutput, CronNoticeIntent, CronNoticeKey,
-    CronOutputBody, CronRunTransition, CronSuccess, CronTransitionStore, CronTransitionWrite,
-    DeliveryReceipt, DeliveryRetryCause, PendingCronDelivery,
+    CRON_DIAGNOSTIC_MAX_BYTES, CRON_OUTPUT_BODY_MAX_BYTES, CronCommitResult,
+    CronCommittedNoticeRecord, CronDeliveryIntent, CronDeliveryKey, CronDiagnosticDetail,
+    CronFailure, CronFailureKey, CronFailureKind, CronLifecycleEvent, CronModuleMailIntent,
+    CronModuleOutput, CronNoticeIntent, CronNoticeKey, CronOutputBody, CronRunTransition,
+    CronSuccess, CronTransitionStore, CronTransitionWrite, DeliveryReceipt, DeliveryRetryCause,
+    PendingCronDelivery,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,

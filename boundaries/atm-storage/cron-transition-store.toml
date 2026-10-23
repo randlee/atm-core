@@ -33,13 +33,13 @@ response_types = ["CronCommitResult", "Vec<CronDeliveryIntent>", "bool"]
 error_types = ["AtmError"]
 
 [testing]
-allowed_test_double_paths = ["crate::testing::cron_transition_store::InMemoryCronTransitionStore"]
+allowed_test_double_paths = ["crate::testing::cron_transition_store::InMemoryCommittedCronNoticeRecord", "crate::testing::cron_transition_store::InMemoryCronTransitionStore"]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [enforcement]
-lint_rules = ["LINT-BOUNDARY-CRON-TRANSITION-STORE-REFERENCES", "SCB-BOUNDARY-003"]
-review_gates = ["sealed_trait", "generation_fence", "deterministic_test_doubles", "committed_lifecycle_intent_issuer"]
+lint_rules = ["LINT-BOUNDARY-CRON-TRANSITION-STORE-REFERENCES"]
+review_gates = ["workspace_convention_seal", "generation_fence", "deterministic_test_doubles", "committed_lifecycle_record_allowlist"]
 
 [status]
 state = "planned"
-notes = ["BK-9 freezes the atomic persistence seam; BK-10 owns its SQLite implementation.", "CronNoticeIntent is opaque. Its only issuer consumes a private committed-row record and carries boundary.forbid_external_impls so sc-lint rejects unauthorized issuer implementations."]
+notes = ["BK-9 freezes the atomic persistence seam; BK-10 owns its SQLite implementation.", "CronNoticeIntent is opaque. CronCommittedNoticeRecord is an ADR-001 workspace-convention sealed read-only projection; the architecture test permits only the SQLite adapter fixture and in-memory double implementation sites."]

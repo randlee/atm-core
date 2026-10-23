@@ -8,7 +8,9 @@ use std::str::FromStr;
 
 use atm_core::boundary::CronLifecycleNudger;
 use atm_runtime_test_support::RecordingCronLifecycleNudger;
-use atm_storage::testing::{InMemoryCronTransitionStore, InMemoryToolSenderRegistry};
+use atm_storage::testing::{
+    InMemoryCommittedCronNoticeRecord, InMemoryCronTransitionStore, InMemoryToolSenderRegistry,
+};
 use atm_storage::{
     AgentName, AtmMessageId, CronCommitResult, CronDeliveryKey, CronDiagnosticDetail,
     CronGeneration, CronLifecycleEvent, CronName, CronNoticeIntent, CronNoticeKey,
@@ -23,19 +25,20 @@ fn fixed_time() -> IsoTimestamp {
 }
 
 fn notice() -> CronNoticeIntent {
-    CronNoticeIntent {
-        key: CronNoticeKey {
+    let record = InMemoryCommittedCronNoticeRecord::new(
+        CronNoticeKey {
             schedule_id: CronScheduleId::new(7),
             generation: CronGeneration::FIRST,
             transition_seq: 3,
         },
-        team: TeamName::from_validated("team"),
-        recipient: AgentName::from_validated("creator"),
-        name: CronName::parse("nightly").expect("fixed name"),
-        event: CronLifecycleEvent::Stopped {
+        TeamName::from_validated("team"),
+        AgentName::from_validated("creator"),
+        CronName::parse("nightly").expect("fixed name"),
+        CronLifecycleEvent::Stopped {
             message: CronDiagnosticDetail::parse("completed".into()).expect("fixed detail"),
         },
-    }
+    );
+    CronNoticeIntent::from_committed(&record)
 }
 
 #[tokio::test]
@@ -72,7 +75,7 @@ async fn lifecycle_consumer_delivers_the_persisted_notice_unchanged() {
 fn transition_store_consumer_commits_and_marks_the_same_lifecycle_key() {
     let store = InMemoryCronTransitionStore::default();
     let persisted = notice();
-    let key = CronDeliveryKey::Lifecycle(persisted.key);
+    let key = CronDeliveryKey::Lifecycle(persisted.key());
     store
         .commit_results
         .lock()
@@ -85,8 +88,8 @@ fn transition_store_consumer_commits_and_marks_the_same_lifecycle_key() {
 
     let result = store
         .commit(CronTransitionWrite {
-            id: persisted.key.schedule_id,
-            generation: persisted.key.generation,
+            id: persisted.key().schedule_id,
+            generation: persisted.key().generation,
             at: fixed_time(),
             transition: CronRunTransition::Success {
                 outcome: CronSuccess::Ok,
