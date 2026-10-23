@@ -3,6 +3,21 @@
 > `develop` and led by solar; its sprint beads are the authoritative current
 > plan. The historical table below remains for provenance.
 
+## Current BK-9–BK-16 extension controls
+
+The current extension is defined by its Beads on `develop`. This retained plan
+records the shared cutover inventory required before the virtual `tool`
+namespace can replace the historical physical roster workaround:
+
+| Installed sender plug-in / repository | Historical sender dependency | BK-15 adoption evidence required |
+| --- | --- | --- |
+| `randlee/atm-bd` | Fixed `atm-bd@tool`; previously depended on a physical `tool` roster member. | A linked installer/release/compatibility receipt showing its authenticated registered principal works without a physical `tool` team. |
+| No other installed sender plug-ins identified in the atm-core workspace or active local hook inventory. | None. | BK-15 records the inventory check; any newly discovered `@tool` sender is added here and receives a matching receipt before cutover. |
+
+BK-15 cannot close its adoption gate until every row above has its linked
+implementation, release, and compatibility receipt. `cron@tool` is a built-in
+daemon principal, not a plug-in row.
+
 # Phase bk — atm task hooks, hook registration, atm cron, doctor hook section
 
 Authority: `design.md` (fenix, PR #1877) over Rand's verbatim rulings on
