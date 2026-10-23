@@ -11,9 +11,54 @@ use serde::{Deserialize, Serialize};
 
 use crate::address::AgentAddress;
 use crate::contract::sealed;
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::AtmMessageId;
 use crate::types::{HostName, IsoTimestamp};
+
+/// Stable failure vocabulary for installer and runtime sender admission.
+///
+/// Registry implementations return the corresponding [`AtmErrorCode`] through
+/// [`AtmError`]. These cases deliberately distinguish invalid claims from
+/// unknown transaction outcomes so callers can choose safe recovery behavior.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ToolSenderFailure {
+    SenderUnregistered,
+    SenderReserved,
+    SenderUnauthorized,
+    KeyUnknown,
+    KeyRevoked,
+    NonceReplay,
+    HostMismatch,
+    GenerationConflict,
+    SignatureInvalid,
+    RequestExpired,
+    CommitUncertain,
+}
+
+impl ToolSenderFailure {
+    #[must_use]
+    pub const fn code(self) -> AtmErrorCode {
+        match self {
+            Self::SenderUnregistered => AtmErrorCode::ToolSenderUnregistered,
+            Self::SenderReserved => AtmErrorCode::ToolSenderReserved,
+            Self::SenderUnauthorized => AtmErrorCode::ToolSenderUnauthorized,
+            Self::KeyUnknown => AtmErrorCode::ToolKeyUnknown,
+            Self::KeyRevoked => AtmErrorCode::ToolKeyRevoked,
+            Self::NonceReplay => AtmErrorCode::ToolNonceReplay,
+            Self::HostMismatch => AtmErrorCode::ToolHostMismatch,
+            Self::GenerationConflict => AtmErrorCode::ToolGenerationConflict,
+            Self::SignatureInvalid => AtmErrorCode::ToolSignatureInvalid,
+            Self::RequestExpired => AtmErrorCode::ToolRequestExpired,
+            Self::CommitUncertain => AtmErrorCode::ToolCommitUncertain,
+        }
+    }
+
+    /// Builds the public ATM error with the catalog recovery for this failure.
+    #[must_use]
+    pub fn into_error(self, detail: impl Into<String>) -> AtmError {
+        AtmError::new(self.code(), detail)
+    }
+}
 
 macro_rules! validated_text_id {
     ($name:ident, $subject:literal) => {
@@ -266,13 +311,22 @@ pub struct ToolInstallReceipt {
 }
 
 /// Sealed persistence/authentication boundary for virtual plug-in principals.
+///
+/// Implementations preserve the [`ToolSenderFailure`] distinctions in the
+/// returned [`AtmError::code`]: installer admission may report unauthorized,
+/// key, host, generation, signature, expiry, nonce, or uncertain-commit cases;
+/// runtime admission may report sender, key, nonce, host, generation,
+/// signature, or uncertain-commit cases. A commit with an unknown outcome is
+/// never reported as an ordinary retryable storage failure.
 pub trait ToolSenderRegistry: sealed::Sealed + Send + Sync {
+    /// Verifies and applies one signed installer operation atomically.
     fn apply_signed(
         &self,
         request: ToolInstallerRequest,
         now: IsoTimestamp,
     ) -> Result<ToolInstallReceipt, AtmError>;
 
+    /// Validates runtime provenance and durably binds its nonce to this message.
     fn admit_signed_message(
         &self,
         proof: ToolRuntimeProof,
@@ -282,7 +336,8 @@ pub trait ToolSenderRegistry: sealed::Sealed + Send + Sync {
     ) -> Result<RegisteredToolSender, AtmError>;
 
     /// Resolves current registry state for inspection only. It does not mint a
-    /// daemon emission capability.
+    /// daemon emission capability. An absent active registration returns
+    /// [`ToolSenderFailure::SenderUnregistered`].
     fn resolve(&self, sender: &PluginSenderId) -> Result<RegisteredToolSender, AtmError>;
 }
 

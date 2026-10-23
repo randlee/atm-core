@@ -10,7 +10,7 @@ use crate::schema::AtmMessageId;
 use crate::tool_sender::{
     MessageDigest, PluginSenderId, RegisteredToolSender, ToolInstallReceipt,
     ToolInstallerOperation, ToolInstallerRequest, ToolPrincipal, ToolRuntimeProof,
-    ToolSenderRegistry,
+    ToolSenderFailure, ToolSenderRegistry,
 };
 use crate::types::IsoTimestamp;
 
@@ -81,10 +81,8 @@ impl ToolSenderRegistry for InMemoryToolSenderRegistry {
             .get(sender)
             .cloned()
             .ok_or_else(|| {
-                AtmError::validation_with_recovery(
-                    format!("tool sender {sender} is not registered"),
-                    "install the plug-in through an authenticated installer",
-                )
+                ToolSenderFailure::SenderUnregistered
+                    .into_error(format!("tool sender {sender} is not registered"))
             })
     }
 }
