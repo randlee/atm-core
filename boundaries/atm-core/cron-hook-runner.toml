@@ -41,5 +41,5 @@ lint_rules = ["LINT-BOUNDARY-CRON-HOOK-RUNNER-REFERENCES"]
 review_gates = ["sealed_trait", "typed_contract", "deterministic_test_doubles"]
 
 [status]
-state = "planned"
-notes = ["BK-9 owns the signature; BK-12 owns parser integration and BK-15 owns the production adapter."]
+state = "concrete_landed"
+notes = ["BK-9 landed the sealed signature and deterministic double; BK-12 owns parser integration and BK-15 owns the production adapter."]

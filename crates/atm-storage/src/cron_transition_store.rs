@@ -7,6 +7,7 @@
 
 use std::fmt;
 
+use sc_lint_attributes::sc_lint;
 use serde::{Deserialize, Serialize};
 
 use crate::contract::sealed;
@@ -19,6 +20,7 @@ use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 pub const CRON_OUTPUT_BODY_MAX_BYTES: usize = 65_536;
 pub const CRON_DIAGNOSTIC_MAX_BYTES: usize = 4_096;
+pub const CRON_DELIVERY_RETRY_CAUSE_MAX_BYTES: usize = 1_024;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
@@ -168,11 +170,100 @@ pub enum CronLifecycleEvent {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CronNoticeIntent {
-    pub key: CronNoticeKey,
-    pub team: TeamName,
-    pub recipient: AgentName,
-    pub name: CronName,
-    pub event: CronLifecycleEvent,
+    key: CronNoticeKey,
+    team: TeamName,
+    recipient: AgentName,
+    name: CronName,
+    event: CronLifecycleEvent,
+}
+
+/// A transition row that has already selected its lifecycle recipient.
+///
+/// This is deliberately private to the storage contract module.  An adapter
+/// obtains it only while materializing a row committed by its transition
+/// transaction; no scheduler, nudger, or caller can provide a recipient or
+/// lifecycle body to the issuer.
+#[allow(
+    dead_code,
+    reason = "BK-9 freezes the issuer seam before BK-10 supplies the SQLite transition adapter"
+)]
+struct CommittedCronNoticeRecord {
+    key: CronNoticeKey,
+    team: TeamName,
+    recipient: AgentName,
+    name: CronName,
+    event: CronLifecycleEvent,
+}
+
+/// Mints a lifecycle intent from a committed transition record.
+///
+/// The issuer is intentionally confined to this module.  It is the one
+/// construction seam for [`CronNoticeIntent`], and the boundary linter
+/// rejects an implementation from any other module.
+#[sc_lint(boundary.forbid_external_impls)]
+#[allow(
+    dead_code,
+    reason = "BK-9 freezes the issuer seam before BK-10 supplies the SQLite transition adapter"
+)]
+trait CronNoticeIntentIssuer: sealed::Sealed {
+    fn issue(&self, record: CommittedCronNoticeRecord) -> CronNoticeIntent;
+}
+
+/// The storage-owned issuer used by approved transition adapters.
+#[allow(
+    dead_code,
+    reason = "BK-9 freezes the issuer seam before BK-10 supplies the SQLite transition adapter"
+)]
+struct CommittedCronNoticeIssuer;
+
+impl sealed::Sealed for CommittedCronNoticeIssuer {}
+
+impl CronNoticeIntentIssuer for CommittedCronNoticeIssuer {
+    fn issue(&self, record: CommittedCronNoticeRecord) -> CronNoticeIntent {
+        CronNoticeIntent {
+            key: record.key,
+            team: record.team,
+            recipient: record.recipient,
+            name: record.name,
+            event: record.event,
+        }
+    }
+}
+
+impl CronNoticeIntent {
+    /// Returns the durable transition key selected when this notice was
+    /// committed.
+    #[must_use]
+    pub fn key(&self) -> CronNoticeKey {
+        self.key
+    }
+
+    /// Returns the persisted schedule team associated with this notice.
+    #[must_use]
+    pub fn team(&self) -> &TeamName {
+        &self.team
+    }
+
+    /// Returns the creator recipient resolved at the committed transition.
+    ///
+    /// The recipient has no public setter or constructor path: a nudger can
+    /// read the persisted destination but cannot redirect the lifecycle mail.
+    #[must_use]
+    pub fn recipient(&self) -> &AgentName {
+        &self.recipient
+    }
+
+    /// Returns the persisted schedule name.
+    #[must_use]
+    pub fn name(&self) -> &CronName {
+        &self.name
+    }
+
+    /// Returns the committed lifecycle event.
+    #[must_use]
+    pub fn event(&self) -> &CronLifecycleEvent {
+        &self.event
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -202,6 +293,69 @@ pub enum CronDeliveryIntent {
     ModuleMail(CronModuleMailIntent),
 }
 
+/// Bounded, operator-safe reason why an external delivery handoff is unknown.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct DeliveryRetryCause(String);
+
+impl DeliveryRetryCause {
+    pub fn parse(value: String) -> Result<Self, AtmError> {
+        let value = value.split_whitespace().collect::<Vec<_>>().join(" ");
+        if value.trim().is_empty() || value.len() > CRON_DELIVERY_RETRY_CAUSE_MAX_BYTES {
+            return Err(AtmError::hook_malformed(&format!(
+                "cron delivery retry cause must contain 1..={CRON_DELIVERY_RETRY_CAUSE_MAX_BYTES} bytes"
+            )));
+        }
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for DeliveryRetryCause {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(value)
+    }
+}
+
+impl From<DeliveryRetryCause> for String {
+    fn from(value: DeliveryRetryCause) -> Self {
+        value.0
+    }
+}
+
+/// A pending-query record makes the resend decision explicit.
+///
+/// Reconciliation-required records retain the intent for inspection but must
+/// never be retried blindly: the prior external handoff may have succeeded.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PendingCronDelivery {
+    ReadyToSend(CronDeliveryIntent),
+    ReconciliationRequired {
+        intent: CronDeliveryIntent,
+        retry_cause: DeliveryRetryCause,
+    },
+}
+
+impl PendingCronDelivery {
+    #[must_use]
+    pub fn intent(&self) -> &CronDeliveryIntent {
+        match self {
+            Self::ReadyToSend(intent) | Self::ReconciliationRequired { intent, .. } => intent,
+        }
+    }
+
+    #[must_use]
+    pub fn is_safe_to_resend(&self) -> bool {
+        matches!(self, Self::ReadyToSend(_))
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CronTransitionWrite {
     pub id: CronScheduleId,
@@ -222,11 +376,15 @@ pub enum DeliveryReceipt {
     Accepted { receipt_id: String },
     Suppressed,
     RecipientUnavailable,
+    Unknown { retry_cause: DeliveryRetryCause },
 }
 
 pub trait CronTransitionStore: sealed::Sealed + Send + Sync {
     fn commit(&self, write: CronTransitionWrite) -> Result<CronCommitResult, AtmError>;
-    fn pending(&self, limit: usize) -> Result<Vec<CronDeliveryIntent>, AtmError>;
+    /// Returns resendable work and uncertain external handoffs separately.
+    /// Reconciliation-required records must not be resent before their prior
+    /// handoff is resolved.
+    fn pending(&self, limit: usize) -> Result<Vec<PendingCronDelivery>, AtmError>;
     fn mark_delivered(
         &self,
         key: CronDeliveryKey,
@@ -237,6 +395,8 @@ pub trait CronTransitionStore: sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
+
     #[test]
     fn output_and_diagnostic_have_different_bounds() {
         assert!(CronOutputBody::parse(String::new()).is_err());
@@ -246,6 +406,56 @@ mod tests {
                 .unwrap()
                 .as_str(),
             "custom mail"
+        );
+    }
+
+    #[test]
+    fn committed_lifecycle_intent_exposes_read_only_provenance() {
+        let key = CronNoticeKey {
+            schedule_id: CronScheduleId::new(7),
+            generation: CronGeneration::FIRST,
+            transition_seq: 3,
+        };
+        let committed_row = CommittedCronNoticeRecord {
+            key,
+            team: TeamName::from_str("ops").expect("team"),
+            recipient: AgentName::from_str("creator").expect("recipient"),
+            name: CronName::parse("hourly").expect("name"),
+            event: CronLifecycleEvent::Stopped {
+                message: CronDiagnosticDetail::parse("finished".into()).expect("detail"),
+            },
+        };
+        let intent = CommittedCronNoticeIssuer.issue(committed_row);
+
+        assert_eq!(intent.key(), key);
+        assert_eq!(intent.team().as_str(), "ops");
+        assert_eq!(intent.recipient().as_str(), "creator");
+        assert_eq!(intent.name().as_str(), "hourly");
+        assert!(matches!(intent.event(), CronLifecycleEvent::Stopped { .. }));
+    }
+
+    #[test]
+    fn committed_notice_issuer_is_the_only_construction_seam() {
+        let source = include_str!("cron_transition_store.rs");
+        let public_issue = ["pub", "fn", "issue("].join(" ");
+        let public_record = ["pub", "struct", "CommittedCronNoticeRecord"].join(" ");
+        assert!(
+            source.contains("#[sc_lint(boundary.forbid_external_impls)]"),
+            "the issuer must retain executable external-implementation enforcement"
+        );
+        assert!(
+            source.contains("trait CronNoticeIntentIssuer: sealed::Sealed"),
+            "the issuer must remain a sealed adapter capability"
+        );
+        assert!(
+            !source.contains(&public_issue) && !source.contains(&public_record),
+            "callers must not mint lifecycle intent provenance"
+    fn delivery_retry_cause_is_bounded_and_normalized() {
+        let cause = DeliveryRetryCause::parse("network\r\ntimeout".into()).expect("cause");
+        assert_eq!(cause.as_str(), "network timeout");
+        assert!(DeliveryRetryCause::parse("\n".into()).is_err());
+        assert!(
+            DeliveryRetryCause::parse("x".repeat(CRON_DELIVERY_RETRY_CAUSE_MAX_BYTES + 1)).is_err()
         );
     }
 }
