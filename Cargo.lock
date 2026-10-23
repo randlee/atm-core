@@ -420,6 +420,7 @@ dependencies = [
  "atm-runtime",
  "atm-storage",
  "atm-storage-rusqlite",
+ "tokio",
 ]
 
 [[package]]
@@ -432,6 +433,7 @@ dependencies = [
  "chrono",
  "getrandom 0.3.4",
  "rustls",
+ "sc-lint-attributes 0.5.0",
  "serde",
  "serde_json",
  "sha2",

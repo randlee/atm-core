@@ -1,6 +1,6 @@
-use serde::de::DeserializeOwned;
+use serde::de::{DeserializeOwned, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::api::{ApiRequest, MessageCollectionRequest};
 use crate::boundary::{HookName, TaskCommand};
@@ -13,8 +13,209 @@ use crate::read::{PeekQuery, ReadQuery};
 use crate::search::SearchRequest;
 use crate::send::WriteRequest;
 use crate::types::{AgentName, TeamName};
+use atm_storage::{CronDiagnosticDetail, CronModuleOutput, CronOutputBody};
+
+use super::{CRON_OUTPUT_MAX_ITEMS, CronStopReply, CronTickReply};
 
 pub(crate) const HOOK_ACTIONS_MAX: usize = 32;
+
+/// Parse a cron tick reply without widening the task-hook reply grammar.
+///
+/// Unlike `serde_json::Value`, the small strict-value reader below rejects a
+/// duplicate key before it can be silently overwritten.  Cron replies are a
+/// security boundary: the hook receives authority to request actions, so its
+/// complete JSON tree is duplicate-free, not merely the top-level object.
+pub fn parse_cron_tick_reply(stdout: &[u8]) -> Result<CronTickReply, AtmError> {
+    let object = strict_object(stdout, "cron tick reply")?;
+    let result = required_string(&object, "result")?;
+    let output = parse_cron_output(object.get("cron-output"))?;
+
+    match result {
+        "pass-through" if keys_are(&object, &["result", "cron-output"]) => {
+            Ok(CronTickReply::PassThrough { output })
+        }
+        "handled" if keys_are(&object, &["result", "atm-action", "cron-output"]) => {
+            let actions = object.get("atm-action").ok_or_else(|| {
+                AtmError::hook_malformed("handled cron reply requires atm-action")
+            })?;
+            let actions: Vec<HookAction> = serde_json::from_value(actions.clone())
+                .map_err(|error| AtmError::hook_malformed(&format!("cron atm-action: {error}")))?;
+            if actions.is_empty() || actions.len() > HOOK_ACTIONS_MAX {
+                return Err(AtmError::hook_malformed(&format!(
+                    "cron atm-action must contain 1..={HOOK_ACTIONS_MAX} actions"
+                )));
+            }
+            Ok(CronTickReply::Handled { actions, output })
+        }
+        "not-applicable" if object.len() == 1 => Ok(CronTickReply::NotApplicable),
+        "refused" if keys_are(&object, &["result", "message"]) => Ok(CronTickReply::Refused {
+            message: CronDiagnosticDetail::parse(required_string(&object, "message")?.to_owned())?,
+        }),
+        _ => Err(AtmError::hook_malformed(
+            "cron tick reply keys and result must match pass-through, handled, not-applicable or refused exactly",
+        )),
+    }
+}
+
+/// Parse the cron-only stop-check reply.  Task hooks do not use this shape.
+pub fn parse_cron_stop_reply(stdout: &[u8]) -> Result<CronStopReply, AtmError> {
+    let object = strict_object(stdout, "cron stop reply")?;
+    let stop = object
+        .get("stop")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| AtmError::hook_malformed("cron stop reply requires boolean stop"))?;
+    let reason = object
+        .get("reason")
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or_else(|| AtmError::hook_malformed("cron stop reason must be a string"))
+        })
+        .transpose()?
+        .map(|value| CronDiagnosticDetail::parse(value.to_owned()))
+        .transpose()?;
+    if !keys_are(&object, &["stop", "reason", "cron-output"]) {
+        return Err(AtmError::hook_malformed(
+            "cron stop reply permits only stop, reason and cron-output",
+        ));
+    }
+    CronStopReply::new(stop, reason, parse_cron_output(object.get("cron-output"))?)
+}
+
+fn required_string<'a>(object: &'a Map<String, Value>, key: &str) -> Result<&'a str, AtmError> {
+    object
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| AtmError::hook_malformed(&format!("cron reply requires non-empty {key}")))
+}
+
+fn keys_are(object: &Map<String, Value>, allowed: &[&str]) -> bool {
+    object.keys().all(|key| allowed.contains(&key.as_str()))
+}
+
+fn parse_cron_output(value: Option<&Value>) -> Result<Vec<CronModuleOutput>, AtmError> {
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    let values = value
+        .as_array()
+        .ok_or_else(|| AtmError::hook_malformed("cron-output must be an array"))?;
+    if values.len() > CRON_OUTPUT_MAX_ITEMS {
+        return Err(AtmError::hook_malformed(&format!(
+            "cron-output must contain at most {CRON_OUTPUT_MAX_ITEMS} entries"
+        )));
+    }
+    values
+        .iter()
+        .map(|item| {
+            let item = item
+                .as_object()
+                .ok_or_else(|| AtmError::hook_malformed("cron-output entries must be objects"))?;
+            if item.len() != 2 || !item.contains_key("kind") || !item.contains_key("body") {
+                return Err(AtmError::hook_malformed(
+                    "cron-output entries require exactly kind and body",
+                ));
+            }
+            let body = item
+                .get("body")
+                .and_then(Value::as_str)
+                .ok_or_else(|| AtmError::hook_malformed("cron-output body must be a string"))?;
+            let body = CronOutputBody::parse(body.to_owned())?;
+            match item.get("kind").and_then(Value::as_str) {
+                Some("message") => Ok(CronModuleOutput::Message { body }),
+                Some("error") => Ok(CronModuleOutput::Error { body }),
+                _ => Err(AtmError::hook_malformed(
+                    "cron-output kind must be message or error",
+                )),
+            }
+        })
+        .collect()
+}
+
+fn strict_object(stdout: &[u8], context: &str) -> Result<Map<String, Value>, AtmError> {
+    let mut deserializer = serde_json::Deserializer::from_slice(stdout);
+    let value = StrictValue::deserialize(&mut deserializer)
+        .map_err(|error| AtmError::hook_malformed(&format!("{context} JSON: {error}")))?;
+    deserializer.end().map_err(|error| {
+        AtmError::hook_malformed(&format!("{context} must contain one JSON object: {error}"))
+    })?;
+    match value.0 {
+        Value::Object(object) => Ok(object),
+        _ => Err(AtmError::hook_malformed(&format!(
+            "{context} must be one JSON object"
+        ))),
+    }
+}
+
+struct StrictValue(Value);
+
+impl<'de> Deserialize<'de> for StrictValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct StrictVisitor;
+        impl<'de> Visitor<'de> for StrictVisitor {
+            type Value = StrictValue;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a JSON value without duplicate object keys")
+            }
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
+                Ok(StrictValue(Value::Bool(value)))
+            }
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+                Ok(StrictValue(Value::Number(value.into())))
+            }
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E> {
+                Ok(StrictValue(Value::Number(value.into())))
+            }
+            fn visit_f64<E: serde::de::Error>(self, value: f64) -> Result<Self::Value, E> {
+                serde_json::Number::from_f64(value)
+                    .map(|value| StrictValue(Value::Number(value)))
+                    .ok_or_else(|| serde::de::Error::custom("invalid JSON number"))
+            }
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> {
+                Ok(StrictValue(Value::String(value.to_owned())))
+            }
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+                Ok(StrictValue(Value::String(value)))
+            }
+            fn visit_none<E>(self) -> Result<Self::Value, E> {
+                Ok(StrictValue(Value::Null))
+            }
+            fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                Ok(StrictValue(Value::Null))
+            }
+            fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut values = Vec::new();
+                while let Some(value) = sequence.next_element::<StrictValue>()? {
+                    values.push(value.0);
+                }
+                Ok(StrictValue(Value::Array(values)))
+            }
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut values = Map::new();
+                while let Some(key) = map.next_key::<String>()? {
+                    if values.contains_key(&key) {
+                        return Err(serde::de::Error::custom(format!(
+                            "duplicate object key `{key}`"
+                        )));
+                    }
+                    values.insert(key, map.next_value::<StrictValue>()?.0);
+                }
+                Ok(StrictValue(Value::Object(values)))
+            }
+        }
+        deserializer.deserialize_any(StrictVisitor)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum HookReply {
@@ -829,6 +1030,48 @@ mod tests {
             r#"{"stop":"#,
         ] {
             malformed(StopReply::parse(stdout.as_bytes()));
+        }
+    }
+
+    #[test]
+    fn cron_tick_parser_accepts_only_cron_grammar() {
+        assert!(matches!(
+            parse_cron_tick_reply(br#"{"result":"pass-through","cron-output":[{"kind":"message","body":"kept verbatim"}]}"#),
+            Ok(CronTickReply::PassThrough { output }) if output.len() == 1
+        ));
+        assert!(matches!(
+            parse_cron_tick_reply(br#"{"result":"refused","message":"redacted diagnostic"}"#),
+            Ok(CronTickReply::Refused { .. })
+        ));
+        for malformed_reply in [
+            br#"{"result":"not-applicable","cron-output":[]}"#.as_slice(),
+            br#"{"result":"handled","atm-action":[],"cron-output":[]}"#.as_slice(),
+            br#"{"result":"pass-through","unknown":true}"#.as_slice(),
+            br#"{"result":"pass-through","result":"handled"}"#.as_slice(),
+            br#"{"result":"pass-through","cron-output":[{"kind":"message","kind":"error","body":"x"}]}"#.as_slice(),
+            br#"{"result":"pass-through","cron-output":[{"kind":"message","body":""}]}"#.as_slice(),
+        ] {
+            malformed(parse_cron_tick_reply(malformed_reply));
+        }
+    }
+
+    #[test]
+    fn cron_stop_parser_requires_exact_reason_invariant_and_nested_keys() {
+        assert!(matches!(
+            parse_cron_stop_reply(
+                br#"{"stop":true,"reason":"done","cron-output":[{"kind":"error","body":"mail"}]}"#
+            ),
+            Ok(CronStopReply { stop: true, .. })
+        ));
+        for malformed_reply in [
+            br#"{"stop":true}"#.as_slice(),
+            br#"{"stop":false,"reason":"no"}"#.as_slice(),
+            br#"{"stop":false,"extra":true}"#.as_slice(),
+            br#"{"stop":false,"cron-output":[{"kind":"message","body":"x","extra":true}]}"#
+                .as_slice(),
+            br#"{"stop":false,"stop":true}"#.as_slice(),
+        ] {
+            malformed(parse_cron_stop_reply(malformed_reply));
         }
     }
 }
