@@ -80,7 +80,7 @@ env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_
 
 [[rmux.windows.panes]]
 name = "arch-ctm"
-command = "codex -c features.hooks=true --yolo"
+command = "codex -c features.hooks=true --model gpt-5.6-terra --yolo"
 env = { ATM_IDENTITY = "arch-ctm", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
@@ -97,7 +97,7 @@ layout = "even-horizontal"
 
 [[rmux.windows.panes]]
 name = "cipher"
-command = "codex -c features.hooks=true -c model_reasoning_effort=\"high\" --yolo"
+command = "codex -c features.hooks=true -c model_reasoning_effort=\"high\" --model gpt-6-luna --yolo"
 env = { ATM_IDENTITY = "cipher", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
@@ -126,7 +126,7 @@ env = { ATM_IDENTITY = "publisher", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_
 
 [[rmux.windows.panes]]
 name = "solar"
-command = "codex -c features.hooks=true --yolo"
+command = "codex -c features.hooks=true --model gpt-6-astra --yolo"
 env = { ATM_IDENTITY = "solar", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 # Window 4: Dev (codex terra + codex luna)
