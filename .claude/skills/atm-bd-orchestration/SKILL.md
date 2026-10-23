@@ -546,6 +546,7 @@ one of these defaults; close and package-internal data templates retain their pa
 | `qa-complete.md.j2` | close | quality-mgr, and its PR comment |
 | `fix-assignment.xml.j2` | assignment | lead → dev, one poured fix bead or important or minor finding bead |
 | `fix-complete.md.j2` | close | dev, for `fix-assignment` |
+| `pr-body.md.j2` | PR description | dev, for `dev-template` and `fix-assignment`: `gh pr create`/`gh pr edit --body-file` |
 | `review-template.xml.j2` | assignment | lead → phase-end reviewer |
 | `review-complete.md.j2` | close | phase-end reviewer |
 | `task-refused.md.j2` | close | anyone who cannot do the whole assignment |
