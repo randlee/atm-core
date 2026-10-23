@@ -348,7 +348,7 @@ jobs:
         run: cargo test --workspace --exclude atm-daemon --verbose
 
       - name: Run Herdr transport fixtures
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        if: ${{ always() && !cancelled() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
         run: cargo test -p atm-herdr --all-features --verbose
         env:
           # AY.7's Windows-only integration test writes a deterministic
@@ -357,7 +357,7 @@ jobs:
           ATM_WINDOWS_PROCESS_AUDIT_DIR: ${{ runner.temp }}/atm-herdr-process-audit
 
       - name: Upload Windows Herdr process-audit doctor fixture
-        if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
+        if: ${{ always() && !cancelled() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
         uses: actions/upload-artifact@v4
         with:
           name: windows-herdr-process-audit-${{ github.run_id }}
