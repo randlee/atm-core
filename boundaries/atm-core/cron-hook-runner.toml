@@ -42,4 +42,4 @@ review_gates = ["sealed_trait", "typed_contract", "deterministic_test_doubles"]
 
 [status]
 state = "concrete_landed"
-notes = ["BK-9 landed the sealed signature and deterministic double; BK-12 owns parser integration and BK-15 owns the production adapter."]
+notes = ["BK-9 landed the sealed signature and deterministic double; BK-12 owns parser integration and BK-15 owns the production adapter.", "CronRunPermit is projected only from the private scheduler issuer in atm-cron; its implementation allowlist is enforced by the cron_run_permit_issuer_boundary architecture test."]
