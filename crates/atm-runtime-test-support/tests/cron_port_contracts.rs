@@ -6,7 +6,7 @@
 
 use std::str::FromStr;
 
-use atm_core::boundary::CronLifecycleNudger;
+use atm_core::boundary::{CronLifecycleNudger, claim_verified_tool_runtime, resolve_sender_claim};
 use atm_runtime_test_support::RecordingCronLifecycleNudger;
 use atm_storage::testing::{
     InMemoryCommittedCronNoticeRecord, InMemoryCronTransitionStore, InMemoryToolSenderRegistry,
@@ -159,9 +159,15 @@ fn sender_registry_consumer_requires_registered_proof_binding() {
         )
         .expect("matching proof is admitted");
 
-    assert_eq!(admitted.address().to_string(), "plugin@tool");
+    assert_eq!(admitted.sender().address().to_string(), "plugin@tool");
     assert_eq!(
         registry.resolve(&sender).expect("registered sender"),
-        admitted
+        admitted.sender().clone()
+    );
+    assert_eq!(
+        resolve_sender_claim(claim_verified_tool_runtime(admitted))
+            .expect("only a verified runtime admission reaches the core claim seam")
+            .to_string(),
+        "plugin@tool"
     );
 }
