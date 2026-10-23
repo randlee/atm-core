@@ -450,6 +450,10 @@ mod tests {
         assert!(
             !source.contains(&public_issue) && !source.contains(&public_record),
             "callers must not mint lifecycle intent provenance"
+        );
+    }
+
+    #[test]
     fn delivery_retry_cause_is_bounded_and_normalized() {
         let cause = DeliveryRetryCause::parse("network\r\ntimeout".into()).expect("cause");
         assert_eq!(cause.as_str(), "network timeout");
