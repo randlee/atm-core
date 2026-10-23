@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 # the description holds a numbered '## Deliverables' list starting at 1
 DELIVERABLES = r"(?m)^## Deliverables\s*\n(?:\s*\n)*\s*1[.)]\s+\S"
@@ -114,6 +114,15 @@ class SanityBead(Bead):
 class QaMetadata(FamilyMetadata):
     checked_bead: NonEmpty
     round: int = Field(ge=1)
+    reviewers_round1: Annotated[list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]*$")]],
+                               Field(min_length=1, json_schema_extra={"uniqueItems": True})]
+
+    @field_validator("reviewers_round1")
+    @classmethod
+    def unique_reviewers(cls, reviewers: list[str]) -> list[str]:
+        if len(set(reviewers)) != len(reviewers):
+            raise ValueError("duplicate reviewer identities")
+        return reviewers
 
 
 class QaBead(Bead):

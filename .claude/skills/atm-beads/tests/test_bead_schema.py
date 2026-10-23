@@ -32,7 +32,7 @@ def test_validate_phase_cli_with_controlled_bd(tmp_path, missing_branch, bd_exit
     )
     stub.chmod(0o755)
     args_file = tmp_path / "bd-args"
-    metadata = {**FAMILY, "checked_bead": "atm-bi-7.group-dev", "round": 1}
+    metadata = {**FAMILY, "checked_bead": "atm-bi-7.group-dev", "round": 1, "reviewers_round1": ["req-qa"]}
     if missing_branch:
         del metadata["branch"]
     bead = {"id": "atm-bi-7.group-qa", "labels": ["phase-bi", "stage:qa"], "metadata": metadata}
@@ -94,7 +94,7 @@ def test_stack_layers_have_all_fields_and_preserve_order():
 
 def test_validate_phase_includes_qa_and_unknown_stage():
     qa = {"id": "atm-phase-bi.18-qa", "labels": ["stage:qa"],
-          "metadata": {**FAMILY, "checked_bead": "atm-phase-bi.18", "round": 1}}
+          "metadata": {**FAMILY, "checked_bead": "atm-phase-bi.18", "round": 1, "reviewers_round1": ["req-qa"]}}
     assert bead_schema.validate_phase([qa]) == []
     del qa["metadata"]["branch"]
     errors = bead_schema.validate_phase([qa, {"id": "atm-bi-unexpected", "labels": ["stage:unexpected"]}])
@@ -104,8 +104,8 @@ def test_validate_phase_includes_qa_and_unknown_stage():
 
 @pytest.mark.parametrize("stage, bead_id, metadata", [
     ("dev", "atm-bi-7.group-dev", {"role": "dev", "phase": "bi", "sprint": "bi-7", "sprint_bead": "atm-bi-7", "stack": "phase-bi", "layer": 7}),
-    ("qa", "atm-bi-7.group-qa", {"role": "qa", "phase": "bi", "sprint": "bi-7", "sprint_bead": "atm-bi-7", "stack": "phase-bi", "checked_bead": "atm-bi-7.group-dev", "round": 1}),
-    ("qa", "atm-phase-bi.18-qa", {"checked_bead": "atm-phase-bi.18", "phase": "bi", "sprint": "bi", "sprint_bead": "atm-phase-bi", "stack": "phase-bi", "round": 1, "layer": 40, "quick_fix": True}),
+    ("qa", "atm-bi-7.group-qa", {"role": "qa", "phase": "bi", "sprint": "bi-7", "sprint_bead": "atm-bi-7", "stack": "phase-bi", "checked_bead": "atm-bi-7.group-dev", "round": 1, "reviewers_round1": ["req-qa"]}),
+    ("qa", "atm-phase-bi.18-qa", {"checked_bead": "atm-phase-bi.18", "phase": "bi", "sprint": "bi", "sprint_bead": "atm-phase-bi", "stack": "phase-bi", "round": 1, "reviewers_round1": ["req-qa"], "layer": 40, "quick_fix": True}),
     ("fix", "atm-bi-7.qa1-f1-r1-fix", {"finding_ref": "qa1-f1", "severity": "blocking", "reviewer": "qa", "found_at_commit": "abc1234"}),
 ])
 def test_family_models_require_each_cut_field(stage, bead_id, metadata):

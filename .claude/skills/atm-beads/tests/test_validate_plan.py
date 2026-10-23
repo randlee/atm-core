@@ -65,6 +65,9 @@ class Repo(unittest.TestCase):
         config = self.repo / ".claude/project/atm-bd-orchestration.yaml"
         config.parent.mkdir(parents=True)
         config.write_text("plans_dir: plans\nbead_prefix: x\n")
+        registry = self.repo / ".claude/agents/registry.yaml"
+        registry.parent.mkdir(parents=True)
+        registry.write_text("agents:\n  req-qa: {}\n  arch-qa: {}\n")
         write_phase(self.repo)
 
     def tearDown(self):
@@ -87,6 +90,45 @@ def broken(bid: str, change) -> list[dict]:
 
 
 class ValidatePlan(Repo):
+    def test_qa_reviewers_are_required_at_planning_not_inferred_from_config(self):
+        qa = poured("x-t-1", "qa", ["x-t-1.group-sanity"])
+        qa["metadata"].update(checked_bead="x-t-1.group-dev", round=1)
+        config = self.repo / ".claude/project/atm-bd-orchestration.yaml"
+        with config.open("a") as stream:
+            stream.write('reviewers_round1: ["req-qa"]\n')
+        for value in (None, "", "req-qa", [], [""], [" "], [7], ["req-qa", "req-qa"], ["unknown-qa"]):
+            with self.subTest(reviewers=value):
+                candidate = copy.deepcopy(qa)
+                if value is not None:
+                    candidate["metadata"]["reviewers_round1"] = value
+                out = self.run_beads(VALID + [candidate])
+                self.assertEqual(out.returncode, 5, out.stdout + out.stderr)
+                self.assertIn("x-t-1.group-qa: reviewers_round1", out.stdout)
+                self.assertNotIn("plan valid:", out.stdout)
+        qa["metadata"]["reviewers_round1"] = ["req-qa", "arch-qa"]
+        out = self.run_beads(VALID + [qa])
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+
+    def test_qa_reviewer_registry_must_be_readable_and_valid(self):
+        qa = poured("x-t-1", "qa", ["x-t-1.group-sanity"])
+        qa["metadata"].update(checked_bead="x-t-1.group-dev", round=1, reviewers_round1=["req-qa"])
+        registry = self.repo / ".claude/agents/registry.yaml"
+        for content in (None, "agents: [", "agents: []", "agents: {}"):
+            with self.subTest(registry=content):
+                registry.unlink(missing_ok=True)
+                if content is not None:
+                    registry.write_text(content)
+                out = self.run_beads(VALID + [qa])
+                self.assertEqual(out.returncode, 5, out.stdout + out.stderr)
+                self.assertIn("cannot validate reviewers_round1", out.stdout)
+
+    def test_closed_qa_history_does_not_require_new_reviewer_metadata(self):
+        qa = poured("x-t-1", "qa", [])
+        qa.update(status="closed")
+        qa["metadata"].update(checked_bead="x-t-1.group-dev", round=1)
+        out = self.run_beads(VALID + [qa])
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+
     def test_stack_is_required_only_for_open_phase(self):
         without_stack = [bead for bead in VALID if bead["id"] != STACK["id"]]
         result = self.run_beads(without_stack)
@@ -376,6 +418,16 @@ class LivePlan(Repo):
         self.assertEqual((out.returncode, out.stdout), (0, "plan valid: 2 sprints\n"), out.stderr)
         self.assertEqual(self.live(VALID, "--root", "x-phase-t").returncode, 0)
 
+    def test_live_qa_reviewer_data_is_a_hard_gate(self):
+        qa = poured("x-t-1", "qa", ["x-t-1.group-sanity"])
+        qa["metadata"].update(checked_bead="x-t-1.group-dev", round=1, reviewers_round1=None)
+        out = self.live(VALID + [qa])
+        self.assertEqual(out.returncode, 5, out.stdout + out.stderr)
+        self.assertIn("x-t-1.group-qa: reviewers_round1", out.stdout)
+        qa["metadata"]["reviewers_round1"] = ["req-qa"]
+        out = self.live(VALID + [qa])
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+
     def test_phase_walk_uses_one_list_includes_gates_and_excludes_other_phases(self):
         log = self.base / "bd.log"
         rows = VALID + [{"id": "other", "status": "open", "labels": ["phase-u"]},
@@ -445,6 +497,16 @@ class FilePlan(LivePlan):
         out = self.run_file([ROOT_EPIC, STACK, container("x-t-1"), container("x-t-2")], [])
         self.assertEqual((out.returncode, out.stdout), (0, "plan valid: 2 sprints\n"), out.stderr)
         self.assertIn("warning: x-t-2: not poured yet", out.stderr)
+
+    def test_import_rejects_qa_without_planned_reviewers(self):
+        qa = poured("x-t-1", "qa", ["x-t-1.group-sanity"])
+        qa["metadata"].update(checked_bead="x-t-1.group-dev", round=1)
+        out = self.run_file([qa], VALID)
+        self.assertEqual(out.returncode, 5, out.stdout + out.stderr)
+        self.assertIn("x-t-1.group-qa: reviewers_round1", out.stdout)
+        qa["metadata"]["reviewers_round1"] = ["req-qa"]
+        out = self.run_file([qa], VALID)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
 
     def test_an_open_phase_requires_its_stack_bead_in_the_file(self):
         out = self.run_file([ROOT_EPIC, container("x-t-1"), container("x-t-2")], [])
