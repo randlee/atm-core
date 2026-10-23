@@ -104,9 +104,9 @@ pub use atm_storage::{
     CronFailureKey, CronFailureKind, CronGeneration, CronLifecycleEvent, CronModuleMailIntent,
     CronModuleOutput, CronName, CronNoticeIntent, CronNoticeKey, CronOutputBody, CronRunTransition,
     CronSchedule, CronScheduleId, CronScheduleStore, CronSuccess, CronTransitionStore,
-    CronTransitionWrite, DeliveryReceipt, HookExitCause, HookName, HookRegistration,
-    HookRegistrationStore, NewCronSchedule, PendingCronDelivery, PhaseId, StopCondition, TaskHook,
-    stopped_outcome,
+    CronTransitionWrite, DeliveryReceipt, DeliveryRetryCause, HookExitCause, HookName,
+    HookRegistration, HookRegistrationStore, NewCronSchedule, PendingCronDelivery, PhaseId,
+    StopCondition, TaskHook, stopped_outcome,
 };
 pub use cron_hook_runner::CronHookRunner;
 pub use cron_lifecycle_nudge_emitter::{
