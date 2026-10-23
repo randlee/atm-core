@@ -76,14 +76,15 @@ use atm_storage::contract::{
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{
-    AsyncMessageSearchStore, CronScheduleStore, HookRegistrationStore, MessageSearchStore,
-    TaskStore, TemplateCatalogStore,
+    AsyncMessageSearchStore, CronScheduleStore, CronTransitionStore, HookRegistrationStore,
+    MessageSearchStore, TaskStore, TemplateCatalogStore,
 };
 use atm_storage::{
     AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
 };
 use cron_schedule_store::cron_schedule_store;
+use cron_transition_store::cron_transition_store;
 pub use diagnostic_timeline::{
     DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
     DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_PRUNE_CHECK_EVERY, SqliteDiagnosticTimeline,
@@ -707,6 +708,7 @@ pub struct SqliteStorageBackend {
     task_store: Arc<SqliteTaskStore>,
     hook_registration_store: Arc<dyn HookRegistrationStore + Send + Sync>,
     cron_schedule_store: Arc<dyn CronScheduleStore + Send + Sync>,
+    cron_transition_store: Arc<dyn CronTransitionStore + Send + Sync>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
@@ -923,6 +925,7 @@ impl SqliteStorageBackend {
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             hook_registration_store: hook_registration_store(Arc::clone(&db)),
             cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
+            cron_transition_store: cron_transition_store(Arc::clone(&db)),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -951,6 +954,7 @@ impl SqliteStorageBackend {
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             hook_registration_store: hook_registration_store(Arc::clone(&db)),
             cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
+            cron_transition_store: cron_transition_store(Arc::clone(&db)),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -1023,6 +1027,11 @@ impl SqliteStorageBackend {
 
     pub fn cron_schedule_store(&self) -> Arc<dyn CronScheduleStore + Send + Sync> {
         self.cron_schedule_store.clone()
+    }
+
+    /// Returns the durable transition and delivery-intent adapter.
+    pub fn cron_transition_store(&self) -> Arc<dyn CronTransitionStore + Send + Sync> {
+        self.cron_transition_store.clone()
     }
 
     pub fn graft_receiver_endpoint_store(

@@ -53,6 +53,27 @@ CREATE TABLE IF NOT EXISTS tool_sender_nonce_ledger (
 "#;
 
 pub(crate) const CRON_DELIVERY_INTENT_DDL: &str = r#"
+-- A transition event is retained before its delivery projections.  This makes
+-- the generation fence and failure-suppression key durable across reopen, and
+-- gives every output/lifecycle intent a stable transition sequence.
+CREATE TABLE IF NOT EXISTS cron_transition_event (
+    schedule_id INTEGER NOT NULL,
+    generation INTEGER NOT NULL CHECK(generation >= 1),
+    transition_seq INTEGER NOT NULL CHECK(transition_seq >= 1),
+    transition_at TEXT NOT NULL,
+    transition_kind TEXT NOT NULL CHECK(transition_kind IN ('success', 'continue', 'failure', 'stopped')),
+    failure_kind TEXT NULL,
+    failure_code TEXT NULL,
+    failure_detail TEXT NULL,
+    PRIMARY KEY (schedule_id, generation, transition_seq),
+    UNIQUE (schedule_id, generation, transition_at),
+    CHECK ((transition_kind = 'failure') = (failure_kind IS NOT NULL)),
+    CHECK (failure_kind IS NOT NULL OR (failure_code IS NULL AND failure_detail IS NULL)),
+    CHECK (failure_kind IS NULL OR failure_detail IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS cron_transition_event_schedule_generation
+    ON cron_transition_event(schedule_id, generation, transition_seq);
+
 CREATE TABLE IF NOT EXISTS cron_delivery_intent (
     schedule_id INTEGER NOT NULL,
     generation INTEGER NOT NULL,
