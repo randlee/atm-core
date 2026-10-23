@@ -193,8 +193,7 @@ pub(crate) async fn persist_send_message_async(
             request,
             context,
             envelope,
-            message_id,
-            timestamp,
+            (message_id, timestamp),
             verified,
             cron_run_fence,
         )
@@ -256,11 +255,11 @@ async fn admit_verified_template(
     request: &SendRequest,
     context: &SendExecutionContext,
     envelope: InboxMessage,
-    message_id: AtmMessageId,
-    timestamp: IsoTimestamp,
+    identity: (AtmMessageId, IsoTimestamp),
     verified: &template::VerifiedTemplateSend,
     cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
+    let (message_id, timestamp) = identity;
     let admission = build_template_admission(
         request,
         context,
@@ -560,7 +559,7 @@ mod tests {
         );
 
         let admission = build_template_admission(
-            &request, &context, &envelope, message_id, timestamp, &verified,
+            &request, &context, &envelope, message_id, timestamp, &verified, None,
         )
         .expect("admission");
         assert_eq!(
@@ -643,7 +642,7 @@ mod tests {
             None,
         );
         let message = build_template_admission(
-            &request, &context, &envelope, message_id, timestamp, &verified,
+            &request, &context, &envelope, message_id, timestamp, &verified, None,
         )
         .expect("admission")
         .decomposition
