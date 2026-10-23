@@ -1,10 +1,5 @@
 # Phase bk — atm task hooks, hook registration, atm cron, doctor hook section
 
-BK-1–BK-8 below are the historical plan and have landed on `develop`.
-The new BK-9–BK-15 work starts from `develop`; see
-[the tool and cron extension plan](extension-bk-9-15.md) for its contracts,
-boundary ownership, acceptance gates, and current PR bases.
-
 Authority: `design.md` (fenix, PR #1877) over Rand's verbatim rulings on
 atm-core #1873 (2026-10-18). Anchors: `anchors.md` (ANC-001..025,
 REQ-BK-*). Intent: `intent.md`. Lead: fenix. Integration branch
