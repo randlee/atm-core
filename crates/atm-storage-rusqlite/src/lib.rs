@@ -49,6 +49,7 @@ mod template_catalog_store;
 mod template_override_migration;
 #[cfg(any(test, feature = "test-support"))]
 mod test_support;
+mod tool_sender_registry;
 mod writer;
 
 pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};
@@ -77,7 +78,7 @@ use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{
     AsyncMessageSearchStore, CronScheduleStore, CronTransitionStore, HookRegistrationStore,
-    MessageSearchStore, TaskStore, TemplateCatalogStore,
+    MessageSearchStore, TaskStore, TemplateCatalogStore, ToolSenderRegistry,
 };
 use atm_storage::{
     AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
@@ -104,6 +105,7 @@ pub use test_support::{
     inspect_mail_message_state_columns_for_test, inspect_message_ack_state_for_test,
     inspect_pending_marker_state_for_test, inspect_template_admission_for_test,
 };
+use tool_sender_registry::tool_sender_registry;
 pub use writer::DiagnosticTimelinePersistenceStats;
 
 #[cfg(any(test, feature = "test-support"))]
@@ -709,6 +711,7 @@ pub struct SqliteStorageBackend {
     hook_registration_store: Arc<dyn HookRegistrationStore + Send + Sync>,
     cron_schedule_store: Arc<dyn CronScheduleStore + Send + Sync>,
     cron_transition_store: Arc<dyn CronTransitionStore + Send + Sync>,
+    tool_sender_registry: Arc<dyn ToolSenderRegistry + Send + Sync>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
@@ -926,6 +929,7 @@ impl SqliteStorageBackend {
             hook_registration_store: hook_registration_store(Arc::clone(&db)),
             cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
             cron_transition_store: cron_transition_store(Arc::clone(&db)),
+            tool_sender_registry: tool_sender_registry(Arc::clone(&db)),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -955,6 +959,7 @@ impl SqliteStorageBackend {
             hook_registration_store: hook_registration_store(Arc::clone(&db)),
             cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
             cron_transition_store: cron_transition_store(Arc::clone(&db)),
+            tool_sender_registry: tool_sender_registry(Arc::clone(&db)),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -1032,6 +1037,11 @@ impl SqliteStorageBackend {
     /// Returns the durable transition and delivery-intent adapter.
     pub fn cron_transition_store(&self) -> Arc<dyn CronTransitionStore + Send + Sync> {
         self.cron_transition_store.clone()
+    }
+
+    /// Returns the persisted, inspection-only tool-sender registry adapter.
+    pub fn tool_sender_registry(&self) -> Arc<dyn ToolSenderRegistry + Send + Sync> {
+        self.tool_sender_registry.clone()
     }
 
     pub fn graft_receiver_endpoint_store(
