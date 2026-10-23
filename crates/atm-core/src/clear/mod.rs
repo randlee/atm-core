@@ -89,7 +89,23 @@ pub fn clear_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<ClearOutcome, AtmError> {
-    clear_mail_with_runtime_impl(query, observability, runtime)
+    clear_mail_with_runtime_impl(
+        query,
+        observability,
+        runtime,
+        atm_storage::MessageWriteOrigin::Local,
+    )
+}
+
+/// Clears mail while carrying a scheduler-minted generation fence to each
+/// durable deletion. The backend rechecks the fence inside its writer transaction.
+pub fn clear_mail_with_origin(
+    query: ClearQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    origin: atm_storage::MessageWriteOrigin,
+) -> Result<ClearOutcome, AtmError> {
+    clear_mail_with_runtime_impl(query, observability, runtime, origin)
 }
 
 struct ClearRuntimeContext {
@@ -103,10 +119,11 @@ fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRunti
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
     runtime: &R,
+    origin: atm_storage::MessageWriteOrigin,
 ) -> Result<ClearOutcome, AtmError> {
     let context = load_clear_runtime_context(runtime, &query)?;
     if !query.dry_run {
-        persist_deleted_messages(runtime, &context.target, &context.removable)?;
+        persist_deleted_messages(runtime, &context.target, &context.removable, origin)?;
     }
     let mut removed_by_class = RemovedByClass::default();
     for (_, _, class) in &context.removable {
@@ -176,21 +193,25 @@ fn persist_deleted_messages<R: RetainedMailboxRuntime>(
     runtime: &R,
     target: &ResolvedTarget,
     removable: &[(boundary::MessageKey, InboxMessage, MessageClass)],
+    origin: atm_storage::MessageWriteOrigin,
 ) -> Result<(), AtmError> {
     let deleted_at = IsoTimestamp::now();
     for (message_key, envelope, _) in removable {
-        runtime.persist_message_state(boundary::MailMessageState {
-            team: target.team.clone(),
-            agent: target.agent.clone(),
-            actor: target.agent.clone(),
-            message_key: message_key.clone(),
-            read: envelope.read,
-            pending_ack_at: envelope.pending_ack_at,
-            acknowledged_at: envelope.acknowledged_at,
-            expires_at: envelope.expires_at,
-            deleted_at: Some(deleted_at),
-            updated_at: Some(deleted_at),
-        })?;
+        runtime.persist_message_state_with_origin(
+            boundary::MailMessageState {
+                team: target.team.clone(),
+                agent: target.agent.clone(),
+                actor: target.agent.clone(),
+                message_key: message_key.clone(),
+                read: envelope.read,
+                pending_ack_at: envelope.pending_ack_at,
+                acknowledged_at: envelope.acknowledged_at,
+                expires_at: envelope.expires_at,
+                deleted_at: Some(deleted_at),
+                updated_at: Some(deleted_at),
+            },
+            origin,
+        )?;
     }
     Ok(())
 }
@@ -471,6 +492,7 @@ mod tests {
             clear_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
             &NullObservability,
             &runtime,
+            atm_storage::MessageWriteOrigin::Local,
         )
         .expect("clear outcome");
 

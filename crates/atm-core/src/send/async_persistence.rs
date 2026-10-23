@@ -169,6 +169,7 @@ pub(crate) async fn persist_send_message_async(
     requires_ack: bool,
     task_id: Option<TaskId>,
     verified_template: Option<&template::VerifiedTemplateSend>,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let mut envelope = build_send_envelope(
         request,
@@ -188,11 +189,18 @@ pub(crate) async fn persist_send_message_async(
     warn_template_fallback(verified_template, request, plain_template_fallback);
     if let Some(verified) = verified_template.filter(|_| !plain_template_fallback) {
         return admit_verified_template(
-            runtime, request, context, envelope, message_id, timestamp, verified,
+            runtime,
+            request,
+            context,
+            envelope,
+            message_id,
+            timestamp,
+            verified,
+            cron_run_fence,
         )
         .await;
     }
-    persist_plain_async_message(runtime, request, context, &envelope).await
+    persist_plain_async_message(runtime, request, context, &envelope, cron_run_fence).await
 }
 
 fn set_async_peer_delivery_target(request: &SendRequest, envelope: &mut InboxMessage) {
@@ -251,9 +259,17 @@ async fn admit_verified_template(
     message_id: AtmMessageId,
     timestamp: IsoTimestamp,
     verified: &template::VerifiedTemplateSend,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
-    let admission =
-        build_template_admission(request, context, &envelope, message_id, timestamp, verified)?;
+    let admission = build_template_admission(
+        request,
+        context,
+        &envelope,
+        message_id,
+        timestamp,
+        verified,
+        cron_run_fence,
+    )?;
     let committed = runtime.admit_template_message_async(admission).await?;
     let admission = match committed.operation {
         Ok(admission) => admission,
@@ -284,6 +300,7 @@ fn build_template_admission(
     message_id: AtmMessageId,
     timestamp: IsoTimestamp,
     verified: &template::VerifiedTemplateSend,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<atm_storage::TemplateMessageAdmission, AtmError> {
     let (template_type, template_name, frontmatter, vars, tags, workflow_snapshot) =
         template_admission_parts(request, verified)?;
@@ -320,7 +337,12 @@ fn build_template_admission(
                 workflow: None,
             },
         },
-        provenance: if request.authenticated_source_host.is_some() {
+        provenance: if let Some((schedule_id, generation)) = cron_run_fence {
+            atm_storage::MessageWriteOrigin::CronRun {
+                schedule_id,
+                generation,
+            }
+        } else if request.authenticated_source_host.is_some() {
             atm_storage::MessageWriteOrigin::Peer
         } else {
             atm_storage::MessageWriteOrigin::Local
@@ -393,6 +415,7 @@ async fn persist_plain_async_message(
     request: &SendRequest,
     context: &SendExecutionContext,
     envelope: &InboxMessage,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     persistence::persist_message_with_async_admission(
         runtime,
@@ -405,7 +428,12 @@ async fn persist_plain_async_message(
             .authenticated_source_host
             .as_ref()
             .zip(request.to.as_ref().and_then(|recipient| recipient.host())),
-        if request.authenticated_source_host.is_some() {
+        if let Some((schedule_id, generation)) = cron_run_fence {
+            atm_storage::MessageWriteOrigin::CronRun {
+                schedule_id,
+                generation,
+            }
+        } else if request.authenticated_source_host.is_some() {
             atm_storage::MessageWriteOrigin::Peer
         } else {
             atm_storage::MessageWriteOrigin::Local

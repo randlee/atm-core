@@ -204,6 +204,23 @@ pub enum MessageWriteOrigin {
     #[default]
     Local,
     Peer,
+    /// Internal admission from one scheduler-minted cron generation.
+    ///
+    /// The opaque permit is verified in core/runtime before this fence is
+    /// constructed; rusqlite rechecks it inside the canonical writer
+    /// transaction before either insertion or duplicate success.
+    CronRun {
+        schedule_id: crate::CronScheduleId,
+        generation: crate::CronGeneration,
+    },
+}
+
+impl MessageWriteOrigin {
+    /// Cron messages retain every local task-ledger effect and rejection rule.
+    #[must_use]
+    pub const fn is_local(self) -> bool {
+        matches!(self, Self::Local | Self::CronRun { .. })
+    }
 }
 
 /// Read and audit capability for the task ledger, including the prompt-handoff
@@ -245,6 +262,26 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         Err(AtmError::daemon_unavailable(
             "task store does not implement ordered task movement",
         ))
+    }
+    /// Moves a task under an internal writer provenance. Backends that do not
+    /// implement cron fencing retain ordinary local behavior and fail closed
+    /// for cron or peer provenance.
+    fn move_task_with_origin(
+        &self,
+        team: &TeamName,
+        task_id: &TaskId,
+        actor: &AgentName,
+        target: &MoveTarget,
+        at: IsoTimestamp,
+        origin: crate::MessageWriteOrigin,
+    ) -> Result<CommittedTaskWrite<TaskMoveRecord>, AtmError> {
+        if origin.is_local() && origin == crate::MessageWriteOrigin::Local {
+            self.move_task(team, task_id, actor, target, at)
+        } else {
+            Err(AtmError::validation(
+                "task store does not implement fenced cron task movement",
+            ))
+        }
     }
     fn record_reminder(
         &self,

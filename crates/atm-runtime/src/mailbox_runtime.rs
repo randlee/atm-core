@@ -16,6 +16,7 @@ use atm_core::read::selection::{
     MailboxSelectionCandidate, MailboxSelectionRequest, MailboxSelectionResult,
     select_mailbox_candidates, sort_and_limit_mailbox_selection,
 };
+use atm_core::send::MessageWriteOrigin;
 #[cfg(test)]
 use atm_storage::MessageQuery;
 use atm_storage::{
@@ -73,6 +74,7 @@ struct ReadDisplayTransition {
     scope: MailboxScope,
     message_ids: Vec<MessageKey>,
     seen_watermark: Option<IsoTimestamp>,
+    origin: MessageWriteOrigin,
 }
 
 /// Owns the only read-to-writer handoff. `try_push` never awaits writer
@@ -152,6 +154,21 @@ impl StateHandoffSupervisor {
         message_ids: Vec<MessageKey>,
         seen_watermark: Option<IsoTimestamp>,
     ) -> Result<(), HandoffRejected> {
+        self.try_push_with_origin(
+            scope,
+            message_ids,
+            seen_watermark,
+            MessageWriteOrigin::Local,
+        )
+    }
+
+    pub fn try_push_with_origin(
+        &self,
+        scope: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        seen_watermark: Option<IsoTimestamp>,
+        origin: MessageWriteOrigin,
+    ) -> Result<(), HandoffRejected> {
         if self.state() != SupervisorState::Ready {
             self.inner
                 .rejected_unavailable
@@ -179,6 +196,7 @@ impl StateHandoffSupervisor {
             scope,
             message_ids,
             seen_watermark,
+            origin,
         });
         drop(queue);
         self.inner.queue_changed.notify_one();
@@ -323,10 +341,11 @@ async fn run_handoff_worker(inner: Arc<StateHandoffInner>) -> Result<(), AtmErro
         loop {
             match inner
                 .writer
-                .apply_read_display_state_async(
+                .apply_read_display_state_with_origin_async(
                     transition.scope.clone(),
                     transition.message_ids.clone(),
                     transition.seen_watermark,
+                    transition.origin,
                 )
                 .await
             {
@@ -525,6 +544,7 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
             command.scope().clone(),
             &selection,
             command.updates_seen_state(),
+            command.write_origin(),
         )?;
         Ok(complete_async_read(
             &command,
@@ -564,7 +584,7 @@ impl AsyncMailboxRuntime for StorageAsyncMailboxRuntime {
         let selection = self
             .select_single(scope.clone(), key, request, read_deadline(deadline)?)
             .await?;
-        self.try_handoff_selected(scope, &selection, true)?;
+        self.try_handoff_selected(scope, &selection, true, MessageWriteOrigin::Local)?;
         Ok(selection)
     }
 }
@@ -794,6 +814,7 @@ impl StorageAsyncMailboxRuntime {
         scope: MailboxScope,
         selection: &MailboxSelectionResult,
         update_seen_watermark: bool,
+        origin: MessageWriteOrigin,
     ) -> Result<bool, AtmError> {
         let message_ids = selection
             .selected
@@ -817,7 +838,9 @@ impl StorageAsyncMailboxRuntime {
                     .max()
             })
             .flatten();
-        if let Err(rejected) = handoff.try_push(scope, message_ids, seen_watermark) {
+        if let Err(rejected) =
+            handoff.try_push_with_origin(scope, message_ids, seen_watermark, origin)
+        {
             tracing::warn!(
                 ?rejected,
                 "mailbox read-state handoff rejected; message remains unread"
@@ -875,12 +898,12 @@ mod tests {
     use atm_storage::testing::InMemoryMailboxReader;
     use atm_storage::{
         AgentName, AtmError, AtmErrorCode, AtmMessageId, IsoTimestamp, Message, MessageEnvelope,
-        ReadLaneError, TeamName,
+        MessageKey, ReadLaneError, TeamName,
     };
 
     use super::{
-        AsyncMailboxRuntime, HandoffConfig, HandoffRejected, StateHandoffSupervisor,
-        StorageAsyncMailboxRuntime,
+        AsyncMailboxRuntime, AsyncMessageStore, HandoffConfig, HandoffRejected, MessageWriteOrigin,
+        StateHandoffSupervisor, StorageAsyncMailboxRuntime,
     };
     use crate::mailbox_runtime::RequestDeadline;
 
@@ -968,6 +991,108 @@ mod tests {
             .await
             .expect("read");
         assert!(missing.selected.is_empty());
+    }
+
+    struct OriginCaptureWriter {
+        sender: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<MessageWriteOrigin>>>,
+    }
+
+    impl atm_storage::contract::sealed::Sealed for OriginCaptureWriter {}
+
+    impl atm_storage::MessageStore for OriginCaptureWriter {
+        fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
+            unreachable!("origin capture only handles display-state writes")
+        }
+
+        fn admit_message_with_provenance(
+            &self,
+            _message: &Message,
+            _provenance: MessageWriteOrigin,
+        ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+        {
+            unreachable!("origin capture only handles display-state writes")
+        }
+
+        fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
+            unreachable!("origin capture only handles display-state writes")
+        }
+
+        fn load_message(&self, _key: &MessageKey) -> Result<Option<Message>, AtmError> {
+            unreachable!("origin capture only handles display-state writes")
+        }
+
+        fn list_messages(
+            &self,
+            _query: &atm_storage::MessageQuery,
+        ) -> Result<Vec<Message>, AtmError> {
+            unreachable!("origin capture only handles display-state writes")
+        }
+
+        fn delete_message(&self, _key: &MessageKey) -> Result<(), AtmError> {
+            unreachable!("origin capture only handles display-state writes")
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AsyncMessageStore for OriginCaptureWriter {
+        async fn apply_read_display_state_async(
+            &self,
+            _scope: atm_storage::MailboxScope,
+            _message_ids: Vec<MessageKey>,
+            _seen_watermark: Option<IsoTimestamp>,
+        ) -> Result<(), AtmError> {
+            unreachable!("cron handoff must use origin-aware writer admission")
+        }
+
+        async fn apply_read_display_state_with_origin_async(
+            &self,
+            _scope: atm_storage::MailboxScope,
+            _message_ids: Vec<MessageKey>,
+            _seen_watermark: Option<IsoTimestamp>,
+            origin: MessageWriteOrigin,
+        ) -> Result<(), AtmError> {
+            if let Some(sender) = self.sender.lock().expect("origin sender mutex").take() {
+                let _ = sender.send(origin);
+            }
+            Ok(())
+        }
+
+        async fn admit_message_with_provenance_async(
+            &self,
+            _message: Message,
+            _provenance: MessageWriteOrigin,
+        ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+        {
+            unreachable!("origin capture only handles display-state writes")
+        }
+    }
+
+    #[tokio::test]
+    async fn cron_origin_survives_read_handoff_until_writer_admission() {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let writer = Arc::new(OriginCaptureWriter {
+            sender: std::sync::Mutex::new(Some(sender)),
+        });
+        let supervisor = StateHandoffSupervisor::start(HandoffConfig::default(), writer)
+            .expect("supervisor starts");
+        let origin = MessageWriteOrigin::CronRun {
+            schedule_id: atm_storage::CronScheduleId::new(17),
+            generation: atm_storage::CronGeneration::FIRST,
+        };
+
+        supervisor
+            .try_push_with_origin(
+                scope(),
+                vec!["delayed-read".parse().expect("message key")],
+                None,
+                origin,
+            )
+            .expect("read transition enters the handoff queue");
+
+        assert_eq!(
+            receiver.await.expect("writer receives queued transition"),
+            origin
+        );
     }
 
     #[tokio::test]

@@ -196,7 +196,8 @@ mod acknowledgement;
 mod pipeline;
 
 pub use pipeline::{
-    PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
+    PreparedWrite, WriteOutcome, cron_run_message_write_origin,
+    prepare_write_with_cron_run_permit_async_runtime, prepare_write_with_preflight_async_runtime,
     prepare_write_with_runtime, prepare_write_with_tool_capability_async_runtime, send_mail,
     send_mail_with_runtime, write_current_herdr_terminal_escalation_with_runtime, write_mail,
     write_mail_with_runtime,

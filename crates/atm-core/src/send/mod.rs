@@ -20,6 +20,7 @@ use crate::schema::{
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, TaskId, TeamName};
+pub use atm_storage::MessageWriteOrigin;
 use atm_storage::{MoveTarget, TaskOp};
 
 pub(crate) mod async_persistence;
@@ -81,7 +82,8 @@ pub fn preflight_template_send(
 // The canonical write pipeline lives in `crate::write`; `send` re-exports the
 // public entry points so external paths are unchanged.
 pub use crate::write::{
-    PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
+    PreparedWrite, WriteOutcome, cron_run_message_write_origin,
+    prepare_write_with_cron_run_permit_async_runtime, prepare_write_with_preflight_async_runtime,
     prepare_write_with_runtime, prepare_write_with_tool_capability_async_runtime, send_mail,
     send_mail_with_runtime, write_current_herdr_terminal_escalation_with_runtime, write_mail,
     write_mail_with_runtime,

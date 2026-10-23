@@ -691,6 +691,24 @@ impl LocalServiceRuntime {
             .await
     }
 
+    /// Performs a generation-fenced acknowledgement source transition and
+    /// reply insertion on the same ordered writer transaction.
+    pub async fn acknowledge_message_atomically_with_origin_async(
+        &self,
+        source: atm_storage::AcknowledgementSource,
+        builder: std::sync::Arc<dyn atm_storage::AcknowledgementReplyBuilder>,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::AcknowledgementCommit>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio acknowledgement admission was not installed in this runtime",
+            )
+        })?;
+        store
+            .acknowledge_message_atomically_with_origin_async(source, builder, origin)
+            .await
+    }
+
     /// Returns the daemon-owned runtime view. A system daemon must not read a
     /// caller-supplied workspace path while handling an IPC or peer request.
     pub fn without_workspace_config(mut self) -> Self {

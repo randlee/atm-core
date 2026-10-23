@@ -1,8 +1,8 @@
 use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
 use crate::search_schema::{
-    InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
-    sync_template_projection,
+    InsertedMessageProjection, delete_message_projection, sync_inserted_message_projection,
+    sync_message_projection_by_key, sync_template_projection,
 };
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
 use atm_storage::TaskCloseOutcome;
@@ -44,6 +44,11 @@ pub(crate) enum WriteOp {
         mailbox: MailboxScope,
         message_ids: Vec<MessageKey>,
         seen_watermark: Option<IsoTimestamp>,
+        provenance: MessageWriteOrigin,
+    },
+    DeleteMessage {
+        key: MessageKey,
+        provenance: MessageWriteOrigin,
     },
     UpsertMessage {
         record: Box<Message>,
@@ -56,6 +61,7 @@ pub(crate) enum WriteOp {
     Acknowledge {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
+        provenance: MessageWriteOrigin,
     },
     TaskMove {
         team: TeamName,
@@ -63,6 +69,7 @@ pub(crate) enum WriteOp {
         actor: AgentName,
         target: MoveTarget,
         at: IsoTimestamp,
+        provenance: MessageWriteOrigin,
     },
     RegisterTemplate(Box<TemplateRegistration>),
     AdmitDecomposedMessage(Box<DecomposedMessageAdmission>),
@@ -82,12 +89,16 @@ impl std::fmt::Debug for WriteOp {
                 mailbox,
                 message_ids,
                 seen_watermark,
+                ..
             } => formatter
                 .debug_struct("ApplyReadDisplayState")
                 .field("mailbox", mailbox)
                 .field("message_ids", &message_ids.len())
                 .field("seen_watermark", seen_watermark)
                 .finish(),
+            Self::DeleteMessage { key, .. } => {
+                formatter.debug_tuple("DeleteMessage").field(key).finish()
+            }
             Self::UpsertMessage { .. } => formatter.write_str("UpsertMessage(..)"),
             Self::UpsertMessages(_) => formatter.write_str("UpsertMessages(..)"),
             Self::Acknowledge { source, .. } => formatter
@@ -134,6 +145,7 @@ impl std::fmt::Debug for WriteOp {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
     ReadDisplayStateApplied,
+    MessageDeleted,
     UpsertMessage {
         inserted: bool,
         /// Populated only when an immutable-key duplicate won the admission
@@ -180,14 +192,35 @@ pub(crate) fn execute(
             mailbox,
             message_ids,
             seen_watermark,
+            provenance,
         } => super::read_display_state::execute_read_display_state(
             mailbox,
             message_ids,
             *seen_watermark,
+            *provenance,
             connection,
             cache,
             target,
         ),
+        WriteOp::DeleteMessage { key, provenance } => {
+            super::message_admission::validate_cron_generation_fence(*provenance, connection)?;
+            delete_message_projection(connection, target, key.as_str())?;
+            connection
+                .execute(
+                    "DELETE FROM mail_message_states WHERE message_key = ?1;",
+                    params![key.as_ref()],
+                )
+                .map_err(|error| {
+                    sqlite_error(target, "failed to delete sqlite message state", error)
+                })?;
+            connection
+                .execute(
+                    "DELETE FROM mail_messages WHERE message_key = ?1;",
+                    params![key.as_ref()],
+                )
+                .map_err(|error| sqlite_error(target, "failed to delete sqlite message", error))?;
+            Ok(WriteOpResult::MessageDeleted)
+        }
         WriteOp::UpsertMessage { record, provenance } => {
             super::message_admission::execute_upsert_message(
                 record,
@@ -209,7 +242,12 @@ pub(crate) fn execute(
             }
             Ok(WriteOpResult::UpsertMessages)
         }
-        WriteOp::Acknowledge { source, builder } => {
+        WriteOp::Acknowledge {
+            source,
+            builder,
+            provenance,
+        } => {
+            super::message_admission::validate_cron_generation_fence(*provenance, connection)?;
             execute_acknowledgement(source, builder, connection, cache, target)
         }
         WriteOp::TaskMove {
@@ -218,10 +256,14 @@ pub(crate) fn execute(
             actor,
             target: target_pos,
             at,
-        } => super::task_ops::apply_task_move(
-            team, task_id, actor, target_pos, *at, connection, target,
-        )
-        .map(WriteOpResult::TaskMoved),
+            provenance,
+        } => {
+            super::message_admission::validate_cron_generation_fence(*provenance, connection)?;
+            super::task_ops::apply_task_move(
+                team, task_id, actor, target_pos, *at, connection, target,
+            )
+            .map(WriteOpResult::TaskMoved)
+        }
         WriteOp::RegisterTemplate(request) => {
             execute_template_registration(request, connection, target)
         }

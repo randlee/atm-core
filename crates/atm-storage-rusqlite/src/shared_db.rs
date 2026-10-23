@@ -422,6 +422,7 @@ impl SharedDb {
         mailbox: atm_storage::MailboxScope,
         message_ids: Vec<atm_storage::MessageKey>,
         seen_watermark: Option<atm_storage::IsoTimestamp>,
+        provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<(), AtmError> {
         match self
             .writer
@@ -429,12 +430,29 @@ impl SharedDb {
                 mailbox,
                 message_ids,
                 seen_watermark,
+                provenance,
             })
             .await?
         {
             WriteOpResult::ReadDisplayStateApplied => Ok(()),
             other => Err(AtmError::daemon_unavailable(format!(
                 "sqlite writer returned the wrong result for async read display state: {other:?}"
+            ))),
+        }
+    }
+
+    pub(crate) fn submit_delete_message(
+        &self,
+        key: atm_storage::MessageKey,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
+        match self
+            .writer
+            .submit(WriteOp::DeleteMessage { key, provenance })?
+        {
+            WriteOpResult::MessageDeleted => Ok(()),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for message deletion: {other:?}"
             ))),
         }
     }
@@ -465,6 +483,7 @@ impl SharedDb {
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::MessageDeleted
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -483,12 +502,14 @@ impl SharedDb {
         source: AcknowledgementSource,
         builder: std::sync::Arc<dyn AcknowledgementReplyBuilder>,
     ) -> Result<AcknowledgementCommit, AtmError> {
-        match self
-            .writer
-            .submit(WriteOp::Acknowledge { source, builder })?
-        {
+        match self.writer.submit(WriteOp::Acknowledge {
+            source,
+            builder,
+            provenance: atm_storage::MessageWriteOrigin::Local,
+        })? {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::MessageDeleted
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -506,14 +527,20 @@ impl SharedDb {
         &self,
         source: AcknowledgementSource,
         builder: std::sync::Arc<dyn AcknowledgementReplyBuilder>,
+        provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<atm_storage::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
         let committed = self
             .writer
-            .submit_committed_async(WriteOp::Acknowledge { source, builder })
+            .submit_committed_async(WriteOp::Acknowledge {
+                source,
+                builder,
+                provenance,
+            })
             .await?;
         Ok(committed.and_then(|result| match result {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::MessageDeleted
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)

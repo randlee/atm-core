@@ -29,8 +29,8 @@ use atm_core::protocol::{
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
-    NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_preflight_async_runtime,
-    prepare_write_with_tool_capability_async_runtime,
+    NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_cron_run_permit_async_runtime,
+    prepare_write_with_preflight_async_runtime, prepare_write_with_tool_capability_async_runtime,
 };
 use atm_runtime::{
     AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext, PeerPortResolver,
@@ -87,6 +87,103 @@ pub struct StorageAndNudgeRouter {
 }
 
 impl StorageAndNudgeRouter {
+    pub(crate) async fn dispatch_with_cron_permit(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+        permit: &atm_core::boundary::CronRunPermit,
+        team: &atm_core::types::TeamName,
+        phase: &atm_core::boundary::PhaseId,
+    ) -> Result<ApiResponse, AtmError> {
+        self.admit_cron_run_permit(permit, team, phase, deadline)
+            .await?;
+        match request {
+            ApiRequest::Write(request) => {
+                self.write_unhooked_with_cron_permit(
+                    *request,
+                    ingress,
+                    deadline,
+                    request_id,
+                    Some(permit),
+                )
+                .await
+            }
+            ApiRequest::TaskMove(request) => {
+                self.task_move_with_cron_permit(request, ingress, deadline, Some(permit))
+                    .await
+            }
+            ApiRequest::Clear(query) => {
+                let origin = atm_core::send::cron_run_message_write_origin(permit);
+                self.clear_messages_with_origin(query, deadline, origin)
+                    .await
+            }
+            ApiRequest::Messages(request) => match *request {
+                atm_core::api::MessageCollectionRequest::Receive(query) => {
+                    self.receive_messages_with_origin(
+                        query,
+                        deadline,
+                        atm_core::send::cron_run_message_write_origin(permit),
+                    )
+                    .await
+                }
+                request => {
+                    self.dispatch_with_request_id(
+                        ApiRequest::Messages(Box::new(request)),
+                        ingress,
+                        deadline,
+                        request_id,
+                    )
+                    .await
+                }
+            },
+            request => {
+                self.dispatch_with_request_id(request, ingress, deadline, request_id)
+                    .await
+            }
+        }
+    }
+
+    pub(crate) async fn admit_cron_run_permit(
+        &self,
+        permit: &atm_core::boundary::CronRunPermit,
+        team: &atm_core::types::TeamName,
+        phase: &atm_core::boundary::PhaseId,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
+        if deadline.expired() {
+            return Err(AtmError::daemon_unavailable(
+                "cron action deadline expired before permit admission",
+            ));
+        }
+        let store = self.service_runtime.cron_schedule_store()?;
+        let schedule_id = permit.schedule_id();
+        let generation = permit.generation();
+        let team = team.clone();
+        let phase = phase.clone();
+        self.control_path_sync_bridge
+            .run(deadline, move || {
+                let schedules = store.active_all()?;
+                let admitted = schedules.iter().any(|schedule| {
+                    schedule.active
+                        && schedule.id == schedule_id
+                        && schedule.generation == generation
+                        && schedule.team == team
+                        && schedule.phase == phase
+                });
+                if admitted {
+                    Ok(())
+                } else {
+                    Err(AtmError::validation_with_recovery(
+                        "cron action permit is stale or its schedule is no longer active",
+                        "allow the current cron run to stop and let the scheduler start a fresh generation",
+                    ))
+                }
+            })
+            .await
+    }
+
     pub(crate) fn dispatch(
         &self,
         request: ApiRequest,
@@ -331,31 +428,43 @@ impl StorageAndNudgeRouter {
         request: atm_core::send::WriteRequest,
         deadline: RequestDeadline,
         tool_capability: Option<atm_core::boundary::ToolSenderCapability>,
+        cron_permit: Option<&atm_core::boundary::CronRunPermit>,
     ) -> Result<CommittedWrite, AtmError> {
         let source_preflight = self
             .write_source_preflight_bridge
             .preflight(deadline, self.service_runtime.clone(), request.clone())
             .await?;
-        let execution = match tool_capability {
-            Some(capability) => {
-                prepare_write_with_tool_capability_async_runtime(
-                    request,
-                    capability,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    source_preflight,
-                )
-                .await?
+        let execution = if let Some(permit) = cron_permit {
+            if tool_capability.is_some() {
+                return Err(AtmError::validation(
+                    "cron action cannot combine a cron permit with tool sender admission",
+                ));
             }
-            None => {
-                prepare_write_with_preflight_async_runtime(
-                    request,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    source_preflight,
-                )
-                .await?
-            }
+            prepare_write_with_cron_run_permit_async_runtime(
+                request,
+                permit,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                source_preflight,
+            )
+            .await?
+        } else if let Some(capability) = tool_capability {
+            prepare_write_with_tool_capability_async_runtime(
+                request,
+                capability,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                source_preflight,
+            )
+            .await?
+        } else {
+            prepare_write_with_preflight_async_runtime(
+                request,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                source_preflight,
+            )
+            .await?
         };
         crate::task_telemetry::project_task_events(&self.task_telemetry, &execution.task_events);
         let mut prepared = execution.operation?;
@@ -578,15 +687,26 @@ impl StorageAndNudgeRouter {
         query: ClearQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
+        self.clear_messages_with_origin(query, deadline, atm_core::send::MessageWriteOrigin::Local)
+            .await
+    }
+
+    async fn clear_messages_with_origin(
+        &self,
+        query: ClearQuery,
+        deadline: RequestDeadline,
+        origin: atm_core::send::MessageWriteOrigin,
+    ) -> Result<ApiResponse, AtmError> {
         let runtime = self.service_runtime.clone();
         let observability = Arc::clone(&self.observability);
         let home = self.daemon_home.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
-                atm_core::clear::clear_mail_with_runtime(
+                atm_core::clear::clear_mail_with_origin(
                     query.with_daemon_paths(home),
                     observability.as_ref(),
                     &runtime,
+                    origin,
                 )
                 .map(ResponseEnvelope::Clear)
                 .map(ApiResponse::new)
@@ -600,6 +720,17 @@ impl StorageAndNudgeRouter {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
+        self.task_move_with_cron_permit(request, ingress, deadline, None)
+            .await
+    }
+
+    async fn task_move_with_cron_permit(
+        &self,
+        request: atm_core::protocol::TaskMoveRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        cron_permit: Option<&atm_core::boundary::CronRunPermit>,
+    ) -> Result<ApiResponse, AtmError> {
         if ingress != AuthenticatedIngress::Local {
             return Err(AtmError::validation(
                 "task move is available only through authenticated local HTTP adapters",
@@ -607,15 +738,19 @@ impl StorageAndNudgeRouter {
         }
         let runtime = self.service_runtime.clone();
         let task_id = request.task_id.clone();
+        let origin = cron_permit
+            .map(atm_core::send::cron_run_message_write_origin)
+            .unwrap_or_default();
         let committed = self
             .control_path_sync_bridge
             .run(deadline, move || {
-                runtime.task_store()?.move_task(
+                runtime.task_store()?.move_task_with_origin(
                     &request.caller_team,
                     &request.task_id,
                     &request.caller_identity,
                     &request.target,
                     atm_core::types::IsoTimestamp::now(),
+                    origin,
                 )
             })
             .await?;
@@ -1029,11 +1164,22 @@ impl StorageAndNudgeRouter {
     /// `NormalTaskCommands` and an un-hooked router both call.
     pub(crate) fn write_unhooked(
         &self,
-        mut request: atm_core::send::WriteRequest,
+        request: atm_core::send::WriteRequest,
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.write_unhooked_with_cron_permit(request, ingress, deadline, request_id, None)
+    }
+
+    fn write_unhooked_with_cron_permit<'a>(
+        &'a self,
+        mut request: atm_core::send::WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+        cron_permit: Option<&'a atm_core::boundary::CronRunPermit>,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + 'a>> {
         Box::pin(async move {
             if deadline.expired() {
                 return Err(AtmError::daemon_unavailable(
@@ -1045,17 +1191,23 @@ impl StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
-            if let Some(outcome) = self
-                .dispatch_raw_host_qualified_local_write(&request, &ingress, deadline, request_id)
-                .await?
+            if cron_permit.is_none()
+                && let Some(outcome) = self
+                    .dispatch_raw_host_qualified_local_write(
+                        &request, &ingress, deadline, request_id,
+                    )
+                    .await?
             {
                 return Ok(ApiResponse::new(write_response(outcome)));
             }
-            let tool_capability = self
-                .admit_tool_write(&request, ingress.clone(), deadline)
-                .await?;
+            let tool_capability = if cron_permit.is_some() {
+                None
+            } else {
+                self.admit_tool_write(&request, ingress.clone(), deadline)
+                    .await?
+            };
             let mut committed = self
-                .commit_write(request, deadline, tool_capability)
+                .commit_write(request, deadline, tool_capability, cron_permit)
                 .await?;
             // ACK replies may acquire their host-qualified recipient while the
             // write is prepared.  These must be forwarded after their local

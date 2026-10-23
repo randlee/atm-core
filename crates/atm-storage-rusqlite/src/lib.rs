@@ -97,7 +97,6 @@ pub use diagnostic_timeline::{
 use graft_receiver_endpoint_store::SqliteGraftReceiverEndpointStore;
 use hook_registration_store::hook_registration_store;
 use rusqlite::{Connection, OptionalExtension, params};
-use search_schema::delete_message_projection;
 use search_store::{async_search_store, search_store};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
@@ -634,25 +633,20 @@ impl MessageStore for SqliteMessageStore {
     }
 
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError> {
-        self.db.with_transaction(|transaction| {
-            delete_message_projection(transaction, self.db.target(), key.as_str())?;
-            transaction
-                .execute(
-                    "DELETE FROM mail_message_states WHERE message_key = ?1;",
-                    params![key.as_ref()],
-                )
-                .map_err(|error| {
-                    self.db
-                        .error("failed to delete sqlite message state", error)
-                })?;
-            transaction
-                .execute(
-                    "DELETE FROM mail_messages WHERE message_key = ?1;",
-                    params![key.as_ref()],
-                )
-                .map_err(|error| self.db.error("failed to delete sqlite message", error))?;
-            Ok(())
-        })
+        self.delete_message_with_origin(key, atm_storage::MessageWriteOrigin::Local)
+    }
+
+    fn delete_message_with_origin(
+        &self,
+        key: &MessageKey,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
+        if matches!(origin, atm_storage::MessageWriteOrigin::Peer) {
+            return Err(AtmError::validation(
+                "peer provenance cannot delete local messages",
+            ));
+        }
+        self.db.submit_delete_message(key.clone(), origin)
     }
 }
 
@@ -664,8 +658,29 @@ impl AsyncMessageStore for SqliteMessageStore {
         message_ids: Vec<MessageKey>,
         seen_watermark: Option<IsoTimestamp>,
     ) -> Result<(), AtmError> {
+        self.apply_read_display_state_with_origin_async(
+            scope,
+            message_ids,
+            seen_watermark,
+            atm_storage::MessageWriteOrigin::Local,
+        )
+        .await
+    }
+
+    async fn apply_read_display_state_with_origin_async(
+        &self,
+        scope: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        seen_watermark: Option<IsoTimestamp>,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
+        if matches!(origin, atm_storage::MessageWriteOrigin::Peer) {
+            return Err(AtmError::validation(
+                "peer provenance cannot update local mailbox display state",
+            ));
+        }
         self.db
-            .submit_read_display_state_async(scope, message_ids, seen_watermark)
+            .submit_read_display_state_async(scope, message_ids, seen_watermark, origin)
             .await
     }
 
@@ -702,7 +717,25 @@ impl AsyncMessageStore for SqliteMessageStore {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     ) -> Result<atm_storage::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
-        self.db.submit_acknowledgement_async(source, builder).await
+        self.db
+            .submit_acknowledgement_async(source, builder, atm_storage::MessageWriteOrigin::Local)
+            .await
+    }
+
+    async fn acknowledge_message_atomically_with_origin_async(
+        &self,
+        source: AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
+        if matches!(origin, atm_storage::MessageWriteOrigin::Peer) {
+            return Err(AtmError::validation(
+                "peer provenance cannot acknowledge local messages",
+            ));
+        }
+        self.db
+            .submit_acknowledgement_async(source, builder, origin)
+            .await
     }
 }
 
@@ -1304,6 +1337,7 @@ mod tests {
                 actor: "lead".parse().expect("actor"),
                 target,
                 at: IsoTimestamp::now(),
+                provenance: MessageWriteOrigin::Local,
             })? {
             crate::writer::WriteOpResult::TaskMoved(record) => Ok(record.to),
             _ => panic!("wrong writer result"),

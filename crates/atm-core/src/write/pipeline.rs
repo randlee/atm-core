@@ -686,6 +686,7 @@ pub async fn prepare_write_with_preflight_async_runtime(
         runtime,
         source_preflight,
         None,
+        None,
     )
     .await
 }
@@ -707,6 +708,39 @@ pub async fn prepare_write_with_tool_capability_async_runtime(
         runtime,
         source_preflight,
         Some(capability),
+        None,
+    )
+    .await
+}
+
+/// Builds the internal storage provenance only from the scheduler-owned
+/// capability. Callers cannot turn caller-supplied schedule ids into a fence.
+#[must_use]
+pub fn cron_run_message_write_origin(
+    permit: &crate::boundary::CronRunPermit,
+) -> atm_storage::MessageWriteOrigin {
+    atm_storage::MessageWriteOrigin::CronRun {
+        schedule_id: permit.schedule_id(),
+        generation: permit.generation(),
+    }
+}
+
+/// Persists a cron action through canonical admission with the opaque
+/// scheduler permit retained until the storage provenance is constructed.
+pub async fn prepare_write_with_cron_run_permit_async_runtime(
+    request: WriteRequest,
+    permit: &crate::boundary::CronRunPermit,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    source_preflight: WriteSourcePreflight,
+) -> Result<WriteExecution, AtmError> {
+    prepare_write_with_admission_async_runtime(
+        request,
+        observability,
+        runtime,
+        source_preflight,
+        None,
+        Some((permit.schedule_id(), permit.generation())),
     )
     .await
 }
@@ -717,7 +751,13 @@ async fn prepare_write_with_admission_async_runtime(
     runtime: &LocalServiceRuntime,
     source_preflight: WriteSourcePreflight,
     tool_capability: Option<crate::boundary::ToolSenderCapability>,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<WriteExecution, AtmError> {
+    if tool_capability.is_some() && cron_run_fence.is_some() {
+        return Err(AtmError::validation(
+            "tool sender admission cannot be combined with a cron run permit",
+        ));
+    }
     if tool_capability.is_some() && request.acknowledges_message_id.is_some() {
         return Err(AtmError::validation(
             "virtual tool sender admission cannot authorize acknowledgement writes",
@@ -753,6 +793,7 @@ async fn prepare_write_with_admission_async_runtime(
             None,
             source_preflight,
             tool_capability,
+            cron_run_fence,
         )
         .await;
     }
@@ -764,10 +805,18 @@ async fn prepare_write_with_admission_async_runtime(
             None,
             source_preflight,
             tool_capability,
+            cron_run_fence,
         )
         .await;
     }
-    let admitted = admit_acknowledgement_write_async(request, runtime).await?;
+    let origin = cron_run_fence.map_or(
+        atm_storage::MessageWriteOrigin::Local,
+        |(schedule_id, generation)| atm_storage::MessageWriteOrigin::CronRun {
+            schedule_id,
+            generation,
+        },
+    );
+    let admitted = admit_acknowledgement_write_async(request, runtime, origin).await?;
     let task_events = admitted.task_events;
     match admitted.operation {
         Ok(acknowledgement) => {
@@ -1077,6 +1126,7 @@ async fn prepare_persisted_write_async(
     acknowledgement: Option<ResolvedAcknowledgement>,
     source_preflight: WriteSourcePreflight,
     tool_capability: Option<crate::boundary::ToolSenderCapability>,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<WriteExecution, AtmError> {
     let mut context = crate::send::prepare_send_context_with_tool_capability(
         runtime,
@@ -1116,6 +1166,7 @@ async fn prepare_persisted_write_async(
         requires_ack,
         task_id.clone(),
         verified_template.as_ref(),
+        cron_run_fence,
     )
     .await?;
     let task_events = std::mem::take(&mut persistence.task_events);
