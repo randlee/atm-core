@@ -229,6 +229,15 @@ AY.3). `STORAGE_SCHEMA_VERSION` is `2.1.0` in
 
 ### D6. Storage-schema approval record
 
+- **2026-10-23 — Phase BK.10 signed tool-sender persistence:** additive
+  `tool_sender_install_receipt` and `tool_sender_runtime_binding` tables retain
+  exact operation receipts beside the existing nonce ledger. `CREATE TABLE IF
+  NOT EXISTS` keeps migration repeatable, and a pre-BK.10 binary ignores the
+  additional tables. Existing registration and historical mail rows are not
+  rewritten or deleted. Installer and runtime signatures use Ed25519 over the
+  ADR-066 canonical frames; this records completion of that algorithm choice
+  without changing the storage-neutral `atm-storage` contract.
+
 - **2026-10-18 — Phase bk (approved):** Fenix, as Phase bk lead, approved
   this additive schema change on PR #1877 (`docs/plans/phase-bk/design.md`
   §4, ADR-068 D5, ADR-069 D1). `hook_registration` (primary key

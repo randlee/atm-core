@@ -54,6 +54,7 @@ mod writer;
 
 pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};
 pub use schema_version::STORAGE_SCHEMA_VERSION;
+pub use tool_sender_registry::{ToolSenderRegistryConfig, TrustedToolInstallerKey};
 
 pub use crate::analyst_query::open_analyst_query_store;
 #[cfg(feature = "test-support")]
@@ -735,6 +736,7 @@ impl std::fmt::Debug for SqliteStorageBackend {
 pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
     read_pool_config: reader_pool::SharedReadPoolConfig,
+    tool_sender_registry_config: Option<ToolSenderRegistryConfig>,
     observability: Arc<dyn SqliteObservability>,
     timeline_observer: Option<Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>>,
 }
@@ -744,6 +746,7 @@ impl Default for SqliteStorageFactory {
         Self {
             database_path: None,
             read_pool_config: reader_pool::SharedReadPoolConfig::default(),
+            tool_sender_registry_config: None,
             observability: Arc::new(observability::PassiveSqliteObservability),
             timeline_observer: None,
         }
@@ -755,6 +758,7 @@ impl Clone for SqliteStorageFactory {
         Self {
             database_path: self.database_path.clone(),
             read_pool_config: self.read_pool_config,
+            tool_sender_registry_config: self.tool_sender_registry_config.clone(),
             observability: Arc::clone(&self.observability),
             timeline_observer: self.timeline_observer.as_ref().map(Arc::clone),
         }
@@ -789,6 +793,13 @@ impl SqliteStorageFactory {
     /// composition root. Tests retain the null adapter by default.
     pub fn with_observability(mut self, observability: Arc<dyn SqliteObservability>) -> Self {
         self.observability = observability;
+        self
+    }
+
+    /// Supplies the local, adapter-owned trust root for signed virtual senders.
+    /// Without it, signed registration and runtime admission fail closed.
+    pub fn with_tool_sender_registry_config(mut self, config: ToolSenderRegistryConfig) -> Self {
+        self.tool_sender_registry_config = Some(config);
         self
     }
 
@@ -833,6 +844,7 @@ impl StorageFactory for SqliteStorageFactory {
                 self.database_path(durable_state_root),
                 Arc::clone(&self.observability),
                 self.read_pool_config,
+                self.tool_sender_registry_config.clone(),
             )?,
         );
         if let Some(observer) = &self.timeline_observer {
@@ -902,6 +914,7 @@ impl SqliteStorageBackend {
             path,
             observability,
             reader_pool::SharedReadPoolConfig::default(),
+            None,
         )
     }
 
@@ -909,6 +922,7 @@ impl SqliteStorageBackend {
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
         read_pool_config: reader_pool::SharedReadPoolConfig,
+        tool_sender_registry_config: Option<ToolSenderRegistryConfig>,
     ) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_with_reader_lanes(
             path,
@@ -929,7 +943,10 @@ impl SqliteStorageBackend {
             hook_registration_store: hook_registration_store(Arc::clone(&db)),
             cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
             cron_transition_store: cron_transition_store(Arc::clone(&db)),
-            tool_sender_registry: tool_sender_registry(Arc::clone(&db)),
+            tool_sender_registry: tool_sender_registry(
+                Arc::clone(&db),
+                tool_sender_registry_config,
+            ),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -959,7 +976,7 @@ impl SqliteStorageBackend {
             hook_registration_store: hook_registration_store(Arc::clone(&db)),
             cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
             cron_transition_store: cron_transition_store(Arc::clone(&db)),
-            tool_sender_registry: tool_sender_registry(Arc::clone(&db)),
+            tool_sender_registry: tool_sender_registry(Arc::clone(&db), None),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),

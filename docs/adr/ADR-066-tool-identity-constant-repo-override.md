@@ -112,3 +112,15 @@ tool registrations; BK-11 owns the installer contract documentation and
 deterministic fixtures; BK-15 owns installer validation, protected
 trust-root loading, and production daemon composition of the authenticated
 adapter.
+
+### D7. BK-10 local verifier completion (2026-10-23)
+
+The signed installer and runtime operations use Ed25519 over the canonical
+bytes above. Signatures and public keys use strict padded standard base64.
+The SQLite adapter receives an explicit local `ToolSenderRegistryConfig`
+containing its `HostName`, trusted installer keys, and per-installer sender
+allowlists. The configuration is supplied by the storage composition root;
+it is never derived from a request, environment variable, repository file, or
+hook payload. An absent configuration fails closed. This completes the
+algorithm and adapter trust-input details left unspecified by the BK-9 value
+contract; it does not add a public verifier trait or expand runtime minting.

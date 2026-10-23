@@ -50,6 +50,14 @@ CREATE TABLE IF NOT EXISTS tool_sender_nonce_ledger (
     result_digest TEXT NULL,
     consumed_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS tool_sender_install_receipt (
+    nonce TEXT PRIMARY KEY,
+    result_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tool_sender_runtime_binding (
+    nonce TEXT PRIMARY KEY,
+    result_json TEXT NOT NULL
+);
 "#;
 
 pub(crate) const CRON_DELIVERY_INTENT_DDL: &str = r#"

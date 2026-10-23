@@ -20,6 +20,7 @@ const INSPECTION_TRAIT: &str = "RegisteredToolSenderIssuer";
 const DOUBLE_IMPLEMENTATION: &str = "crates/atm-storage/src/testing/tool_sender_registry.rs";
 const INSPECTION_TEST_IMPLEMENTATION: &str =
     "crates/atm-storage/tests/ui/registered_sender_issuer_fixture.rs";
+const SQLITE_IMPLEMENTATION: &str = "crates/atm-storage-rusqlite/src/tool_sender_registry.rs";
 
 #[derive(Deserialize)]
 struct BoundaryManifest {
@@ -63,7 +64,7 @@ fn manifest_declares_the_future_sqlite_adapter_and_current_test_double() {
 }
 
 #[test]
-fn only_the_documented_issuer_implements_the_seam_before_sqlite_lands() {
+fn only_the_documented_issuer_implements_the_seam_after_sqlite_lands() {
     let root = root();
     let actual = rust_sources(&root.join("crates"))
         .into_iter()
@@ -72,8 +73,11 @@ fn only_the_documented_issuer_implements_the_seam_before_sqlite_lands() {
         .collect::<BTreeSet<_>>();
     assert_eq!(
         actual,
-        BTreeSet::from([DOUBLE_IMPLEMENTATION.to_owned()]),
-        "a resolve result cannot gain an admission issuer outside the documented adapter seam"
+        BTreeSet::from([
+            DOUBLE_IMPLEMENTATION.to_owned(),
+            SQLITE_IMPLEMENTATION.to_owned(),
+        ]),
+        "a resolve result cannot gain an admission issuer outside the documented SQLite adapter and deterministic double"
     );
 }
 

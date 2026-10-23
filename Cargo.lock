@@ -449,10 +449,13 @@ version = "1.6.5"
 dependencies = [
  "async-trait",
  "atm-storage",
+ "base64",
  "chrono",
+ "ring",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
  "tracing",
