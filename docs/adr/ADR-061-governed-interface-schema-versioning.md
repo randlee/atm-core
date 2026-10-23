@@ -326,11 +326,18 @@ AY.3). `STORAGE_SCHEMA_VERSION` is `2.1.0` in
   grammar is unchanged. Duplicate-key rejection is a separately reviewed
   validation tightening and requires an explicit coexistence decision before
   release if old modules can emit duplicates.
-- **HTTP/peer, no version bump in BK-9:** installer/runtime proof DTOs and the
-  local-only `/v1/atm/tool-senders` endpoint are frozen for BK-14. The HTTP
-  version, both OpenAPI documents, and old-consumer fixture change only when
-  that wire surface is implemented. A future optional peer attestation field
-  needs its own minor version record and prior-consumer proof.
+- **HTTP/peer, planned additive MINOR:** BK-9 freezes the installer/runtime
+  proof DTOs and local-only `/v1/atm/tool-senders` contract in both OpenAPI
+  documents. The endpoint and optional `WriteRequest.tool_runtime_proof` and
+  `WriteRequest.tool_sender_attestation` fields are additive and classified as
+  HTTP API **1.17.0 MINOR**, targeted for BK-14 implementation. This contract
+  record does not claim those wire elements are available in the shipped
+  **1.16.0** API: `HTTP_API_VERSION` and the OpenAPI `info.version` remain
+  1.16.0 on the BK-9 contract layer. BK-14 must ship the 1.17.0 version bump,
+  implementation, and a pinned 1.16 previous-consumer proof together. Ordinary
+  1.16 writes omit both proof fields; virtual plug-in writes require a runtime
+  proof, and cross-host virtual writes require an origin-daemon attestation
+  once the 1.17.0 wire is implemented.
 - **Breaking cutover:** retirement of physical `tool` credentials and ingress
   rejection of newly supplied bare `@tool` addresses require recorded approval,
   inventory-backed coexistence, and a migration window; this record does not

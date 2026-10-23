@@ -227,9 +227,11 @@ second application handler or a browser-specific persistence path.
 
 ### BK-9 reserved endpoint contract
 
-BK-9 freezes, but does not yet expose, local-only `POST`/`DELETE`
-`/v1/atm/tool-senders`. It accepts authenticated installer envelopes only;
-peer ingress is refused. The associated runtime proof and peer attestation
-remain internal DTOs until BK-14 publishes an additive HTTP version with both
-OpenAPI documents and a previous-consumer fixture. The current HTTP baseline
-therefore remains unchanged.
+BK-9 freezes the local-only `POST`/`DELETE` `/v1/atm/tool-senders` endpoint
+and its signed installer, runtime-proof, and peer-attestation schemas in both
+OpenAPI documents. Installer operations are signed register/rotate requests
+for `POST` and signed unregister requests for `DELETE`; peer ingress is
+refused. The endpoint and optional message-proof fields are additive HTTP API
+1.17.0 MINOR, targeted for BK-14 implementation. They are a planned contract,
+not available on the current 1.16.0 wire: BK-14 owns the version bump,
+endpoint execution, and pinned 1.16 previous-consumer fixture.
