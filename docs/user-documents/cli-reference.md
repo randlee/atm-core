@@ -705,6 +705,7 @@ Usage: atm queue [OPTIONS] [TO] [MESSAGE]
 | `--host` | `` | `HOST` | no | `` |  | Route this send through the explicitly named host.  Supplying this flag allows a same-identity send to be an intentional physical delivery test (for example, `--host localhost` or a same-host IP). This is wire-equivalent to a host-qualified recipient address. When both forms are supplied, they must name the same host. |
 | `--chat-id` | `` | `CHAT_ID` | no | `` |  | Restrict the send to this caller chat ID |
 | `--as` | `` | `ACTOR` | no | `` |  | Act as this member instead of the environment identity |
+| `--from` | `` | `AGENT@TEAM` | no | `` |  | Assert the authenticated caller as a full ordinary agent@team address. This does not select or grant sender identity |
 | `--file` | `` | `FILE` | no | `` |  | Read the message body from this file |
 | `--stdin` | `` | `STDIN` | no | `false` |  | Read the message body from standard input |
 | `--template` | `` | `PATH` | no | `` |  | Render and send a locally loaded template through the daemon-owned template admission path |
@@ -833,6 +834,7 @@ Usage: atm send [OPTIONS] [TO] [MESSAGE]
 | `--host` | `` | `HOST` | no | `` |  | Route this send through the explicitly named host.  Supplying this flag allows a same-identity send to be an intentional physical delivery test (for example, `--host localhost` or a same-host IP). This is wire-equivalent to a host-qualified recipient address. When both forms are supplied, they must name the same host. |
 | `--chat-id` | `` | `CHAT_ID` | no | `` |  | Restrict the send to this caller chat ID |
 | `--as` | `` | `ACTOR` | no | `` |  | Act as this member instead of the environment identity |
+| `--from` | `` | `AGENT@TEAM` | no | `` |  | Assert the authenticated caller as a full ordinary agent@team address. This does not select or grant sender identity |
 | `--file` | `` | `FILE` | no | `` |  | Read the message body from this file |
 | `--stdin` | `` | `STDIN` | no | `false` |  | Read the message body from standard input |
 | `--template` | `` | `PATH` | no | `` |  | Render and send a locally loaded template through the daemon-owned template admission path |
