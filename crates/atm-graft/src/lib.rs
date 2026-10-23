@@ -10,7 +10,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::api::{ApiRequest, DaemonApiClient};
-use atm_core::boundary::{NudgeKind, PostSendHookEvent};
+use atm_core::boundary::{CronNoticeKey, DeliveryReceipt, NudgeKind, PostSendHookEvent};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
@@ -68,7 +68,7 @@ pub struct SessionSnapshot {
 pub mod prelude {
     pub use super::{
         GraftClient, GraftObservability, GraftSession, GraftSessionOptions, GraftSessionState,
-        HostNudgeInjector, NoopGraftObservability, SessionSnapshot,
+        HostCronNudge, HostNudgeInjector, NoopGraftObservability, SessionSnapshot,
     };
 }
 
@@ -85,6 +85,18 @@ pub struct HostNudge {
     pub notice_text: String,
 }
 
+/// A cron lifecycle notice delivered using its committed transition key.
+///
+/// Hosts should use `key` to deduplicate replays. The Graft receiver reports
+/// acceptance only when the host returns an explicit receipt identifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostCronNudge {
+    pub key: CronNoticeKey,
+    pub team: TeamName,
+    pub recipient: AgentName,
+    pub body: String,
+}
+
 /// Host-owned bridge for automatic between-tool-call nudge injection.
 pub trait HostNudgeInjector: Send + Sync {
     /// # Errors
@@ -92,6 +104,16 @@ pub trait HostNudgeInjector: Send + Sync {
     /// Returns [`AtmError`] when the host cannot safely inject the nudge into
     /// its between-tool-call context flow.
     fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError>;
+
+    /// Inject a committed cron lifecycle notice and return a durable receipt.
+    ///
+    /// The default is intentionally unknown: legacy void callbacks cannot
+    /// prove keyed acceptance and must not be reported as delivered.
+    fn inject_cron_nudge(&self, _nudge: &HostCronNudge) -> DeliveryReceipt {
+        atm_core::graft::unknown_cron_lifecycle_receipt(
+            "host does not support keyed cron lifecycle receipts",
+        )
+    }
 }
 
 /// ATM-owned graft observability boundary supplied by the embedding host.
