@@ -10,7 +10,6 @@ use atm_storage::{
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
 use chrono::{TimeZone, Utc};
-use tempfile::TempDir;
 
 fn stamp(day: u32) -> IsoTimestamp {
     IsoTimestamp::from_datetime(
@@ -21,27 +20,44 @@ fn stamp(day: u32) -> IsoTimestamp {
 }
 
 struct Harness {
-    _directory: TempDir,
-    backend: SqliteStorageBackend,
+    db_path: PathBuf,
+    backend: TestBackend,
     team: TeamName,
     phase: PhaseId,
 }
 
+struct TestBackend(Option<SqliteStorageBackend>);
+
+impl std::ops::Deref for TestBackend {
+    type Target = SqliteStorageBackend;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref().expect("backend remains open")
+    }
+}
+
 impl Harness {
     fn new() -> Self {
-        let directory = tempfile::tempdir().expect("tempdir");
-        let backend =
-            SqliteStorageBackend::new(directory.path().join("mail.db")).expect("sqlite backend");
+        let db_path = std::env::temp_dir().join(format!(
+            "atm-cron-message-admission-{}-{}.db",
+            std::process::id(),
+            AtmMessageId::new()
+        ));
+        let backend = SqliteStorageBackend::new(&db_path).expect("sqlite backend");
         Self {
-            _directory: directory,
-            backend,
+            db_path,
+            backend: TestBackend(Some(backend)),
             team: "test-team".parse().expect("team"),
             phase: PhaseId::parse("bk").expect("phase"),
         }
     }
 
+    fn backend(&self) -> &SqliteStorageBackend {
+        &self.backend
+    }
+
     fn start_schedule(&self) -> atm_storage::CronSchedule {
-        self.backend
+        self.backend()
             .cron_schedule_store()
             .start(NewCronSchedule {
                 team: self.team.clone(),
@@ -101,10 +117,21 @@ impl Harness {
     }
 }
 
+impl Drop for Harness {
+    fn drop(&mut self) {
+        drop(self.backend.0.take());
+        for suffix in ["", "-wal", "-shm"] {
+            let mut path = self.db_path.as_os_str().to_os_string();
+            path.push(suffix);
+            let _ = std::fs::remove_file(PathBuf::from(path));
+        }
+    }
+}
+
 #[test]
 fn active_cron_generation_admits_once_and_rejects_duplicate_after_stop_or_restart() {
     let h = Harness::new();
-    let schedules = h.backend.cron_schedule_store();
+    let schedules = h.backend().cron_schedule_store();
     let first = h.start_schedule();
     let message = h.message("BK-CRON-1");
     let origin = Harness::cron_origin(first.id, first.generation);
@@ -118,7 +145,7 @@ fn active_cron_generation_admits_once_and_rejects_duplicate_after_stop_or_restar
         .expect("task admission");
     assert!(inserted.existing.is_none());
     assert!(
-        h.backend
+        h.backend()
             .task_store()
             .load_task(&h.team, &"BK-CRON-1".parse().unwrap())
             .expect("cron local task effect")
@@ -184,7 +211,7 @@ fn active_cron_generation_admits_once_and_rejects_duplicate_after_stop_or_restar
             .contains("stale or its schedule is no longer active")
     );
 
-    h.backend
+    h.backend()
         .message_store()
         .admit_message_with_provenance(
             &h.message("BK-CRON-3"),
@@ -199,14 +226,14 @@ fn active_cron_generation_admits_once_and_rejects_duplicate_after_stop_or_restar
 fn local_and_peer_message_task_effects_remain_distinct() {
     let h = Harness::new();
     let local = h.message("BK-LOCAL");
-    h.backend
+    h.backend()
         .message_store()
         .admit_message_with_provenance(&local, MessageWriteOrigin::Local)
         .expect("local message")
         .operation
         .expect("local task effect");
     assert!(
-        h.backend
+        h.backend()
             .task_store()
             .load_task(&h.team, &"BK-LOCAL".parse().unwrap())
             .expect("load local task")
@@ -214,14 +241,14 @@ fn local_and_peer_message_task_effects_remain_distinct() {
     );
 
     let peer = h.message("BK-PEER");
-    h.backend
+    h.backend()
         .message_store()
         .admit_message_with_provenance(&peer, MessageWriteOrigin::Peer)
         .expect("peer message")
         .operation
         .expect("peer does not apply task effect");
     assert!(
-        h.backend
+        h.backend()
             .task_store()
             .load_task(&h.team, &"BK-PEER".parse().unwrap())
             .expect("load peer task")
@@ -235,17 +262,17 @@ fn task_move_generation_fence_is_checked_inside_writer_before_mutation() {
     let first_task = h.message("BK-MOVE-1");
     let second_task = h.message("BK-MOVE-2");
     for message in [&first_task, &second_task] {
-        h.backend
+        h.backend()
             .message_store()
             .admit_message_with_provenance(message, MessageWriteOrigin::Local)
             .expect("local task assignment")
             .operation
             .expect("task assigned");
     }
-    let schedules = h.backend.cron_schedule_store();
+    let schedules = h.backend().cron_schedule_store();
     let active = h.start_schedule();
     let origin = Harness::cron_origin(active.id, active.generation);
-    h.backend
+    h.backend()
         .task_store()
         .move_task_with_origin(
             &h.team,
@@ -340,7 +367,7 @@ fn pending_ack_source(h: &Harness) -> Message {
     source.envelope.task_id = None;
     source.envelope.requires_ack = true;
     source.envelope.pending_ack_at = Some(stamp(2));
-    h.backend
+    h.backend()
         .message_store()
         .save_message(&source)
         .expect("pending ack source persisted");
@@ -378,7 +405,7 @@ async fn cron_acknowledgement_requires_current_active_generation_before_reply_bu
     assert!(committed.source.envelope.acknowledged_at.is_some());
     assert!(committed.source.envelope.pending_ack_at.is_none());
     assert!(
-        h.backend
+        h.backend()
             .message_store()
             .load_message(&committed.reply.message_key)
             .expect("load ack reply")
@@ -392,7 +419,7 @@ async fn cron_acknowledgement_stale_or_stopped_fence_has_no_partial_effects() {
 
     for restart in [false, true] {
         let h = Harness::new();
-        let schedules = h.backend.cron_schedule_store();
+        let schedules = h.backend().cron_schedule_store();
         let schedule = h.start_schedule();
         let source = pending_ack_source(&h);
         if restart {
@@ -460,13 +487,13 @@ async fn cron_acknowledgement_stale_or_stopped_fence_has_no_partial_effects() {
 #[tokio::test]
 async fn delayed_cron_read_and_clear_recheck_generation_before_any_mutation() {
     let h = Harness::new();
-    let schedules = h.backend.cron_schedule_store();
+    let schedules = h.backend().cron_schedule_store();
     let schedule = h.start_schedule();
     let stale_origin = Harness::cron_origin(schedule.id, schedule.generation);
-    let store = h.backend.async_message_store();
+    let store = h.backend().async_message_store();
 
     let read_message = h.message("BK-READ-FENCE");
-    h.backend
+    h.backend()
         .message_store()
         .save_message(&read_message)
         .expect("seed read target");
@@ -505,7 +532,7 @@ async fn delayed_cron_read_and_clear_recheck_generation_before_any_mutation() {
     );
 
     let clear_message = h.message("BK-CLEAR-FENCE");
-    h.backend
+    h.backend()
         .message_store()
         .save_message(&clear_message)
         .expect("seed clear target");
@@ -520,7 +547,7 @@ async fn delayed_cron_read_and_clear_recheck_generation_before_any_mutation() {
             .contains("stale or its schedule is no longer active")
     );
     assert!(
-        h.backend
+        h.backend()
             .message_store()
             .load_message(&clear_message.message_key)
             .expect("load clear target")
@@ -545,7 +572,7 @@ async fn delayed_cron_read_and_clear_recheck_generation_before_any_mutation() {
             created_at: stamp(4),
         })
         .expect("start current generation");
-    h.backend
+    h.backend()
         .message_store()
         .delete_message_with_origin(
             &clear_message.message_key,
@@ -553,7 +580,7 @@ async fn delayed_cron_read_and_clear_recheck_generation_before_any_mutation() {
         )
         .expect("current generation can clear its target");
     assert!(
-        h.backend
+        h.backend()
             .message_store()
             .load_message(&clear_message.message_key)
             .expect("confirm cleared message")
