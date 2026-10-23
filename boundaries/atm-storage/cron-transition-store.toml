@@ -41,5 +41,5 @@ lint_rules = ["LINT-BOUNDARY-CRON-TRANSITION-STORE-REFERENCES"]
 review_gates = ["sealed_trait", "generation_fence", "deterministic_test_doubles"]
 
 [status]
-state = "planned"
-notes = ["BK-9 freezes the atomic persistence seam; BK-10 owns its SQLite implementation."]
+state = "concrete_landed"
+notes = ["BK-9 landed the sealed contract and deterministic double; BK-10 owns its SQLite implementation."]

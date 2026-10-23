@@ -41,5 +41,5 @@ lint_rules = ["LINT-BOUNDARY-TOOL-SENDER-REGISTRY-REFERENCES"]
 review_gates = ["sealed_trait", "authenticated_provenance", "deterministic_test_doubles"]
 
 [status]
-state = "planned"
-notes = ["BK-9 freezes the port and in-memory double; BK-10 implements SQLite verification and nonce persistence."]
+state = "concrete_landed"
+notes = ["BK-9 landed the sealed port and in-memory double; BK-10 implements SQLite verification and nonce persistence."]
