@@ -317,3 +317,118 @@ impl CronTransitionStore for SqliteCronTransitionStore {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use atm_storage::{NewCronSchedule, PhaseId, StopCondition};
+    use chrono::{TimeZone, Utc};
+    use tempfile::tempdir;
+
+    use super::*;
+    use crate::SqliteStorageBackend;
+
+    fn at(day: u32) -> atm_storage::IsoTimestamp {
+        atm_storage::IsoTimestamp::from_datetime(
+            Utc.with_ymd_and_hms(2026, 10, day, 12, 0, 0)
+                .single()
+                .expect("fixed timestamp"),
+        )
+    }
+
+    fn schedule() -> NewCronSchedule {
+        NewCronSchedule {
+            team: TeamName::from_validated("test-team"),
+            phase: PhaseId::parse("bk").expect("phase"),
+            name: "nightly".to_owned(),
+            cron_expr: "0 * * * *".to_owned(),
+            module_path: PathBuf::from("/hooks/cron"),
+            cwd: PathBuf::from("/repo"),
+            args: vec![],
+            timeout_ms: 1_000,
+            jitter_s: 0,
+            custom: serde_json::Map::new(),
+            stop: StopCondition::Hook,
+            created_by: AgentName::from_validated("creator"),
+            created_at: at(1),
+        }
+    }
+
+    #[test]
+    fn repeated_failure_is_persisted_but_only_first_lifecycle_notice_is_emitted() {
+        let root = tempdir().expect("tempdir");
+        let backend = SqliteStorageBackend::new(root.path().join("mail.db")).expect("backend");
+        let row = backend
+            .cron_schedule_store()
+            .start(schedule())
+            .expect("schedule");
+        let store = backend.cron_transition_store();
+        let failure = CronFailure {
+            kind: CronFailureKind::Timeout,
+            code: Some(AtmErrorCode::HookTimeout),
+            detail: CronDiagnosticDetail::parse("fixed timeout".into()).expect("detail"),
+        };
+        let write = |day| CronTransitionWrite {
+            id: row.id,
+            generation: row.generation,
+            at: at(day),
+            transition: CronRunTransition::Failure(failure.clone()),
+            outputs: vec![],
+        };
+        let first = store.commit(write(2)).expect("first failure");
+        let second = store.commit(write(3)).expect("repeat failure");
+        assert!(matches!(first, CronCommitResult::Applied { intents } if intents.len() == 1));
+        assert!(matches!(second, CronCommitResult::Applied { intents } if intents.is_empty()));
+    }
+
+    #[test]
+    fn unknown_delivery_survives_reopen_as_reconciliation_work() {
+        let root = tempdir().expect("tempdir");
+        let path = root.path().join("mail.db");
+        let backend = SqliteStorageBackend::new(&path).expect("backend");
+        let row = backend
+            .cron_schedule_store()
+            .start(schedule())
+            .expect("schedule");
+        let store = backend.cron_transition_store();
+        let committed = store
+            .commit(CronTransitionWrite {
+                id: row.id,
+                generation: row.generation,
+                at: at(2),
+                transition: CronRunTransition::Success {
+                    outcome: CronSuccess::Ok,
+                },
+                outputs: vec![CronModuleOutput::Message {
+                    body: atm_storage::CronOutputBody::parse("report".into()).expect("body"),
+                }],
+            })
+            .expect("commit");
+        let CronCommitResult::Applied { intents } = committed else {
+            panic!("current generation")
+        };
+        let CronDeliveryIntent::ModuleMail(intent) = intents.into_iter().next().expect("output")
+        else {
+            panic!("module mail")
+        };
+        let cause = DeliveryRetryCause::parse("fixed handoff timeout".into()).expect("cause");
+        assert!(
+            store
+                .mark_delivered(
+                    intent.key,
+                    DeliveryReceipt::Unknown {
+                        retry_cause: cause.clone()
+                    }
+                )
+                .expect("mark unknown")
+        );
+        drop(store);
+        drop(backend);
+
+        let reopened = SqliteStorageBackend::new(&path).expect("reopen");
+        assert!(
+            matches!(reopened.cron_transition_store().pending(10).expect("pending").as_slice(), [PendingCronDelivery::ReconciliationRequired { retry_cause, .. }] if retry_cause == &cause)
+        );
+    }
+}
