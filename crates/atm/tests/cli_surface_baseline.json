@@ -903,6 +903,17 @@
               "short": null
             },
             {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
               "has_default": false,
               "id": "phase",
               "long": "phase",
@@ -1000,6 +1011,17 @@
                 "min": 1
               },
               "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
               "short": null
             },
             {

@@ -299,6 +299,7 @@ Usage: atm hook disable [OPTIONS] --phase <PHASE> [HOOK]
 |------|-------|-------|----------|---------|----------------|-------------|
 | `--phase` | `` | `PHASE` | yes | `` |  | Phase whose active registrations will be disabled |
 | `<hook>` | `` | `HOOK` | no | `` |  | Disable only this hook; otherwise disable every hook in the phase |
+| `--json` | `` | `JSON` | no | `false` |  | Emit the disabled registrations as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 #### `atm hook list`
@@ -334,6 +335,7 @@ Usage: atm hook register [OPTIONS] --module <MODULE> --phase <PHASE> <HOOK>
 | `--phase` | `` | `PHASE` | yes | `` |  | Phase owning the registration |
 | `--cwd` | `` | `CWD` | no | `` |  | Working directory; defaults to the module directory |
 | `--custom` | `` | `CUSTOM` | no | `` |  | Custom JSON object passed to the module |
+| `--json` | `` | `JSON` | no | `false` |  | Emit the persisted registration as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 ### `atm list`
