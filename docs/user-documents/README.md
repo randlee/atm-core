@@ -25,6 +25,7 @@ They are not developer architecture notes.
 - [Herdr Integration](./herdr.md)
 - [Hooks](./hooks.md)
 - [Cron Schedules](./cron.md)
+- [Tool Sender Trust Root](./tool-sender-trust-root.md)
 - [Hermes Gateway Integration](./hermes-atm.md)
 - [Nudge Templates](./nudge-templates.md)
   - [Cron lifecycle notices](./nudge-templates.md#cron-lifecycle-notices)
