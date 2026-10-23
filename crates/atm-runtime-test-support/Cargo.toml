@@ -19,3 +19,6 @@ atm-runtime.workspace = true
 atm-storage = { workspace = true, features = ["test-utils"] }
 atm-storage-rusqlite = { workspace = true, features = ["test-support"] }
 async-trait.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

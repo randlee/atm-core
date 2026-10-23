@@ -165,9 +165,11 @@ D5) and `CronScheduleStore` (D1, D4).
 Cron transitions are persisted through a generation-fenced, sealed transition
 store. State and every lifecycle/module-mail intent commit atomically. A stale
 generation changes neither. A logical intent is exactly once per transition;
-unknown external handoffs remain reconcilable rather than being claimed as
-externally exactly once. Lifecycle notices target the persisted creator and
-are rendered by the dedicated `cron` template family.
+unknown external handoffs retain a bounded typed retry cause and appear only
+as reconciliation-required pending records, never blind-retry work. They
+remain reconcilable rather than being claimed as externally exactly once.
+Lifecycle notices target the persisted creator and are rendered by the
+dedicated `cron` template family.
 
 Cron action sender precedence is explicit ordinary `from`, legacy same-team
 `as`, then daemon-owned `cron@tool`. Mixed `from` and `as`, foreign/different
