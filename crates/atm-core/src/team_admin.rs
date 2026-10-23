@@ -380,7 +380,11 @@ pub fn set_nudge_template_override_with_store(
         "set-nudge-template",
     )?;
     validate_nudge_template_body(&request.template_body)?;
-    crate::send::nudge_template::validate_built_in_nudge_template_body(&request.template_body)?;
+    if request.kind == BuiltInNudgeTemplateKind::Cron {
+        crate::send::nudge_template::validate_cron_nudge_template_body(&request.template_body)?;
+    } else {
+        crate::send::nudge_template::validate_built_in_nudge_template_body(&request.template_body)?;
+    }
 
     let row = override_store.save_template_override(
         &request.team,
