@@ -7,6 +7,8 @@
 
 use atm_storage::{CronGeneration, CronScheduleId};
 
+use super::sealed;
+
 #[derive(Debug)]
 pub struct CronRunPermit {
     schedule_id: CronScheduleId,
@@ -15,16 +17,16 @@ pub struct CronRunPermit {
 }
 
 impl CronRunPermit {
-    /// Scheduler composition only. Hook modules and child environments never
+    /// Projects the opaque permit from a scheduler-owned record.
+    ///
+    /// `CronRunPermitIssuer` is an ADR-001 workspace-convention seal whose
+    /// only authorized production implementation is the private scheduler
+    /// record in `atm-cron`. Hook modules and child environments never
     /// receive a permit or its raw fence fields.
-    #[allow(dead_code)]
-    pub(crate) fn minted_by_scheduler(
-        schedule_id: CronScheduleId,
-        generation: CronGeneration,
-    ) -> Self {
+    pub fn from_issuer(issuer: &impl CronRunPermitIssuer) -> Self {
         Self {
-            schedule_id,
-            generation,
+            schedule_id: issuer.schedule_id(),
+            generation: issuer.generation(),
             _private: (),
         }
     }
@@ -38,4 +40,18 @@ impl CronRunPermit {
     pub fn generation(&self) -> CronGeneration {
         self.generation
     }
+}
+
+/// Read-only scheduler-owned state used to project a [`CronRunPermit`].
+///
+/// This ADR-001 workspace-convention seal is authorized only for the private
+/// scheduler issuer in `atm-cron` and its deterministic test coverage. A
+/// permit is never serializable or available to hook modules or child
+/// environments.
+pub trait CronRunPermitIssuer: sealed::Sealed {
+    /// Persisted identity of the active schedule.
+    fn schedule_id(&self) -> CronScheduleId;
+
+    /// Active schedule generation checked at canonical action admission.
+    fn generation(&self) -> CronGeneration;
 }

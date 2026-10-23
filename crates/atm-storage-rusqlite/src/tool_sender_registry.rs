@@ -243,61 +243,14 @@ impl ToolSenderRegistry for SqliteToolSenderRegistry {
         let proof_copy = proof.clone();
         let sender_id = proof.sender.clone();
         let issuer_record = self.transaction(|transaction| {
-            if let Some(record) = replay_receipt::<RuntimeBindingRecord>(
+            persist_runtime_binding(
                 transaction,
-                proof.nonce.as_str(),
+                &proof,
+                message_id,
+                &digest,
+                now,
                 &operation_digest,
-                "tool_sender_runtime_binding",
-            )? {
-                return Ok(record);
-            }
-            let registration = load_registration(transaction, sender_id.as_str())?
-                .filter(|registration| registration.active)
-                .ok_or_else(|| {
-                    ToolSenderFailure::SenderUnregistered
-                        .into_error(format!("tool sender {sender_id} is not registered"))
-                })?;
-            if registration.host_id != proof.host_id.as_str() {
-                return Err(ToolSenderFailure::HostMismatch
-                    .into_error("runtime proof host does not match the registration"));
-            }
-            if registration.generation != proof.registration_generation {
-                return Err(ToolSenderFailure::GenerationConflict
-                    .into_error("runtime proof uses a stale registration generation"));
-            }
-            if registration.runtime_key_id != proof.runtime_key_id.as_str() {
-                return Err(ToolSenderFailure::KeyRevoked
-                    .into_error("runtime proof uses a key that is no longer active"));
-            }
-            let public_key = decode_fixed::<32>(
-                &registration.runtime_public_key,
-                "registered runtime public key",
-            )?;
-            verify_signature(
-                &public_key,
-                &proof.canonical_signing_bytes()?,
-                &proof.signature,
-            )?;
-            let record = RuntimeBindingRecord {
-                sender: sender_id.to_string(),
-                runtime_key_id: proof.runtime_key_id.to_string(),
-                generation: proof.registration_generation,
-                host_id: proof.host_id.to_string(),
-                message_id: message_id.to_string(),
-                digest: digest.to_string(),
-                admitted_at: now.to_string(),
-            };
-            let json = serde_json::to_string(&record).map_err(serialization_error)?;
-            persist_nonce(
-                transaction,
-                proof.nonce.as_str(),
-                sender_id.as_str(),
-                &operation_digest,
-                &json,
-                &now.to_string(),
-                "tool_sender_runtime_binding",
-            )?;
-            Ok(record)
+            )
         })?;
 
         // The durable row is the authority on exact replay. Verify that the
@@ -339,6 +292,76 @@ impl ToolSenderRegistry for SqliteToolSenderRegistry {
             registered_sender(sender_id)
         })
     }
+}
+
+fn persist_runtime_binding(
+    transaction: &Transaction<'_>,
+    proof: &ToolRuntimeProof,
+    message_id: AtmMessageId,
+    digest: &MessageDigest,
+    now: IsoTimestamp,
+    operation_digest: &str,
+) -> Result<RuntimeBindingRecord, AtmError> {
+    if let Some(record) = replay_receipt::<RuntimeBindingRecord>(
+        transaction,
+        proof.nonce.as_str(),
+        operation_digest,
+        "tool_sender_runtime_binding",
+    )? {
+        return Ok(record);
+    }
+    let registration = load_registration(transaction, proof.sender.as_str())?
+        .filter(|row| row.active)
+        .ok_or_else(|| {
+            ToolSenderFailure::SenderUnregistered
+                .into_error(format!("tool sender {} is not registered", proof.sender))
+        })?;
+    validate_runtime_registration(&registration, proof)?;
+    let record = RuntimeBindingRecord {
+        sender: proof.sender.to_string(),
+        runtime_key_id: proof.runtime_key_id.to_string(),
+        generation: proof.registration_generation,
+        host_id: proof.host_id.to_string(),
+        message_id: message_id.to_string(),
+        digest: digest.to_string(),
+        admitted_at: now.to_string(),
+    };
+    persist_nonce(
+        transaction,
+        proof.nonce.as_str(),
+        proof.sender.as_str(),
+        operation_digest,
+        &serde_json::to_string(&record).map_err(serialization_error)?,
+        &now.to_string(),
+        "tool_sender_runtime_binding",
+    )?;
+    Ok(record)
+}
+
+fn validate_runtime_registration(
+    registration: &Registration,
+    proof: &ToolRuntimeProof,
+) -> Result<(), AtmError> {
+    if registration.host_id != proof.host_id.as_str() {
+        return Err(ToolSenderFailure::HostMismatch
+            .into_error("runtime proof host does not match the registration"));
+    }
+    if registration.generation != proof.registration_generation {
+        return Err(ToolSenderFailure::GenerationConflict
+            .into_error("runtime proof uses a stale registration generation"));
+    }
+    if registration.runtime_key_id != proof.runtime_key_id.as_str() {
+        return Err(ToolSenderFailure::KeyRevoked
+            .into_error("runtime proof uses a key that is no longer active"));
+    }
+    verify_signature(
+        &decode_fixed::<32>(
+            &registration.runtime_public_key,
+            "registered runtime public key",
+        )?,
+        &proof.canonical_signing_bytes()?,
+        &proof.signature,
+    )
 }
 
 #[derive(Clone, Debug)]

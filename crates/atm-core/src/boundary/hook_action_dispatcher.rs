@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use super::{HookName, PhaseId, sealed};
+use super::{CronRunPermit, HookName, PhaseId, sealed};
 use crate::api::{ApiResponse, RequestDeadline};
 use crate::error::AtmError;
 use crate::hook::{HookAction, HookActionCommand};
@@ -29,6 +29,23 @@ pub trait HookActionDispatcher: sealed::Sealed + Send + Sync {
         spec: DispatchSpec,
         actions: Vec<HookAction>,
     ) -> Result<Vec<DispatchedAction>, AtmError>;
+
+    /// Dispatches cron actions under the scheduler's generation fence.
+    ///
+    /// Implementations must present the permit to canonical admission for
+    /// every action. The default refuses cron dispatch so an adapter cannot
+    /// accidentally ignore the permit while still supporting ordinary hooks.
+    async fn dispatch_cron_actions(
+        &self,
+        _spec: DispatchSpec,
+        _permit: CronRunPermit,
+        _actions: Vec<HookAction>,
+    ) -> Result<Vec<DispatchedAction>, AtmError> {
+        Err(AtmError::new(
+            crate::error::AtmErrorCode::InternalError,
+            "cron action dispatch requires a permit-aware adapter",
+        ))
+    }
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -36,6 +53,7 @@ pub trait HookActionDispatcher: sealed::Sealed + Send + Sync {
 pub struct DispatchCall {
     pub spec: DispatchSpec,
     pub actions: Vec<HookAction>,
+    pub cron_permit: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 }
 
 #[cfg(any(test, feature = "test-utils"))]
@@ -51,12 +69,12 @@ pub struct RecordingHookActionDispatcher {
 impl sealed::Sealed for RecordingHookActionDispatcher {}
 
 #[cfg(any(test, feature = "test-utils"))]
-#[async_trait]
-impl HookActionDispatcher for RecordingHookActionDispatcher {
-    async fn dispatch_actions(
+impl RecordingHookActionDispatcher {
+    async fn dispatch_recorded(
         &self,
         spec: DispatchSpec,
         actions: Vec<HookAction>,
+        cron_permit: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
     ) -> Result<Vec<DispatchedAction>, AtmError> {
         self.calls
             .lock()
@@ -64,6 +82,7 @@ impl HookActionDispatcher for RecordingHookActionDispatcher {
             .push(DispatchCall {
                 spec: spec.clone(),
                 actions: actions.clone(),
+                cron_permit,
             });
         for action in &actions {
             action.into_api_request(&spec.team, &spec.default_as)?;
@@ -98,6 +117,32 @@ impl HookActionDispatcher for RecordingHookActionDispatcher {
             });
         }
         Ok(responses)
+    }
+}
+
+#[cfg(any(test, feature = "test-utils"))]
+#[async_trait]
+impl HookActionDispatcher for RecordingHookActionDispatcher {
+    async fn dispatch_actions(
+        &self,
+        spec: DispatchSpec,
+        actions: Vec<HookAction>,
+    ) -> Result<Vec<DispatchedAction>, AtmError> {
+        self.dispatch_recorded(spec, actions, None).await
+    }
+
+    async fn dispatch_cron_actions(
+        &self,
+        spec: DispatchSpec,
+        permit: CronRunPermit,
+        actions: Vec<HookAction>,
+    ) -> Result<Vec<DispatchedAction>, AtmError> {
+        self.dispatch_recorded(
+            spec,
+            actions,
+            Some((permit.schedule_id(), permit.generation())),
+        )
+        .await
     }
 }
 
@@ -175,6 +220,7 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].spec, expected_spec);
         assert_eq!(calls[0].actions, actions);
+        assert_eq!(calls[0].cron_permit, None);
     }
 
     #[test]

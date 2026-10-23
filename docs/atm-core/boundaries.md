@@ -588,3 +588,18 @@ Rules:
 - Endpoint values are already-sanitized symbolic display values. Raw homes,
   config roots, sockets, and named pipes never enter core, report JSON, or
   human output; the separate host-wide breaker report is not endpoint state.
+
+## CronRunPermit
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/cron-run-permit.toml](../../boundaries/atm-core/cron-run-permit.toml)
+
+Rules:
+- `CronRunPermit` is opaque and non-serializable. Only the private scheduler
+  issuer in `atm-cron` is authorized to project it.
+- Ordinary `HookActionDispatcher::dispatch_actions` remains unchanged.
+  Cron actions use `dispatch_cron_actions` and pass the permit to canonical
+  admission for each action. An adapter that does not implement that contract
+  refuses cron dispatch by default.
+- The architecture test `cron_run_permit_issuer_boundary` compares all issuer
+  implementations against the exact manifest allowlist.

@@ -3,7 +3,8 @@ use std::time::Duration;
 use atm_core::{
     api::RequestDeadline,
     boundary::{
-        CronSchedule, DispatchSpec, HOOK_ACTION_RESERVE_MS, HookName, HookTarget, StopCondition,
+        CronGeneration, CronRunPermit, CronRunPermitIssuer, CronSchedule, CronScheduleId,
+        DispatchSpec, HOOK_ACTION_RESERVE_MS, HookName, HookTarget, StopCondition, sealed,
     },
     error::AtmError,
     error_codes::AtmErrorCode,
@@ -12,6 +13,24 @@ use atm_core::{
 use chrono::{DateTime, Utc};
 
 use crate::{AtmCron, scheduler::store_call};
+
+/// Private scheduler-owned source for the opaque generation fence.
+struct SchedulePermitIssuer {
+    schedule_id: CronScheduleId,
+    generation: CronGeneration,
+}
+
+impl sealed::Sealed for SchedulePermitIssuer {}
+
+impl CronRunPermitIssuer for SchedulePermitIssuer {
+    fn schedule_id(&self) -> CronScheduleId {
+        self.schedule_id
+    }
+
+    fn generation(&self) -> CronGeneration {
+        self.generation
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CronRunOutcome {
@@ -188,10 +207,14 @@ async fn reply_outcome(
         HookReply::PassThrough | HookReply::NotApplicable => CronRunOutcome::Ok,
         HookReply::Handled(actions) => {
             let count = actions.len();
+            let issuer = SchedulePermitIssuer {
+                schedule_id: schedule.id,
+                generation: schedule.generation,
+            };
             match cron
                 .deps
                 .dispatcher
-                .dispatch_actions(
+                .dispatch_cron_actions(
                     DispatchSpec {
                         hook: HookName::cron_tick(),
                         team: schedule.team.clone(),
@@ -200,6 +223,7 @@ async fn reply_outcome(
                         deadline: None,
                         dry_run: false,
                     },
+                    CronRunPermit::from_issuer(&issuer),
                     actions,
                 )
                 .await
