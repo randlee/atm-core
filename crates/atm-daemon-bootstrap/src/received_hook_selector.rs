@@ -122,6 +122,7 @@ pub fn active_received_hook_selector_with_health(
 
 /// Builds the production selector with the composition-root-owned bare-CLI
 /// FIFO and overflow counter.
+#[cfg(feature = "benchmark-harness")]
 pub fn active_received_hook_selector_with_health_and_fifo(
     service_runtime: LocalServiceRuntime,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
@@ -451,12 +452,34 @@ impl CronLifecycleNudgeEmitter for ReplacementReceivedHookSelector {
                     )),
                 }
             }
-            // This branch is replaced by Lumen's direct Graft transport helper
-            // when its already-assigned cross-crate helper lands. It must never
-            // synthesize a post-send event or telemetry record.
-            CronLifecycleNudgeTarget::Graft(_) => Ok(unknown_lifecycle_receipt(
-                "graft lifecycle transport is not available",
-            )),
+            CronLifecycleNudgeTarget::Graft(target) => {
+                let runtime = self.graft.service_runtime.clone();
+                let key = nudge.key;
+                let target = target.clone();
+                match self
+                    .graft
+                    .blocking_bridge
+                    .run(
+                        RequestDeadline::after(std::time::Duration::from_secs(30)),
+                        move || {
+                            Ok::<_, AtmError>(
+                                atm_core::graft::deliver_published_cron_lifecycle_from_local_runtime(
+                                    &runtime,
+                                    key,
+                                    &target,
+                                    RequestDeadline::after(std::time::Duration::from_secs(30)),
+                                ),
+                            )
+                        },
+                    )
+                    .await
+                {
+                    Ok(receipt) => Ok(receipt),
+                    Err(_) => Ok(unknown_lifecycle_receipt(
+                        "graft lifecycle handoff result is unknown",
+                    )),
+                }
+            }
         }
     }
 }

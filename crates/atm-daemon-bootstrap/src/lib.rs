@@ -1120,10 +1120,7 @@ mod replacement_runtime_tests {
     use std::time::Duration;
 
     use atm_core::api::ApiRequest;
-    use atm_core::boundary::{
-        BuiltInPostSendDispatch, MemberKey, MessageReceivedHookSelector, RosterEntry,
-        TemplateSource,
-    };
+    use atm_core::boundary::{MemberKey, RosterEntry, TemplateSource};
     use atm_core::observability::NullObservability;
     use atm_core::peer_wire::PeerWireMode;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -1141,29 +1138,15 @@ mod replacement_runtime_tests {
     use super::peer_launch_config::parse_peer_pool_config_with_environment;
     use super::{
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
-        SelectedPeerAdapterSelection, ShutdownSignal, active_received_hook_selector_with_health,
-        assemble_host_runtime_with_template_composer, build_replacement_handler,
-        legacy_literal_ip_policy_from_value, parse_peer_wire_mode, peer_stream_adapter_for_mode,
-        replacement_runtime_config_with_direct_peer, start_replacement_runtime_for_test,
-        write_ready_signal_if_requested,
+        SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
+        build_replacement_handler, legacy_literal_ip_policy_from_value, parse_peer_wire_mode,
+        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
+        start_replacement_runtime_for_test, write_ready_signal_if_requested,
     };
     use peer_tls::LegacyLiteralIpPolicy;
 
     /// Test-owned receiver selection prevents an external tmux/graft action
     /// from obscuring the bootstrap's direct-peer persistence proof.
-    struct NoReceivedHookSelector;
-
-    impl atm_core::boundary::sealed::Sealed for NoReceivedHookSelector {}
-
-    impl MessageReceivedHookSelector for NoReceivedHookSelector {
-        fn select_emitter(
-            &self,
-            _dispatch: &BuiltInPostSendDispatch,
-        ) -> Option<&dyn atm_core::boundary::AsyncMessageReceivedHookEmitter> {
-            None
-        }
-    }
-
     #[test]
     fn ready_signal_is_absent_unless_requested() {
         let mut output = Vec::new();
@@ -1373,7 +1356,7 @@ mod replacement_runtime_tests {
                 ReplacementHandlerConfig {
                     observability: Arc::new(NullObservability),
                     selector_factory: |_, _, _, _| {
-                        received_hook_selector::ReceivedHookTransports::disabled_for_test()
+                        crate::received_hook_selector::ReceivedHookTransports::disabled_for_test()
                     },
                     daemon_launch_identity: DaemonLaunchIdentity::default(),
                     peer_wire_mode: PeerWireMode::plaintext_test(),
@@ -1575,7 +1558,7 @@ mod replacement_runtime_tests {
                 ReplacementHandlerConfig {
                     observability: Arc::new(NullObservability),
                     selector_factory: |runtime, herdr_process, health, _| {
-                        received_hook_selector::active_received_hook_transports_with_health_and_fifo(
+                        crate::received_hook_selector::active_received_hook_transports_with_health_and_fifo(
                             runtime,
                             herdr_process,
                             health,
