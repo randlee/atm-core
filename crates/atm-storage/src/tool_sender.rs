@@ -84,7 +84,9 @@ impl RegisteredToolSender {
     /// Records the result of a successful registry admission.  This value is
     /// inspection data only: production composition additionally requires a
     /// non-serializable daemon capability before it can write mail.
-    pub fn admitted(principal: ToolPrincipal, address: AgentAddress) -> Self {
+    /// Registry-only issuance. This is crate-visible so deserialized request data
+    /// cannot manufacture virtual sender authority.
+    pub(crate) fn admitted(principal: ToolPrincipal, address: AgentAddress) -> Self {
         Self { principal, address }
     }
 
