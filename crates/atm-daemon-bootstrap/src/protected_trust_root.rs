@@ -292,6 +292,24 @@ mod tests {
             .into_configs(Path::new("/etc/atm/tool-sender-trust-root.json"))
             .expect_err("malformed key must fail closed");
         assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+
+        let root: RawTrustRoot = serde_json::from_str(&format!(
+            r#"{{"version":1,"host_id":"not a host","installers":[{{"installer_id":"installer-a","key_id":"key-a","public_key":"{PUBLIC_KEY}","allowed_senders":["tool-a"]}}],"trusted_origins":[{{"host_id":"peer.example","public_key":"{PUBLIC_KEY}","allowed_senders":["tool-a"]}}]}}"#
+        ))
+        .expect("schema is syntactically valid");
+        let error = root
+            .into_configs(Path::new("/etc/atm/tool-sender-trust-root.json"))
+            .expect_err("invalid protected local host must fail closed");
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+
+        let root: RawTrustRoot = serde_json::from_str(&format!(
+            r#"{{"version":1,"host_id":"daemon.example","installers":[{{"installer_id":"installer-a","key_id":"key-a","public_key":"{PUBLIC_KEY}","allowed_senders":["tool-a"]}}],"trusted_origins":[]}}"#
+        ))
+        .expect("schema is syntactically valid");
+        let error = root
+            .into_configs(Path::new("/etc/atm/tool-sender-trust-root.json"))
+            .expect_err("empty origin policy must fail closed");
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
     }
 
     #[cfg(unix)]
