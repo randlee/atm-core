@@ -68,7 +68,7 @@ fn installed_tables(path: &std::path::Path) -> Vec<String> {
             "SELECT name FROM sqlite_master
              WHERE type = 'table' AND name IN (
                 'hook_registration', 'cron_schedule', 'tool_sender_registry',
-                'tool_sender_nonce_ledger', 'cron_transition_event', 'cron_delivery_intent'
+                'tool_sender_nonce_ledger', 'tool_sender_peer_binding', 'cron_transition_event', 'cron_delivery_intent'
              )
              ORDER BY name",
         )
@@ -115,6 +115,7 @@ fn pre_bk_ddl_set_reads_and_writes_after_hook_tables_created() {
                 "cron_transition_event",
                 "hook_registration",
                 "tool_sender_nonce_ledger",
+                "tool_sender_peer_binding",
                 "tool_sender_registry",
             ]
         );
@@ -265,6 +266,7 @@ fn ensure_schema_twice_is_idempotent() {
             "cron_transition_event",
             "hook_registration",
             "tool_sender_nonce_ledger",
+            "tool_sender_peer_binding",
             "tool_sender_registry",
         ]
     );

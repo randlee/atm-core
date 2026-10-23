@@ -38,9 +38,14 @@ mod request;
 pub(crate) mod summary;
 mod template;
 mod write_context;
+pub(crate) use write_context::prepare_send_context_with_tool_capability;
 
 pub use async_persistence::{TemplateVerification, WriteSourcePreflight};
 pub use async_persistence::{preflight_write_source_request, verify_template_request};
+pub use atm_storage::{
+    ToolInstallReceipt, ToolInstallerOperation, ToolInstallerRequest, ToolRuntimeProof,
+    ToolSenderAttestation, ToolSenderPeerAdmissionStore, ToolSenderRegistry,
+};
 pub(crate) use delivery_persistence::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, DuplicateWriteDisposition,
 };
@@ -77,8 +82,9 @@ pub fn preflight_template_send(
 // public entry points so external paths are unchanged.
 pub use crate::write::{
     PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
-    prepare_write_with_runtime, send_mail, send_mail_with_runtime,
-    write_current_herdr_terminal_escalation_with_runtime, write_mail, write_mail_with_runtime,
+    prepare_write_with_runtime, prepare_write_with_tool_capability_async_runtime, send_mail,
+    send_mail_with_runtime, write_current_herdr_terminal_escalation_with_runtime, write_mail,
+    write_mail_with_runtime,
 };
 
 #[cfg(test)]
@@ -159,6 +165,17 @@ pub struct WriteRequest {
     /// ingress compares this with its adapter mode before the writer runs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub peer_wire_security: Option<crate::peer_wire::PeerWireSecurity>,
+    /// Signed origin-runtime proof for a local plug-in message. The daemon
+    /// verifies it against the protected tool-sender registry before writing;
+    /// an authenticated caller cannot turn this JSON value into a capability.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_runtime_proof: Option<atm_storage::ToolRuntimeProof>,
+    /// Origin-host assertion for a virtual sender forwarded over an
+    /// authenticated peer connection. TLS peer identity alone does not
+    /// authorize this sender; peer admission verifies this signature and its
+    /// durable replay binding before canonical write admission.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_sender_attestation: Option<atm_storage::ToolSenderAttestation>,
     /// The immutable identity assigned by the origin canonical writer.
     /// Authenticated peer ingress preserves it so both hosts store one ULID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -255,6 +272,8 @@ impl WriteRequest {
             authenticated_source_host: None,
             peer_http_api_version: None,
             peer_wire_security: None,
+            tool_runtime_proof: None,
+            tool_sender_attestation: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: Some(to.parse()?),
@@ -683,7 +702,7 @@ fn build_send_envelope(
     let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
     let mut envelope = InboxMessage {
         from: context.canonical_sender.clone(),
-        source_chat_id: request.caller_chat_id.clone(),
+        source_chat_id: context.canonical_sender_chat_id.clone(),
         text: body.to_string(),
         timestamp,
         // A member's task addressed to itself keeps its body and record but is
@@ -694,7 +713,7 @@ fn build_send_envelope(
                 &request.caller_team,
                 &context.recipient,
             ),
-        source_team: Some(request.caller_team.clone()),
+        source_team: Some(context.canonical_sender_team.clone()),
         destination_chat_id: request
             .to
             .as_ref()
@@ -909,5 +928,49 @@ mod path_body_tests {
             send_mode_for_task_request(&ordinary_request, &task_id),
             NudgeMode::Immediate
         );
+    }
+}
+
+#[cfg(test)]
+mod tool_sender_wire_tests {
+    use super::{SendMessageSource, WriteRequest};
+
+    fn write_request() -> WriteRequest {
+        WriteRequest::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline("body".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request")
+    }
+
+    #[test]
+    fn ordinary_write_constructor_omits_tool_provenance_fields() {
+        let request = write_request();
+
+        assert!(request.tool_runtime_proof.is_none());
+        assert!(request.tool_sender_attestation.is_none());
+        let value = serde_json::to_value(request).expect("serialize request");
+        assert!(value.get("tool_runtime_proof").is_none());
+        assert!(value.get("tool_sender_attestation").is_none());
+    }
+
+    #[test]
+    fn legacy_write_json_defaults_tool_provenance_to_absent() {
+        let mut value = serde_json::to_value(write_request()).expect("serialize request");
+        let object = value.as_object_mut().expect("request object");
+        object.remove("tool_runtime_proof");
+        object.remove("tool_sender_attestation");
+
+        let request: WriteRequest = serde_json::from_value(value).expect("legacy request");
+        assert!(request.tool_runtime_proof.is_none());
+        assert!(request.tool_sender_attestation.is_none());
     }
 }

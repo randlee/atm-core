@@ -82,6 +82,13 @@ impl StorageAndNudgeRouter {
             ApiRequest::CronStart(request) => self.cron_start(request, ingress, deadline).await,
             ApiRequest::CronEnd(request) => self.cron_end(request, ingress, deadline).await,
             ApiRequest::CronList(request) => self.cron_list(request, ingress, deadline).await,
+            ApiRequest::ToolSenderApply(request) => {
+                self.tool_sender_apply(request, ingress, deadline).await
+            }
+            ApiRequest::ToolSenderUnregister(request) => {
+                self.tool_sender_unregister(request, ingress, deadline)
+                    .await
+            }
         }
     }
 

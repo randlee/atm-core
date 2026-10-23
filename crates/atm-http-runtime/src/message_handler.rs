@@ -581,6 +581,16 @@ fn decode_framework_request(
         Some(HttpRouteKind::TaskMove) => serde_json::from_slice::<TaskMoveRequest>(body)
             .map(ApiRequest::TaskMove)
             .map_err(|source| invalid_framework_body("task move", source)),
+        Some(HttpRouteKind::ToolSenderApply) => {
+            serde_json::from_slice::<atm_core::protocol::ToolInstallerRequest>(body)
+                .map(ApiRequest::ToolSenderApply)
+                .map_err(|source| invalid_framework_body("tool sender apply", source))
+        }
+        Some(HttpRouteKind::ToolSenderUnregister) => {
+            serde_json::from_slice::<atm_core::protocol::ToolInstallerRequest>(body)
+                .map(ApiRequest::ToolSenderUnregister)
+                .map_err(|source| invalid_framework_body("tool sender unregister", source))
+        }
         Some(
             kind @ (HttpRouteKind::GraftReceiverRegister
             | HttpRouteKind::GraftReceiverRefresh
@@ -845,6 +855,7 @@ pub(crate) fn map_api_response(response: ApiResponse) -> Result<Response, AtmErr
         ResponseEnvelope::HookRegistered(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::HookList(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::HookDisabled(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::ToolSenderApplied(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::CronStarted(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::CronList(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::CronEnded(value) => json_response(StatusCode::OK, &value, None),

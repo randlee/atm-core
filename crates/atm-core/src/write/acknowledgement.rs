@@ -448,6 +448,8 @@ pub(crate) fn canonical_ack_write_request(
         authenticated_source_host: None,
         peer_http_api_version: None,
         peer_wire_security: None,
+        tool_runtime_proof: None,
+        tool_sender_attestation: None,
         origin_message_id: None,
         origin_timestamp: None,
         to: Some(crate::address::AgentAddress::new(

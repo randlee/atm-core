@@ -680,6 +680,57 @@ pub async fn prepare_write_with_preflight_async_runtime(
     runtime: &LocalServiceRuntime,
     source_preflight: WriteSourcePreflight,
 ) -> Result<WriteExecution, AtmError> {
+    prepare_write_with_admission_async_runtime(
+        request,
+        observability,
+        runtime,
+        source_preflight,
+        None,
+    )
+    .await
+}
+
+/// Persists a write whose virtual sender and stable identity were admitted by
+/// a signed local runtime proof or authenticated peer attestation. The proof
+/// itself remains in the transport request; only this non-serializable
+/// capability authorizes canonical sender/id projection.
+pub async fn prepare_write_with_tool_capability_async_runtime(
+    request: WriteRequest,
+    capability: crate::boundary::ToolSenderCapability,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    source_preflight: WriteSourcePreflight,
+) -> Result<WriteExecution, AtmError> {
+    prepare_write_with_admission_async_runtime(
+        request,
+        observability,
+        runtime,
+        source_preflight,
+        Some(capability),
+    )
+    .await
+}
+
+async fn prepare_write_with_admission_async_runtime(
+    request: WriteRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    source_preflight: WriteSourcePreflight,
+    tool_capability: Option<crate::boundary::ToolSenderCapability>,
+) -> Result<WriteExecution, AtmError> {
+    if tool_capability.is_some() && request.acknowledges_message_id.is_some() {
+        return Err(AtmError::validation(
+            "virtual tool sender admission cannot authorize acknowledgement writes",
+        ));
+    }
+    if tool_capability.is_none()
+        && (request.tool_runtime_proof.is_some() || request.tool_sender_attestation.is_some())
+    {
+        return Err(AtmError::validation_with_recovery(
+            "tool sender proof was not admitted by the daemon",
+            "submit the signed proof through the configured local or authenticated-peer admission route",
+        ));
+    }
     validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {
@@ -701,6 +752,7 @@ pub async fn prepare_write_with_preflight_async_runtime(
             runtime,
             None,
             source_preflight,
+            tool_capability,
         )
         .await;
     }
@@ -711,6 +763,7 @@ pub async fn prepare_write_with_preflight_async_runtime(
             runtime,
             None,
             source_preflight,
+            tool_capability,
         )
         .await;
     }
@@ -963,6 +1016,59 @@ fn delivery_mode_for(self_task: bool, mode: DeliveryExecutionMode) -> DeliveryEx
     }
 }
 
+/// Verifies that an opaque admission still matches the exact proof and canonical
+/// body carried into persistence, then selects its immutable message id.
+fn verified_tool_message_id(
+    request: &WriteRequest,
+    capability: &crate::boundary::ToolSenderCapability,
+    body: &str,
+) -> Result<AtmMessageId, AtmError> {
+    let actual_digest = atm_storage::MessageDigest::for_message_body(body);
+    if capability.message_digest() != &actual_digest {
+        return Err(AtmError::new(
+            crate::error_codes::AtmErrorCode::ToolSignatureInvalid,
+            "canonical message body does not match the admitted tool proof digest",
+        ));
+    }
+
+    match (
+        capability.is_peer_admission(),
+        request.tool_runtime_proof.as_ref(),
+        request.tool_sender_attestation.as_ref(),
+    ) {
+        (false, Some(proof), None) if capability.matches_runtime_proof(proof) => {
+            if request.origin_message_id.is_some()
+                || request.origin_timestamp.is_some()
+                || request.authenticated_source_host.is_some()
+            {
+                return Err(AtmError::validation(
+                    "local tool proof cannot override peer origin identity or timestamp",
+                ));
+            }
+        }
+        (true, None, Some(attestation)) if capability.matches_peer_attestation(attestation) => {
+            if request.origin_message_id != Some(capability.message_id()) {
+                return Err(AtmError::validation(
+                    "peer tool proof identity does not match authenticated origin metadata",
+                ));
+            }
+            if request.authenticated_source_host.as_ref() != capability.authenticated_source_host()
+            {
+                return Err(atm_storage::ToolSenderFailure::HostMismatch.into_error(
+                    "peer tool proof host does not match authenticated origin metadata",
+                ));
+            }
+        }
+        _ => {
+            return Err(AtmError::new(
+                crate::error_codes::AtmErrorCode::ToolSignatureInvalid,
+                "tool admission capability does not match the exact proof in the write request",
+            ));
+        }
+    }
+    Ok(capability.message_id())
+}
+
 /// Prepares the canonical write after its one asynchronous durable admission.
 async fn prepare_persisted_write_async(
     mut request: SendRequest,
@@ -970,8 +1076,13 @@ async fn prepare_persisted_write_async(
     runtime: &LocalServiceRuntime,
     acknowledgement: Option<ResolvedAcknowledgement>,
     source_preflight: WriteSourcePreflight,
+    tool_capability: Option<crate::boundary::ToolSenderCapability>,
 ) -> Result<WriteExecution, AtmError> {
-    let mut context = prepare_send_context(runtime, &mut request)?;
+    let mut context = crate::send::prepare_send_context_with_tool_capability(
+        runtime,
+        &mut request,
+        tool_capability.as_ref(),
+    )?;
     crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
@@ -980,10 +1091,20 @@ async fn prepare_persisted_write_async(
     let requires_ack = request_requires_ack(&request, &task_id);
     let (body, verified_template) =
         crate::send::async_persistence::resolve_async_body(&request, source_preflight)?;
+    let message_id = match tool_capability.as_ref() {
+        Some(capability) => verified_tool_message_id(&request, capability, &body)?,
+        None => request.origin_message_id.unwrap_or_default(),
+    };
     annotate_path_only_body(&mut request, &mut context, &body);
     let summary = crate::send::summary::build_summary(&body, request.summary_override.clone());
-    let message_id = request.origin_message_id.unwrap_or_default();
-    let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
+    let timestamp = if tool_capability
+        .as_ref()
+        .is_some_and(|capability| !capability.is_peer_admission())
+    {
+        IsoTimestamp::now()
+    } else {
+        request.origin_timestamp.unwrap_or_else(IsoTimestamp::now)
+    };
     let mut persistence = crate::send::async_persistence::persist_send_message_async(
         runtime,
         &request,
@@ -1065,5 +1186,129 @@ pub(crate) fn send_mail_with_runtime_impl<
         WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
             "test send helper cannot finish an acknowledgement write",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tool_sender_admission_tests {
+    use std::str::FromStr;
+
+    use super::verified_tool_message_id;
+    use crate::boundary::{ToolSenderCapability, claim_verified_tool_runtime};
+    use crate::send::{SendMessageSource, WriteRequest};
+    use crate::types::{AgentName, TeamName};
+    use atm_storage::testing::InMemoryToolSenderRegistry;
+    use atm_storage::{
+        AtmMessageId, HostName, InstallerId, MessageDigest, PluginSenderId, ToolInstallerOperation,
+        ToolInstallerRequest, ToolKeyId, ToolNonce, ToolRuntimeProof, ToolSenderRegistry,
+    };
+
+    const MESSAGE_ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+    const BODY: &str = "deterministic tool mail";
+
+    fn admitted() -> (ToolSenderCapability, ToolRuntimeProof) {
+        let sender = PluginSenderId::parse("test-plugin").expect("sender");
+        let key_id = ToolKeyId::parse("runtime-key").expect("runtime key");
+        let host = HostName::from_str("host.example").expect("host");
+        let now = crate::types::IsoTimestamp::now();
+        let registry = InMemoryToolSenderRegistry::default();
+        registry
+            .apply_signed(
+                ToolInstallerRequest {
+                    schema_version: "1.0.0".into(),
+                    operation: ToolInstallerOperation::Register,
+                    installer_id: InstallerId::parse("installer").expect("installer"),
+                    installer_key_id: ToolKeyId::parse("installer-key").expect("installer key"),
+                    sender: sender.clone(),
+                    package_digest: MessageDigest::parse("package-digest").expect("package digest"),
+                    registration_generation: 1,
+                    host_id: host.clone(),
+                    runtime_key_id: key_id.clone(),
+                    runtime_public_key: "test-key".into(),
+                    previous_runtime_key_id: None,
+                    nonce: ToolNonce::parse("install-nonce").expect("installer nonce"),
+                    issued_at: now,
+                    expires_at: now,
+                    signature: "test-signature".into(),
+                },
+                now,
+            )
+            .expect("register deterministic fixture");
+
+        let message_id = AtmMessageId::from_str(MESSAGE_ID).expect("message id");
+        let digest = MessageDigest::for_message_body(BODY);
+        let proof = ToolRuntimeProof {
+            runtime_key_id: key_id,
+            sender,
+            registration_generation: 1,
+            host_id: host,
+            message_id,
+            message_digest: digest.clone(),
+            nonce: ToolNonce::parse("runtime-nonce").expect("runtime nonce"),
+            signature: "runtime-signature".into(),
+        };
+        let admission = registry
+            .admit_signed_message(proof.clone(), message_id, digest, now)
+            .expect("admit deterministic fixture");
+        let claim = claim_verified_tool_runtime(admission);
+        let crate::boundary::SenderClaim::DaemonTool {
+            proof: capability, ..
+        } = claim
+        else {
+            panic!("admission yields a daemon tool claim");
+        };
+        (capability, proof)
+    }
+
+    fn request(proof: ToolRuntimeProof) -> WriteRequest {
+        let mut request = WriteRequest::new(
+            std::path::PathBuf::from("/tmp"),
+            std::path::PathBuf::from("/tmp"),
+            AgentName::from_validated("daemon"),
+            "recipient@team",
+            TeamName::from_validated("team"),
+            SendMessageSource::Inline(BODY.into()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("valid fixed request");
+        request.tool_runtime_proof = Some(proof);
+        request
+    }
+
+    #[test]
+    fn exact_admitted_tool_proof_keeps_the_bound_message_id_on_retry() {
+        let (capability, proof) = admitted();
+        let request = request(proof);
+        let first = verified_tool_message_id(&request, &capability, BODY).expect("first write");
+        let retry = verified_tool_message_id(&request, &capability, BODY).expect("exact retry");
+        assert_eq!(first, retry);
+        assert_eq!(first.to_string(), MESSAGE_ID);
+    }
+
+    #[test]
+    fn tool_admission_rejects_changed_body_and_substituted_proof() {
+        let (capability, proof) = admitted();
+        let original_request = request(proof.clone());
+        assert!(verified_tool_message_id(&original_request, &capability, "changed body").is_err());
+
+        let mut changed_id = proof.clone();
+        changed_id.message_id =
+            AtmMessageId::from_str("01ARZ3NDEKTSV4RRFFQ69G5FAW").expect("alternate id");
+        assert!(verified_tool_message_id(&request(changed_id), &capability, BODY).is_err());
+
+        let mut changed_sender = proof;
+        changed_sender.sender = PluginSenderId::parse("other-plugin").expect("other sender");
+        assert!(verified_tool_message_id(&request(changed_sender), &capability, BODY).is_err());
+    }
+
+    #[test]
+    fn local_tool_admission_rejects_origin_identity_overrides() {
+        let (capability, proof) = admitted();
+        let mut request = request(proof);
+        request.origin_message_id = Some(capability.message_id());
+        assert!(verified_tool_message_id(&request, &capability, BODY).is_err());
     }
 }

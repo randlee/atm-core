@@ -8,6 +8,7 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::address::AgentAddress;
 use crate::contract::sealed;
@@ -109,6 +110,21 @@ validated_text_id!(ToolNonce, "tool nonce");
 validated_text_id!(MessageDigest, "message digest");
 validated_text_id!(ToolKeyId, "tool key id");
 
+impl MessageDigest {
+    /// Computes the canonical SHA-256 digest for UTF-8 message body bytes.
+    #[must_use]
+    pub fn for_message_body(body: &str) -> Self {
+        let digest = Sha256::digest(body.as_bytes());
+        let mut encoded = String::with_capacity(7 + digest.len() * 2);
+        encoded.push_str("sha256:");
+        for byte in digest {
+            use std::fmt::Write as _;
+            let _ = write!(encoded, "{byte:02x}");
+        }
+        Self(encoded)
+    }
+}
+
 /// The only virtual identities that can be admitted by trusted daemon code.
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -192,6 +208,8 @@ struct VerifiedRuntimeBinding {
     host_id: HostName,
     message_id: AtmMessageId,
     message_digest: MessageDigest,
+    nonce: ToolNonce,
+    signature: String,
 }
 
 impl ToolRuntimeAdmission {
@@ -235,6 +253,8 @@ impl ToolRuntimeAdmission {
                 host_id: proof.host_id.clone(),
                 message_id,
                 message_digest,
+                nonce: proof.nonce.clone(),
+                signature: proof.signature.clone(),
             },
         })
     }
@@ -243,6 +263,29 @@ impl ToolRuntimeAdmission {
     pub fn sender(&self) -> &RegisteredToolSender {
         let _ = &self.binding;
         &self.sender
+    }
+
+    #[must_use]
+    pub fn message_id(&self) -> AtmMessageId {
+        self.binding.message_id
+    }
+
+    #[must_use]
+    pub fn message_digest(&self) -> &MessageDigest {
+        &self.binding.message_digest
+    }
+
+    /// Confirms that the request carries the exact proof admitted by the registry.
+    #[must_use]
+    pub fn matches_proof(&self, proof: &ToolRuntimeProof) -> bool {
+        self.binding.sender == proof.sender
+            && self.binding.runtime_key_id == proof.runtime_key_id
+            && self.binding.registration_generation == proof.registration_generation
+            && self.binding.host_id == proof.host_id
+            && self.binding.message_id == proof.message_id
+            && self.binding.message_digest == proof.message_digest
+            && self.binding.nonce == proof.nonce
+            && self.binding.signature == proof.signature
     }
 }
 
@@ -462,9 +505,154 @@ pub trait ToolSenderRegistry: sealed::Sealed + Send + Sync {
     fn resolve(&self, sender: &PluginSenderId) -> Result<RegisteredToolSender, AtmError>;
 }
 
+/// Opaque result of a durable origin-host attestation admission.
+///
+/// Its sender and message binding come from an adapter-owned committed issuer
+/// record. It is deliberately non-serializable and cannot be reconstructed
+/// from peer payload data.
+#[derive(Debug)]
+pub struct ToolPeerAdmission {
+    sender: RegisteredToolSender,
+    binding: VerifiedPeerBinding,
+}
+
+#[derive(Debug)]
+struct VerifiedPeerBinding {
+    authenticated_source_host: HostName,
+    sender: PluginSenderId,
+    registration_generation: u64,
+    message_id: AtmMessageId,
+    message_digest: MessageDigest,
+    nonce: ToolNonce,
+    signature: String,
+}
+
+impl ToolPeerAdmission {
+    /// Projects an opaque admission only from an adapter-owned committed
+    /// issuer record.
+    pub fn from_issuer(issuer: &impl ToolPeerAdmissionIssuer) -> Result<Self, AtmError> {
+        let attestation = issuer.attestation();
+        let source_host = issuer.authenticated_source_host();
+        let digest = issuer.message_digest();
+        let message_id = issuer.message_id();
+        if source_host != &attestation.host_id {
+            return Err(ToolSenderFailure::HostMismatch
+                .into_error("peer admission issuer host does not match the authenticated source"));
+        }
+        if attestation.sender != *issuer.sender_id()
+            || attestation.registration_generation != issuer.registration_generation()
+            || attestation.message_id != message_id
+            || attestation.message_digest != *digest
+        {
+            return Err(ToolSenderFailure::SignatureInvalid
+                .into_error("peer admission issuer does not match the verified message binding"));
+        }
+        let sender = RegisteredToolSender::from_issuer(issuer);
+        Ok(Self {
+            sender,
+            binding: VerifiedPeerBinding {
+                authenticated_source_host: source_host.clone(),
+                sender: issuer.sender_id().clone(),
+                registration_generation: issuer.registration_generation(),
+                message_id,
+                message_digest: digest.clone(),
+                nonce: attestation.nonce.clone(),
+                signature: attestation.signature.clone(),
+            },
+        })
+    }
+
+    #[must_use]
+    pub fn sender(&self) -> &RegisteredToolSender {
+        &self.sender
+    }
+
+    #[must_use]
+    pub fn authenticated_source_host(&self) -> &HostName {
+        &self.binding.authenticated_source_host
+    }
+
+    #[must_use]
+    pub fn sender_id(&self) -> &PluginSenderId {
+        &self.binding.sender
+    }
+
+    #[must_use]
+    pub fn registration_generation(&self) -> u64 {
+        self.binding.registration_generation
+    }
+
+    #[must_use]
+    pub fn message_id(&self) -> AtmMessageId {
+        self.binding.message_id
+    }
+
+    #[must_use]
+    pub fn message_digest(&self) -> &MessageDigest {
+        &self.binding.message_digest
+    }
+
+    #[must_use]
+    pub fn nonce(&self) -> &ToolNonce {
+        &self.binding.nonce
+    }
+
+    /// Confirms that the request carries the exact attestation admitted by the peer store.
+    #[must_use]
+    pub fn matches_attestation(&self, attestation: &ToolSenderAttestation) -> bool {
+        self.binding.sender == attestation.sender
+            && self.binding.registration_generation == attestation.registration_generation
+            && self.binding.authenticated_source_host == attestation.host_id
+            && self.binding.message_id == attestation.message_id
+            && self.binding.message_digest == attestation.message_digest
+            && self.binding.nonce == attestation.nonce
+            && self.binding.signature == attestation.signature
+    }
+}
+
+/// Private adapter record from which a committed peer admission is projected.
+/// Implementations are restricted by ADR-001's workspace-convention seal.
+pub trait ToolPeerAdmissionIssuer: RegisteredToolSenderIssuer {
+    fn attestation(&self) -> &ToolSenderAttestation;
+    fn authenticated_source_host(&self) -> &HostName;
+    fn sender_id(&self) -> &PluginSenderId;
+    fn registration_generation(&self) -> u64;
+    fn message_id(&self) -> AtmMessageId;
+    fn message_digest(&self) -> &MessageDigest;
+}
+
+/// Durable verification and replay boundary for origin-host attestations.
+///
+/// Implementations verify the enrolled origin key, sender-host policy,
+/// transport-authenticated host, and exact message binding before committing
+/// a replay record. Exact replay is idempotent; conflicting nonce reuse fails
+/// before a new admission can be issued.
+pub trait ToolSenderPeerAdmissionStore: sealed::Sealed + Send + Sync {
+    fn admit_attestation(
+        &self,
+        attestation: ToolSenderAttestation,
+        message_id: AtmMessageId,
+        digest: MessageDigest,
+        authenticated_source_host: &HostName,
+        now: IsoTimestamp,
+    ) -> Result<ToolPeerAdmission, AtmError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canonical_message_digest_hashes_exact_utf8_body_bytes() {
+        assert_eq!(
+            MessageDigest::for_message_body("abc").as_str(),
+            "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        assert_ne!(
+            MessageDigest::for_message_body("abc"),
+            MessageDigest::for_message_body("abc\n")
+        );
+    }
 
     #[test]
     fn identifiers_reject_blank_values() {

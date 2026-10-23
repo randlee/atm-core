@@ -5,12 +5,12 @@ use atm_storage::AtmError;
 
 /// Semver for the SQLite schema installed by this crate.
 ///
-/// The 2.1.0 minor records the additive schema introduced after the approved
-/// 2.0.0 task-domain migration, including the BK hook, cron, and sender tables.
-pub const STORAGE_SCHEMA_VERSION: &str = "2.1.0";
+/// The 2.2.0 minor adds durable authenticated-peer tool-sender replay bindings
+/// after the hook, cron, and local signed-sender schema in 2.1.0.
+pub const STORAGE_SCHEMA_VERSION: &str = "2.2.0";
 
 const STORAGE_SCHEMA_MAJOR: i64 = 2;
-const STORAGE_SCHEMA_MINOR: i64 = 1;
+const STORAGE_SCHEMA_MINOR: i64 = 2;
 const STORAGE_SCHEMA_PATCH: i64 = 0;
 
 const STORAGE_SCHEMA_VERSION_DDL: &str = r#"

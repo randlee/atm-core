@@ -58,6 +58,17 @@ CREATE TABLE IF NOT EXISTS tool_sender_runtime_binding (
     nonce TEXT PRIMARY KEY,
     result_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS tool_sender_peer_binding (
+    origin_host TEXT NOT NULL,
+    sender TEXT NOT NULL,
+    nonce TEXT NOT NULL,
+    registration_generation INTEGER NOT NULL CHECK(registration_generation >= 1),
+    message_id TEXT NOT NULL,
+    message_digest TEXT NOT NULL,
+    signature TEXT NOT NULL,
+    admitted_at TEXT NOT NULL,
+    PRIMARY KEY (origin_host, sender, nonce)
+);
 "#;
 
 pub(crate) const CRON_DELIVERY_INTENT_DDL: &str = r#"

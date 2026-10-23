@@ -88,6 +88,11 @@ pub fn preflight_write_source_request(
         }),
         SendMessageSource::File { .. } => {
             let mut canonical_request = request.clone();
+            // Source preflight resolves paths and policy only; it is not an
+            // emission admission. Strip wire proofs here and require the later
+            // canonical write to supply a verified capability.
+            canonical_request.tool_runtime_proof = None;
+            canonical_request.tool_sender_attestation = None;
             let context = prepare_send_context(runtime, &mut canonical_request)?;
             Ok(WriteSourcePreflight {
                 kind: PreflightSourceKind::File,
@@ -449,6 +454,8 @@ mod tests {
                 team: team.clone(),
             },
             canonical_sender: "sender".parse().expect("sender"),
+            canonical_sender_team: team.clone(),
+            canonical_sender_chat_id: None,
             inbox_path: PathBuf::from("/tmp/atm-an10-test-inbox"),
             delivery_snapshot: DeliveryRecipientSnapshot::remote(agent, team),
             delivery_family: crate::delivery_policy::DeliveryEventFamily::NewMessage,

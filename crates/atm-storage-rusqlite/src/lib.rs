@@ -49,11 +49,13 @@ mod template_catalog_store;
 mod template_override_migration;
 #[cfg(any(test, feature = "test-support"))]
 mod test_support;
+mod tool_sender_peer_admission;
 mod tool_sender_registry;
 mod writer;
 
 pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};
 pub use schema_version::STORAGE_SCHEMA_VERSION;
+pub use tool_sender_peer_admission::{ToolSenderPeerAdmissionConfig, TrustedToolOriginKey};
 pub use tool_sender_registry::{ToolSenderRegistryConfig, TrustedToolInstallerKey};
 
 pub use crate::analyst_query::open_analyst_query_store;
@@ -79,7 +81,8 @@ use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{
     AsyncMessageSearchStore, CronScheduleStore, CronTransitionStore, HookRegistrationStore,
-    MessageSearchStore, TaskStore, TemplateCatalogStore, ToolSenderRegistry,
+    MessageSearchStore, TaskStore, TemplateCatalogStore, ToolSenderPeerAdmissionStore,
+    ToolSenderRegistry,
 };
 use atm_storage::{
     AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
@@ -106,6 +109,7 @@ pub use test_support::{
     inspect_mail_message_state_columns_for_test, inspect_message_ack_state_for_test,
     inspect_pending_marker_state_for_test, inspect_template_admission_for_test,
 };
+use tool_sender_peer_admission::tool_sender_peer_admission_store;
 use tool_sender_registry::tool_sender_registry;
 pub use writer::DiagnosticTimelinePersistenceStats;
 
@@ -713,6 +717,7 @@ pub struct SqliteStorageBackend {
     cron_schedule_store: Arc<dyn CronScheduleStore + Send + Sync>,
     cron_transition_store: Arc<dyn CronTransitionStore + Send + Sync>,
     tool_sender_registry: Arc<dyn ToolSenderRegistry + Send + Sync>,
+    tool_sender_peer_admission_store: Arc<dyn ToolSenderPeerAdmissionStore + Send + Sync>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
@@ -737,6 +742,7 @@ pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
     read_pool_config: reader_pool::SharedReadPoolConfig,
     tool_sender_registry_config: Option<ToolSenderRegistryConfig>,
+    tool_sender_peer_admission_config: Option<ToolSenderPeerAdmissionConfig>,
     observability: Arc<dyn SqliteObservability>,
     timeline_observer: Option<Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>>,
 }
@@ -747,6 +753,7 @@ impl Default for SqliteStorageFactory {
             database_path: None,
             read_pool_config: reader_pool::SharedReadPoolConfig::default(),
             tool_sender_registry_config: None,
+            tool_sender_peer_admission_config: None,
             observability: Arc::new(observability::PassiveSqliteObservability),
             timeline_observer: None,
         }
@@ -759,6 +766,7 @@ impl Clone for SqliteStorageFactory {
             database_path: self.database_path.clone(),
             read_pool_config: self.read_pool_config,
             tool_sender_registry_config: self.tool_sender_registry_config.clone(),
+            tool_sender_peer_admission_config: self.tool_sender_peer_admission_config.clone(),
             observability: Arc::clone(&self.observability),
             timeline_observer: self.timeline_observer.as_ref().map(Arc::clone),
         }
@@ -800,6 +808,16 @@ impl SqliteStorageFactory {
     /// Without it, signed registration and runtime admission fail closed.
     pub fn with_tool_sender_registry_config(mut self, config: ToolSenderRegistryConfig) -> Self {
         self.tool_sender_registry_config = Some(config);
+        self
+    }
+
+    /// Supplies the immutable enrolled origin-host keys and sender policy for
+    /// peer attestation verification. Protected loading stays in daemon composition.
+    pub fn with_tool_sender_peer_admission_config(
+        mut self,
+        config: ToolSenderPeerAdmissionConfig,
+    ) -> Self {
+        self.tool_sender_peer_admission_config = Some(config);
         self
     }
 
@@ -845,6 +863,7 @@ impl StorageFactory for SqliteStorageFactory {
                 Arc::clone(&self.observability),
                 self.read_pool_config,
                 self.tool_sender_registry_config.clone(),
+                self.tool_sender_peer_admission_config.clone(),
             )?,
         );
         if let Some(observer) = &self.timeline_observer {
@@ -906,6 +925,23 @@ impl SqliteStorageBackend {
         Self::new_with_observability(path, Arc::new(observability::PassiveSqliteObservability))
     }
 
+    /// Opens a backend with protected virtual-sender trust roots. Daemon
+    /// composition supplies these values after loading host-local secrets and
+    /// peer enrollment policy; request data cannot populate either policy.
+    pub fn new_with_tool_sender_configs(
+        path: impl AsRef<Path>,
+        registry_config: Option<ToolSenderRegistryConfig>,
+        peer_admission_config: Option<ToolSenderPeerAdmissionConfig>,
+    ) -> Result<Self, AtmError> {
+        Self::new_with_observability_and_read_pool_config(
+            path,
+            Arc::new(observability::PassiveSqliteObservability),
+            reader_pool::SharedReadPoolConfig::default(),
+            registry_config,
+            peer_admission_config,
+        )
+    }
+
     pub fn new_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
@@ -915,6 +951,7 @@ impl SqliteStorageBackend {
             observability,
             reader_pool::SharedReadPoolConfig::default(),
             None,
+            None,
         )
     }
 
@@ -923,6 +960,7 @@ impl SqliteStorageBackend {
         observability: Arc<dyn SqliteObservability>,
         read_pool_config: reader_pool::SharedReadPoolConfig,
         tool_sender_registry_config: Option<ToolSenderRegistryConfig>,
+        tool_sender_peer_admission_config: Option<ToolSenderPeerAdmissionConfig>,
     ) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_with_reader_lanes(
             path,
@@ -946,6 +984,10 @@ impl SqliteStorageBackend {
             tool_sender_registry: tool_sender_registry(
                 Arc::clone(&db),
                 tool_sender_registry_config,
+            ),
+            tool_sender_peer_admission_store: tool_sender_peer_admission_store(
+                Arc::clone(&db),
+                tool_sender_peer_admission_config,
             ),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
@@ -977,6 +1019,10 @@ impl SqliteStorageBackend {
             cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
             cron_transition_store: cron_transition_store(Arc::clone(&db)),
             tool_sender_registry: tool_sender_registry(Arc::clone(&db), None),
+            tool_sender_peer_admission_store: tool_sender_peer_admission_store(
+                Arc::clone(&db),
+                None,
+            ),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -1059,6 +1105,12 @@ impl SqliteStorageBackend {
     /// Returns the persisted, inspection-only tool-sender registry adapter.
     pub fn tool_sender_registry(&self) -> Arc<dyn ToolSenderRegistry + Send + Sync> {
         self.tool_sender_registry.clone()
+    }
+
+    pub fn tool_sender_peer_admission_store(
+        &self,
+    ) -> Arc<dyn ToolSenderPeerAdmissionStore + Send + Sync> {
+        self.tool_sender_peer_admission_store.clone()
     }
 
     pub fn graft_receiver_endpoint_store(

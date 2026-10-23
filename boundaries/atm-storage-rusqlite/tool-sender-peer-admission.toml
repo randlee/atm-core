@@ -1,0 +1,48 @@
+boundary_id = "BOUNDARY-ToolSenderPeerAdmission-Sqlite"
+owner_package = "atm-storage-rusqlite"
+owner_crate_path = "atm_storage_rusqlite"
+name = "SqliteToolSenderPeerAdmissionStore"
+
+[public]
+trait = "ToolSenderPeerAdmissionStore"
+notes = "Private SQLite adapter verifies origin-host Ed25519 attestations against protected immutable policy and persists exact replay bindings transactionally before projecting ToolPeerAdmission. Authenticated TLS identity alone never grants sender authority."
+
+[implementation]
+type = "SqliteToolSenderPeerAdmissionStore"
+module = "atm_storage_rusqlite::tool_sender_peer_admission"
+visibility = "private"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_storage_rusqlite::SqliteStorageFactory::with_tool_sender_peer_admission_config"]
+
+[ownership]
+io_owns = ["sqlite", "origin_signature_verification", "peer_nonce_binding"]
+io_forbidden = ["process_spawn", "socket_io", "mail_delivery"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = ["atm-storage", "base64", "ring", "rusqlite", "serde", "tokio", "tracing"]
+allowed_dev_dependencies = ["atm-storage", "serde", "serde_json", "tempfile"]
+forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime", "atm-daemon -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["SqliteToolSenderPeerAdmissionStore", "rusqlite::Connection"]
+
+[contracts]
+request_types = ["ToolSenderAttestation", "AtmMessageId", "MessageDigest", "HostName", "IsoTimestamp"]
+response_types = ["ToolPeerAdmission", "ToolPeerAdmissionIssuer"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TOOL-SENDER-REGISTRY-REFERENCES"]
+review_gates = ["authenticated_origin_host", "exact_message_binding", "durable_nonce_replay", "commit_before_capability"]
+
+[status]
+state = "active"
+notes = ["Peer attestation verification uses immutable protected host key and sender allowlist configuration.", "Exact replay of origin_host/sender/nonce returns the same opaque binding; changed message or signature reuse is rejected.", "No expiry is added because ToolSenderAttestation has no expiry field."]

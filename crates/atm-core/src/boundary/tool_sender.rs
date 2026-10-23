@@ -4,24 +4,93 @@
 //! neither serializable nor publicly constructible; daemon composition mints
 //! it only after registry admission.
 
-use atm_storage::{AgentAddress, TeamName, ToolRuntimeAdmission};
+use atm_storage::{AgentAddress, MessageDigest, TeamName, ToolPeerAdmission, ToolRuntimeAdmission};
 
 use crate::caller_context::CallerContext;
 
 #[derive(Debug)]
 pub struct ToolSenderCapability {
-    _verified_runtime_admission: ToolRuntimeAdmission,
+    admission: VerifiedToolAdmission,
+}
+
+#[derive(Debug)]
+enum VerifiedToolAdmission {
+    Local(ToolRuntimeAdmission),
+    Peer(ToolPeerAdmission),
 }
 
 impl ToolSenderCapability {
-    fn from_verified_runtime_admission(admission: ToolRuntimeAdmission) -> (AgentAddress, Self) {
-        let sender = admission.sender().address().clone();
-        (
-            sender,
-            Self {
-                _verified_runtime_admission: admission,
-            },
-        )
+    /// Full protected sender identity established by a local or peer admission.
+    #[must_use]
+    pub fn sender_address(&self) -> &AgentAddress {
+        match &self.admission {
+            VerifiedToolAdmission::Local(admission) => admission.sender().address(),
+            VerifiedToolAdmission::Peer(admission) => admission.sender().address(),
+        }
+    }
+
+    /// Stable message id bound by the verified signed proof.
+    #[must_use]
+    pub fn message_id(&self) -> crate::schema::AtmMessageId {
+        match &self.admission {
+            VerifiedToolAdmission::Local(admission) => admission.message_id(),
+            VerifiedToolAdmission::Peer(admission) => admission.message_id(),
+        }
+    }
+
+    /// Canonical body digest bound by the verified signed proof.
+    #[must_use]
+    pub fn message_digest(&self) -> &MessageDigest {
+        match &self.admission {
+            VerifiedToolAdmission::Local(admission) => admission.message_digest(),
+            VerifiedToolAdmission::Peer(admission) => admission.message_digest(),
+        }
+    }
+
+    /// Whether this capability came from the authenticated peer-admission path.
+    #[must_use]
+    pub fn is_peer_admission(&self) -> bool {
+        matches!(&self.admission, VerifiedToolAdmission::Peer(_))
+    }
+
+    /// Confirms that the serialized proof is the exact one admitted by its issuer.
+    #[must_use]
+    pub fn matches_runtime_proof(&self, proof: &atm_storage::ToolRuntimeProof) -> bool {
+        matches!(&self.admission, VerifiedToolAdmission::Local(admission) if admission.matches_proof(proof))
+    }
+
+    /// Confirms that the serialized attestation is the exact one admitted by its issuer.
+    #[must_use]
+    pub fn matches_peer_attestation(
+        &self,
+        attestation: &atm_storage::ToolSenderAttestation,
+    ) -> bool {
+        matches!(&self.admission, VerifiedToolAdmission::Peer(admission) if admission.matches_attestation(attestation))
+    }
+
+    /// Host proven by the peer attestation, if this is a peer admission.
+    #[must_use]
+    pub fn authenticated_source_host(&self) -> Option<&atm_storage::HostName> {
+        match &self.admission {
+            VerifiedToolAdmission::Local(_) => None,
+            VerifiedToolAdmission::Peer(admission) => Some(admission.authenticated_source_host()),
+        }
+    }
+}
+
+impl From<ToolRuntimeAdmission> for ToolSenderCapability {
+    fn from(admission: ToolRuntimeAdmission) -> Self {
+        Self {
+            admission: VerifiedToolAdmission::Local(admission),
+        }
+    }
+}
+
+impl From<ToolPeerAdmission> for ToolSenderCapability {
+    fn from(admission: ToolPeerAdmission) -> Self {
+        Self {
+            admission: VerifiedToolAdmission::Peer(admission),
+        }
     }
 }
 
@@ -41,8 +110,9 @@ pub enum SenderClaim {
 /// claim. A resolved [`atm_storage::RegisteredToolSender`] is inspection data
 /// and cannot use this seam.
 #[must_use]
-pub fn claim_verified_tool_runtime(admission: ToolRuntimeAdmission) -> SenderClaim {
-    let (sender, proof) = ToolSenderCapability::from_verified_runtime_admission(admission);
+pub fn claim_verified_tool_runtime(admission: impl Into<ToolSenderCapability>) -> SenderClaim {
+    let proof = admission.into();
+    let sender = proof.sender_address().clone();
     SenderClaim::DaemonTool { sender, proof }
 }
 

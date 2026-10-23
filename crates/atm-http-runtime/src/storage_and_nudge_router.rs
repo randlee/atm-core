@@ -30,6 +30,7 @@ use atm_core::protocol::{
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
     NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_preflight_async_runtime,
+    prepare_write_with_tool_capability_async_runtime,
 };
 use atm_runtime::{
     AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext, PeerPortResolver,
@@ -50,6 +51,7 @@ pub(crate) mod hook_wiring;
 mod non_write_dispatch;
 mod peer_port;
 mod roster_ingress;
+mod tool_sender_routes;
 
 /// The replacement implementation of the canonical write operation.
 ///
@@ -328,18 +330,33 @@ impl StorageAndNudgeRouter {
         &self,
         request: atm_core::send::WriteRequest,
         deadline: RequestDeadline,
+        tool_capability: Option<atm_core::boundary::ToolSenderCapability>,
     ) -> Result<CommittedWrite, AtmError> {
         let source_preflight = self
             .write_source_preflight_bridge
             .preflight(deadline, self.service_runtime.clone(), request.clone())
             .await?;
-        let execution = prepare_write_with_preflight_async_runtime(
-            request,
-            self.observability.as_ref(),
-            &self.service_runtime,
-            source_preflight,
-        )
-        .await?;
+        let execution = match tool_capability {
+            Some(capability) => {
+                prepare_write_with_tool_capability_async_runtime(
+                    request,
+                    capability,
+                    self.observability.as_ref(),
+                    &self.service_runtime,
+                    source_preflight,
+                )
+                .await?
+            }
+            None => {
+                prepare_write_with_preflight_async_runtime(
+                    request,
+                    self.observability.as_ref(),
+                    &self.service_runtime,
+                    source_preflight,
+                )
+                .await?
+            }
+        };
         crate::task_telemetry::project_task_events(&self.task_telemetry, &execution.task_events);
         let mut prepared = execution.operation?;
         let newly_persisted = prepared.is_newly_persisted();
@@ -1034,7 +1051,12 @@ impl StorageAndNudgeRouter {
             {
                 return Ok(ApiResponse::new(write_response(outcome)));
             }
-            let mut committed = self.commit_write(request, deadline).await?;
+            let tool_capability = self
+                .admit_tool_write(&request, ingress.clone(), deadline)
+                .await?;
+            let mut committed = self
+                .commit_write(request, deadline, tool_capability)
+                .await?;
             // ACK replies may acquire their host-qualified recipient while the
             // write is prepared.  These must be forwarded after their local
             // durable record is created; raw host-qualified sends returned

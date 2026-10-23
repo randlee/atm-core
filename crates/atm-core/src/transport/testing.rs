@@ -166,6 +166,11 @@ impl LoopbackClientTransport {
             | RequestEnvelope::CronList(_) => Err(AtmError::daemon_unavailable(
                 "loopback hook and cron transport is not wired outside the daemon runtime",
             )),
+            RequestEnvelope::ToolSenderApply(_) | RequestEnvelope::ToolSenderUnregister(_) => {
+                Err(AtmError::daemon_unavailable(
+                    "loopback tool sender transport is not wired outside the daemon runtime",
+                ))
+            }
         };
         response.map(ApiResponse::new)
     }

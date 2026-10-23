@@ -56,6 +56,7 @@ const HOOK_LIST_PATH: &str = "/v1/atm/hooks/list";
 const CRON_START_PATH: &str = "/v1/atm/cron/start";
 const CRON_END_PATH: &str = "/v1/atm/cron/end";
 const CRON_LIST_PATH: &str = "/v1/atm/cron/list";
+const TOOL_SENDERS_PATH: &str = "/v1/atm/tool-senders";
 
 /// One registered HTTP route, published from the same constants as request encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -88,6 +89,8 @@ pub enum HttpRouteKind {
     CronStart,
     CronEnd,
     CronList,
+    ToolSenderApply,
+    ToolSenderUnregister,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -253,6 +256,20 @@ const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
             path_template: CRON_LIST_PATH,
         },
     },
+    HttpRouteSpec {
+        kind: HttpRouteKind::ToolSenderApply,
+        route: HttpRoute {
+            method: "POST",
+            path_template: TOOL_SENDERS_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::ToolSenderUnregister,
+        route: HttpRoute {
+            method: "DELETE",
+            path_template: TOOL_SENDERS_PATH,
+        },
+    },
 ];
 
 /// Registered HTTP route inventory for documentation conformance tests.
@@ -286,6 +303,8 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
         HttpRouteKind::CronStart => &HTTP_ROUTE_SPECS[19],
         HttpRouteKind::CronEnd => &HTTP_ROUTE_SPECS[20],
         HttpRouteKind::CronList => &HTTP_ROUTE_SPECS[21],
+        HttpRouteKind::ToolSenderApply => &HTTP_ROUTE_SPECS[22],
+        HttpRouteKind::ToolSenderUnregister => &HTTP_ROUTE_SPECS[23],
     }
 }
 
@@ -306,6 +325,8 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::CronStart(_) => HttpRouteKind::CronStart,
         RequestEnvelope::CronEnd(_) => HttpRouteKind::CronEnd,
         RequestEnvelope::CronList(_) => HttpRouteKind::CronList,
+        RequestEnvelope::ToolSenderApply(_) => HttpRouteKind::ToolSenderApply,
+        RequestEnvelope::ToolSenderUnregister(_) => HttpRouteKind::ToolSenderUnregister,
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
         RequestEnvelope::QueueGetNext(_) => HttpRouteKind::QueueGetNext,
@@ -492,6 +513,8 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::CronStart(value) => serde_json::to_vec(value),
         RequestEnvelope::CronEnd(value) => serde_json::to_vec(value),
         RequestEnvelope::CronList(value) => serde_json::to_vec(value),
+        RequestEnvelope::ToolSenderApply(value) => serde_json::to_vec(value),
+        RequestEnvelope::ToolSenderUnregister(value) => serde_json::to_vec(value),
     }
     .map_err(AtmError::from)
 }
@@ -582,6 +605,10 @@ fn decode_success_response(
         RequestEnvelope::CronList(_) => {
             decode_response_body(body, "cron list").map(ResponseEnvelope::CronList)
         }
+        RequestEnvelope::ToolSenderApply(_) | RequestEnvelope::ToolSenderUnregister(_) => {
+            decode_response_body(body, "tool sender operation")
+                .map(ResponseEnvelope::ToolSenderApplied)
+        }
     }
 }
 
@@ -619,6 +646,8 @@ pub enum ApiRequest {
     CronStart(CronStartRequest),
     CronEnd(CronEndRequest),
     CronList(CronListQuery),
+    ToolSenderApply(crate::protocol::ToolInstallerRequest),
+    ToolSenderUnregister(crate::protocol::ToolInstallerRequest),
 }
 
 #[derive(Debug, Clone)]
@@ -665,6 +694,8 @@ impl ApiRequest {
             Self::CronStart(request) => RequestEnvelope::CronStart(request),
             Self::CronEnd(request) => RequestEnvelope::CronEnd(request),
             Self::CronList(query) => RequestEnvelope::CronList(query),
+            Self::ToolSenderApply(request) => RequestEnvelope::ToolSenderApply(request),
+            Self::ToolSenderUnregister(request) => RequestEnvelope::ToolSenderUnregister(request),
         }
     }
 }
@@ -706,6 +737,8 @@ impl From<RequestEnvelope> for ApiRequest {
             RequestEnvelope::CronStart(request) => Self::CronStart(request),
             RequestEnvelope::CronEnd(request) => Self::CronEnd(request),
             RequestEnvelope::CronList(query) => Self::CronList(query),
+            RequestEnvelope::ToolSenderApply(request) => Self::ToolSenderApply(request),
+            RequestEnvelope::ToolSenderUnregister(request) => Self::ToolSenderUnregister(request),
         }
     }
 }
