@@ -15,7 +15,7 @@ use chrono::{DateTime, Utc};
 use crate::{AtmCron, scheduler::store_call};
 
 /// Private scheduler-owned source for the opaque generation fence.
-struct SchedulePermitIssuer {
+pub(crate) struct SchedulePermitIssuer {
     schedule_id: CronScheduleId,
     generation: CronGeneration,
 }
@@ -29,6 +29,15 @@ impl CronRunPermitIssuer for SchedulePermitIssuer {
 
     fn generation(&self) -> CronGeneration {
         self.generation
+    }
+}
+
+impl SchedulePermitIssuer {
+    pub(crate) fn for_schedule(schedule: &CronSchedule) -> Self {
+        Self {
+            schedule_id: schedule.id,
+            generation: schedule.generation,
+        }
     }
 }
 
@@ -207,10 +216,7 @@ async fn reply_outcome(
         HookReply::PassThrough | HookReply::NotApplicable => CronRunOutcome::Ok,
         HookReply::Handled(actions) => {
             let count = actions.len();
-            let issuer = SchedulePermitIssuer {
-                schedule_id: schedule.id,
-                generation: schedule.generation,
-            };
+            let issuer = SchedulePermitIssuer::for_schedule(schedule);
             match cron
                 .deps
                 .dispatcher

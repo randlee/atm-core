@@ -11,14 +11,18 @@ use atm_core::{
     api::RequestDeadline,
     boundary::{
         CronCommitResult, CronDeliveryIntent, CronDeliveryKey, CronDiagnosticDetail, CronFailure,
-        CronFailureKind, CronHookRunner, CronLifecycleNudger, CronRunTransition, CronSchedule,
-        CronSuccess, CronTransitionStore, CronTransitionWrite, HookName, HookTarget, StopCondition,
+        CronFailureKind, CronHookRunner, CronLifecycleNudger, CronRunPermit, CronRunTransition,
+        CronSchedule, CronSuccess, CronTransitionStore, CronTransitionWrite, DispatchSpec,
+        HookName, HookTarget, StopCondition,
     },
     error::{AtmError, AtmErrorCode},
     hook::{CronHookOutcome, CronStopReply, CronTickReply, HookCaller, HookRequest},
 };
 
-use crate::{AtmCron, tick};
+use crate::{
+    AtmCron,
+    tick::{self, SchedulePermitIssuer},
+};
 
 /// Ports needed by the typed cron engine.
 ///
@@ -250,14 +254,42 @@ impl CronEngine {
                     },
                     output,
                 ),
-                CronTickReply::Handled { output, .. } => Execution::new(
-                    failure(
-                        CronFailureKind::ActionFailed,
-                        None,
-                        "cron action admission permit unavailable",
-                    ),
-                    output,
-                ),
+                CronTickReply::Handled { actions, output } => {
+                    let count = actions.len();
+                    let issuer = SchedulePermitIssuer::for_schedule(schedule);
+                    match cron
+                        .deps
+                        .dispatcher
+                        .dispatch_cron_actions(
+                            DispatchSpec {
+                                hook: HookName::cron_tick(),
+                                team: schedule.team.clone(),
+                                phase: schedule.phase.clone(),
+                                default_as: schedule.created_by.clone(),
+                                deadline: None,
+                                dry_run: false,
+                            },
+                            CronRunPermit::from_issuer(&issuer),
+                            actions,
+                        )
+                        .await
+                    {
+                        Ok(_) => Execution::new(
+                            CronRunTransition::Success {
+                                outcome: CronSuccess::Actions { count },
+                            },
+                            output,
+                        ),
+                        Err(error) => Execution::new(
+                            failure(
+                                CronFailureKind::ActionFailed,
+                                Some(error.code()),
+                                "cron action admission failed",
+                            ),
+                            output,
+                        ),
+                    }
+                }
             },
         }
     }
@@ -380,11 +412,12 @@ mod tests {
     async fn typed_cron(
         runner: Arc<ScriptedCronHookRunner>,
         transitions: Arc<atm_storage::testing::InMemoryCronTransitionStore>,
-    ) -> (AtmCron, CronSchedule) {
+    ) -> (AtmCron, CronSchedule, Arc<RecordingHookActionDispatcher>) {
+        let dispatcher = Arc::new(RecordingHookActionDispatcher::default());
         let cron = AtmCron::new(crate::AtmCronDeps {
             store: Arc::new(InMemoryCronScheduleStore::new()),
             runner: Arc::new(atm_runtime_test_support::DummyHookRunner::default()),
-            dispatcher: Arc::new(RecordingHookActionDispatcher::default()),
+            dispatcher: dispatcher.clone(),
             clock: Arc::new(crate::ManualClock::new(
                 "2026-10-19T00:00:00Z".parse().expect("timestamp"),
             )),
@@ -412,7 +445,7 @@ mod tests {
             })
             .await
             .expect("schedule");
-        (cron, schedule)
+        (cron, schedule, dispatcher)
     }
 
     #[tokio::test]
@@ -436,7 +469,7 @@ mod tests {
                 CronStopReply::new(false, None, vec![]).expect("stop reply")
             ));
         let transitions = Arc::new(atm_storage::testing::InMemoryCronTransitionStore::default());
-        let (cron, schedule) = typed_cron(runner, transitions.clone()).await;
+        let (cron, schedule, _) = typed_cron(runner, transitions.clone()).await;
 
         assert_eq!(
             tick::run_one(&cron, &schedule).await,
@@ -456,7 +489,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn action_reply_fails_closed_without_the_permit_admission_port() {
+    async fn action_reply_uses_scheduler_permit_for_canonical_admission() {
         let runner = Arc::new(ScriptedCronHookRunner::default());
         runner
             .tick_replies
@@ -467,7 +500,10 @@ mod tests {
                     actions: vec![atm_core::hook::HookAction {
                         command: atm_core::hook::HookActionCommand::Doctor,
                         run_as: None,
-                        request: serde_json::json!({}),
+                        request: serde_json::json!({
+                            "home_dir": "/home/test",
+                            "current_dir": "/work/test"
+                        }),
                     }],
                     output: vec![output("retain output")],
                 },
@@ -481,14 +517,20 @@ mod tests {
                 CronStopReply::new(false, None, vec![]).expect("stop reply")
             ));
         let transitions = Arc::new(atm_storage::testing::InMemoryCronTransitionStore::default());
-        let (cron, schedule) = typed_cron(runner, transitions.clone()).await;
+        let (cron, schedule, dispatcher) = typed_cron(runner, transitions.clone()).await;
 
         let outcome = tick::run_one(&cron, &schedule).await;
-        assert!(matches!(outcome, tick::CronRunOutcome::ActionErr(_)));
+        assert_eq!(outcome, tick::CronRunOutcome::Actions(1));
+        let calls = dispatcher.calls.lock().expect("dispatch calls");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(
+            calls[0].cron_permit,
+            Some((schedule.id, schedule.generation))
+        );
         let writes = transitions.writes.lock().expect("writes");
         assert!(matches!(
             writes[1].transition,
-            CronRunTransition::Failure(_)
+            CronRunTransition::Success { .. }
         ));
         assert_eq!(writes[1].outputs, vec![output("retain output")]);
     }
