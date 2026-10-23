@@ -8,9 +8,10 @@ use crate::contract::sealed;
 use crate::error::AtmError;
 use crate::schema::AtmMessageId;
 use crate::tool_sender::{
-    MessageDigest, PluginSenderId, RegisteredToolSender, ToolInstallReceipt,
-    ToolInstallerOperation, ToolInstallerRequest, ToolPrincipal, ToolRuntimeAdmission,
-    ToolRuntimeAdmissionIssuer, ToolRuntimeProof, ToolSenderFailure, ToolSenderRegistry,
+    MessageDigest, PluginSenderId, RegisteredToolSender, RegisteredToolSenderIssuer,
+    ToolInstallReceipt, ToolInstallerOperation, ToolInstallerRequest, ToolPrincipal,
+    ToolRuntimeAdmission, ToolRuntimeAdmissionIssuer, ToolRuntimeProof, ToolSenderFailure,
+    ToolSenderRegistry,
 };
 use crate::types::IsoTimestamp;
 
@@ -26,6 +27,25 @@ struct InMemoryToolRuntimeAdmissionIssuer {
     proof: ToolRuntimeProof,
     message_id: AtmMessageId,
     message_digest: MessageDigest,
+}
+
+/// Private, deterministic registry state used only to exercise the
+/// inspection projection independently of runtime admission.
+struct InMemoryRegisteredToolSenderIssuer {
+    principal: ToolPrincipal,
+    address: AgentAddress,
+}
+
+impl sealed::Sealed for InMemoryRegisteredToolSenderIssuer {}
+
+impl RegisteredToolSenderIssuer for InMemoryRegisteredToolSenderIssuer {
+    fn principal(&self) -> &ToolPrincipal {
+        &self.principal
+    }
+
+    fn address(&self) -> &AgentAddress {
+        &self.address
+    }
 }
 
 impl sealed::Sealed for InMemoryToolRuntimeAdmissionIssuer {}
@@ -51,12 +71,13 @@ impl ToolRuntimeAdmissionIssuer for InMemoryToolRuntimeAdmissionIssuer {
 impl InMemoryToolSenderRegistry {
     fn sender(sender: &PluginSenderId) -> Result<RegisteredToolSender, AtmError> {
         let address: AgentAddress = format!("{}@tool", sender.as_str()).parse()?;
-        Ok(RegisteredToolSender::from_registry_state(
-            ToolPrincipal::RegisteredPlugin {
+        let issuer = InMemoryRegisteredToolSenderIssuer {
+            principal: ToolPrincipal::RegisteredPlugin {
                 sender: sender.clone(),
             },
             address,
-        ))
+        };
+        Ok(RegisteredToolSender::from_issuer(&issuer))
     }
 }
 

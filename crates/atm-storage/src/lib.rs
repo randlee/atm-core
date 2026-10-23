@@ -131,10 +131,10 @@ pub use tls::{
     install_tls_provider, normalize_fingerprint,
 };
 pub use tool_sender::{
-    InstallerId, MessageDigest, PluginSenderId, RegisteredToolSender, ToolInstallReceipt,
-    ToolInstallerOperation, ToolInstallerRequest, ToolKeyId, ToolNonce, ToolPrincipal,
-    ToolRuntimeAdmission, ToolRuntimeAdmissionIssuer, ToolRuntimeProof, ToolSenderAttestation,
-    ToolSenderFailure, ToolSenderRegistry,
+    InstallerId, MessageDigest, PluginSenderId, RegisteredToolSender, RegisteredToolSenderIssuer,
+    ToolInstallReceipt, ToolInstallerOperation, ToolInstallerRequest, ToolKeyId, ToolNonce,
+    ToolPrincipal, ToolRuntimeAdmission, ToolRuntimeAdmissionIssuer, ToolRuntimeProof,
+    ToolSenderAttestation, ToolSenderFailure, ToolSenderRegistry,
 };
 pub use types::{
     AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, LOCAL_CAPABILITY_BYTES,

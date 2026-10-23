@@ -126,14 +126,17 @@ pub struct RegisteredToolSender {
 }
 
 impl RegisteredToolSender {
-    /// Builds an inspection record from registry-owned state.
+    /// Projects registry-owned sender inspection state into its public value.
     ///
-    /// This is deliberately not an emission credential. The registry returns a
-    /// [`ToolRuntimeAdmission`] only after it has verified runtime provenance
-    /// and bound the proof nonce to the canonical message.
-    #[allow(dead_code)]
-    pub(crate) fn from_registry_state(principal: ToolPrincipal, address: AgentAddress) -> Self {
-        Self { principal, address }
+    /// This is deliberately not an emission credential. Only a registry-owned
+    /// issuer record can implement [`RegisteredToolSenderIssuer`], and this
+    /// projection does not create a [`ToolRuntimeAdmission`]. Runtime admission
+    /// still requires a distinct issuer that binds verified proof to a message.
+    pub fn from_issuer(issuer: &impl RegisteredToolSenderIssuer) -> Self {
+        Self {
+            principal: issuer.principal().clone(),
+            address: issuer.address().clone(),
+        }
     }
 
     #[must_use]
@@ -145,6 +148,21 @@ impl RegisteredToolSender {
     pub fn address(&self) -> &AgentAddress {
         &self.address
     }
+}
+
+/// Read-only registry-owned state used to project a [`RegisteredToolSender`].
+///
+/// This ADR-001 workspace-convention seal is authorized only for the private
+/// SQLite registry record and deterministic in-memory inspection record. Its
+/// values are inspection data; implementing it does not grant runtime
+/// admission or emission authority. That authority is issued separately by
+/// [`ToolRuntimeAdmissionIssuer`] after proof/message binding.
+pub trait RegisteredToolSenderIssuer: sealed::Sealed {
+    /// Registered virtual principal selected by the registry.
+    fn principal(&self) -> &ToolPrincipal;
+
+    /// Canonical address stored by the registry for that principal.
+    fn address(&self) -> &AgentAddress;
 }
 
 /// Opaque result of a successful, durable runtime admission.

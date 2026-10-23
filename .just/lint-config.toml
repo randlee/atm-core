@@ -186,7 +186,7 @@ allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage/Cargo.toml"
-allowed_dependencies = ["async-trait", "atm-error", "base64", "chrono", "getrandom", "rustls", "serde", "serde_json", "sha2", "toml", "ulid", "x509-parser", "zeroize"]
+allowed_dependencies = ["async-trait", "atm-error", "base64", "chrono", "getrandom", "rustls", "serde", "serde_json", "sha2", "toml", "trybuild", "ulid", "x509-parser", "zeroize"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
