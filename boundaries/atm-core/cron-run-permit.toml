@@ -24,7 +24,7 @@ forbidden_edges = ["atm-core -> atm-storage-rusqlite", "atm-core -> atm-daemon"]
 
 [references]
 scope = "outside_owner_crate"
-forbidden = ["serde", "child_environment"]
+forbidden = ["child_environment"]
 
 [contracts]
 request_types = ["CronRunPermitIssuer"]
