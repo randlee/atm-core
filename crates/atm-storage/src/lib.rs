@@ -133,8 +133,8 @@ pub use tls::{
 pub use tool_sender::{
     InstallerId, MessageDigest, PluginSenderId, RegisteredToolSender, ToolInstallReceipt,
     ToolInstallerOperation, ToolInstallerRequest, ToolKeyId, ToolNonce, ToolPrincipal,
-    ToolRuntimeAdmission, ToolRuntimeProof, ToolSenderAttestation, ToolSenderFailure,
-    ToolSenderRegistry,
+    ToolRuntimeAdmission, ToolRuntimeAdmissionIssuer, ToolRuntimeProof, ToolSenderAttestation,
+    ToolSenderFailure, ToolSenderRegistry,
 };
 pub use types::{
     AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, LOCAL_CAPABILITY_BYTES,
