@@ -297,7 +297,7 @@ async fn run_replacement_daemon_with_owner(
     run_replacement_daemon_with_selector(
         observability,
         |service_runtime, herdr_process, runtime_health, bare_cli| {
-            received_hook_selector::active_received_hook_selector_with_health_and_fifo(
+            received_hook_selector::active_received_hook_transports_with_health_and_fifo(
                 service_runtime,
                 herdr_process,
                 runtime_health,
@@ -458,7 +458,7 @@ async fn run_replacement_daemon_with_selector(
         Arc<dyn HerdrProcessAdapter>,
         RuntimeHealth,
         BareCliRuntime,
-    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    ) -> received_hook_selector::ReceivedHookTransports,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
     peer_pool_config: PeerPoolConfig,
@@ -540,7 +540,7 @@ fn compose_replacement_handler_and_cron(
             Arc<dyn HerdrProcessAdapter>,
             RuntimeHealth,
             BareCliRuntime,
-        ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+        ) -> received_hook_selector::ReceivedHookTransports,
     >,
 ) -> Result<
     (
@@ -554,11 +554,21 @@ fn compose_replacement_handler_and_cron(
         handler,
         recovery_sweep,
         runner,
+        cron_runner,
         dispatcher,
         local_host,
+        lifecycle_nudge_emitter,
         ..
     } = build_replacement_handler(assembly, config)?;
-    let cron = cron_composition::compose_system(&handler, runtime, runner, dispatcher, local_host)?;
+    let cron = cron_composition::compose_system(
+        &handler,
+        runtime,
+        runner,
+        dispatcher,
+        local_host,
+        cron_runner,
+        lifecycle_nudge_emitter,
+    )?;
     Ok((handler, recovery_sweep, cron))
 }
 
@@ -1363,8 +1373,7 @@ mod replacement_runtime_tests {
                 ReplacementHandlerConfig {
                     observability: Arc::new(NullObservability),
                     selector_factory: |_, _, _, _| {
-                        Arc::new(NoReceivedHookSelector)
-                            as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                        received_hook_selector::ReceivedHookTransports::disabled_for_test()
                     },
                     daemon_launch_identity: DaemonLaunchIdentity::default(),
                     peer_wire_mode: PeerWireMode::plaintext_test(),
@@ -1566,7 +1575,13 @@ mod replacement_runtime_tests {
                 ReplacementHandlerConfig {
                     observability: Arc::new(NullObservability),
                     selector_factory: |runtime, herdr_process, health, _| {
-                        active_received_hook_selector_with_health(runtime, herdr_process, health)
+                        received_hook_selector::active_received_hook_transports_with_health_and_fifo(
+                            runtime,
+                            herdr_process,
+                            health,
+                            Default::default(),
+                            Default::default(),
+                        )
                     },
                     daemon_launch_identity: DaemonLaunchIdentity::default(),
                     peer_wire_mode: PeerWireMode::plaintext_test(),

@@ -81,8 +81,7 @@ impl World {
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
                 selector_factory: |_, _, _, _| {
-                    Arc::new(atm_core::boundary::NoopMessageReceivedHookSelector)
-                        as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                    crate::received_hook_selector::ReceivedHookTransports::disabled_for_test()
                 },
                 daemon_launch_identity: DaemonLaunchIdentity::default(),
                 peer_wire_mode: atm_core::peer_wire::PeerWireMode::plaintext_test(),

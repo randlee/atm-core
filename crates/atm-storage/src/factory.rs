@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use crate::{
     AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncMessageSearchStore,
-    AsyncMessageStore, AsyncTaskLedgerReader, AtmError, CronScheduleStore, DiagnosticTimelineStore,
-    HookRegistrationStore, MessageSearchStore, MessageStore, NudgeTemplateOverrideStore,
-    PeerConfigStore, PendingNudgeStore, RosterRuntimeMirror, RosterStore, TaskStore,
-    TemplateCatalogStore,
+    AsyncMessageStore, AsyncTaskLedgerReader, AtmError, CronScheduleStore, CronTransitionStore,
+    DiagnosticTimelineStore, HookRegistrationStore, MessageSearchStore, MessageStore,
+    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterRuntimeMirror,
+    RosterStore, TaskStore, TemplateCatalogStore,
 };
 
 /// Backend-neutral effective capacity settings for the single shared reader
@@ -116,6 +116,7 @@ pub struct StorageHandles {
     task_store: Arc<dyn TaskStore + Send + Sync>,
     hook_registration_store: Arc<dyn HookRegistrationStore + Send + Sync>,
     cron_schedule_store: Arc<dyn CronScheduleStore + Send + Sync>,
+    cron_transition_store: Arc<dyn CronTransitionStore + Send + Sync>,
     graft_receiver_endpoint_store: Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
@@ -148,6 +149,7 @@ pub struct StorageHandleParts {
     pub task_store: Arc<dyn TaskStore + Send + Sync>,
     pub hook_registration_store: Arc<dyn HookRegistrationStore + Send + Sync>,
     pub cron_schedule_store: Arc<dyn CronScheduleStore + Send + Sync>,
+    pub cron_transition_store: Arc<dyn CronTransitionStore + Send + Sync>,
     pub graft_receiver_endpoint_store: Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     pub template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
@@ -201,6 +203,7 @@ impl StorageHandles {
             task_store: parts.task_store,
             hook_registration_store: parts.hook_registration_store,
             cron_schedule_store: parts.cron_schedule_store,
+            cron_transition_store: parts.cron_transition_store,
             graft_receiver_endpoint_store: parts.graft_receiver_endpoint_store,
             peer_config_store: parts.peer_config_store,
             template_catalog_store: parts.template_catalog_store,
@@ -264,6 +267,10 @@ impl StorageHandles {
     /// Returns the durable cron schedule capability selected by composition.
     pub fn cron_schedule_store(&self) -> Arc<dyn CronScheduleStore + Send + Sync> {
         Arc::clone(&self.cron_schedule_store)
+    }
+
+    pub fn cron_transition_store(&self) -> Arc<dyn CronTransitionStore + Send + Sync> {
+        Arc::clone(&self.cron_transition_store)
     }
 
     pub fn graft_receiver_endpoint_store(

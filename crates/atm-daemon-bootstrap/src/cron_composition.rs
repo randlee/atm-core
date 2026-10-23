@@ -3,7 +3,9 @@ use std::{future::Future, sync::Arc, time::Duration};
 use atm_core::types::HostName;
 use atm_core::{api::RequestDeadline, error::AtmError};
 use atm_cron::{AtmCron, AtmCronDeps, Clock, JitterSource};
-use atm_http_runtime::StorageAndNudgeRouter;
+use atm_http_runtime::{
+    CronLifecycleNudgerAdapter, CronModuleMailDeliveryAdapter, StorageAndNudgeRouter,
+};
 use tokio::time::Instant;
 
 use crate::{DaemonWorkers, shutdown_probe};
@@ -16,6 +18,8 @@ pub(crate) fn compose_system(
     runner: Arc<dyn atm_core::boundary::HookRunner>,
     dispatcher: Arc<atm_http_runtime::UnhookedRouter>,
     host: Option<HostName>,
+    cron_runner: Arc<dyn atm_core::boundary::CronHookRunner>,
+    lifecycle_nudge_emitter: Arc<dyn atm_core::boundary::CronLifecycleNudgeEmitter>,
 ) -> Result<Arc<AtmCron>, AtmError> {
     compose_runtime_cron(
         handler,
@@ -25,6 +29,8 @@ pub(crate) fn compose_system(
         Arc::new(atm_cron::SystemClock),
         Arc::new(atm_cron::SystemJitter),
         host,
+        cron_runner,
+        lifecycle_nudge_emitter,
     )
 }
 
@@ -36,8 +42,15 @@ pub(crate) fn compose_runtime_cron(
     clock: Arc<dyn Clock>,
     jitter: Arc<dyn JitterSource>,
     host: Option<HostName>,
+    cron_runner: Arc<dyn atm_core::boundary::CronHookRunner>,
+    lifecycle_nudge_emitter: Arc<dyn atm_core::boundary::CronLifecycleNudgeEmitter>,
 ) -> Result<Arc<AtmCron>, AtmError> {
-    compose_cron(
+    let lifecycle_delivery = Arc::new(CronLifecycleNudgerAdapter::new(
+        handler.clone(),
+        lifecycle_nudge_emitter,
+    ));
+    let module_mail_delivery = Arc::new(CronModuleMailDeliveryAdapter::new(handler.clone()));
+    compose_cron_with_typed(
         handler,
         AtmCronDeps {
             store: runtime.cron_schedule_store()?,
@@ -47,6 +60,10 @@ pub(crate) fn compose_runtime_cron(
             jitter,
             host,
         },
+        cron_runner,
+        runtime.cron_transition_store()?,
+        lifecycle_delivery,
+        module_mail_delivery,
     )
 }
 
@@ -55,6 +72,26 @@ pub(crate) fn compose_cron(
     deps: AtmCronDeps,
 ) -> Result<Arc<AtmCron>, AtmError> {
     let cron = Arc::new(AtmCron::new(deps));
+    handler.install_cron_scheduler(cron.clone())?;
+    Ok(cron)
+}
+
+fn compose_cron_with_typed(
+    handler: &StorageAndNudgeRouter,
+    deps: AtmCronDeps,
+    cron_runner: Arc<dyn atm_core::boundary::CronHookRunner>,
+    transitions: Arc<dyn atm_core::boundary::CronTransitionStore>,
+    lifecycle_delivery: Arc<dyn atm_core::boundary::CronLifecycleNudger>,
+    module_mail_delivery: Arc<dyn atm_core::boundary::CronModuleMailDelivery>,
+) -> Result<Arc<AtmCron>, AtmError> {
+    let cron = Arc::new(
+        AtmCron::new(deps).with_typed_execution(atm_cron::CronEngineDeps {
+            runner: cron_runner,
+            transitions,
+            lifecycle_delivery,
+            module_mail_delivery,
+        }),
+    );
     handler.install_cron_scheduler(cron.clone())?;
     Ok(cron)
 }
