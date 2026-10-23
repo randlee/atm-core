@@ -107,6 +107,8 @@ always excluded. The field order is:
 - peer attestation (`ATM-TOOL-PEER-v1`): domain, sender, registration
   generation, host id, message id, message digest, nonce.
 
-BK-9 freezes these value contracts only. BK-11 implements installer validation
-and protected trust-root storage; BK-15 composes the authenticated daemon
+BK-9 freezes these value contracts only. BK-10 owns SQLite persistence for
+tool registrations; BK-11 owns the installer contract documentation and
+deterministic fixtures; BK-15 owns installer validation, protected
+trust-root loading, and production daemon composition of the authenticated
 adapter.
