@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS cron_delivery_intent (
     payload TEXT NOT NULL,
     state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending', 'delivered', 'suppressed', 'recipient_unavailable', 'unknown')),
     receipt TEXT NULL,
+    retry_cause TEXT NULL,
+    CHECK ((state = 'unknown') = (retry_cause IS NOT NULL)),
     PRIMARY KEY(schedule_id, generation, transition_seq, output_index)
 );
 "#;

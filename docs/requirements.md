@@ -5594,10 +5594,12 @@ remains a bare array.
   end is the same atomic stopped transition; repeat end adds none.
 - Lifecycle intents use a stable `CronNoticeKey`; module mail intents use a
   stable stored `AtmMessageId`. Delivery is `accepted`, `suppressed`,
-  `recipient_unavailable`, or retained for reconciliation when handoff status
-  is unknown. The contract guarantees one durable logical intent, never an
-  unproven exactly-once external nudge. Missing creators are terminal,
-  operator-visible outcomes and never redirect notification.
+  `recipient_unavailable`, or `unknown` with a bounded typed retry cause.
+  Unknown handoffs persist as reconciliation-required pending records, never
+  resendable work: a caller must resolve the prior handoff rather than blindly
+  send the same intent again. The contract guarantees one durable logical
+  intent, never an unproven exactly-once external nudge. Missing creators are
+  terminal, operator-visible outcomes and never redirect notification.
 - A generation-scoped, non-serializable `CronRunPermit` is checked at each
   canonical action admission. Ending or restarting fences the next action but
   cannot roll back an already committed action. The scheduler alone mints it;
