@@ -6,6 +6,8 @@ reviewed_for_release: 1.6.2
 
 # Tool Sender Trust Root
 
+> Signed `@tool` admission is suspended (2026-10-24) and not required: ordinary callers in the `tool` team send without this file, and the daemon starts when it is absent.
+
 Virtual `@tool` senders are enabled only by the daemon's administrator-owned
 trust root. The daemon reads exactly `/etc/atm/tool-sender-trust-root.json` on
 Unix. It does not read this policy from an ATM repository, a user home

@@ -76,6 +76,14 @@ are tracked separately so neither waits on the other.
 
 ## BK-9 amendment — reserved virtual namespace and authenticated principals
 
+> **Suspended (2026-10-24).** Rand ruled: "we need to disable the signing
+> bullshit on develop until we have a plan that is actually well thought out."
+> Signed admission against the trust root is suspended on the send path. D4 is
+> in force: an ordinary caller whose identity is `<name>` in the `tool` team
+> (a roster member created by the tool's installer) sends like any other
+> caller. Only the daemon-owned `cron@tool` principal stays reserved. The
+> signing, registry and trust-root code remains in the tree, unused by send.
+
 The historical temporary physical `tool` roster workaround is superseded.
 `tool` is a reserved virtual namespace, not an ordinary `TeamName`; no normal
 team creation, member administration, or agent launch may create `cron@tool`

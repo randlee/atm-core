@@ -736,12 +736,6 @@ impl SendCommand {
                 "Use a canonical full agent@team address.",
             ));
         }
-        if team.as_str() == "tool" {
-            return Err(Self::message_validation_error(
-                "--from cannot assert a virtual @tool sender",
-                "Use an authenticated ordinary agent@team caller; @tool senders are daemon-owned.",
-            ));
-        }
         if address.agent() != &caller_context.caller_identity || team != &caller_context.caller_team
         {
             return Err(Self::message_validation_error(
@@ -1710,6 +1704,27 @@ mod tests {
                 "expected --from validation for {value}, got {error}"
             );
         }
+    }
+
+    #[test]
+    #[serial(env)]
+    fn full_from_may_equal_an_authenticated_tool_team_caller() {
+        let _env =
+            EnvGuard::set_many([("ATM_IDENTITY", Some("atm-bd")), ("ATM_TEAM", Some("tool"))]);
+        let mut matching = send_command("recipient-a", None);
+        matching.team = Some("tool".to_string());
+        matching.from = Some("atm-bd@tool".to_string());
+        matching
+            .build_request(".".into(), ".".into())
+            .expect("ADR-066 D4: --from equal to the authenticated tool-team caller");
+
+        let mut mismatched = send_command("recipient-a", None);
+        mismatched.team = Some("tool".to_string());
+        mismatched.from = Some("other@tool".to_string());
+        let error = mismatched
+            .build_request(".".into(), ".".into())
+            .expect_err("--from may not assert a different @tool sender");
+        assert!(error.to_string().contains("--from"));
     }
 
     #[test]

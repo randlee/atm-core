@@ -36,6 +36,6 @@ fn raw_cron_tool_sender_is_refused_while_the_authenticated_creator_is_preserved(
         address: raw_virtual,
         caller: caller(),
     })
-    .expect_err("textual cron sender cannot bypass daemon registry admission");
-    assert!(error.detail().contains("registry admission"));
+    .expect_err("textual cron sender cannot be claimed as an ordinary sender");
+    assert!(error.detail().contains("daemon-owned scheduler principal"));
 }

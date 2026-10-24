@@ -201,10 +201,15 @@ fn canonical_sender_identity(
             "submit the signed proof through the configured local or authenticated-peer admission route",
         ));
     }
-    if request.caller_team == crate::types::TeamName::from_validated("tool") {
+    // Signed tool-sender admission is suspended (ADR-066 D4 is in force): an
+    // ordinary roster caller in team `tool` sends like any other caller. Only
+    // the daemon-owned `cron` principal name stays unavailable to them.
+    if request.caller_team == crate::types::TeamName::from_validated("tool")
+        && request.caller_identity.as_str() == "cron"
+    {
         return Err(AtmError::validation_with_recovery(
-            "virtual tool senders require signed daemon admission",
-            "use an authenticated ordinary sender or submit a verified tool proof",
+            "cron@tool is the daemon-owned scheduler principal",
+            "use a different ordinary sender identity",
         ));
     }
     Ok((
