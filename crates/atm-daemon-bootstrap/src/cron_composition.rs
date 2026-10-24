@@ -63,7 +63,7 @@ fn compose_runtime_cron(
 
 /// Builds the same typed cron path as the daemon while substituting only the
 /// deterministic clock and jitter sources owned by test support.
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn compose_controlled(
     composition: RuntimeCronComposition<'_>,
     clock: Arc<atm_cron::ManualClock>,

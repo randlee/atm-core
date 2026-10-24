@@ -324,9 +324,9 @@ fn compose_storage_router(
     peer_wire_mode: PeerWireMode,
     peer_adapter_selection: SelectedPeerAdapterSelection,
 ) -> Result<ComposedStorageRouter, AtmError> {
-    let snapshot = Arc::new(ActiveHookSnapshot::load(
+    let snapshot = Arc::new(ActiveHookSnapshot::deferred(
         assembly.service_runtime.hook_registration_store()?,
-    )?);
+    ));
     let daemon_runner = Arc::new(crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource));
     let runner: Arc<dyn HookRunner> = daemon_runner.clone();
     let cron_runner: Arc<dyn atm_core::boundary::CronHookRunner> = daemon_runner;
