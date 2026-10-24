@@ -17,6 +17,8 @@ use tokio::{
     task::JoinHandle,
 };
 
+#[cfg(feature = "test-utils")]
+use crate::run_completion::{CronRunCompletionWaiter, RunCompletionTracker};
 use crate::{Clock, CronEngineDeps, JitterSource, engine::CronEngine, expr, jitter, tick, worker};
 
 pub struct AtmCronDeps {
@@ -34,6 +36,8 @@ pub struct AtmCron {
     reload: watch::Sender<u64>,
     start_lock: tokio::sync::Mutex<()>,
     stopped: Arc<AtomicBool>,
+    #[cfg(feature = "test-utils")]
+    pub(crate) run_completions: Arc<RunCompletionTracker>,
 }
 
 impl AtmCron {
@@ -44,6 +48,8 @@ impl AtmCron {
             reload: watch::channel(0).0,
             start_lock: tokio::sync::Mutex::new(()),
             stopped: Arc::new(AtomicBool::new(false)),
+            #[cfg(feature = "test-utils")]
+            run_completions: Arc::new(RunCompletionTracker::default()),
         }
     }
 
@@ -84,7 +90,11 @@ impl AtmCron {
         let (shutdown, receiver) = oneshot::channel();
         let (running, settled) = watch::channel(0);
         let cron = self.clone();
-        let guard = Stopped(self.stopped.clone());
+        let guard = Stopped {
+            stopped: self.stopped.clone(),
+            #[cfg(feature = "test-utils")]
+            run_completions: Arc::clone(&self.run_completions),
+        };
         let worker = tokio::spawn(async move {
             let _guard = guard;
             worker::run(cron, rows, reload, receiver, running).await;
@@ -106,6 +116,7 @@ impl AtmCron {
 pub trait AtmCronTestAccess {
     fn hook_runner(&self) -> &Arc<dyn HookRunner>;
     fn action_dispatcher(&self) -> &Arc<dyn HookActionDispatcher>;
+    fn register_run_completion(&self, schedule: &CronSchedule) -> CronRunCompletionWaiter;
 }
 
 #[cfg(feature = "test-utils")]
@@ -117,13 +128,23 @@ impl AtmCronTestAccess for AtmCron {
     fn action_dispatcher(&self) -> &Arc<dyn HookActionDispatcher> {
         &self.deps.dispatcher
     }
+
+    fn register_run_completion(&self, schedule: &CronSchedule) -> CronRunCompletionWaiter {
+        self.run_completions.register_next(schedule)
+    }
 }
 
-struct Stopped(Arc<AtomicBool>);
+struct Stopped {
+    stopped: Arc<AtomicBool>,
+    #[cfg(feature = "test-utils")]
+    run_completions: Arc<RunCompletionTracker>,
+}
 
 impl Drop for Stopped {
     fn drop(&mut self) {
-        self.0.store(true, Ordering::SeqCst);
+        self.stopped.store(true, Ordering::SeqCst);
+        #[cfg(feature = "test-utils")]
+        self.run_completions.close();
     }
 }
 

@@ -15,6 +15,8 @@ use tokio::{
     task::{JoinError, JoinHandle},
 };
 
+#[cfg(feature = "test-utils")]
+use crate::run_completion::RunCompletionTicket;
 use crate::{
     AtmCron, expr,
     scheduler::store_call,
@@ -25,6 +27,8 @@ struct Slot {
     schedule: CronSchedule,
     next: Option<DateTime<Utc>>,
     in_flight: Option<JoinHandle<CronRunOutcome>>,
+    #[cfg(feature = "test-utils")]
+    completion: Option<RunCompletionTicket>,
 }
 
 struct Running(watch::Sender<usize>);
@@ -177,6 +181,8 @@ async fn merge(cron: &AtmCron, slots: &mut Vec<Slot>, rows: Vec<CronSchedule>) {
                     schedule,
                     next: Some(next),
                     in_flight: None,
+                    #[cfg(feature = "test-utils")]
+                    completion: None,
                 }),
                 Ok(None) => stop_exhausted(cron, &schedule).await,
                 Err(error) => log_next_time_error(&schedule, &error),
@@ -191,6 +197,8 @@ async fn merge(cron: &AtmCron, slots: &mut Vec<Slot>, rows: Vec<CronSchedule>) {
                     %error, "cron run cancelled on reload: {error}");
             }
         }
+        #[cfg(feature = "test-utils")]
+        drop(removed.completion.take());
     }
 }
 
@@ -330,10 +338,16 @@ async fn apply_step(cron: &Arc<AtmCron>, slots: &mut Vec<Slot>, running: &watch:
             let owner = cron.clone();
             let schedule = slot.schedule.clone();
             let guard = Running::new(running.clone());
+            #[cfg(feature = "test-utils")]
+            let completion = Some(Arc::clone(&cron.run_completions).begin(&schedule));
             slot.in_flight = Some(tokio::spawn(TrackedRun {
                 future: Box::pin(async move { tick::run_one(&owner, &schedule).await }),
                 _guard: guard,
             }));
+            #[cfg(feature = "test-utils")]
+            {
+                slot.completion = completion;
+            }
             match next_time(&slot.schedule, now) {
                 Ok(Some(next)) => slot.next = Some(next),
                 Ok(None) => slot.next = None,
@@ -382,6 +396,9 @@ pub(crate) async fn run(
             }
             (index, result) = finished(&mut slots) => {
                 slots[index].in_flight.take();
+                let cancelled = result.as_ref().is_err_and(|error| error.is_cancelled());
+                #[cfg(feature = "test-utils")]
+                let mut ticket = slots[index].completion.take();
                 if complete(&cron, &slots[index], result).await { slots.remove(index); }
                 else {
                     match next_time(&slots[index].schedule, cron.deps.clock.now()) {
@@ -396,6 +413,14 @@ pub(crate) async fn run(
                         }
                     }
                 }
+                #[cfg(feature = "test-utils")]
+                if let Some(ticket) = ticket.as_mut() {
+                    if cancelled {
+                        ticket.finish(Err("cron run was cancelled before completion".into()));
+                    } else {
+                        ticket.finish(Ok(()));
+                    }
+                }
             }
             _ = &mut shutdown => break,
         }
@@ -404,7 +429,16 @@ pub(crate) async fn run(
         if let Some(handle) = &mut slot.in_flight {
             let result = handle.await;
             slot.in_flight.take();
+            let cancelled = result.as_ref().is_err_and(|error| error.is_cancelled());
             complete(&cron, &slot, result).await;
+            #[cfg(feature = "test-utils")]
+            if let Some(mut ticket) = slot.completion.take() {
+                if cancelled {
+                    ticket.finish(Err("cron run was cancelled before completion".into()));
+                } else {
+                    ticket.finish(Ok(()));
+                }
+            }
         }
     }
 }
@@ -474,6 +508,7 @@ mod tests {
             schedule: schedule.clone(),
             next: Some(due),
             in_flight: None,
+            completion: None,
         }];
 
         merge(&cron, &mut slots, vec![schedule]).await;

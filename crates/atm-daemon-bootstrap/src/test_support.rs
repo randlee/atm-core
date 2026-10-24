@@ -9,11 +9,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::api::{ApiRequest, AuthenticatedIngress, RequestDeadline};
+use atm_core::boundary::CronSchedule;
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-use atm_cron::{AtmCron, CronWorkerHandle, ManualClock};
+use atm_cron::{AtmCron, AtmCronTestAccess, CronWorkerHandle, ManualClock};
 use atm_http_runtime::{
     CanonicalWriteHandler, PeerPoolConfig, RuntimeHealth, StorageAndNudgeRouter,
 };
@@ -194,6 +195,18 @@ impl ControlledCronComposition {
     /// Advances the manual clock to a completed worker cycle without wall-clock sleeps.
     pub async fn advance_clock_settled(&self, duration: chrono::Duration) {
         self.clock.advance_settled(duration).await;
+    }
+
+    /// Advances the controlled clock and waits for this schedule generation's
+    /// next run to finish dispatch and durable outcome recording.
+    pub async fn advance_clock_and_wait_for_run(
+        &self,
+        schedule: &CronSchedule,
+        duration: chrono::Duration,
+    ) -> Result<(), AtmError> {
+        let completion = self.cron.register_run_completion(schedule);
+        self.clock.advance_settled(duration).await;
+        completion.wait().await
     }
 
     /// Stops the production worker after all in-flight deterministic work settles.

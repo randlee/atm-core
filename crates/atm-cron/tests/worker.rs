@@ -17,7 +17,9 @@ use atm_core::{
     hook::{HookReply, StopReply},
     test_support::TEST_SENDER,
 };
-use atm_cron::{AtmCron, AtmCronDeps, Clock, CronWorkerHandle, ManualClock, SeqJitter};
+use atm_cron::{
+    AtmCron, AtmCronDeps, AtmCronTestAccess, Clock, CronWorkerHandle, ManualClock, SeqJitter,
+};
 use atm_runtime_test_support::{
     DummyHookRunner, InMemoryCronScheduleStore, RecordingHookActionDispatcher,
 };
@@ -494,6 +496,58 @@ async fn ticks_fire_only_when_the_manual_clock_reaches_them() {
     shutdown(&worker).await;
     assert_eq!(fixture.calls(), 1);
     assert_eq!(fixture.row().last_outcome.as_deref(), Some("ok"));
+}
+
+#[tokio::test]
+async fn completion_waits_for_hook_dispatch_and_durable_outcome_record() {
+    let fixture = Fixture::new();
+    fixture.reply(HookReply::PassThrough);
+    let schedule = fixture
+        .cron
+        .start(fixture.spec("completion-barrier"))
+        .await
+        .unwrap();
+    let (release, mut entered) = fixture.hold();
+    let worker = fixture.worker().await;
+    let completion = fixture.cron.register_run_completion(&schedule);
+    let wait = completion.wait();
+    tokio::pin!(wait);
+
+    fixture.clock.advance(chrono::Duration::seconds(60));
+    tokio::select! {
+        biased;
+        result = &mut wait => panic!("run completed while its hook was held: {result:?}"),
+        () = wait_for_entered(&mut entered, 1) => {}
+    }
+    assert_eq!(fixture.row().last_outcome, None);
+
+    release.send_replace(true);
+    wait.await.expect("run completion follows hook and record");
+    assert_eq!(fixture.row().last_outcome.as_deref(), Some("ok"));
+    shutdown(&worker).await;
+}
+
+#[tokio::test]
+async fn completion_waiter_resolves_after_a_refusal_is_recorded() {
+    let fixture = Fixture::new();
+    fixture.reply(HookReply::Refused {
+        message: "quota".into(),
+    });
+    let schedule = fixture
+        .cron
+        .start(fixture.spec("completion-refusal"))
+        .await
+        .unwrap();
+    let worker = fixture.worker().await;
+    let completion = fixture.cron.register_run_completion(&schedule);
+
+    fixture.step(60).await;
+    completion.wait().await.expect("refusal is a completed run");
+    assert_eq!(
+        fixture.row().last_outcome.as_deref(),
+        Some("refused: quota")
+    );
+    shutdown(&worker).await;
 }
 
 #[tokio::test]
