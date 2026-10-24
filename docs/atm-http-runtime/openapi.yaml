@@ -156,7 +156,6 @@ paths:
         '200': { description: Runtime view reloaded, content: { application/json: { schema: { type: 'null' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /tool-senders:
-    x-atm-contract-status: planned
     x-atm-target-http-api-version: 1.17.0
     post:
       operationId: applyToolSenderRegistration

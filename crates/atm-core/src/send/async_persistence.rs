@@ -1,5 +1,6 @@
 //! Tokio durable-admission preparation for the canonical send pipeline.
 
+use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
 use tracing::warn;
 
 use super::*;
@@ -12,6 +13,59 @@ type TemplateAdmissionParts = (
     Vec<atm_storage::InstanceTag>,
     Option<atm_storage::WorkflowSnapshot>,
 );
+
+pub(crate) fn validate_async_write_admission(
+    request: &WriteRequest,
+    has_tool_capability: bool,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
+    stable_message_id: Option<AtmMessageId>,
+) -> Result<(), AtmError> {
+    if has_tool_capability && cron_run_fence.is_some() {
+        return Err(AtmError::validation(
+            "tool sender admission cannot be combined with a cron run permit",
+        ));
+    }
+    if stable_message_id.is_some() && cron_run_fence.is_none() {
+        return Err(AtmError::validation(
+            "a caller-selected stable message id requires a cron run permit",
+        ));
+    }
+    if stable_message_id.is_some()
+        && (request.origin_message_id.is_some() || request.origin_timestamp.is_some())
+    {
+        return Err(AtmError::validation(
+            "cron module mail cannot override canonical origin metadata",
+        ));
+    }
+    if has_tool_capability && request.acknowledges_message_id.is_some() {
+        return Err(AtmError::validation(
+            "virtual tool sender admission cannot authorize acknowledgement writes",
+        ));
+    }
+    if !has_tool_capability
+        && (request.tool_runtime_proof.is_some() || request.tool_sender_attestation.is_some())
+    {
+        return Err(AtmError::validation_with_recovery(
+            "tool sender proof was not admitted by the daemon",
+            "submit the signed proof through the configured local or authenticated-peer admission route",
+        ));
+    }
+    validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
+    if request.acknowledges_message_id.is_none() && request.to.is_none() {
+        return Err(AtmError::validation(
+            "message write is missing a destination",
+        ));
+    }
+    Ok(())
+}
 
 /// Opaque proof that a template request was verified before durable admission.
 ///

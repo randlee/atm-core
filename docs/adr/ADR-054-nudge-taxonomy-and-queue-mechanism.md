@@ -502,3 +502,23 @@ template override cluster in (g), these helpers use nudge in its umbrella
 sense: neither selects nor introduces a Steer/Queue delivery kind. These two
 exact identifiers are therefore admitted to the frozen taxonomy inventory;
 the kind taxonomy and gate for all other new identifiers remain unchanged.
+
+## BK-14 amendment — cron lifecycle transport representation
+
+BK-14 adds the exact identifiers `CronLifecycleNudge` and
+`CronLifecycleNudgeTarget` for the typed lifecycle payload and its explicit
+transport target, plus `CronLifecycleNudgeEmitter` and
+`cron_lifecycle_nudge_emitter` for the sealed core port and module,
+`CronLifecycleNudgerAdapter` and `RecordingCronLifecycleNudgeEmitter` for
+production and test adapters, and `resolve_cron_lifecycle_nudge_target` for
+runtime target resolution. These names represent direct delivery of the
+existing committed cron lifecycle template through an authenticated transport;
+they do not introduce a third nudge kind, a mailbox/task/ack side effect, or a
+change to the Steer/Queue taxonomy. This is a narrow inventory addition under
+the BK-14 authorization recorded in ATM message `01M5NJ8TVNXRFC78ZHKCVR905P`.
+The associated Graft/Python transport identifiers `HostCronNudge`,
+`inject_cron_nudge`, `spawn_host_cron_nudge_helper`,
+`receive_host_cron_nudge_result`, and `PyCronNudge` are also admitted; they are
+authorized in ATM message `01M5NJCJSK2Q8KZYB6R3NYH96F` and represent the same
+direct lifecycle transport. The frozen identifier gate remains active for
+every other identifier.

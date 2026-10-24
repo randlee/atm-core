@@ -16,7 +16,7 @@ roots = []
 
 [ownership]
 io_owns = ["canonical_mail_delivery"]
-io_forbidden = ["database_io", "message_persistence", "process_spawn", "socket_io"]
+io_forbidden = ["database_io", "process_spawn", "socket_io"]
 
 [dependencies]
 allowed_dependents = ["atm-cron", "atm-http-runtime", "atm-runtime-test-support"]

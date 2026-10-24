@@ -78,6 +78,11 @@ ALLOWED_FORBIDDEN_LITERALS = (
 ALLOWED_NUDGE_IDENTIFIERS = frozenset(
     {
         "CronLifecycleNudger", "cron_lifecycle_nudger", "RecordingCronLifecycleNudger",
+        "CronLifecycleNudge", "CronLifecycleNudgeTarget", "CronLifecycleNudgeEmitter",
+        "CronLifecycleNudgerAdapter", "RecordingCronLifecycleNudgeEmitter",
+        "cron_lifecycle_nudge_emitter", "resolve_cron_lifecycle_nudge_target",
+        "HostCronNudge", "inject_cron_nudge", "spawn_host_cron_nudge_helper",
+        "receive_host_cron_nudge_result", "PyCronNudge",
         "HerdrNudgeTarget",
         "_enqueue_nudge", "_nudge", "_on_nudge", "acquire_host_nudge_helper_permit",
         "bounded_host_nudge_injector_caps_helper_growth_under_repeated_hangs",
