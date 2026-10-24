@@ -16,7 +16,7 @@ roots = []
 
 [ownership]
 io_owns = ["direct_prompt_transport"]
-io_forbidden = ["mailbox_write", "task_write", "ack_write", "post_send_telemetry"]
+io_forbidden = ["delivery_plan_construction", "hook_execution", "message_delivery"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm-http-runtime", "atm-runtime-test-support"]

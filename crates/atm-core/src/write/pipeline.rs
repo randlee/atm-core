@@ -7,6 +7,7 @@ use super::pipeline_terminal_escalation::{
 };
 use super::*;
 use crate::boundary::MemberKey;
+use crate::send::async_persistence::validate_async_write_admission;
 use crate::send::{NudgeMode, WriteSourcePreflight, send_mode_for_task_request};
 
 /// Result of the one canonical write operation.
@@ -636,60 +637,24 @@ async fn prepare_write_with_admission_async_runtime(
     cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
     stable_message_id: Option<AtmMessageId>,
 ) -> Result<WriteExecution, AtmError> {
-    if tool_capability.is_some() && cron_run_fence.is_some() {
-        return Err(AtmError::validation(
-            "tool sender admission cannot be combined with a cron run permit",
-        ));
-    }
-    if stable_message_id.is_some() && cron_run_fence.is_none() {
-        return Err(AtmError::validation(
-            "a caller-selected stable message id requires a cron run permit",
-        ));
-    }
-    if stable_message_id.is_some()
-        && (request.origin_message_id.is_some() || request.origin_timestamp.is_some())
-    {
-        return Err(AtmError::validation(
-            "cron module mail cannot override canonical origin metadata",
-        ));
-    }
-    if tool_capability.is_some() && request.acknowledges_message_id.is_some() {
-        return Err(AtmError::validation(
-            "virtual tool sender admission cannot authorize acknowledgement writes",
-        ));
-    }
-    if tool_capability.is_none()
-        && (request.tool_runtime_proof.is_some() || request.tool_sender_attestation.is_some())
-    {
-        return Err(AtmError::validation_with_recovery(
-            "tool sender proof was not admitted by the daemon",
-            "submit the signed proof through the configured local or authenticated-peer admission route",
-        ));
-    }
-    validate_write_provenance(
-        WriteIngress::Canonical,
-        WriteProvenance {
-            target_host: request.to.as_ref().and_then(|address| address.host()),
-            authenticated_source_host: request.authenticated_source_host.as_ref(),
-            origin_message_id: request.origin_message_id.is_some(),
-            origin_timestamp: request.origin_timestamp.is_some(),
-        },
+    validate_async_write_admission(
+        &request,
+        tool_capability.is_some(),
+        cron_run_fence,
+        stable_message_id,
     )?;
-    if request.acknowledges_message_id.is_none() && request.to.is_none() {
-        return Err(AtmError::validation(
-            "message write is missing a destination",
-        ));
-    }
     if request.acknowledges_message_id.is_none() || has_authenticated_peer_provenance(&request) {
         return prepare_persisted_write_async(
             request,
             observability,
             runtime,
-            None,
-            source_preflight,
-            tool_capability,
-            cron_run_fence,
-            stable_message_id,
+            PersistedWritePreparation {
+                acknowledgement: None,
+                source_preflight,
+                tool_capability,
+                cron_run_fence,
+                stable_message_id,
+            },
         )
         .await;
     }
@@ -1003,16 +968,27 @@ fn verified_tool_message_id(
 }
 
 /// Prepares the canonical write after its one asynchronous durable admission.
-async fn prepare_persisted_write_async(
-    mut request: SendRequest,
-    observability: &(dyn ObservabilityPort + Send + Sync),
-    runtime: &LocalServiceRuntime,
+struct PersistedWritePreparation {
     acknowledgement: Option<ResolvedAcknowledgement>,
     source_preflight: WriteSourcePreflight,
     tool_capability: Option<crate::boundary::ToolSenderCapability>,
     cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
     stable_message_id: Option<AtmMessageId>,
+}
+
+async fn prepare_persisted_write_async(
+    mut request: SendRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    preparation: PersistedWritePreparation,
 ) -> Result<WriteExecution, AtmError> {
+    let PersistedWritePreparation {
+        acknowledgement,
+        source_preflight,
+        tool_capability,
+        cron_run_fence,
+        stable_message_id,
+    } = preparation;
     let mut context = crate::send::prepare_send_context_with_tool_capability(
         runtime,
         &mut request,

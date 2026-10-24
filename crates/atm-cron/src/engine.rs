@@ -11,9 +11,9 @@ use atm_core::{
     boundary::{
         CronCommitResult, CronDeliveryIntent, CronDeliveryKey, CronDiagnosticDetail, CronFailure,
         CronFailureKind, CronHookRunner, CronLifecycleNudger, CronModuleMailDelivery,
-        CronRunPermit, CronRunTransition, CronSchedule, CronSuccess, CronTransitionStore,
-        CronTransitionWrite, DispatchSpec, HookName, HookTarget, PendingCronDelivery,
-        StopCondition,
+        CronRunPermit, CronRunTransition, CronSchedule, CronScheduleId, CronSuccess,
+        CronTransitionStore, CronTransitionWrite, DeliveryReceipt, DispatchSpec, HookName,
+        HookTarget, PendingCronDelivery, StopCondition,
     },
     error::{AtmError, AtmErrorCode},
     hook::{CronStopReply, CronTickReply, HookAction, HookCaller, HookRequest},
@@ -57,28 +57,7 @@ impl CronEngine {
         transition: CronRunTransition,
         outputs: Vec<atm_core::boundary::CronModuleOutput>,
     ) -> Result<bool, AtmError> {
-        let pending_store = self.deps.transitions.clone();
-        let pending = tokio::task::spawn_blocking(move || pending_store.pending(128))
-            .await
-            .map_err(|source| {
-                AtmError::new(
-                    AtmErrorCode::InternalError,
-                    "cron pending delivery task failed",
-                )
-                .with_cause(source)
-            })??;
-        let mut intents = pending.into_iter().filter_map(|pending| match pending {
-            PendingCronDelivery::ReadyToSend(intent) => match &intent {
-                CronDeliveryIntent::Lifecycle(notice)
-                    if notice.key().schedule_id == schedule.id
-                        && notice.key().generation == schedule.generation => Some(intent),
-                CronDeliveryIntent::ModuleMail(mail)
-                    if matches!(mail.key, CronDeliveryKey::ModuleMail { schedule_id, generation, .. }
-                        if schedule_id == schedule.id && generation == schedule.generation) => Some(intent),
-                _ => None,
-            },
-            PendingCronDelivery::ReconciliationRequired { .. } => None,
-        }).collect::<Vec<_>>();
+        let mut intents = self.pending_intents(schedule).await?;
         let write = CronTransitionWrite {
             id: schedule.id,
             generation: schedule.generation,
@@ -98,72 +77,123 @@ impl CronEngine {
         };
         intents.extend(committed);
         for intent in intents {
-            let (key, receipt) = match intent {
-                CronDeliveryIntent::Lifecycle(intent) => {
-                    let key = CronDeliveryKey::Lifecycle(intent.key());
-                    let receipt = match self.deps.lifecycle_delivery.deliver(&intent).await {
-                        Ok(receipt) => receipt,
-                        Err(error) => {
-                            tracing::error!(subsystem = "atm_cron", action = "lifecycle_delivery_failed", schedule = %schedule.id, %error, "cron lifecycle delivery failed: {error}");
-                            continue;
-                        }
-                    };
-                    (key, receipt)
-                }
-                CronDeliveryIntent::ModuleMail(intent) => {
-                    let CronDeliveryKey::ModuleMail {
-                        schedule_id,
-                        generation,
-                        ..
-                    } = intent.key
-                    else {
-                        tracing::error!(subsystem = "atm_cron", action = "module_mail_key_invalid", schedule = %schedule.id, "cron module mail intent has a lifecycle key");
-                        continue;
-                    };
-                    if schedule_id != schedule.id || generation != schedule.generation {
-                        tracing::error!(subsystem = "atm_cron", action = "module_mail_generation_mismatch", schedule = %schedule.id, "cron module mail intent does not match the committed schedule generation");
-                        continue;
-                    }
-                    let issuer = SchedulePermitIssuer::for_schedule(schedule);
-                    let permit = CronRunPermit::from_issuer(&issuer);
-                    let key = intent.key;
-                    let receipt = match self
-                        .deps
-                        .module_mail_delivery
-                        .deliver(&intent, &permit)
-                        .await
-                    {
-                        Ok(receipt) => receipt,
-                        Err(error) => {
-                            tracing::error!(subsystem = "atm_cron", action = "module_mail_delivery_failed", schedule = %schedule.id, message_id = %intent.message_id, %error, "cron module mail delivery failed: {error}");
-                            continue;
-                        }
-                    };
-                    (key, receipt)
-                }
-            };
-            let transitions = self.deps.transitions.clone();
-            let marked =
-                tokio::task::spawn_blocking(move || transitions.mark_delivered(key, receipt))
-                    .await
-                    .map_err(|source| {
-                        AtmError::new(
-                            AtmErrorCode::InternalError,
-                            "cron delivery receipt task failed",
-                        )
-                        .with_cause(source)
-                    });
-            match marked {
-                Ok(Ok(_)) => {}
-                Ok(Err(error)) => {
-                    tracing::error!(subsystem = "atm_cron", action = "lifecycle_receipt_failed", schedule = %schedule.id, %error, "cron lifecycle receipt persistence failed: {error}")
-                }
-                Err(error) => {
-                    tracing::error!(subsystem = "atm_cron", action = "lifecycle_receipt_task_failed", schedule = %schedule.id, %error, "cron lifecycle receipt task failed: {error}")
-                }
+            if let Some((key, receipt)) = self.deliver_intent(schedule, intent).await {
+                self.mark_intent_delivered(schedule.id, key, receipt).await;
             }
         }
         Ok(true)
+    }
+
+    async fn pending_intents(
+        &self,
+        schedule: &CronSchedule,
+    ) -> Result<Vec<CronDeliveryIntent>, AtmError> {
+        let pending_store = self.deps.transitions.clone();
+        let pending = tokio::task::spawn_blocking(move || pending_store.pending(128))
+            .await
+            .map_err(|source| {
+                AtmError::new(
+                    AtmErrorCode::InternalError,
+                    "cron pending delivery task failed",
+                )
+                .with_cause(source)
+            })??;
+        Ok(pending
+            .into_iter()
+            .filter_map(|pending| match pending {
+                PendingCronDelivery::ReadyToSend(intent) => match &intent {
+                    CronDeliveryIntent::Lifecycle(notice)
+                        if notice.key().schedule_id == schedule.id
+                            && notice.key().generation == schedule.generation =>
+                    {
+                        Some(intent)
+                    }
+                    CronDeliveryIntent::ModuleMail(mail)
+                        if matches!(mail.key, CronDeliveryKey::ModuleMail { schedule_id, generation, .. }
+                            if schedule_id == schedule.id && generation == schedule.generation) =>
+                    {
+                        Some(intent)
+                    }
+                    _ => None,
+                },
+                PendingCronDelivery::ReconciliationRequired { .. } => None,
+            })
+            .collect())
+    }
+
+    async fn deliver_intent(
+        &self,
+        schedule: &CronSchedule,
+        intent: CronDeliveryIntent,
+    ) -> Option<(CronDeliveryKey, DeliveryReceipt)> {
+        match intent {
+            CronDeliveryIntent::Lifecycle(intent) => {
+                let key = CronDeliveryKey::Lifecycle(intent.key());
+                match self.deps.lifecycle_delivery.deliver(&intent).await {
+                    Ok(receipt) => Some((key, receipt)),
+                    Err(error) => {
+                        tracing::error!(subsystem = "atm_cron", action = "lifecycle_delivery_failed", schedule = %schedule.id, %error, "cron lifecycle delivery failed: {error}");
+                        None
+                    }
+                }
+            }
+            CronDeliveryIntent::ModuleMail(intent) => {
+                let CronDeliveryKey::ModuleMail {
+                    schedule_id,
+                    generation,
+                    ..
+                } = intent.key
+                else {
+                    tracing::error!(subsystem = "atm_cron", action = "module_mail_key_invalid", schedule = %schedule.id, "cron module mail intent has a lifecycle key");
+                    return None;
+                };
+                if schedule_id != schedule.id || generation != schedule.generation {
+                    tracing::error!(subsystem = "atm_cron", action = "module_mail_generation_mismatch", schedule = %schedule.id, "cron module mail intent does not match the committed schedule generation");
+                    return None;
+                }
+                let issuer = SchedulePermitIssuer::for_schedule(schedule);
+                let permit = CronRunPermit::from_issuer(&issuer);
+                match self
+                    .deps
+                    .module_mail_delivery
+                    .deliver(&intent, &permit)
+                    .await
+                {
+                    Ok(receipt) => Some((intent.key, receipt)),
+                    Err(error) => {
+                        tracing::error!(subsystem = "atm_cron", action = "module_mail_delivery_failed", schedule = %schedule.id, message_id = %intent.message_id, %error, "cron module mail delivery failed: {error}");
+                        None
+                    }
+                }
+            }
+        }
+    }
+
+    async fn mark_intent_delivered(
+        &self,
+        schedule_id: CronScheduleId,
+        key: CronDeliveryKey,
+        receipt: DeliveryReceipt,
+    ) {
+        let transitions = self.deps.transitions.clone();
+        let marked = tokio::task::spawn_blocking(move || transitions.mark_delivered(key, receipt))
+            .await
+            .map_err(|source| {
+                AtmError::new(
+                    AtmErrorCode::InternalError,
+                    "cron delivery receipt task failed",
+                )
+                .with_cause(source)
+            });
+        match marked {
+            Ok(Ok(_)) => {}
+            Ok(Err(error)) => {
+                tracing::error!(subsystem = "atm_cron", action = "lifecycle_receipt_failed", schedule = %schedule_id, %error, "cron lifecycle receipt persistence failed: {error}")
+            }
+            Err(error) => {
+                tracing::error!(subsystem = "atm_cron", action = "lifecycle_receipt_task_failed", schedule = %schedule_id, %error, "cron lifecycle receipt task failed: {error}")
+            }
+        }
     }
 
     pub(crate) async fn record(
@@ -626,16 +656,19 @@ mod tests {
             output: output("retry with stable identity"),
         };
         let stable_id = intent.message_id;
-        let mut pending = transitions.pending_intents.lock().expect("pending intents");
-        pending.push(atm_storage::PendingCronDelivery::ReadyToSend(
-            atm_storage::CronDeliveryIntent::ModuleMail(intent.clone()),
-        ));
-        pending.push(atm_storage::PendingCronDelivery::ReconciliationRequired {
-            intent: atm_storage::CronDeliveryIntent::ModuleMail(intent),
-            retry_cause: atm_storage::DeliveryRetryCause::parse("prior handoff uncertain".into())
+        {
+            let mut pending = transitions.pending_intents.lock().expect("pending intents");
+            pending.push(atm_storage::PendingCronDelivery::ReadyToSend(
+                atm_storage::CronDeliveryIntent::ModuleMail(intent.clone()),
+            ));
+            pending.push(atm_storage::PendingCronDelivery::ReconciliationRequired {
+                intent: atm_storage::CronDeliveryIntent::ModuleMail(intent),
+                retry_cause: atm_storage::DeliveryRetryCause::parse(
+                    "prior handoff uncertain".into(),
+                )
                 .expect("retry cause"),
-        });
-        drop(pending);
+            });
+        }
 
         let engine = cron.typed_engine.as_ref().expect("typed engine");
         assert!(
