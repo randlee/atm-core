@@ -293,7 +293,7 @@ fn read_dacl_entries(
         };
         entries.push(Ace {
             kind,
-            inherited: header.AceFlags != 0,
+            flags: header.AceFlags,
             trustee,
             mask,
         });

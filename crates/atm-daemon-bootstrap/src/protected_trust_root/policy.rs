@@ -18,7 +18,7 @@ pub(super) enum AceKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Ace {
     pub kind: AceKind,
-    pub inherited: bool,
+    pub flags: u8,
     pub trustee: Trustee,
     pub mask: u32,
 }
@@ -39,6 +39,9 @@ const WRITE_OWNER: u32 = 0x0008_0000;
 const SYNCHRONIZE: u32 = 0x0010_0000;
 const GENERIC_WRITE: u32 = 0x4000_0000;
 const GENERIC_ALL: u32 = 0x1000_0000;
+const OBJECT_INHERIT_ACE: u8 = 0x01;
+const CONTAINER_INHERIT_ACE: u8 = 0x02;
+const INHERITED_ACE: u8 = 0x10;
 const READ_ONLY_RIGHTS: u32 =
     FILE_READ_DATA | FILE_READ_EA | FILE_READ_ATTRIBUTES | READ_CONTROL | SYNCHRONIZE;
 const DANGEROUS_WRITE_RIGHTS: u32 = FILE_WRITE_DATA
@@ -69,8 +72,21 @@ pub(super) fn verify_dacl(
         return Err("DACL must be present and non-null");
     }
     for entry in entries {
-        if entry.kind != AceKind::Allow || entry.inherited {
-            return Err("only explicit, non-inheriting allow entries are permitted");
+        // OI/CI are propagation instructions for a protected directory ACL,
+        // not evidence that the ACE itself was inherited. Inherited ACEs and
+        // other flags (for example inherit-only or no-propagate) are rejected.
+        let allowed_flags = if is_directory {
+            OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE
+        } else {
+            0
+        };
+        if entry.kind != AceKind::Allow
+            || entry.flags & INHERITED_ACE != 0
+            || entry.flags & !allowed_flags != 0
+        {
+            return Err(
+                "only explicit allow entries with supported propagation flags are permitted",
+            );
         }
         if entry.trustee == Trustee::TrustedAdministrator {
             continue;
@@ -97,7 +113,7 @@ mod tests {
     fn other(mask: u32) -> Ace {
         Ace {
             kind: AceKind::Allow,
-            inherited: false,
+            flags: 0,
             trustee: Trustee::Other,
             mask,
         }
@@ -108,7 +124,7 @@ mod tests {
         let entries = [
             Ace {
                 kind: AceKind::Allow,
-                inherited: false,
+                flags: 0,
                 trustee: Trustee::TrustedAdministrator,
                 mask: u32::MAX,
             },
@@ -116,6 +132,26 @@ mod tests {
         ];
         assert!(verify_dacl(true, true, true, false, &entries).is_ok());
         assert!(verify_dacl(true, true, true, true, &[other(0x0012_00a9)]).is_ok()); // read + traverse
+    }
+
+    #[test]
+    fn accepts_ci_acl_shape_used_by_windows_provisioning() {
+        const OI_CI: u8 = 0x01 | 0x02;
+        let entries = [
+            Ace {
+                kind: AceKind::Allow,
+                flags: OI_CI,
+                trustee: Trustee::TrustedAdministrator,
+                mask: u32::MAX,
+            },
+            Ace {
+                flags: OI_CI,
+                ..other(0x0012_00a9) // runner RX with directory traversal
+            },
+        ];
+
+        assert!(verify_dacl(true, true, true, true, &entries).is_ok());
+        assert!(verify_dacl(true, true, true, false, &[other(0x0012_0089)]).is_ok());
     }
 
     #[test]
@@ -130,7 +166,7 @@ mod tests {
     #[test]
     fn rejects_inherited_and_unknown_acl_entries() {
         let inherited = Ace {
-            inherited: true,
+            flags: 0x10,
             ..other(0x0012_0089)
         };
         let unknown = Ace {
@@ -139,5 +175,14 @@ mod tests {
         };
         assert!(verify_dacl(true, true, true, false, &[inherited]).is_err());
         assert!(verify_dacl(true, true, true, false, &[unknown]).is_err());
+    }
+
+    #[test]
+    fn rejects_untrusted_write_rights_even_with_directory_propagation_flags() {
+        let writer = Ace {
+            flags: 0x01 | 0x02,
+            ..other(0x0002)
+        };
+        assert!(verify_dacl(true, true, true, true, &[writer]).is_err());
     }
 }

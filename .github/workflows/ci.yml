@@ -273,10 +273,19 @@ jobs:
           # Keep the fixed system location administrator-controlled. The daemon
           # runner receives only traversal/read; no request or environment value
           # selects this policy path.
-          & icacls $root /inheritance:r /setowner "*${administratorsSid}" /grant:r "*${systemSid}:(OI)(CI)F" "*${administratorsSid}:(OI)(CI)F" "*${runnerSid}:(OI)(CI)RX"
-          if ($LASTEXITCODE -ne 0) { throw "failed to protect $root" }
-          & icacls $trustRoot /inheritance:r /setowner "*${administratorsSid}" /grant:r "*${systemSid}:F" "*${administratorsSid}:F" "*${runnerSid}:R"
-          if ($LASTEXITCODE -ne 0) { throw "failed to protect $trustRoot" }
+          & icacls $root /inheritance:r
+          if ($LASTEXITCODE -ne 0) { throw "failed to disable inherited ACLs on $root" }
+          & icacls $root /setowner "*${administratorsSid}"
+          if ($LASTEXITCODE -ne 0) { throw "failed to set owner on $root" }
+          & icacls $root /grant:r "*${systemSid}:(OI)(CI)F" "*${administratorsSid}:(OI)(CI)F" "*${runnerSid}:(OI)(CI)RX"
+          if ($LASTEXITCODE -ne 0) { throw "failed to grant protected ACLs on $root" }
+
+          & icacls $trustRoot /inheritance:r
+          if ($LASTEXITCODE -ne 0) { throw "failed to disable inherited ACLs on $trustRoot" }
+          & icacls $trustRoot /setowner "*${administratorsSid}"
+          if ($LASTEXITCODE -ne 0) { throw "failed to set owner on $trustRoot" }
+          & icacls $trustRoot /grant:r "*${systemSid}:F" "*${administratorsSid}:F" "*${runnerSid}:R"
+          if ($LASTEXITCODE -ne 0) { throw "failed to grant protected ACLs on $trustRoot" }
 
       - name: Install Rust toolchain
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
