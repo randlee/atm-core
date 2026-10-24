@@ -22,31 +22,6 @@ fn invalid(module: &Path, rule: &str) -> AtmError {
     AtmError::hook_module_invalid(&format!("{}: {rule}", module.display()))
 }
 
-/// Canonicalize a hook path while keeping it consumable by the external hook
-/// interpreter.
-///
-/// Windows' `std::fs::canonicalize` returns a verbatim `\\?\\` path. That
-/// spelling is appropriate for Win32 filesystem calls, while the persisted
-/// hook target is later passed to an external child process. The path is
-/// already resolved, so retain its identity but use the portable drive or UNC
-/// spelling before it crosses the CLI-to-daemon boundary.
-fn canonicalize_hook_path(path: &Path) -> std::io::Result<PathBuf> {
-    let canonical = path.canonicalize()?;
-    #[cfg(windows)]
-    {
-        let Some(value) = canonical.to_str() else {
-            return Ok(canonical);
-        };
-        if let Some(unc) = value.strip_prefix(r"\\?\UNC\") {
-            return Ok(PathBuf::from(format!(r"\\{unc}")));
-        }
-        if let Some(portable) = value.strip_prefix(r"\\?\") {
-            return Ok(PathBuf::from(portable));
-        }
-    }
-    Ok(canonical)
-}
-
 fn read_constant(module: &Path, name: &str) -> Result<Option<u32>, AtmError> {
     let source = std::fs::read_to_string(module)
         .map_err(|error| invalid(module, &format!("cannot read module: {error}")))?;
@@ -102,14 +77,15 @@ pub(super) fn canonical_paths(
     module: &Path,
     cwd: Option<&Path>,
 ) -> Result<(PathBuf, PathBuf), AtmError> {
-    let canonical_module = canonicalize_hook_path(module)
+    let canonical_module = module
+        .canonicalize()
         .map_err(|error| invalid(module, &format!("module does not exist: {error}")))?;
     let cwd = cwd.unwrap_or_else(|| {
         canonical_module
             .parent()
             .expect("canonical module has a parent")
     });
-    let canonical_cwd = canonicalize_hook_path(cwd).map_err(|error| {
+    let canonical_cwd = cwd.canonicalize().map_err(|error| {
         invalid(
             module,
             &format!("cwd {} does not exist: {error}", cwd.display()),
@@ -172,18 +148,5 @@ mod tests {
             std::fs::write(&module, source).unwrap();
             assert!(read_cron_timeout_ms(&module).is_err(), "{source}");
         }
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn canonical_hook_paths_do_not_persist_windows_verbatim_prefixes() {
-        let directory = tempfile::tempdir().unwrap();
-        let module = directory.path().join("hook.py");
-        std::fs::write(&module, "TIMEOUT_MS = 2500").unwrap();
-
-        let (canonical_module, canonical_cwd) = canonical_paths(&module, None).unwrap();
-
-        assert!(!canonical_module.to_string_lossy().starts_with(r"\\?\"));
-        assert!(!canonical_cwd.to_string_lossy().starts_with(r"\\?\"));
     }
 }

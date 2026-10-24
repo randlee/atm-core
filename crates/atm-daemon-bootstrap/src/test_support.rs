@@ -10,8 +10,10 @@ use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiRequest, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::{CronSchedule, PendingCronDelivery};
+use atm_core::boundary::{CronSchedule, HookName, HookRunner, PendingCronDelivery};
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
+use atm_core::hook::{HookCaller, HookRequest, HookTarget};
 use atm_core::observability::NullObservability;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
@@ -37,6 +39,7 @@ pub struct ControlledCronComposition {
     root: Arc<tempfile::TempDir>,
     runtime: LocalServiceRuntime,
     handler: Arc<StorageAndNudgeRouter>,
+    runner: Arc<dyn HookRunner>,
     cron: Arc<AtmCron>,
     clock: Arc<ManualClock>,
     cron_worker: Mutex<Option<CronWorkerHandle>>,
@@ -104,7 +107,7 @@ impl ControlledCronComposition {
             RuntimeCronComposition {
                 handler: handler.as_ref(),
                 runtime: &runtime,
-                runner,
+                runner: runner.clone(),
                 dispatcher,
                 host: local_host,
                 cron_runner,
@@ -116,6 +119,7 @@ impl ControlledCronComposition {
             root,
             runtime,
             handler,
+            runner,
             cron,
             clock,
             cron_worker: Mutex::new(None),
@@ -246,6 +250,46 @@ impl ControlledCronComposition {
         Ok((schedules, pending))
     }
 
+    /// Re-runs a cron request through the real child-process runner only to
+    /// retain its typed launch/exit diagnostic for a controlled test failure.
+    ///
+    /// A successfully started cron module has cron-specific output that the
+    /// general hook parser intentionally rejects, so only child-launch and
+    /// child-exit failures are returned. Production durable cron diagnostics
+    /// remain generic and never retain child stderr.
+    pub async fn cron_runner_failure_detail(&self, schedule: &CronSchedule) -> Option<String> {
+        let target = HookTarget::from(schedule);
+        let request = HookRequest::for_cron(
+            &target,
+            HookCaller {
+                identity: schedule.created_by.clone(),
+                team: schedule.team.clone(),
+                host: None,
+            },
+            HookName::cron_tick(),
+            &schedule.args,
+        );
+        match self
+            .runner
+            .run(
+                &target,
+                &request,
+                RequestDeadline::after(Duration::from_millis(u64::from(schedule.timeout_ms) + 500)),
+            )
+            .await
+        {
+            Err(error)
+                if matches!(
+                    error.code(),
+                    AtmErrorCode::HookExit | AtmErrorCode::HookTimeout
+                ) =>
+            {
+                Some(error.detail().to_owned())
+            }
+            Ok(_) | Err(_) => None,
+        }
+    }
+
     /// Stops the production worker after all in-flight deterministic work settles.
     pub async fn shutdown_cron_worker(&self) {
         let worker = self
@@ -284,6 +328,7 @@ impl ControlledCronComposition {
             root,
             runtime,
             handler,
+            runner: _,
             cron,
             clock,
             cron_worker: _,
