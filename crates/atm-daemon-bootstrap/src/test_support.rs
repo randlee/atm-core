@@ -4,7 +4,8 @@
 //! substitutes only test-owned storage, clock, jitter, and received-hook
 //! transports; it does not expose the test-only cron constructor.
 
-use std::sync::Arc;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::api::{ApiRequest, AuthenticatedIngress, RequestDeadline};
@@ -12,7 +13,7 @@ use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-use atm_cron::{AtmCron, ManualClock};
+use atm_cron::{AtmCron, CronWorkerHandle, ManualClock};
 use atm_http_runtime::{
     CanonicalWriteHandler, PeerPoolConfig, RuntimeHealth, StorageAndNudgeRouter,
 };
@@ -36,6 +37,7 @@ pub struct ControlledCronComposition {
     handler: Arc<StorageAndNudgeRouter>,
     cron: Arc<AtmCron>,
     clock: Arc<ManualClock>,
+    cron_worker: Mutex<Option<CronWorkerHandle>>,
     recovery_sweep: queue_drain::RecoverySweepHandle,
 }
 
@@ -104,6 +106,7 @@ impl ControlledCronComposition {
             handler,
             cron,
             clock,
+            cron_worker: Mutex::new(None),
             recovery_sweep,
         })
     }
@@ -149,13 +152,49 @@ impl ControlledCronComposition {
         self.clock.advance(duration);
     }
 
+    /// Returns the isolated working directory supplied to real hook modules.
+    pub fn root_path(&self) -> &Path {
+        self.root.path()
+    }
+
+    /// Starts the production cron worker and waits until its manual clock is parked.
+    pub async fn start_cron_worker(&self) -> Result<(), AtmError> {
+        let worker = self.cron.start_worker().await?;
+        {
+            let mut slot = self
+                .cron_worker
+                .lock()
+                .expect("controlled cron worker lock poisoned");
+            debug_assert!(slot.is_none(), "cron worker can only start once");
+            *slot = Some(worker);
+        }
+        self.clock.wait_parks_above(0).await;
+        Ok(())
+    }
+
+    /// Advances the manual clock to a completed worker cycle without wall-clock sleeps.
+    pub async fn advance_clock_settled(&self, duration: chrono::Duration) {
+        self.clock.advance_settled(duration).await;
+    }
+
     /// Rebuilds the production composition over the same isolated SQLite data.
     pub async fn reopen(self) -> Result<Self, AtmError> {
+        let worker = self
+            .cron_worker
+            .lock()
+            .expect("controlled cron worker lock poisoned")
+            .take();
+        if let Some(worker) = worker {
+            worker
+                .shutdown(tokio::time::Instant::now() + Duration::from_secs(1))
+                .await;
+        }
         let Self {
             root,
             handler,
             cron,
             clock,
+            cron_worker: _,
             recovery_sweep,
         } = self;
         recovery_sweep
