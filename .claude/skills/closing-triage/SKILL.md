@@ -94,7 +94,9 @@ python3 /path/to/.claude/skills/closing-triage/scripts/query_open_findings.py \
 `--sprint` is the sprint's local name in the phase structure (`BB6`, the
 `triage:foundIn` of its findings) and is what scopes the query on a stacked
 layer; `--phase` is the phase's local name (`BB`). Both come from your
-assignment. Omit `--sprint` only on a branch the phase structure declares.
+assignment. Both match case-insensitively, and `--sprint` ignores separators
+(`bl-1`, `BL1` and `BL.1` are the same sprint). Omit `--sprint` only on a
+branch the phase structure declares.
 Each result carries `files`, where the defect was observed; it locates the
 finding for you but is not where the fix necessarily lands. When a sprint's
 fix work is split across sibling layers by crate, your assignment names

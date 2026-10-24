@@ -296,6 +296,78 @@ class LintTtlTriageConsistencyTests(unittest.TestCase):
 
             self.assertEqual(collect_ttl_triage_violations(repo_root), [])
 
+    def test_accepts_lowercase_dash_sprint_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            write_ttl(
+                repo_root / ".triage/phase-bl/findings/F016.ttl",
+                """
+                triage:F016
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:foundIn triage:bl-1 ;
+                  triage:aich_sprint "an-8" ;
+                  triage:sprint_id "bl-12" .
+                """,
+            )
+
+            self.assertEqual(collect_ttl_triage_violations(repo_root), [])
+
+    def test_validates_found_in_for_phases_longer_than_two_letters(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            write_ttl(
+                repo_root / ".triage/phase-blx/findings/F017.ttl",
+                """
+                triage:F017
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:foundIn triage:BLX-S1 .
+                """,
+            )
+            write_ttl(
+                repo_root / ".triage/phase-ao2/findings/F018.ttl",
+                """
+                triage:F018
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:foundIn triage:ao2.15 .
+                """,
+            )
+            write_ttl(
+                repo_root / ".triage/phase-abc/findings/F019.ttl",
+                """
+                triage:F019
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:foundIn triage:abc-3 .
+                """,
+            )
+
+            violations = collect_ttl_triage_violations(repo_root)
+
+            messages = sorted(f"{v.path}: {v.message}" for v in violations)
+            self.assertEqual(len(violations), 2, messages)
+            self.assertIn("phase-ao2/findings/F018.ttl: NAMING.NON_CANONICAL", messages[0])
+            self.assertIn("canonical candidate=AO2.15", messages[0])
+            self.assertIn("phase-blx/findings/F017.ttl: TTL.QA_RUN_KEY_MISMATCH", messages[1])
+            self.assertIn("canonical candidate=BLX.1", messages[1])
+
+    def test_found_in_with_foreign_long_prefix_is_not_a_sprint(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            write_ttl(
+                repo_root / ".triage/readiness-1.4/findings/F020.ttl",
+                """
+                triage:F020
+                  a triage:Finding ;
+                  triage:status "open" ;
+                  triage:foundIn triage:PUB-1085 .
+                """,
+            )
+
+            self.assertEqual(collect_ttl_triage_violations(repo_root), [])
+
     def test_historical_allowlist_suppresses_only_listed_path_and_value(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

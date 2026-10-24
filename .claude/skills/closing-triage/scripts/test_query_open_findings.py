@@ -35,6 +35,19 @@ triage:BB6 a triage:Sprint ; triage:inPhase triage:PhaseAJ ; triage:order 1 ; tr
 """
 
 
+BL_STRUCTURE = """\
+@prefix triage: <urn:atm:triage:> .
+triage:PhaseBL a triage:Phase .
+triage:BL1 a triage:Sprint ; triage:inPhase triage:PhaseBL ; triage:order 1 ; triage:branch "sprint/bl-1-refresh-core" ; triage:criteria "docs/plans/phase-bl/sprint-bl-1-refresh-core.md" .
+"""
+
+CRITERIA_ONLY_STRUCTURE = """\
+@prefix triage: <urn:atm:triage:> .
+triage:PhaseAN a triage:Phase .
+triage:AN.8 a triage:Sprint ; triage:inPhase triage:PhaseAN ; triage:order 8 ; triage:criteria "docs/plans/phase-an/sprint-an-8-validation-evidence.md" .
+"""
+
+
 def _write_structures(root: Path, phases: dict[str, str]) -> None:
     for phase, text in phases.items():
         phase_dir = root / ".sprints" / phase
@@ -83,6 +96,64 @@ class SprintSelectionTests(unittest.TestCase):
             with self.assertRaises(qof.QueryError) as caught:
                 qof._sprint_for_branch(root, "fix/bb9-x", "BB", "BB9")
         self.assertIn("sprint 'BB9'", str(caught.exception))
+
+    def test_lowercase_sprint_ids_and_old_forms_select_the_sprint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_structures(root, {"BL": BL_STRUCTURE, "BB": BB_STRUCTURE, "AN": CRITERIA_ONLY_STRUCTURE})
+            for requested, expected in (
+                ("bl-1", ("BL", "BL1")),
+                ("BL1", ("BL", "BL1")),
+                ("bl1", ("BL", "BL1")),
+                ("BL.1", ("BL", "BL1")),
+                ("bb-6", ("BB", "BB6")),
+                ("an-8", ("AN", "AN.8")),
+                ("AN.8", ("AN", "AN.8")),
+            ):
+                with self.subTest(requested=requested):
+                    phase, _, sprint = qof._sprint_for_branch(root, "fix/bl-1-x", None, requested)
+                    self.assertEqual((phase, sprint), (expected[0], TRIAGE[expected[1]]))
+
+    def test_phase_directory_lookup_ignores_case(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_structures(root, {"BL": BL_STRUCTURE, "bb": BB_STRUCTURE})
+            for requested_phase, branch, expected in (
+                ("bl", "sprint/bl-1-refresh-core", ("BL", "BL1")),
+                ("phase-bl", "sprint/bl-1-refresh-core", ("BL", "BL1")),
+                ("BB", "feature/bb6-prompt-handoffs", ("bb", "BB6")),
+            ):
+                with self.subTest(requested_phase=requested_phase):
+                    phase, phase_path, sprint = qof._sprint_for_branch(root, branch, requested_phase)
+                    self.assertEqual((phase, sprint), (expected[0], TRIAGE[expected[1]]))
+                    self.assertEqual(phase_path, root / ".sprints" / expected[0])
+
+    def test_declared_branch_match_ignores_case(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_structures(root, {"BL": BL_STRUCTURE})
+            _, _, sprint = qof._sprint_for_branch(root, "Sprint/BL-1-refresh-core", None)
+        self.assertEqual(sprint, TRIAGE["BL1"])
+
+    def test_criteria_fallback_builds_lowercase_sprint_branch(self) -> None:
+        self.assertEqual(
+            qof._branch_from_criteria("docs/plans/phase-an/sprint-an-8-validation-evidence.md"),
+            "sprint/an-8-validation-evidence",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_structures(root, {"AN": CRITERIA_ONLY_STRUCTURE})
+            _, _, sprint = qof._sprint_for_branch(root, "sprint/an-8-validation-evidence", None)
+        self.assertEqual(sprint, TRIAGE["AN.8"])
+
+    def test_criteria_fallback_still_matches_old_feature_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_structures(root, {"AN": CRITERIA_ONLY_STRUCTURE})
+            for branch in ("feature/pAN-s8-validation-evidence", "feature/pan-s8-validation-evidence"):
+                with self.subTest(branch=branch):
+                    _, _, sprint = qof._sprint_for_branch(root, branch, None)
+                    self.assertEqual(sprint, TRIAGE["AN.8"])
 
 
 class IntegrationCandidateTests(unittest.TestCase):
