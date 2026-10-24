@@ -48,8 +48,13 @@ def render(template: str, variables: Path) -> str:
 INPUTS = re.compile(r"^## (?:Inputs|Input Contract)\b.*?```json\n(.*?)\n```", re.S | re.M)
 
 
+def required_match(match: re.Match[str] | None) -> re.Match[str]:
+    assert match is not None
+    return match
+
+
 def inputs_json(agent: str) -> dict:
-    return json.loads(INPUTS.search((AGENTS / agent).read_text()).group(1))
+    return json.loads(required_match(INPUTS.search((AGENTS / agent).read_text())).group(1))
 
 
 # Fenced JSON as agents send and return it.
@@ -80,11 +85,12 @@ def fenced_json(text: str, heading: str):
 
 
 def section_fence(agent: str, heading: str) -> str:
-    return re.search(r"^## " + heading + r"\b.*?```json\n(.*?)\n```", (AGENTS / agent).read_text(), re.S | re.M).group(1)
+    return required_match(re.search(r"^## " + heading + r"\b.*?```json\n(.*?)\n```", (AGENTS / agent).read_text(), re.S | re.M)).group(1)
 
 
 def load_client():
     spec = importlib.util.spec_from_file_location("jev_client", ROOT / "scripts" / "jev_client.py")
+    assert spec is not None and spec.loader is not None
     client = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(client)
     return client
@@ -92,7 +98,9 @@ def load_client():
 
 def load_merge():
     loader = importlib.machinery.SourceFileLoader("sanity_merge", str(ROOT / "scripts" / "sanity-merge"))
-    merge = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    merge = importlib.util.module_from_spec(spec)
     loader.exec_module(merge)
     return merge
 
@@ -155,12 +163,13 @@ class DevSanityHandoffTests(unittest.TestCase):
         self.assertNotIn("{path, why}", paragraph)
         match = re.search(r"--argjson context '<\[(.*?)\]>'", paragraph)
         self.assertIsNotNone(match, "dev-sanity.md must show the rerun context as a JSON array of path strings")
+        assert match is not None
         self.assertEqual(match.group(1), '"path", ...')
         self.assertIn("`path:start-end`", paragraph)
         base = self.assignment("dev-sanity-assignment-vars.json")
         manifest = Path(self.tmp.name) / "manifest.json"
         manifest.write_text(json.dumps({"assignments": [{"number": 1, "assignment": base}]}))
-        jq = re.search(r"`(jq --argjson n <n> .*?)`;", paragraph, re.S).group(1)
+        jq = required_match(re.search(r"`(jq --argjson n <n> .*?)`;", paragraph, re.S)).group(1)
         jq = jq.replace("<n>", "1").replace("'<[\"path\", ...]>'", "\"$CONTEXT\"").replace("$manifest", str(manifest))
         pinned = {"worktree_path": str(self.repo), "sha": self.commit}
         # the documented shapes, a whole file and a line range, filled with real entries at the pinned commit
@@ -187,11 +196,12 @@ class DevSanityHandoffTests(unittest.TestCase):
         text = (AGENTS / "dev-sanity.md").read_text()
         anchor = re.search(r"`sanity-merge` accepts exactly these keys(?: per entry)?:", text)
         self.assertIsNotNone(anchor, "dev-sanity.md must list the selection entry keys sanity-merge accepts")
+        assert anchor is not None
         paragraph = text[anchor.start():]
         paragraph = paragraph[:paragraph.index("\n\n")]
         documented = set(re.findall(r"`(\w+)`", paragraph[anchor.end() - anchor.start():].split(". ", 1)[0]))
         merge = (ROOT / "scripts/sanity-merge").read_text()
-        required = ast.literal_eval(re.search(r"required = (\{[^}]*\})", merge).group(1))
+        required = ast.literal_eval(required_match(re.search(r"required = (\{[^}]*\})", merge)).group(1))
         self.assertEqual(documented, required)
         self.assertIn("`{reviewer, context, reply}`", paragraph)
         self.assertIn("set(rerun) != {'reviewer', 'context', 'reply'}".replace("'", '"'), merge)
@@ -253,7 +263,7 @@ class ReviewerHandoffTests(unittest.TestCase):
     def test_fix_round_scope_flags_in_the_senders_exist_in_the_script(self):
         script = (ROOT / "scripts/fix-round-scope").read_text()
         declared = set(re.findall(r'add_argument\("(--[\w-]+)"', script)) | {"-h", "--help"}
-        commands = set(re.search(r'choices=\(([^)]*)\)', script).group(1).replace('"', "").replace(" ", "").split(","))
+        commands = set(required_match(re.search(r'choices=\(([^)]*)\)', script)).group(1).replace('"', "").replace(" ", "").split(","))
         seen = 0
         for template in ("qa-template.xml.j2", "plan-review-template.xml.j2"):
             text = (TEMPLATES / template).read_text()
@@ -353,7 +363,7 @@ class SanityReplyHandoffTests(unittest.TestCase):
         for agent in ("sc-sanity-llm.md", "sc-sanity-jev.md"):
             with self.subTest(agent=agent):
                 text = (AGENTS / agent).read_text()
-                keys = re.search(r"`error: \{([^}]*)\}`", text).group(1).replace(" ", "").split(",")
+                keys = required_match(re.search(r"`error: \{([^}]*)\}`", text)).group(1).replace(" ", "").split(",")
                 assignment = inputs_json(agent)
                 number = assignment["deliverable"]["number"]
                 error = {key: typed.get(key, number) for key in keys}
@@ -476,7 +486,7 @@ def step(rendered: str, step_id: str) -> str:
 def named_fields(instruction: str) -> dict:
     """The fenced JSON an instruction tells its sender to write: each `key` = `value` it names (a described value as text)."""
     sent = {key: value or "<as described>" for key, value in re.findall(r"`(\w+)` = (?:`([^`]*)`)?", instruction)}
-    return json.loads(FENCE.search(fence(sent)).group(2))
+    return json.loads(required_match(FENCE.search(fence(sent))).group(2))
 
 
 def required_inputs(agent: str) -> set:
@@ -503,7 +513,7 @@ class PlanReviewHandoffTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "vars.json"
             path.write_text(json.dumps({**base, **values}))
-            return json.loads(FENCE.search(fence(json.loads(render(f"{reviewer}-assignment.json.j2", path)))).group(2))
+            return json.loads(required_match(FENCE.search(fence(json.loads(render(f"{reviewer}-assignment.json.j2", path))))).group(2))
 
     def renders_assignments(self, step_c: str, worktree: str) -> bool:
         return RENDER_ASSIGNMENTS in step_c and f"Each carries worktree `{worktree}`" in step_c and '("Rendering")' in step_c
@@ -517,7 +527,7 @@ class PlanReviewHandoffTests(unittest.TestCase):
             with self.subTest(reviewer=reviewer):
                 sent = self.assignment(reviewer, worktree_path=worktree, branch=branch)
                 self.assertEqual((sent["worktree_path"], sent["branch"]), (worktree, branch))
-        mention = re.search(r"Run `ceremony-qa` with (.*?)\. Run ", step_c, re.S).group(1)
+        mention = required_match(re.search(r"Run `ceremony-qa` with (.*?)\. Run ", step_c, re.S)).group(1)
         sent = named_fields(mention)
         self.assertLessEqual(required_inputs("ceremony-qa.md"), set(sent))
         self.assertLessEqual(set(sent), set(inputs_json("ceremony-qa.md")))
@@ -574,7 +584,7 @@ class PlanReviewHandoffTests(unittest.TestCase):
 def blocking_shape(rendered: str) -> str:
     """The `<scratch>/<qa bead>-blocking.json` content step g of a rendered qa-template tells quality-mgr to write."""
     step = rendered[rendered.index('<step id="g">'):rendered.index('<step id="h">')]
-    return re.search(r"-blocking\.json` = `(\{.*?\})` and run", step, re.S).group(1)
+    return required_match(re.search(r"-blocking\.json` = `(\{.*?\})` and run", step, re.S)).group(1)
 
 
 class BlockingFindingsHandoffTests(unittest.TestCase):

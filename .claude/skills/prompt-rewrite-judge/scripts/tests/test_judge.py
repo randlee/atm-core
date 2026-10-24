@@ -49,6 +49,7 @@ class RequestTests(unittest.TestCase):
 
     def test_request_is_accepted_by_the_package_jev_client(self):
         spec = importlib.util.spec_from_file_location("jev_client", CLIENT)
+        assert spec is not None and spec.loader is not None
         client = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(client)
         req = judge.request(["Run tests."], "orig", "cand")

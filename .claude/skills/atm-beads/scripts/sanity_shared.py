@@ -4,11 +4,12 @@ from __future__ import annotations
 import math
 import subprocess
 from pathlib import Path
+from typing import TypeGuard
 
 
-def valid_elapsed_s(value: object) -> bool:
+def valid_elapsed_s(value: object) -> TypeGuard[int | float]:
     """Whether elapsed seconds is a finite, non-negative JSON number (excluding bool)."""
-    return type(value) in (int, float) and math.isfinite(value) and value >= 0
+    return isinstance(value, (int, float)) and type(value) in (int, float) and math.isfinite(value) and value >= 0
 
 
 def primary_root(cwd: str | Path | None = None, *, run=subprocess.run) -> Path:

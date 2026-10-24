@@ -220,7 +220,9 @@ class SanitySplit(unittest.TestCase):
         driver = self.root / "driver.py"
         driver.write_text(DRIVER)
         loader = importlib.machinery.SourceFileLoader("sanity_split_test", str(SCRIPT))
-        split = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        assert spec is not None
+        split = importlib.util.module_from_spec(spec)
         loader.exec_module(split)
         original_popen = subprocess.Popen
         gated = "--lint-timeout-seconds" in extra
@@ -250,12 +252,14 @@ class SanitySplit(unittest.TestCase):
             returncode = split.main()
         self.close_event_writer()
         out = subprocess.CompletedProcess(argv, returncode, stdout.getvalue(), stderr.getvalue())
+        lint_info = None
         try:
             lint_info = json.loads(out.stdout)["lint"]
             supervisor = lint_info["pid"]
         except (ValueError, KeyError, TypeError):
             supervisor = None
         if supervisor:
+            assert isinstance(lint_info, dict)
             self.exit_processes[lint_info["exit_file"]] = self.supervisors[supervisor]
             if gated:
                 self.supervisors[supervisor].stdin.write(b"t")
@@ -662,6 +666,7 @@ class SanitySplit(unittest.TestCase):
     def test_lint_supervisor_times_out_and_kills_the_command(self):
         """The gated timeout fires after Popen records the lint process group."""
         proc, exit_file, pgid_file = self.supervise(f"exec {sys.executable} -c 'import signal; signal.pause()'", 1, gated=True)
+        assert proc.stdin is not None
         proc.stdin.write(b"t")
         proc.stdin.close()
         self.assertEqual(self.finished(proc), 0)
@@ -738,6 +743,7 @@ class SanitySplit(unittest.TestCase):
         lint, marker = self.descendant_command()
         proc, exit_file, pgid_file = self.supervise(lint, 1800, gated=True)
         descendant = self.read_marker(marker)
+        assert proc.stdin is not None
         proc.stdin.write(b"t")
         proc.stdin.close()
         self.assertEqual(self.finished(proc), 0)

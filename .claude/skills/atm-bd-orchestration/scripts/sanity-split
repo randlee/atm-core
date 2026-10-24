@@ -155,7 +155,9 @@ def parse_deliverables(description):
         elif TOP_BULLET.match(line):
             raise Fail(2, f"`## Deliverables` has an unnumbered top-level bullet: {stripped!r}")
         elif FENCE.match(line):
-            fence = FENCE.match(line).group(1)       # closes on the same character, at least this long
+            fence_match = FENCE.match(line)
+            assert fence_match is not None
+            fence = fence_match.group(1)       # closes on the same character, at least this long
             items[-1][1] += " " + stripped
         elif line[0] in " \t" or not prev_blank:    # indented sub-item, or wrapped item text
             items[-1][1] += " " + stripped
@@ -219,6 +221,7 @@ def layer_ranges(worktree, prs):
     if run.returncode != 0:
         raise Fail(3, f"gh api pulls failed: {run.stderr.strip()}")
     listed = {}
+    line = ""
     try:
         for line in run.stdout.splitlines():
             if line.strip():

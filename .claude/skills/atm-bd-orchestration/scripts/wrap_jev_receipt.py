@@ -46,6 +46,8 @@ class Refused(Exception):
 
 def load_client():
     spec = importlib.util.spec_from_file_location("jev_client", CLIENT)
+    if spec is None or spec.loader is None:
+        raise Refused("client_load", f"cannot load Jev client {CLIENT}", RERUN)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -83,7 +85,7 @@ def client_receipts(jev, client, key):
             if not isinstance(part, dict) or part.get("part") != label:
                 raise Refused("part_order", f"Jev part {label} is missing or mislabelled", RERUN)
             receipt = part.get("receipt")
-            if not client.verify_receipt(receipt, key):
+            if not isinstance(receipt, dict) or not client.verify_receipt(receipt, key):
                 raise Refused("receipt_mac", f"no valid Jev receipt on part {label}", RERUN)
             response = part.get("response")
             answer = response.get("answers", {}).get("written") if isinstance(response, dict) else None

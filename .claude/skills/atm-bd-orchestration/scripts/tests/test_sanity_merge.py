@@ -23,6 +23,7 @@ FINDING = {"kind": "skipped", "file": "crates/x/src/lib.rs", "line": 3, "issue":
 run_bounded = partial(run_command, timeout=HANG_GUARD_SECONDS)
 MERGE_LOADER = importlib.machinery.SourceFileLoader("sanity_merge_test_module", str(SCRIPT))
 MERGE_SPEC = importlib.util.spec_from_loader(MERGE_LOADER.name, MERGE_LOADER)
+assert MERGE_SPEC is not None
 MERGE_MODULE = importlib.util.module_from_spec(MERGE_SPEC)
 MERGE_LOADER.exec_module(MERGE_MODULE)
 

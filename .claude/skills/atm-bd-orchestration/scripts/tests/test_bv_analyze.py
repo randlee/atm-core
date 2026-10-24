@@ -11,6 +11,7 @@ from unittest.mock import patch
 SCRIPT = Path(__file__).resolve().parents[1] / "bv-analyze"
 LOADER = importlib.machinery.SourceFileLoader("bv_analyze", str(SCRIPT))
 spec = importlib.util.spec_from_loader("bv_analyze", LOADER)
+assert spec is not None and spec.loader is not None
 analysis = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(analysis)
 

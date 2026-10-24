@@ -18,7 +18,7 @@ import pytest
 from unittest.mock import patch
 
 
-from task_close_world import DERIVED, EXAMPLES, SCRIPTS, World, example_values, hook
+from task_close_world import DERIVED, EXAMPLES, SCRIPTS, World, cache_call, example_values, hook
 
 @pytest.fixture
 def world(tmp_path, monkeypatch):
@@ -60,6 +60,7 @@ def test_assignment_details_requires_an_assignment():
 ])
 def test_template_rebase_and_hook_ancestry_use_the_same_stack_top(world, template, layers, expected):
     spec = importlib.util.spec_from_file_location("assignment_gates_for_close", SCRIPTS / "assignment-gates.py")
+    assert spec is not None and spec.loader is not None
     gates = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gates)
     world.beads["atm-phase-bj.stack"]["metadata"]["layers"] = layers
@@ -90,7 +91,7 @@ def test_dev_handoff_is_immediate_and_closes_the_dev_task_as_the_dev(world, monk
     before = dict(hook.os.environ)
     assert "ok" in world.run()
     assert dict(hook.os.environ) == before
-    calls = [argv for argv, _kwargs in world.calls]
+    calls = [argv for argv, _kwargs in world.calls if not cache_call(argv)]
     close_index = next(index for index, argv in enumerate(calls) if argv[:2] == ["bd", "close"])
     assert calls[close_index + 1][:2] == ["atm", "send"]
     assert calls[close_index + 2] == ["bd", "where", "--json"]
@@ -233,6 +234,7 @@ def test_network_timeouts_retry_then_fall_back(world, command, monkeypatch):
 
 def test_deadline_injection_convention_matches_assignment_gates(world, monkeypatch):
     spec = importlib.util.spec_from_file_location("assignment_gates_deadline_contract", SCRIPTS / "assignment-gates.py")
+    assert spec is not None and spec.loader is not None
     gates = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(gates)
     assert hook.COMMAND_TIMEOUT == gates.COMMAND_TIMEOUT == hook.command_timeout(os.environ)
@@ -468,7 +470,9 @@ def test_sanity_fail_message_contains_exact_undone_deliverables(world):
     assert len(messages) == 1
     root = ET.fromstring(messages[0]["body"])
     assert root.attrib == {"bead": world.values["checked_bead"], "sprint": world.values["sprint"]}
-    lines = root.find("description").text.splitlines()
+    description = root.find("description")
+    assert description is not None and description.text is not None
+    lines = description.text.splitlines()
     assert lines == [
         f"{world.values['checked_title']}: sanity round {world.values['round']} of {world.values['max_sanity_rounds']}.",
         f"Branch {world.values['branch']}, PR #{world.values['pr_number']}, commit {world.values['commit']}.",
@@ -492,7 +496,7 @@ def test_metadata_update_preserves_concurrent_keys_and_writes_fail_counter_atomi
                                           ("sanity", "FAIL"), ("sanity", "CANNOT_RUN"), ("qa", "PASS")])
 def test_replay_state_is_snapshotted_before_writes(world, role, verdict):
     assert "ok" in world.run(role, verdict=verdict, undone=[{"number": 1, "reason": "missing"}])
-    calls = [argv for argv, _ in world.calls]
+    calls = [argv for argv, _ in world.calls if not cache_call(argv)]  # the drain's own reads apply the write
     first_write = next(index for index, argv in enumerate(calls) if argv[:2] in (["bd", "update"], ["bd", "close"], ["atm", "send"]) or argv[:3] in (["atm", "task", "assign"], ["atm", "task", "close"]))
     reads = [argv for argv in calls[first_write + 1:] if argv[:2] in (["bd", "show"], ["bd", "list"]) or argv[:3] == ["atm", "task", "events"]]
     expected = [["atm", "task", "events", world.values["sanity_task_id"], "--all", "--json"]] if role == "sanity" and verdict == "FAIL" else []
@@ -613,8 +617,7 @@ def test_replay_after_every_committed_write_converges(tmp_path, monkeypatch, rol
     baseline_root = tmp_path / "baseline"
     baseline_root.mkdir()
     baseline = World(baseline_root, monkeypatch)
-    changes = dict(verdict=verdict, undone=[{"number": 1, "reason": "not implemented"}])
-    assert "ok" in baseline.run(role, **changes)
+    assert "ok" in baseline.run(role, verdict=verdict, undone=[{"number": 1, "reason": "not implemented"}])
     # each baseline send, keyed by the boundary that commits it: the next write is its gating write
     sends = [index for index, (argv, _) in enumerate(baseline.writes) if argv[:2] == ["atm", "send"]]
     gated = {index + 1: index for index in sends if index + 1 < len(baseline.writes)}
@@ -626,7 +629,7 @@ def test_replay_after_every_committed_write_converges(tmp_path, monkeypatch, rol
         root.mkdir()
         world = World(root, monkeypatch)
         world.fail_after = boundary
-        assert "err" in world.run(role, **changes)
+        assert "err" in world.run(role, verdict=verdict, undone=[{"number": 1, "reason": "not implemented"}])
         assert world.writes[-1][0][:3] == baseline.writes[boundary - 1][0][:3], boundary
         world.fail_after = None
         result = world.run(role)
@@ -650,11 +653,10 @@ def test_replay_after_every_committed_write_converges(tmp_path, monkeypatch, rol
 
 @pytest.mark.parametrize("role,verdict", [("dev", "PASS"), ("fix", "PASS"), ("sanity", "PASS"), ("sanity", "FAIL"), ("sanity", "CANNOT_RUN"), ("qa", "PASS"), ("qa", "FAIL")])
 def test_second_run_after_success_sends_nothing(tmp_path, monkeypatch, role, verdict):
-    changes = dict(verdict=verdict, undone=[{"number": 1, "reason": "not implemented"}])
     root = tmp_path / "world"
     root.mkdir()
     world = World(root, monkeypatch)
-    assert "ok" in world.run(role, **changes)
+    assert "ok" in world.run(role, verdict=verdict, undone=[{"number": 1, "reason": "not implemented"}])
     sent = len(world.messages)
     assert "ok" in world.run(role)
     assert len(world.messages) == sent
@@ -791,7 +793,9 @@ def test_shared_contract_covers_all_role_templates_and_ids(world):
             assert world.values[role_id] in body
     rebase = ET.fromstring(hook.sc_render.render(hook.TEMPLATES / "rebase-required.xml.j2", world.values))
     assert rebase.attrib["bead"] == world.values["checked_bead"]
-    description = rebase.find("description").text
+    description_node = rebase.find("description")
+    assert description_node is not None and description_node.text is not None
+    description = description_node.text
     assert world.values["branch"] in description
     assert world.values["stacked"]["top"]["branch"] in description
     assert world.values["stacked"]["top"]["head"] in description
@@ -1225,3 +1229,43 @@ def test_load_sample_is_portable(monkeypatch):
         raise OSError
     monkeypatch.setattr(hook.os, "getloadavg", unavailable)
     assert hook.load_sample() == {"load_avg": None, "cpu_pct": None}
+
+
+# -- bead writes go through the bd-cache (#557) ----------------------------------------------------
+
+def test_dev_close_leaves_its_recorded_fields_in_the_cache(world):
+    assert "ok" in world.run()
+    cache = hook.bd_cache.BdCache(world.root, runner=world)
+    checked = cache.cached(world.values["checked_bead"])
+    assert (checked["status"], checked["metadata"]["commit"], checked["metadata"]["pr_number"]) == (
+        "closed", world.values["commit"], int(world.pr_number))
+    journal = cache.status()["journal"]
+    assert journal and all(state.endswith(":applied") for state in journal), journal
+
+
+def test_a_write_bd_does_not_take_stays_journaled_and_applies_once_on_rerun(world):
+    world.timeout_command = ["bd", "close"]
+    result = world.run()
+    assert result["err"]["code"] == "BEADS.WRITE_PENDING" and "journaled" in result["err"]["message"]
+    world.timeout_command = None
+    assert "ok" in world.run()
+    closes = [argv for argv, _ in world.writes if argv[:3] == ["bd", "close", world.values["checked_bead"]]]
+    assert len(closes) == 1 and world.beads[world.values["checked_bead"]]["status"] == "closed"
+
+
+def test_a_write_bd_refuses_is_escalated_not_retried(world):
+    reason = f"dev complete at {world.values['commit']}"
+    world.overrides[("bd", "close", world.values["checked_bead"], "--reason", reason, "--actor", "caller")] = (13, "")
+    result = world.run()
+    assert result["err"]["code"] == "BEADS.WRITE_ESCALATED" and "bd_cache.py resolve" in result["err"]["fix"]
+    assert not any(argv[:3] == ["atm", "task", "assign"] for argv, _ in world.writes)  # nothing is handed off
+
+
+def test_a_busy_drain_is_waited_for_then_reported(world):
+    cache = hook.bd_cache.BdCache(world.root, runner=world)
+    with cache.drain_lock() as held:
+        assert held
+        result = world.run()
+    assert result["err"]["code"] == "BEADS.WRITE_PENDING" and "busy" in result["err"]["message"]
+    assert world.sleeps.count(hook.DRAIN_BUSY_SLEEP_S) == hook.DRAIN_TRIES
+    assert "ok" in world.run()

@@ -16,7 +16,7 @@ def test_sanity_prompts_close_before_ordered_stack_handoff():
         assert phrase in stack
     normalized_stack = " ".join(stack.split())
     assert "do not wait for a person or retry a repair" in normalized_stack
-    assert normalized_dev.index("Run atm-task-close.py --role sanity") < normalized_dev.index("Only after successful PASS close")
+    assert normalized_dev.index("Run atm task close") < normalized_dev.index("Only after successful PASS close")
     assert "keep the sanity task active" not in normalized_dev
     for prompt in (dev, stack):
         for forbidden in ("class bead", "outage bead", "hold on re-dispatch", "citation", "checker-defect", "sanity-run-table"):

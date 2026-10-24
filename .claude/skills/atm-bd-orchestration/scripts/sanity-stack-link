@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from typing import Any
 import tempfile
 import time
 
@@ -288,6 +289,7 @@ def main(argv=None, runner=subprocess.run, clock=time.time):
     linker = None
     args = None
     values = {}
+    result: dict[str, Any] | None = None
     try:
         args = parser.parse_args(argv)
         values = json.loads(args.input.read_text(encoding='utf-8'))
@@ -303,7 +305,6 @@ def main(argv=None, runner=subprocess.run, clock=time.time):
         if not actor:
             raise StackError('ATM_IDENTITY is required')
         linker = Linker(values, runner, clock, actor)
-        result = None
         try:
             try:
                 result = linker.execute()
@@ -323,6 +324,7 @@ def main(argv=None, runner=subprocess.run, clock=time.time):
                     result = {'result': 'stack_failed', 'evidence': f'release failed after {result["result"]}: {error}'}
     except (StackError, OSError, ValueError, TypeError, KeyError) as error:
         result = {'result': 'stack_failed', 'evidence': str(error)}
+    assert result is not None
     if linker is not None and linker.mode is not None:
         result.update(mode=linker.mode, lean_reason=linker.lean_reason)
     lead = (args.notify_lead if args is not None else None) or (values.get('lead') if isinstance(values, dict) else None)

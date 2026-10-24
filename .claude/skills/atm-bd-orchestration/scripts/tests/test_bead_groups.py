@@ -20,15 +20,17 @@ class FindingGroupTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("sc-compose"), "sc-compose is required to render bead formulas")
     def test_finding_group_propagates_optional_provenance_to_fix(self):
         loader = importlib.machinery.SourceFileLoader("bead_groups_provenance", str(SCRIPTS / "bead-groups"))
-        groups = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        assert spec is not None
+        groups = importlib.util.module_from_spec(spec)
         loader.exec_module(groups)
         runner = object.__new__(groups.Run)
         runner.option = None
-        runner.config = {"worktree_base": "/worktrees"}
+        runner.config = {"worktree_base": "/worktrees", "lint_command": "just lint", "policy_path": "policy.md", "max_sanity_rounds": 5}
         runner.bd = Mock()
         runner.bd.show.return_value = None
         stack = {"id": "t-phase-d.stack", "metadata": {"trunk": "integrate/phase-d", "stack_number": None, "layers": []}}
-        container = {"status": "open", "metadata": {"phase": "d", "sprint": "d-1", "stack": "stack", "difficulty": "normal",
+        container = {"status": "open", "title": "d-1: the work", "metadata": {"phase": "d", "sprint": "d-1", "stack": "stack", "difficulty": "normal",
                                                      "layer": 4, "requirements": ["REQ-1"], "adrs": ["NONE"]}}
         runner.show = lambda bead: stack if bead == "t-phase-d.stack" else container
         runner.sidecar = lambda _: {"default_option": "C", "options": {"C": {}}, "ref": "{vars[finding_ref]}-r{vars[round]}"}
@@ -39,7 +41,7 @@ class FindingGroupTests(unittest.TestCase):
             findings = root / "findings.json"
             shutil.copyfile(formula, root / "formula.toml.j2")
             for provenance in (15, None):
-                row = {"ref": "qa1-f1", "severity": "blocking", "reviewer": "qa", "title": "issue", "remedy": "fix"}
+                row: dict[str, object] = {"ref": "qa1-f1", "severity": "blocking", "reviewer": "qa", "title": "issue", "remedy": "fix"}
                 if provenance is not None:
                     row["found_on_layer"] = provenance
                 findings.write_text(json.dumps({"sprint": "d-1", "round": 1, "filed_by": "qa",
@@ -64,15 +66,17 @@ class FindingGroupTests(unittest.TestCase):
 class FoundOnLayerGuardTests(unittest.TestCase):
     def targets(self, layer):
         loader = importlib.machinery.SourceFileLoader("bead_groups_layer_guard", str(SCRIPTS / "bead-groups"))
-        groups = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        assert spec is not None
+        groups = importlib.util.module_from_spec(spec)
         loader.exec_module(groups)
         runner = object.__new__(groups.Run)
         runner.option = None
-        runner.config = {"worktree_base": "/worktrees"}
+        runner.config = {"worktree_base": "/worktrees", "lint_command": "just lint", "policy_path": "policy.md", "max_sanity_rounds": 5}
         runner.bd = Mock()
         runner.bd.show.return_value = None
         stack = {"id": "t-phase-d.stack", "metadata": {"trunk": "integrate/phase-d", "stack_number": None, "layers": []}}
-        container = {"status": "open", "metadata": {"phase": "d", "sprint": "d-1", "stack": "stack", "difficulty": "normal",
+        container = {"status": "open", "title": "d-1: the work", "metadata": {"phase": "d", "sprint": "d-1", "stack": "stack", "difficulty": "normal",
                                                      "requirements": ["REQ-1"], "adrs": ["NONE"]}}
         runner.show = lambda bead: stack if bead == "t-phase-d.stack" else container
         runner.sidecar = lambda _: {"default_option": "C", "options": {"C": {}}, "ref": "{vars[finding_ref]}-r{vars[round]}"}
@@ -109,15 +113,17 @@ class FoundOnLayerGuardTests(unittest.TestCase):
 class PhaseEndFindingTests(unittest.TestCase):
     def targets(self, **extra):
         loader = importlib.machinery.SourceFileLoader("bead_groups_phase_end", str(SCRIPTS / "bead-groups"))
-        groups = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        assert spec is not None
+        groups = importlib.util.module_from_spec(spec)
         loader.exec_module(groups)
         runner = object.__new__(groups.Run)
         runner.option = None
-        runner.config = {"worktree_base": "/worktrees"}
+        runner.config = {"worktree_base": "/worktrees", "lint_command": "just lint", "policy_path": "policy.md", "max_sanity_rounds": 5}
         runner.bd = Mock()
         runner.bd.show.return_value = None
         stack = {"id": "t-phase-d.stack", "metadata": {"trunk": "integrate/phase-d", "stack_number": None, "layers": []}}
-        epic = {"status": "open", "metadata": {"integration_branch": "integrate/phase-d", "phase": "d", "plan_scope": "epic"}}
+        epic = {"status": "open", "title": "phase-d: feature", "metadata": {"integration_branch": "integrate/phase-d", "phase": "d", "plan_scope": "epic"}}
         runner.show = lambda bead: stack if bead == "t-phase-d.stack" else epic
         runner.sidecar = lambda _: {"default_option": "C", "options": {"C": {}}, "ref": "{vars[finding_ref]}-r{vars[round]}"}
         row = {"ref": "pe-f1", "severity": "blocking", "reviewer": "review", "title": "issue", "remedy": "fix",

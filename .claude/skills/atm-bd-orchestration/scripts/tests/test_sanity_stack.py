@@ -17,6 +17,7 @@ from task_close_world import World as HookWorld, hook as close_hook
 SCRIPTS = Path(__file__).resolve().parents[1]
 LOADER = importlib.machinery.SourceFileLoader("sanity_stack_link", str(SCRIPTS / "sanity-stack-link"))
 SPEC = importlib.util.spec_from_loader(LOADER.name, LOADER)
+assert SPEC is not None
 LINK = importlib.util.module_from_spec(SPEC)
 LOADER.exec_module(LINK)
 

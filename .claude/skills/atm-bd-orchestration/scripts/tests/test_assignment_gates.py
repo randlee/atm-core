@@ -14,6 +14,7 @@ from unittest.mock import patch
 MODULE = Path(__file__).parents[1] / "assignment-gates.py"
 FIXTURES = Path(__file__).parent / "fixtures"
 SPEC = importlib.util.spec_from_file_location("assignment_gates", MODULE)
+assert SPEC is not None and SPEC.loader is not None
 assert SPEC and SPEC.loader
 gates = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(gates)
@@ -283,6 +284,7 @@ class AssignmentGateTests(unittest.TestCase):
             with self.subTest(env=env), patch.dict(os.environ, env, clear=False):
                 if not env:
                     os.environ.pop("ATM_BD_GATE_TIMEOUT_S", None)
+                assert SPEC is not None and SPEC.loader is not None
                 fresh = importlib.util.module_from_spec(SPEC)
                 SPEC.loader.exec_module(fresh)
                 self.assertEqual((fresh.COMMAND_TIMEOUT, fresh.VALIDATE_PLAN_TIMEOUT), expected)
