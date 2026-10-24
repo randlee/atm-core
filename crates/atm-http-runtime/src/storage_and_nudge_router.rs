@@ -1387,18 +1387,22 @@ pub(crate) mod tests {
         source_bytes: Vec<u8>,
         inspection: atm_core::TemplateInspection,
         release: Arc<(Mutex<bool>, Condvar)>,
-        started: AtomicUsize,
+        started: tokio::sync::mpsc::UnboundedSender<()>,
     }
 
     impl BlockingTemplateComposer {
-        fn new(body: &str) -> Self {
+        fn new(body: &str) -> (Self, tokio::sync::mpsc::UnboundedReceiver<()>) {
             let fixture = FixtureTemplateComposer::new(body);
-            Self {
-                source_bytes: fixture.source_bytes,
-                inspection: fixture.inspection,
-                release: Arc::new((Mutex::new(false), Condvar::new())),
-                started: AtomicUsize::new(0),
-            }
+            let (started, receiver) = tokio::sync::mpsc::unbounded_channel();
+            (
+                Self {
+                    source_bytes: fixture.source_bytes,
+                    inspection: fixture.inspection,
+                    release: Arc::new((Mutex::new(false), Condvar::new())),
+                    started,
+                },
+                receiver,
+            )
         }
 
         fn release(&self) {
@@ -1418,7 +1422,9 @@ pub(crate) mod tests {
             source: &atm_core::TemplateSource,
         ) -> Result<atm_core::TemplateInspection, AtmError> {
             assert_eq!(source.raw_file_bytes, self.source_bytes);
-            self.started.fetch_add(1, Ordering::SeqCst);
+            self.started
+                .send(())
+                .expect("report stalled template verification start");
             let (released, wake) = &*self.release;
             let mut released = released
                 .lock()
@@ -3979,20 +3985,26 @@ pub(crate) mod tests {
         .expect("infallible Axum service")
     }
 
-    #[tokio::test]
-    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist() {
-        let composer = Arc::new(BlockingTemplateComposer::new("template body"));
-        let fixture = fixture_with_selector_and_template(
-            true,
-            None,
-            None,
-            Some(composer.clone()),
-            |received_hook| {
-                Arc::new(FixedReceivedHookSelector {
-                    emitter: received_hook,
-                })
-            },
+    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_body(
+        through: bool,
+    ) {
+        let (composer, mut starts) = BlockingTemplateComposer::new("template body");
+        let composer = Arc::new(composer);
+        let fixture = route_task_commands(
+            fixture_with_selector_and_template(
+                true,
+                None,
+                None,
+                Some(composer.clone()),
+                |received_hook| {
+                    Arc::new(FixedReceivedHookSelector {
+                        emitter: received_hook,
+                    })
+                },
+            ),
+            through,
         );
+        let response_deadline = Duration::from_secs(30);
         let first_request = template_write_request(&fixture, "template body");
         let second_request = template_write_request(&fixture, "template body");
         let first_router = fixture.router.clone();
@@ -4002,7 +4014,7 @@ pub(crate) mod tests {
                 .dispatch(
                     ApiRequest::new(RequestEnvelope::Write(Box::new(first_request))),
                     AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::from_millis(250)),
+                    RequestDeadline::after(response_deadline),
                 )
                 .await
         });
@@ -4011,17 +4023,18 @@ pub(crate) mod tests {
                 .dispatch(
                     ApiRequest::new(RequestEnvelope::Write(Box::new(second_request))),
                     AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::from_millis(250)),
+                    RequestDeadline::after(response_deadline),
                 )
                 .await
         });
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while composer.started.load(Ordering::SeqCst) != 2 {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("two template verifications occupy the bounded preflight");
+        starts
+            .recv()
+            .await
+            .expect("first template verification occupies the bounded preflight");
+        starts
+            .recv()
+            .await
+            .expect("second template verification occupies the bounded preflight");
 
         let list = atm_core::list::ListQuery::new(
             fixture.home_dir.clone(),
@@ -4039,34 +4052,35 @@ pub(crate) mod tests {
         )
         .expect("task-ledger list query")
         .with_task_ledger(atm_core::list::TaskLedgerQuery::Tasks { member: None });
-        let listed = tokio::time::timeout(
-            Duration::from_millis(100),
-            fixture.router.dispatch(
+        let listed = fixture
+            .router
+            .dispatch(
                 ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
                     list,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            ),
-        )
-        .await
-        .expect("list stays schedulable while template verification is stalled")
-        .expect("list succeeds while template verification is stalled")
-        .into_inner();
+                RequestDeadline::after(response_deadline),
+            )
+            .await
+            .expect("list succeeds while template verification is stalled")
+            .into_inner();
         assert!(matches!(listed, ResponseEnvelope::List(_)));
 
-        let blocked = fixture
-            .router
-            .dispatch(
+        let (blocked, ()) = tokio::join!(
+            fixture.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
                     &fixture,
                     "template body",
                 )))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_millis(25)),
-            )
-            .await
-            .expect_err("a saturated template preflight fails before durable admission");
+                RequestDeadline::after(response_deadline),
+            ),
+            async {
+                tokio::time::advance(response_deadline).await;
+            },
+        );
+        let blocked =
+            blocked.expect_err("a saturated template preflight fails before durable admission");
         assert_eq!(
             blocked.code(),
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
@@ -4089,14 +4103,12 @@ pub(crate) mod tests {
                 .is_empty(),
             "a template verification deadline cannot persist a partial message"
         );
-        let first_error = tokio::time::timeout(Duration::from_secs(1), first)
+        let first_error = first
             .await
-            .expect("first stalled source preflight reaches its deadline")
             .expect("first stalled request joins")
             .expect_err("first stalled source preflight fails closed");
-        let second_error = tokio::time::timeout(Duration::from_secs(1), second)
+        let second_error = second
             .await
-            .expect("second stalled source preflight reaches its deadline")
             .expect("second stalled request joins")
             .expect_err("second stalled source preflight fails closed");
         assert_eq!(
@@ -4119,9 +4131,23 @@ pub(crate) mod tests {
         composer.release();
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
+    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist() {
+        stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_body(false)
+            .await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_through_normal_task_commands()
+     {
+        stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_body(true)
+            .await;
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn file_source_preflight_shares_bounded_admission_and_fails_closed() {
-        let composer = Arc::new(BlockingTemplateComposer::new("template body"));
+        let (composer, mut starts) = BlockingTemplateComposer::new("template body");
+        let composer = Arc::new(composer);
         let fixture = fixture_with_selector_and_template(
             true,
             None,
@@ -4147,25 +4173,29 @@ pub(crate) mod tests {
                     .await
             });
         }
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while composer.started.load(Ordering::SeqCst) != 2 {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("two stalled source preflights occupy the bounded bridge");
+        starts
+            .recv()
+            .await
+            .expect("first stalled source preflight occupies the bounded bridge");
+        starts
+            .recv()
+            .await
+            .expect("second stalled source preflight occupies the bounded bridge");
 
-        let error = fixture
-            .router
-            .dispatch(
+        let response_deadline = Duration::from_secs(30);
+        let (error, ()) = tokio::join!(
+            fixture.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(file_write_request(
                     &fixture,
                 )))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_millis(25)),
-            )
-            .await
-            .expect_err("file preflight cannot bypass saturated bounded admission");
+                RequestDeadline::after(response_deadline),
+            ),
+            async {
+                tokio::time::advance(response_deadline).await;
+            },
+        );
+        let error = error.expect_err("file preflight cannot bypass saturated bounded admission");
         assert_eq!(
             error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
