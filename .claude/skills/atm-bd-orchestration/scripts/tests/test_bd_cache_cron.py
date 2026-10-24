@@ -85,10 +85,11 @@ def test_undelivered_escalation_is_retried_and_the_tick_refuses(setup):
 
 def test_sync_failure_is_announced_once_per_cause(setup):
     root, bd, cache, sender = setup
+    bd.rows["b1"]["status"] = "nope"  # a reachable bd whose rows break the contract (an outage is test_backend_outage_*)
     for _ in range(2):
-        bd.fail.append((lambda c: c[1] == "list" and "-l" in c, subprocess.TimeoutExpired("bd", 30)))
         assert run(setup) == {"result": "pass-through"}
     assert len(sender.sent) == 1 and "phase x" in sender.sent[0][2]
+    bd.rows["b1"]["status"] = "in_progress"
     run(setup)  # recovery clears the alert
     assert cache.sync_alert("x") is None
 
@@ -135,3 +136,53 @@ def test_custom_phases_limits_sync_and_stop(setup):
 
 def test_malformed_custom_phases_is_refused(setup):
     assert run(setup, team="t", phases="bk")["result"] == "refused"
+
+
+def down(bd):
+    bd.fail[:] = [(lambda c: True, OSError("connection refused"))] * 100
+
+
+def test_backend_outage_is_announced_once_and_sync_failures_are_not(setup):
+    root, bd, cache, sender = setup
+    cache.write("b1", "close", {}, idem_key="k", actor="san")
+    run(setup)  # roots cached while bd answers
+    sender.sent.clear()
+    cache.write("b1", "update", {"add_labels": ["y"]}, idem_key="k2", actor="san")
+    down(bd)
+    for _ in range(bc.MAX_ATTEMPTS + 2):
+        assert run(setup) == {"result": "pass-through"}
+    assert [(lead, "unreachable" in body) for _, lead, body in sender.sent] == [("lead-x", True)]
+    assert cache.status()["escalated"] == []
+    bd.fail.clear()
+    assert run(setup) == {"result": "pass-through"}
+    assert "y" in bd.rows["b1"]["labels"] and cache.outage() is None
+    down(bd)
+    run(setup)
+    assert len(sender.sent) == 2  # a new outage is announced again
+
+
+def test_outage_with_uncached_roots_still_tells_every_configured_lead(setup):
+    root, bd, cache, sender = setup
+    down(bd)
+    assert run(setup) == {"result": "pass-through"}
+    assert sorted(lead for _, lead, _ in sender.sent) == ["lead-x", "lead-y"]
+
+
+def test_outage_is_not_cleared_while_only_the_backend_check_answers(setup):
+    # bd version/schema answer quickly on a loaded host while every list still times out: one announcement.
+    root, bd, cache, sender = setup
+    run(setup)
+    for _ in range(3):
+        bd.fail.append((lambda c: c[1] == "list" and "-l" in c, subprocess.TimeoutExpired("bd", 30)))
+        run(setup)
+    assert len(sender.sent) == 1 and cache.outage() is not None
+
+
+def test_undelivered_outage_announcement_is_retried(setup):
+    root, bd, cache, sender = setup
+    run(setup)
+    down(bd)
+    sender.fail = 1
+    assert run(setup)["result"] == "refused"
+    assert cache.outage()["announced_at"] is None
+    assert run(setup) == {"result": "pass-through"} and len(sender.sent) == 1

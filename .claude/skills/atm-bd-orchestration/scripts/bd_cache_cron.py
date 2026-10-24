@@ -7,7 +7,8 @@ Register once per repository (ADR-069), from the beads repository root:
 
 Each tick drains pending writes, then syncs every phase whose `.atm-bd/phase-<x>.toml`
 root bead is open (`custom.phases`, a list, limits this to the named phases). Every escalated write, and each new sync failure cause, is sent
-once to that phase's `lead` through `atm send --team tool`; an undeliverable
+once to that phase's `lead` through `atm send --team tool`; a backend outage is sent once to every active
+phase's lead, not as per-phase sync failures (bd_cache.UNREACHABLE); an undeliverable
 escalation stays unannounced and is retried next tick. The schedule stops when no
 phase is active and the journal holds no pending or unannounced entries.
 """
@@ -51,7 +52,14 @@ def active_phases(cache, configured):
     """Phases whose root bead is open; roots are read in one batched `bd list --id` when not cached."""
     missing = [p["root"] for p in configured.values() if cache.cached(p["root"]) is None]
     if missing:
-        for row in cache.bd_rows(missing).values():
+        try:
+            rows = cache.bd_rows(missing)
+        except bd_cache.CacheError as error:
+            if error.code not in bd_cache.UNREACHABLE:
+                raise
+            cache.record_outage(error)  # an uncached root is treated as inactive until bd answers
+            rows = {}
+        for row in rows.values():
             cache.store(row)
     return {name: info for name, info in configured.items()
             if (cache.cached(info["root"]) or {}).get("status") not in (None, "closed")}
@@ -68,6 +76,13 @@ def escalation_text(entry):
     return (f"bd-cache escalation: journaled write #{entry['seq']} ({entry['op']} on {entry['bead']}, by "
             f"{entry['actor']}) was not applied: {entry['last_error']}. Check the bead in bd (a timed-out write may "
             f"have landed), set the intended state with bd, then clear the entry: bd_cache.py resolve {entry['seq']} --note <what you did> --actor <you>.")
+
+
+def outage_text(outage):
+    return (f"bd-cache: the beads backend has been unreachable since {outage['since']}: {outage['error']}. "
+            "Journaled writes stay pending and count no retry attempts; they apply when bd answers again, and hooks "
+            "read the last synced rows meanwhile. Fix: restore bd and its dolt server on this host (`bd version`, "
+            "`bd list -n 1 --json`). This is sent once per outage.")
 
 
 def tick(root, custom, *, cache=None, send_fn=send, clock=time.monotonic):
@@ -91,6 +106,8 @@ def tick(root, custom, *, cache=None, send_fn=send, clock=time.monotonic):
             cache.clear_sync_alert(name)
         except bd_cache.CacheError as error:
             report["sync"][name] = error.as_json()
+            if bd_cache.UNREACHABLE & {error.code, error.extra.get("cause")}:
+                continue  # the outage is announced once below, not once per phase
             cause = f"{error.code}: {error.detail}"
             if cache.sync_alert(name) != cause:
                 ok, detail = send_fn(team, active[name]["lead"],
@@ -100,6 +117,16 @@ def tick(root, custom, *, cache=None, send_fn=send, clock=time.monotonic):
                     cache.set_sync_alert(name, cause)
                 else:
                     report["undelivered"].append({"phase": name, "error": detail})
+    outage = cache.outage()
+    if outage and not outage["announced_at"]:
+        leads = sorted({info["lead"] for info in (active or configured).values()})
+        failed = [(lead, detail) for lead in leads
+                  for ok, detail in [send_fn(team, lead, outage_text(outage))] if not ok]
+        if leads and not failed:
+            cache.mark_outage_announced()
+        report["undelivered"] += [{"outage": outage["since"], "lead": lead, "error": detail} for lead, detail in failed]
+        if not leads:
+            report["undelivered"].append({"outage": outage["since"], "error": "no phase lead to tell"})
     for entry in cache.unannounced_escalations():
         lead = (configured.get(entry["phase"]) or {}).get("lead")
         if not lead:

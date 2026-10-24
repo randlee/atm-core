@@ -294,11 +294,59 @@ def test_transient_write_failure_stays_pending_and_holds_later_entries_of_that_b
     assert bd.rows["b1"]["status"] == "closed" and "x" in bd.rows["b1"]["labels"]
 
 
-def test_failed_pre_read_retries_every_entry(world):
+def attempts(cache, seq):
+    return cache.db.execute("SELECT attempts FROM journal WHERE seq=?", (seq,)).fetchone()[0]
+
+
+@pytest.mark.parametrize("failure", [
+    (lambda c: c[1] == "list" and "--id" in c, subprocess.TimeoutExpired("bd", 30)),  # pre-read timed out
+    (lambda c: c[1] == "list" and "--id" in c, 1),  # pre-read exited nonzero (dolt connection refused)
+    (lambda c: c[1] == "version", OSError("bd: not found")),  # backend check cannot run bd
+], ids=["pre-read-timeout", "pre-read-exit", "backend-check"])
+def test_unreachable_backend_is_an_outage_that_counts_no_attempt(world, failure):
+    # A backend outage of more than MAX_ATTEMPTS drains used to escalate every pending write (bd-cache gap 2).
     bd, cache = world
     cache.write("b2", "close", {}, idem_key="k1", actor="san")
-    bd.fail.append((lambda c: c[1] == "list" and "--id" in c, subprocess.TimeoutExpired("bd", 30)))
-    assert cache.drain()["retrying"] == [1] and bd.writes() == []
+    for _ in range(bc.MAX_ATTEMPTS + 2):
+        bd.fail.append(failure)
+        report = cache.drain()
+        assert (report["ok"], report["deferred"], report["retrying"], report["escalated"]) == (False, [1], [], [])
+        assert report["outage"]["code"] in bc.UNREACHABLE
+    assert attempts(cache, 1) == 0 and bd.writes() == []
+    outage = cache.status()["meta"]
+    assert outage["outage_since"] and outage["outage_error"].startswith(report["outage"]["code"])
+    assert cache.drain()["applied"] == [1]  # bd answers again: the write lands and the outage clears
+    assert bd.rows["b2"]["status"] == "closed" and cache.outage() is None
+
+
+def test_outage_keeps_its_start_time_and_latest_error(world):
+    bd, cache = world
+    cache.write("b2", "close", {}, idem_key="k1", actor="san")
+    bd.fail.append((lambda c: c[1] == "version", OSError("first")))
+    cache.drain()
+    since = cache.outage()["since"]
+    cache.clock = lambda: 1792749660.0
+    bd.fail.append((lambda c: c[1] == "version", OSError("second")))
+    cache.drain()
+    assert cache.outage()["since"] == since and "second" in cache.outage()["error"]
+
+
+def test_a_reachable_backend_refusing_the_write_still_counts_attempts(world):
+    bd, cache = world
+    cache.write("b2", "close", {}, idem_key="k1", actor="san")
+    bd.fail.append((lambda c: c[1] == "close", 1))
+    assert cache.drain()["retrying"] == [1] and attempts(cache, 1) == 1 and cache.outage() is None
+
+
+def test_sync_records_an_outage_and_a_passing_sync_clears_it(world):
+    bd, cache = world
+    bd.fail.append((lambda c: c[1] == "list" and "-l" in c, subprocess.TimeoutExpired("bd", 30)))
+    with pytest.raises(bc.CacheError) as raised:
+        cache.sync("x")
+    assert raised.value.code == "BD_CACHE.SYNC_FAILED" and raised.value.extra["cause"] == "BD_CACHE.BD_UNAVAILABLE"
+    assert cache.outage() is not None
+    cache.sync("x")
+    assert cache.outage() is None
 
 
 def test_retries_exhausted_escalate_and_never_silently_drop(world):

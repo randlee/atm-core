@@ -42,6 +42,9 @@ BD_TIMEOUT = 30.0
 SYNC_SKEW = datetime.timedelta(minutes=2)
 STATUSES = "open,in_progress,blocked,deferred,closed,pinned,hooked"
 DERIVED_KEYS = ("dependency_count", "dependent_count")
+# bd could not answer at all (cannot run, timed out, connection failed): a backend outage, never a write attempt.
+UNREACHABLE = {"BD_CACHE.BD_UNAVAILABLE", "BD_CACHE.BD_VERSION_FAILED", "BD_CACHE.BD_SCHEMA_FAILED",
+               "BD_CACHE.BD_LIST_FAILED"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -321,6 +324,7 @@ class BdCache:
         """Fresh validated rows for the given ids in one `bd list --id`; absent ids are missing from the result."""
         rows = self.bd_json(["bd", "list", "--id", ",".join(ids), "--status", STATUSES, "-n", "0", "--json"],
                             timeout, "BD_CACHE.BD_LIST_FAILED") or []
+        self.clear_outage()  # only a data read proves bd answers; `bd version` can pass while lists time out
         return {row["id"]: row for row in map(validated, rows)}
 
     def check_backend(self, timeout=BD_TIMEOUT):
@@ -484,12 +488,19 @@ class BdCache:
             entries = self.db.execute("SELECT * FROM journal WHERE state='pending' ORDER BY seq").fetchall()
             if not entries:
                 return report
-            report["backend"] = self.check_backend()
             try:
+                report["backend"] = self.check_backend()
                 fresh = self.bd_rows(sorted({e["bead"] for e in entries}))
             except CacheError as error:
-                for entry in entries:
-                    self._retry(report, entry, error)
+                if error.code not in UNREACHABLE:
+                    if "backend" not in report:
+                        raise
+                    for entry in entries:
+                        self._retry(report, entry, error)
+                    return report
+                # An outage: every entry stays pending with its attempts unchanged; the cron announces it once.
+                self.record_outage(error)
+                report.update(ok=False, outage=error.as_json(), deferred=[e["seq"] for e in entries])
                 return report
             blocked = set()
             for entry in entries:
@@ -549,7 +560,12 @@ class BdCache:
 
     # -- sync ----------------------------------------------------------------
     def sync(self, phase, timeout=BD_TIMEOUT):
-        backend = self.check_backend(timeout)
+        try:
+            backend = self.check_backend(timeout)
+        except CacheError as error:
+            if error.code in UNREACHABLE:
+                self.record_outage(error)
+            raise
         started = self.clock()
         state = self.db.execute("SELECT last_ok_at FROM sync_state WHERE phase=?", (phase,)).fetchone()
         command = ["bd", "list", "-l", f"phase-{phase}", "-n", "0", "--status", STATUSES, "--json"]
@@ -560,10 +576,15 @@ class BdCache:
                         "ON CONFLICT(phase) DO UPDATE SET last_started_at=excluded.last_started_at",
                         (phase, now_iso(lambda: started)))
         try:
-            rows = [validated(row) for row in self.bd_json(command, timeout, "BD_CACHE.BD_LIST_FAILED") or []]
+            listed = self.bd_json(command, timeout, "BD_CACHE.BD_LIST_FAILED") or []
+            self.clear_outage()
+            rows = [validated(row) for row in listed]
         except CacheError as error:
             self.db.execute("UPDATE sync_state SET last_error=? WHERE phase=?", (f"{error.code}: {error.detail}", phase))
-            raise CacheError("BD_CACHE.SYNC_FAILED", f"{error.code}: {error.detail}", error.fix, phase=phase)
+            if error.code in UNREACHABLE:
+                self.record_outage(error)
+            raise CacheError("BD_CACHE.SYNC_FAILED", f"{error.code}: {error.detail}", error.fix, phase=phase,
+                             cause=error.code)
         stale = [r["id"] for r in self.db.execute("SELECT id FROM beads WHERE phase=? AND stale=1", (phase,))]
         with self.transaction():
             stored = sum(self.store(row) for row in rows)
@@ -619,6 +640,24 @@ class BdCache:
 
     def clear_sync_alert(self, phase):
         self.db.execute("DELETE FROM meta WHERE key=?", (f"sync_alert:{phase}",))
+
+    def outage(self):
+        """{since, error, announced_at} while bd is unreachable, else None; cleared by the next `bd list` that answers."""
+        since = self.meta("outage_since")
+        return None if since is None else {"since": since, "error": self.meta("outage_error"),
+                                           "announced_at": self.meta("outage_announced_at")}
+
+    def record_outage(self, error):
+        values = {"outage_error": f"{error.code}: {error.detail}"}
+        if self.meta("outage_since") is None:
+            values["outage_since"] = now_iso(self.clock)
+        self.set_meta(**values)
+
+    def mark_outage_announced(self):
+        self.set_meta(outage_announced_at=now_iso(self.clock))
+
+    def clear_outage(self):
+        self.db.execute("DELETE FROM meta WHERE key IN ('outage_since', 'outage_error', 'outage_announced_at')")
 
     def has_open_work(self):
         return self.db.execute("SELECT COUNT(*) FROM journal WHERE state='pending' OR "

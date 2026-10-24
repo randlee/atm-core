@@ -99,7 +99,8 @@ write plus one read-back, 60 s, which exceeds the daemon's 30 s cron timeout.
 ATM then kills the tick. This is safe: `flock` is released when the process
 exits, and the entry stays `pending`. If the write landed, the next pass finds
 it `achieved` and records it without a second write. If it did not, the entry
-retries until `MAX_ATTEMPTS` (5), then escalates. The Rust implementation
+retries until `MAX_ATTEMPTS` (5), then escalates. A killed write is an attempt; an
+unreachable backend is not (see Failure handling, outage). The Rust implementation
 should add a hard deadline: cap each `bd` call at the time left before it, so
 a tick never exceeds its budget.
 
@@ -118,9 +119,10 @@ a tick never exceeds its budget.
 | Bead absent at drain | drain | escalated | phase lead |
 | Precondition no longer holds at drain | drain | escalated, no write | phase lead |
 | `bd` guard refused (exit 13) | drain | escalated | phase lead |
-| Transient `bd` failure or timeout | drain | retried; later entries for that bead held; escalated at 5 attempts | phase lead after 5 |
+| Backend unreachable (`bd` cannot start, times out, or a list exits nonzero) during the backend check or the batched pre-read | drain, sync, cron | an outage: recorded once with its start time, every entry stays pending with no attempt counted, per-phase sync alerts suppressed; sent once per outage to every active phase lead; cleared by the next `bd list` that answers | whoever restores bd |
+| `bd` write fails or times out | drain | retried; later entries for that bead held; escalated at 5 attempts | phase lead after 5 |
 | Read-back failure | drain | applied, row marked `stale`; the bead's later entries held until a sync re-reads it | none |
-| Sync failure | cron | `BD_CACHE.SYNC_FAILED` recorded; sent once per cause to the phase lead | phase lead |
+| Sync failure from a reachable `bd` (e.g. `BD_CONTRACT`) | cron | `BD_CACHE.SYNC_FAILED` recorded; sent once per cause to the phase lead | phase lead |
 | `bd` schema changed | backend check | cache rows rebuilt, journal kept; `BD_CONTRACT` if rows no longer validate | maintainer regenerates `bd_models.py` |
 | Escalation message not delivered | cron | reply `refused` with the list; retried every tick | ATM operator |
 
@@ -266,8 +268,11 @@ current view (`get`); unmet precondition → `BD_CACHE.PRECONDITION` with
 `.atm-bd/<dolt_database>.bd-cache.drain.lock` (held → `{busy: true}`). An
 entry not started by the deadline (a monotonic time) is reported in
 `deferred`, stays pending and keeps its `attempts`. With pending entries: backend check, then one
-batched `bd list --id` of every bead with a pending entry (failure → every
-entry retries). For each pending entry by `seq`, skipping beads whose earlier
+batched `bd list --id` of every bead with a pending entry. An unreachable
+backend in either (`UNREACHABLE`: `BD_UNAVAILABLE`, `BD_VERSION_FAILED`,
+`BD_SCHEMA_FAILED`, `BD_LIST_FAILED`) records the outage and returns
+`{ok: false, outage, deferred: <every seq>}` with no attempt counted; any other
+pre-read failure → every entry retries. For each pending entry by `seq`, skipping beads whose earlier
 entry failed in this pass:
 
 1. bead absent from the batch → escalate;
@@ -282,7 +287,15 @@ entry failed in this pass:
    `stale = 1`, and hold the bead's later entries until a sync re-reads it.
 
 Each `bd` call has a 30 s timeout. The report lists `applied`, `retrying`
-`escalated` (`seq, bead, op, actor, phase, reason`) and `deferred`.
+`escalated` (`seq, bead, op, actor, phase, reason`) and `deferred`, plus
+`outage` when the backend was unreachable.
+
+Outage state lives in `meta`: `outage_since` (kept from the first failure),
+`outage_error` (the latest) and `outage_announced_at`. A drain pre-read or
+sync list that answers clears all three; `bd version` passing does not,
+because on a loaded host it answers while lists still time out. A sync whose
+backend check or list is unreachable records the outage and raises
+`SYNC_FAILED` with `cause` set to the underlying code.
 
 `sync(phase)`: backend check, then `bd list -l phase-<x> -n 0 --status
 <all seven> --json`, every row validated before any is stored, with `--updated-after
@@ -310,8 +323,12 @@ in one `bd list --id`).
 
 `cron.tick`, within a 25 s budget: drain with the deadline 5 s before the
 budget ends; sync each active phase, deferring any not started 2 s before
-it; a sync failure whose cause differs from `sync_alert:<phase>` is sent to
-that phase's lead, success clears it; every escalated entry with no
+it (an uncached root that cannot be read during an outage counts as
+inactive); a sync failure whose code or `cause` is unreachable is not
+announced per phase; any other sync failure whose cause differs from
+`sync_alert:<phase>` is sent to that phase's lead, success clears it; an
+outage not yet announced is sent once to every active phase's lead (every
+configured lead when none is known active), then marked; every escalated entry with no
 `announced_at` is sent to its phase's lead with the `resolve` command, then
 marked. Messages go through `atm send <lead>@<team> --team tool` as `cron`.
 Any message not delivered (or an entry whose phase has no lead) makes the
@@ -338,7 +355,7 @@ Exit 0 ok; 2 usage; 3 typed error `{ok:false, code, detail, fix, ...}`.
 
 | code | meaning | fix carried |
 |---|---|---|
-| `BD_CACHE.BD_UNAVAILABLE` | `bd` timed out or could not start | transient; drain retries, hook escalates or defers |
+| `BD_CACHE.BD_UNAVAILABLE` | `bd` timed out or could not start | an outage before a write (no attempt counted); a timed-out write retries |
 | `BD_CACHE.NO_DATABASE` | no readable `dolt_database`/`project_id` in metadata.json | run from the beads root or set `BEADS_DIR` |
 | `BD_CACHE.WRONG_DATABASE` | file's recorded project id differs | move the file aside |
 | `BD_CACHE.NOT_FOUND` | bead in neither cache nor `bd` | check the bead id |
@@ -382,8 +399,8 @@ the Rust binary and the reverse.
 ## Tests
 
 1. Unit (no `bd`, no dolt; fake `BdRunner` emitting validated list rows):
-   port every case in `tests/test_bd_cache.py` (41 tests) and
-   `tests/test_bd_cache_cron.py` (9 tests, real cache with the fake runner and an
+   port every case in `tests/test_bd_cache.py` (44 tests) and
+   `tests/test_bd_cache_cron.py` (13 tests, real cache with the fake runner and an
    injected sender): file name from
    metadata.json and `BEADS_DIR`, NO_DATABASE, WRONG_DATABASE, schema change
    rebuilds rows and keeps the journal, first check keeps rows, model_current,
@@ -396,11 +413,18 @@ the Rust binary and the reverse.
    incremental sync and newer-row guard, typed sync failure, edge index,
    single drain writer, prune guard, schema refusal, bad ops, drain
    deadline defers without attempts, announce/resolve bookkeeping, resolve
-   keeps the note, prune after resolve, sync alert round trip; cron: only
+   keeps the note, prune after resolve, sync alert round trip, an
+   unreachable backend (pre-read timeout, pre-read exit, backend check) counts
+   no attempt across more than `MAX_ATTEMPTS` drains and recovers, outage
+   keeps its start, a reachable refusal still counts, sync records and clears
+   the outage; cron: only
    open-root phases sync, escalation sent once to the phase lead,
    undelivered escalation refused and retried, sync failure announced once
    per cause and cleared, missing team refused, stop rule, tick budget
-   defers the drain. Each test must
+   defers the drain, outage announced once (not per phase) and again for a
+   new outage, uncached roots during an outage tell every configured lead,
+   a passing `bd version` does not clear the outage, undelivered outage
+   announcement retried. Each test must
    fail against a planted bug: the prototype was checked with 19 (among them: no overlay,
    no write/drain precondition, no newer-row guard, no per-bead hold, no
    achieved check, no retry cap, no stale flag, no drain lock, no metadata
@@ -412,7 +436,11 @@ the Rust binary and the reverse.
    open-work ignores announcement, resolve accepts any state, deferred not
    reported, no mark_announced, no set/clear sync alert, refusal dropped,
    team check dropped, closed roots active, stop ignores open work, drain
-   without deadline); every one failed at least one test.
+   without deadline); every one failed at least one test. The outage code
+   was checked with 7 more (outage counts attempts, per-phase alert on outage,
+   outage start overwritten, announcement not marked, uncached root raises,
+   sync never clears, sync check records nothing); every one failed at least
+   one test, and a no-op control passed.
 2. Contract: the bd-1.3.1 fixtures above; the fake runner's command plan is
    asserted.
 3. Live integration (testbed only, never in CI or unit suites): sync, get and
@@ -466,7 +494,7 @@ and the fresh check before every write is kept.
   solar), which reads through the cache and journals its writes.
 - Journal so far: 17 entries applied (6 close, 11 update: 9 are the
   close-fields backfill, the rest sanity closes), 0 escalated.
-- Tests: `test_bd_cache.py` (41), `test_bd_cache_cron.py` (9), and the sanity
+- Tests: `test_bd_cache.py` (44), `test_bd_cache_cron.py` (13), and the sanity
   hook's suite pass in the declared environment (`uv run --with pytest --with
   pydantic --with pyyaml --with sc-compose==1.7.0 --with "sc-sha>=1.7.0,<2"`).
 
@@ -486,10 +514,6 @@ and the fresh check before every write is kept.
   it. Readiness always comes from live `bd ready`. A cache that serves ready
   must re-read the dependers of changed blockers, including blockers outside
   the synced phases (beads-cache ADR-BDC-0002).
-- A backend outage counts as a drain attempt: when the batched read fails,
-  every pending entry retries, so about five failed ticks escalate every
-  write. Proposed fix: treat an unreachable backend as an outage that counts
-  no attempt (beads-cache ADR-BDC-0005).
 - Closed phases are not pruned automatically. Run `prune --phase <x>` after
   the root closes. Automatic prune from the cron once a root is closed and
   its journal is clear is a candidate.
