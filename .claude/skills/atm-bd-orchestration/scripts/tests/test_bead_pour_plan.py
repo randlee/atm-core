@@ -32,7 +32,8 @@ class PlanFixture:
         self.runner = object.__new__(groups.Run)
         self.runner.repo = root
         self.runner.option = None
-        self.runner.config = {"worktree_base": str(root / "worktrees")}
+        self.runner.config = {"worktree_base": str(root / "worktrees"), "lint_command": "just lint",
+                              "policy_path": "policy.md", "max_sanity_rounds": 5}
         self.runner.plans = {}
         self.runner.sidecars = {}
         self.rows = {}
@@ -42,12 +43,14 @@ class PlanFixture:
     def sprint(self, phase="x", number=1, predecessors=()):
         name, bead = f"{phase}-{number}", f"t-{phase}-{number}"
         self.rows[bead] = {
-            "id": bead, "status": "open", "priority": 2,
+            "id": bead, "status": "open", "priority": 2, "title": f"{name}: the work",
             "metadata": {"phase": phase, "sprint": name, "stack": f"phase-{phase}",
                          "layer": number, "difficulty": "normal", "branch": f"sprint/{name}",
                          "worktree": str(self.root / "worktrees" / name),
                          "pr_target": f"integrate/phase-{phase}", "requirements": ["REQ-1"], "adrs": ["NONE"]},
         }
+        self.runner.__dict__.setdefault("features", {})[phase] = {"stack_bead": f"t-phase-{phase}.stack",
+                                                                  "phase_feature": f"phase-{phase}: feature"}
         self.runner.plans.setdefault(phase, {})[name] = (bead, f"{bead}.group-sanity", list(predecessors))
         self.rows[f"{bead}.group-qa"] = {"id": f"{bead}.group-qa", "status": "open"}
         self.rows[f"t-phase-{phase}.stack"] = {
@@ -89,6 +92,19 @@ class PlanFixture:
         return attachment, request, command
 
 
+def assert_close_fields(case, steps, parent, ref, work):
+    """Every poured step carries close_fields.POURED for its role, naming its group's own beads."""
+    import close_fields
+    for step in steps:
+        metadata = step["metadata"]
+        case.assertEqual([k for k in close_fields.POURED if metadata.get(k) in (None, "")], [], step["id"])
+        case.assertEqual(metadata["role"], {"sanity": "sanity"}.get(step["id"], step["id"]))
+        case.assertEqual((metadata["checked_bead"], metadata["sanity_bead"], metadata["qa_bead"], metadata["base"]),
+                         (f"{parent}.{ref}-{work}", f"{parent}.{ref}-sanity", f"{parent}.{ref}-qa", metadata["pr_target"]))
+        case.assertEqual((metadata["stack_bead"], metadata["lint_command"], metadata["max_sanity_rounds"]),
+                         ("t-phase-x.stack", "just lint", 5))
+
+
 class PourPlanTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -112,6 +128,8 @@ class PourPlanTests(unittest.TestCase):
                 formula = self.fixture.formula(target)
                 steps = formula["steps"]
                 self.assertEqual([step["id"] for step in steps], ["dev"] if option == "A" else ["dev", "sanity", "qa"])
+                assert_close_fields(self, steps, dependent, "group", "dev")
+                self.assertEqual(steps[0]["metadata"]["checked_title"], "x-2: the work")
                 for step in steps:
                     self.assertNotIn("assignee", step)
                     for key in ("branch", "worktree", "pr_target", "difficulty"):
@@ -143,6 +161,8 @@ class PourPlanTests(unittest.TestCase):
                     self.assertEqual(step["metadata"]["pr_target"], "fix/x-previous")
                     self.assertEqual(step["metadata"]["branch"], "fix/x-1-qa1-f1")
                 self.assertEqual(steps[0]["metadata"]["requirements"], ["REQ-1"])
+                assert_close_fields(self, steps, self.sprint, "qa1-f1-r1", "fix")
+                self.assertEqual(steps[0]["metadata"]["checked_title"], steps[0]["title"])  # the fix bead's own title
                 relations, _ = self.runner.relations(target, preview=False)
                 self.assertIn({"from": "step:fix", "to": f"bead:{self.sprint}.group-qa", "type": "discovered-from"}, relations)
 
@@ -234,7 +254,8 @@ class PourPlanTests(unittest.TestCase):
         target = self.runner.sprint_target(self.sprint)
         ids = {step: f"{self.sprint}.group-{step}" for step in ("dev", "sanity", "qa")}
         template = SCRIPTS.parents[1] / "atm-beads/templates/dev-sanity-bead.json.j2"
-        values = {**target["compose"], "id": ids["sanity"], "dev_bead": ids["dev"]}
+        values = {**target["compose"], "id": ids["sanity"], "dev_bead": ids["dev"], "qa_bead": ids["qa"],
+                  "sprint_bead": self.sprint}
         rendered = json.loads(sc_render.render(template, values))
         self.assertEqual(bead_schema.validate_phase([rendered]), [])
         del rendered["metadata"]["branch"]

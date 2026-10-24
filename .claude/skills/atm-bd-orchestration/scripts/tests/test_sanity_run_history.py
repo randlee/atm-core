@@ -174,6 +174,7 @@ class SanityHistory(unittest.TestCase):
 
     def test_assignment_selection_renders_without_legacy_reviewers(self):
         variables = json.loads((SCRIPTS.parent / "examples/dev-sanity-template-vars.json").read_text())
+        variables["sanity_close_mode"] = "legacy"  # the split/merge coordinator path; daemon mode has its own step b
         rendered = render(SCRIPTS.parent / "templates/dev-sanity-template.xml.j2", variables)
         self.assertEqual(rendered.returncode, 0, rendered.stderr)
         self.assertNotIn("<reviewers>", rendered.stdout)

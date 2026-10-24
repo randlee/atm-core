@@ -55,6 +55,16 @@
           "minimum": 1,
           "title": "Round",
           "type": "integer"
+        },
+        "reviewers_round1": {
+          "items": {
+            "pattern": "^[a-z][a-z0-9_-]*$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Reviewers Round1",
+          "type": "array",
+          "uniqueItems": true
         }
       },
       "required": [
@@ -63,7 +73,8 @@
         "pr_target",
         "difficulty",
         "checked_bead",
-        "round"
+        "round",
+        "reviewers_round1"
       ],
       "title": "QaMetadata",
       "type": "object"

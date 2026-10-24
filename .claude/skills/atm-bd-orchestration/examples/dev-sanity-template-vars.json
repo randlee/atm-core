@@ -11,5 +11,8 @@
   "primary_checkout": "/path/to/atm-core",
   "lint_command": "make lint",
   "beads_dir": "/path/to/atm-core/.beads",
-  "close_context": {"example": "lead-supplied close contract"}
+  "close_context": {
+    "example": "lead-supplied close contract"
+  },
+  "sanity_close_mode": "daemon"
 }

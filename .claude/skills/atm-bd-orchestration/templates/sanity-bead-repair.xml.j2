@@ -1,0 +1,18 @@
+---
+name: sanity-bead-repair
+version: 1.0.0
+format: xml
+required_variables: [task_id, original_task, journal, key, failure, root, repair_script, phase, team, phase_lead]
+metadata:
+  type: sanity-bead-repair
+---
+<atm-task id="{{ task_id | string | cdata_escape }}" mode="bead-repair">
+  <description><![CDATA[Complete deferred bead operations for {{ original_task }}. Its original sanity task is closing; this task owns recovery until all required operations succeed. No Cargo work.]]></description>
+  <failure><![CDATA[{{ failure | tojson | cdata_escape }}]]></failure>
+  <workflow><![CDATA[
+Run atm task start {{ task_id }} "Retry deferred sanity bead operations".
+Run python3 {{ repair_script }} --journal {{ journal }} --key {{ key }} --phase {{ phase }} --team {{ team }} --original-task {{ original_task }} --lead {{ phase_lead }}.
+The runner reads current state, skips successful operations, and completes required dev closure or failure notification. On error diagnose the named command, notify the phase lead, and retry after the cause clears; keep this repair task open until successful. Do not run a busy retry loop, compile code, bypass a dependency, or force-close a bead.
+Only after runner success: atm task close {{ task_id }} completed "Deferred sanity bead operations verified complete".
+]]></workflow>
+</atm-task>

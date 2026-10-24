@@ -58,3 +58,10 @@ tmp/
 # sc-publish kit bootstrap cache (pinned clone, see release/sc-publish-pin.toml)
 .sc-publish-kit/
 **/.sc-compose/
+
+# Durable local sanity-close repair journal
+.atm-bd/sanity-close/
+
+# bd-cache: per-dolt-database local cache, journal and drain lock (#557)
+.atm-bd/*.bd-cache.sqlite3*
+.atm-bd/*.bd-cache.drain.*

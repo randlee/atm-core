@@ -11,8 +11,10 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
+import time
 from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
@@ -27,12 +29,21 @@ VALIDATE_PLAN = str(PRIMARY / ".claude/skills/atm-beads/scripts/validate-plan")
 MIN_VALIDATE_PLAN_TIMEOUT = 300
 COMMAND_TIMEOUT = import_timeout()
 VALIDATE_PLAN_TIMEOUT = max(MIN_VALIDATE_PLAN_TIMEOUT, COMMAND_TIMEOUT)
+DOLT_DROP = re.compile(r"invalid connection|i/o timeout", re.IGNORECASE)  # local mirror of atm-task-close.py, 2026-10-20
+DOLT_RETRIES = 3
+DOLT_RETRY_SLEEP_S = 10  # validate-plan takes 60-90s under host load (2026-10-20, load 45-55); mirror PR upstream
 
 
 def invoke(runner: Runner, argv: list[str], *, timeout: float | None = None, **kwargs: Any) -> subprocess.CompletedProcess[str]:
     limit = COMMAND_TIMEOUT if timeout is None else timeout
     try:
-        return runner(argv, timeout=limit, **kwargs)
+        for attempt in range(DOLT_RETRIES + 1):
+            result = runner(argv, timeout=limit, **kwargs)
+            text = (getattr(result, "stderr", "") or "") + (getattr(result, "stdout", "") or "")
+            if not getattr(result, "returncode", 0) or attempt == DOLT_RETRIES or not DOLT_DROP.search(str(text)):
+                return result
+            time.sleep(DOLT_RETRY_SLEEP_S)  # Dolt dropped the connection under host load; retry (local mirror of the close hook, 2026-10-20)
+        return result
     except subprocess.TimeoutExpired as error:
         raise RuntimeError(f"{argv!r} timed out after {limit}s; {RAISE_FIX} "
                            f"(now {COMMAND_TIMEOUT}s per command, {VALIDATE_PLAN_TIMEOUT}s for validate-plan)") from error

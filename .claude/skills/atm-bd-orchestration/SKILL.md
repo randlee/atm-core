@@ -331,7 +331,7 @@ this skill; use the configured path when the phase overrides a default.
 | plan review (`stage:plan-review`) | `templates.plan_review` | quality-mgr |
 | dev (`stage:dev`) | `templates.dev` | the member the lead picks for its `difficulty` |
 | sanity check (`stage:dev-sanity`) | `templates.sanity` | `.claude/skills/atm-beads/scripts/resolve-role dev-sanity` |
-| QA (`stage:qa`) | `templates.qa` | quality-mgr |
+| QA (`stage:qa`) | `templates.qa`, vars from `scripts/close-vars.py <qa bead> --qa-assignment --out <vars>` (its PR, commit and branch are the checked bead's recorded close); run the `next` command it prints | quality-mgr |
 | fix (`stage:fix`) | `templates.fix` | the member the lead picks for its `difficulty` |
 | finding from a quick-fix QA (its `discovered-from` QA bead has `metadata.quick_fix` true) | `templates.fix`, no sanity bead; once every finding from that failed QA has closed, one more quick-fix QA bead (Parallel Quick Fix step 4) | an idle dev picked for its `difficulty`, by priority |
 | important or minor finding (`stage:finding`, no `metadata.sanity_finding`, not from a quick-fix QA) | `templates.fix`, in the same step as one `bd import` of its sanity bead (`atm-beads` [`dev-sanity-bead.json.j2`](../atm-beads/templates/dev-sanity-bead.json.j2), `dev_bead` = the finding) and its QA bead ([`qa-bead.json.j2`](templates/qa-bead.json.j2), `checked_bead` = the finding, `sprint_bead` = the finding's `metadata.sprint_bead`, `blocked_by` = the sanity bead), each with `parent` = the finding's parent and the cut layer's `branch`, `worktree`, `pr_target`, and `difficulty`; a minor finding left in the backlog gets neither until it is assigned | an idle dev, by priority |
@@ -546,6 +546,7 @@ one of these defaults; close and package-internal data templates retain their pa
 | `qa-complete.md.j2` | close | quality-mgr, and its PR comment |
 | `fix-assignment.xml.j2` | assignment | lead → dev, one poured fix bead or important or minor finding bead |
 | `fix-complete.md.j2` | close | dev, for `fix-assignment` |
+| `pr-body.md.j2` | PR description | dev, for `dev-template` and `fix-assignment`: `gh pr create`/`gh pr edit --body-file` |
 | `review-template.xml.j2` | assignment | lead → phase-end reviewer |
 | `review-complete.md.j2` | close | phase-end reviewer |
 | `task-refused.md.j2` | close | anyone who cannot do the whole assignment |

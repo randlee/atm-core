@@ -160,6 +160,20 @@ class Run:
             raise TargetError("BEAD_GROUPS_TARGET_NOT_FOUND", f"{bead} does not exist")
         return row
 
+    def close_compose(self, phase: str, checked_title: str, stack_bead: str | None = None) -> dict:
+        """The close-field compose variables (close_fields.POURED) every poured step carries."""
+        features = self.__dict__.setdefault("features", {})
+        if phase not in features:
+            root = sprint_index_common.load_phase_config(self.repo, phase)["root"]
+            title = self.show(root).get("title")
+            if not title:
+                raise TargetError("BEAD_GROUPS_TARGET_INVALID", f"phase root {root} has no title for phase_feature")
+            features[phase] = {"stack_bead": stack_bead or stack_bead_id(root), "phase_feature": title}
+        if not checked_title:
+            raise TargetError("BEAD_GROUPS_TARGET_INVALID", "the checked work has no title for checked_title")
+        return {**features[phase], "checked_title": checked_title, "lint_command": self.config["lint_command"],
+                "policy_path": self.config["policy_path"], "max_sanity_rounds": self.config["max_sanity_rounds"]}
+
     def option_for(self, sidecar: dict) -> str:
         option = self.option or sidecar["default_option"]
         if option not in sidecar["options"]:
@@ -181,7 +195,7 @@ class Run:
         compose = {"parent": bead, "phase": meta["phase"], "sprint": meta["sprint"], "stack": meta["stack"],
                    "layer": meta["layer"], "difficulty": meta["difficulty"], "priority": container.get("priority", 2),
                    "branch": meta["branch"], "worktree": meta["worktree"], "pr_target": meta["pr_target"],
-                   "edge_option": option}
+                   "edge_option": option, **self.close_compose(str(meta["phase"]), container.get("title") or "")}
         compose["ref"] = fmt(sidecar["ref"], {"vars": compose})
         relate_vars = {**sidecar.get("defaults", {}), "predecessor_sanity": [plan[d][1] for d in deps],
                        "predecessors": [plan[d][0] for d in deps],
@@ -257,7 +271,7 @@ class Run:
                            "found_on_layer": finding.get("found_on_layer", ""),
                            "has_found_on_layer": finding.get("found_on_layer") not in (None, ""),
                            "priority": finding.get("priority", 1),
-                           "edge_option": option}
+                           "edge_option": option, **self.close_compose(str(meta["phase"]), f"{meta['sprint']}: fix {ref}: {finding['title']}", stack_id)}
                 compose["ref"] = fmt(sidecar["ref"], {"vars": {**compose, "finding_ref": slug}})
                 existing = self.bd.show(attach_id(sprint, compose["ref"], "fix"))
                 existing_cut = (existing or {}).get("metadata") or {}
