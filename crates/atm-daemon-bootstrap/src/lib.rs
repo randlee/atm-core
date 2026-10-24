@@ -528,6 +528,7 @@ async fn run_replacement_daemon_with_selector(
     run_until_shutdown(running, handler, workers, owner, singleton_guards).await
 }
 
+#[allow(clippy::too_many_arguments)]
 fn replacement_handler_config<F>(
     observability: &Arc<dyn ObservabilityPort + Send + Sync>,
     selector_factory: F,
