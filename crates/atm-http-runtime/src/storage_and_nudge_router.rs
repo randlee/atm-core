@@ -3985,10 +3985,14 @@ pub(crate) mod tests {
         .expect("infallible Axum service")
     }
 
-    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_body(
+    fn stalled_template_fixture(
         through: bool,
+    ) -> (
+        Fixture,
+        Arc<BlockingTemplateComposer>,
+        tokio::sync::mpsc::UnboundedReceiver<()>,
     ) {
-        let (composer, mut starts) = BlockingTemplateComposer::new("template body");
+        let (composer, starts) = BlockingTemplateComposer::new("template body");
         let composer = Arc::new(composer);
         let fixture = route_task_commands(
             fixture_with_selector_and_template(
@@ -4004,29 +4008,28 @@ pub(crate) mod tests {
             ),
             through,
         );
-        let response_deadline = Duration::from_secs(30);
-        let first_request = template_write_request(&fixture, "template body");
-        let second_request = template_write_request(&fixture, "template body");
-        let first_router = fixture.router.clone();
-        let second_router = fixture.router.clone();
-        let first = tokio::spawn(async move {
-            first_router
-                .dispatch(
-                    ApiRequest::new(RequestEnvelope::Write(Box::new(first_request))),
-                    AuthenticatedIngress::Local,
-                    RequestDeadline::after(response_deadline),
-                )
-                .await
-        });
-        let second = tokio::spawn(async move {
-            second_router
-                .dispatch(
-                    ApiRequest::new(RequestEnvelope::Write(Box::new(second_request))),
-                    AuthenticatedIngress::Local,
-                    RequestDeadline::after(response_deadline),
-                )
-                .await
-        });
+        (fixture, composer, starts)
+    }
+
+    async fn start_stalled_template_verifications(
+        fixture: &Fixture,
+        starts: &mut tokio::sync::mpsc::UnboundedReceiver<()>,
+        deadline: Duration,
+    ) -> tokio::task::JoinSet<Result<atm_core::api::ApiResponse, AtmError>> {
+        let mut stalled = tokio::task::JoinSet::new();
+        for _ in 0..2 {
+            let router = fixture.router.clone();
+            let request = template_write_request(fixture, "template body");
+            stalled.spawn(async move {
+                router
+                    .dispatch(
+                        ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(deadline),
+                    )
+                    .await
+            });
+        }
         starts
             .recv()
             .await
@@ -4035,7 +4038,10 @@ pub(crate) mod tests {
             .recv()
             .await
             .expect("second template verification occupies the bounded preflight");
+        stalled
+    }
 
+    async fn assert_task_list_remains_live(fixture: &Fixture, deadline: Duration) {
         let list = atm_core::list::ListQuery::new(
             fixture.home_dir.clone(),
             fixture.current_dir.clone(),
@@ -4059,24 +4065,29 @@ pub(crate) mod tests {
                     list,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(response_deadline),
+                RequestDeadline::after(deadline),
             )
             .await
             .expect("list succeeds while template verification is stalled")
             .into_inner();
         assert!(matches!(listed, ResponseEnvelope::List(_)));
+    }
 
+    async fn assert_template_preflight_fails_before_persistence(
+        fixture: &Fixture,
+        deadline: Duration,
+    ) {
         let (blocked, ()) = tokio::join!(
             fixture.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
-                    &fixture,
+                    fixture,
                     "template body",
                 )))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(response_deadline),
+                RequestDeadline::after(deadline),
             ),
             async {
-                tokio::time::advance(response_deadline).await;
+                tokio::time::advance(deadline).await;
             },
         );
         let blocked =
@@ -4103,12 +4114,22 @@ pub(crate) mod tests {
                 .is_empty(),
             "a template verification deadline cannot persist a partial message"
         );
-        let first_error = first
+    }
+
+    async fn assert_stalled_template_verifications_fail_closed(
+        fixture: &Fixture,
+        stalled: &mut tokio::task::JoinSet<Result<atm_core::api::ApiResponse, AtmError>>,
+    ) {
+        let first_error = stalled
+            .join_next()
             .await
+            .expect("first stalled request is present")
             .expect("first stalled request joins")
             .expect_err("first stalled source preflight fails closed");
-        let second_error = second
+        let second_error = stalled
+            .join_next()
             .await
+            .expect("second stalled request is present")
             .expect("second stalled request joins")
             .expect_err("second stalled source preflight fails closed");
         assert_eq!(
@@ -4127,6 +4148,18 @@ pub(crate) mod tests {
             2,
             "each abandoned source preflight remains visible to doctor"
         );
+    }
+
+    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_body(
+        through: bool,
+    ) {
+        let (fixture, composer, mut starts) = stalled_template_fixture(through);
+        let response_deadline = Duration::from_secs(30);
+        let mut stalled =
+            start_stalled_template_verifications(&fixture, &mut starts, response_deadline).await;
+        assert_task_list_remains_live(&fixture, response_deadline).await;
+        assert_template_preflight_fails_before_persistence(&fixture, response_deadline).await;
+        assert_stalled_template_verifications_fail_closed(&fixture, &mut stalled).await;
 
         composer.release();
     }
