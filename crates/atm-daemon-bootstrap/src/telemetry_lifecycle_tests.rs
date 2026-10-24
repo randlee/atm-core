@@ -194,6 +194,8 @@ impl Daemon {
                 herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: Some(herdr.clone()),
                 daemon_home: root.path().join("home"),
+                #[cfg(feature = "test-support")]
+                controlled_hook_deadline: None,
             },
         )
         .expect("compose the replacement daemon handler");

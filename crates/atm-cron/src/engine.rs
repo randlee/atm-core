@@ -6,6 +6,9 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "test-utils")]
+use std::{collections::BTreeMap, sync::Mutex};
+
 use atm_core::{
     api::RequestDeadline,
     boundary::{
@@ -38,6 +41,8 @@ pub struct CronEngineDeps {
 
 pub(crate) struct CronEngine {
     deps: CronEngineDeps,
+    #[cfg(feature = "test-utils")]
+    runner_failures: Mutex<BTreeMap<CronScheduleId, AtmError>>,
 }
 
 struct Execution {
@@ -47,7 +52,32 @@ struct Execution {
 
 impl CronEngine {
     pub(crate) fn new(deps: CronEngineDeps) -> Self {
-        Self { deps }
+        Self {
+            deps,
+            #[cfg(feature = "test-utils")]
+            runner_failures: Mutex::new(BTreeMap::new()),
+        }
+    }
+
+    /// Returns the original runner error observed while executing this schedule.
+    ///
+    /// This is test support only: durable cron state retains its stable generic
+    /// failure diagnostic and never stores adapter-provided child stderr.
+    #[cfg(feature = "test-utils")]
+    pub(crate) fn runner_failure(&self, schedule: &CronSchedule) -> Option<AtmError> {
+        self.runner_failures
+            .lock()
+            .expect("cron runner failure observer lock poisoned")
+            .get(&schedule.id)
+            .cloned()
+    }
+
+    #[cfg(feature = "test-utils")]
+    fn observe_runner_failure(&self, schedule: &CronSchedule, error: &AtmError) {
+        self.runner_failures
+            .lock()
+            .expect("cron runner failure observer lock poisoned")
+            .insert(schedule.id, error.clone());
     }
 
     async fn commit(
@@ -322,7 +352,11 @@ impl CronEngine {
         reply: Result<CronTickReply, AtmError>,
     ) -> Execution {
         match reply {
-            Err(error) => Execution::new(runner_failure(error), Vec::new()),
+            Err(error) => {
+                #[cfg(feature = "test-utils")]
+                self.observe_runner_failure(schedule, &error);
+                Execution::new(runner_failure(error), Vec::new())
+            }
             Ok(reply) => match reply {
                 CronTickReply::PassThrough { output } => Execution::new(
                     CronRunTransition::Success {
@@ -496,8 +530,10 @@ fn outcome_for(transition: &CronRunTransition) -> tick::CronRunOutcome {
 #[cfg(all(test, feature = "test-utils"))]
 mod tests {
     use super::*;
+    use crate::AtmCronTestAccess;
     use atm_core::{
         boundary::{CronScheduler, CronStartSpec, PhaseId},
+        error_codes::AtmErrorCode,
         hook::{CronHookOutcome, CronTickReply},
         test_support::TEST_SENDER,
     };
@@ -634,6 +670,41 @@ mod tests {
         assert_eq!(delivered[0].1, schedule.id);
         assert_eq!(delivered[0].2, schedule.generation);
         assert_eq!(transitions.delivered.lock().expect("receipts").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn original_runner_failure_is_observed_without_widening_durable_diagnostic() {
+        let runner = Arc::new(ScriptedCronHookRunner::default());
+        runner
+            .stop_replies
+            .lock()
+            .expect("stop queue")
+            .push_back(Ok(
+                CronStopReply::new(false, None, vec![]).expect("stop reply")
+            ));
+        let original = AtmError::hook_malformed("controlled original failure");
+        runner
+            .tick_replies
+            .lock()
+            .expect("tick queue")
+            .push_back(Err(original.clone()));
+        let transitions = Arc::new(atm_storage::testing::InMemoryCronTransitionStore::default());
+        let (cron, schedule, _, _) = typed_cron(runner, transitions.clone()).await;
+
+        assert_eq!(
+            tick::run_one(&cron, &schedule).await,
+            tick::CronRunOutcome::Malformed
+        );
+        let observed = cron
+            .original_runner_failure(&schedule)
+            .expect("original runner failure is retained for test support");
+        assert_eq!(observed.code(), AtmErrorCode::HookMalformed);
+        assert_eq!(observed.detail(), original.detail());
+        let writes = transitions.writes.lock().expect("writes");
+        assert!(matches!(
+            writes.last().expect("runner failure transition").transition,
+            CronRunTransition::Failure(CronFailure { ref detail, .. }) if detail.as_str() == "cron hook runner failed"
+        ));
     }
 
     #[tokio::test]

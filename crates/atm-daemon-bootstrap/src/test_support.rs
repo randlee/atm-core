@@ -8,8 +8,9 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiRequest, AuthenticatedIngress, RequestDeadline};
-use atm_core::boundary::CronSchedule;
+use atm_core::boundary::{CronSchedule, PendingCronDelivery};
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -34,6 +35,7 @@ use crate::{DaemonLaunchIdentity, queue_drain};
 /// listener, fake scheduler, or environment-selected authority.
 pub struct ControlledCronComposition {
     root: Arc<tempfile::TempDir>,
+    runtime: LocalServiceRuntime,
     handler: Arc<StorageAndNudgeRouter>,
     cron: Arc<AtmCron>,
     clock: Arc<ManualClock>,
@@ -56,6 +58,7 @@ impl ControlledCronComposition {
         Self::seed_roster(&assembly)?;
         let runtime = assembly.service_runtime.clone();
         let herdr_process = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        let controlled_hook_deadline = Arc::new(crate::hook_runner::ControlledHookDeadline::new());
         let crate::replacement_handler::ReplacementHandler {
             handler,
             recovery_sweep,
@@ -91,6 +94,7 @@ impl ControlledCronComposition {
                 herdr_config: Default::default(),
                 herdr_process: Some(herdr_process.clone()),
                 daemon_home: root.path().into(),
+                controlled_hook_deadline: Some(controlled_hook_deadline),
             },
         )?;
         let clock = Arc::new(ManualClock::new(
@@ -102,7 +106,7 @@ impl ControlledCronComposition {
             RuntimeCronComposition {
                 handler: handler.as_ref(),
                 runtime: &runtime,
-                runner,
+                runner: runner.clone(),
                 dispatcher,
                 host: local_host,
                 cron_runner,
@@ -112,6 +116,7 @@ impl ControlledCronComposition {
         )?;
         Ok(Self {
             root,
+            runtime,
             handler,
             cron,
             clock,
@@ -229,6 +234,28 @@ impl ControlledCronComposition {
         Ok(())
     }
 
+    /// Reads the durable cron state after a controlled run barrier completes.
+    ///
+    /// This test-support diagnostic deliberately observes the production
+    /// schedule and transition stores rather than inferring delivery from
+    /// worker completion alone. Pending intents retain the canonical payload
+    /// and any reconciliation cause when delivery did not finish.
+    pub fn persisted_cron_diagnostics(
+        &self,
+    ) -> Result<(Vec<CronSchedule>, Vec<PendingCronDelivery>), AtmError> {
+        let schedules = self.runtime.cron_schedule_store()?.active_all()?;
+        let pending = self.runtime.cron_transition_store()?.pending(128)?;
+        Ok((schedules, pending))
+    }
+
+    /// Returns the typed runner error from the original controlled execution.
+    ///
+    /// The observer lives at the typed engine boundary, so this does not rerun
+    /// the module or change the stable, generic durable cron failure record.
+    pub fn original_cron_runner_failure(&self, schedule: &CronSchedule) -> Option<AtmError> {
+        self.cron.original_runner_failure(schedule)
+    }
+
     /// Stops the production worker after all in-flight deterministic work settles.
     pub async fn shutdown_cron_worker(&self) {
         let worker = self
@@ -265,6 +292,7 @@ impl ControlledCronComposition {
         self.shutdown_cron_worker().await;
         let Self {
             root,
+            runtime,
             handler,
             cron,
             clock,
@@ -275,7 +303,7 @@ impl ControlledCronComposition {
         recovery_sweep
             .shutdown(tokio::time::Instant::now() + Duration::from_secs(1))
             .await;
-        drop((handler, cron, clock));
+        drop((handler, cron, clock, runtime));
         Self::from_root(root)
     }
 }

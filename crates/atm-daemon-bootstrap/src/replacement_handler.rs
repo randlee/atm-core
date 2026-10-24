@@ -85,6 +85,8 @@ pub(crate) struct ReplacementHandlerConfig<F> {
     /// ATM home for daemon-originated writes: the router's normalized request
     /// roots and the queue-wake pump's escalation mail.
     pub(crate) daemon_home: PathBuf,
+    #[cfg(feature = "test-support")]
+    pub(crate) controlled_hook_deadline: Option<Arc<crate::hook_runner::ControlledHookDeadline>>,
 }
 
 fn compose_queue_workers<F>(
@@ -257,6 +259,8 @@ pub(crate) fn build_replacement_handler(
         herdr_config,
         herdr_process,
         daemon_home,
+        #[cfg(feature = "test-support")]
+        controlled_hook_deadline,
     } = config;
     let herdr_process = resolve_herdr_process(&mut assembly, herdr_process, herdr_config.client);
     let queue_wake_process = Arc::clone(&herdr_process);
@@ -293,6 +297,8 @@ pub(crate) fn build_replacement_handler(
         daemon_launch_identity,
         peer_wire_mode,
         peer_adapter_selection,
+        #[cfg(feature = "test-support")]
+        controlled_hook_deadline,
     )?;
     Ok(ReplacementHandler {
         handler: Arc::new(composed.handler),
@@ -323,13 +329,17 @@ fn compose_storage_router(
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
     peer_adapter_selection: SelectedPeerAdapterSelection,
+    #[cfg(feature = "test-support")] controlled_hook_deadline: Option<
+        Arc<crate::hook_runner::ControlledHookDeadline>,
+    >,
 ) -> Result<ComposedStorageRouter, AtmError> {
     let snapshot = Arc::new(ActiveHookSnapshot::deferred(
         assembly.service_runtime.hook_registration_store()?,
     ));
-    let daemon_runner = Arc::new(crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource));
-    let runner: Arc<dyn HookRunner> = daemon_runner.clone();
-    let cron_runner: Arc<dyn atm_core::boundary::CronHookRunner> = daemon_runner;
+    let (runner, cron_runner) = compose_hook_runners(
+        #[cfg(feature = "test-support")]
+        controlled_hook_deadline,
+    );
     let async_mailbox_runtime = assembly
         .async_mailbox_runtime
         .clone()
@@ -378,6 +388,32 @@ fn compose_storage_router(
         #[cfg(test)]
         hook_filter: filter,
     })
+}
+
+fn compose_hook_runners(
+    #[cfg(feature = "test-support")] controlled_hook_deadline: Option<
+        Arc<crate::hook_runner::ControlledHookDeadline>,
+    >,
+) -> (
+    Arc<dyn HookRunner>,
+    Arc<dyn atm_core::boundary::CronHookRunner>,
+) {
+    let daemon_runner = Arc::new({
+        #[cfg(feature = "test-support")]
+        if let Some(deadline) = controlled_hook_deadline {
+            crate::hook_runner::DaemonHookRunner::with_controlled_deadline(
+                &ProcessEnvSource,
+                deadline,
+            )
+        } else {
+            crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource)
+        }
+        #[cfg(not(feature = "test-support"))]
+        crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource)
+    });
+    let runner: Arc<dyn HookRunner> = daemon_runner.clone();
+    let cron_runner: Arc<dyn atm_core::boundary::CronHookRunner> = daemon_runner;
+    (runner, cron_runner)
 }
 
 fn build_queue_wake_pump(
