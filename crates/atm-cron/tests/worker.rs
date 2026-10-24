@@ -1245,7 +1245,7 @@ async fn shutdown_deadline_aborts_the_held_run_before_returning() {
 
     let fixture = Fixture::new();
     let logs = capture_logs();
-    let (entered, mut received) = watch::channel(false);
+    let (entered, mut entered_at_before_reply) = watch::channel(false);
     let (dropped, finished) = watch::channel(false);
     *fixture.runner.before_reply.lock().unwrap() = Some(Arc::new(move |_| {
         let guard = Dropped(dropped.clone());
@@ -1259,13 +1259,19 @@ async fn shutdown_deadline_aborts_the_held_run_before_returning() {
     fixture.cron.start(fixture.spec("cleanup")).await.unwrap();
     let worker = fixture.worker().await;
     fixture.step(60).await;
-    wait_for_release(&mut received).await;
+    wait_for_release(&mut entered_at_before_reply).await;
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
-    tokio::join!(worker.shutdown(deadline), async {
-        tokio::task::yield_now().await;
-        tokio::time::advance(Duration::from_secs(1)).await;
-    });
+    let mut shutdown = Box::pin(worker.shutdown(deadline));
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
+
+    assert!(matches!(
+        shutdown.as_mut().poll(&mut context),
+        Poll::Pending
+    ));
+    tokio::time::advance(Duration::from_secs(1)).await;
+    shutdown.await;
 
     assert!(*finished.borrow(), "aborting the worker drops the held run");
     assert_eq!(fixture.row().last_outcome, None);
