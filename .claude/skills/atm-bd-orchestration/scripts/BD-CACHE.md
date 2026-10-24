@@ -92,16 +92,16 @@ SQLite (milliseconds). It spawns the drain detached and returns. A typical
 close spends about 0.3-0.5 s of its 2.5 s budget.
 
 **Drain bounds.** Each `bd` call has a 30 s timeout. The cron tick has a 25 s
-budget and gives the drain a deadline 5 s before it ends. The deadline is
-checked before each entry starts, so an entry that has started runs to
+budget and gives the drain a deadline 5 s before it ends. That deadline is a
+start gate, not a hard bound: it is checked before each entry starts, so an entry that has started runs to
 completion. In the worst case (every call hits its timeout), that is one
 write plus one read-back, 60 s, which exceeds the daemon's 30 s cron timeout.
 ATM then kills the tick. This is safe: `flock` is released when the process
 exits, and the entry stays `pending`. If the write landed, the next pass finds
 it `achieved` and records it without a second write. If it did not, the entry
 retries until `MAX_ATTEMPTS` (5), then escalates. The Rust implementation
-should cap each `bd` call at the time left before the deadline, so a tick
-never exceeds its budget.
+should add a hard deadline: cap each `bd` call at the time left before it, so
+a tick never exceeds its budget.
 
 **Cache size.** The atm-dev file holds 1887 rows across phases bd, bj and bk
 (7.6 MB with WAL). Closed phases stay until `prune` runs (see Open items).
@@ -111,7 +111,7 @@ never exceeds its budget.
 | Failure | Where | Outcome | Who fixes |
 |---|---|---|---|
 | Invalid op, args or precondition at write time | `write` | typed error to the caller; nothing journaled | caller |
-| Precondition unmet at write time | `write` | `BD_CACHE.PRECONDITION` with `unmet {expected, actual}` | caller re-reads and decides |
+| Precondition unmet at write time | `write` | `BD_CACHE.PRECONDITION` with `unmet {key: {expected, actual}}` | caller re-reads and decides |
 | Same idempotency key, different write | `write` | `BD_CACHE.IDEM_CONFLICT` | caller |
 | `bd` slow or down while a hook runs | hook | decides on cached rows, `read_fallback` named in any escalation; writes journaled | none; the drain applies them later |
 | Drain cannot start after a hook | hook | stderr record `drain_spawn_error`; the cron drains within one tick | none |
@@ -401,14 +401,14 @@ the Rust binary and the reverse.
    undelivered escalation refused and retried, sync failure announced once
    per cause and cleared, missing team refused, stop rule, tick budget
    defers the drain. Each test must
-   fail against a planted bug: the prototype was checked with 19 (no overlay,
+   fail against a planted bug: the prototype was checked with 19 (among them: no overlay,
    no write/drain precondition, no newer-row guard, no per-bead hold, no
    achieved check, no retry cap, no stale flag, no drain lock, no metadata
    coercion guard, bools passed as `True`, skip validation, skip rebuild,
    rebuild deletes journal, skip project-id check, per-entry pre-read,
    rebuild on first check, no dep-type check, no not-found escalation); every
    one failed at least one test. The escalation and cron code was checked
-   with 13 more (prune ignores escalated, unannounced filter dropped,
+   with 13 more (among them: prune ignores escalated, unannounced filter dropped,
    open-work ignores announcement, resolve accepts any state, deferred not
    reported, no mark_announced, no set/clear sync alert, refusal dropped,
    team check dropped, closed roots active, stop ignores open work, drain
@@ -481,6 +481,15 @@ and the fresh check before every write is kept.
 - A drain entry can outlive the cron tick (see Performance, Drain bounds).
   This is safe but wastes the tick. The Rust implementation caps each call
   at the time left.
+- Blocked state is not cached. `bd list --json` rows carry no `is_blocked`, and
+  bd settles blocked state without bumping `updated_at`, so a sync would miss
+  it. Readiness always comes from live `bd ready`. A cache that serves ready
+  must re-read the dependers of changed blockers, including blockers outside
+  the synced phases (beads-cache ADR-BDC-0002).
+- A backend outage counts as a drain attempt: when the batched read fails,
+  every pending entry retries, so about five failed ticks escalate every
+  write. Proposed fix: treat an unreachable backend as an outage that counts
+  no attempt (beads-cache ADR-BDC-0005).
 - Closed phases are not pruned automatically. Run `prune --phase <x>` after
   the root closes. Automatic prune from the cron once a root is closed and
   its journal is clear is a candidate.
