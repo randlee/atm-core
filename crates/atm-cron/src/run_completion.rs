@@ -15,6 +15,11 @@ type Key = (CronScheduleId, CronGeneration);
 
 #[derive(Default)]
 pub(crate) struct RunCompletionTracker {
+    shared: Arc<RunCompletionState>,
+}
+
+#[derive(Default)]
+struct RunCompletionState {
     state: Mutex<TrackerState>,
 }
 
@@ -34,7 +39,11 @@ impl RunCompletionTracker {
     pub(crate) fn register_next(&self, schedule: &CronSchedule) -> CronRunCompletionWaiter {
         let key = (schedule.id, schedule.generation);
         let (sender, receiver) = oneshot::channel();
-        let mut state = self.state.lock().expect("cron completion tracker poisoned");
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .expect("cron completion tracker poisoned");
         if state.closed {
             let _ = sender.send(Err("cron worker stopped".into()));
         } else {
@@ -45,16 +54,20 @@ impl RunCompletionTracker {
         CronRunCompletionWaiter { receiver }
     }
 
-    pub(crate) fn begin(self: &Arc<Self>, schedule: &CronSchedule) -> RunCompletionTicket {
+    pub(crate) fn begin(&self, schedule: &CronSchedule) -> RunCompletionTicket {
         let key = (schedule.id, schedule.generation);
         let sequence = {
-            let mut state = self.state.lock().expect("cron completion tracker poisoned");
+            let mut state = self
+                .shared
+                .state
+                .lock()
+                .expect("cron completion tracker poisoned");
             let runs = state.schedules.entry(key).or_default();
             runs.started = runs.started.saturating_add(1);
             runs.started
         };
         RunCompletionTicket {
-            tracker: Arc::clone(self),
+            shared: Arc::clone(&self.shared),
             key,
             sequence,
             finished: false,
@@ -62,7 +75,11 @@ impl RunCompletionTracker {
     }
 
     pub(crate) fn close(&self) {
-        let mut state = self.state.lock().expect("cron completion tracker poisoned");
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .expect("cron completion tracker poisoned");
         state.closed = true;
         for runs in state.schedules.values_mut() {
             for (_, waiters) in runs.waiters.drain() {
@@ -74,7 +91,9 @@ impl RunCompletionTracker {
             }
         }
     }
+}
 
+impl RunCompletionState {
     fn finish(&self, key: Key, sequence: u64, result: Result<(), String>) {
         let mut state = self.state.lock().expect("cron completion tracker poisoned");
         if let Some(waiters) = state
@@ -106,7 +125,7 @@ impl CronRunCompletionWaiter {
 }
 
 pub(crate) struct RunCompletionTicket {
-    tracker: Arc<RunCompletionTracker>,
+    shared: Arc<RunCompletionState>,
     key: Key,
     sequence: u64,
     finished: bool,
@@ -114,7 +133,7 @@ pub(crate) struct RunCompletionTicket {
 
 impl RunCompletionTicket {
     pub(crate) fn finish(&mut self, result: Result<(), String>) {
-        self.tracker.finish(self.key, self.sequence, result);
+        self.shared.finish(self.key, self.sequence, result);
         self.finished = true;
     }
 }
@@ -122,7 +141,7 @@ impl RunCompletionTicket {
 impl Drop for RunCompletionTicket {
     fn drop(&mut self) {
         if !self.finished {
-            self.tracker.finish(
+            self.shared.finish(
                 self.key,
                 self.sequence,
                 Err("cron run was cancelled before completion".into()),
@@ -202,5 +221,21 @@ mod tests {
 
         let error = waiter.wait().await.expect_err("worker closure is reported");
         assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
+    }
+
+    #[tokio::test]
+    async fn ticket_completes_waiter_after_tracker_is_dropped() {
+        let tracker = Arc::new(RunCompletionTracker::default());
+        let target = schedule(1, 1);
+        let waiter = tracker.register_next(&target);
+        let mut ticket = tracker.begin(&target);
+        drop(tracker);
+
+        ticket.finish(Ok(()));
+
+        waiter
+            .wait()
+            .await
+            .expect("ticket retains completion state");
     }
 }

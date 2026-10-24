@@ -80,6 +80,20 @@ impl ReferenceCollector {
             }),
         });
     }
+
+    fn insert_trait_qualified_call(&mut self, method: &str) {
+        let Some(owner_name) = &self.owner_name else {
+            return;
+        };
+        self.references.insert(CollectedReference {
+            path: owner_name.clone(),
+            kind: ReferenceKind::Expr,
+            call_callee: Some(CallCallee {
+                ident: method.to_string(),
+                kind: CallCalleeKind::TraitQualified,
+            }),
+        });
+    }
 }
 
 impl<'ast> Visit<'ast> for ReferenceCollector {
@@ -89,17 +103,62 @@ impl<'ast> Visit<'ast> for ReferenceCollector {
     }
 
     fn visit_expr_path(&mut self, expr_path: &'ast syn::ExprPath) {
-        self.maybe_insert_path(&expr_path.path, ReferenceKind::Expr, None);
+        let associated_value = expr_path
+            .path
+            .segments
+            .first()
+            .is_some_and(|segment| segment.ident == "Self")
+            .then(|| CallCallee {
+                ident: expr_path
+                    .path
+                    .segments
+                    .last()
+                    .map(|segment| segment.ident.to_string())
+                    .unwrap_or_default(),
+                kind: CallCalleeKind::AssociatedValue,
+            });
+        self.maybe_insert_path(&expr_path.path, ReferenceKind::Expr, associated_value);
         syn::visit::visit_expr_path(self, expr_path);
+    }
+
+    fn visit_expr_struct(&mut self, expr_struct: &'ast syn::ExprStruct) {
+        let constructor = expr_struct
+            .path
+            .segments
+            .first()
+            .is_some_and(|segment| segment.ident == "Self")
+            .then(|| CallCallee {
+                ident: "Self".to_string(),
+                kind: CallCalleeKind::Constructor,
+            });
+        self.maybe_insert_path(&expr_struct.path, ReferenceKind::Expr, constructor);
+        for field in &expr_struct.fields {
+            self.visit_expr(&field.expr);
+        }
+        if let Some(rest) = &expr_struct.rest {
+            self.visit_expr(rest);
+        }
     }
 
     fn visit_expr_call(&mut self, expr_call: &'ast syn::ExprCall) {
         if let syn::Expr::Path(path) = expr_call.func.as_ref() {
             let callee = path.path.segments.last().map(|segment| CallCallee {
                 ident: segment.ident.to_string(),
-                kind: CallCalleeKind::Associated,
+                kind: if path.qself.is_some() {
+                    CallCalleeKind::TraitQualified
+                } else if path.path.is_ident("Self") {
+                    CallCalleeKind::Constructor
+                } else {
+                    CallCalleeKind::Associated
+                },
             });
-            self.maybe_insert_path(&path.path, ReferenceKind::Expr, callee);
+            if let Some(callee) = &callee {
+                if callee.kind == CallCalleeKind::TraitQualified {
+                    self.insert_trait_qualified_call(&callee.ident);
+                } else {
+                    self.maybe_insert_path(&path.path, ReferenceKind::Expr, Some(callee.clone()));
+                }
+            }
             if let Some(qself) = &path.qself {
                 self.visit_type(&qself.ty);
             }
