@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 LOADER = importlib.machinery.SourceFileLoader("sanity_close_vars", str(ROOT / "scripts/sanity-close-vars"))
 SPEC = importlib.util.spec_from_loader(LOADER.name, LOADER)
+assert SPEC is not None
 CLOSE = importlib.util.module_from_spec(SPEC)
 LOADER.exec_module(CLOSE)
 

@@ -1,0 +1,9 @@
+---
+name: sanity-dev-close
+version: 1.0.0
+format: markdown
+required_variables: [task_id, checked_bead, commit]
+metadata:
+  type: dev-complete
+---
+Sanity {{ task_id }} passed {{ checked_bead }} at {{ commit }}. Closing the reviewed dev task.

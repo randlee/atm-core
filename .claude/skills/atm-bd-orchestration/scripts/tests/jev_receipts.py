@@ -8,6 +8,7 @@ HERE = Path(__file__).resolve()
 CLIENT = HERE.parents[1] / "jev_client.py"
 KEY = "test-only-key"
 _spec = importlib.util.spec_from_file_location("jev_client_for_tests", CLIENT)
+assert _spec is not None and _spec.loader is not None
 client = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(client)
 

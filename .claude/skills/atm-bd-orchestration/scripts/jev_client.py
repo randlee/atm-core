@@ -37,6 +37,8 @@ class JevError(Exception):
     def __init__(self, code, message, recoverable=False):
         super().__init__(message)
         self.code, self.message, self.recoverable = code, message, recoverable
+        self.size: int | None = None
+        self.fix: str | None = None
 
 
 REPORT = "Report this error unchanged; the coordinator records the slot unavailable."
@@ -363,6 +365,8 @@ def split_request(request, target, changed_files):
         if field == "context":
             sample["state"][field] = {key: ""}
         elif field == "external_evidence":
+            if entry is None:
+                raise ValueError("external evidence entry is required")
             sample["state"][field] = [{**entry, "text": ""}]
         budget = target - size(sample) - 16
         for piece in chunks(value, budget, is_diff=field == "evidence"):
@@ -438,7 +442,8 @@ def evidence_ref(ref):
         return isinstance(ref["bead"], str) and bool(ref["bead"]) and not ref["bead"].startswith("-") and isinstance(ref["text"], str)
     if isinstance(ref, dict) and ref.get("kind") == "bead_notes":
         return False
-    keys = EVIDENCE_REFS.get(ref.get("kind")) if isinstance(ref, dict) else None
+    kind = ref.get("kind") if isinstance(ref, dict) else None
+    keys = EVIDENCE_REFS.get(kind) if isinstance(kind, str) else None
     return keys is not None and set(ref) == {"kind", *keys} and all(
         type(ref[k]) is int and ref[k] > 0 if k in ("pr", "comment_id")
         else isinstance(ref[k], str) and ref[k] and not ref[k].startswith("-") for k in keys)
@@ -460,11 +465,13 @@ def external_evidence(ref, worktree):
         value = json.loads(proc.stdout) if proc.returncode == 0 else None
     except (OSError, subprocess.TimeoutExpired, ValueError):
         value = None
-    text = value.get("body") if isinstance(value, dict) else None
-    if not isinstance(text, str):
+    if not isinstance(value, dict) or not isinstance(value.get("body"), str):
         raise JevError("VALIDATION.INPUT", f"External evidence unreadable: {kind} {label}")
+    text = value["body"]
+    user = value.get("user")
+    author = user.get("login") if isinstance(user, dict) else None
     return {"kind": kind, "ref": label, "url": value.get("html_url"), "updated_at": value.get("updated_at"),
-            "author": (value.get("user") or {}).get("login"), "text": text}
+            "author": author, "text": text}
 
 
 def assignment_requests(assignment):
@@ -569,6 +576,8 @@ def announce(message, lead):
 
 def evaluation_result(args, *, clock=time.monotonic, sleep=None):
     elapsed_s = None
+    requests = []
+    assignment = None
     try:
         if args.startup:
             request = startup_request()
@@ -583,6 +592,7 @@ def evaluation_result(args, *, clock=time.monotonic, sleep=None):
         started = clock()
         try:
             if args.assignment:
+                assert isinstance(assignment, dict)
                 data = evaluate_parts(requests, api_key(), assignment["changed_files"], sleep=sleep)
             elif args.startup:
                 data = evaluate(request, sleep=sleep)

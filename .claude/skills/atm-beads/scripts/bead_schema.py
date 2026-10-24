@@ -16,9 +16,9 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, ClassVar, Literal
 
-from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 # the description holds a numbered '## Deliverables' list starting at 1
 DELIVERABLES = r"(?m)^## Deliverables\s*\n(?:\s*\n)*\s*1[.)]\s+\S"
@@ -76,7 +76,54 @@ class FamilyMetadata(BaseModel):
     difficulty: Literal["hard", "normal", "fast"]
 
 
-class DevBead(Bead):
+class CloseFields(BaseModel):
+    """Stamped at pour on every open dev, fix, sanity and QA bead (close_fields.POURED): its close reads no other bead."""
+    model_config = ConfigDict(extra="allow")
+    role: Literal["dev", "fix", "sanity", "qa"]
+    phase: NonEmpty
+    sprint: NonEmpty
+    sprint_bead: NonEmpty
+    stack: NonEmpty
+    stack_bead: NonEmpty
+    branch: NonEmpty
+    worktree: NonEmpty
+    pr_target: NonEmpty
+    base: NonEmpty
+    checked_bead: NonEmpty
+    checked_title: NonEmpty
+    sanity_bead: str = ""
+    qa_bead: NonEmpty
+    phase_feature: NonEmpty
+    lint_command: NonEmpty
+    policy_path: NonEmpty
+    max_sanity_rounds: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def names_its_sanity_bead(self) -> CloseFields:
+        if not self.sanity_bead and not (self.model_extra or {}).get("quick_fix"):
+            raise ValueError("sanity_bead is empty; only a quick-fix QA bead has no sanity bead")
+        return self
+
+
+class TaskBead(Bead):
+    """A dev, fix, sanity or QA bead; while it is not closed its metadata carries CloseFields for `close_role`.
+    A finding bead (`stamped_at_dispatch`) gets them when the lead dispatches it, so only an in-progress one is checked."""
+    close_role: ClassVar[str] = ""
+    stamped_at_dispatch: ClassVar[bool] = False
+
+    @model_validator(mode="after")
+    def carries_close_fields(self) -> TaskBead:
+        status = getattr(self, "status", None)
+        if status == "closed" or (self.stamped_at_dispatch and status != "in_progress"):
+            return self
+        fields = CloseFields.model_validate(getattr(self, "metadata").model_dump())
+        if fields.role != self.close_role:
+            raise ValueError(f"metadata.role is {fields.role!r}; a {self.close_role} bead needs {self.close_role!r}")
+        return self
+
+
+class DevBead(TaskBead):
+    close_role: ClassVar[str] = "dev"
     metadata: FamilyMetadata
 
 
@@ -87,7 +134,8 @@ class FixMetadata(FamilyMetadata):
     found_at_commit: NonEmpty
 
 
-class FixBead(Bead):
+class FixBead(TaskBead):
+    close_role: ClassVar[str] = "fix"
     metadata: FixMetadata
 
 
@@ -96,27 +144,38 @@ class SanityMetadata(FamilyMetadata):
     dev_bead: NonEmpty
 
 
-class SanityBead(Bead):
+class SanityBead(TaskBead):
     """A sanity bead links once to the bead it checks."""
+    close_role: ClassVar[str] = "sanity"
     metadata: SanityMetadata
 
     @model_validator(mode="after")
     def blocks_on_dev_bead(self) -> SanityBead:
-        related = [d.depends_on_id for d in self.dependencies if d.type in ("blocks", "validates")]
+        related = self.blocks()
         count = related.count(self.metadata.dev_bead)
         if count == 0:
             raise ValueError(f"missing blocks edge to its sprint {self.metadata.dev_bead}")
         if count > 1:
-            raise ValueError(f"multiple blocks or validates edges to {self.metadata.dev_bead}")
+            raise ValueError(f"multiple blocks edges to {self.metadata.dev_bead}")
         return self
 
 
 class QaMetadata(FamilyMetadata):
     checked_bead: NonEmpty
     round: int = Field(ge=1)
+    reviewers_round1: Annotated[list[Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]*$")]],
+                               Field(min_length=1, json_schema_extra={"uniqueItems": True})]
+
+    @field_validator("reviewers_round1")
+    @classmethod
+    def unique_reviewers(cls, reviewers: list[str]) -> list[str]:
+        if len(set(reviewers)) != len(reviewers):
+            raise ValueError("duplicate reviewer identities")
+        return reviewers
 
 
-class QaBead(Bead):
+class QaBead(TaskBead):
+    close_role: ClassVar[str] = "qa"
     metadata: QaMetadata
 
 
@@ -140,7 +199,9 @@ class FindingMetadata(BaseModel):
     found_at_commit: NonEmpty
 
 
-class FindingBead(Bead):
+class FindingBead(TaskBead):
+    close_role: ClassVar[str] = "fix"
+    stamped_at_dispatch: ClassVar[bool] = True
     metadata: FindingMetadata
 
 

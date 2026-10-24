@@ -10,7 +10,7 @@ SUITE_TIMEOUT = 1200  # generous hang backstop, shorter than the 30-minute CI jo
 OUTPUT_TAIL = 16000
 
 
-def run_command(command, *, timeout=COMMAND_TIMEOUT, check=False, runner=None, **kwargs):
+def run_command(command, *, timeout: float = COMMAND_TIMEOUT, check=False, runner=None, **kwargs):
     if not kwargs.get("capture_output"):
         kwargs.setdefault("stdout", subprocess.PIPE)
         kwargs.setdefault("stderr", subprocess.PIPE)

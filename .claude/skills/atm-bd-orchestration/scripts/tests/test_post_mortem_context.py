@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[1] / "post_mortem_context.py"
 spec = importlib.util.spec_from_file_location("context", MODULE)
+assert spec is not None and spec.loader is not None
 context = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(context)
 

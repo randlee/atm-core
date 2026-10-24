@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 spec = importlib.util.spec_from_file_location("jev_client", Path(__file__).parents[1] / "jev_client.py")
+assert spec is not None and spec.loader is not None
 client = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(client)
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "atm-beads/tests"))

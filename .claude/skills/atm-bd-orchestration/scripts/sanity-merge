@@ -207,6 +207,8 @@ def load_client(path):
     """The Jev client module, or the reason it cannot be loaded."""
     try:
         spec = importlib.util.spec_from_file_location("jev_client", path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"no loader for {path}")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module, None
@@ -226,18 +228,20 @@ def jev_reply_problem(result, client, seen):
     client, load_error = client
     if result["success"] is False:
         error = result.get("error")
-        code = error.get("code") if isinstance(error, dict) else None
+        if not isinstance(error, dict):
+            return None
+        code = error.get("code")
         if not isinstance(code, str) or not code.startswith("SANITY.JEV_"):
             return None
-        if load_error:
-            return load_error
+        if load_error or client is None:
+            return load_error or "Jev client is unavailable"
         return None if client.is_client_message(error.get("message")) else \
             f"Jev failure message is not the client's own text: {error.get('message')!r}"
     data = result.get("data")
     if not isinstance(data, dict):
         return None
-    if load_error:
-        return load_error
+    if load_error or client is None:
+        return load_error or "Jev client is unavailable"
     key = os.environ.get("TYPESAFE_API_KEY", "").strip()
     if not key:
         return "TYPESAFE_API_KEY is not set, so the Jev receipt cannot be verified"
@@ -249,7 +253,7 @@ def jev_reply_problem(result, client, seen):
             if not isinstance(part, dict) or part.get("part") != label:
                 return f"Jev part {label} is missing or mislabelled: a split reply returns every part in order"
             receipt = part.get("receipt")
-            if not client.verify_receipt(receipt, key):
+            if not isinstance(receipt, dict) or not client.verify_receipt(receipt, key):
                 return f"no valid Jev receipt on part {label}: the reply was not written from a jev_client.py call"
             response = part.get("response")
             answer = response.get("answers", {}).get("written") if isinstance(response, dict) else None
@@ -260,7 +264,7 @@ def jev_reply_problem(result, client, seen):
         if not receipts:
             return "no valid Jev receipt in data.jev: the part list is empty"
     else:
-        if not client.verify_receipt(jev, key):
+        if not isinstance(jev, dict) or not client.verify_receipt(jev, key):
             return "no valid Jev receipt in data.jev: the reply was not written from a jev_client.py call"
         receipts = [jev]
     for receipt in receipts:
@@ -274,7 +278,8 @@ def jev_reply_problem(result, client, seen):
     else:
         if not (isinstance(final, dict) and final.get("choice") in ("yes", "no")
                 and isinstance(final.get("reason"), str) and final["reason"].strip()
-                and final.get("parts") == [part["part"] for part in jev]):
+                and isinstance(jev, list)
+                and final.get("parts") == [part["part"] for part in jev if isinstance(part, dict)]):
             return ("Jev parts disagree and data.jev_final does not record dev-sanity's triaged result "
                     "({choice, reason, parts} citing every part)")
         choice = final["choice"]
@@ -506,7 +511,7 @@ def main(argv):
     results, selection, selection_sources, rejected = [], None, {}, []
 
     def metadata():
-        if not args.reviewer:
+        if not args.reviewer or manifest is None:
             return {}
         completed = datetime.fromtimestamp(args.completed_at, timezone.utc)
         return {"run_id": manifest["run_id"], "reviewer": args.reviewer,

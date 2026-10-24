@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 import json
 import re
@@ -100,13 +101,14 @@ def is_qa_of(bead: dict[str, Any], dev_id: str) -> bool:
         return True
     if "stage:qa" not in (bead.get("labels") or []):
         return False
-    metadata = bead.get("metadata") if isinstance(bead.get("metadata"), dict) else {}
+    bead_metadata = bead.get("metadata")
+    metadata = bead_metadata if isinstance(bead_metadata, dict) else {}
     return related_bead(bead, dev_id, "parent-child") or bead.get("parent") == dev_id \
         or metadata.get("checked_bead") == dev_id
 
 
 def status_icon(dev: dict[str, Any], sanity: dict[str, Any] | None,
-                findings: list[dict[str, Any]] = (), blocked: bool = False) -> str:
+                findings: Sequence[dict[str, Any]] = (), blocked: bool = False) -> str:
     if blocked or dev.get("status") == "blocked":
         return "🚧"
     if sanity is None:
@@ -272,7 +274,7 @@ def dispatch_rows(ready: list[dict[str, Any]], members: list[dict[str, Any]], ac
     return sorted(rows, key=lambda row: (int(row["priority"]), int(row["layer"]), row["id"]))
 
 
-def render_dispatch(rows: list[dict[str, str]], members: list[dict[str, Any]] = ()) -> str:
+def render_dispatch(rows: list[dict[str, str]], members: Sequence[dict[str, Any]] = ()) -> str:
     devs = dev_members(list(members))
     unknown = sorted(member_name(m) for m in devs if str(m.get("model") or "").lower() in ("", "unknown", "none"))
     head = ["prerequisite: dev agents have roster type `dev` and `model` set"
@@ -311,7 +313,7 @@ def main() -> int:
             ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
             cwd=repo, text=True,
         ).strip())
-        sanity_runs = phase_sanity_iterations(common_dir.parent / ".sc" / "sanity-log", phase)
+        sanity_runs: dict[str, int | None] = dict(phase_sanity_iterations(common_dir.parent / ".sc" / "sanity-log", phase))
         rows = index.get("sprints")
         if not isinstance(rows, list) or not rows:
             raise RuntimeError("sprint index contains no sprints")
@@ -405,7 +407,8 @@ def main() -> int:
         sanity = live_by_id.get(str(sanity_id)) if sanity_id else None
         sanity_count = sanity_runs.get(str(sanity_id))
         sanity_cell = "?" if sanity_count is None else str(sanity_count) if sanity_count else ""
-        qa = live_by_id.get(str(selected_qa.get(dev_id, {}).get("id"))) if selected_qa.get(dev_id) else None
+        selected = selected_qa.get(dev_id)
+        qa = live_by_id.get(str(selected.get("id"))) if isinstance(selected, dict) else None
         qa_ids = {str(candidate["id"]) for candidate in qa_by_dev.get(dev_id, [])}
         findings = [
             bead for bead in all_beads

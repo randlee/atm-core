@@ -34,6 +34,8 @@ def install_folder() -> Path:
 
 
 def _sha(data: bytes) -> str:
+    if sc_sha is None:
+        raise RuntimeError(f"sc_sha is unavailable; {SC_SHA_FIX}")
     return sc_sha.calculate_hash({"utf8_file_bytes": data})["sha256"]
 
 
@@ -132,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["doctor"] and len(argv) == 1:
         return _doctor_mode()
-    parser = argparse.ArgumentParser(prog="atm-hook-doctor.py", description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog="atm-hook-doctor.py", description=__doc__.splitlines()[0] if __doc__ else "")
     parser.add_argument("--dest", type=Path, help="the installed .claude or .codex directory (default: this install)")
     args = parser.parse_args(argv)
     if sc_sha is None:

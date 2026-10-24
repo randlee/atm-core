@@ -3,6 +3,8 @@
 
 Every bd, git and gh command is bounded by `ATM_BD_GATE_TIMEOUT_S` seconds (default 180, shared with
 assignment-gates.py); a timeout is `COMMAND.FAILED` whose fix says to retry once or raise the variable.
+Bead writes go through the bd-cache journal and are drained at once (BD-CACHE.md, Scope); a write not yet
+applied is `BEADS.WRITE_PENDING` and a rerun with the same vars applies it once.
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import bd_cache
 import repo_config
 import sc_render
 from command_timeout import TIMEOUT_ENV, command_timeout, import_timeout
@@ -40,6 +43,9 @@ REFUSED = "refused"
 DOLT_DROP = re.compile(r"invalid connection|i/o timeout", re.IGNORECASE)
 DOLT_RETRIES = 3
 DOLT_RETRY_SLEEP_S = 10
+# Bead writes go through the bd-cache journal and are drained at once; a drain held by the cron is waited for.
+DRAIN_TRIES = 5
+DRAIN_BUSY_SLEEP_S = 2
 
 
 def is_terminal(events):
@@ -54,6 +60,16 @@ def load_sample():
         return {"load_avg": None, "cpu_pct": None}
     return {"load_avg": [round(one, 2), round(five, 2), round(fifteen, 2)],
             "cpu_pct": round(100 * one / (os.cpu_count() or 1), 1)}
+
+
+def bd_value(item):
+    """A metadata value as bd stores it: lists and objects as their JSON text (readers decode them, e.g.
+    sanity_round_key) and integer text as the integer (a vars file carries pr_number as "351")."""
+    if isinstance(item, (list, dict)):
+        return json.dumps(item, separators=(",", ":"))
+    if isinstance(item, str) and item.isdigit() and str(int(item)) == item:
+        return int(item)
+    return item
 
 
 class CloseError(RuntimeError):
@@ -313,9 +329,12 @@ class Hook:
         self.key = [self.task, values.get("verdict", ""), values.get("commit", "")]
         self.records, self.task_history = {}, {}
         self.attempts = []
+        self.beads = None
+        self.assignment_id = None
 
     def run(self, argv, *, lead=False, git=False, check=True):
         started = self.clock()
+        result = None
         for attempt in range(DOLT_RETRIES + 1):
             began = self.clock()
             result, error = None, None
@@ -323,17 +342,19 @@ class Hook:
                 result = self._run_once(argv, lead=lead, git=git)
             except CloseError as failure:
                 error = failure
-            retry = (error is None and argv[0] == "bd" and bool(result.returncode) and attempt < DOLT_RETRIES
+            retry = (error is None and result is not None and argv[0] == "bd" and bool(result.returncode) and attempt < DOLT_RETRIES
                      and bool(DOLT_DROP.search((result.stderr or "") + (result.stdout or ""))))
             outcome = ("timeout" if error is not None and "timed out" in str(error) else "error" if error is not None
-                       else "dolt_drop_retry" if retry else "failed" if result.returncode else "ok")
+                       else "dolt_drop_retry" if retry else "failed" if result is not None and result.returncode else "ok")
             if outcome != "ok" or attempt:
                 self._log_attempt(argv, attempt + 1, began, outcome, started)
             if error is not None:
                 raise error
+            assert result is not None
             if not retry:
                 break
             self.sleep(DOLT_RETRY_SLEEP_S)
+        assert result is not None
         if check and result.returncode:
             raise CloseError("COMMAND.FAILED", result.stderr.strip() or result.stdout.strip(),
                              f"Repair {' '.join(argv[:3])} and rerun with the same vars file.")
@@ -416,16 +437,54 @@ class Hook:
         _, self.assignment_id, self.assignment_round = assignment_details(events, self.task)
         return self.check_replay()
 
+    def cache(self):
+        """The bd-cache every bead write goes through, so cache readers (close-vars, hooks) see it at once (#557)."""
+        if self.beads is None:
+            try:
+                self.beads = bd_cache.BdCache(self.root, runner=self.cache_runner)
+            except bd_cache.CacheError as error:
+                raise CloseError(error.code, error.detail, error.fix) from error
+        return self.beads
+
+    def cache_runner(self, command, **_):
+        """bd calls made by the cache keep this hook's environment, retries and attempt log."""
+        try:
+            return self.run(command, check=False)
+        except CloseError as error:
+            raise OSError(str(error)) from error
+
+    def write_bead(self, bead, op, args):
+        """Journal one bead write and drain it now; the cache stores bd's read-back row."""
+        cache = self.cache()
+        key = json.dumps([*self.key, self.assignment_id, bead, op, args], sort_keys=True)
+        try:
+            seq = cache.write(bead, op, args, idem_key=key, actor=self.identity)["seq"]
+            for _ in range(DRAIN_TRIES):
+                if not cache.drain()["busy"]:
+                    break
+                self.sleep(DRAIN_BUSY_SLEEP_S)
+            entry = cache.entry(seq)
+        except bd_cache.CacheError as error:
+            raise CloseError(error.code, f"{bead} {op}: {error.detail}", error.fix) from error
+        if entry["state"] == "applied":
+            return
+        if entry["state"] == "escalated":
+            raise CloseError("BEADS.WRITE_ESCALATED", f"{bead} {op} (bd-cache journal #{seq}) was not applied: {entry['last_error']}",
+                             f"Ask the phase lead to set {bead} in bd and run `bd_cache.py resolve {seq} --note <what> --actor <lead>`, "
+                             "then rerun with the same vars file.")
+        raise CloseError("BEADS.WRITE_PENDING", f"{bead} {op} is journaled (bd-cache #{seq}) but not applied yet: "
+                         f"{entry['last_error'] or 'the drain is busy'}",
+                         "Rerun with the same vars file once bd answers; the journaled write is applied once "
+                         "(the bd-cache cron also applies it within a tick).")
+
     def update(self, bead, **fields):
-        argv = ["bd", "update", bead]
+        args = {}
         for name, value in fields.items():
             if name == "metadata":
-                for key, item in value.items():
-                    encoded = json.dumps(item, separators=(",", ":")) if isinstance(item, (list, dict, bool)) else str(item)
-                    argv += ["--set-metadata", f"{key}={encoded}"]
+                args["set_metadata"] = {key: bd_value(item) for key, item in value.items()}
             else:
-                argv += ["--" + name.replace("_", "-"), str(value)]
-        self.run([*argv, "--actor", self.identity])
+                args[name] = str(value)
+        self.write_bead(bead, "update", args)
         record = self.bead(bead)
         for name, value in fields.items():
             if name == "metadata":
@@ -491,6 +550,7 @@ class Hook:
             raise CloseError("HEAD.DIRTY", dirty, "Commit or remove worktree changes before retrying.")
         remote_available = False
         remote_ref = f"refs/heads/{values['branch']}"
+        argv = ["git", "ls-remote", "origin", remote_ref]
         for _attempt in range(3):
             try:
                 argv = ["git", "ls-remote", "origin", remote_ref]
@@ -604,7 +664,7 @@ class Hook:
         record = self.bead(bead)
         wrote = False
         if record.get("status") != "closed":
-            self.run(["bd", "close", bead, "--reason", reason, "--actor", self.identity])
+            self.write_bead(bead, "close", {"reason": reason})
             record.update(status="closed", close_reason=reason)
             wrote = True
         self.closed.append(bead)
@@ -780,6 +840,8 @@ def main(argv=None, runner=subprocess.run, clock=time.monotonic, sleep=time.slee
     parser.add_argument("--result", type=Path, help="the fixer's result file; required for dev and fix")
     parser.add_argument("--skip-checks", action="store_true", help="skips the PR and stack checks. Do NOT use without permission from the phase lead.")
     hook = None
+    args = None
+    output: dict[str, object]
     try:
         args = parser.parse_args(argv)
         try:
@@ -809,7 +871,7 @@ def main(argv=None, runner=subprocess.run, clock=time.monotonic, sleep=time.slee
         output = {"err": {"code": error.code, "message": str(error), "fix": error.fix}}
     except KeyError as error:
         field = str(error.args[0])
-        producer = " ".join(hook.last_json_argv) if hook is not None else str(args.vars)
+        producer = " ".join(hook.last_json_argv) if hook is not None else str(args.vars if args is not None else "--vars")
         output = {"err": {"code": "COMMAND.INVALID", "message": f"{producer}: required field {field} is missing",
                           "fix": f"Restore field {field} in `{producer}` before retrying."}}
     except OSError as error:
@@ -817,7 +879,7 @@ def main(argv=None, runner=subprocess.run, clock=time.monotonic, sleep=time.slee
         output = {"err": {"code": "COMMAND.FAILED", "message": str(error),
                           "fix": f"Restore file access for {path} and rerun with the same vars file."}}
     except (ValueError, TypeError) as error:
-        producer = " ".join(hook.last_json_argv) if hook is not None else str(args.vars)
+        producer = " ".join(hook.last_json_argv) if hook is not None else str(args.vars if args is not None else "--vars")
         output = {"err": {"code": "COMMAND.INVALID", "message": f"{producer}: {type(error).__name__}: {error}",
                           "fix": f"Repair the invalid value reported by {type(error).__name__} in `{producer}`: {error}."}}
     if hook is not None and hook.attempts:

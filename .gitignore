@@ -58,3 +58,6 @@ tmp/
 # sc-publish kit bootstrap cache (pinned clone, see release/sc-publish-pin.toml)
 .sc-publish-kit/
 **/.sc-compose/
+.atm-bd/sanity-close/
+.atm-bd/*.bd-cache.sqlite3*
+.atm-bd/*.bd-cache.drain.*
