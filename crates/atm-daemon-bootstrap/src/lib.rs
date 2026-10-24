@@ -560,15 +560,15 @@ fn compose_replacement_handler_and_cron(
         lifecycle_nudge_emitter,
         ..
     } = build_replacement_handler(assembly, config)?;
-    let cron = cron_composition::compose_system(
-        &handler,
+    let cron = cron_composition::compose_system(cron_composition::RuntimeCronComposition {
+        handler: &handler,
         runtime,
         runner,
         dispatcher,
-        local_host,
+        host: local_host,
         cron_runner,
         lifecycle_nudge_emitter,
-    )?;
+    })?;
     Ok((handler, recovery_sweep, cron))
 }
 

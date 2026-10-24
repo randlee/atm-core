@@ -12,61 +12,56 @@ use crate::{DaemonWorkers, shutdown_probe};
 
 pub(super) const CRON_WORKER_SHUTDOWN_GRACE: Duration = Duration::from_secs(1);
 
+pub(crate) struct RuntimeCronComposition<'a> {
+    pub(crate) handler: &'a StorageAndNudgeRouter,
+    pub(crate) runtime: &'a atm_core::LocalServiceRuntime,
+    pub(crate) runner: Arc<dyn atm_core::boundary::HookRunner>,
+    pub(crate) dispatcher: Arc<atm_http_runtime::UnhookedRouter>,
+    pub(crate) host: Option<HostName>,
+    pub(crate) cron_runner: Arc<dyn atm_core::boundary::CronHookRunner>,
+    pub(crate) lifecycle_nudge_emitter: Arc<dyn atm_core::boundary::CronLifecycleNudgeEmitter>,
+}
+
 pub(crate) fn compose_system(
-    handler: &StorageAndNudgeRouter,
-    runtime: &atm_core::LocalServiceRuntime,
-    runner: Arc<dyn atm_core::boundary::HookRunner>,
-    dispatcher: Arc<atm_http_runtime::UnhookedRouter>,
-    host: Option<HostName>,
-    cron_runner: Arc<dyn atm_core::boundary::CronHookRunner>,
-    lifecycle_nudge_emitter: Arc<dyn atm_core::boundary::CronLifecycleNudgeEmitter>,
+    composition: RuntimeCronComposition<'_>,
 ) -> Result<Arc<AtmCron>, AtmError> {
     compose_runtime_cron(
-        handler,
-        runtime,
-        runner,
-        dispatcher,
+        composition,
         Arc::new(atm_cron::SystemClock),
         Arc::new(atm_cron::SystemJitter),
-        host,
-        cron_runner,
-        lifecycle_nudge_emitter,
     )
 }
 
-pub(crate) fn compose_runtime_cron(
-    handler: &StorageAndNudgeRouter,
-    runtime: &atm_core::LocalServiceRuntime,
-    runner: Arc<dyn atm_core::boundary::HookRunner>,
-    dispatcher: Arc<atm_http_runtime::UnhookedRouter>,
+fn compose_runtime_cron(
+    composition: RuntimeCronComposition<'_>,
     clock: Arc<dyn Clock>,
     jitter: Arc<dyn JitterSource>,
-    host: Option<HostName>,
-    cron_runner: Arc<dyn atm_core::boundary::CronHookRunner>,
-    lifecycle_nudge_emitter: Arc<dyn atm_core::boundary::CronLifecycleNudgeEmitter>,
 ) -> Result<Arc<AtmCron>, AtmError> {
     let lifecycle_delivery = Arc::new(CronLifecycleNudgerAdapter::new(
-        handler.clone(),
-        lifecycle_nudge_emitter,
+        composition.handler.clone(),
+        composition.lifecycle_nudge_emitter,
     ));
-    let module_mail_delivery = Arc::new(CronModuleMailDeliveryAdapter::new(handler.clone()));
+    let module_mail_delivery = Arc::new(CronModuleMailDeliveryAdapter::new(
+        composition.handler.clone(),
+    ));
     compose_cron_with_typed(
-        handler,
+        composition.handler,
         AtmCronDeps {
-            store: runtime.cron_schedule_store()?,
-            runner,
-            dispatcher,
+            store: composition.runtime.cron_schedule_store()?,
+            runner: composition.runner,
+            dispatcher: composition.dispatcher,
             clock,
             jitter,
-            host,
+            host: composition.host,
         },
-        cron_runner,
-        runtime.cron_transition_store()?,
+        composition.cron_runner,
+        composition.runtime.cron_transition_store()?,
         lifecycle_delivery,
         module_mail_delivery,
     )
 }
 
+#[cfg(test)]
 pub(crate) fn compose_cron(
     handler: &StorageAndNudgeRouter,
     deps: AtmCronDeps,

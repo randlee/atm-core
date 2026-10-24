@@ -120,27 +120,6 @@ pub fn active_received_hook_selector_with_health(
     ))
 }
 
-/// Builds the production selector with the composition-root-owned bare-CLI
-/// FIFO and overflow counter.
-#[cfg(feature = "benchmark-harness")]
-pub fn active_received_hook_selector_with_health_and_fifo(
-    service_runtime: LocalServiceRuntime,
-    herdr_process: Arc<dyn HerdrProcessAdapter>,
-    runtime_health: RuntimeHealth,
-    bare_cli_fifo: BareCliFifo,
-    bare_cli_queue_full_drops: BareCliQueueFullDrops,
-) -> Arc<dyn MessageReceivedHookSelector> {
-    Arc::new(
-        ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
-            service_runtime,
-            herdr_process,
-            runtime_health,
-            bare_cli_fifo,
-            bare_cli_queue_full_drops,
-        ),
-    )
-}
-
 pub(crate) fn active_received_hook_transports_with_health_and_fifo(
     service_runtime: LocalServiceRuntime,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
@@ -221,16 +200,24 @@ pub fn benchmark_received_hook_selector_with_health_and_fifo(
     runtime_health: RuntimeHealth,
     bare_cli_fifo: BareCliFifo,
     bare_cli_queue_full_drops: BareCliQueueFullDrops,
-) -> Arc<dyn MessageReceivedHookSelector> {
+) -> ReceivedHookTransports {
     match mode {
-        BenchmarkHookMode::Active => active_received_hook_selector_with_health_and_fifo(
-            service_runtime,
-            herdr_process,
-            runtime_health,
-            bare_cli_fifo,
-            bare_cli_queue_full_drops,
-        ),
-        BenchmarkHookMode::Disabled => Arc::new(DisabledReceivedHookSelector),
+        BenchmarkHookMode::Active => ReceivedHookTransports::from_replacement(Arc::new(
+            ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
+                service_runtime,
+                herdr_process,
+                runtime_health,
+                bare_cli_fifo,
+                bare_cli_queue_full_drops,
+            ),
+        )),
+        BenchmarkHookMode::Disabled => {
+            let selector = Arc::new(DisabledReceivedHookSelector);
+            ReceivedHookTransports {
+                selector: selector.clone(),
+                lifecycle_nudge_emitter: selector,
+            }
+        }
     }
 }
 
@@ -501,6 +488,18 @@ impl MessageReceivedHookSelector for DisabledReceivedHookSelector {
         _dispatch: &BuiltInPostSendDispatch,
     ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
         None
+    }
+}
+
+#[cfg(feature = "benchmark-harness")]
+#[async_trait::async_trait]
+impl CronLifecycleNudgeEmitter for DisabledReceivedHookSelector {
+    async fn emit(
+        &self,
+        _nudge: &CronLifecycleNudge,
+        _target: &CronLifecycleNudgeTarget,
+    ) -> Result<atm_storage::DeliveryReceipt, AtmError> {
+        Ok(atm_storage::DeliveryReceipt::Suppressed)
     }
 }
 
