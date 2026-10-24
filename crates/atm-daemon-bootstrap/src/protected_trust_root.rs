@@ -6,8 +6,10 @@
 //! [`ToolSenderRegistryConfig`] before returning it, so a failed refresh never
 //! exposes a partial policy to a caller which retains its previous config.
 
-use std::fs;
 use std::path::{Path, PathBuf};
+
+#[cfg(unix)]
+use std::fs;
 
 use atm_storage::{AtmError, HostName, InstallerId, PluginSenderId, ToolKeyId};
 use atm_storage_rusqlite::{
@@ -16,7 +18,15 @@ use atm_storage_rusqlite::{
 };
 use serde::Deserialize;
 
+#[path = "protected_trust_root/policy.rs"]
+mod policy;
+
+#[cfg(unix)]
 const TRUST_ROOT_FILE: &str = "/etc/atm/tool-sender-trust-root.json";
+
+#[cfg(windows)]
+#[path = "protected_trust_root/windows.rs"]
+mod windows;
 
 /// Load the installed, administrator-protected virtual-sender trust root.
 ///
@@ -53,25 +63,34 @@ impl ProtectedToolSenderConfigs {
 
 /// Load both adapter configurations from one administrator-protected snapshot.
 pub fn load_protected_tool_sender_configs() -> Result<ProtectedToolSenderConfigs, AtmError> {
-    load_from_protected_path(&system_trust_root_path())
+    load_from_protected_path(&system_trust_root_path()?)
 }
 
 /// The only production location from which the daemon bootstrap accepts this
 /// authority.  It is intentionally not configurable through a launch flag or
 /// environment variable.
 #[must_use]
-pub fn system_trust_root_path() -> PathBuf {
-    PathBuf::from(TRUST_ROOT_FILE)
+pub fn system_trust_root_path() -> Result<PathBuf, AtmError> {
+    #[cfg(windows)]
+    {
+        return windows::system_trust_root_path();
+    }
+
+    #[cfg(unix)]
+    {
+        Ok(PathBuf::from(TRUST_ROOT_FILE))
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        Err(AtmError::config(
+            "protected tool sender trust root is unavailable on this platform",
+        ))
+    }
 }
 
 fn load_from_protected_path(path: &Path) -> Result<ProtectedToolSenderConfigs, AtmError> {
-    verify_protected_path(path)?;
-    let document = fs::read_to_string(path).map_err(|error| {
-        AtmError::config(format!(
-            "failed to read administrator-protected tool sender trust root {}: {error}",
-            path.display()
-        ))
-    })?;
+    let document = read_protected_file(path)?;
     let root: RawTrustRoot = serde_json::from_str(&document).map_err(|error| {
         AtmError::config(format!(
             "failed to parse administrator-protected tool sender trust root {}: {error}",
@@ -79,6 +98,30 @@ fn load_from_protected_path(path: &Path) -> Result<ProtectedToolSenderConfigs, A
         ))
     })?;
     root.into_configs(path)
+}
+
+#[cfg(unix)]
+fn read_protected_file(path: &Path) -> Result<String, AtmError> {
+    verify_protected_path(path)?;
+    fs::read_to_string(path).map_err(|error| {
+        AtmError::config(format!(
+            "failed to read administrator-protected tool sender trust root {}: {error}",
+            path.display()
+        ))
+    })
+}
+
+#[cfg(windows)]
+fn read_protected_file(path: &Path) -> Result<String, AtmError> {
+    windows::read_protected_file(path)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn read_protected_file(path: &Path) -> Result<String, AtmError> {
+    Err(config_error(
+        path,
+        "protected trust-root loading is unavailable on this platform",
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -239,26 +282,20 @@ fn verify_unix_metadata(
             "parent directory must be root-owned and not group/world writable",
         ));
     }
-    if !file_is_regular || file_uid != 0 || file_mode & 0o077 != 0 {
+    if !file_is_regular || file_uid != 0 || file_mode & 0o022 != 0 {
         return Err(config_error(
             path,
-            "file must be a root-owned regular file with no group/world permissions",
+            "file must be a root-owned regular file and not group/world writable",
         ));
     }
     Ok(())
 }
 
-#[cfg(not(unix))]
-fn verify_protected_path(path: &Path) -> Result<(), AtmError> {
-    Err(config_error(
-        path,
-        "protected trust-root loading is unavailable until the platform ACL verifier is implemented",
-    ))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{RawTrustRoot, load_from_protected_path, verify_unix_metadata};
+    #[cfg(unix)]
+    use super::verify_unix_metadata;
+    use super::{RawTrustRoot, load_from_protected_path};
     use atm_storage::AtmErrorCode;
     use std::path::Path;
 
@@ -321,8 +358,10 @@ mod tests {
             .expect_err("non-root parent owner is unsafe");
         assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
 
-        let error = verify_unix_metadata(path, true, 0, 0o755, true, 0, 0o640)
-            .expect_err("group-readable trust root is unsafe");
+        assert!(verify_unix_metadata(path, true, 0, 0o755, true, 0, 0o644).is_ok());
+
+        let error = verify_unix_metadata(path, true, 0, 0o755, true, 0, 0o664)
+            .expect_err("group-writable trust root is unsafe");
         assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
     }
 
