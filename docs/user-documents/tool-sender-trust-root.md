@@ -11,10 +11,19 @@ trust root. The daemon reads exactly `/etc/atm/tool-sender-trust-root.json` on
 Unix. It does not read this policy from an ATM repository, a user home
 directory, a command-line option, a hook, or an environment variable.
 
-The `/etc/atm` directory must be owned by `root` and not writable by group or
-other users. The document must be a root-owned regular file with mode `0600`
-or stricter. If these checks, the JSON schema, or any key validation fails,
-signed installer and peer tool-sender admission fail closed.
+On Unix, the `/etc/atm` directory must be owned by `root` and not writable by
+group or other users. The document must be a root-owned regular file with no
+group or world write permission. The policy contains public keys, not private
+key material, so it may be readable by the unprivileged daemon account (for
+example, mode `0644`). If these integrity checks, the JSON schema, or any key
+validation fails, signed installer and peer tool-sender admission fail closed.
+
+On Windows, the daemon reads the fixed system location
+`%ProgramData%\ATM\tool-sender-trust-root.json`. The `ATM` directory and the
+file must reject reparse points and have explicit protected ACLs: only `SYSTEM`
+and `BUILTIN\Administrators` may modify them, while the daemon identity has
+read/traverse access only. Neither location is configurable by a request,
+environment variable, repository setting, or hook payload.
 
 ## Provisioning
 

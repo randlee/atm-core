@@ -246,6 +246,38 @@ jobs:
       - uses: actions/checkout@v4
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
 
+      - name: Provision protected tool-sender trust root on Unix
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d -o root -g root -m 0755 /etc/atm
+          sudo install -o root -g root -m 0644 \
+            .github/fixtures/tool-sender-trust-root-ci.json \
+            /etc/atm/tool-sender-trust-root.json
+
+      - name: Provision protected tool-sender trust root on Windows
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          $programData = [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)
+          $root = Join-Path $programData "ATM"
+          $trustRoot = Join-Path $root "tool-sender-trust-root.json"
+          $runnerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          $systemSid = "S-1-5-18"
+          $administratorsSid = "S-1-5-32-544"
+
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Copy-Item -LiteralPath ".github/fixtures/tool-sender-trust-root-ci.json" -Destination $trustRoot -Force
+
+          # Keep the fixed system location administrator-controlled. The daemon
+          # runner receives only traversal/read; no request or environment value
+          # selects this policy path.
+          & icacls $root /inheritance:r /setowner "*${administratorsSid}" /grant:r "*${systemSid}:(OI)(CI)F" "*${administratorsSid}:(OI)(CI)F" "*${runnerSid}:(OI)(CI)RX"
+          if ($LASTEXITCODE -ne 0) { throw "failed to protect $root" }
+          & icacls $trustRoot /inheritance:r /setowner "*${administratorsSid}" /grant:r "*${systemSid}:F" "*${administratorsSid}:F" "*${runnerSid}:R"
+          if ($LASTEXITCODE -ne 0) { throw "failed to protect $trustRoot" }
+
       - name: Install Rust toolchain
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: dtolnay/rust-toolchain@stable
