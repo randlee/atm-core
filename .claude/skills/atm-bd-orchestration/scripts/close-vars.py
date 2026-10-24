@@ -173,8 +173,7 @@ def commands(role: str, bead: str, out: str) -> list[str]:
     close = ".claude/skills/atm-bd-orchestration/scripts/atm-task-close.py"
     if role in ("dev", "fix"):
         return [f"write the remaining fields to <result.json>",
-                f"{close} --role {role} --vars {out} --result <result.json>",
-                f"atm task close {bead} completed \"<reason>\""]
+                f"{close} --role {role} --vars {out} --result <result.json>"]
     return [f"add the remaining fields to {out}", f"{close} --role {role} --vars {out}"]
 
 
