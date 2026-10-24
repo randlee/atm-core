@@ -45,9 +45,35 @@ class WindowsTrustRootProvisioningTests(unittest.TestCase):
         )
         self.assertIn('"*${runnerSid}:R"', script)
         self.assertIn('"*${runnerSid}:(OI)(CI)RX"', script)
+        self.assertIn("[Security.AccessControl.FileSystemRights]::Synchronize", script)
+        self.assertIn("$readRights -bor [Security.AccessControl.FileSystemRights]::Synchronize", script)
         self.assertIn("$acl.GetOwner([Security.Principal.SecurityIdentifier])", script)
         self.assertIn("$acl.AreAccessRulesProtected", script)
         self.assertIn("$rule.IsInherited", script)
+
+    def test_windows_read_only_acl_masks_include_synchronize_without_write_bits(self):
+        # Observed exact masks from Windows CI: directory RX is 0x1200a9;
+        # file R is 0x120089. Both are their read masks plus Synchronize.
+        synchronize = 0x00100000
+        read_execute = 0x000200A9
+        read = 0x00020089
+        directory_mask = read_execute | synchronize
+        file_mask = read | synchronize
+        self.assertEqual(directory_mask, 0x001200A9)
+        self.assertEqual(file_mask, 0x00120089)
+
+        write_authority = (
+            0x00000002  # WriteData/CreateFiles
+            | 0x00000004  # AppendData/CreateDirectories
+            | 0x00000040  # DeleteSubdirectoriesAndFiles
+            | 0x00000010  # WriteExtendedAttributes
+            | 0x00000100  # WriteAttributes
+            | 0x00010000  # Delete
+            | 0x00040000  # ChangePermissions
+            | 0x00080000  # TakeOwnership
+        )
+        self.assertEqual(directory_mask & write_authority, 0)
+        self.assertEqual(file_mask & write_authority, 0)
 
     def test_acl_failures_capture_token_and_pre_failure_acl_state(self):
         script = (REPOSITORY / ".github/scripts/provision_windows_trust_root.ps1").read_text(

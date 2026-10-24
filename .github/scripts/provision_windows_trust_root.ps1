@@ -76,8 +76,13 @@ function Assert-ProtectedTrustRootAcl {
       $systemSid { [Security.AccessControl.FileSystemRights]::FullControl; break }
       $administratorsSid { [Security.AccessControl.FileSystemRights]::FullControl; break }
       $runnerSid {
-        if ($IsDirectory) { [Security.AccessControl.FileSystemRights]::ReadAndExecute }
-        else { [Security.AccessControl.FileSystemRights]::Read }
+        # Windows normalizes read-only filesystem ACEs with Synchronize. This
+        # permits synchronization for reads and grants no file or ACL writes.
+        $readRights = [Security.AccessControl.FileSystemRights]::Read
+        if ($IsDirectory) {
+          $readRights = [Security.AccessControl.FileSystemRights]::ReadAndExecute
+        }
+        $readRights -bor [Security.AccessControl.FileSystemRights]::Synchronize
         break
       }
       default { throw "unexpected trustee on $Path`: $sid" }
