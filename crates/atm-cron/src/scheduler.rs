@@ -117,6 +117,7 @@ pub trait AtmCronTestAccess {
     fn hook_runner(&self) -> &Arc<dyn HookRunner>;
     fn action_dispatcher(&self) -> &Arc<dyn HookActionDispatcher>;
     fn register_run_completion(&self, schedule: &CronSchedule) -> CronRunCompletionWaiter;
+    fn original_runner_failure(&self, schedule: &CronSchedule) -> Option<AtmError>;
 }
 
 #[cfg(feature = "test-utils")]
@@ -131,6 +132,12 @@ impl AtmCronTestAccess for AtmCron {
 
     fn register_run_completion(&self, schedule: &CronSchedule) -> CronRunCompletionWaiter {
         self.run_completions.register_next(schedule)
+    }
+
+    fn original_runner_failure(&self, schedule: &CronSchedule) -> Option<AtmError> {
+        self.typed_engine
+            .as_ref()
+            .and_then(|engine| engine.runner_failure(schedule))
     }
 }
 

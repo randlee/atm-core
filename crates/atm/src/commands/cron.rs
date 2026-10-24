@@ -952,9 +952,7 @@ mod tests {
             .await
             .expect("custom mail and lifecycle runs complete");
         let delivery_diagnostics = composition.persisted_cron_diagnostics();
-        let runner_failure_detail = composition
-            .cron_runner_failure_detail(&custom_schedule)
-            .await;
+        let runner_failure = composition.original_cron_runner_failure(&custom_schedule);
         composition.shutdown_cron_worker().await;
         assert!(
             composition.has_herdr_prompt(
@@ -994,7 +992,7 @@ mod tests {
         };
         assert_eq!(
             outcome.count, 1,
-            "custom cron mail must be durable after completion; persisted cron schedules and pending delivery intents: {delivery_diagnostics:?}; controlled child-process failure detail: {runner_failure_detail:?}"
+            "custom cron mail must be durable after completion; persisted cron schedules and pending delivery intents: {delivery_diagnostics:?}; original controlled runner failure: {runner_failure:?}"
         );
         assert_eq!(
             outcome.rows[0].from,
