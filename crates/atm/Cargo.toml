@@ -102,7 +102,7 @@ atm-graft = { workspace = true, features = ["test-support"] }
 atm-core = { workspace = true, features = ["test-utils"] }
 atm-runtime-test-support.workspace = true
 # In-process OTLP gRPC log collector for the CLI log-destination proof.
-opentelemetry-proto = { version = "=0.33.0", default-features = false, features = ["gen-tonic", "logs"] }
+opentelemetry-proto = { version = "=0.33.1", default-features = false, features = ["gen-tonic", "logs"] }
 sc-observability = { workspace = true, features = ["fault-injection"] }
 serial_test = "3"
 tempfile = "3"
