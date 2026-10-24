@@ -23,6 +23,7 @@ mod tests {
     use super::super::hook::tests::{caller, fixture, transport};
     use super::*;
     use atm_core::list::ListQuery;
+    use atm_core::read::ReadQuery;
     use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use atm_core::types::ReadSelection;
     use atm_daemon_bootstrap::test_support::ControlledCronComposition;
@@ -791,6 +792,40 @@ mod tests {
                 .expect("daemon sender")
         );
         assert_eq!(outcome.rows[0].summary, "fixture custom mail");
+        let message_id = outcome.rows[0]
+            .message_id
+            .as_ref()
+            .expect("persisted custom mail has an id")
+            .to_string();
+        let ResponseEnvelope::Receive(read) = composition
+            .execute(RequestEnvelope::Receive(
+                ReadQuery::new(
+                    composition.root_path().into(),
+                    composition.root_path().into(),
+                    TEST_RECIPIENT.parse().expect("test recipient"),
+                    None,
+                    TEST_TEAM.parse().expect("test team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    Some(&message_id),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("custom-mail read request"),
+            ))
+            .await
+            .expect("read persisted custom mail")
+        else {
+            panic!("read response")
+        };
+        assert_eq!(
+            read.message.expect("persisted custom mail").envelope.text,
+            "fixture custom mail"
+        );
     }
 }
 
