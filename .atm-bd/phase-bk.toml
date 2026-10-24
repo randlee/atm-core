@@ -1,7 +1,7 @@
 plan = "docs/plans/phase-bk.jsonl"
 root = "atm-phase-bk"
-integration_branch = "integrate/phase-bk"
-lead = "fenix"
+integration_branch = "develop"
+lead = "solar"
 
 [templates]
 dev = ".claude/skills/atm-bd-orchestration/templates/dev-template.xml.j2"

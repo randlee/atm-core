@@ -1,0 +1,30 @@
+{
+  "baseline": {
+    "p50_floor": 35000.0,
+    "revision": 1
+  },
+  "binary_hashes": {
+    "atm": "978aa89aeecd9d1464fba89035ad0b2a796d28cf000e584e76deec1696154752",
+    "atm-daemon": "7c9633a2d2047fec2a38e347015ab69ca91d1dba9453a7d1da50b3d46f1c80d7"
+  },
+  "binary_versions": {
+    "atm": "atm 1.6.5",
+    "atm-daemon": "atm-daemon 1.6.5"
+  },
+  "campaign_id": "20261022T072457Z-m5-atmbench",
+  "direct_sqlite_message_write": null,
+  "durability_after_restart": null,
+  "frames_per_connection": 0,
+  "generated_at": "2026-10-22T07:24:57.505140Z",
+  "host_label": "m5-atmbench",
+  "incomplete_reason": "not measured: --bin-dir does not ship atm-daemon-benchmark; no local build was run",
+  "messages_admitted": 0,
+  "messages_durable": 0,
+  "messages_requested": 0,
+  "metrics": null,
+  "os": "macos",
+  "schema_version": 4,
+  "source_revision": "ce9c98f7d8847bad72ddd23feeaa143ff486bb94",
+  "status": "INCOMPLETE",
+  "target": "sqlite"
+}
