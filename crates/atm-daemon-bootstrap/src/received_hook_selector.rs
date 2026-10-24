@@ -15,9 +15,9 @@ use atm_core::HerdrSession;
 use atm_core::LocalServiceRuntime;
 use atm_core::RequestDeadline;
 use atm_core::boundary::{
-    self, AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, MessageReceivedHookSelector,
-    NudgeKind, PostSendBuiltInTarget, PostSendEmissionPath, TMUX_DOUBLE_ENTER_DELAY,
-    TMUX_NUDGE_CONFIRM_KEY,
+    self, AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, CronLifecycleNudge,
+    CronLifecycleNudgeEmitter, CronLifecycleNudgeTarget, MessageReceivedHookSelector, NudgeKind,
+    PostSendBuiltInTarget, PostSendEmissionPath, TMUX_DOUBLE_ENTER_DELAY, TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 #[cfg(feature = "benchmark-harness")]
@@ -27,6 +27,69 @@ use atm_http_runtime::{
     BareCliFifo, BareCliQueueFullDrops, BoundedBlockingBridge, HERDR_MAX_PROMPTS_PER_TICK,
     RuntimeHealth, append_bare_cli_message,
 };
+
+/// The two sealed ports backed by one receiver-selector instance.
+///
+/// Cron lifecycle prompts deliberately share the daemon's selected local
+/// transport rather than being translated into a post-send event.
+pub(crate) struct ReceivedHookTransports {
+    pub(crate) selector: Arc<dyn MessageReceivedHookSelector>,
+    pub(crate) lifecycle_nudge_emitter: Arc<dyn CronLifecycleNudgeEmitter>,
+}
+
+impl ReceivedHookTransports {
+    fn from_replacement(selector: Arc<ReplacementReceivedHookSelector>) -> Self {
+        Self {
+            selector: selector.clone(),
+            lifecycle_nudge_emitter: selector,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn disabled_for_test() -> Self {
+        let selector = Arc::new(TestNoopReceivedHookSelector);
+        Self {
+            selector: selector.clone(),
+            lifecycle_nudge_emitter: selector,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_selector_for_test(selector: Arc<dyn MessageReceivedHookSelector>) -> Self {
+        Self {
+            selector,
+            lifecycle_nudge_emitter: Arc::new(TestNoopReceivedHookSelector),
+        }
+    }
+}
+
+#[cfg(test)]
+struct TestNoopReceivedHookSelector;
+
+#[cfg(test)]
+impl boundary::sealed::Sealed for TestNoopReceivedHookSelector {}
+
+#[cfg(test)]
+impl MessageReceivedHookSelector for TestNoopReceivedHookSelector {
+    fn select_emitter(
+        &self,
+        _dispatch: &BuiltInPostSendDispatch,
+    ) -> Option<&dyn AsyncMessageReceivedHookEmitter> {
+        None
+    }
+}
+
+#[cfg(test)]
+#[async_trait::async_trait]
+impl CronLifecycleNudgeEmitter for TestNoopReceivedHookSelector {
+    async fn emit(
+        &self,
+        _nudge: &CronLifecycleNudge,
+        _target: &CronLifecycleNudgeTarget,
+    ) -> Result<atm_storage::DeliveryReceipt, AtmError> {
+        Ok(atm_storage::DeliveryReceipt::Suppressed)
+    }
+}
 
 /// Builds the selector injected into every production replacement daemon.
 ///
@@ -59,6 +122,7 @@ pub fn active_received_hook_selector_with_health(
 
 /// Builds the production selector with the composition-root-owned bare-CLI
 /// FIFO and overflow counter.
+#[cfg(feature = "benchmark-harness")]
 pub fn active_received_hook_selector_with_health_and_fifo(
     service_runtime: LocalServiceRuntime,
     herdr_process: Arc<dyn HerdrProcessAdapter>,
@@ -75,6 +139,24 @@ pub fn active_received_hook_selector_with_health_and_fifo(
             bare_cli_queue_full_drops,
         ),
     )
+}
+
+pub(crate) fn active_received_hook_transports_with_health_and_fifo(
+    service_runtime: LocalServiceRuntime,
+    herdr_process: Arc<dyn HerdrProcessAdapter>,
+    runtime_health: RuntimeHealth,
+    bare_cli_fifo: BareCliFifo,
+    bare_cli_queue_full_drops: BareCliQueueFullDrops,
+) -> ReceivedHookTransports {
+    ReceivedHookTransports::from_replacement(Arc::new(
+        ReplacementReceivedHookSelector::with_herdr_process_and_fifo(
+            service_runtime,
+            herdr_process,
+            runtime_health,
+            bare_cli_fifo,
+            bare_cli_queue_full_drops,
+        ),
+    ))
 }
 
 /// Mode accepted exclusively by the separately compiled benchmark binary.
@@ -325,6 +407,90 @@ impl MessageReceivedHookSelector for ReplacementReceivedHookSelector {
     }
 }
 
+#[async_trait::async_trait]
+impl CronLifecycleNudgeEmitter for ReplacementReceivedHookSelector {
+    async fn emit(
+        &self,
+        nudge: &CronLifecycleNudge,
+        target: &CronLifecycleNudgeTarget,
+    ) -> Result<atm_storage::DeliveryReceipt, AtmError> {
+        let receipt_id = format!(
+            "cron-lifecycle:{}:{}:{}",
+            nudge.key.schedule_id,
+            nudge.key.generation.get(),
+            nudge.key.transition_seq
+        );
+        match target {
+            CronLifecycleNudgeTarget::Tmux(target) => TokioTmuxReceivedHook::emit_nudge(
+                target,
+                RequestDeadline::after(std::time::Duration::from_secs(30)),
+            )
+            .await
+            .map(|()| atm_storage::DeliveryReceipt::Accepted { receipt_id })
+            .or_else(|_| {
+                Ok(unknown_lifecycle_receipt(
+                    "tmux lifecycle handoff result is unknown",
+                ))
+            }),
+            CronLifecycleNudgeTarget::Herdr(target) => {
+                match self
+                    .herdr
+                    .process
+                    .prompt(
+                        &target.agent,
+                        target.session.as_ref(),
+                        &target.rendered_nudge,
+                        RequestDeadline::after(std::time::Duration::from_secs(30)),
+                    )
+                    .await
+                {
+                    Ok(HerdrPromptOutcome::Accepted(_)) => {
+                        Ok(atm_storage::DeliveryReceipt::Accepted { receipt_id })
+                    }
+                    Err(_) => Ok(unknown_lifecycle_receipt(
+                        "herdr lifecycle handoff result is unknown",
+                    )),
+                }
+            }
+            CronLifecycleNudgeTarget::Graft(target) => {
+                let runtime = self.graft.service_runtime.clone();
+                let key = nudge.key;
+                let target = target.clone();
+                match self
+                    .graft
+                    .blocking_bridge
+                    .run(
+                        RequestDeadline::after(std::time::Duration::from_secs(30)),
+                        move || {
+                            Ok::<_, AtmError>(
+                                atm_core::graft::deliver_published_cron_lifecycle_from_local_runtime(
+                                    &runtime,
+                                    key,
+                                    &target,
+                                    RequestDeadline::after(std::time::Duration::from_secs(30)),
+                                ),
+                            )
+                        },
+                    )
+                    .await
+                {
+                    Ok(receipt) => Ok(receipt),
+                    Err(_) => Ok(unknown_lifecycle_receipt(
+                        "graft lifecycle handoff result is unknown",
+                    )),
+                }
+            }
+        }
+    }
+}
+
+fn unknown_lifecycle_receipt(reason: &str) -> atm_storage::DeliveryReceipt {
+    atm_storage::DeliveryReceipt::Unknown {
+        retry_cause: atm_storage::DeliveryRetryCause::parse(reason.to_owned())
+            .expect("static lifecycle retry cause is valid"),
+    }
+}
+
 /// Benchmark-only selector which leaves post-commit hook dispatch empty.
 /// It is compiled only into the dedicated benchmark executable, never the
 /// normal replacement daemon binary.
@@ -366,44 +532,53 @@ impl AsyncMessageReceivedHookEmitter for TokioTmuxReceivedHook {
                     "tmux receiver hook received a non-tmux dispatch",
                 ));
             };
-            run_tmux(
-                [
-                    "send-keys",
-                    "-t",
-                    target.pane_id.as_str(),
-                    "-l",
-                    &target.rendered_nudge,
-                ],
-                deadline,
-            )
-            .await?;
-            run_tmux(
-                [
-                    "send-keys",
-                    "-t",
-                    target.pane_id.as_str(),
-                    TMUX_NUDGE_CONFIRM_KEY,
-                ],
-                deadline,
-            )
-            .await?;
-            let delay = deadline
-                .remaining()
-                .ok_or_else(|| hook_deadline_error("before tmux's second Enter"))?
-                .min(TMUX_DOUBLE_ENTER_DELAY);
-            tokio::time::sleep(delay).await;
-            run_tmux(
-                [
-                    "send-keys",
-                    "-t",
-                    target.pane_id.as_str(),
-                    TMUX_NUDGE_CONFIRM_KEY,
-                ],
-                deadline,
-            )
-            .await?;
+            Self::emit_nudge(&target, deadline).await?;
             Ok(PostSendEmissionPath::LocalTmux)
         })
+    }
+}
+
+impl TokioTmuxReceivedHook {
+    async fn emit_nudge(
+        target: &boundary::LocalTmuxNudgeTarget,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
+        run_tmux(
+            [
+                "send-keys",
+                "-t",
+                target.pane_id.as_str(),
+                "-l",
+                &target.rendered_nudge,
+            ],
+            deadline,
+        )
+        .await?;
+        run_tmux(
+            [
+                "send-keys",
+                "-t",
+                target.pane_id.as_str(),
+                TMUX_NUDGE_CONFIRM_KEY,
+            ],
+            deadline,
+        )
+        .await?;
+        let delay = deadline
+            .remaining()
+            .ok_or_else(|| hook_deadline_error("before tmux's second Enter"))?
+            .min(TMUX_DOUBLE_ENTER_DELAY);
+        tokio::time::sleep(delay).await;
+        run_tmux(
+            [
+                "send-keys",
+                "-t",
+                target.pane_id.as_str(),
+                TMUX_NUDGE_CONFIRM_KEY,
+            ],
+            deadline,
+        )
+        .await
     }
 }
 

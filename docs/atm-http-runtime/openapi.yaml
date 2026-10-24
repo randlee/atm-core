@@ -155,6 +155,41 @@ paths:
       responses:
         '200': { description: Runtime view reloaded, content: { application/json: { schema: { type: 'null' } } } }
         default: { $ref: '#/components/responses/AtmError' }
+  /tool-senders:
+    x-atm-contract-status: planned
+    x-atm-target-http-api-version: 1.17.0
+    post:
+      operationId: applyToolSenderRegistration
+      description: Planned local-only installer registration or runtime-key rotation. Peer ingress is refused. This frozen additive contract is targeted for HTTP API 1.17.0; BK-14 owns endpoint execution and the previous-consumer proof.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ToolInstallerRequest'
+                - type: object
+                  properties:
+                    operation: { enum: [register, rotate] }
+      responses:
+        '200': { description: Registration or rotation receipt, content: { application/json: { schema: { $ref: '#/components/schemas/ToolInstallReceipt' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+    delete:
+      operationId: unregisterToolSender
+      description: Planned local-only installer-authorized unregistration. Peer ingress is refused. This frozen additive contract is targeted for HTTP API 1.17.0; BK-14 owns endpoint execution and the previous-consumer proof.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ToolInstallerRequest'
+                - type: object
+                  properties:
+                    operation: { const: unregister }
+      responses:
+        '200': { description: Unregistration receipt, content: { application/json: { schema: { $ref: '#/components/schemas/ToolInstallReceipt' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
   /hooks/register:
     post:
       operationId: registerHook
@@ -238,6 +273,66 @@ components:
           type: string
           enum: [mtls, plaintext-test]
           description: Optional cross-host peer-wire security mode. Omitted values default to the receiver's established connector mode for compatibility; peer ingress rejects a mode mismatch before dispatch.
+        tool_runtime_proof:
+          $ref: '#/components/schemas/ToolRuntimeProof'
+          description: Planned optional signed provenance for a registered plug-in sender; required for virtual plug-in writes when HTTP API 1.17.0 is implemented.
+          x-atm-target-http-api-version: 1.17.0
+        tool_sender_attestation:
+          $ref: '#/components/schemas/ToolSenderAttestation'
+          description: Planned origin-daemon proof for forwarding a registered plug-in message across a peer link; required for virtual plug-in peer writes when HTTP API 1.17.0 is implemented.
+          x-atm-target-http-api-version: 1.17.0
+    ToolInstallerRequest:
+      type: object
+      description: Signed installer envelope. Canonical signing bytes use ATM-TOOL-INSTALL-v1 and the field order recorded in ADR-066; signature is excluded from signing input.
+      required: [schema_version, operation, installer_id, installer_key_id, sender, package_digest, registration_generation, host_id, runtime_key_id, runtime_public_key, nonce, issued_at, expires_at, signature]
+      properties:
+        schema_version: { type: string, const: '1.0.0' }
+        operation: { type: string, enum: [register, rotate, unregister] }
+        installer_id: { type: string, minLength: 1 }
+        installer_key_id: { type: string, minLength: 1 }
+        sender: { type: string, minLength: 1, description: Registered plug-in sender identity in the reserved virtual tool namespace. }
+        package_digest: { type: string, minLength: 1 }
+        registration_generation: { type: integer, format: uint64, minimum: 0 }
+        host_id: { type: string, minLength: 1 }
+        runtime_key_id: { type: string, minLength: 1 }
+        runtime_public_key: { type: string, minLength: 1 }
+        previous_runtime_key_id: { type: string, minLength: 1, description: Required by rotation semantics and omitted for register or unregister. }
+        nonce: { type: string, minLength: 1 }
+        issued_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        signature: { type: string, minLength: 1, description: Opaque installer signature; excluded from canonical signing bytes. }
+    ToolRuntimeProof:
+      type: object
+      description: Signed provenance for one canonical message write. Canonical signing bytes use ATM-TOOL-MESSAGE-v1 and the field order recorded in ADR-066; signature is excluded from signing input.
+      required: [runtime_key_id, sender, registration_generation, host_id, message_id, message_digest, nonce, signature]
+      properties:
+        runtime_key_id: { type: string, minLength: 1 }
+        sender: { type: string, minLength: 1 }
+        registration_generation: { type: integer, format: uint64, minimum: 0 }
+        host_id: { type: string, minLength: 1 }
+        message_id: { type: string, minLength: 1 }
+        message_digest: { type: string, minLength: 1 }
+        nonce: { type: string, minLength: 1 }
+        signature: { type: string, minLength: 1, description: Opaque runtime signature; excluded from canonical signing bytes. }
+    ToolSenderAttestation:
+      type: object
+      description: Origin-daemon proof for one admitted message forwarded across a peer link. Canonical signing bytes use ATM-TOOL-PEER-v1 and the field order recorded in ADR-066; signature is excluded from signing input.
+      required: [sender, registration_generation, host_id, message_id, message_digest, nonce, signature]
+      properties:
+        sender: { type: string, minLength: 1 }
+        registration_generation: { type: integer, format: uint64, minimum: 0 }
+        host_id: { type: string, minLength: 1 }
+        message_id: { type: string, minLength: 1 }
+        message_digest: { type: string, minLength: 1 }
+        nonce: { type: string, minLength: 1 }
+        signature: { type: string, minLength: 1, description: Opaque origin-daemon signature; excluded from canonical signing bytes. }
+    ToolInstallReceipt:
+      type: object
+      required: [sender, registration_generation, applied_at]
+      properties:
+        sender: { type: string, minLength: 1 }
+        registration_generation: { type: integer, format: uint64, minimum: 0 }
+        applied_at: { type: string, format: date-time }
     PeekQuery:
       type: object
       description: Canonical inspect query; fields are validated by the daemon.

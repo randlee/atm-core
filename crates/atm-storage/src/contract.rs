@@ -138,6 +138,8 @@ pub enum BuiltInNudgeTemplateKind {
     TaskStarted,
     TaskComplete,
     TaskClosed,
+    /// Cron lifecycle nudge override family; separate from post-send events.
+    Cron,
 }
 
 impl BuiltInNudgeTemplateKind {
@@ -154,6 +156,7 @@ impl BuiltInNudgeTemplateKind {
             Self::TaskStarted => "task_started",
             Self::TaskComplete => "task_complete",
             Self::TaskClosed => "task_closed",
+            Self::Cron => "cron",
         }
     }
 }
@@ -763,6 +766,21 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
         Ok(None)
     }
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
+    /// Deletes a message while preserving its scheduler generation fence in
+    /// the durable writer transaction. Compatibility stores accept only Local.
+    fn delete_message_with_origin(
+        &self,
+        key: &MessageKey,
+        origin: MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
+        if origin == MessageWriteOrigin::Local {
+            self.delete_message(key)
+        } else {
+            Err(AtmError::validation(
+                "message store does not implement fenced message deletion",
+            ))
+        }
+    }
 }
 
 /// Async durable-admission boundary used by the Tokio HTTP runtime.
@@ -789,6 +807,25 @@ pub trait AsyncMessageStore: MessageStore {
         Err(AtmError::daemon_unavailable(
             "message store does not implement async mailbox read-state transition",
         ))
+    }
+
+    /// Applies display state with an origin checked by the durable writer.
+    /// Narrow compatibility stores continue to support Local reads only.
+    async fn apply_read_display_state_with_origin_async(
+        &self,
+        scope: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        seen_watermark: Option<IsoTimestamp>,
+        origin: MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
+        if origin == MessageWriteOrigin::Local {
+            self.apply_read_display_state_async(scope, message_ids, seen_watermark)
+                .await
+        } else {
+            Err(AtmError::validation(
+                "message store does not implement fenced mailbox read-state transition",
+            ))
+        }
     }
 
     /// Makes one immutable message durable, or returns the record that already
@@ -831,6 +868,25 @@ pub trait AsyncMessageStore: MessageStore {
                 operation: Ok(commit),
                 task_events: Vec::new(),
             })
+    }
+
+    /// Cron-aware acknowledgement admission. The default remains compatible
+    /// for ordinary local ACKs and refuses a cron fence unless a backend can
+    /// verify it in the same transaction as source transition and reply write.
+    async fn acknowledge_message_atomically_with_origin_async(
+        &self,
+        source: AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+        origin: MessageWriteOrigin,
+    ) -> Result<crate::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
+        if origin == MessageWriteOrigin::Local {
+            self.acknowledge_message_atomically_async(source, builder)
+                .await
+        } else {
+            Err(AtmError::validation(
+                "message store does not implement fenced acknowledgement admission",
+            ))
+        }
     }
 }
 
@@ -1761,7 +1817,7 @@ mod tests {
     }
 
     #[test]
-    fn eleven_kinds_round_trip_as_str_from_str() {
+    fn twelve_kinds_round_trip_as_str_from_str() {
         let kinds = [
             BuiltInNudgeTemplateKind::Delivery,
             BuiltInNudgeTemplateKind::DeliveryAck,
@@ -1774,6 +1830,7 @@ mod tests {
             BuiltInNudgeTemplateKind::TaskStarted,
             BuiltInNudgeTemplateKind::TaskComplete,
             BuiltInNudgeTemplateKind::TaskClosed,
+            BuiltInNudgeTemplateKind::Cron,
         ];
         for kind in kinds {
             assert_eq!(kind.as_str().parse::<BuiltInNudgeTemplateKind>(), Ok(kind));

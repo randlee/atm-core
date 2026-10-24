@@ -1,13 +1,14 @@
 use std::sync::{Arc, RwLock};
 
 use atm_core::boundary::{
-    self, BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter,
+    self, BuiltInPostSendDispatch, DeliveryReceipt, GraftNudgeTarget, MessageReceivedHookEmitter,
     PostSendBuiltInTarget, PostSendEmissionPath,
 };
 use atm_core::error::AtmError;
+use atm_core::graft::CronLifecycleGraftRequest;
 
 use crate::runtime::read_snapshot;
-use crate::{GraftObservability, HostNudge, HostNudgeInjector, SessionSnapshot};
+use crate::{GraftObservability, HostCronNudge, HostNudge, HostNudgeInjector, SessionSnapshot};
 
 /// Receiver-owned Graft implementation of the post-persistence hook boundary.
 pub(crate) struct GraftReceiveHook<'a> {
@@ -54,6 +55,29 @@ impl GraftReceiveHook<'_> {
             }
         }
     }
+
+    pub(crate) fn deliver_cron_lifecycle(
+        &self,
+        request: CronLifecycleGraftRequest,
+    ) -> DeliveryReceipt {
+        let snapshot = match read_snapshot(self.snapshot) {
+            Ok(snapshot) => snapshot,
+            Err(_) => return unknown_receipt("graft session identity is unavailable"),
+        };
+        if request.recipient != snapshot.agent || request.team != snapshot.team {
+            return unknown_receipt("graft lifecycle recipient does not match receiver identity");
+        }
+        self.injector.inject_cron_nudge(&HostCronNudge {
+            key: request.key,
+            team: request.team,
+            recipient: request.recipient,
+            body: request.rendered_nudge,
+        })
+    }
+}
+
+fn unknown_receipt(reason: &'static str) -> DeliveryReceipt {
+    atm_core::graft::unknown_cron_lifecycle_receipt(reason)
 }
 
 impl boundary::sealed::Sealed for GraftReceiveHook<'_> {}
@@ -103,26 +127,44 @@ mod tests {
     use std::sync::{Arc, Mutex, RwLock};
 
     use atm_core::boundary::{
-        BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, NudgeKind,
-        PostSendBuiltInTarget, PostSendHookEvent,
+        BuiltInPostSendDispatch, CronGeneration, CronNoticeKey, CronScheduleId, DeliveryReceipt,
+        GraftNudgeTarget, MessageReceivedHookEmitter, NudgeKind, PostSendBuiltInTarget,
+        PostSendHookEvent,
     };
     use atm_core::error::{AtmError, AtmErrorCode};
+    use atm_core::graft::CronLifecycleGraftRequest;
     use atm_core::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
+    use atm_core::types::{AgentName, TeamName};
 
     use super::GraftReceiveHook;
     use crate::{
-        GraftObservability, GraftSessionState, HostNudge, HostNudgeInjector, SessionSnapshot,
+        GraftObservability, GraftSessionState, HostCronNudge, HostNudge, HostNudgeInjector,
+        SessionSnapshot,
     };
 
     #[derive(Default)]
     struct RecordingInjector {
         nudges: Mutex<Vec<HostNudge>>,
+        cron_nudges: Mutex<Vec<HostCronNudge>>,
     }
 
     impl HostNudgeInjector for RecordingInjector {
         fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError> {
             self.nudges.lock().expect("nudges").push(nudge.clone());
             Ok(())
+        }
+
+        fn inject_cron_nudge(&self, nudge: &HostCronNudge) -> DeliveryReceipt {
+            self.cron_nudges
+                .lock()
+                .expect("cron nudges")
+                .push(nudge.clone());
+            DeliveryReceipt::Accepted {
+                receipt_id: format!(
+                    "{}:{}:{}",
+                    nudge.key.schedule_id, nudge.key.generation, nudge.key.transition_seq
+                ),
+            }
         }
     }
 
@@ -255,5 +297,71 @@ mod tests {
                 .message()
                 .contains("synthetic graft receiver unavailable")
         );
+    }
+
+    #[test]
+    fn cron_lifecycle_graft_receipt_is_keyed_and_explicit() {
+        let injector = RecordingInjector::default();
+        let sink = GraftReceiveHook {
+            injector: &injector,
+            snapshot: &snapshot(),
+            observability: &NoopObservability,
+        };
+        let key = CronNoticeKey {
+            schedule_id: CronScheduleId::new(17),
+            generation: CronGeneration::FIRST,
+            transition_seq: 4,
+        };
+        let receipt = sink.deliver_cron_lifecycle(CronLifecycleGraftRequest {
+            key,
+            team: TEST_TEAM.parse().expect("team"),
+            recipient: TEST_ARCH_CTM.parse().expect("recipient"),
+            rendered_nudge: "cron stopped".to_owned(),
+        });
+
+        assert_eq!(
+            receipt,
+            DeliveryReceipt::Accepted {
+                receipt_id: "17:1:4".to_owned()
+            }
+        );
+        let nudges = injector.cron_nudges.lock().expect("cron nudges");
+        assert_eq!(nudges.len(), 1);
+        assert_eq!(nudges[0].key, key);
+        assert_eq!(nudges[0].team, TeamName::from_validated(TEST_TEAM));
+        assert_eq!(
+            nudges[0].recipient,
+            AgentName::from_validated(TEST_ARCH_CTM)
+        );
+        assert_eq!(nudges[0].body, "cron stopped");
+    }
+
+    #[test]
+    fn cron_lifecycle_unknowns_legacy_void_injector_and_identity_mismatch() {
+        let injector = FailingInjector;
+        let sink = GraftReceiveHook {
+            injector: &injector,
+            snapshot: &snapshot(),
+            observability: &NoopObservability,
+        };
+        let key = CronNoticeKey {
+            schedule_id: CronScheduleId::new(17),
+            generation: CronGeneration::FIRST,
+            transition_seq: 4,
+        };
+        let receipt = sink.deliver_cron_lifecycle(CronLifecycleGraftRequest {
+            key,
+            team: TEST_TEAM.parse().expect("team"),
+            recipient: TEST_ARCH_CTM.parse().expect("recipient"),
+            rendered_nudge: "cron stopped".to_owned(),
+        });
+        assert!(matches!(receipt, DeliveryReceipt::Unknown { .. }));
+        let mismatch = sink.deliver_cron_lifecycle(CronLifecycleGraftRequest {
+            key,
+            team: TEST_TEAM.parse().expect("team"),
+            recipient: TEST_LEAD.parse().expect("wrong recipient"),
+            rendered_nudge: "cron stopped".to_owned(),
+        });
+        assert!(matches!(mismatch, DeliveryReceipt::Unknown { .. }));
     }
 }

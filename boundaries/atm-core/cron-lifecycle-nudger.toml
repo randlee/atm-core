@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-CronLifecycleNudger"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "CronLifecycleNudger"
+
+[public]
+trait = "CronLifecycleNudger"
+notes = "sealed lifecycle-notice delivery seam consuming only committed CronNoticeIntent rows"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["lifecycle_nudge_delivery"]
+io_forbidden = ["sqlite", "process_spawn", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-cron", "atm-daemon-bootstrap", "atm-http-runtime", "atm-runtime-test-support"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-storage-rusqlite", "atm-core -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["CronNoticeIntent"]
+response_types = ["DeliveryReceipt"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_runtime_test_support::RecordingCronLifecycleNudger"]
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CRON-LIFECYCLE-NUDGER-REFERENCES"]
+review_gates = ["sealed_trait", "persisted_intent_only", "deterministic_test_doubles"]
+
+[status]
+state = "concrete_landed"
+notes = ["BK-9 landed the sealed signature and deterministic double; BK-12 owns lifecycle execution and BK-15 owns the production adapter."]

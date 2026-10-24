@@ -11,6 +11,7 @@ use atm_core::boundary::{
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::RequestId;
+use atm_core::send::{ToolSenderPeerAdmissionStore, ToolSenderRegistry};
 use atm_core::types::HostName;
 
 use crate::hook_actions::UnhookedRouter;
@@ -29,6 +30,11 @@ pub(crate) struct HookWiring {
     pub runner: Option<Arc<dyn HookRunner>>,
     /// Shared by every clone; unset makes cron routes unavailable.
     pub cron: Arc<OnceLock<Arc<dyn CronScheduler>>>,
+    /// Installed by daemon composition after protected installer trust is loaded.
+    /// None leaves signed tool-sender routes unavailable.
+    pub tool_senders: Option<Arc<dyn ToolSenderRegistry>>,
+    /// Installed by daemon composition with enrolled origin-host policy.
+    pub tool_sender_peers: Option<Arc<dyn ToolSenderPeerAdmissionStore>>,
     pub chains: Arc<ChainTracker>,
     /// Stamped as the caller host of every hook request this router filters.
     pub local_host: Option<HostName>,
@@ -41,6 +47,8 @@ impl Default for HookWiring {
             snapshot: None,
             runner: None,
             cron: Arc::new(OnceLock::new()),
+            tool_senders: None,
+            tool_sender_peers: None,
             chains: Arc::new(ChainTracker::new()),
             local_host: None,
         }
@@ -110,6 +118,24 @@ impl StorageAndNudgeRouter {
                 "install the cron scheduler once during daemon startup",
             )
         })
+    }
+
+    /// Installs the adapter-owned signed tool-sender registry. Protected
+    /// installer trust loading remains the composition root's responsibility.
+    #[must_use]
+    pub fn with_tool_sender_registry(mut self, registry: Arc<dyn ToolSenderRegistry>) -> Self {
+        self.hooks.tool_senders = Some(registry);
+        self
+    }
+
+    /// Installs durable peer tool-sender attestation admission.
+    #[must_use]
+    pub fn with_tool_sender_peer_admission(
+        mut self,
+        store: Arc<dyn ToolSenderPeerAdmissionStore>,
+    ) -> Self {
+        self.hooks.tool_sender_peers = Some(store);
+        self
     }
 
     /// A clone with no task filter, the only router an action or the filter's inner body may use.

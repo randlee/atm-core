@@ -29,7 +29,7 @@ use serde_json::{Value, json};
 
 use crate::{
     AtmTempSweeperRuntime, DaemonLaunchIdentity, DaemonWorkers,
-    cron_composition::{compose_cron, compose_runtime_cron, run_shutdown_steps, start_cron_worker},
+    cron_composition::{compose_cron, run_shutdown_steps, start_cron_worker},
     replacement_handler::{
         ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
     },
@@ -81,8 +81,7 @@ impl World {
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
                 selector_factory: |_, _, _, _| {
-                    Arc::new(atm_core::boundary::NoopMessageReceivedHookSelector)
-                        as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                    crate::received_hook_selector::ReceivedHookTransports::disabled_for_test()
                 },
                 daemon_launch_identity: DaemonLaunchIdentity::default(),
                 peer_wire_mode: atm_core::peer_wire::PeerWireMode::plaintext_test(),
@@ -367,16 +366,7 @@ async fn filter_and_cron_share_one_runner_and_one_dispatcher() {
     assert!(Arc::ptr_eq(&world.runner, filter.runner()));
     assert!(Arc::ptr_eq(&world.dispatcher, filter.actions()));
     assert!(Arc::ptr_eq(&world.handler.hook_chains(), filter.chains()));
-    let cron = compose_runtime_cron(
-        &world.handler,
-        &world.runtime,
-        world.runner.clone(),
-        world.dispatcher.clone(),
-        Arc::new(ManualClock::new(now())),
-        Arc::new(SeqJitter::default()),
-        None,
-    )
-    .unwrap();
+    let cron = world.cron(Arc::new(ManualClock::new(now())));
     assert!(Arc::ptr_eq(cron.hook_runner(), filter.runner()));
     let expected: Arc<dyn atm_core::boundary::HookActionDispatcher> = filter.actions().clone();
     assert!(Arc::ptr_eq(cron.action_dispatcher(), &expected));

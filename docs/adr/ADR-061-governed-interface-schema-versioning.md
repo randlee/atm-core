@@ -50,9 +50,9 @@ approved that.
 `HERDR_MINIMUM_VERSION` is `0.8.0` today (`crates/atm-herdr/src/lib.rs`),
 set by Rand on 2026-09-05 from the M5 agents' drift review of Herdr
 v0.8.0..v0.8.2. The phase-ay plan lands the runtime checks around it (AY.1,
-AY.3). `STORAGE_SCHEMA_VERSION` does not exist yet and needs its own planned
-sprint; until it lands, the SQLite rules below are applied against the
-migration functions directly.
+AY.3). `STORAGE_SCHEMA_VERSION` is `2.1.0` in
+`crates/atm-storage-rusqlite/src/schema_version.rs`, persisted in
+`atm_storage_schema_version` after the registered schema migrations.
 
 ### D2. Classification
 
@@ -229,6 +229,15 @@ migration functions directly.
 
 ### D6. Storage-schema approval record
 
+- **2026-10-23 — Phase BK.10 signed tool-sender persistence:** additive
+  `tool_sender_install_receipt` and `tool_sender_runtime_binding` tables retain
+  exact operation receipts beside the existing nonce ledger. `CREATE TABLE IF
+  NOT EXISTS` keeps migration repeatable, and a pre-BK.10 binary ignores the
+  additional tables. Existing registration and historical mail rows are not
+  rewritten or deleted. Installer and runtime signatures use Ed25519 over the
+  ADR-066 canonical frames; this records completion of that algorithm choice
+  without changing the storage-neutral `atm-storage` contract.
+
 - **2026-10-18 — Phase bk (approved):** Fenix, as Phase bk lead, approved
   this additive schema change on PR #1877 (`docs/plans/phase-bk/design.md`
   §4, ADR-068 D5, ADR-069 D1). `hook_registration` (primary key
@@ -241,6 +250,15 @@ migration functions directly.
   after both tables exist. Sprint bk-1 owns the store traits, not this
   SQLite schema proof. No
   `STORAGE_SCHEMA_VERSION` is added, for the reason given under Phase BB.1.
+- **2026-10-23 — Phase BK storage-version record:** Following the approved
+  Phase BA SQLite MAJOR schema change, the installed additive hook, cron,
+  sender registry, nonce ledger, and delivery-intent tables are recorded as
+  storage schema `2.1.0`. `atm-storage-rusqlite` persists the version after
+  schema ensures complete. The deterministic pre-BK consumer proof is
+  `crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`.
+  It verifies the five additive tables and recorded version, then replays the
+  frozen pre-BK DDL and confirms the old consumer can still read and write its
+  supported tables.
 - **2026-09-12 — Phase BB.6 (approved):** Fenix, as Phase BB lead, approved
   this additive schema change through ATM on team `atm-dev`. `prompt_handoffs`
   and its task lookup index are additive SQLite MINOR schema objects. The table
@@ -305,3 +323,31 @@ migration functions directly.
   against the previous release binary.
 - Plan documents must list their intended interface changes so phase-end
   drift review has something to diff against.
+
+### 2026-10-23 — Phase BK.9 tool/cron contract records
+
+- **SQLite, additive MINOR implemented:** `STORAGE_SCHEMA_VERSION = 2.1.0`
+  records the installed additive hook, cron, sender registry, nonce ledger,
+  and delivery-intent tables after migration. The deterministic previous-
+  consumer proof is `crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`; it opens both empty and seeded frozen pre-BK databases, verifies installed tables and version, and proves the old DDL/column set continues reading and writing its supported tables.
+- **Hook schema, additive MINOR:** cron-only reply schema `1.1.0` adds optional
+  `cron-output`; old replies without it remain valid and task-hook reply
+  grammar is unchanged. Duplicate-key rejection is a separately reviewed
+  validation tightening and requires an explicit coexistence decision before
+  release if old modules can emit duplicates.
+- **HTTP/peer, planned additive MINOR:** BK-9 freezes the installer/runtime
+  proof DTOs and local-only `/v1/atm/tool-senders` contract in both OpenAPI
+  documents. The endpoint and optional `WriteRequest.tool_runtime_proof` and
+  `WriteRequest.tool_sender_attestation` fields are additive and classified as
+  HTTP API **1.17.0 MINOR**, targeted for BK-14 implementation. This contract
+  record does not claim those wire elements are available in the shipped
+  **1.16.0** API: `HTTP_API_VERSION` and the OpenAPI `info.version` remain
+  1.16.0 on the BK-9 contract layer. BK-14 must ship the 1.17.0 version bump,
+  implementation, and a pinned 1.16 previous-consumer proof together. Ordinary
+  1.16 writes omit both proof fields; virtual plug-in writes require a runtime
+  proof, and cross-host virtual writes require an origin-daemon attestation
+  once the 1.17.0 wire is implemented.
+- **Breaking cutover:** retirement of physical `tool` credentials and ingress
+  rejection of newly supplied bare `@tool` addresses require recorded approval,
+  inventory-backed coexistence, and a migration window; this record does not
+  approve cutover.

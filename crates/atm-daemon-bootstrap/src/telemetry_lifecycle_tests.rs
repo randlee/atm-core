@@ -177,7 +177,11 @@ impl Daemon {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(observability.clone()),
-                selector_factory: move |_, _, _, _| selector,
+                selector_factory: move |_, _, _, _| {
+                    crate::received_hook_selector::ReceivedHookTransports::with_selector_for_test(
+                        selector,
+                    )
+                },
                 daemon_launch_identity: DaemonLaunchIdentity::default(),
                 peer_wire_mode: atm_core::peer_wire::PeerWireMode::plaintext_test(),
                 peer_adapter_selection: SelectedPeerAdapterSelection {

@@ -9,6 +9,7 @@
 
 mod analyst_query;
 mod cron_schedule_store;
+mod cron_transition_store;
 mod diagnostic_timeline;
 mod graft_receiver_endpoint_schema;
 mod graft_receiver_endpoint_store;
@@ -28,6 +29,7 @@ mod reader_pool;
 pub mod roster_runtime;
 mod roster_store;
 mod schema_support;
+mod schema_version;
 mod search_reader;
 mod search_schema;
 mod search_store;
@@ -47,9 +49,14 @@ mod template_catalog_store;
 mod template_override_migration;
 #[cfg(any(test, feature = "test-support"))]
 mod test_support;
+mod tool_sender_peer_admission;
+mod tool_sender_registry;
 mod writer;
 
 pub use reader_pool::{ReaderLaneMetricsSnapshot, ReaderLanesMetricsSnapshot};
+pub use schema_version::STORAGE_SCHEMA_VERSION;
+pub use tool_sender_peer_admission::{ToolSenderPeerAdmissionConfig, TrustedToolOriginKey};
+pub use tool_sender_registry::{ToolSenderRegistryConfig, TrustedToolInstallerKey};
 
 pub use crate::analyst_query::open_analyst_query_store;
 #[cfg(feature = "test-support")]
@@ -73,14 +80,16 @@ use atm_storage::contract::{
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{
-    AsyncMessageSearchStore, CronScheduleStore, HookRegistrationStore, MessageSearchStore,
-    TaskStore, TemplateCatalogStore,
+    AsyncMessageSearchStore, CronScheduleStore, CronTransitionStore, HookRegistrationStore,
+    MessageSearchStore, TaskStore, TemplateCatalogStore, ToolSenderPeerAdmissionStore,
+    ToolSenderRegistry,
 };
 use atm_storage::{
     AtmError, EffectiveReaderPool, EffectiveReaderPoolMetrics, IsoTimestamp, StorageFactory,
     StorageHandleParts, StorageHandles,
 };
 use cron_schedule_store::cron_schedule_store;
+use cron_transition_store::cron_transition_store;
 pub use diagnostic_timeline::{
     DIAGNOSTIC_DETAIL_MAX_BYTES, DIAGNOSTIC_MAX_AGE_DAYS, DIAGNOSTIC_MAX_ROWS,
     DIAGNOSTIC_PRUNE_BATCH, DIAGNOSTIC_PRUNE_CHECK_EVERY, SqliteDiagnosticTimeline,
@@ -88,7 +97,6 @@ pub use diagnostic_timeline::{
 use graft_receiver_endpoint_store::SqliteGraftReceiverEndpointStore;
 use hook_registration_store::hook_registration_store;
 use rusqlite::{Connection, OptionalExtension, params};
-use search_schema::delete_message_projection;
 use search_store::{async_search_store, search_store};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
@@ -100,6 +108,8 @@ pub use test_support::{
     inspect_mail_message_state_columns_for_test, inspect_message_ack_state_for_test,
     inspect_pending_marker_state_for_test, inspect_template_admission_for_test,
 };
+use tool_sender_peer_admission::tool_sender_peer_admission_store;
+use tool_sender_registry::tool_sender_registry;
 pub use writer::DiagnosticTimelinePersistenceStats;
 
 #[cfg(any(test, feature = "test-support"))]
@@ -623,25 +633,20 @@ impl MessageStore for SqliteMessageStore {
     }
 
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError> {
-        self.db.with_transaction(|transaction| {
-            delete_message_projection(transaction, self.db.target(), key.as_str())?;
-            transaction
-                .execute(
-                    "DELETE FROM mail_message_states WHERE message_key = ?1;",
-                    params![key.as_ref()],
-                )
-                .map_err(|error| {
-                    self.db
-                        .error("failed to delete sqlite message state", error)
-                })?;
-            transaction
-                .execute(
-                    "DELETE FROM mail_messages WHERE message_key = ?1;",
-                    params![key.as_ref()],
-                )
-                .map_err(|error| self.db.error("failed to delete sqlite message", error))?;
-            Ok(())
-        })
+        self.delete_message_with_origin(key, atm_storage::MessageWriteOrigin::Local)
+    }
+
+    fn delete_message_with_origin(
+        &self,
+        key: &MessageKey,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
+        if matches!(origin, atm_storage::MessageWriteOrigin::Peer) {
+            return Err(AtmError::validation(
+                "peer provenance cannot delete local messages",
+            ));
+        }
+        self.db.submit_delete_message(key.clone(), origin)
     }
 }
 
@@ -653,8 +658,29 @@ impl AsyncMessageStore for SqliteMessageStore {
         message_ids: Vec<MessageKey>,
         seen_watermark: Option<IsoTimestamp>,
     ) -> Result<(), AtmError> {
+        self.apply_read_display_state_with_origin_async(
+            scope,
+            message_ids,
+            seen_watermark,
+            atm_storage::MessageWriteOrigin::Local,
+        )
+        .await
+    }
+
+    async fn apply_read_display_state_with_origin_async(
+        &self,
+        scope: MailboxScope,
+        message_ids: Vec<MessageKey>,
+        seen_watermark: Option<IsoTimestamp>,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
+        if matches!(origin, atm_storage::MessageWriteOrigin::Peer) {
+            return Err(AtmError::validation(
+                "peer provenance cannot update local mailbox display state",
+            ));
+        }
         self.db
-            .submit_read_display_state_async(scope, message_ids, seen_watermark)
+            .submit_read_display_state_async(scope, message_ids, seen_watermark, origin)
             .await
     }
 
@@ -691,7 +717,25 @@ impl AsyncMessageStore for SqliteMessageStore {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
     ) -> Result<atm_storage::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
-        self.db.submit_acknowledgement_async(source, builder).await
+        self.db
+            .submit_acknowledgement_async(source, builder, atm_storage::MessageWriteOrigin::Local)
+            .await
+    }
+
+    async fn acknowledge_message_atomically_with_origin_async(
+        &self,
+        source: AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
+        if matches!(origin, atm_storage::MessageWriteOrigin::Peer) {
+            return Err(AtmError::validation(
+                "peer provenance cannot acknowledge local messages",
+            ));
+        }
+        self.db
+            .submit_acknowledgement_async(source, builder, origin)
+            .await
     }
 }
 
@@ -704,6 +748,9 @@ pub struct SqliteStorageBackend {
     task_store: Arc<SqliteTaskStore>,
     hook_registration_store: Arc<dyn HookRegistrationStore + Send + Sync>,
     cron_schedule_store: Arc<dyn CronScheduleStore + Send + Sync>,
+    cron_transition_store: Arc<dyn CronTransitionStore + Send + Sync>,
+    tool_sender_registry: Arc<dyn ToolSenderRegistry + Send + Sync>,
+    tool_sender_peer_admission_store: Arc<dyn ToolSenderPeerAdmissionStore + Send + Sync>,
     graft_receiver_endpoint_store: Arc<SqliteGraftReceiverEndpointStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
     template_catalog_store: Arc<dyn TemplateCatalogStore>,
@@ -727,6 +774,8 @@ impl std::fmt::Debug for SqliteStorageBackend {
 pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
     read_pool_config: reader_pool::SharedReadPoolConfig,
+    tool_sender_registry_config: Option<ToolSenderRegistryConfig>,
+    tool_sender_peer_admission_config: Option<ToolSenderPeerAdmissionConfig>,
     observability: Arc<dyn SqliteObservability>,
     timeline_observer: Option<Arc<dyn Fn(Arc<SqliteDiagnosticTimeline>) + Send + Sync>>,
 }
@@ -736,6 +785,8 @@ impl Default for SqliteStorageFactory {
         Self {
             database_path: None,
             read_pool_config: reader_pool::SharedReadPoolConfig::default(),
+            tool_sender_registry_config: None,
+            tool_sender_peer_admission_config: None,
             observability: Arc::new(observability::PassiveSqliteObservability),
             timeline_observer: None,
         }
@@ -747,6 +798,8 @@ impl Clone for SqliteStorageFactory {
         Self {
             database_path: self.database_path.clone(),
             read_pool_config: self.read_pool_config,
+            tool_sender_registry_config: self.tool_sender_registry_config.clone(),
+            tool_sender_peer_admission_config: self.tool_sender_peer_admission_config.clone(),
             observability: Arc::clone(&self.observability),
             timeline_observer: self.timeline_observer.as_ref().map(Arc::clone),
         }
@@ -781,6 +834,23 @@ impl SqliteStorageFactory {
     /// composition root. Tests retain the null adapter by default.
     pub fn with_observability(mut self, observability: Arc<dyn SqliteObservability>) -> Self {
         self.observability = observability;
+        self
+    }
+
+    /// Supplies the local, adapter-owned trust root for signed virtual senders.
+    /// Without it, signed registration and runtime admission fail closed.
+    pub fn with_tool_sender_registry_config(mut self, config: ToolSenderRegistryConfig) -> Self {
+        self.tool_sender_registry_config = Some(config);
+        self
+    }
+
+    /// Supplies the immutable enrolled origin-host keys and sender policy for
+    /// peer attestation verification. Protected loading stays in daemon composition.
+    pub fn with_tool_sender_peer_admission_config(
+        mut self,
+        config: ToolSenderPeerAdmissionConfig,
+    ) -> Self {
+        self.tool_sender_peer_admission_config = Some(config);
         self
     }
 
@@ -825,6 +895,8 @@ impl StorageFactory for SqliteStorageFactory {
                 self.database_path(durable_state_root),
                 Arc::clone(&self.observability),
                 self.read_pool_config,
+                self.tool_sender_registry_config.clone(),
+                self.tool_sender_peer_admission_config.clone(),
             )?,
         );
         if let Some(observer) = &self.timeline_observer {
@@ -869,6 +941,7 @@ impl StorageFactory for SqliteStorageFactory {
             task_store: backend.task_store(),
             hook_registration_store: backend.hook_registration_store(),
             cron_schedule_store: backend.cron_schedule_store(),
+            cron_transition_store: backend.cron_transition_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
@@ -886,6 +959,23 @@ impl SqliteStorageBackend {
         Self::new_with_observability(path, Arc::new(observability::PassiveSqliteObservability))
     }
 
+    /// Opens a backend with protected virtual-sender trust roots. Daemon
+    /// composition supplies these values after loading host-local secrets and
+    /// peer enrollment policy; request data cannot populate either policy.
+    pub fn new_with_tool_sender_configs(
+        path: impl AsRef<Path>,
+        registry_config: Option<ToolSenderRegistryConfig>,
+        peer_admission_config: Option<ToolSenderPeerAdmissionConfig>,
+    ) -> Result<Self, AtmError> {
+        Self::new_with_observability_and_read_pool_config(
+            path,
+            Arc::new(observability::PassiveSqliteObservability),
+            reader_pool::SharedReadPoolConfig::default(),
+            registry_config,
+            peer_admission_config,
+        )
+    }
+
     pub fn new_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
@@ -894,6 +984,8 @@ impl SqliteStorageBackend {
             path,
             observability,
             reader_pool::SharedReadPoolConfig::default(),
+            None,
+            None,
         )
     }
 
@@ -901,6 +993,8 @@ impl SqliteStorageBackend {
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
         read_pool_config: reader_pool::SharedReadPoolConfig,
+        tool_sender_registry_config: Option<ToolSenderRegistryConfig>,
+        tool_sender_peer_admission_config: Option<ToolSenderPeerAdmissionConfig>,
     ) -> Result<Self, AtmError> {
         let db = Arc::new(SharedDb::open_with_reader_lanes(
             path,
@@ -920,6 +1014,15 @@ impl SqliteStorageBackend {
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             hook_registration_store: hook_registration_store(Arc::clone(&db)),
             cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
+            cron_transition_store: cron_transition_store(Arc::clone(&db)),
+            tool_sender_registry: tool_sender_registry(
+                Arc::clone(&db),
+                tool_sender_registry_config,
+            ),
+            tool_sender_peer_admission_store: tool_sender_peer_admission_store(
+                Arc::clone(&db),
+                tool_sender_peer_admission_config,
+            ),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -948,6 +1051,12 @@ impl SqliteStorageBackend {
             task_store: Arc::new(SqliteTaskStore::new(Arc::clone(&db))),
             hook_registration_store: hook_registration_store(Arc::clone(&db)),
             cron_schedule_store: cron_schedule_store(Arc::clone(&db)),
+            cron_transition_store: cron_transition_store(Arc::clone(&db)),
+            tool_sender_registry: tool_sender_registry(Arc::clone(&db), None),
+            tool_sender_peer_admission_store: tool_sender_peer_admission_store(
+                Arc::clone(&db),
+                None,
+            ),
             graft_receiver_endpoint_store: Arc::new(SqliteGraftReceiverEndpointStore::new(
                 Arc::clone(&db),
             )),
@@ -1020,6 +1129,22 @@ impl SqliteStorageBackend {
 
     pub fn cron_schedule_store(&self) -> Arc<dyn CronScheduleStore + Send + Sync> {
         self.cron_schedule_store.clone()
+    }
+
+    /// Returns the durable transition and delivery-intent adapter.
+    pub fn cron_transition_store(&self) -> Arc<dyn CronTransitionStore + Send + Sync> {
+        self.cron_transition_store.clone()
+    }
+
+    /// Returns the persisted, inspection-only tool-sender registry adapter.
+    pub fn tool_sender_registry(&self) -> Arc<dyn ToolSenderRegistry + Send + Sync> {
+        self.tool_sender_registry.clone()
+    }
+
+    pub fn tool_sender_peer_admission_store(
+        &self,
+    ) -> Arc<dyn ToolSenderPeerAdmissionStore + Send + Sync> {
+        self.tool_sender_peer_admission_store.clone()
     }
 
     pub fn graft_receiver_endpoint_store(
@@ -1213,6 +1338,7 @@ mod tests {
                 actor: "lead".parse().expect("actor"),
                 target,
                 at: IsoTimestamp::now(),
+                provenance: MessageWriteOrigin::Local,
             })? {
             crate::writer::WriteOpResult::TaskMoved(record) => Ok(record.to),
             _ => panic!("wrong writer result"),

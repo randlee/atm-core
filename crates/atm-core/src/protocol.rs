@@ -39,6 +39,7 @@ pub use atm_storage::{
     RuntimeObservationAvailability, RuntimeObservationSource,
 };
 use atm_storage::{MoveTarget, QueuePosition};
+pub use atm_storage::{ToolInstallReceipt, ToolInstallerRequest};
 
 /// Body representation for the local graft receiver lookup route.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -86,6 +87,8 @@ pub enum RequestEnvelope {
     CronStart(CronStartRequest),
     CronEnd(CronEndRequest),
     CronList(CronListQuery),
+    ToolSenderApply(ToolInstallerRequest),
+    ToolSenderUnregister(ToolInstallerRequest),
 }
 
 /// Shared protocol response envelope.
@@ -113,13 +116,14 @@ pub enum ResponseEnvelope {
     CronStarted(CronSchedule),
     CronList(Vec<CronSchedule>),
     CronEnded(Vec<CronSchedule>),
+    ToolSenderApplied(ToolInstallReceipt),
     /// Hook actions ran in place of the hooked command; the count is also sent in `X-ATM-Hook-Actions`.
     HookActions(HookActionsResponse),
     Error(AtmError),
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.16.0";
+pub const HTTP_API_VERSION: &str = "1.17.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskMoveRequest {
@@ -1043,6 +1047,8 @@ mod tests {
             RequestEnvelope::CronStart(_) => "CronStart",
             RequestEnvelope::CronEnd(_) => "CronEnd",
             RequestEnvelope::CronList(_) => "CronList",
+            RequestEnvelope::ToolSenderApply(_) => "ToolSenderApply",
+            RequestEnvelope::ToolSenderUnregister(_) => "ToolSenderUnregister",
         }
     }
 
@@ -1073,6 +1079,7 @@ mod tests {
             ResponseEnvelope::CronStarted(_) => "CronStarted",
             ResponseEnvelope::CronList(_) => "CronList",
             ResponseEnvelope::CronEnded(_) => "CronEnded",
+            ResponseEnvelope::ToolSenderApplied(_) => "ToolSenderApplied",
         }
     }
 

@@ -1,0 +1,752 @@
+{
+  "schema_version": 1,
+  "commands": [
+    {
+      "id": "start-until-hook",
+      "argv": [
+        "cron",
+        "start",
+        "nightly",
+        "--cron",
+        "0 */5 * * * *",
+        "--module",
+        "./cron.py",
+        "--phase",
+        "bk",
+        "--cwd",
+        ".",
+        "--until-hook",
+        "--arg",
+        "status",
+        "--arg",
+        "--json",
+        "--custom",
+        "{\"goal\":\"ship\"}"
+      ],
+      "valid": true,
+      "checks": [
+        "six-fields",
+        "relative-module-and-cwd",
+        "repeated-arg-including-hyphen-value",
+        "custom-object",
+        "until-hook"
+      ]
+    },
+    {
+      "id": "start-until-utc",
+      "argv": [
+        "cron",
+        "start",
+        "reminder",
+        "--cron",
+        "0 0 2 * * * 2030",
+        "--module",
+        "./cron.py",
+        "--phase",
+        "bk",
+        "--until",
+        "2030-11-01T02:00:00+02:00"
+      ],
+      "valid": true,
+      "checks": [
+        "seven-fields",
+        "rfc3339-normalizes-to-utc",
+        "until"
+      ]
+    },
+    {
+      "id": "start-alias",
+      "argv": [
+        "cron",
+        "start",
+        "hourly",
+        "--cron",
+        "@hourly",
+        "--module",
+        "./cron.py",
+        "--phase",
+        "bk",
+        "--until-hook"
+      ],
+      "valid": true,
+      "checks": [
+        "supported-alias"
+      ]
+    },
+    {
+      "id": "list-json",
+      "argv": [
+        "cron",
+        "list",
+        "--phase",
+        "bk",
+        "--json"
+      ],
+      "valid": true,
+      "checks": [
+        "list-filter",
+        "json"
+      ]
+    },
+    {
+      "id": "end-one",
+      "argv": [
+        "cron",
+        "end",
+        "--phase",
+        "bk",
+        "nightly"
+      ],
+      "valid": true,
+      "checks": [
+        "manual-stop-one"
+      ]
+    },
+    {
+      "id": "end-phase",
+      "argv": [
+        "cron",
+        "end",
+        "--phase",
+        "bk"
+      ],
+      "valid": true,
+      "checks": [
+        "manual-stop-phase"
+      ]
+    },
+    {
+      "id": "reject-five-fields",
+      "expression": "* * * * *",
+      "valid": false,
+      "deferred_execution": false
+    },
+    {
+      "id": "reject-missing-stop",
+      "argv": [
+        "cron",
+        "start",
+        "bad",
+        "--cron",
+        "0 * * * * *",
+        "--module",
+        "./cron.py",
+        "--phase",
+        "bk"
+      ],
+      "valid": false,
+      "checks": [
+        "exactly-one-stop"
+      ]
+    },
+    {
+      "id": "reject-both-stops",
+      "argv": [
+        "cron",
+        "start",
+        "bad",
+        "--cron",
+        "0 * * * * *",
+        "--module",
+        "./cron.py",
+        "--phase",
+        "bk",
+        "--until",
+        "2030-11-01T00:00:00Z",
+        "--until-hook"
+      ],
+      "valid": false,
+      "checks": [
+        "mutually-exclusive-stop-flags"
+      ]
+    },
+    {
+      "id": "reject-invalid-custom",
+      "argv": [
+        "cron",
+        "start",
+        "bad",
+        "--cron",
+        "0 * * * * *",
+        "--module",
+        "./cron.py",
+        "--phase",
+        "bk",
+        "--until-hook",
+        "--custom",
+        "[1]"
+      ],
+      "valid": false,
+      "checks": [
+        "custom-must-be-object"
+      ]
+    },
+    {
+      "id": "reject-foreign-from",
+      "classification": "rejection",
+      "deferred_execution": true,
+      "reply": {
+        "result": "handled",
+        "atm-action": [
+          {
+            "command": "send",
+            "from": "other@atm-dev",
+            "request": {
+              "to": "team-lead",
+              "message": "status"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "reject-malformed-output",
+      "classification": "rejection",
+      "deferred_execution": true,
+      "reply": {
+        "result": "pass-through",
+        "cron-output": [
+          {
+            "kind": "message",
+            "body": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "hook-register-json-contract",
+      "argv": [
+        "hook",
+        "register",
+        "task.close",
+        "--module",
+        "./hooks.py",
+        "--phase",
+        "bk",
+        "--json"
+      ],
+      "valid": true,
+      "deferred_execution": true,
+      "checks": [
+        "frozen-bk9-register-json"
+      ]
+    },
+    {
+      "id": "hook-disable-one-json-contract",
+      "argv": [
+        "hook",
+        "disable",
+        "--phase",
+        "bk",
+        "task.close",
+        "--json"
+      ],
+      "valid": true,
+      "deferred_execution": true,
+      "checks": [
+        "frozen-bk9-disable-single-json"
+      ]
+    },
+    {
+      "id": "hook-disable-phase-json-contract",
+      "argv": [
+        "hook",
+        "disable",
+        "--phase",
+        "bk",
+        "--json"
+      ],
+      "valid": true,
+      "deferred_execution": true,
+      "checks": [
+        "frozen-bk9-disable-phase-json"
+      ]
+    },
+    {
+      "id": "hook-disable-no-match-json-contract",
+      "argv": [
+        "hook",
+        "disable",
+        "--phase",
+        "missing",
+        "--json"
+      ],
+      "valid": true,
+      "deferred_execution": true,
+      "checks": [
+        "frozen-bk9-disable-empty-json"
+      ]
+    }
+  ],
+  "expressions": [
+    {
+      "id": "six-field",
+      "value": "0 */5 * * * *",
+      "valid": true
+    },
+    {
+      "id": "seven-field",
+      "value": "0 0 2 * * * 2030",
+      "valid": true
+    },
+    {
+      "id": "alias-yearly",
+      "value": "@yearly",
+      "valid": true
+    },
+    {
+      "id": "alias-monthly",
+      "value": "@monthly",
+      "valid": true
+    },
+    {
+      "id": "alias-weekly",
+      "value": "@weekly",
+      "valid": true
+    },
+    {
+      "id": "alias-daily",
+      "value": "@daily",
+      "valid": true
+    },
+    {
+      "id": "alias-hourly",
+      "value": "@hourly",
+      "valid": true
+    },
+    {
+      "id": "five-field",
+      "value": "* * * * *",
+      "valid": false
+    },
+    {
+      "id": "malformed",
+      "value": "x y",
+      "valid": false
+    }
+  ],
+  "replies": [
+    {
+      "id": "pass-through",
+      "hook": "cron.tick",
+      "json": {
+        "result": "pass-through"
+      },
+      "expected_outcome": "ok",
+      "outputs": []
+    },
+    {
+      "id": "handled-explicit-creator",
+      "hook": "cron.tick",
+      "json": {
+        "result": "handled",
+        "atm-action": [
+          {
+            "command": "send",
+            "from": "creator@atm-dev",
+            "request": {
+              "home_dir": "/repo",
+              "current_dir": "/repo",
+              "caller_identity": "cron",
+              "caller_team": "atm-dev",
+              "to": "team-lead@atm-dev",
+              "message_source": {
+                "Inline": "Nightly check complete"
+              },
+              "classification": {
+                "category": null,
+                "tags": [],
+                "content_format": null
+              },
+              "summary_override": null,
+              "requires_ack": false,
+              "task_id": null,
+              "dry_run": false
+            }
+          }
+        ]
+      },
+      "expected_outcome": "actions: 1",
+      "outputs": []
+    },
+    {
+      "id": "custom-error-output",
+      "hook": "cron.tick",
+      "json": {
+        "result": "pass-through",
+        "cron-output": [
+          {
+            "kind": "error",
+            "body": "One source is unavailable"
+          }
+        ]
+      },
+      "expected_outcome": "ok",
+      "outputs": [
+        {
+          "sender": "cron@tool",
+          "recipient": "creator@atm-dev",
+          "category": "cron",
+          "tag": "output:error",
+          "body": "One source is unavailable"
+        }
+      ]
+    },
+    {
+      "id": "custom-message-output",
+      "hook": "cron.tick",
+      "json": {
+        "result": "pass-through",
+        "cron-output": [
+          {
+            "kind": "message",
+            "body": "All checks passed"
+          }
+        ]
+      },
+      "expected_outcome": "ok",
+      "outputs": [
+        {
+          "sender": "cron@tool",
+          "recipient": "creator@atm-dev",
+          "category": "cron",
+          "tag": "output:message",
+          "body": "All checks passed"
+        }
+      ]
+    },
+    {
+      "id": "message-output",
+      "hook": "cron.tick",
+      "json": {
+        "result": "pass-through",
+        "cron-output": [
+          {
+            "kind": "message",
+            "body": "All checks passed"
+          }
+        ]
+      },
+      "expected_outcome": "ok",
+      "outputs": [
+        {
+          "sender": "cron@tool",
+          "recipient": "creator@atm-dev",
+          "category": "cron",
+          "tag": "output:message",
+          "body": "All checks passed"
+        }
+      ]
+    },
+    {
+      "id": "stop-true",
+      "hook": "cron.stop",
+      "json": {
+        "stop": true,
+        "reason": "phase complete",
+        "cron-output": [
+          {
+            "kind": "message",
+            "body": "Phase complete"
+          }
+        ]
+      },
+      "expected_outcome": "stopped: phase complete",
+      "outputs": [
+        {
+          "sender": "cron@tool",
+          "recipient": "creator@atm-dev",
+          "category": "cron",
+          "tag": "output:message",
+          "body": "Phase complete"
+        }
+      ]
+    },
+    {
+      "id": "stop-false",
+      "hook": "cron.stop",
+      "json": {
+        "stop": false
+      },
+      "expected_outcome": "continue",
+      "outputs": []
+    }
+  ],
+  "registration": {
+    "register": {
+      "action": "hook.register",
+      "registration": {
+        "team": "atm-dev",
+        "phase": "bk",
+        "hook": "task.close",
+        "module_path": "/repo/hooks.py",
+        "cwd": "/repo",
+        "timeout_ms": 2500,
+        "custom": {},
+        "active": true,
+        "registered_by": "trinity",
+        "registered_at": "2026-10-23T00:00:00Z",
+        "disabled_at": null
+      }
+    },
+    "disable_one": {
+      "action": "hook.disable",
+      "disabled": [
+        {
+          "team": "atm-dev",
+          "phase": "bk",
+          "hook": "task.close",
+          "module_path": "/repo/hooks.py",
+          "cwd": "/repo",
+          "timeout_ms": 2500,
+          "custom": {},
+          "active": false,
+          "registered_by": "trinity",
+          "registered_at": "2026-10-23T00:00:00Z",
+          "disabled_at": "2026-10-23T01:00:00Z"
+        }
+      ],
+      "count": 1
+    },
+    "disable_phase": {
+      "action": "hook.disable",
+      "disabled": [
+        {
+          "team": "atm-dev",
+          "phase": "bk",
+          "hook": "task.close",
+          "module_path": "/repo/hooks.py",
+          "cwd": "/repo",
+          "timeout_ms": 2500,
+          "custom": {},
+          "active": false,
+          "registered_by": "trinity",
+          "registered_at": "2026-10-23T00:00:00Z",
+          "disabled_at": "2026-10-23T01:00:00Z"
+        },
+        {
+          "team": "atm-dev",
+          "phase": "bj",
+          "hook": "task.start",
+          "module_path": "/repo/hooks.py",
+          "cwd": "/repo",
+          "timeout_ms": 2500,
+          "custom": {},
+          "active": false,
+          "registered_by": "trinity",
+          "registered_at": "2026-10-23T00:00:00Z",
+          "disabled_at": "2026-10-23T01:00:00Z"
+        }
+      ],
+      "count": 2
+    },
+    "disable_no_match": {
+      "action": "hook.disable",
+      "disabled": [],
+      "count": 0
+    }
+  },
+  "examples": [
+    {
+      "id": "command.start-until-hook",
+      "file": "cron.md",
+      "language": "bash",
+      "text": "atm cron start nightly --cron \"0 */5 * * * *\" --module ./cron.py --phase bk --cwd . --until-hook --arg status --arg --json --custom '{\"goal\":\"ship\"}'",
+      "command_id": "start-until-hook"
+    },
+    {
+      "id": "command.start-until-utc",
+      "file": "cron.md",
+      "language": "bash",
+      "text": "atm cron start reminder --cron \"0 0 2 * * * 2030\" --module ./cron.py --phase bk --until 2030-11-01T02:00:00+02:00",
+      "command_id": "start-until-utc"
+    },
+    {
+      "id": "command.list-json",
+      "file": "cron.md",
+      "language": "bash",
+      "text": "atm cron list --phase bk --json",
+      "command_id": "list-json"
+    },
+    {
+      "id": "command.end-one",
+      "file": "cron.md",
+      "language": "bash",
+      "text": "atm cron end --phase bk nightly",
+      "command_id": "end-one"
+    },
+    {
+      "id": "command.end-phase",
+      "file": "cron.md",
+      "language": "bash",
+      "text": "atm cron end --phase bk",
+      "command_id": "end-phase"
+    },
+    {
+      "id": "command.start-alias",
+      "file": "cron.md",
+      "language": "bash",
+      "text": "atm cron start hourly --cron @hourly --module ./cron.py --phase bk --until-hook",
+      "command_id": "start-alias"
+    },
+    {
+      "id": "expression.supported",
+      "file": "cron.md",
+      "language": "text",
+      "text": "0 */5 * * * *\n0 0 2 * * * 2030\n@yearly\n@monthly\n@weekly\n@daily\n@hourly",
+      "expression_ids": [
+        "six-field",
+        "seven-field",
+        "alias-yearly",
+        "alias-monthly",
+        "alias-weekly",
+        "alias-daily",
+        "alias-hourly"
+      ]
+    },
+    {
+      "id": "expression.five-field-rejected",
+      "file": "cron.md",
+      "language": "text",
+      "text": "* * * * *",
+      "expression_ids": [
+        "five-field"
+      ]
+    },
+    {
+      "id": "reply.handled-explicit-creator",
+      "file": "cron.md",
+      "language": "json",
+      "text": "{\n  \"result\": \"handled\",\n  \"atm-action\": [\n    {\n      \"command\": \"send\",\n      \"from\": \"creator@atm-dev\",\n      \"request\": {\n        \"home_dir\": \"/repo\",\n        \"current_dir\": \"/repo\",\n        \"caller_identity\": \"cron\",\n        \"caller_team\": \"atm-dev\",\n        \"to\": \"team-lead@atm-dev\",\n        \"message_source\": {\n          \"Inline\": \"Nightly check complete\"\n        },\n        \"classification\": {\n          \"category\": null,\n          \"tags\": [],\n          \"content_format\": null\n        },\n        \"summary_override\": null,\n        \"requires_ack\": false,\n        \"task_id\": null,\n        \"dry_run\": false\n      }\n    }\n  ]\n}",
+      "reply_id": "handled-explicit-creator"
+    },
+    {
+      "id": "rejection.foreign-from",
+      "file": "cron.md",
+      "language": "json",
+      "text": "{\n  \"result\": \"handled\",\n  \"atm-action\": [\n    {\n      \"command\": \"send\",\n      \"from\": \"other@atm-dev\",\n      \"request\": {\n        \"to\": \"team-lead\",\n        \"message\": \"status\"\n      }\n    }\n  ]\n}",
+      "command_id": "reject-foreign-from"
+    },
+    {
+      "id": "reply.custom-message-output",
+      "file": "cron.md",
+      "language": "json",
+      "text": "{\n  \"result\": \"pass-through\",\n  \"cron-output\": [\n    {\n      \"kind\": \"message\",\n      \"body\": \"All checks passed\"\n    }\n  ]\n}",
+      "reply_id": "custom-message-output"
+    },
+    {
+      "id": "reply.custom-error-output",
+      "file": "cron.md",
+      "language": "json",
+      "text": "{\n  \"result\": \"pass-through\",\n  \"cron-output\": [\n    {\n      \"kind\": \"error\",\n      \"body\": \"One source is unavailable\"\n    }\n  ]\n}",
+      "reply_id": "custom-error-output"
+    },
+    {
+      "id": "output.custom-error",
+      "file": "cron.md",
+      "language": "text",
+      "text": "From: cron@tool to creator@atm-dev\nCategory: cron\nTag: output:error\nBody: One source is unavailable"
+    },
+    {
+      "id": "rejection.malformed-output",
+      "file": "cron.md",
+      "language": "json",
+      "text": "{\n  \"result\": \"pass-through\",\n  \"cron-output\": [\n    {\n      \"kind\": \"message\",\n      \"body\": \"\"\n    }\n  ]\n}",
+      "command_id": "reject-malformed-output"
+    },
+    {
+      "id": "reply.stop-false",
+      "file": "cron.md",
+      "language": "json",
+      "text": "{\n  \"stop\": false\n}",
+      "reply_id": "stop-false"
+    },
+    {
+      "id": "reply.stop-true",
+      "file": "cron.md",
+      "language": "json",
+      "text": "{\n  \"stop\": true,\n  \"reason\": \"phase complete\",\n  \"cron-output\": [\n    {\n      \"kind\": \"message\",\n      \"body\": \"Phase complete\"\n    }\n  ]\n}",
+      "reply_id": "stop-true"
+    },
+    {
+      "id": "output.lifecycle-error",
+      "file": "cron.md",
+      "language": "xml",
+      "text": "<atm cron name=\"nightly\" event=\"error\" error=\"timeout: ATM_HOOK_TIMEOUT\">"
+    },
+    {
+      "id": "output.lifecycle-stopped",
+      "file": "cron.md",
+      "language": "xml",
+      "text": "<atm cron name=\"nightly\" event=\"stopped\" message=\"phase complete\">"
+    },
+    {
+      "id": "hook.register-json",
+      "file": "hooks.md",
+      "language": "json",
+      "text": "{\n  \"action\": \"hook.register\",\n  \"registration\": {\n    \"team\": \"atm-dev\",\n    \"phase\": \"bk\",\n    \"hook\": \"task.close\",\n    \"module_path\": \"/repo/hooks.py\",\n    \"cwd\": \"/repo\",\n    \"timeout_ms\": 2500,\n    \"custom\": {},\n    \"active\": true,\n    \"registered_by\": \"trinity\",\n    \"registered_at\": \"2026-10-23T00:00:00Z\",\n    \"disabled_at\": null\n  }\n}",
+      "registration_id": "register"
+    },
+    {
+      "id": "hook.disable-one",
+      "file": "hooks.md",
+      "language": "json",
+      "text": "{\n  \"action\": \"hook.disable\",\n  \"disabled\": [\n    {\n      \"team\": \"atm-dev\",\n      \"phase\": \"bk\",\n      \"hook\": \"task.close\",\n      \"module_path\": \"/repo/hooks.py\",\n      \"cwd\": \"/repo\",\n      \"timeout_ms\": 2500,\n      \"custom\": {},\n      \"active\": false,\n      \"registered_by\": \"trinity\",\n      \"registered_at\": \"2026-10-23T00:00:00Z\",\n      \"disabled_at\": \"2026-10-23T01:00:00Z\"\n    }\n  ],\n  \"count\": 1\n}",
+      "registration_id": "disable_one"
+    },
+    {
+      "id": "hook.disable-phase",
+      "file": "hooks.md",
+      "language": "json",
+      "text": "{\n  \"action\": \"hook.disable\",\n  \"disabled\": [\n    {\n      \"team\": \"atm-dev\",\n      \"phase\": \"bk\",\n      \"hook\": \"task.close\",\n      \"module_path\": \"/repo/hooks.py\",\n      \"cwd\": \"/repo\",\n      \"timeout_ms\": 2500,\n      \"custom\": {},\n      \"active\": false,\n      \"registered_by\": \"trinity\",\n      \"registered_at\": \"2026-10-23T00:00:00Z\",\n      \"disabled_at\": \"2026-10-23T01:00:00Z\"\n    },\n    {\n      \"team\": \"atm-dev\",\n      \"phase\": \"bj\",\n      \"hook\": \"task.start\",\n      \"module_path\": \"/repo/hooks.py\",\n      \"cwd\": \"/repo\",\n      \"timeout_ms\": 2500,\n      \"custom\": {},\n      \"active\": false,\n      \"registered_by\": \"trinity\",\n      \"registered_at\": \"2026-10-23T00:00:00Z\",\n      \"disabled_at\": \"2026-10-23T01:00:00Z\"\n    }\n  ],\n  \"count\": 2\n}",
+      "registration_id": "disable_phase"
+    },
+    {
+      "id": "hook.disable-no-match",
+      "file": "hooks.md",
+      "language": "json",
+      "text": "{\n  \"action\": \"hook.disable\",\n  \"disabled\": [],\n  \"count\": 0\n}",
+      "registration_id": "disable_no_match"
+    },
+    {
+      "id": "hook.register-command",
+      "file": "hooks.md",
+      "language": "bash",
+      "text": "atm hook register task.close --module ./hooks.py --phase bk --json",
+      "command_id": "hook-register-json-contract"
+    },
+    {
+      "id": "hook.disable-one-command",
+      "file": "hooks.md",
+      "language": "bash",
+      "text": "atm hook disable --phase bk task.close --json",
+      "command_id": "hook-disable-one-json-contract"
+    },
+    {
+      "id": "hook.disable-phase-command",
+      "file": "hooks.md",
+      "language": "bash",
+      "text": "atm hook disable --phase bk --json",
+      "command_id": "hook-disable-phase-json-contract"
+    },
+    {
+      "id": "hook.disable-no-match-command",
+      "file": "hooks.md",
+      "language": "bash",
+      "text": "atm hook disable --phase missing --json",
+      "command_id": "hook-disable-no-match-json-contract"
+    },
+    {
+      "id": "nudge.lifecycle-error",
+      "file": "nudge-templates.md",
+      "language": "xml",
+      "text": "<atm cron name=\"nightly\" event=\"error\" error=\"timeout: ATM_HOOK_TIMEOUT\">"
+    },
+    {
+      "id": "nudge.cron-template-commands",
+      "file": "nudge-templates.md",
+      "language": "bash",
+      "text": "atm teams set-nudge-template --team atm-dev --kind cron --template-body '<atm cron name=\"{{name}}\" event=\"{{event}}\" {{detail_attribute}}>'\natm teams disable-nudge-template --team atm-dev --kind cron\natm teams clear-nudge-template --team atm-dev --kind cron"
+    }
+  ]
+}

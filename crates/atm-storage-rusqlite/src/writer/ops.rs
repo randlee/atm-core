@@ -1,8 +1,11 @@
 use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
+
+#[path = "ops_admission.rs"]
+mod ops_admission;
 use crate::search_schema::{
-    InsertedMessageProjection, sync_inserted_message_projection, sync_message_projection_by_key,
-    sync_template_projection,
+    InsertedMessageProjection, delete_message_projection, sync_inserted_message_projection,
+    sync_message_projection_by_key, sync_template_projection,
 };
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_error, sqlite_thread_mode};
 use atm_storage::TaskCloseOutcome;
@@ -44,6 +47,11 @@ pub(crate) enum WriteOp {
         mailbox: MailboxScope,
         message_ids: Vec<MessageKey>,
         seen_watermark: Option<IsoTimestamp>,
+        provenance: MessageWriteOrigin,
+    },
+    DeleteMessage {
+        key: MessageKey,
+        provenance: MessageWriteOrigin,
     },
     UpsertMessage {
         record: Box<Message>,
@@ -56,6 +64,7 @@ pub(crate) enum WriteOp {
     Acknowledge {
         source: AcknowledgementSource,
         builder: Arc<dyn AcknowledgementReplyBuilder>,
+        provenance: MessageWriteOrigin,
     },
     TaskMove {
         team: TeamName,
@@ -63,6 +72,7 @@ pub(crate) enum WriteOp {
         actor: AgentName,
         target: MoveTarget,
         at: IsoTimestamp,
+        provenance: MessageWriteOrigin,
     },
     RegisterTemplate(Box<TemplateRegistration>),
     AdmitDecomposedMessage(Box<DecomposedMessageAdmission>),
@@ -82,12 +92,16 @@ impl std::fmt::Debug for WriteOp {
                 mailbox,
                 message_ids,
                 seen_watermark,
+                ..
             } => formatter
                 .debug_struct("ApplyReadDisplayState")
                 .field("mailbox", mailbox)
                 .field("message_ids", &message_ids.len())
                 .field("seen_watermark", seen_watermark)
                 .finish(),
+            Self::DeleteMessage { key, .. } => {
+                formatter.debug_tuple("DeleteMessage").field(key).finish()
+            }
             Self::UpsertMessage { .. } => formatter.write_str("UpsertMessage(..)"),
             Self::UpsertMessages(_) => formatter.write_str("UpsertMessages(..)"),
             Self::Acknowledge { source, .. } => formatter
@@ -134,6 +148,7 @@ impl std::fmt::Debug for WriteOp {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
     ReadDisplayStateApplied,
+    MessageDeleted,
     UpsertMessage {
         inserted: bool,
         /// Populated only when an immutable-key duplicate won the admission
@@ -176,18 +191,12 @@ pub(crate) fn execute(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     match op {
-        WriteOp::ApplyReadDisplayState {
-            mailbox,
-            message_ids,
-            seen_watermark,
-        } => super::read_display_state::execute_read_display_state(
-            mailbox,
-            message_ids,
-            *seen_watermark,
-            connection,
-            cache,
-            target,
-        ),
+        WriteOp::ApplyReadDisplayState { .. } => {
+            execute_read_display_state_op(op, connection, cache, target)
+        }
+        WriteOp::DeleteMessage { key, provenance } => {
+            execute_delete_message(key, *provenance, connection, target)
+        }
         WriteOp::UpsertMessage { record, provenance } => {
             super::message_admission::execute_upsert_message(
                 record,
@@ -198,30 +207,39 @@ pub(crate) fn execute(
             )
         }
         WriteOp::UpsertMessages(records) => {
-            for record in records {
-                let _ = super::message_admission::execute_upsert_message(
-                    record,
-                    MessageWriteOrigin::Local,
-                    connection,
-                    cache,
-                    target,
-                )?;
-            }
-            Ok(WriteOpResult::UpsertMessages)
+            execute_upsert_messages(records, connection, cache, target)
         }
-        WriteOp::Acknowledge { source, builder } => {
-            execute_acknowledgement(source, builder, connection, cache, target)
-        }
+        WriteOp::Acknowledge {
+            source,
+            builder,
+            provenance,
+        } => ops_admission::execute_acknowledgement_with_fence(
+            source,
+            builder,
+            *provenance,
+            connection,
+            cache,
+            target,
+        ),
         WriteOp::TaskMove {
             team,
             task_id,
             actor,
             target: target_pos,
             at,
-        } => super::task_ops::apply_task_move(
-            team, task_id, actor, target_pos, *at, connection, target,
-        )
-        .map(WriteOpResult::TaskMoved),
+            provenance,
+        } => ops_admission::execute_task_move_with_fence(
+            ops_admission::TaskMoveDetails {
+                team,
+                task_id,
+                actor,
+                target: target_pos,
+                at: *at,
+            },
+            *provenance,
+            connection,
+            target,
+        ),
         WriteOp::RegisterTemplate(request) => {
             execute_template_registration(request, connection, target)
         }
@@ -229,7 +247,7 @@ pub(crate) fn execute(
             execute_decomposed_message_admission(admission, connection, target)
         }
         WriteOp::AdmitTemplateMessage(admission) => {
-            execute_admit_template_message(admission, connection, cache, target)
+            ops_admission::execute_admit_template_message(admission, connection, cache, target)
         }
         WriteOp::RecordDiagnostics(events) => execute_diagnostic_batch(events, connection, target),
         WriteOp::PruneDiagnostics { now_unix_ms } => {
@@ -238,63 +256,71 @@ pub(crate) fn execute(
     }
 }
 
-/// Admits a template-sourced message, then persists its decomposition when
-/// the record is newly inserted.
-///
-/// Returns the same [`WriteOpResult::TemplateMessageAdmission`] outcome the
-/// inline `execute` match arm previously produced, with no behavior change.
-fn execute_admit_template_message(
-    admission: &TemplateMessageAdmission,
+fn execute_read_display_state_op(
+    op: &WriteOp,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
-    admission.validate()?;
-    match super::message_admission::execute_upsert_message(
-        &admission.record,
-        admission.provenance,
+    let WriteOp::ApplyReadDisplayState {
+        mailbox,
+        message_ids,
+        seen_watermark,
+        provenance,
+    } = op
+    else {
+        unreachable!("read display helper only receives read display operations")
+    };
+    super::read_display_state::execute_read_display_state(
+        mailbox,
+        message_ids,
+        *seen_watermark,
+        *provenance,
         connection,
         cache,
         target,
-    )? {
-        WriteOpResult::UpsertMessage {
-            inserted: false,
-            existing,
-            ..
-        } => Ok(WriteOpResult::TemplateMessageAdmission {
-            inserted: false,
-            existing,
-            task_assignee: None,
-            queued_position: None,
-            reassign_notice: None,
-            task_rejection: None,
-            task_events: Vec::new(),
-        }),
-        WriteOpResult::UpsertMessage {
-            inserted: true,
-            task_assignee,
-            queued_position,
-            reassign_notice,
-            task_rejection,
-            task_events,
-            ..
-        } => {
-            let _ =
-                execute_decomposed_message_admission(&admission.decomposition, connection, target)?;
-            Ok(WriteOpResult::TemplateMessageAdmission {
-                inserted: true,
-                existing: None,
-                task_assignee,
-                queued_position,
-                reassign_notice,
-                task_rejection,
-                task_events,
-            })
-        }
-        other => Err(AtmError::daemon_unavailable(format!(
-            "sqlite writer returned the wrong result while admitting a template message: {other:?}"
-        ))),
+    )
+}
+
+fn execute_delete_message(
+    key: &MessageKey,
+    provenance: MessageWriteOrigin,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    super::message_admission::validate_cron_generation_fence(provenance, connection)?;
+    delete_message_projection(connection, target, key.as_str())?;
+    connection
+        .execute(
+            "DELETE FROM mail_message_states WHERE message_key = ?1;",
+            params![key.as_ref()],
+        )
+        .map_err(|error| sqlite_error(target, "failed to delete sqlite message state", error))?;
+    connection
+        .execute(
+            "DELETE FROM mail_messages WHERE message_key = ?1;",
+            params![key.as_ref()],
+        )
+        .map_err(|error| sqlite_error(target, "failed to delete sqlite message", error))?;
+    Ok(WriteOpResult::MessageDeleted)
+}
+
+fn execute_upsert_messages(
+    records: &[Message],
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    for record in records {
+        let _ = super::message_admission::execute_upsert_message(
+            record,
+            MessageWriteOrigin::Local,
+            connection,
+            cache,
+            target,
+        )?;
     }
+    Ok(WriteOpResult::UpsertMessages)
 }
 
 fn execute_diagnostic_batch(

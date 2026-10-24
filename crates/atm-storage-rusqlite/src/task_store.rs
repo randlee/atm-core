@@ -424,6 +424,30 @@ impl TaskStore for SqliteTaskStore {
         target: &MoveTarget,
         at: IsoTimestamp,
     ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::TaskMoveRecord>, AtmError> {
+        self.move_task_with_origin(
+            team,
+            task_id,
+            actor,
+            target,
+            at,
+            atm_storage::MessageWriteOrigin::Local,
+        )
+    }
+
+    fn move_task_with_origin(
+        &self,
+        team: &TeamName,
+        task_id: &TaskId,
+        actor: &AgentName,
+        target: &MoveTarget,
+        at: IsoTimestamp,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::TaskMoveRecord>, AtmError> {
+        if matches!(origin, atm_storage::MessageWriteOrigin::Peer) {
+            return Err(AtmError::validation(
+                "peer provenance cannot move local tasks",
+            ));
+        }
         let committed = self
             .db
             .submit_committed_writer_op(crate::writer::WriteOp::TaskMove {
@@ -432,6 +456,7 @@ impl TaskStore for SqliteTaskStore {
                 actor: actor.clone(),
                 target: target.clone(),
                 at,
+                provenance: origin,
             })?;
         let operation = committed.operation.and_then(|result| match result {
             crate::writer::WriteOpResult::TaskMoved(outcome) => Ok(outcome),

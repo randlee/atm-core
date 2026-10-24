@@ -351,6 +351,36 @@
           }
         }
       }
+    },
+    "/tool-senders": {
+      "delete": {
+        "operation_id": "unregisterToolSender",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/ToolInstallReceipt"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      },
+      "post": {
+        "operation_id": "applyToolSenderRegistration",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/ToolInstallReceipt"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
     }
   },
   "schemas": {
@@ -1139,6 +1169,95 @@
         "updated_at"
       ]
     },
+    "ToolInstallReceipt": {
+      "properties": [
+        "applied_at",
+        "registration_generation",
+        "sender"
+      ],
+      "required": [
+        "applied_at",
+        "registration_generation",
+        "sender"
+      ]
+    },
+    "ToolInstallerRequest": {
+      "properties": [
+        "expires_at",
+        "host_id",
+        "installer_id",
+        "installer_key_id",
+        "issued_at",
+        "nonce",
+        "operation",
+        "package_digest",
+        "previous_runtime_key_id",
+        "registration_generation",
+        "runtime_key_id",
+        "runtime_public_key",
+        "schema_version",
+        "sender",
+        "signature"
+      ],
+      "required": [
+        "expires_at",
+        "host_id",
+        "installer_id",
+        "installer_key_id",
+        "issued_at",
+        "nonce",
+        "operation",
+        "package_digest",
+        "registration_generation",
+        "runtime_key_id",
+        "runtime_public_key",
+        "schema_version",
+        "sender",
+        "signature"
+      ]
+    },
+    "ToolRuntimeProof": {
+      "properties": [
+        "host_id",
+        "message_digest",
+        "message_id",
+        "nonce",
+        "registration_generation",
+        "runtime_key_id",
+        "sender",
+        "signature"
+      ],
+      "required": [
+        "host_id",
+        "message_digest",
+        "message_id",
+        "nonce",
+        "registration_generation",
+        "runtime_key_id",
+        "sender",
+        "signature"
+      ]
+    },
+    "ToolSenderAttestation": {
+      "properties": [
+        "host_id",
+        "message_digest",
+        "message_id",
+        "nonce",
+        "registration_generation",
+        "sender",
+        "signature"
+      ],
+      "required": [
+        "host_id",
+        "message_digest",
+        "message_id",
+        "nonce",
+        "registration_generation",
+        "sender",
+        "signature"
+      ]
+    },
     "WorkflowProjectionRequest": {
       "properties": [
         "end",
@@ -1177,7 +1296,9 @@
         "peer_http_api_version",
         "peer_wire_security",
         "requires_ack",
-        "to"
+        "to",
+        "tool_runtime_proof",
+        "tool_sender_attestation"
       ],
       "required": [
         "body",
@@ -1187,5 +1308,5 @@
       ]
     }
   },
-  "version": "1.14.0"
+  "version": "1.16.0"
 }

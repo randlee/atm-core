@@ -108,7 +108,7 @@ Composition is local and never reads or writes the mailbox. Use `atm send <agent
 
 ### `atm cron`
 
-Start, end, or list cron schedules
+Manage recurring hook schedules
 
 **Usage:**
 
@@ -132,13 +132,13 @@ Usage: atm cron end [OPTIONS] --phase <PHASE> [NAME]
 
 | Flag | Short | Value | Required | Default | Allowed values | Description |
 |------|-------|-------|----------|---------|----------------|-------------|
-| `--phase` | `` | `PHASE` | yes | `` |  | Phase whose active schedules will be ended |
-| `<name>` | `` | `NAME` | no | `` |  | End only this schedule; otherwise end every schedule in the phase |
+| `--phase` | `` | `PHASE` | yes | `` |  | Select the phase whose active schedules are ended. The selected caller must belong to the schedule's team. |
+| `<name>` | `` | `NAME` | no | `` |  | Optional schedule name. When supplied, only that active schedule is ended; when omitted, every active schedule in the phase is ended. |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 #### `atm cron list`
 
-List active and inactive schedules
+List active and ended schedules
 
 **Usage:**
 
@@ -148,13 +148,13 @@ Usage: atm cron list [OPTIONS]
 
 | Flag | Short | Value | Required | Default | Allowed values | Description |
 |------|-------|-------|----------|---------|----------------|-------------|
-| `--phase` | `` | `PHASE` | no | `` |  | Limit schedules to this phase |
-| `--json` | `` | `JSON` | no | `false` |  | Emit full schedules as a bare JSON array |
+| `--phase` | `` | `PHASE` | no | `` |  | Show only schedules associated with this phase. Without this option, all schedules for the caller's team are listed. |
+| `--json` | `` | `JSON` | no | `false` |  | Write the stored schedule rows as one JSON array. Each row includes the creator, generation, active state, stop condition, custom object, fixed jitter_s, last_run_at, last_outcome, and ended_at fields. An empty result is []. |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 #### `atm cron start`
 
-Start a recurring module schedule with a mandatory stop condition
+Start a recurring hook schedule
 
 **Usage:**
 
@@ -164,15 +164,15 @@ Usage: atm cron start [OPTIONS] --cron <CRON_EXPR> --module <MODULE> --phase <PH
 
 | Flag | Short | Value | Required | Default | Allowed values | Description |
 |------|-------|-------|----------|---------|----------------|-------------|
-| `<name>` | `` | `NAME` | yes | `` |  | Schedule name within the phase |
-| `--cron` | `` | `CRON_EXPR` | yes | `` |  | Six-field UTC cron expression, validated by the daemon |
-| `--module` | `` | `MODULE` | yes | `` |  | Python module declaring its timeout |
-| `--phase` | `` | `PHASE` | yes | `` |  | Phase owning the schedule |
-| `--until` | `` | `UNTIL` | no | `` |  | Stop at this RFC 3339 instant |
-| `--until-hook` | `` | `UNTIL_HOOK` | no | `false` |  | Ask the module stop hook before each tick |
-| `--arg` | `` | `ARGS` | no | `` |  | Module argument; repeat for each argument, including flags |
-| `--cwd` | `` | `CWD` | no | `` |  | Working directory; defaults to the module directory |
-| `--custom` | `` | `CUSTOM` | no | `` |  | Custom JSON object passed to the module |
+| `<name>` | `` | `NAME` | yes | `` |  | Unique schedule name within the selected team and phase. An active schedule with the same name is refused; restarting an ended name reuses its stored row. |
+| `--cron` | `` | `CRON_EXPR` | yes | `` |  | Cron 0.17 expression in UTC: six fields with seconds first, or seven fields with an optional year. The supported aliases are @yearly, @monthly, @weekly, @daily, and @hourly. Five fields, expressions with no future occurrence, and a stop time that is not in the future are rejected before a schedule is stored. |
+| `--module` | `` | `MODULE` | yes | `` |  | Path to the Python hook module. The CLI resolves the module and working directory before sending the start request. The module declares CRON_TIMEOUT_MS, or TIMEOUT_MS when the cron-specific value is absent; the daemon enforces the 30,000 ms maximum. |
+| `--phase` | `` | `PHASE` | yes | `` |  | Phase associated with this schedule. Any roster member of the caller's team may start, end, or list schedules. |
+| `--until` | `` | `UNTIL` | no | `` |  | End the schedule at this future RFC 3339 instant. The stored timestamp is normalized to UTC. This option conflicts with --until-hook; provide exactly one stop condition. |
+| `--until-hook` | `` | `UNTIL_HOOK` | no | `false` |  | Use the module's cron.stop reply as the stop condition before each scheduled tick. Reply {"stop":false} to continue or {"stop":true,"reason":"..."} to end. This option conflicts with --until; provide exactly one stop condition. |
+| `--arg` | `` | `ARGS` | no | `` |  | One argument passed in the cron.tick request's args array. Repeat this option for additional values. Values beginning with a hyphen, such as --json, are accepted and are not interpreted as ATM options. |
+| `--cwd` | `` | `CWD` | no | `` |  | Working directory used to resolve and run the module. Relative paths are resolved from the current invocation directory. If omitted, the canonical module directory is used. |
+| `--custom` | `` | `CUSTOM` | no | `` |  | JSON object passed unchanged to the module in the cron.tick and cron.stop request envelopes. Arrays, scalars, and malformed JSON are rejected. The serialized object is limited by the daemon's hook custom-data limit. |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 ### `atm doctor`
@@ -299,6 +299,7 @@ Usage: atm hook disable [OPTIONS] --phase <PHASE> [HOOK]
 |------|-------|-------|----------|---------|----------------|-------------|
 | `--phase` | `` | `PHASE` | yes | `` |  | Phase whose active registrations will be disabled |
 | `<hook>` | `` | `HOOK` | no | `` |  | Disable only this hook; otherwise disable every hook in the phase |
+| `--json` | `` | `JSON` | no | `false` |  | Emit the disabled registrations as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 #### `atm hook list`
@@ -334,6 +335,7 @@ Usage: atm hook register [OPTIONS] --module <MODULE> --phase <PHASE> <HOOK>
 | `--phase` | `` | `PHASE` | yes | `` |  | Phase owning the registration |
 | `--cwd` | `` | `CWD` | no | `` |  | Working directory; defaults to the module directory |
 | `--custom` | `` | `CUSTOM` | no | `` |  | Custom JSON object passed to the module |
+| `--json` | `` | `JSON` | no | `false` |  | Emit the persisted registration as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 ### `atm list`
@@ -703,6 +705,7 @@ Usage: atm queue [OPTIONS] [TO] [MESSAGE]
 | `--host` | `` | `HOST` | no | `` |  | Route this send through the explicitly named host.  Supplying this flag allows a same-identity send to be an intentional physical delivery test (for example, `--host localhost` or a same-host IP). This is wire-equivalent to a host-qualified recipient address. When both forms are supplied, they must name the same host. |
 | `--chat-id` | `` | `CHAT_ID` | no | `` |  | Restrict the send to this caller chat ID |
 | `--as` | `` | `ACTOR` | no | `` |  | Act as this member instead of the environment identity |
+| `--from` | `` | `AGENT@TEAM` | no | `` |  | Assert the authenticated caller as a full ordinary agent@team address. This does not select or grant sender identity |
 | `--file` | `` | `FILE` | no | `` |  | Read the message body from this file |
 | `--stdin` | `` | `STDIN` | no | `false` |  | Read the message body from standard input |
 | `--template` | `` | `PATH` | no | `` |  | Render and send a locally loaded template through the daemon-owned template admission path |
@@ -831,6 +834,7 @@ Usage: atm send [OPTIONS] [TO] [MESSAGE]
 | `--host` | `` | `HOST` | no | `` |  | Route this send through the explicitly named host.  Supplying this flag allows a same-identity send to be an intentional physical delivery test (for example, `--host localhost` or a same-host IP). This is wire-equivalent to a host-qualified recipient address. When both forms are supplied, they must name the same host. |
 | `--chat-id` | `` | `CHAT_ID` | no | `` |  | Restrict the send to this caller chat ID |
 | `--as` | `` | `ACTOR` | no | `` |  | Act as this member instead of the environment identity |
+| `--from` | `` | `AGENT@TEAM` | no | `` |  | Assert the authenticated caller as a full ordinary agent@team address. This does not select or grant sender identity |
 | `--file` | `` | `FILE` | no | `` |  | Read the message body from this file |
 | `--stdin` | `` | `STDIN` | no | `false` |  | Read the message body from standard input |
 | `--template` | `` | `PATH` | no | `` |  | Render and send a locally loaded template through the daemon-owned template admission path |

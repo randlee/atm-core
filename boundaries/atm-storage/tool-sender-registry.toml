@@ -1,0 +1,49 @@
+boundary_id = "BOUNDARY-ToolSenderRegistry"
+owner_package = "atm-storage"
+owner_crate_path = "atm_storage"
+name = "ToolSenderRegistry"
+
+[public]
+trait = "ToolSenderRegistry"
+notes = "sealed storage-neutral local installer/runtime registry plus separate authenticated-peer attestation replay port. Resolved senders are inspection-only. Runtime and peer admission issuer records are opaque ADR-001 workspace-convention seams and mint capabilities only after their durable verification/replay transaction commits."
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["tool_sender_registration_ledger", "tool_sender_nonce_ledger", "tool_sender_peer_binding_ledger"]
+io_forbidden = ["process_spawn", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime-test-support", "atm-storage-rusqlite"]
+allowed_dependencies = []
+allowed_dev_dependencies = ["trybuild"]
+forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["rusqlite::Connection"]
+
+[contracts]
+request_types = ["ToolInstallerRequest", "ToolRuntimeProof", "AtmMessageId", "MessageDigest", "IsoTimestamp"]
+response_types = ["ToolInstallReceipt", "RegisteredToolSender", "RegisteredToolSenderIssuer", "ToolRuntimeAdmission", "ToolPeerAdmission", "ToolPeerAdmissionIssuer"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["crate::testing::tool_sender_registry::InMemoryToolSenderRegistry", "crate::testing::tool_sender_registry::InMemoryToolRuntimeAdmissionIssuer", "crate::testing::tool_sender_registry::InMemoryRegisteredToolSenderIssuer"]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[inspection_issuer]
+allowed_impl_paths = ["crates/atm-storage-rusqlite/src/tool_sender_registry.rs", "crates/atm-storage-rusqlite/src/tool_sender_peer_admission.rs", "crates/atm-storage/src/testing/tool_sender_registry.rs", "crates/atm-storage/tests/ui/registered_sender_issuer_fixture.rs"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TOOL-SENDER-REGISTRY-REFERENCES"]
+review_gates = ["sealed_trait", "authenticated_provenance", "deterministic_test_doubles"]
+
+[status]
+state = "concrete_landed"
+notes = ["BK-9 landed the sealed port and in-memory double; BK-10 implements SQLite verification and nonce persistence.", "ToolRuntimeAdmissionIssuer is implemented by the private SQLite runtime record and deterministic in-memory issuer.", "ToolPeerAdmissionIssuer is implemented only by the private SQLite peer admission record; the peer store is separately keyed by authenticated origin host, sender, and nonce.", "RegisteredToolSenderIssuer is a separate inspection-only ADR-001 workspace-convention seal. Its authorized production implementation site is the private SQLite registry record in crates/atm-storage-rusqlite/src/tool_sender_registry.rs; the only other implementors are the private in-memory inspection record and its external compile fixture. It does not issue ToolRuntimeAdmission."]

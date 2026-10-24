@@ -188,6 +188,28 @@ pub enum AtmErrorCode {
     HookMalformed,
     /// A runtime store query failed; `ATM_STORE_QUERY_FAILED` in the error-code doc.
     StoreQueryFailed,
+    /// A plug-in sender has no active registration.
+    ToolSenderUnregistered,
+    /// A request attempted to claim a reserved virtual sender.
+    ToolSenderReserved,
+    /// A registered sender is not authorized for the requested operation.
+    ToolSenderUnauthorized,
+    /// A signing key id is not present in the active trust or registration record.
+    ToolKeyUnknown,
+    /// A signing key has been revoked and cannot authenticate new operations.
+    ToolKeyRevoked,
+    /// A nonce was already consumed by a different signed operation.
+    ToolNonceReplay,
+    /// A signed proof names a host outside the sender's allowed host binding.
+    ToolHostMismatch,
+    /// A signed operation was based on a stale or unexpected registration generation.
+    ToolGenerationConflict,
+    /// A signature is malformed or does not verify against its canonical payload.
+    ToolSignatureInvalid,
+    /// A signed installer request is outside its validity interval.
+    ToolRequestExpired,
+    /// A registry transaction outcome is unknown and requires reconciliation.
+    ToolCommitUncertain,
 }
 
 impl AtmErrorCode {
@@ -385,6 +407,17 @@ impl AtmErrorCode {
             Self::HookTimeout => "ATM_HOOK_TIMEOUT",
             Self::HookMalformed => "ATM_HOOK_MALFORMED",
             Self::StoreQueryFailed => "ATM_STORE_QUERY_FAILED",
+            Self::ToolSenderUnregistered => "ATM_TOOL_SENDER_UNREGISTERED",
+            Self::ToolSenderReserved => "ATM_TOOL_SENDER_RESERVED",
+            Self::ToolSenderUnauthorized => "ATM_TOOL_SENDER_UNAUTHORIZED",
+            Self::ToolKeyUnknown => "ATM_TOOL_KEY_UNKNOWN",
+            Self::ToolKeyRevoked => "ATM_TOOL_KEY_REVOKED",
+            Self::ToolNonceReplay => "ATM_TOOL_NONCE_REPLAY",
+            Self::ToolHostMismatch => "ATM_TOOL_HOST_MISMATCH",
+            Self::ToolGenerationConflict => "ATM_TOOL_GENERATION_CONFLICT",
+            Self::ToolSignatureInvalid => "ATM_TOOL_SIGNATURE_INVALID",
+            Self::ToolRequestExpired => "ATM_TOOL_REQUEST_EXPIRED",
+            Self::ToolCommitUncertain => "ATM_TOOL_COMMIT_UNCERTAIN",
             _ => unreachable!("all AtmErrorCode variants must be covered by as_str helpers"),
         }
     }
@@ -598,6 +631,17 @@ fn parse_post_send_or_misc_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_HOOK_TIMEOUT" => AtmErrorCode::HookTimeout,
         "ATM_HOOK_MALFORMED" => AtmErrorCode::HookMalformed,
         "ATM_STORE_QUERY_FAILED" => AtmErrorCode::StoreQueryFailed,
+        "ATM_TOOL_SENDER_UNREGISTERED" => AtmErrorCode::ToolSenderUnregistered,
+        "ATM_TOOL_SENDER_RESERVED" => AtmErrorCode::ToolSenderReserved,
+        "ATM_TOOL_SENDER_UNAUTHORIZED" => AtmErrorCode::ToolSenderUnauthorized,
+        "ATM_TOOL_KEY_UNKNOWN" => AtmErrorCode::ToolKeyUnknown,
+        "ATM_TOOL_KEY_REVOKED" => AtmErrorCode::ToolKeyRevoked,
+        "ATM_TOOL_NONCE_REPLAY" => AtmErrorCode::ToolNonceReplay,
+        "ATM_TOOL_HOST_MISMATCH" => AtmErrorCode::ToolHostMismatch,
+        "ATM_TOOL_GENERATION_CONFLICT" => AtmErrorCode::ToolGenerationConflict,
+        "ATM_TOOL_SIGNATURE_INVALID" => AtmErrorCode::ToolSignatureInvalid,
+        "ATM_TOOL_REQUEST_EXPIRED" => AtmErrorCode::ToolRequestExpired,
+        "ATM_TOOL_COMMIT_UNCERTAIN" => AtmErrorCode::ToolCommitUncertain,
         _ => return None,
     })
 }

@@ -82,8 +82,22 @@ impl StorageAndNudgeRouter {
 
     pub(super) async fn receive_messages_impl(
         &self,
+        query: ReadQuery,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        self.receive_messages_with_origin(
+            query,
+            deadline,
+            atm_core::send::MessageWriteOrigin::Local,
+        )
+        .await
+    }
+
+    pub(super) async fn receive_messages_with_origin(
+        &self,
         mut query: ReadQuery,
         deadline: RequestDeadline,
+        origin: atm_core::send::MessageWriteOrigin,
     ) -> Result<ApiResponse, AtmError> {
         let runtime = self.async_mailbox_runtime.as_ref().ok_or_else(|| {
             AtmError::daemon_unavailable(
@@ -100,7 +114,8 @@ impl StorageAndNudgeRouter {
                 )
             },
         );
-        let command = atm_core::read::async_projection::prepare_async_read(&query)?;
+        let command =
+            atm_core::read::async_projection::prepare_async_read(&query)?.with_write_origin(origin);
         runtime
             .read_command(command, deadline)
             .await
