@@ -501,6 +501,8 @@ async fn run_replacement_daemon_with_selector(
             herdr_config,
             herdr_process,
             daemon_home: atm_core::home::atm_home()?,
+            #[cfg(feature = "test-support")]
+            controlled_hook_deadline: None,
         },
     )?;
     let config = replacement_runtime_config(
@@ -1372,6 +1374,8 @@ mod replacement_runtime_tests {
                     herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                     herdr_process: None,
                     daemon_home: temporary_root.path().join("home"),
+                    #[cfg(feature = "test-support")]
+                    controlled_hook_deadline: None,
                 },
             )
             .expect("compose the replacement daemon handler");
@@ -1580,6 +1584,8 @@ mod replacement_runtime_tests {
                     herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                     herdr_process: Some(fake.clone()),
                     daemon_home: temporary_root.path().join("home"),
+                    #[cfg(feature = "test-support")]
+                    controlled_hook_deadline: None,
                 },
             )
             .expect("compose the replacement daemon handler");

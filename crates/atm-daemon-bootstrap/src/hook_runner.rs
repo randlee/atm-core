@@ -30,7 +30,47 @@ use atm_core::types::TeamName;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 
+#[cfg(feature = "test-support")]
+use crate::process_deadline::spawn_until;
 use crate::process_deadline::{SpawnFailure, SpawnSpec, SpawnedOutput, spawn_with_deadline};
+
+#[cfg(feature = "test-support")]
+#[derive(Debug)]
+pub(crate) struct ControlledHookDeadline {
+    generation: tokio::sync::watch::Sender<u64>,
+}
+
+#[cfg(feature = "test-support")]
+impl ControlledHookDeadline {
+    pub(crate) fn new() -> Self {
+        Self {
+            generation: tokio::sync::watch::channel(0).0,
+        }
+    }
+
+    /// Expires all waits already registered against this test-owned source.
+    #[allow(dead_code)] // Used by feature-gated timeout tests; composition only retains the source.
+    pub(crate) fn advance(&self) {
+        self.generation
+            .send_modify(|value| *value = value.wrapping_add(1));
+    }
+
+    async fn wait_for_advance(&self) {
+        let mut generation = self.generation.subscribe();
+        let current = *generation.borrow_and_update();
+        generation
+            .wait_for(|value| *value != current)
+            .await
+            .expect("controlled hook deadline sender alive");
+    }
+}
+
+#[derive(Debug, Clone)]
+enum HookDeadlineSource {
+    System,
+    #[cfg(feature = "test-support")]
+    Controlled(Arc<ControlledHookDeadline>),
+}
 
 /// Maximum concurrently running hook children for one daemon.
 ///
@@ -45,6 +85,7 @@ pub struct DaemonHookRunner {
     base_env: Result<Vec<(OsString, OsString)>, AtmError>,
     python: Result<PathBuf, AtmError>,
     permits: Arc<Semaphore>,
+    deadline_source: HookDeadlineSource,
 }
 
 fn missing(detail: impl Into<String>) -> AtmError {
@@ -149,6 +190,26 @@ impl DaemonHookRunner {
     }
 
     pub(crate) fn with_limit(env: &dyn EnvSource, permits: usize) -> Self {
+        Self::with_limit_and_deadline(env, permits, HookDeadlineSource::System)
+    }
+
+    #[cfg(feature = "test-support")]
+    pub(crate) fn with_controlled_deadline(
+        env: &dyn EnvSource,
+        deadline: Arc<ControlledHookDeadline>,
+    ) -> Self {
+        Self::with_limit_and_deadline(
+            env,
+            HOOK_CONCURRENCY_MAX,
+            HookDeadlineSource::Controlled(deadline),
+        )
+    }
+
+    fn with_limit_and_deadline(
+        env: &dyn EnvSource,
+        permits: usize,
+        deadline_source: HookDeadlineSource,
+    ) -> Self {
         let base_env = base_environment(env, cfg!(windows));
         let python = base_env
             .as_ref()
@@ -158,6 +219,7 @@ impl DaemonHookRunner {
             base_env,
             python,
             permits: Arc::new(Semaphore::new(permits)),
+            deadline_source,
         }
     }
 
@@ -249,7 +311,8 @@ impl DaemonHookRunner {
             .map_err(|_| missing("hook semaphore closed"))?;
         let spec = self.spec(target, hook).await?;
         let remaining = remaining_spawn_budget(&target.phase, budget, started.elapsed())?;
-        let output = spawn_with_deadline(spec, &stdin, remaining)
+        let output = self
+            .spawn(spec, &stdin, remaining)
             .instrument(hook_spawn_span(target, hook, budget))
             .await
             .map_err(|failure| {
@@ -276,6 +339,28 @@ impl DaemonHookRunner {
             outcome = "ok", "hook execution completed"
         );
         Ok(output)
+    }
+
+    async fn spawn(
+        &self,
+        spec: SpawnSpec,
+        stdin: &[u8],
+        remaining: Duration,
+    ) -> Result<SpawnedOutput, SpawnFailure> {
+        match &self.deadline_source {
+            HookDeadlineSource::System => spawn_with_deadline(spec, stdin, remaining).await,
+            #[cfg(feature = "test-support")]
+            HookDeadlineSource::Controlled(deadline) => {
+                spawn_until(spec, stdin, deadline.wait_for_advance())
+                    .await
+                    .map_err(|failure| match failure {
+                        SpawnFailure::TimedOut { .. } => SpawnFailure::TimedOut {
+                            after_ms: remaining.as_millis().min(u128::from(u64::MAX)) as u64,
+                        },
+                        other => other,
+                    })
+            }
+        }
     }
 }
 
@@ -652,6 +737,20 @@ mod tests {
     fn runner_debug_reports_its_type() {
         let fixture = Fixture::new();
         assert!(format!("{:?}", fixture.runner()).starts_with("DaemonHookRunner"));
+    }
+
+    #[cfg(feature = "test-support")]
+    #[tokio::test]
+    async fn controlled_deadline_expires_only_after_explicit_advance() {
+        let deadline = ControlledHookDeadline::new();
+        let mut generation = deadline.generation.subscribe();
+        let initial = *generation.borrow_and_update();
+
+        deadline.advance();
+        generation
+            .wait_for(|value| *value != initial)
+            .await
+            .expect("controlled deadline sender alive");
     }
 
     #[test]

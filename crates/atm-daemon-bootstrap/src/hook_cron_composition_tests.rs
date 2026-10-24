@@ -97,6 +97,8 @@ impl World {
                     atm_herdr::testing::FakeHerdrProcessAdapter::default(),
                 )),
                 daemon_home: root.path().into(),
+                #[cfg(feature = "test-support")]
+                controlled_hook_deadline: None,
             },
         )?;
         std::fs::create_dir_all(root.path().join("temp")).unwrap();

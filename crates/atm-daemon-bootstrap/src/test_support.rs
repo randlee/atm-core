@@ -58,6 +58,7 @@ impl ControlledCronComposition {
         Self::seed_roster(&assembly)?;
         let runtime = assembly.service_runtime.clone();
         let herdr_process = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+        let controlled_hook_deadline = Arc::new(crate::hook_runner::ControlledHookDeadline::new());
         let crate::replacement_handler::ReplacementHandler {
             handler,
             recovery_sweep,
@@ -93,6 +94,7 @@ impl ControlledCronComposition {
                 herdr_config: Default::default(),
                 herdr_process: Some(herdr_process.clone()),
                 daemon_home: root.path().into(),
+                controlled_hook_deadline: Some(controlled_hook_deadline),
             },
         )?;
         let clock = Arc::new(ManualClock::new(
