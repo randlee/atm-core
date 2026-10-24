@@ -18,7 +18,9 @@ fn caller() -> CallerContext {
 
 #[test]
 fn raw_cron_tool_sender_is_refused_while_the_authenticated_creator_is_preserved() {
-    let creator: atm_storage::AgentAddress = "creator@atm-dev".parse().expect("creator address");
+    let creator: atm_storage::AgentAddress = format!("creator@{TEST_TEAM}")
+        .parse()
+        .expect("creator address");
     assert_eq!(
         resolve_sender_claim(SenderClaim::Ordinary {
             address: creator.clone(),
