@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use std::{
     path::PathBuf,
     sync::{Arc, atomic::Ordering},
@@ -8,8 +10,8 @@ use atm_core::{
     LocalServiceRuntime,
     api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline},
     boundary::{
-        CronScheduler, CronStartSpec, DummyHookRunner, HookOutcome, HookRegistration, HookRunner,
-        PhaseId, StopCondition,
+        CronScheduler, CronStartSpec, DummyHookRunner, HookOutcome, HookRegistration,
+        HookRegistrationStore, HookRunner, PhaseId, StopCondition,
     },
     error::{AtmError, AtmErrorCode},
     hook::{CronListQuery, CronStartRequest, HookListQuery, HookRegisterRequest, HookReply},
@@ -53,6 +55,9 @@ struct World {
     handler: Arc<StorageAndNudgeRouter>,
     runner: Arc<dyn HookRunner>,
     dispatcher: Arc<UnhookedRouter>,
+    cron_runner: Arc<dyn atm_core::boundary::CronHookRunner>,
+    lifecycle_nudge_emitter: Arc<dyn atm_core::boundary::CronLifecycleNudgeEmitter>,
+    local_host: Option<atm_core::types::HostName>,
     hook_filter: Arc<atm_http_runtime::HookedTaskCommands>,
     workers: DaemonWorkers,
 }
@@ -74,8 +79,10 @@ impl World {
             recovery_sweep,
             runner,
             dispatcher,
+            cron_runner,
+            lifecycle_nudge_emitter,
+            local_host,
             hook_filter,
-            ..
         } = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
@@ -117,6 +124,9 @@ impl World {
             handler,
             runner,
             dispatcher,
+            cron_runner,
+            lifecycle_nudge_emitter,
+            local_host,
             hook_filter,
             workers: DaemonWorkers::for_process(
                 task_telemetry,
@@ -129,6 +139,18 @@ impl World {
 
     fn cron(&self, clock: Arc<ManualClock>) -> Arc<AtmCron> {
         compose_cron(&self.handler, self.deps(clock)).unwrap()
+    }
+
+    fn runtime_cron_composition(&self) -> crate::cron_composition::RuntimeCronComposition<'_> {
+        crate::cron_composition::RuntimeCronComposition {
+            handler: &self.handler,
+            runtime: &self.runtime,
+            runner: self.runner.clone(),
+            dispatcher: self.dispatcher.clone(),
+            host: self.local_host.clone(),
+            cron_runner: self.cron_runner.clone(),
+            lifecycle_nudge_emitter: self.lifecycle_nudge_emitter.clone(),
+        }
     }
 
     fn deps(&self, clock: Arc<ManualClock>) -> AtmCronDeps {
@@ -368,7 +390,11 @@ async fn filter_and_cron_share_one_runner_and_one_dispatcher() {
     assert!(Arc::ptr_eq(&world.runner, filter.runner()));
     assert!(Arc::ptr_eq(&world.dispatcher, filter.actions()));
     assert!(Arc::ptr_eq(&world.handler.hook_chains(), filter.chains()));
-    let cron = world.cron(Arc::new(ManualClock::new(now())));
+    let cron = crate::cron_composition::compose_controlled(
+        world.runtime_cron_composition(),
+        Arc::new(ManualClock::new(now())),
+    )
+    .unwrap();
     assert!(Arc::ptr_eq(cron.hook_runner(), filter.runner()));
     let expected: Arc<dyn atm_core::boundary::HookActionDispatcher> = filter.actions().clone();
     assert!(Arc::ptr_eq(cron.action_dispatcher(), &expected));
@@ -376,21 +402,66 @@ async fn filter_and_cron_share_one_runner_and_one_dispatcher() {
 }
 
 #[tokio::test]
-async fn snapshot_load_error_fails_daemon_composition() {
+async fn snapshot_load_is_deferred_retryable_and_uses_current_hooks() {
     let root = tempfile::tempdir().unwrap();
+    std::fs::write(
+        root.path().join("fixture_reply.json"),
+        json!({"result": "refused", "message": "current hook loaded on retry"}).to_string(),
+    )
+    .unwrap();
     let mut assembly = open_isolated_sqlite_boundary(root.path())
         .unwrap()
         .for_daemon();
     let store = Arc::new(InMemoryHookRegistrationStore::default());
     store.fail_active_all.store(true, Ordering::SeqCst);
+    store
+        .register(registration(root.path(), TEST_TEAM, "task.close"))
+        .unwrap();
+    let calls_before_composition = store.calls.load(Ordering::SeqCst);
     assembly.service_runtime = assembly
         .service_runtime
         .with_hook_registration_store(store.clone());
-    let error = World::assemble(root, assembly)
-        .err()
-        .expect("snapshot load failure aborts daemon composition");
+    let world = World::assemble(root, assembly).expect("composition defers hook snapshot load");
+    world.seed_roster();
+    assert_eq!(store.calls.load(Ordering::SeqCst), calls_before_composition);
+
+    let mut request = world.write();
+    request.task_op = Some(atm_core::boundary::TaskOp::Close {
+        outcome: atm_core::boundary::TaskCloseOutcome::Completed,
+        reason: None,
+    });
+    let error = world
+        .request_with_deadline(
+            ApiRequest::Write(Box::new(request.clone())),
+            RequestDeadline::after_at(std::time::Instant::now(), Duration::ZERO),
+        )
+        .await
+        .expect_err("expired deadline prevents the first bounded hook read");
+    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+    assert_eq!(store.calls.load(Ordering::SeqCst), calls_before_composition);
+
+    let error = world
+        .request(ApiRequest::Write(Box::new(request.clone())))
+        .await
+        .expect_err("failed initial snapshot load fails the hook path closed");
     assert_eq!(error.code(), AtmErrorCode::InternalError);
-    assert_eq!(store.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        store.calls.load(Ordering::SeqCst),
+        calls_before_composition + 1
+    );
+
+    store.fail_active_all.store(false, Ordering::SeqCst);
+    let error = world
+        .request(ApiRequest::Write(Box::new(request)))
+        .await
+        .expect_err("the next hook request retries the dirty snapshot and sees its registration");
+    assert_eq!(error.code(), AtmErrorCode::HookRefused);
+    assert!(error.message().contains("current hook loaded on retry"));
+    assert_eq!(
+        store.calls.load(Ordering::SeqCst),
+        calls_before_composition + 2
+    );
+    world.shutdown().await;
 }
 
 #[tokio::test]
@@ -458,11 +529,12 @@ async fn blocked_cron_hook_leaves_budget_for_hook_chains_and_later_shutdown_step
     let probe = Arc::new(crate::shutdown_probe::Probe::new());
     let shutdown_probe = probe.clone();
     let shared_deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let (release_listener, listener_released) = tokio::sync::oneshot::channel();
     let shutdown = tokio::spawn(async move {
         crate::shutdown_probe::observe(&shutdown_probe, async move {
             run_shutdown_steps(
-                async {
-                    tokio::time::sleep(Duration::from_secs(3)).await;
+                async move {
+                    listener_released.await.expect("test releases listener");
                     Ok(())
                 },
                 &handler,
@@ -480,6 +552,9 @@ async fn blocked_cron_hook_leaves_budget_for_hook_chains_and_later_shutdown_step
     probe.wait_for_start("listener").await;
     assert!(tokio::time::Instant::now() < shared_deadline);
     tokio::time::advance(Duration::from_secs(3)).await;
+    release_listener
+        .send(())
+        .expect("listener waits for test release");
     shutdown.await.unwrap().unwrap();
     cancelled_rx.wait_for(|cancelled| *cancelled).await.unwrap();
 

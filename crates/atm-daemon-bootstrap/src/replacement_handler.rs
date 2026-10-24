@@ -333,9 +333,9 @@ fn compose_storage_router(
         Arc<crate::hook_runner::ControlledHookDeadline>,
     >,
 ) -> Result<ComposedStorageRouter, AtmError> {
-    let snapshot = Arc::new(ActiveHookSnapshot::load(
+    let snapshot = Arc::new(ActiveHookSnapshot::deferred(
         assembly.service_runtime.hook_registration_store()?,
-    )?);
+    ));
     let daemon_runner = Arc::new({
         #[cfg(feature = "test-support")]
         if let Some(deadline) = controlled_hook_deadline {
