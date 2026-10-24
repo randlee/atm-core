@@ -23,6 +23,7 @@ mod tests {
     use super::super::hook::tests::{caller, fixture, transport};
     use super::*;
     use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+    use atm_daemon_bootstrap::test_support::ControlledCronComposition;
 
     fn start(module: &str) -> CronCommand {
         CronCommand::try_parse_from([
@@ -400,6 +401,59 @@ mod tests {
             "2030-11-01T00:00:00Z"
         );
         assert_eq!(start.cron_expr, "0 0 2 * * * 2030");
+    }
+
+    #[tokio::test]
+    async fn documented_cron_argv_fixtures_use_the_composed_daemon() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repo root");
+        let manifest: Value = serde_json::from_slice(
+            &std::fs::read(root.join("docs/user-documents/examples/cron/manifest.json"))
+                .expect("read manifest"),
+        )
+        .expect("parse manifest");
+        let composition = ControlledCronComposition::new().expect("compose daemon");
+        let observability = CliObservability::fallback();
+
+        for documented in manifest["commands"].as_array().expect("commands") {
+            if documented["deferred_execution"].as_bool() == Some(true) {
+                continue;
+            }
+            let Some(argv) = documented["argv"].as_array() else {
+                continue;
+            };
+            let id = documented["id"].as_str().expect("fixture id");
+            let mut argv = argv
+                .iter()
+                .map(|value| value.as_str().expect("argument").to_owned())
+                .collect::<Vec<_>>();
+            if let Some(module) = argv.iter().position(|value| value == "--module") {
+                argv[module + 1] = fixture("valid_hook.py").display().to_string();
+            }
+            let parsed = CronCommand::try_parse_from(argv);
+            if documented["valid"] == false {
+                assert!(parsed.is_err(), "fixture {id} must be refused by CLI parsing");
+                continue;
+            }
+            let command = parsed.unwrap_or_else(|error| panic!("fixture {id}: {error}"));
+            let request = command
+                .request(caller())
+                .unwrap_or_else(|error| panic!("fixture {id} request: {error}"));
+            let response = composition
+                .execute(request)
+                .await
+                .unwrap_or_else(|error| panic!("fixture {id} daemon: {error}"));
+            let output = command
+                .execute_request(
+                    &CliComposition::from_fake_transport(transport(response).0, &observability),
+                    command.request(caller()).expect("repeat request"),
+                )
+                .await
+                .unwrap_or_else(|error| panic!("fixture {id} output: {error}"));
+            assert!(!output.is_empty(), "fixture {id} rendered output");
+        }
     }
 }
 
