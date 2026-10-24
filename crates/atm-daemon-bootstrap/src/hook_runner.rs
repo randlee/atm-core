@@ -38,6 +38,7 @@ use crate::process_deadline::{SpawnFailure, SpawnSpec, SpawnedOutput, spawn_with
 #[derive(Debug)]
 pub(crate) struct ControlledHookDeadline {
     generation: tokio::sync::watch::Sender<u64>,
+    process_registrations: tokio::sync::watch::Sender<u64>,
 }
 
 #[cfg(feature = "test-support")]
@@ -45,6 +46,7 @@ impl ControlledHookDeadline {
     pub(crate) fn new() -> Self {
         Self {
             generation: tokio::sync::watch::channel(0).0,
+            process_registrations: tokio::sync::watch::channel(0).0,
         }
     }
 
@@ -55,6 +57,16 @@ impl ControlledHookDeadline {
             .send_modify(|value| *value = value.wrapping_add(1));
     }
 
+    #[allow(dead_code)] // Used by feature-gated runner expiry tests.
+    pub(crate) async fn wait_for_process_registration(&self) {
+        let mut registrations = self.process_registrations.subscribe();
+        let observed = *registrations.borrow_and_update();
+        registrations
+            .wait_for(|value| *value > observed)
+            .await
+            .expect("controlled hook deadline sender alive");
+    }
+
     async fn wait_for_advance(&self) {
         let mut generation = self.generation.subscribe();
         let current = *generation.borrow_and_update();
@@ -62,6 +74,12 @@ impl ControlledHookDeadline {
             .wait_for(|value| *value != current)
             .await
             .expect("controlled hook deadline sender alive");
+    }
+
+    async fn wait_for_process_advance(&self) {
+        self.process_registrations
+            .send_modify(|value| *value = value.wrapping_add(1));
+        self.wait_for_advance().await;
     }
 }
 
@@ -297,20 +315,34 @@ impl DaemonHookRunner {
             error
         })?;
         let started = tokio::time::Instant::now();
-        let _permit = tokio::time::timeout(budget, self.permits.clone().acquire_owned())
-            .await
-            .map_err(|_| {
-                tracing::warn!(
-                    subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
-                    budget_ms = budget.as_millis() as u64,
-                    elapsed_ms = started.elapsed().as_millis() as u64,
-                    outcome = "permit_timeout", "hook concurrency limit reached"
-                );
-                AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")
-            })?
-            .map_err(|_| missing("hook semaphore closed"))?;
+        let permit = self.permits.clone().acquire_owned();
+        let _permit = match &self.deadline_source {
+            HookDeadlineSource::System => tokio::time::timeout(budget, permit)
+                .await
+                .map_err(|_| {
+                    tracing::warn!(
+                        subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
+                        budget_ms = budget.as_millis() as u64,
+                        elapsed_ms = started.elapsed().as_millis() as u64,
+                        outcome = "permit_timeout", "hook concurrency limit reached"
+                    );
+                    AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")
+                })?
+                .map_err(|_| missing("hook semaphore closed")),
+            #[cfg(feature = "test-support")]
+            HookDeadlineSource::Controlled(deadline) => tokio::select! {
+                permit = permit => permit.map_err(|_| missing("hook semaphore closed")),
+                _ = deadline.wait_for_advance() => Err(AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")),
+            },
+        }?;
         let spec = self.spec(target, hook).await?;
-        let remaining = remaining_spawn_budget(&target.phase, budget, started.elapsed())?;
+        let remaining = match self.deadline_source {
+            HookDeadlineSource::System => {
+                remaining_spawn_budget(&target.phase, budget, started.elapsed())?
+            }
+            #[cfg(feature = "test-support")]
+            HookDeadlineSource::Controlled(_) => budget,
+        };
         let output = self
             .spawn(spec, &stdin, remaining)
             .instrument(hook_spawn_span(target, hook, budget))
@@ -351,7 +383,7 @@ impl DaemonHookRunner {
             HookDeadlineSource::System => spawn_with_deadline(spec, stdin, remaining).await,
             #[cfg(feature = "test-support")]
             HookDeadlineSource::Controlled(deadline) => {
-                spawn_until(spec, stdin, deadline.wait_for_advance())
+                spawn_until(spec, stdin, deadline.wait_for_process_advance())
                     .await
                     .map_err(|failure| match failure {
                         SpawnFailure::TimedOut { .. } => SpawnFailure::TimedOut {
@@ -742,15 +774,30 @@ mod tests {
     #[cfg(feature = "test-support")]
     #[tokio::test]
     async fn controlled_deadline_expires_only_after_explicit_advance() {
-        let deadline = ControlledHookDeadline::new();
-        let mut generation = deadline.generation.subscribe();
-        let initial = *generation.borrow_and_update();
-
+        let fixture = Fixture::new();
+        fixture.script("import threading\nthreading.Event().wait()\n");
+        let deadline = Arc::new(ControlledHookDeadline::new());
+        let runner = DaemonHookRunner::with_controlled_deadline(&fixture.env, deadline.clone());
+        let target = fixture.target.clone();
+        let request = fixture.request("task.close");
+        let run = tokio::spawn(async move {
+            runner
+                .run(
+                    &target,
+                    &request,
+                    RequestDeadline::after(Duration::from_secs(10)),
+                )
+                .await
+        });
+        deadline.wait_for_process_registration().await;
+        assert!(!run.is_finished(), "controlled deadline has not advanced");
         deadline.advance();
-        generation
-            .wait_for(|value| *value != initial)
+        let error = run
             .await
-            .expect("controlled deadline sender alive");
+            .expect("runner task joins")
+            .expect_err("controlled expiry");
+        assert_eq!(error.code(), AtmErrorCode::HookTimeout);
+        fixture.no_spawn();
     }
 
     #[test]
