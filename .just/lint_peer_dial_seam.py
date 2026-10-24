@@ -38,8 +38,9 @@ RESOLUTION_RE = re.compile(r"\blookup_host\s*\(|\bto_socket_addrs\s*\(|\bToSocke
 RESOLUTION_ALLOWED = {
     SEAM,
     # ADR-040: CLI literal-IP input is authorized by a fresh lookup of the
-    # registered hostnames. It is an authorization check, not a dial.
-    "crates/atm/src/commands/send.rs",
+    # registered hostnames. The implementation lives in the extracted
+    # peer-resolution module; it is an authorization check, not a dial.
+    "crates/atm/src/commands/send/peer_resolution.rs",
 }
 DIAL_RE = re.compile(r"\b(?:TcpStream::connect(?:_timeout)?|TcpSocket::connect)\s*\(")
 DIAL_SCOPE_PREFIX = "crates/atm-http-runtime/"
