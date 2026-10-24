@@ -1,0 +1,199 @@
+//! Feature-gated deterministic daemon composition for CLI integration tests.
+//!
+//! This fixture installs the same typed cron execution path as the daemon. It
+//! substitutes only test-owned storage, clock, jitter, and received-hook
+//! transports; it does not expose the test-only cron constructor.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use atm_core::api::{ApiRequest, AuthenticatedIngress, RequestDeadline};
+use atm_core::error::AtmError;
+use atm_core::observability::NullObservability;
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+use atm_cron::{AtmCron, ManualClock};
+use atm_http_runtime::{
+    CanonicalWriteHandler, PeerPoolConfig, RuntimeHealth, StorageAndNudgeRouter,
+};
+use atm_runtime::RuntimeAssembly;
+use atm_runtime_test_support::open_isolated_sqlite_boundary;
+
+use crate::cron_composition::{RuntimeCronComposition, compose_controlled};
+use crate::received_hook_selector::ReceivedHookTransports;
+use crate::replacement_handler::{
+    ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
+};
+use crate::{DaemonLaunchIdentity, queue_drain};
+
+/// A deterministic, SQLite-backed composition for CLI integration tests.
+///
+/// Requests execute through the production replacement router, and cron is
+/// installed through the production typed composition path. There is no
+/// listener, fake scheduler, or environment-selected authority.
+pub struct ControlledCronComposition {
+    root: Arc<tempfile::TempDir>,
+    handler: Arc<StorageAndNudgeRouter>,
+    cron: Arc<AtmCron>,
+    clock: Arc<ManualClock>,
+    recovery_sweep: queue_drain::RecoverySweepHandle,
+}
+
+impl ControlledCronComposition {
+    /// Creates a fresh isolated SQLite composition with deterministic time.
+    pub fn new() -> Result<Self, AtmError> {
+        let root = tempfile::tempdir().map_err(|source| {
+            AtmError::config("failed to create controlled cron fixture root").with_cause(source)
+        })?;
+        Self::from_root(Arc::new(root))
+    }
+
+    fn from_root(root: Arc<tempfile::TempDir>) -> Result<Self, AtmError> {
+        let assembly = open_isolated_sqlite_boundary(root.path())?.for_daemon();
+        Self::seed_roster(&assembly)?;
+        let runtime = assembly.service_runtime.clone();
+        let crate::replacement_handler::ReplacementHandler {
+            handler,
+            recovery_sweep,
+            runner,
+            cron_runner,
+            dispatcher,
+            local_host,
+            lifecycle_nudge_emitter,
+            ..
+        } = build_replacement_handler(
+            assembly,
+            ReplacementHandlerConfig {
+                observability: Arc::new(NullObservability),
+                selector_factory: |_, _, _, _| ReceivedHookTransports::disabled_for_test(),
+                daemon_launch_identity: DaemonLaunchIdentity::default(),
+                peer_wire_mode: atm_core::peer_wire::PeerWireMode::plaintext_test(),
+                peer_adapter_selection: SelectedPeerAdapterSelection {
+                    adapter: None,
+                    pool_config: PeerPoolConfig::default(),
+                },
+                runtime_health: RuntimeHealth::default(),
+                diagnostic_counters: None,
+                bare_cli: Default::default(),
+                herdr_config: Default::default(),
+                herdr_process: Some(Arc::new(
+                    atm_herdr::testing::FakeHerdrProcessAdapter::default(),
+                )),
+                daemon_home: root.path().into(),
+            },
+        )?;
+        let clock = Arc::new(ManualClock::new(
+            "2026-10-24T00:00:00Z"
+                .parse()
+                .expect("fixed test timestamp is valid"),
+        ));
+        let cron = compose_controlled(
+            RuntimeCronComposition {
+                handler: handler.as_ref(),
+                runtime: &runtime,
+                runner,
+                dispatcher,
+                host: local_host,
+                cron_runner,
+                lifecycle_nudge_emitter,
+            },
+            Arc::clone(&clock),
+        )?;
+        Ok(Self {
+            root,
+            handler,
+            cron,
+            clock,
+            recovery_sweep,
+        })
+    }
+
+    fn seed_roster(assembly: &RuntimeAssembly) -> Result<(), AtmError> {
+        let team: atm_core::types::TeamName = TEST_TEAM.parse()?;
+        assembly
+            .service_runtime
+            .shared_roster_store_arc()
+            .save_roster(&atm_storage::RosterSnapshot {
+                team_name: team.clone(),
+                members: [TEST_SENDER, TEST_RECIPIENT]
+                    .into_iter()
+                    .map(|name| atm_core::boundary::RosterEntry {
+                        team_name: team.clone(),
+                        agent_name: name.parse().expect("fixed test agent name is valid"),
+                        member_kind: atm_storage::RosterMemberKind::Permanent,
+                        harness: atm_storage::RosterHarness::PythonGraft,
+                        agent_type: Default::default(),
+                        model: Default::default(),
+                        recipient_pane_id: None,
+                        metadata_json: Default::default(),
+                    })
+                    .collect(),
+                refreshed_at: None,
+            })
+    }
+
+    /// Executes one decoded CLI request through the production router.
+    pub async fn execute(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        CanonicalWriteHandler::dispatch(
+            self.handler.as_ref(),
+            ApiRequest::new(request),
+            AuthenticatedIngress::Local,
+            RequestDeadline::after(Duration::from_secs(60)),
+        )
+        .await
+        .map(atm_core::api::ApiResponse::into_inner)
+    }
+
+    /// Advances the fixture's owned clock without timing or scheduler races.
+    pub fn advance_clock(&self, duration: chrono::Duration) {
+        self.clock.advance(duration);
+    }
+
+    /// Rebuilds the production composition over the same isolated SQLite data.
+    pub async fn reopen(self) -> Result<Self, AtmError> {
+        let Self {
+            root,
+            handler,
+            cron,
+            clock,
+            recovery_sweep,
+        } = self;
+        recovery_sweep
+            .shutdown(tokio::time::Instant::now() + Duration::from_secs(1))
+            .await;
+        drop((handler, cron, clock));
+        Self::from_root(root)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use atm_core::hook::CronListQuery;
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+
+    use super::ControlledCronComposition;
+
+    #[tokio::test]
+    async fn composition_executes_and_reopens_over_the_same_sqlite_state() {
+        let composition = ControlledCronComposition::new().expect("compose fixture");
+        let list = || {
+            RequestEnvelope::CronList(CronListQuery {
+                caller_identity: TEST_SENDER.parse().expect("fixed test sender"),
+                caller_team: TEST_TEAM.parse().expect("fixed test team"),
+                phase: None,
+            })
+        };
+
+        assert!(matches!(
+            composition.execute(list()).await.expect("execute list"),
+            ResponseEnvelope::CronList(rows) if rows.is_empty()
+        ));
+
+        let reopened = composition.reopen().await.expect("reopen fixture");
+        assert!(matches!(
+            reopened.execute(list()).await.expect("execute reopened list"),
+            ResponseEnvelope::CronList(rows) if rows.is_empty()
+        ));
+    }
+}

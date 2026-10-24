@@ -45,7 +45,7 @@ impl ReceivedHookTransports {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn disabled_for_test() -> Self {
         let selector = Arc::new(TestNoopReceivedHookSelector);
         Self {
@@ -63,13 +63,13 @@ impl ReceivedHookTransports {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 struct TestNoopReceivedHookSelector;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl boundary::sealed::Sealed for TestNoopReceivedHookSelector {}
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl MessageReceivedHookSelector for TestNoopReceivedHookSelector {
     fn select_emitter(
         &self,
@@ -79,7 +79,7 @@ impl MessageReceivedHookSelector for TestNoopReceivedHookSelector {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 #[async_trait::async_trait]
 impl CronLifecycleNudgeEmitter for TestNoopReceivedHookSelector {
     async fn emit(

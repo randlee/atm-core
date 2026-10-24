@@ -60,6 +60,8 @@ mod replacement_handler;
 mod shutdown_probe;
 mod singleton_guard;
 mod sqlite_observability;
+#[cfg(feature = "test-support")]
+pub mod test_support;
 
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
