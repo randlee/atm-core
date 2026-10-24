@@ -138,10 +138,13 @@ impl ControlledCronComposition {
                         model: Default::default(),
                         recipient_pane_id: None,
                         metadata_json: if name == TEST_RECIPIENT {
-                            serde_json::json!({"backendType": "herdr", "alias": TEST_RECIPIENT})
-                                .as_object()
-                                .expect("fixed test metadata is an object")
-                                .clone()
+                            serde_json::json!({
+                                atm_core::delivery_channel::BACKEND_TYPE_METADATA_KEY: "herdr",
+                                "alias": TEST_RECIPIENT
+                            })
+                            .as_object()
+                            .expect("fixed test metadata is an object")
+                            .clone()
                         } else {
                             Default::default()
                         },
