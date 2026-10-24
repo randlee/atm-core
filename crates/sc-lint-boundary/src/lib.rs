@@ -407,7 +407,10 @@ pub struct CallCallee {
 #[serde(rename_all = "snake_case")]
 pub enum CallCalleeKind {
     Associated,
+    AssociatedValue,
+    Constructor,
     Receiver,
+    TraitQualified,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
