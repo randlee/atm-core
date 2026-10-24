@@ -434,7 +434,10 @@ mod tests {
             }
             let parsed = CronCommand::try_parse_from(argv);
             if documented["valid"] == false {
-                assert!(parsed.is_err(), "fixture {id} must be refused by CLI parsing");
+                assert!(
+                    parsed.is_err(),
+                    "fixture {id} must be refused by CLI parsing"
+                );
                 continue;
             }
             let command = parsed.unwrap_or_else(|error| panic!("fixture {id}: {error}"));
@@ -469,9 +472,15 @@ mod tests {
             panic!("cron list response")
         };
         assert_eq!(rows.len(), 3, "three documented starts persist once each");
-        assert!(rows.iter().all(|row| !row.active), "end-phase stops remaining rows");
+        assert!(
+            rows.iter().all(|row| !row.active),
+            "end-phase stops remaining rows"
+        );
 
-        let composition = composition.reopen().await.expect("reopen SQLite composition");
+        let composition = composition
+            .reopen()
+            .await
+            .expect("reopen SQLite composition");
         let ResponseEnvelope::CronList(rows) = composition
             .execute(RequestEnvelope::CronList(CronListQuery {
                 caller_identity: TEST_SENDER.parse().expect("test sender"),
