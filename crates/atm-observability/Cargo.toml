@@ -30,6 +30,6 @@ tonic = { workspace = true, features = ["router"] }
 atm-core = { workspace = true, features = ["test-utils"] }
 serial_test = "3"
 tempfile = "3"
-opentelemetry-proto = { version = "=0.33.0", default-features = false, features = ["gen-tonic", "trace", "logs", "metrics"] }
+opentelemetry-proto = { version = "=0.33.1", default-features = false, features = ["gen-tonic", "trace", "logs", "metrics"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 trybuild = "1"

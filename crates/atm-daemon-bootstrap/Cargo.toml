@@ -52,7 +52,7 @@ atm-http-runtime = { workspace = true, features = ["test-support"] }
 atm-runtime-test-support.workspace = true
 atm-storage-rusqlite = { workspace = true, features = ["test-support"] }
 # In-process OTLP gRPC collector for the BD6 lifecycle proofs.
-opentelemetry-proto = { version = "=0.33.0", default-features = false, features = ["gen-tonic", "trace", "logs", "metrics"] }
+opentelemetry-proto = { version = "=0.33.1", default-features = false, features = ["gen-tonic", "trace", "logs", "metrics"] }
 serial_test = "3"
 sc-observability-log.workspace = true
 serde_json.workspace = true
