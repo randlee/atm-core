@@ -683,23 +683,19 @@ mod tests {
             std::fs::write(composition.root_path().join("fixture_reply.json"), reply)
                 .expect("write refusal reply");
             let command = deferred_cron_start(id, &module, composition.root_path());
-            assert!(matches!(
-                execute_composed(&composition, &command).await,
-                ResponseEnvelope::CronStarted(_)
-            ));
+            let ResponseEnvelope::CronStarted(schedule) =
+                execute_composed(&composition, &command).await
+            else {
+                panic!("fixture {id} must start")
+            };
             composition
                 .start_cron_worker()
                 .await
                 .expect("start controlled worker");
             composition
-                .advance_clock_settled(chrono::Duration::minutes(1))
-                .await;
-            composition
-                .advance_clock_settled(chrono::Duration::minutes(59))
-                .await;
-            composition
-                .advance_clock_settled(chrono::Duration::minutes(1))
-                .await;
+                .advance_clock_and_wait_for_run(&schedule, chrono::Duration::minutes(1))
+                .await
+                .expect("fixture cron run completes");
             let composition = composition
                 .reopen()
                 .await
@@ -780,23 +776,19 @@ mod tests {
         )
         .expect("write foreign-sender reply");
         let foreign = deferred_cron_start("reject-foreign-from", &module, composition.root_path());
-        assert!(matches!(
-            execute_composed(&composition, &foreign).await,
-            ResponseEnvelope::CronStarted(_)
-        ));
+        let ResponseEnvelope::CronStarted(foreign_schedule) =
+            execute_composed(&composition, &foreign).await
+        else {
+            panic!("foreign refusal must start")
+        };
         composition
             .start_cron_worker()
             .await
             .expect("start controlled cron worker");
         composition
-            .advance_clock_settled(chrono::Duration::minutes(1))
-            .await;
-        composition
-            .advance_clock_settled(chrono::Duration::minutes(59))
-            .await;
-        composition
-            .advance_clock_settled(chrono::Duration::minutes(1))
-            .await;
+            .advance_clock_and_wait_for_run(&foreign_schedule, chrono::Duration::minutes(1))
+            .await
+            .expect("foreign refusal run completes");
         let composition = composition
             .reopen()
             .await
@@ -844,17 +836,19 @@ mod tests {
         .expect("write malformed-output reply");
         let malformed =
             deferred_cron_start("reject-malformed-output", &module, composition.root_path());
-        assert!(matches!(
-            execute_composed(&composition, &malformed).await,
-            ResponseEnvelope::CronStarted(_)
-        ));
+        let ResponseEnvelope::CronStarted(malformed_schedule) =
+            execute_composed(&composition, &malformed).await
+        else {
+            panic!("malformed refusal must start")
+        };
         composition
             .start_cron_worker()
             .await
             .expect("restart controlled cron worker");
         composition
-            .advance_clock_settled(chrono::Duration::minutes(1))
-            .await;
+            .advance_clock_and_wait_for_run(&malformed_schedule, chrono::Duration::minutes(1))
+            .await
+            .expect("malformed refusal run completes");
         let composition = composition
             .reopen()
             .await
@@ -924,35 +918,39 @@ mod tests {
         .expect("malformed lifecycle cron argv parses");
         let mut lifecycle_caller = caller();
         lifecycle_caller.caller_identity = TEST_RECIPIENT.parse().expect("test recipient");
-        assert!(matches!(
-            composition
-                .execute(
-                    command
-                        .request(lifecycle_caller.clone())
-                        .expect("custom-mail request")
-                )
-                .await
-                .expect("custom-mail start"),
-            ResponseEnvelope::CronStarted(_)
-        ));
-        assert!(matches!(
-            composition
-                .execute(
-                    malformed_command
-                        .request(lifecycle_caller)
-                        .expect("malformed lifecycle request")
-                )
-                .await
-                .expect("malformed lifecycle start"),
-            ResponseEnvelope::CronStarted(_)
-        ));
+        let ResponseEnvelope::CronStarted(custom_schedule) = composition
+            .execute(
+                command
+                    .request(lifecycle_caller.clone())
+                    .expect("custom-mail request"),
+            )
+            .await
+            .expect("custom-mail start")
+        else {
+            panic!("custom mail must start")
+        };
+        let ResponseEnvelope::CronStarted(lifecycle_schedule) = composition
+            .execute(
+                malformed_command
+                    .request(lifecycle_caller)
+                    .expect("malformed lifecycle request"),
+            )
+            .await
+            .expect("malformed lifecycle start")
+        else {
+            panic!("lifecycle error must start")
+        };
         composition
             .start_cron_worker()
             .await
             .expect("start controlled cron worker");
         composition
-            .advance_clock_settled(chrono::Duration::minutes(1))
-            .await;
+            .advance_clock_and_wait_for_runs(
+                &[&custom_schedule, &lifecycle_schedule],
+                chrono::Duration::minutes(1),
+            )
+            .await
+            .expect("custom mail and lifecycle runs complete");
         composition.shutdown_cron_worker().await;
         assert!(
             composition.has_herdr_prompt(

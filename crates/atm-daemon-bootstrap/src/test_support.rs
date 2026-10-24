@@ -204,9 +204,29 @@ impl ControlledCronComposition {
         schedule: &CronSchedule,
         duration: chrono::Duration,
     ) -> Result<(), AtmError> {
-        let completion = self.cron.register_run_completion(schedule);
+        self.advance_clock_and_wait_for_runs(&[schedule], duration)
+            .await
+    }
+
+    /// Advances once after registering completions for every supplied schedule.
+    ///
+    /// Registering each waiter before moving the controlled clock makes a shared
+    /// tick observable without a second advance that could trigger an unrelated
+    /// recurrence.
+    pub async fn advance_clock_and_wait_for_runs(
+        &self,
+        schedules: &[&CronSchedule],
+        duration: chrono::Duration,
+    ) -> Result<(), AtmError> {
+        let completions = schedules
+            .iter()
+            .map(|schedule| self.cron.register_run_completion(schedule))
+            .collect::<Vec<_>>();
         self.clock.advance_settled(duration).await;
-        completion.wait().await
+        for completion in completions {
+            completion.wait().await?;
+        }
+        Ok(())
     }
 
     /// Stops the production worker after all in-flight deterministic work settles.

@@ -74,14 +74,17 @@ async fn run_action(
         ))
         .await
         .expect("start cron action");
-    assert!(matches!(started, ResponseEnvelope::CronStarted(_)));
+    let ResponseEnvelope::CronStarted(schedule) = started else {
+        panic!("cron action must start")
+    };
     composition
         .start_cron_worker()
         .await
         .expect("start controlled worker");
     composition
-        .advance_clock_settled(chrono::Duration::minutes(1))
-        .await;
+        .advance_clock_and_wait_for_run(&schedule, chrono::Duration::minutes(1))
+        .await
+        .expect("cron action run completes");
     let composition = composition.reopen().await.expect("reopen composition");
     let ended = composition
         .execute(end_request(name))
