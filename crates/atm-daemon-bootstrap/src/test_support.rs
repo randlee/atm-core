@@ -21,7 +21,6 @@ use atm_runtime::RuntimeAssembly;
 use atm_runtime_test_support::open_isolated_sqlite_boundary;
 
 use crate::cron_composition::{RuntimeCronComposition, compose_controlled};
-use crate::received_hook_selector::ReceivedHookTransports;
 use crate::replacement_handler::{
     ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
 };
@@ -38,6 +37,7 @@ pub struct ControlledCronComposition {
     cron: Arc<AtmCron>,
     clock: Arc<ManualClock>,
     cron_worker: Mutex<Option<CronWorkerHandle>>,
+    herdr_process: Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
     recovery_sweep: queue_drain::RecoverySweepHandle,
 }
 
@@ -54,6 +54,7 @@ impl ControlledCronComposition {
         let assembly = open_isolated_sqlite_boundary(root.path())?.for_daemon();
         Self::seed_roster(&assembly)?;
         let runtime = assembly.service_runtime.clone();
+        let herdr_process = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
         let crate::replacement_handler::ReplacementHandler {
             handler,
             recovery_sweep,
@@ -67,7 +68,16 @@ impl ControlledCronComposition {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(NullObservability),
-                selector_factory: |_, _, _, _| ReceivedHookTransports::disabled_for_test(),
+                selector_factory:
+                    |runtime, herdr, health, bare_cli: crate::bare_cli_runtime::BareCliRuntime| {
+                        crate::received_hook_selector::active_received_hook_transports_with_health_and_fifo(
+                        runtime,
+                        herdr,
+                        health,
+                        bare_cli.fifo(),
+                        bare_cli.queue_full_drops(),
+                    )
+                    },
                 daemon_launch_identity: DaemonLaunchIdentity::default(),
                 peer_wire_mode: atm_core::peer_wire::PeerWireMode::plaintext_test(),
                 peer_adapter_selection: SelectedPeerAdapterSelection {
@@ -78,9 +88,7 @@ impl ControlledCronComposition {
                 diagnostic_counters: None,
                 bare_cli: Default::default(),
                 herdr_config: Default::default(),
-                herdr_process: Some(Arc::new(
-                    atm_herdr::testing::FakeHerdrProcessAdapter::default(),
-                )),
+                herdr_process: Some(herdr_process.clone()),
                 daemon_home: root.path().into(),
             },
         )?;
@@ -107,6 +115,7 @@ impl ControlledCronComposition {
             cron,
             clock,
             cron_worker: Mutex::new(None),
+            herdr_process,
             recovery_sweep,
         })
     }
@@ -128,7 +137,14 @@ impl ControlledCronComposition {
                         agent_type: Default::default(),
                         model: Default::default(),
                         recipient_pane_id: None,
-                        metadata_json: Default::default(),
+                        metadata_json: if name == TEST_RECIPIENT {
+                            serde_json::json!({"backendType": "herdr", "alias": TEST_RECIPIENT})
+                                .as_object()
+                                .expect("fixed test metadata is an object")
+                                .clone()
+                        } else {
+                            Default::default()
+                        },
                     })
                     .collect(),
                 refreshed_at: None,
@@ -177,8 +193,8 @@ impl ControlledCronComposition {
         self.clock.advance_settled(duration).await;
     }
 
-    /// Rebuilds the production composition over the same isolated SQLite data.
-    pub async fn reopen(self) -> Result<Self, AtmError> {
+    /// Stops the production worker after all in-flight deterministic work settles.
+    pub async fn shutdown_cron_worker(&self) {
         let worker = self
             .cron_worker
             .lock()
@@ -189,12 +205,23 @@ impl ControlledCronComposition {
                 .shutdown(tokio::time::Instant::now() + Duration::from_secs(1))
                 .await;
         }
+    }
+
+    /// Returns the direct Herdr calls made by the production lifecycle transport.
+    pub fn herdr_calls(&self) -> Vec<atm_herdr::testing::FakeHerdrCall> {
+        self.herdr_process.calls()
+    }
+
+    /// Rebuilds the production composition over the same isolated SQLite data.
+    pub async fn reopen(self) -> Result<Self, AtmError> {
+        self.shutdown_cron_worker().await;
         let Self {
             root,
             handler,
             cron,
             clock,
             cron_worker: _,
+            herdr_process: _,
             recovery_sweep,
         } = self;
         recovery_sweep

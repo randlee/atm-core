@@ -670,6 +670,88 @@ mod tests {
         assert_empty_mailbox(&composition, TEST_SENDER).await;
         assert_empty_mailbox(&composition, TEST_RECIPIENT).await;
     }
+
+    #[tokio::test]
+    async fn composed_cron_delivers_custom_mail_and_lifecycle_nudge() {
+        let composition = ControlledCronComposition::new().expect("compose daemon");
+        let module = fixture("cron_composed_actions.py");
+        let command = CronCommand::try_parse_from([
+            "cron",
+            "start",
+            "custom-mail",
+            "--cron",
+            "0 * * * * *",
+            "--phase",
+            TEST_TEAM,
+            "--module",
+            module.to_str().expect("fixture module utf-8"),
+            "--arg",
+            "custom-mail",
+            "--until",
+            "2026-10-24T01:00:00Z",
+        ])
+        .expect("custom-mail cron argv parses");
+        let mut lifecycle_caller = caller();
+        lifecycle_caller.caller_identity = TEST_RECIPIENT.parse().expect("test recipient");
+        assert!(matches!(
+            composition
+                .execute(
+                    command
+                        .request(lifecycle_caller)
+                        .expect("custom-mail request")
+                )
+                .await
+                .expect("custom-mail start"),
+            ResponseEnvelope::CronStarted(_)
+        ));
+        composition
+            .start_cron_worker()
+            .await
+            .expect("start controlled cron worker");
+        composition
+            .advance_clock_settled(chrono::Duration::minutes(1))
+            .await;
+        composition.shutdown_cron_worker().await;
+        assert!(
+            !composition.herdr_calls().is_empty(),
+            "production lifecycle transport emits a deterministic Herdr prompt"
+        );
+        let composition = composition
+            .reopen()
+            .await
+            .expect("reopen after custom mail");
+
+        let ResponseEnvelope::List(outcome) = composition
+            .execute(RequestEnvelope::List(
+                ListQuery::new(
+                    composition.root_path().into(),
+                    composition.root_path().into(),
+                    TEST_RECIPIENT.parse().expect("test recipient"),
+                    Some(TEST_RECIPIENT),
+                    TEST_TEAM.parse().expect("test team"),
+                    ReadSelection::All,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("custom-mail list request"),
+            ))
+            .await
+            .expect("list custom mail")
+        else {
+            panic!("list response")
+        };
+        assert_eq!(outcome.count, 1);
+        assert_eq!(
+            outcome.rows[0].from,
+            "atm-daemon"
+                .parse::<atm_core::types::AgentName>()
+                .expect("daemon sender")
+        );
+    }
 }
 
 #[derive(Debug, Parser)]
