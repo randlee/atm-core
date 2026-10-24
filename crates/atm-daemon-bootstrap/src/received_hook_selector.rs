@@ -432,26 +432,19 @@ impl CronLifecycleNudgeEmitter for ReplacementReceivedHookSelector {
                     "tmux lifecycle handoff result is unknown",
                 ))
             }),
-            CronLifecycleNudgeTarget::Herdr(target) => {
-                match self
-                    .herdr
-                    .process
-                    .prompt(
-                        &target.agent,
-                        target.session.as_ref(),
-                        &target.rendered_nudge,
-                        RequestDeadline::after(std::time::Duration::from_secs(30)),
-                    )
-                    .await
-                {
-                    Ok(HerdrPromptOutcome::Accepted(_)) => {
-                        Ok(atm_storage::DeliveryReceipt::Accepted { receipt_id })
-                    }
-                    Err(_) => Ok(unknown_lifecycle_receipt(
+            CronLifecycleNudgeTarget::Herdr(target) => self
+                .herdr
+                .emit_nudge(
+                    target,
+                    RequestDeadline::after(std::time::Duration::from_secs(30)),
+                )
+                .await
+                .map(|()| atm_storage::DeliveryReceipt::Accepted { receipt_id })
+                .or_else(|_| {
+                    Ok(unknown_lifecycle_receipt(
                         "herdr lifecycle handoff result is unknown",
-                    )),
-                }
-            }
+                    ))
+                }),
             CronLifecycleNudgeTarget::Graft(target) => {
                 let runtime = self.graft.service_runtime.clone();
                 let key = nudge.key;
@@ -597,7 +590,6 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
         dispatch: BuiltInPostSendDispatch,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<PostSendEmissionPath, AtmError>> + Send + '_>> {
-        let process = Arc::clone(&self.process);
         Box::pin(async move {
             let PostSendBuiltInTarget::LocalSteer(boundary::LocalSteerTarget::Herdr(target)) =
                 dispatch.target
@@ -606,27 +598,29 @@ impl AsyncMessageReceivedHookEmitter for HerdrReceivedHook {
                     "Herdr receiver hook received a non-Herdr dispatch",
                 ));
             };
-            let result = process
-                .prompt(
-                    &target.agent,
-                    target.session.as_ref(),
-                    &target.rendered_nudge,
-                    deadline,
-                )
-                .await;
-            match result {
-                Ok(HerdrPromptOutcome::Accepted(_)) => {
-                    tracing::info!(backend = "herdr", member = %dispatch.event.recipient, outcome = "accepted", "Herdr wake-up submitted");
-                }
-                Err(error) => {
-                    let outcome = error.emission_outcome();
-                    let code = atm_core::error::AtmError::from(error.clone()).code();
-                    tracing::warn!(subsystem = "herdr_queue_wake", action = "herdr_prompt", backend = "herdr", member = %dispatch.event.recipient, code = %code, failure_class = outcome, error = ?error, outcome, "Herdr wake-up was not accepted");
-                    return Err(error.into());
-                }
-            }
+            self.emit_nudge(&target, deadline).await?;
+            tracing::info!(backend = "herdr", member = %dispatch.event.recipient, outcome = "accepted", "Herdr wake-up submitted");
             Ok(PostSendEmissionPath::LocalHerdr)
         })
+    }
+}
+
+impl HerdrReceivedHook {
+    async fn emit_nudge(
+        &self,
+        target: &boundary::HerdrNudgeTarget,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
+        self.process
+            .prompt(
+                &target.agent,
+                target.session.as_ref(),
+                &target.rendered_nudge,
+                deadline,
+            )
+            .await
+            .map(|HerdrPromptOutcome::Accepted(_)| ())
+            .map_err(Into::into)
     }
 }
 

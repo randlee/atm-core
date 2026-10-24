@@ -263,6 +263,7 @@ mod tests {
     use std::path::Path;
 
     const PUBLIC_KEY: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    const TEST_TRUST_ROOT_PATH: &str = "trust-root.json";
 
     #[test]
     fn parses_a_complete_installer_policy_into_the_validated_registry_config() {
@@ -271,7 +272,7 @@ mod tests {
         ))
         .expect("valid root document");
 
-        let config = root.into_configs(Path::new("/etc/atm/tool-sender-trust-root.json"));
+        let config = root.into_configs(Path::new(TEST_TRUST_ROOT_PATH));
 
         assert!(config.is_ok(), "complete policy is accepted");
     }
@@ -289,7 +290,7 @@ mod tests {
         )
         .expect("schema is syntactically valid");
         let error = root
-            .into_configs(Path::new("/etc/atm/tool-sender-trust-root.json"))
+            .into_configs(Path::new(TEST_TRUST_ROOT_PATH))
             .expect_err("malformed key must fail closed");
         assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
 
@@ -298,7 +299,7 @@ mod tests {
         ))
         .expect("schema is syntactically valid");
         let error = root
-            .into_configs(Path::new("/etc/atm/tool-sender-trust-root.json"))
+            .into_configs(Path::new(TEST_TRUST_ROOT_PATH))
             .expect_err("invalid protected local host must fail closed");
         assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
 
@@ -307,7 +308,7 @@ mod tests {
         ))
         .expect("schema is syntactically valid");
         let error = root
-            .into_configs(Path::new("/etc/atm/tool-sender-trust-root.json"))
+            .into_configs(Path::new(TEST_TRUST_ROOT_PATH))
             .expect_err("empty origin policy must fail closed");
         assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
     }
@@ -315,7 +316,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn rejects_paths_without_administrator_protection() {
-        let path = Path::new("/etc/atm/tool-sender-trust-root.json");
+        let path = Path::new(TEST_TRUST_ROOT_PATH);
         let error = verify_unix_metadata(path, true, 1000, 0o755, true, 0, 0o600)
             .expect_err("non-root parent owner is unsafe");
         assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
