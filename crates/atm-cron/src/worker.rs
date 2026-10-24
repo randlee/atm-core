@@ -396,6 +396,7 @@ pub(crate) async fn run(
             }
             (index, result) = finished(&mut slots) => {
                 slots[index].in_flight.take();
+                #[cfg(feature = "test-utils")]
                 let cancelled = result.as_ref().is_err_and(|error| error.is_cancelled());
                 #[cfg(feature = "test-utils")]
                 let mut ticket = slots[index].completion.take();
@@ -429,6 +430,7 @@ pub(crate) async fn run(
         if let Some(handle) = &mut slot.in_flight {
             let result = handle.await;
             slot.in_flight.take();
+            #[cfg(feature = "test-utils")]
             let cancelled = result.as_ref().is_err_and(|error| error.is_cancelled());
             complete(&cron, &slot, result).await;
             #[cfg(feature = "test-utils")]
