@@ -9,6 +9,7 @@ use std::{fs, path::PathBuf};
 use atm_core::{
     boundary::{PhaseId, StopCondition},
     hook::CronStartRequest,
+    test_support::TEST_TEAM,
     types::IsoTimestamp,
 };
 use atm_runtime_test_support::open_isolated_sqlite_boundary;
@@ -41,7 +42,7 @@ fn fixture(id: &str) -> Value {
 fn documented_start_request(custom: Value) -> CronStartRequest {
     CronStartRequest {
         caller_identity: "creator".parse().expect("creator"),
-        caller_team: "atm-dev".parse().expect("team"),
+        caller_team: TEST_TEAM.parse().expect("team"),
         phase: PhaseId::parse("bk").expect("phase"),
         name: "nightly".to_owned(),
         cron_expr: "0 */5 * * * *".to_owned(),
