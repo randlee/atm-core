@@ -454,6 +454,37 @@ mod tests {
                 .unwrap_or_else(|error| panic!("fixture {id} output: {error}"));
             assert!(!output.is_empty(), "fixture {id} rendered output");
         }
+
+        let list = CronCommand::try_parse_from(["cron", "list", "--phase", "bk", "--json"])
+            .expect("documented list argv");
+        let RequestEnvelope::CronList(list_request) = list.request(caller()).expect("list request")
+        else {
+            unreachable!("cron list must build a list request")
+        };
+        let ResponseEnvelope::CronList(rows) = composition
+            .execute(RequestEnvelope::CronList(list_request))
+            .await
+            .expect("list durable cron rows")
+        else {
+            panic!("cron list response")
+        };
+        assert_eq!(rows.len(), 3, "three documented starts persist once each");
+        assert!(rows.iter().all(|row| !row.active), "end-phase stops remaining rows");
+
+        let composition = composition.reopen().await.expect("reopen SQLite composition");
+        let ResponseEnvelope::CronList(rows) = composition
+            .execute(RequestEnvelope::CronList(CronListQuery {
+                caller_identity: TEST_SENDER.parse().expect("test sender"),
+                caller_team: TEST_TEAM.parse().expect("test team"),
+                phase: Some(PhaseId::parse("bk").expect("fixture phase")),
+            }))
+            .await
+            .expect("list recovered cron rows")
+        else {
+            panic!("reopened cron list response")
+        };
+        assert_eq!(rows.len(), 3, "restart retains documented schedules");
+        assert!(rows.iter().all(|row| !row.active));
     }
 }
 
