@@ -101,12 +101,12 @@ class LintPeerDialSeamTests(unittest.TestCase):
             )
             self.assertEqual(collect_seam_findings(repo_root), [])
 
-    def test_adr_040_literal_ip_check_is_allowlisted(self) -> None:
+    def test_adr_040_literal_ip_check_is_allowlisted_at_extracted_location(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
-            (repo_root / "crates/atm/src/commands").mkdir(parents=True)
-            (repo_root / "crates/atm/src/commands/send.rs").write_text(
+            (repo_root / "crates/atm/src/commands/send").mkdir(parents=True)
+            (repo_root / "crates/atm/src/commands/send/peer_resolution.rs").write_text(
                 "fn check() { let _ = (host, port).to_socket_addrs(); }\n", encoding="utf-8"
             )
             (repo_root / "crates/atm/src/other.rs").write_text(

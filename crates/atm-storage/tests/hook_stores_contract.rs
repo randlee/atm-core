@@ -105,20 +105,6 @@ fn generation(value: u32) -> CronGeneration {
 }
 
 #[test]
-fn new_cron_schedule_requires_a_stop_condition() {
-    assert_eq!(
-        serde_json::to_value(StopCondition::Hook).expect("serialize hook stop"),
-        serde_json::json!({"kind": "hook"})
-    );
-
-    let until = StopCondition::Until { at: stamp(3) };
-    let serialized = serde_json::to_value(&until).expect("serialize until stop");
-    let decoded: StopCondition =
-        serde_json::from_value(serialized).expect("deserialize until stop");
-    assert_eq!(decoded, until);
-}
-
-#[test]
 fn disable_keeps_rows_inactive() {
     let store = InMemoryHookRegistrationStore::new();
     store

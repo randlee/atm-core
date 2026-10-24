@@ -209,6 +209,7 @@ dependencies = [
  "agent-team-mail-core",
  "async-trait",
  "atm-runtime-test-support",
+ "atm-storage",
  "chrono",
  "cron",
  "getrandom 0.3.4",
@@ -262,6 +263,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "ulid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -420,6 +422,7 @@ dependencies = [
  "atm-runtime",
  "atm-storage",
  "atm-storage-rusqlite",
+ "tokio",
 ]
 
 [[package]]
@@ -436,6 +439,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "toml 0.8.23",
+ "trybuild",
  "ulid",
  "x509-parser",
  "zeroize",
@@ -447,10 +451,13 @@ version = "1.6.5"
 dependencies = [
  "async-trait",
  "atm-storage",
+ "base64",
  "chrono",
+ "ring",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
  "tracing",

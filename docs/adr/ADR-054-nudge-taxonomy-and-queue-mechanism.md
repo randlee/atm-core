@@ -482,3 +482,46 @@ only Herdr queue/drain mechanism: it polls the Herdr roster and prompts from
 the durable ATM pending-marker store. A prompt being accepted does not mean
 that the message was read. Only `atm read`, which clears the pending marker,
 means read; the durable ATM mailbox remains the source of truth.
+
+## BK-9 amendment — cron lifecycle nudge port
+
+BK-9 introduces `CronLifecycleNudger`, `cron_lifecycle_nudger`, and
+`RecordingCronLifecycleNudger` to select and deliver persisted
+`CronNoticeIntent` records. They are lifecycle plumbing for cron terminal,
+error, and custom notices; they do not add a physical nudge kind or alter the
+existing Steer/Queue taxonomy. These three identifiers are therefore admitted
+to the frozen taxonomy inventory.
+
+## BK-12 amendment — cron lifecycle template helpers
+
+BK-12 adds `render_cron_lifecycle_nudge` and
+`validate_cron_nudge_template_body` in `atm-core` for the cron-only built-in
+template family. The renderer uses committed cron lifecycle event values;
+the validator checks cron override placeholders before storage. Like the
+template override cluster in (g), these helpers use nudge in its umbrella
+sense: neither selects nor introduces a Steer/Queue delivery kind. These two
+exact identifiers are therefore admitted to the frozen taxonomy inventory;
+the kind taxonomy and gate for all other new identifiers remain unchanged.
+
+## BK-14 amendment — cron lifecycle transport representation
+
+BK-14 adds the exact identifiers `CronLifecycleNudge` and
+`CronLifecycleNudgeTarget` for the typed lifecycle payload and its explicit
+transport target, plus `CronLifecycleNudgeEmitter` and
+`cron_lifecycle_nudge_emitter` for the sealed core port and module,
+`CronLifecycleNudgerAdapter` and `RecordingCronLifecycleNudgeEmitter` for
+production and test adapters, and `resolve_cron_lifecycle_nudge_target` for
+runtime target resolution. These names represent direct delivery of the
+existing committed cron lifecycle template through an authenticated transport;
+they do not introduce a third nudge kind, a mailbox/task/ack side effect, or a
+change to the Steer/Queue taxonomy. This is a narrow inventory addition under
+the BK-14 authorization recorded in ATM message `01M5NJ8TVNXRFC78ZHKCVR905P`.
+The bootstrap transport wiring also uses `lifecycle_nudge_emitter` and
+`emit_nudge` to carry the same typed payload to its selected transport; these
+identifiers do not change delivery semantics or the nudge-kind taxonomy.
+The associated Graft/Python transport identifiers `HostCronNudge`,
+`inject_cron_nudge`, `spawn_host_cron_nudge_helper`,
+`receive_host_cron_nudge_result`, and `PyCronNudge` are also admitted; they are
+authorized in ATM message `01M5NJCJSK2Q8KZYB6R3NYH96F` and represent the same
+direct lifecycle transport. The frozen identifier gate remains active for
+every other identifier.

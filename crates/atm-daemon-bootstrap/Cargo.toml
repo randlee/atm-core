@@ -11,6 +11,14 @@ homepage.workspace = true
 
 [features]
 benchmark-harness = []
+test-support = [
+    "dep:atm-runtime-test-support",
+    "dep:tempfile",
+    "atm-core/test-utils",
+    "atm-cron/test-utils",
+    "atm-herdr/test-utils",
+    "atm-http-runtime/test-support",
+]
 
 [[bin]]
 name = "atm-daemon-benchmark"
@@ -28,6 +36,7 @@ atm-runtime.workspace = true
 atm-storage.workspace = true
 atm-storage-rusqlite.workspace = true
 atm-template-sc-compose.workspace = true
+atm-runtime-test-support = { workspace = true, optional = true }
 # Lifecycle-only standard SDK provider handles (ADR-064); construction stays in atm-observability.
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
@@ -40,9 +49,22 @@ serde_json.workspace = true
 serde.workspace = true
 toml = "0.8"
 ulid.workspace = true
+tempfile = { version = "3", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_IO",
+    "Win32_System_SystemServices",
+    "Win32_UI_Shell",
+] }
 
 [dev-dependencies]
 atm-cron = { workspace = true, features = ["test-utils"] }

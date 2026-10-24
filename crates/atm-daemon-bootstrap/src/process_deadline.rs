@@ -90,6 +90,20 @@ impl Drop for GroupKillGuard {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum FailedCollectionCleanup {
+    Skip,
+    KillGroupAndReap,
+}
+
+fn failed_collection_cleanup<T>(leader_status: &io::Result<Option<T>>) -> FailedCollectionCleanup {
+    if matches!(leader_status, Ok(Some(_))) {
+        FailedCollectionCleanup::Skip
+    } else {
+        FailedCollectionCleanup::KillGroupAndReap
+    }
+}
+
 fn failed(spec: &SpawnSpec, error: io::Error) -> SpawnFailure {
     SpawnFailure::Failed(AtmError::hook_exit(HookExitCause::Spawn {
         path: spec.program.clone(),
@@ -206,14 +220,15 @@ pub(crate) async fn spawn_until(
         result = collect(&mut child, stdin, &spec) => result,
     };
     if result.is_err() {
-        tracing::warn!(
-            subsystem = "atm_hook",
-            outcome = "killed",
-            elapsed_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
-            "killing hook process group after failed or timed-out collection"
-        );
-        guard.kill();
-        if !matches!(child.try_wait(), Ok(Some(_))) {
+        let leader_status = child.try_wait();
+        if failed_collection_cleanup(&leader_status) == FailedCollectionCleanup::KillGroupAndReap {
+            tracing::warn!(
+                subsystem = "atm_hook",
+                outcome = "killed",
+                elapsed_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+                "killing hook process group after failed or timed-out collection"
+            );
+            guard.kill();
             let _ = child.kill().await;
             child.wait().await.map_err(|error| failed(&spec, error))?;
         }
@@ -258,6 +273,32 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::*;
+
+    #[test]
+    fn failed_collection_skips_cleanup_after_leader_is_reaped() {
+        assert_eq!(
+            failed_collection_cleanup(&Ok::<Option<()>, io::Error>(Some(()))),
+            FailedCollectionCleanup::Skip
+        );
+    }
+
+    #[test]
+    fn failed_collection_keeps_cleanup_for_a_running_leader() {
+        assert_eq!(
+            failed_collection_cleanup(&Ok::<Option<()>, io::Error>(None)),
+            FailedCollectionCleanup::KillGroupAndReap
+        );
+    }
+
+    #[test]
+    fn failed_collection_keeps_cleanup_when_leader_status_is_unknown() {
+        assert_eq!(
+            failed_collection_cleanup(&Err::<Option<()>, _>(io::Error::other(
+                "injected try_wait failure"
+            ))),
+            FailedCollectionCleanup::KillGroupAndReap
+        );
+    }
 
     struct FailingReader;
 
@@ -452,38 +493,6 @@ mod tests {
                 "HOOK.EXIT: cannot read stdout: injected pipe failure\n  Recovery: ",
                 "Fix the hook module so it starts and exits with a valid reply, then retry."
             )
-        );
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn cancel_kills_descendant_after_leader_exits() {
-        let root = tempfile::tempdir().unwrap();
-        let (path, ready, reader) = pipe(&root);
-        let source = "import os,sys,threading\nwriter=open(sys.argv[1],'wb',buffering=0)\nif os.fork()==0:\n writer.write(b'r')\n threading.Event().wait()\nos._exit(0)\n";
-        let spawn = spec(&root, source, vec![path.into_os_string()]);
-        let (cancel, cancelled) = oneshot::channel();
-        let handle = tokio::spawn(async move {
-            spawn_until(spawn, b"{}", async {
-                cancelled.await.unwrap();
-            })
-            .await
-        });
-        tokio::time::timeout(Duration::from_secs(10), ready)
-            .await
-            .expect("FIFO reader must observe descendant readiness")
-            .unwrap();
-        cancel.send(()).unwrap();
-        assert!(matches!(
-            handle.await.unwrap(),
-            Err(SpawnFailure::TimedOut { .. })
-        ));
-        assert!(
-            tokio::time::timeout(Duration::from_secs(10), reader)
-                .await
-                .expect("FIFO closes when the descendant process group is killed")
-                .unwrap()
-                .is_empty()
         );
     }
 

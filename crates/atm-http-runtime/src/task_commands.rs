@@ -49,7 +49,7 @@ impl TaskCommands for NormalTaskCommands {
         ctx: &TaskCallCtx,
     ) -> Result<ApiResponse, AtmError> {
         self.router
-            .task_move(req, ctx.ingress.clone(), ctx.deadline)
+            .task_move(req, ctx.ingress.clone(), ctx.deadline, None)
             .await
     }
     async fn list(&self, req: TaskList, ctx: &TaskCallCtx) -> Result<ApiResponse, AtmError> {

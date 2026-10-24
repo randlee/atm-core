@@ -5,7 +5,7 @@
 //! to `atm-runtime`; they neither reconstruct mailbox policy nor call the
 //! retained synchronous service runtime.
 
-use atm_storage::MailboxScope;
+use atm_storage::{MailboxScope, MessageWriteOrigin};
 use std::time::Duration;
 
 use crate::error::AtmError;
@@ -26,6 +26,7 @@ pub struct AsyncReadCommand {
     loads_seen_watermark: bool,
     updates_seen_state: bool,
     wait_timeout: Option<Duration>,
+    write_origin: MessageWriteOrigin,
 }
 
 impl AsyncReadCommand {
@@ -63,6 +64,17 @@ impl AsyncReadCommand {
     #[must_use]
     pub fn wait_timeout(&self) -> Option<Duration> {
         self.wait_timeout
+    }
+
+    #[must_use]
+    pub fn write_origin(&self) -> MessageWriteOrigin {
+        self.write_origin
+    }
+
+    #[must_use]
+    pub fn with_write_origin(mut self, origin: MessageWriteOrigin) -> Self {
+        self.write_origin = origin;
+        self
     }
 }
 
@@ -153,6 +165,7 @@ fn prepare(
         loads_seen_watermark: seen_requested,
         updates_seen_state,
         wait_timeout: query.timeout_secs().map(Duration::from_secs),
+        write_origin: MessageWriteOrigin::Local,
     })
 }
 

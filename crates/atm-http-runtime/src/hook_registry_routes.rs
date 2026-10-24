@@ -258,6 +258,7 @@ impl StorageAndNudgeRouter {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Arc;
@@ -344,6 +345,28 @@ mod tests {
             timeout_ms: 1_000,
             custom: json!({"goal": "ship"}),
         }
+    }
+
+    fn assert_complete_registration(row: &atm_core::boundary::HookRegistration) {
+        let value = serde_json::to_value(row).expect("registration JSON");
+        let object = value.as_object().expect("registration object");
+        let keys: BTreeSet<&str> = object.keys().map(String::as_str).collect();
+        let expected: BTreeSet<&str> = [
+            "team",
+            "phase",
+            "hook",
+            "module_path",
+            "cwd",
+            "timeout_ms",
+            "custom",
+            "active",
+            "registered_by",
+            "registered_at",
+            "disabled_at",
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(keys, expected, "response must carry the full persisted row");
     }
 
     async fn register(
@@ -626,6 +649,150 @@ mod tests {
             }
             other => panic!("expected HookList, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn register_response_is_the_complete_persisted_row() {
+        let routes = routes();
+        let response = routes
+            .router
+            .hook_register(
+                register_request("sender", "task.assign", "bk"),
+                AuthenticatedIngress::Local,
+                deadline(),
+            )
+            .await
+            .expect("register");
+        let ResponseEnvelope::HookRegistered(returned) = response.into_inner() else {
+            panic!("expected HookRegistered response");
+        };
+        let stored = routes.hooks.active_all().expect("stored rows");
+        assert_eq!(stored.len(), 1);
+        assert_eq!(
+            serde_json::to_value(&returned).expect("response JSON"),
+            serde_json::to_value(&stored[0]).expect("stored JSON"),
+        );
+        assert_complete_registration(&returned);
+    }
+
+    #[tokio::test]
+    async fn disable_responses_contain_only_changed_complete_rows() {
+        let routes = routes();
+        for (name, phase_name) in [
+            ("task.assign", "bk"),
+            ("task.close", "bk"),
+            ("task.assign", "bj"),
+        ] {
+            register(&routes, register_request("sender", name, phase_name))
+                .await
+                .expect("register");
+        }
+
+        let single = routes
+            .router
+            .hook_disable(
+                HookDisableRequest {
+                    caller_identity: agent("sender"),
+                    caller_team: team(),
+                    phase: phase("bk"),
+                    hook: Some("task.assign".to_owned()),
+                },
+                AuthenticatedIngress::Local,
+                deadline(),
+            )
+            .await
+            .expect("single disable");
+        let ResponseEnvelope::HookDisabled(single_rows) = single.into_inner() else {
+            panic!("expected HookDisabled response");
+        };
+        assert_eq!(single_rows.len(), 1);
+        assert_complete_registration(&single_rows[0]);
+        let persisted = routes.hooks.list(&team(), None).expect("stored rows");
+        let persisted_single = persisted
+            .iter()
+            .find(|row| row.phase.as_str() == "bk" && row.hook.as_str() == "task.assign")
+            .expect("single row");
+        assert_eq!(
+            serde_json::to_value(&single_rows[0]).expect("response JSON"),
+            serde_json::to_value(persisted_single).expect("stored JSON"),
+        );
+        assert!(!persisted_single.active);
+        assert!(persisted.iter().any(|row| {
+            row.phase.as_str() == "bk" && row.hook.as_str() == "task.close" && row.active
+        }));
+        assert!(persisted.iter().any(|row| {
+            row.phase.as_str() == "bj" && row.hook.as_str() == "task.assign" && row.active
+        }));
+
+        let phase_wide = routes
+            .router
+            .hook_disable(
+                HookDisableRequest {
+                    caller_identity: agent("sender"),
+                    caller_team: team(),
+                    phase: phase("bk"),
+                    hook: None,
+                },
+                AuthenticatedIngress::Local,
+                deadline(),
+            )
+            .await
+            .expect("phase-wide disable");
+        let ResponseEnvelope::HookDisabled(phase_rows) = phase_wide.into_inner() else {
+            panic!("expected HookDisabled response");
+        };
+        assert_eq!(
+            phase_rows.len(),
+            1,
+            "already inactive rows are not returned"
+        );
+        assert_complete_registration(&phase_rows[0]);
+        assert_eq!(phase_rows[0].hook.as_str(), "task.close");
+        assert!(!phase_rows[0].active);
+        assert!(phase_rows[0].disabled_at.is_some());
+        let persisted = routes
+            .hooks
+            .list(&team(), None)
+            .expect("stored rows after phase-wide disable");
+        let persisted_phase_row = persisted
+            .iter()
+            .find(|row| row.phase.as_str() == "bk" && row.hook.as_str() == "task.close")
+            .expect("phase-wide row");
+        assert_eq!(
+            serde_json::to_value(&phase_rows[0]).expect("response JSON"),
+            serde_json::to_value(persisted_phase_row).expect("stored JSON"),
+        );
+        let before_no_match: Vec<_> = persisted
+            .iter()
+            .map(|row| serde_json::to_value(row).expect("stored JSON"))
+            .collect();
+
+        let no_match = routes
+            .router
+            .hook_disable(
+                HookDisableRequest {
+                    caller_identity: agent("sender"),
+                    caller_team: team(),
+                    phase: phase("empty"),
+                    hook: None,
+                },
+                AuthenticatedIngress::Local,
+                deadline(),
+            )
+            .await
+            .expect("no-match disable is successful");
+        let ResponseEnvelope::HookDisabled(no_match_rows) = no_match.into_inner() else {
+            panic!("expected HookDisabled response");
+        };
+        assert!(no_match_rows.is_empty());
+        let after_no_match: Vec<_> = routes
+            .hooks
+            .list(&team(), None)
+            .expect("stored rows after no-match disable")
+            .iter()
+            .map(|row| serde_json::to_value(row).expect("stored JSON"))
+            .collect();
+        assert_eq!(before_no_match, after_no_match);
     }
 
     #[tokio::test]

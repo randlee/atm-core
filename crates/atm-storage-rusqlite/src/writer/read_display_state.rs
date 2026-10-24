@@ -1,6 +1,7 @@
 use super::ops::WriteOpResult;
 use super::stmt_cache::WriterStatementCache;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
+use atm_storage::MessageWriteOrigin;
 use atm_storage::contract::{MailboxScope, MessageKey};
 use atm_storage::error::AtmError;
 use atm_storage::types::IsoTimestamp;
@@ -10,10 +11,12 @@ pub(super) fn execute_read_display_state(
     mailbox: &MailboxScope,
     message_ids: &[MessageKey],
     seen_watermark: Option<IsoTimestamp>,
+    provenance: MessageWriteOrigin,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
+    super::message_admission::validate_cron_generation_fence(provenance, connection)?;
     let now = IsoTimestamp::now();
     let updated_at = now.to_string();
     let next_due = atm_storage::next_reminder_due(now).to_string();

@@ -23,6 +23,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "peer-tls"),
     ("atm", "opentelemetry-otlp"),
     ("atm-core", "atm-daemon"),
+    ("atm-cron", "atm-storage-rusqlite"),
     ("atm-core", "atm-storage-rusqlite"),
     ("atm-core", "sc-observability"),
     ("atm-core", "opentelemetry"),
@@ -1688,6 +1689,11 @@ fn ao2_mtls_surface_guard_matches_ast_identifiers_not_comments_or_strings() {
 #[test]
 fn atm_must_not_depend_on_atm_storage_rusqlite() {
     assert_forbidden_edge_absent("atm", "atm-storage-rusqlite");
+}
+
+#[test]
+fn atm_cron_must_not_depend_on_atm_storage_rusqlite() {
+    assert_forbidden_edge_absent("atm-cron", "atm-storage-rusqlite");
 }
 
 #[test]

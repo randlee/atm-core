@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 from pathlib import Path
 import subprocess
 import sys
@@ -21,6 +23,7 @@ from lint_cargo_shear import evaluate_policy
 from lint_cargo_shear import load_policy_config
 from lint_cargo_shear import parse_sections
 from lint_codespell import build_command as build_codespell_command
+from lint_codespell import main as run_codespell_lint
 
 
 class ExternalLintToolTests(unittest.TestCase):
@@ -236,21 +239,66 @@ shear/unlinked_files
             self.assertIn("codespell_lib", command[2])
             self.assertEqual(len(command), 3)
 
-    def test_codespell_misspelling_warns_without_failing(self) -> None:
+    def run_codespell_with_result(self, result: subprocess.CompletedProcess[str]) -> tuple[int, str, str]:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             (repo_root / "Cargo.toml").write_text("[workspace]\nmembers = []\n", encoding="utf-8")
-            (repo_root / "typo.txt").write_text("teh typo\n", encoding="utf-8")
-            completed = subprocess.run(
-                [sys.executable, str(JUST_DIR / "lint_codespell.py"), "--root", str(repo_root)],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=False,
-            )
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn("warning: spelling check reported findings", completed.stdout)
-            self.assertIn("teh", completed.stdout)
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with mock.patch("lint_codespell.subprocess.run", return_value=result) as run_mock:
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    exit_code = run_codespell_lint(["lint_codespell.py", "--root", str(repo_root)])
+            run_mock.assert_called_once()
+            return exit_code, stdout.getvalue(), stderr.getvalue()
+
+    def test_codespell_clean_output_passes(self) -> None:
+        exit_code, stdout, stderr = self.run_codespell_with_result(
+            subprocess.CompletedProcess([], 0, "checked 3 files\n", "")
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertIn("checked 3 files", stdout)
+        self.assertEqual(stderr, "")
+
+    def test_codespell_findings_fail_and_preserve_output(self) -> None:
+        exit_code, stdout, stderr = self.run_codespell_with_result(
+            subprocess.CompletedProcess([], 65, "typo.txt:1: teh ==> the\n", "")
+        )
+        self.assertEqual(exit_code, 65)
+        self.assertIn("typo.txt:1: teh ==> the", stdout)
+        self.assertEqual(stderr, "")
+
+    def test_codespell_missing_python_package_has_actionable_error(self) -> None:
+        exit_code, stdout, stderr = self.run_codespell_with_result(
+            subprocess.CompletedProcess([], 1, "", "ModuleNotFoundError: No module named 'codespell_lib'\n")
+        )
+        self.assertEqual(exit_code, 2)
+        self.assertIn("crates analyzed:", stdout)
+        self.assertIn("codespell is unavailable", stderr)
+        self.assertIn("just bootstrap", stderr)
+
+    def test_codespell_executable_unavailable_fails_actionably(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text("[workspace]\nmembers = []\n", encoding="utf-8")
+            stderr = io.StringIO()
+            with mock.patch("lint_codespell.subprocess.run", side_effect=FileNotFoundError("python missing")):
+                with contextlib.redirect_stderr(stderr):
+                    exit_code = run_codespell_lint(["lint_codespell.py", "--root", str(repo_root)])
+            self.assertEqual(exit_code, 127)
+            self.assertIn("executable is unavailable", stderr.getvalue())
+            self.assertIn("just bootstrap", stderr.getvalue())
+
+    def test_codespell_execution_error_fails_with_distinct_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text("[workspace]\nmembers = []\n", encoding="utf-8")
+            stderr = io.StringIO()
+            with mock.patch("lint_codespell.subprocess.run", side_effect=PermissionError("permission denied")):
+                with contextlib.redirect_stderr(stderr):
+                    exit_code = run_codespell_lint(["lint_codespell.py", "--root", str(repo_root)])
+            self.assertEqual(exit_code, 2)
+            self.assertIn("spelling check could not execute", stderr.getvalue())
+            self.assertIn("permission denied", stderr.getvalue())
 
 
 if __name__ == "__main__":

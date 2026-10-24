@@ -29,7 +29,9 @@ use atm_core::protocol::{
 };
 use atm_core::read::{PeekQuery, ReadQuery};
 use atm_core::send::{
-    NudgeMode, WarningEntry, WriteOutcome, prepare_write_with_preflight_async_runtime,
+    NudgeMode, SendMessageSource, WarningEntry, WriteOutcome,
+    prepare_cron_module_mail_async_runtime, prepare_write_with_cron_run_permit_async_runtime,
+    prepare_write_with_preflight_async_runtime, prepare_write_with_tool_capability_async_runtime,
 };
 use atm_runtime::{
     AsyncMailboxRuntime, DoctorProjection, DoctorProjectionContext, PeerPortResolver,
@@ -50,6 +52,9 @@ pub(crate) mod hook_wiring;
 mod non_write_dispatch;
 mod peer_port;
 mod roster_ingress;
+mod router_configuration;
+mod router_cron_admission;
+mod tool_sender_routes;
 
 /// The replacement implementation of the canonical write operation.
 ///
@@ -123,225 +128,75 @@ impl StorageAndNudgeRouter {
         self.list_messages_impl(query, deadline).await
     }
 
-    #[must_use]
-    pub fn new(
-        service_runtime: LocalServiceRuntime,
-        observability: Arc<dyn ObservabilityPort + Send + Sync>,
-        received_hook_selector: Arc<dyn MessageReceivedHookSelector>,
-        daemon_home: PathBuf,
-    ) -> Self {
-        let runtime_health = RuntimeHealth::default();
-        Self {
-            service_runtime,
-            observability,
-            received_hook_selector,
-            control_path_sync_bridge: ControlPathSyncBridge::new(
-                NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
-                runtime_health.clone(),
-            ),
-            write_source_preflight_bridge: WriteSourcePreflightBridge::new(runtime_health.clone()),
-            async_mailbox_runtime: None,
-            doctor_projection: None,
-            daemon_home,
-            runtime_health,
-            doctor_ports: None,
-            daemon_context: None,
-            diagnostic_counters: None,
-            peer_port_resolver: None,
-            #[cfg(test)]
-            direct_peer_port: crate::direct_peer_port(),
-            peer_connection_pool: None,
-            shared_direct_peer_client: None,
-            maintenance: None,
-            bare_cli_fifo: Default::default(),
-            bare_cli_queue_full_drops: Default::default(),
-            member_state_transition_sink: None,
-            detached_received_hooks: DetachedReceivedHooks::default(),
-            task_telemetry: atm_runtime::TaskTelemetryRuntime::disabled(),
-            hooks: hook_wiring::HookWiring::default(),
-        }
-    }
-
-    /// Installs the composition-owned Tokio mailbox port.  AV.1b routes the
-    /// read family exclusively through this capability.
-    #[must_use]
-    pub fn with_async_mailbox_runtime(
-        mut self,
-        async_mailbox_runtime: Arc<dyn AsyncMailboxRuntime>,
-    ) -> Self {
-        self.async_mailbox_runtime = Some(async_mailbox_runtime);
-        self
-    }
-
-    /// Installs the bounded, composition-owned doctor projection.  Doctor is
-    /// a control-plane request and must not share the mailbox read bridge.
-    #[must_use]
-    pub fn with_doctor_projection(mut self, doctor_projection: Arc<dyn DoctorProjection>) -> Self {
-        self.doctor_projection = Some(doctor_projection);
-        self
-    }
-
-    #[cfg(test)]
-    fn with_direct_peer_port(mut self, direct_peer_port: NonZeroU16) -> Self {
-        self.direct_peer_port = direct_peer_port;
-        self
-    }
-
-    /// Installs the durable exact-peer authority used to select outbound ports.
-    #[must_use]
-    pub fn with_peer_port_resolver(mut self, resolver: PeerPortResolver) -> Self {
-        self.peer_port_resolver = Some(resolver);
-        self
-    }
-
-    /// Adds the existing core doctor ports and the process-owned lifecycle
-    /// projection. Both stay behind core interfaces; the HTTP runtime never
-    /// learns a concrete storage backend.
-    #[must_use]
-    pub fn with_runtime_health(
-        mut self,
-        runtime_health: RuntimeHealth,
-        doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
-    ) -> Self {
-        self.control_path_sync_bridge = ControlPathSyncBridge::new(
-            NonZeroUsize::new(1).expect("one non-storage core bridge operation"),
-            runtime_health.clone(),
-        );
-        self.write_source_preflight_bridge =
-            WriteSourcePreflightBridge::new(runtime_health.clone());
-        self.runtime_health = runtime_health;
-        self.doctor_ports = Some(doctor_ports);
-        self
-    }
-
-    /// Installs the process-owned retained-diagnostic counter projection for
-    /// the doctor report. The runtime sees only the core snapshot contract.
-    #[must_use]
-    pub fn with_diagnostic_counters(mut self, counters: Arc<dyn DiagnosticCountersSource>) -> Self {
-        self.diagnostic_counters = Some(counters);
-        self
-    }
-
-    /// Installs the optional bootstrap diagnostic projection without forcing
-    /// focused runtime fixtures to construct a tracing bridge.
-    #[must_use]
-    pub fn with_diagnostic_counters_option(
-        mut self,
-        counters: Option<Arc<dyn DiagnosticCountersSource>>,
-    ) -> Self {
-        self.diagnostic_counters = counters;
-        self
-    }
-
-    /// Attaches the process-owned maintenance task to this composition root.
-    #[must_use]
-    pub fn with_maintenance(mut self, maintenance: Arc<dyn crate::RuntimeMaintenance>) -> Self {
-        self.maintenance = Some(maintenance);
-        self
-    }
-
-    /// Installs the daemon-lifetime bare-CLI FIFO and its overflow counter.
-    #[must_use]
-    pub fn with_bare_cli_fifo(
-        mut self,
-        fifo: BareCliFifo,
-        queue_full_drops: BareCliQueueFullDrops,
-    ) -> Self {
-        self.bare_cli_fifo = fifo;
-        self.bare_cli_queue_full_drops = queue_full_drops;
-        self
-    }
-
-    /// Installs the best-effort idle-transition queue drain owned by daemon
-    /// composition. The runtime only forwards the sealed notification.
-    #[must_use]
-    pub fn with_member_state_transition_sink(
-        mut self,
-        sink: Arc<dyn crate::MemberStateTransitionSink>,
-    ) -> Self {
-        self.member_state_transition_sink = Some(sink);
-        self
-    }
-
-    /// Attaches daemon process identity captured at bootstrap to the doctor
-    /// response. This is intentionally injected: request-time doctor handling
-    /// must not read a mutable process environment to identify its server.
-    #[must_use]
-    pub fn with_daemon_context(
-        mut self,
-        daemon_context: atm_core::doctor::DoctorExecutionContext,
-    ) -> Self {
-        self.daemon_context = Some(daemon_context);
-        self
-    }
-
-    /// Installs the daemon-owned outbound pool paired with the selected
-    /// authenticated stream adapter. The pool is a transport implementation
-    /// detail; canonical request routing remains in this router.
-    #[must_use]
-    pub fn with_peer_connection_pool(mut self, pool: PeerConnectionPool) -> Self {
-        self.peer_connection_pool = Some(pool);
-        self
-    }
-
-    /// Injects the daemon-lifetime reqwest client for direct plaintext peers.
-    /// Clones share reqwest's built-in connection pool; this router never
-    /// creates a second plaintext pooling mechanism.
-    #[must_use]
-    pub fn with_shared_direct_peer_client(mut self, client: reqwest::Client) -> Self {
-        self.shared_direct_peer_client = Some(client);
-        self
-    }
-
-    /// Projects committed task-ledger rows through the bounded runtime handle;
-    /// the default is the disabled runtime.
-    #[must_use]
-    pub fn with_task_telemetry(mut self, runtime: atm_runtime::TaskTelemetryRuntime) -> Self {
-        self.task_telemetry = runtime;
-        self
-    }
-
-    /// Drains retained authenticated peer connections after HTTP request
-    /// admission has stopped, then the receiver-hook work that peer responses
-    /// deliberately did not wait for. Individual request guards remain
-    /// non-blocking on drop; only this daemon lifecycle path awaits driver
-    /// termination.
-    /// Releases outbound peer drivers, detached received hooks, and hook
-    /// chains within the one caller-owned shutdown `deadline`: each drain gets
-    /// only what its predecessors left, never a fresh budget.
-    pub async fn shutdown_peer_connections(&self, deadline: tokio::time::Instant) {
-        if let Some(pool) = &self.peer_connection_pool {
-            pool.shutdown(deadline.saturating_duration_since(tokio::time::Instant::now()))
-                .await;
-        }
-        self.detached_received_hooks
-            .drain(deadline.saturating_duration_since(tokio::time::Instant::now()))
-            .await;
-        self.hook_chains()
-            .drain(RequestDeadline::after(
-                deadline.saturating_duration_since(tokio::time::Instant::now()),
-            ))
-            .await;
-    }
-
-    async fn commit_write(
+    async fn prepare_and_commit_write(
         &self,
         request: atm_core::send::WriteRequest,
         deadline: RequestDeadline,
+        tool_capability: Option<atm_core::boundary::ToolSenderCapability>,
+        cron_permit: Option<&atm_core::boundary::CronRunPermit>,
+        stable_message_id: Option<atm_core::schema::AtmMessageId>,
     ) -> Result<CommittedWrite, AtmError> {
         let source_preflight = self
             .write_source_preflight_bridge
             .preflight(deadline, self.service_runtime.clone(), request.clone())
             .await?;
-        let execution = prepare_write_with_preflight_async_runtime(
-            request,
-            self.observability.as_ref(),
-            &self.service_runtime,
-            source_preflight,
-        )
-        .await?;
+        let execution = if let Some(permit) = cron_permit {
+            if tool_capability.is_some() {
+                return Err(AtmError::validation(
+                    "cron action cannot combine a cron permit with tool sender admission",
+                ));
+            }
+            match stable_message_id {
+                Some(message_id) => {
+                    prepare_cron_module_mail_async_runtime(
+                        request,
+                        permit,
+                        message_id,
+                        self.observability.as_ref(),
+                        &self.service_runtime,
+                        source_preflight,
+                    )
+                    .await?
+                }
+                None => {
+                    prepare_write_with_cron_run_permit_async_runtime(
+                        request,
+                        permit,
+                        self.observability.as_ref(),
+                        &self.service_runtime,
+                        source_preflight,
+                    )
+                    .await?
+                }
+            }
+        } else if let Some(capability) = tool_capability {
+            prepare_write_with_tool_capability_async_runtime(
+                request,
+                capability,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                source_preflight,
+            )
+            .await?
+        } else {
+            prepare_write_with_preflight_async_runtime(
+                request,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                source_preflight,
+            )
+            .await?
+        };
         crate::task_telemetry::project_task_events(&self.task_telemetry, &execution.task_events);
-        let mut prepared = execution.operation?;
+        self.commit_write(execution.operation?, deadline).await
+    }
+
+    async fn commit_write(
+        &self,
+        prepared: atm_core::send::PreparedWrite,
+        deadline: RequestDeadline,
+    ) -> Result<CommittedWrite, AtmError> {
+        let mut prepared = prepared;
         let newly_persisted = prepared.is_newly_persisted();
         let canonical_request = prepared.outbound_request();
         let message_id = prepared.persisted_message_id();
@@ -560,16 +415,18 @@ impl StorageAndNudgeRouter {
         &self,
         query: ClearQuery,
         deadline: RequestDeadline,
+        origin: atm_core::send::MessageWriteOrigin,
     ) -> Result<ApiResponse, AtmError> {
         let runtime = self.service_runtime.clone();
         let observability = Arc::clone(&self.observability);
         let home = self.daemon_home.clone();
         self.control_path_sync_bridge
             .run(deadline, move || {
-                atm_core::clear::clear_mail_with_runtime(
+                atm_core::clear::clear_mail_with_origin(
                     query.with_daemon_paths(home),
                     observability.as_ref(),
                     &runtime,
+                    origin,
                 )
                 .map(ResponseEnvelope::Clear)
                 .map(ApiResponse::new)
@@ -582,6 +439,7 @@ impl StorageAndNudgeRouter {
         request: atm_core::protocol::TaskMoveRequest,
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
+        cron_permit: Option<&atm_core::boundary::CronRunPermit>,
     ) -> Result<ApiResponse, AtmError> {
         if ingress != AuthenticatedIngress::Local {
             return Err(AtmError::validation(
@@ -590,15 +448,19 @@ impl StorageAndNudgeRouter {
         }
         let runtime = self.service_runtime.clone();
         let task_id = request.task_id.clone();
+        let origin = cron_permit
+            .map(atm_core::send::cron_run_message_write_origin)
+            .unwrap_or_default();
         let committed = self
             .control_path_sync_bridge
             .run(deadline, move || {
-                runtime.task_store()?.move_task(
+                runtime.task_store()?.move_task_with_origin(
                     &request.caller_team,
                     &request.task_id,
                     &request.caller_identity,
                     &request.target,
                     atm_core::types::IsoTimestamp::now(),
+                    origin,
                 )
             })
             .await?;
@@ -913,6 +775,12 @@ impl StorageAndNudgeRouter {
     }
 }
 
+pub(crate) struct CronPermitContext<'a> {
+    pub(crate) permit: &'a atm_core::boundary::CronRunPermit,
+    pub(crate) team: &'a atm_core::types::TeamName,
+    pub(crate) phase: &'a atm_core::boundary::PhaseId,
+}
+
 impl crate::RuntimeMaintenance for StorageAndNudgeRouter {
     fn start(&self, shutdown: tokio::sync::watch::Receiver<()>) -> tokio::task::JoinHandle<()> {
         self.maintenance.as_ref().map_or_else(
@@ -1012,11 +880,22 @@ impl StorageAndNudgeRouter {
     /// `NormalTaskCommands` and an un-hooked router both call.
     pub(crate) fn write_unhooked(
         &self,
-        mut request: atm_core::send::WriteRequest,
+        request: atm_core::send::WriteRequest,
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
+        self.write_unhooked_with_cron_permit(request, ingress, deadline, request_id, None)
+    }
+
+    fn write_unhooked_with_cron_permit<'a>(
+        &'a self,
+        mut request: atm_core::send::WriteRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+        cron_permit: Option<&'a atm_core::boundary::CronRunPermit>,
+    ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + 'a>> {
         Box::pin(async move {
             if deadline.expired() {
                 return Err(AtmError::daemon_unavailable(
@@ -1028,64 +907,92 @@ impl StorageAndNudgeRouter {
             // shared writer uses them for its state and file-policy paths.
             request.home_dir = self.daemon_home.clone();
             request.current_dir = self.daemon_home.clone();
-            if let Some(outcome) = self
-                .dispatch_raw_host_qualified_local_write(&request, &ingress, deadline, request_id)
-                .await?
+            if cron_permit.is_none()
+                && let Some(outcome) = self
+                    .dispatch_raw_host_qualified_local_write(
+                        &request, &ingress, deadline, request_id,
+                    )
+                    .await?
             {
                 return Ok(ApiResponse::new(write_response(outcome)));
             }
-            let mut committed = self.commit_write(request, deadline).await?;
-            // ACK replies may acquire their host-qualified recipient while the
-            // write is prepared.  These must be forwarded after their local
-            // durable record is created; raw host-qualified sends returned
-            // above and therefore never reach this post-commit path.
-            let is_remote_recipient = ingress == AuthenticatedIngress::Local
-                && committed
-                    .canonical_request
-                    .to
-                    .as_ref()
-                    .and_then(|recipient| recipient.host())
-                    .is_some();
-            if committed.newly_persisted && is_remote_recipient {
-                let _ = self
-                    .dispatch_resolved_peer_write(
-                        &committed.canonical_request,
-                        committed.message_id,
-                        committed.persisted_timestamp,
-                        deadline,
-                        request_id,
-                    )
-                    .await?;
-            }
-            if committed.newly_persisted && !is_remote_recipient {
-                // A host-qualified local admission has already been handed to
-                // its peer above. Its receiver hook belongs to that peer's
-                // ingress, not to this sender's local roster.
-                let hook = self.clone();
-                let hook_task = async move {
-                    hook.emit_received_hook(committed.received_hook_dispatches, deadline)
-                        .await
-                };
-                if matches!(ingress, AuthenticatedIngress::Peer) {
-                    // Peer writes acknowledge durable persistence immediately; a
-                    // receiver hook (tmux nudge, etc.) must not hold the remote
-                    // request open past its absolute budget. The hook still runs
-                    // and its warnings are logged against this request id.
-                    self.detached_received_hooks.observe(
-                        self.runtime_health.clone(),
-                        request_id,
-                        hook_task,
-                    );
-                } else {
-                    let warnings = hook_task.await;
-                    append_warnings(&mut committed.outcome, warnings);
-                }
-            }
-            if let Some(error) = committed.task_rejection {
+            let tool_capability = if cron_permit.is_some() {
+                None
+            } else {
+                self.admit_tool_write(&request, ingress.clone(), deadline)
+                    .await?
+            };
+            let committed = self
+                .prepare_and_commit_write(request, deadline, tool_capability, cron_permit, None)
+                .await?;
+            let (outcome, task_rejection) = self
+                .finish_write_delivery(committed, ingress, deadline, request_id)
+                .await?;
+            if let Some(error) = task_rejection {
                 return Err(error);
             }
-            Ok(ApiResponse::new(write_response(committed.outcome)))
+            Ok(ApiResponse::new(write_response(outcome)))
         })
+    }
+
+    async fn finish_write_delivery(
+        &self,
+        mut committed: CommittedWrite,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+        request_id: RequestId,
+    ) -> Result<(WriteOutcome, Option<AtmError>), AtmError> {
+        // ACK replies may acquire their host-qualified recipient while the
+        // write is prepared.  These must be forwarded after their local
+        // durable record is created; raw host-qualified sends returned
+        // above and therefore never reach this post-commit path.
+        let is_remote_recipient = ingress == AuthenticatedIngress::Local
+            && committed
+                .canonical_request
+                .to
+                .as_ref()
+                .and_then(|recipient| recipient.host())
+                .is_some();
+        if committed.newly_persisted && is_remote_recipient {
+            let _ = self
+                .dispatch_resolved_peer_write(
+                    &committed.canonical_request,
+                    committed.message_id,
+                    committed.persisted_timestamp,
+                    deadline,
+                    request_id,
+                )
+                .await?;
+        }
+        if committed.newly_persisted && !is_remote_recipient {
+            // A host-qualified local admission has already been handed to
+            // its peer above. Its receiver hook belongs to that peer's
+            // ingress, not to this sender's local roster.
+            let hook = self.clone();
+            let mut outcome = committed.outcome.clone();
+            let task_rejection = committed.task_rejection.take();
+            let hook_task = async move {
+                hook.emit_received_hook(committed.received_hook_dispatches, deadline)
+                    .await
+            };
+            if matches!(ingress, AuthenticatedIngress::Peer) {
+                // Peer writes acknowledge durable persistence immediately; a
+                // receiver hook (tmux nudge, etc.) must not hold the remote
+                // request open past its absolute budget. The hook still runs
+                // and its warnings are logged against this request id.
+                self.detached_received_hooks.observe(
+                    self.runtime_health.clone(),
+                    request_id,
+                    hook_task,
+                );
+                return Ok((outcome, task_rejection));
+            } else {
+                let warnings = hook_task.await;
+                append_warnings(&mut outcome, warnings);
+                return Ok((outcome, task_rejection));
+            }
+        }
+        Ok((committed.outcome, committed.task_rejection))
     }
 }
 
@@ -1480,18 +1387,22 @@ pub(crate) mod tests {
         source_bytes: Vec<u8>,
         inspection: atm_core::TemplateInspection,
         release: Arc<(Mutex<bool>, Condvar)>,
-        started: AtomicUsize,
+        started: tokio::sync::mpsc::UnboundedSender<()>,
     }
 
     impl BlockingTemplateComposer {
-        fn new(body: &str) -> Self {
+        fn new(body: &str) -> (Self, tokio::sync::mpsc::UnboundedReceiver<()>) {
             let fixture = FixtureTemplateComposer::new(body);
-            Self {
-                source_bytes: fixture.source_bytes,
-                inspection: fixture.inspection,
-                release: Arc::new((Mutex::new(false), Condvar::new())),
-                started: AtomicUsize::new(0),
-            }
+            let (started, receiver) = tokio::sync::mpsc::unbounded_channel();
+            (
+                Self {
+                    source_bytes: fixture.source_bytes,
+                    inspection: fixture.inspection,
+                    release: Arc::new((Mutex::new(false), Condvar::new())),
+                    started,
+                },
+                receiver,
+            )
         }
 
         fn release(&self) {
@@ -1511,7 +1422,9 @@ pub(crate) mod tests {
             source: &atm_core::TemplateSource,
         ) -> Result<atm_core::TemplateInspection, AtmError> {
             assert_eq!(source.raw_file_bytes, self.source_bytes);
-            self.started.fetch_add(1, Ordering::SeqCst);
+            self.started
+                .send(())
+                .expect("report stalled template verification start");
             let (released, wake) = &*self.release;
             let mut released = released
                 .lock()
@@ -4072,50 +3985,63 @@ pub(crate) mod tests {
         .expect("infallible Axum service")
     }
 
-    #[tokio::test]
-    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist() {
-        let composer = Arc::new(BlockingTemplateComposer::new("template body"));
-        let fixture = fixture_with_selector_and_template(
-            true,
-            None,
-            None,
-            Some(composer.clone()),
-            |received_hook| {
-                Arc::new(FixedReceivedHookSelector {
-                    emitter: received_hook,
-                })
-            },
+    fn stalled_template_fixture(
+        through: bool,
+    ) -> (
+        Fixture,
+        Arc<BlockingTemplateComposer>,
+        tokio::sync::mpsc::UnboundedReceiver<()>,
+    ) {
+        let (composer, starts) = BlockingTemplateComposer::new("template body");
+        let composer = Arc::new(composer);
+        let fixture = route_task_commands(
+            fixture_with_selector_and_template(
+                true,
+                None,
+                None,
+                Some(composer.clone()),
+                |received_hook| {
+                    Arc::new(FixedReceivedHookSelector {
+                        emitter: received_hook,
+                    })
+                },
+            ),
+            through,
         );
-        let first_request = template_write_request(&fixture, "template body");
-        let second_request = template_write_request(&fixture, "template body");
-        let first_router = fixture.router.clone();
-        let second_router = fixture.router.clone();
-        let first = tokio::spawn(async move {
-            first_router
-                .dispatch(
-                    ApiRequest::new(RequestEnvelope::Write(Box::new(first_request))),
-                    AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::from_millis(250)),
-                )
-                .await
-        });
-        let second = tokio::spawn(async move {
-            second_router
-                .dispatch(
-                    ApiRequest::new(RequestEnvelope::Write(Box::new(second_request))),
-                    AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::from_millis(250)),
-                )
-                .await
-        });
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while composer.started.load(Ordering::SeqCst) != 2 {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("two template verifications occupy the bounded preflight");
+        (fixture, composer, starts)
+    }
 
+    async fn start_stalled_template_verifications(
+        fixture: &Fixture,
+        starts: &mut tokio::sync::mpsc::UnboundedReceiver<()>,
+        deadline: Duration,
+    ) -> tokio::task::JoinSet<Result<atm_core::api::ApiResponse, AtmError>> {
+        let mut stalled = tokio::task::JoinSet::new();
+        for _ in 0..2 {
+            let router = fixture.router.clone();
+            let request = template_write_request(fixture, "template body");
+            stalled.spawn(async move {
+                router
+                    .dispatch(
+                        ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(deadline),
+                    )
+                    .await
+            });
+        }
+        starts
+            .recv()
+            .await
+            .expect("first template verification occupies the bounded preflight");
+        starts
+            .recv()
+            .await
+            .expect("second template verification occupies the bounded preflight");
+        stalled
+    }
+
+    async fn assert_task_list_remains_live(fixture: &Fixture, deadline: Duration) {
         let list = atm_core::list::ListQuery::new(
             fixture.home_dir.clone(),
             fixture.current_dir.clone(),
@@ -4132,34 +4058,40 @@ pub(crate) mod tests {
         )
         .expect("task-ledger list query")
         .with_task_ledger(atm_core::list::TaskLedgerQuery::Tasks { member: None });
-        let listed = tokio::time::timeout(
-            Duration::from_millis(100),
-            fixture.router.dispatch(
+        let listed = fixture
+            .router
+            .dispatch(
                 ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
                     list,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            ),
-        )
-        .await
-        .expect("list stays schedulable while template verification is stalled")
-        .expect("list succeeds while template verification is stalled")
-        .into_inner();
+                RequestDeadline::after(deadline),
+            )
+            .await
+            .expect("list succeeds while template verification is stalled")
+            .into_inner();
         assert!(matches!(listed, ResponseEnvelope::List(_)));
+    }
 
-        let blocked = fixture
-            .router
-            .dispatch(
+    async fn assert_template_preflight_fails_before_persistence(
+        fixture: &Fixture,
+        deadline: Duration,
+    ) {
+        let (blocked, ()) = tokio::join!(
+            fixture.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
-                    &fixture,
+                    fixture,
                     "template body",
                 )))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_millis(25)),
-            )
-            .await
-            .expect_err("a saturated template preflight fails before durable admission");
+                RequestDeadline::after(deadline),
+            ),
+            async {
+                tokio::time::advance(deadline).await;
+            },
+        );
+        let blocked =
+            blocked.expect_err("a saturated template preflight fails before durable admission");
         assert_eq!(
             blocked.code(),
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
@@ -4182,14 +4114,22 @@ pub(crate) mod tests {
                 .is_empty(),
             "a template verification deadline cannot persist a partial message"
         );
-        let first_error = tokio::time::timeout(Duration::from_secs(1), first)
+    }
+
+    async fn assert_stalled_template_verifications_fail_closed(
+        fixture: &Fixture,
+        stalled: &mut tokio::task::JoinSet<Result<atm_core::api::ApiResponse, AtmError>>,
+    ) {
+        let first_error = stalled
+            .join_next()
             .await
-            .expect("first stalled source preflight reaches its deadline")
+            .expect("first stalled request is present")
             .expect("first stalled request joins")
             .expect_err("first stalled source preflight fails closed");
-        let second_error = tokio::time::timeout(Duration::from_secs(1), second)
+        let second_error = stalled
+            .join_next()
             .await
-            .expect("second stalled source preflight reaches its deadline")
+            .expect("second stalled request is present")
             .expect("second stalled request joins")
             .expect_err("second stalled source preflight fails closed");
         assert_eq!(
@@ -4208,13 +4148,39 @@ pub(crate) mod tests {
             2,
             "each abandoned source preflight remains visible to doctor"
         );
+    }
+
+    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_body(
+        through: bool,
+    ) {
+        let (fixture, composer, mut starts) = stalled_template_fixture(through);
+        let response_deadline = Duration::from_secs(30);
+        let mut stalled =
+            start_stalled_template_verifications(&fixture, &mut starts, response_deadline).await;
+        assert_task_list_remains_live(&fixture, response_deadline).await;
+        assert_template_preflight_fails_before_persistence(&fixture, response_deadline).await;
+        assert_stalled_template_verifications_fail_closed(&fixture, &mut stalled).await;
 
         composer.release();
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
+    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist() {
+        stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_body(false)
+            .await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_through_normal_task_commands()
+     {
+        stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_body(true)
+            .await;
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn file_source_preflight_shares_bounded_admission_and_fails_closed() {
-        let composer = Arc::new(BlockingTemplateComposer::new("template body"));
+        let (composer, mut starts) = BlockingTemplateComposer::new("template body");
+        let composer = Arc::new(composer);
         let fixture = fixture_with_selector_and_template(
             true,
             None,
@@ -4240,25 +4206,29 @@ pub(crate) mod tests {
                     .await
             });
         }
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while composer.started.load(Ordering::SeqCst) != 2 {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("two stalled source preflights occupy the bounded bridge");
+        starts
+            .recv()
+            .await
+            .expect("first stalled source preflight occupies the bounded bridge");
+        starts
+            .recv()
+            .await
+            .expect("second stalled source preflight occupies the bounded bridge");
 
-        let error = fixture
-            .router
-            .dispatch(
+        let response_deadline = Duration::from_secs(30);
+        let (error, ()) = tokio::join!(
+            fixture.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(file_write_request(
                     &fixture,
                 )))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_millis(25)),
-            )
-            .await
-            .expect_err("file preflight cannot bypass saturated bounded admission");
+                RequestDeadline::after(response_deadline),
+            ),
+            async {
+                tokio::time::advance(response_deadline).await;
+            },
+        );
+        let error = error.expect_err("file preflight cannot bypass saturated bounded admission");
         assert_eq!(
             error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable

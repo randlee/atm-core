@@ -1265,7 +1265,7 @@ Global caller-context rules:
 
 | Command | Caller identity required | Caller identity may come from | Caller team required | Caller team may come from | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `atm send` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select caller context; target recipient/team are not caller context |
+| `atm send` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select caller context; target recipient/team are not caller context; the shipped CLI has no `--from` caller override |
 | `atm peek` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | inspection-only; `--from` remains a sender filter |
 | `atm read` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
 | `atm ack` | Yes | `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target preserves the received full source address |
@@ -1302,7 +1302,14 @@ Global caller-context rules:
   and fails before daemon dispatch
 - a chat-qualified recipient is expressed only in canonical `<to>` syntax:
   `<agent>:<chat-id>@<team>[.<host>]`
-- `--from` on `send` is not an accepted caller-identity override
+- the shipped `atm send` CLI declares no `--from` option: both unqualified
+  `--from <name>` and full-address `--from <agent>@<team>` are rejected before
+  dispatch and cannot select a sender or caller context. A later compatible
+  addition may admit only the full-address form, never the unqualified alias;
+  it must be mutually exclusive with `--as` and `--chat-id`, match the
+  invoking shell's authenticated agent and resolved caller team, and require
+  any supplied `--team` to match. It therefore remains a spelling of the
+  authenticated caller, not an impersonation mechanism.
 - `--from` on `read` / `list` is a sender filter only
 - `--as` is accepted on `send` and `read` for the caller agent/chat override,
   and on inspection-only surfaces such as `peek` and `list`
@@ -1508,7 +1515,6 @@ Write one message into one target inbox.
 - `--summary <text>`
 - `--json`
 - `--dry-run`
-- `--from <name>`
 - `--requires-ack`
 - `--task-id <id>`
 - `--task-complete` (requires `--task-id`)
@@ -1519,9 +1525,10 @@ Retired from the current implementation:
 
 ### 6.3 Required Behavior
 
-- resolve sender identity using the defined precedence
-- if sender identity cannot be resolved from `--from` or invoking-shell
-  `ATM_IDENTITY`, fail before daemon dispatch
+- resolve sender identity using the caller-context matrix and its chat-id
+  precedence; the shipped CLI has no send-time `--from` source
+- if sender identity cannot be resolved from `--as`, `--chat-id`, or the
+  invoking-shell caller-context sources, fail before daemon dispatch
 - resolve recipient address using the defined precedence
 - resolve aliases before mailbox lookup
 - when a cross-team alias-oriented sender is projected into `from`, also
@@ -5510,3 +5517,117 @@ ADR-065, ADR-067.
   as `created_by` unless `as` is given, with local ingress; each run
   writes `last_run_at`, `last_outcome` and one structured log entry
   (`subsystem = "atm_cron"`)
+
+## 25. Virtual tool senders and cron lifecycle contracts (BK-9)
+
+Product requirement IDs:
+
+- `REQ-P-TOOL-IDENTITY-001` reserves `tool` as a virtual core namespace.
+  Ordinary team/member administration, agent launch, CLI caller context, hook
+  JSON, and peer request bodies cannot create or impersonate `<agent>@tool`.
+  `cron@tool` is daemon-owned. A plug-in sender is available only after an
+  authenticated, fixed registration; historical rows remain readable after
+  retirement.
+- `REQ-P-CRON-003` defines cron-only output and lifecycle replies.
+- `REQ-P-CRON-004` persists one logical delivery intent per cron transition.
+- `REQ-P-CRON-005` defines the cron lifecycle nudge template family.
+
+### 25.1 Tool sender admission (`REQ-P-TOOL-IDENTITY-001`)
+
+- A virtual plug-in sender is registered only by a local-only signed
+  `ToolInstallerRequest`. Its canonical signing input is the UTF-8,
+  length-prefixed field order in ADR-066, domain separated as
+  `ATM-TOOL-INSTALL-v1`; `signature` is excluded. The trust root is an
+  administrator-owned, daemon-read-only allowlist. A roster member, process
+  environment, repository configuration, `--as`, `--from`, or peer-authenticated
+  hostname is never proof of a virtual sender.
+- A message from a registered plug-in carries a signed `ToolRuntimeProof`
+  (`ATM-TOOL-MESSAGE-v1`) binding sender, active registration generation,
+  origin host, message id, message digest, runtime key and nonce. The registry
+  atomically checks key, host, generation, expiry and nonce before the daemon
+  creates its non-serializable emission capability. Exact replay returns the
+  prior result; nonce reuse with different bytes is refused.
+- Cross-host forwarding additionally requires an origin-host signed
+  `ToolSenderAttestation` bound to the same sender, generation, message digest
+  and nonce. mTLS identifies the peer host but does not by itself authorize a
+  virtual sender. Receiving hosts verify the attestation and their sender-host
+  allowlist and refuse bare `@tool` strings.
+- The shipped `atm send` CLI has no `--from` option. Consequently neither
+  `--from <name>` nor `--from <agent>@<team>` is a current caller-context
+  source; both are rejected before dispatch. If a compatible send-time form
+  is introduced, it must be only the full-address
+  `--from <agent>@<team>` spelling and must follow §4.2's authenticated-caller
+  equality, mutual-exclusion, and `--team`-matching rules. Read/list `--from`
+  remains a filter. Cron reply `from` is an authenticated action field and is
+  not CLI authority.
+- A cron `send` action uses, in order: its explicit full-address ordinary
+  `from`; its legacy same-team `as`; then daemon-owned `cron@tool`. `from`
+  plus `as`, a foreign team, a different roster member, or explicit `@tool`
+  is refused before dispatch. An explicit ordinary sender must equal the
+  persisted schedule creator and be eligible on the schedule's real team.
+  The child environment for cron alone is a cleared approved environment plus
+  `ATM_IDENTITY=cron`, `ATM_TEAM=tool`, and `ATM_PHASE=<schedule.phase>`;
+  these variables are not credentials. Task-hook behavior is unchanged.
+
+### 25.2 Hook machine-readable mutation results (`REQ-P-HOOK-003`)
+
+`atm hook register ... --json` writes one JSON object and newline exactly:
+`{"action":"hook.register","registration":<HookRegistration>}`.
+`atm hook disable ... --json` writes exactly
+`{"action":"hook.disable","disabled":<HookRegistration[]>,"count":<integer>}`
+and a newline. Each persisted registration object has exactly these eleven
+fields: `team`, `phase`, `hook`, `module_path`, `cwd`, `timeout_ms`, `custom`,
+`active`, `registered_by`, `registered_at`, and `disabled_at`; there is no
+synthetic id. `count` equals `disabled.len()`. Disabling no rows succeeds with
+an empty array and `count:0`. Register/disable without `--json` retain their
+human output, typed failures remain failures, and `atm hook list --json`
+remains a bare array.
+
+### 25.3 Cron reply, transition, and delivery (`REQ-P-CRON-003`, `REQ-P-CRON-004`)
+
+- Cron replies use `CRON_REPLY_SCHEMA_VERSION=1.1.0`; task-hook `HookReply`
+  remains unchanged. Tick accepts only `pass-through` or `handled` with an
+  optional `cron-output` array, `not-applicable` with no output, and `refused`
+  with a bounded diagnostic. Stop accepts only `stop`, a reason required iff
+  true, and optional `cron-output`. Unknown/duplicate keys, extra stdout,
+  empty bodies, or oversized arrays/bodies are malformed.
+- `cron-output` items are `{"kind":"message"|"error","body":"..."}`.
+  They become ordinary, creator-addressed mail with a stable stored message id;
+  an `error` output does not change successful run status. The body is
+  persisted verbatim after UTF-8/non-empty/size validation. Diagnostics use a
+  separate bounded redacted type and never silently rewrite module mail.
+- The `(schedule_id,generation,active)` transition transaction persists run
+  state, a monotonic sequence, suppression fingerprint and all intents. First
+  or changed failure creates one error intent; identical failures do not;
+  success resets suppression; stopped creates one stopped intent; stale and
+  skipped transitions create none. Name reuse increments generation. A manual
+  end is the same atomic stopped transition; repeat end adds none.
+- Lifecycle intents use a stable `CronNoticeKey`; module mail intents use a
+  stable stored `AtmMessageId`. Delivery is `accepted`, `suppressed`,
+  `recipient_unavailable`, or `unknown` with a bounded typed retry cause.
+  Unknown handoffs persist as reconciliation-required pending records, never
+  resendable work: a caller must resolve the prior handoff rather than blindly
+  send the same intent again. The contract guarantees one durable logical
+  intent, never an unproven exactly-once external nudge. Missing creators are
+  terminal, operator-visible outcomes and never redirect notification.
+- A generation-scoped, non-serializable `CronRunPermit` is checked at each
+  canonical action admission. Ending or restarting fences the next action but
+  cannot roll back an already committed action. The scheduler alone mints it;
+  it is never serialized, forwarded to a module, or represented in a child
+  environment.
+- `CronLifecycleNudger` accepts only a committed `CronNoticeIntent` and
+  returns a `DeliveryReceipt`. This preserves the creator-selected recipient,
+  lets suppression and unavailable recipients remain explicit, and prevents a
+  nudge adapter from synthesizing lifecycle notices.
+
+### 25.4 Cron lifecycle templates (`REQ-P-CRON-005`)
+
+`cron` is a twelfth stored template override kind, separate from the eleven
+post-send kinds and keyed in the existing `(team_name, template_kind)` store.
+It selects a lifecycle nudge, never a mail, task, ack, or post-send hook. Its
+trusted default is `<atm cron name="{{name}}" event="{{event}}"
+{{detail_attribute}}>` and only `name`, `event`, and `detail_attribute` are
+available to an override. `event` is `stopped` or `error`; trusted code creates
+`detail_attribute` as exactly `message="..."` or `error="..."`, escaping XML
+attributes and normalizing controls. Disabled suppresses both lifecycle
+variants but not module mail.

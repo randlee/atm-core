@@ -27,7 +27,7 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["DispatchSpec","HookAction","HookActionCommand"]
+request_types = ["DispatchSpec","HookAction","HookActionCommand","CronRunPermit"]
 response_types = ["Vec<DispatchedAction>"]
 error_types = ["AtmError"]
 
@@ -47,4 +47,4 @@ socket_io = ["atm_core::boundary::hook_action_dispatcher"]
 [status]
 state = "concrete_landed"
 concrete_landed = ["atm_http_runtime::hook_actions::UnhookedRouter"]
-notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "BK.7 concrete_landed in atm-http-runtime: UnhookedRouter is the sole production HookActionDispatcher, built from a StorageAndNudgeRouter clone with no task filter so dispatched actions cannot re-enter the originating hook chain. Each committed action emits one ADR-067 atm_hook action entry."]
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "dispatch_actions preserves ordinary hook behavior. dispatch_cron_actions requires the opaque CronRunPermit and adapters must check it at every canonical action admission; the default implementation refuses cron dispatch.", "BK.7 concrete_landed in atm-http-runtime: UnhookedRouter is the sole production HookActionDispatcher, built from a StorageAndNudgeRouter clone with no task filter so dispatched actions cannot re-enter the originating hook chain. Each committed action emits one ADR-067 atm_hook action entry."]

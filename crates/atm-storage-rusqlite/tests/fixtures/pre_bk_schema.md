@@ -17,8 +17,9 @@ current migration implementation.
 
 `hook_schema::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created` covers
 both an empty database and a database seeded with these frozen statements and
-representative rows before opening the current backend. It verifies both new
-hook tables, preservation of old rows, replay of the frozen old DDL, and old
-column-set inserts/reads after migration for mail, message state, watermark,
-roster, task, task-event and prompt-handoff tables. The new hook/cron rows also
-survive the old statements and a subsequent backend reopen.
+representative rows before opening the current backend. It verifies all five
+installed hook/cron/sender tables and `STORAGE_SCHEMA_VERSION = 2.1.0`,
+preservation of old rows, replay of the frozen old DDL, and old column-set
+inserts/reads after migration for mail, message state, watermark, roster, task,
+task-event and prompt-handoff tables. The version marker and new hook/cron rows
+also survive the old statements and a subsequent backend reopen.

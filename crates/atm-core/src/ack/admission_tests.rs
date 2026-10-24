@@ -583,6 +583,7 @@ fn async_admission_matches_sync_behavior_for_local_ack() {
     let write = block_on(admit_acknowledgement_write_async(
         ack_write_request(message_id),
         &runtime,
+        atm_storage::MessageWriteOrigin::Local,
     ))
     .expect("async local acknowledgement commits")
     .operation
@@ -616,6 +617,7 @@ fn async_admission_requires_installed_async_store() {
         block_on(admit_acknowledgement_write_async(
             ack_write_request(message_id),
             &runtime,
+            atm_storage::MessageWriteOrigin::Local,
         )),
         "a runtime without the async store must refuse admission",
     );
