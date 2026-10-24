@@ -171,6 +171,7 @@ fn documented_route_surface(document: &Value) -> BTreeSet<(String, String)> {
 
     object(&document["paths"])
         .iter()
+        .filter(|(_, item)| item["x-atm-contract-status"] != "planned")
         .flat_map(|(path, item)| {
             OPENAPI_HTTP_METHODS.iter().filter_map(move |method| {
                 item.get(*method)

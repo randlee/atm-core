@@ -194,6 +194,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     .with_task_store(task_store)
     .with_hook_registration_store(storage.hook_registration_store())
     .with_cron_schedule_store(storage.cron_schedule_store())
+    .with_cron_transition_store(storage.cron_transition_store())
     .with_graft_receiver_endpoint_store(graft_receiver_endpoint_store)
     .with_template_rendering(template_catalog_store, template_composer.clone());
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {

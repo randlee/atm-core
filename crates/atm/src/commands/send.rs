@@ -1,4 +1,4 @@
-use std::net::{IpAddr, Ipv4Addr, ToSocketAddrs};
+use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -38,6 +38,11 @@ use crate::composition::{
 use crate::observability::CliObservability;
 use crate::output;
 
+mod peer_resolution;
+#[cfg(test)]
+use peer_resolution::resolve_trusted_ipv4_with_lookup;
+use peer_resolution::{resolve_trusted_host, resolve_trusted_ipv4};
+
 #[derive(Debug, Args)]
 #[command(
     after_help = "Path-only bodies are admitted for compatibility but recorded as content_format=path-ref and warned on stderr; use `atm send --template <path> --vars <file>` to send rendered content, and `atm compose --template <path>` to preview it. Post-send hooks can be configured in .atm.toml via one or more [[atm.post_send_hooks]] rules with recipient = \"name-or-*\" and command = [\"argv\", ...]. Matching rules run after a successful non-dry-run send, in config order. Path-like command[0] values resolve relative to the declaring .atm.toml; bare executables like bash or python3 use normal PATH resolution. Recipient non-match is silent. For hook troubleshooting, combine --stderr-logs with ATM_LOG=debug to surface debug-level hook diagnostics on stderr."
@@ -73,6 +78,11 @@ pub struct SendCommand {
     /// Act as this member instead of the environment identity.
     #[arg(long = "as")]
     actor: Option<String>,
+
+    /// Assert the authenticated caller as a full ordinary agent@team address.
+    /// This does not select or grant sender identity.
+    #[arg(long, value_name = "AGENT@TEAM", conflicts_with_all = ["actor", "chat_id"])]
+    from: Option<String>,
 
     /// Read the message body from this file.
     #[arg(long, conflicts_with = "from_json")]
@@ -190,6 +200,7 @@ impl SendCommand {
             host: None,
             chat_id: None,
             actor: options.actor,
+            from: None,
             file: options.file,
             stdin: options.stdin,
             template: options.template,
@@ -371,15 +382,7 @@ impl SendCommand {
             })
             .transpose()?
             .unwrap_or(input::default_message_max_bytes());
-        let caller_context = if self.actor.is_some() || self.chat_id.is_some() {
-            resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
-                identity_override: self.actor.as_deref().map(CallerIdentityOverride),
-                chat_id_override: self.chat_id.as_deref().map(CallerChatIdOverride),
-                team_override: self.team.as_deref().map(CallerTeamOverride),
-            })?
-        } else {
-            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?
-        };
+        let caller_context = self.resolve_caller_context()?;
         let target = self.target_with_explicit_host(&caller_context.caller_team)?;
         let classification = self.build_classification()?;
         let message_source =
@@ -695,17 +698,61 @@ impl SendCommand {
     /// (`send_fan_out.rs`, a sibling module: RULE-003 keeps this file under
     /// the 1000-non-test-line cap).
     pub(super) fn resolve_caller_context(&self) -> Result<atm_core::caller_context::CallerContext> {
-        if self.actor.is_some() || self.chat_id.is_some() {
+        let caller_context = if self.actor.is_some() || self.chat_id.is_some() {
             resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
                 identity_override: self.actor.as_deref().map(CallerIdentityOverride),
                 chat_id_override: self.chat_id.as_deref().map(CallerChatIdOverride),
                 team_override: self.team.as_deref().map(CallerTeamOverride),
             })
-            .map_err(Into::into)
         } else {
             resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))
-                .map_err(Into::into)
+        }?;
+        self.validate_from_assertion(&caller_context)?;
+        Ok(caller_context)
+    }
+
+    fn validate_from_assertion(
+        &self,
+        caller_context: &atm_core::caller_context::CallerContext,
+    ) -> Result<()> {
+        let Some(value) = self.from.as_deref() else {
+            return Ok(());
+        };
+        let address = value.parse::<AgentAddress>().map_err(|_| {
+            Self::message_validation_error(
+                "--from requires a full ordinary <agent>@<team> address",
+                "Use the same full agent@team address as ATM_IDENTITY and the resolved caller team.",
+            )
+        })?;
+        let Some(team) = address.team() else {
+            return Err(Self::message_validation_error(
+                "--from requires a full ordinary <agent>@<team> address",
+                "Use the same full agent@team address as ATM_IDENTITY and the resolved caller team.",
+            ));
+        };
+        if address.chat_id().is_some() || address.host().is_some() || address.to_string() != value {
+            return Err(Self::message_validation_error(
+                "--from accepts only a canonical <agent>@<team> address without chat or host qualification",
+                "Use a canonical full agent@team address.",
+            ));
         }
+        if team.as_str() == "tool" {
+            return Err(Self::message_validation_error(
+                "--from cannot assert a virtual @tool sender",
+                "Use an authenticated ordinary agent@team caller; @tool senders are daemon-owned.",
+            ));
+        }
+        if address.agent() != &caller_context.caller_identity || team != &caller_context.caller_team
+        {
+            return Err(Self::message_validation_error(
+                format!(
+                    "--from ({address}) must match the authenticated caller {}@{}",
+                    caller_context.caller_identity, caller_context.caller_team
+                ),
+                "Use the caller identity from ATM_IDENTITY and the resolved caller team from --team or ATM_TEAM.",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -983,86 +1030,6 @@ fn try_resolve_host_input(
     resolve_trusted_host(host.as_str(), peers)
 }
 
-fn resolve_trusted_ipv4(
-    target_ip: Ipv4Addr,
-    peers: &[TrustedPeer],
-) -> std::result::Result<HostName, AtmError> {
-    resolve_trusted_ipv4_with_lookup(target_ip, peers, |peer| {
-        let authority = (peer.host.as_str(), peer.https_port.get());
-        authority
-            .to_socket_addrs()
-            .map(|addresses| addresses.map(|address| address.ip()).collect())
-            .map_err(|error| {
-                peer_resolution_error(
-                    format!("trusted peer '{}' could not be resolved: {error}", peer.host),
-                    "Verify the registered DNS/mDNS authority is resolvable, then retry the send with its hostname.",
-                )
-            })
-    })
-}
-
-fn resolve_trusted_ipv4_with_lookup(
-    target_ip: Ipv4Addr,
-    peers: &[TrustedPeer],
-    lookup: impl Fn(&TrustedPeer) -> std::result::Result<Vec<IpAddr>, AtmError>,
-) -> std::result::Result<HostName, AtmError> {
-    const MAX_ENABLED_PEER_LOOKUPS: usize = 32;
-
-    let enabled_peers: Vec<&TrustedPeer> = peers.iter().filter(|peer| peer.enabled).collect();
-    if enabled_peers.len() > MAX_ENABLED_PEER_LOOKUPS {
-        return Err(peer_resolution_error(
-            format!(
-                "literal IP authority resolution exceeds the {MAX_ENABLED_PEER_LOOKUPS}-peer lookup bound"
-            ),
-            "Use the registered hostname directly, or reduce the enabled peer set before retrying the literal IP diagnostic.",
-        ));
-    }
-
-    let mut matches = Vec::new();
-    for peer in enabled_peers {
-        if lookup(peer)?.contains(&IpAddr::V4(target_ip)) {
-            matches.push(peer);
-        }
-    }
-    match matches.as_slice() {
-        [peer] => Ok(peer.host.clone()),
-        [] => Err(peer_resolution_error(
-            format!("no enabled trusted peer resolves to literal IP '{target_ip}'"),
-            "Use a registered hostname, or add/enable the exact trusted peer before retrying.",
-        )),
-        _ => Err(peer_resolution_error(
-            format!("literal IP '{target_ip}' resolves to multiple enabled trusted peers"),
-            "Use the exact registered hostname instead of the shared IP address.",
-        )),
-    }
-}
-
-fn resolve_trusted_host(
-    raw_host: &str,
-    peers: &[TrustedPeer],
-) -> std::result::Result<Option<HostName>, AtmError> {
-    let exact_or_local = |host: &HostName| {
-        let canonical_lower = host.as_str().to_ascii_lowercase();
-        host.as_str().eq_ignore_ascii_case(raw_host)
-            || (!raw_host.to_ascii_lowercase().ends_with(".local")
-                && canonical_lower
-                    .strip_suffix(".local")
-                    .is_some_and(|short| short.eq_ignore_ascii_case(raw_host)))
-    };
-    let matches: Vec<&TrustedPeer> = peers
-        .iter()
-        .filter(|peer| peer.enabled && exact_or_local(&peer.host))
-        .collect();
-    match matches.as_slice() {
-        [] => Ok(None),
-        [peer] => Ok(Some(peer.host.clone())),
-        _ => Err(peer_resolution_error(
-            format!("trusted peer shorthand '{raw_host}' is ambiguous"),
-            "Use the exact registered hostname from `atm peer trust list`, or remove the duplicate enabled peer record before retrying.",
-        )),
-    }
-}
-
 fn peer_resolution_error(message: impl Into<String>, recovery: impl Into<String>) -> AtmError {
     AtmError::validation_with_recovery(message, recovery)
 }
@@ -1219,6 +1186,7 @@ mod tests {
             host: host.map(str::to_string),
             chat_id: None,
             actor: None,
+            from: None,
             file: None,
             stdin: false,
             template: None,
@@ -1553,6 +1521,43 @@ mod tests {
     }
 
     #[test]
+    fn cli_accepts_full_from_assertion_and_rejects_mutually_exclusive_overrides() {
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "recipient-a@test-team",
+            "hello",
+            "--from",
+            "sender-a@test-team",
+        ])
+        .expect("full --from address parses");
+
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "recipient-a@test-team",
+            "hello",
+            "--from",
+            "sender-a@test-team",
+            "--as",
+            "sender-a",
+        ])
+        .expect_err("--from is mutually exclusive with --as");
+
+        crate::commands::Cli::try_parse_from([
+            "atm",
+            "send",
+            "recipient-a@test-team",
+            "hello",
+            "--from",
+            "sender-a@test-team",
+            "--chat-id",
+            "1234",
+        ])
+        .expect_err("--from is mutually exclusive with --chat-id");
+    }
+
+    #[test]
     fn cli_rejects_from_json_combined_with_a_positional_recipient() {
         crate::commands::Cli::try_parse_from([
             "atm",
@@ -1671,6 +1676,57 @@ mod tests {
             })
         );
         assert_eq!(request.task_complete, None);
+    }
+
+    #[test]
+    #[serial(env)]
+    fn full_from_must_match_authenticated_agent_and_resolved_team() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let mut matching = send_command("recipient-a@test-team", None);
+        matching.from = Some(format!("{TEST_SENDER}@{TEST_TEAM}"));
+        matching
+            .build_request(".".into(), ".".into())
+            .expect("matching assertion");
+
+        for value in [
+            "sender-a".to_string(),
+            "other-agent@test-team".to_string(),
+            "sender-a@other-team".to_string(),
+            "sender-a:1234@test-team".to_string(),
+            "sender-a@test-team.example-host".to_string(),
+            "sender-a@tool".to_string(),
+        ] {
+            let mut command = send_command("recipient-a@test-team", None);
+            command.from = Some(value.clone());
+            let error = command
+                .build_request(".".into(), ".".into())
+                .expect_err("sender assertion must not select or impersonate a sender");
+            assert!(
+                error.to_string().contains("--from"),
+                "expected --from validation for {value}, got {error}"
+            );
+        }
+    }
+
+    #[test]
+    #[serial(env)]
+    fn full_from_must_match_explicitly_resolved_team() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let mut command = send_command("recipient-a@test-team", None);
+        command.team = Some("other-team".to_string());
+        command.from = Some(format!("{TEST_SENDER}@{TEST_TEAM}"));
+
+        let error = command
+            .build_request(".".into(), ".".into())
+            .expect_err("--from must match the resolved --team");
+        assert!(error.to_string().contains("--from"));
     }
 
     #[test]
@@ -1823,6 +1879,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: None,
+            from: None,
             file: None,
             stdin: false,
             template: None,
@@ -1858,6 +1915,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: None,
+            from: None,
             file: Some(PathBuf::from("message.txt")),
             stdin: true,
             template: None,
@@ -1899,6 +1957,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: None,
+            from: None,
             file: Some(PathBuf::from("message.md")),
             stdin: true,
             template: None,
@@ -1924,6 +1983,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: None,
+            from: None,
             file: None,
             stdin: true,
             template: None,
@@ -1975,6 +2035,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: None,
+            from: None,
             file: None,
             stdin: false,
             template: None,
@@ -2206,6 +2267,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: None,
+            from: None,
             file: None,
             stdin: false,
             template: None,
@@ -2263,6 +2325,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: None,
+            from: None,
             file: None,
             stdin: false,
             template: None,
@@ -2304,6 +2367,7 @@ mod tests {
             host: None,
             chat_id: Some("1234".to_string()),
             actor: None,
+            from: None,
             file: None,
             stdin: false,
             template: None,
@@ -2335,6 +2399,7 @@ mod tests {
             host: None,
             chat_id: Some("1234".to_string()),
             actor: None,
+            from: None,
             file: None,
             stdin: false,
             template: None,
@@ -2378,6 +2443,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: Some(format!("{TEST_SENDER}-other:1234")),
+            from: None,
             file: None,
             stdin: false,
             template: None,
@@ -2417,6 +2483,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: None,
+            from: None,
             file: None,
             stdin: false,
             template: None,
@@ -2455,6 +2522,7 @@ mod tests {
             host: None,
             chat_id: None,
             actor: None,
+            from: None,
             file: Some(PathBuf::from("incident.md")),
             stdin: false,
             template: None,

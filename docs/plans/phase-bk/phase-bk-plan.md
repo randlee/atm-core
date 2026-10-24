@@ -1,3 +1,23 @@
+> **Plan status (2026-10-23):** This file retains the historical BK-1–BK-8
+> delivery plan. The current BK-9–BK-16 extension is tracked in Beads on
+> `develop` and led by solar; its sprint beads are the authoritative current
+> plan. The historical table below remains for provenance.
+
+## Current BK-9–BK-16 extension controls
+
+The current extension is defined by its Beads on `develop`. This retained plan
+records the shared cutover inventory required before the virtual `tool`
+namespace can replace the historical physical roster workaround:
+
+| Installed sender plug-in / repository | Historical sender dependency | BK-15 adoption evidence required |
+| --- | --- | --- |
+| `randlee/atm-bd` | Fixed `atm-bd@tool`; previously depended on a physical `tool` roster member. | A linked installer/release/compatibility receipt showing its authenticated registered principal works without a physical `tool` team. |
+| No other installed sender plug-ins identified in the atm-core workspace or active local hook inventory. | None. | BK-15 records the inventory check; any newly discovered `@tool` sender is added here and receives a matching receipt before cutover. |
+
+BK-15 cannot close its adoption gate until every row above has its linked
+implementation, release, and compatibility receipt. `cron@tool` is a built-in
+daemon principal, not a plug-in row.
+
 # Phase bk — atm task hooks, hook registration, atm cron, doctor hook section
 
 Authority: `design.md` (fenix, PR #1877) over Rand's verbatim rulings on
@@ -60,9 +80,10 @@ semantic storage capabilities (Rand: "yes, we need storage for cron").
 
 ## Governed interfaces (ADR-061)
 
-- SQLite storage: two additive tables, MINOR; D6 record of 2026-10-18 on
-  `docs/adr/ADR-061-governed-interface-schema-versioning.md` (this PR);
-  bk-6 lands the D3 previous-consumer proof test.
+- SQLite storage: additive hook, cron, sender registry, nonce ledger, and
+  delivery-intent tables are recorded as `STORAGE_SCHEMA_VERSION = 2.1.0`;
+  ADR-061 D6 records the version and the deterministic previous-consumer
+  proof lives in `crates/atm-storage-rusqlite/tests/hook_schema.rs`.
 - HTTP API: six additive `RequestEnvelope` variants, the `HookActions`
   response and the `X-ATM-Hook-Actions` header; `HTTP_API_VERSION`
   `1.12.0` → `1.13.0` in bk-7, with the D5 record line, both

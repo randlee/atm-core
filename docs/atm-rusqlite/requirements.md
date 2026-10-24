@@ -58,6 +58,13 @@ Initial crate requirement IDs:
 - `REQ-RUSQLITE-MIGRATION-001` `atm-storage-rusqlite` must own deterministic schema
   bootstrap and migration execution. Satisfies:
   `REQ-CORE-STORE-001`, `REQ-CORE-STORE-002`.
+- `REQ-RUSQLITE-MIGRATION-002` the signed peer tool-sender admission adapter
+  must persist its `(origin_host, sender, nonce)` replay binding in an additive,
+  idempotently created SQLite table. Schema version `2.2.0` records this minor
+  extension. The previous-consumer proof is
+  `crates/atm-storage-rusqlite/tests/hook_schema.rs::pre_bk_ddl_set_reads_and_writes_after_hook_tables_created`:
+  the frozen previous DDL and supported reads/writes continue after the peer
+  table exists. Satisfies `REQ-P-TOOL-IDENTITY-001`.
 - `REQ-RUSQLITE-ERROR-001` `atm-storage-rusqlite` must translate SQLite failures into
   typed ATM store errors with stable `AtmErrorCode` mapping. Satisfies:
   `REQ-CORE-BOUNDARY-002`.

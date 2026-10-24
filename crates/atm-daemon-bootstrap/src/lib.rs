@@ -53,17 +53,20 @@ pub mod hook_runner;
 mod owner_gate;
 mod peer_launch_config;
 mod process_deadline;
+mod protected_trust_root;
 mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
 mod shutdown_probe;
 mod singleton_guard;
 mod sqlite_observability;
+#[cfg(feature = "test-support")]
+pub mod test_support;
 
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 use bare_cli_runtime::BareCliRuntime;
-use herdr_config::daemon_herdr_config;
+use herdr_config::{DaemonHerdrConfig, daemon_herdr_config};
 use replacement_handler::{
     ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
 };
@@ -73,6 +76,10 @@ pub use daemon_observability::DaemonObservability;
 pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
     configured_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
+};
+pub use protected_trust_root::{
+    ProtectedToolSenderConfigs, load_protected_tool_sender_configs,
+    load_protected_tool_sender_trust_root, system_trust_root_path,
 };
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
@@ -236,9 +243,12 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 pub fn assemble_daemon_runtime(
     owner: Option<&DaemonObservability>,
 ) -> Result<RuntimeAssembly, AtmError> {
+    let tool_sender_configs = load_protected_tool_sender_configs()?;
     let storage_factory = SqliteStorageFactory::host_scoped()
         .with_observability(Arc::new(sqlite_observability::DaemonSqliteObservability))
-        .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline));
+        .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline))
+        .with_tool_sender_registry_config(tool_sender_configs.registry())
+        .with_tool_sender_peer_admission_config(tool_sender_configs.peer_admission());
     compose_daemon_assembly(storage_factory, owner)
 }
 
@@ -289,7 +299,7 @@ async fn run_replacement_daemon_with_owner(
     run_replacement_daemon_with_selector(
         observability,
         |service_runtime, herdr_process, runtime_health, bare_cli| {
-            received_hook_selector::active_received_hook_selector_with_health_and_fifo(
+            received_hook_selector::active_received_hook_transports_with_health_and_fifo(
                 service_runtime,
                 herdr_process,
                 runtime_health,
@@ -450,7 +460,7 @@ async fn run_replacement_daemon_with_selector(
         Arc<dyn HerdrProcessAdapter>,
         RuntimeHealth,
         BareCliRuntime,
-    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    ) -> received_hook_selector::ReceivedHookTransports,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
     peer_pool_config: PeerPoolConfig,
@@ -473,26 +483,21 @@ async fn run_replacement_daemon_with_selector(
     let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
     let runtime = assembly.service_runtime.clone();
-    let (handler, recovery_sweep, cron) = compose_replacement_handler_and_cron(
-        assembly,
-        &runtime,
-        ReplacementHandlerConfig {
-            observability: Arc::clone(&observability),
-            selector_factory,
-            daemon_launch_identity: daemon_launch_identity.clone(),
-            peer_wire_mode,
-            peer_adapter_selection: SelectedPeerAdapterSelection {
-                adapter: peer_stream_adapter.clone(),
-                pool_config: peer_pool_config,
-            },
-            runtime_health: runtime_health.clone(),
-            diagnostic_counters: diagnostic_counters.clone(),
-            bare_cli,
-            herdr_config,
-            herdr_process,
-            daemon_home: atm_core::home::atm_home()?,
-        },
+    let handler_config = replacement_handler_config(
+        &observability,
+        selector_factory,
+        daemon_launch_identity.clone(),
+        peer_wire_mode,
+        peer_stream_adapter.clone(),
+        peer_pool_config,
+        runtime_health.clone(),
+        diagnostic_counters.clone(),
+        bare_cli,
+        herdr_config,
+        herdr_process,
     )?;
+    let (handler, recovery_sweep, cron) =
+        compose_replacement_handler_and_cron(assembly, &runtime, handler_config)?;
     let config = replacement_runtime_config(
         &scope,
         &owner,
@@ -523,6 +528,42 @@ async fn run_replacement_daemon_with_selector(
     run_until_shutdown(running, handler, workers, owner, singleton_guards).await
 }
 
+#[allow(clippy::too_many_arguments)]
+fn replacement_handler_config<F>(
+    observability: &Arc<dyn ObservabilityPort + Send + Sync>,
+    selector_factory: F,
+    daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_stream_adapter: Option<Arc<dyn PeerStreamAdapter>>,
+    peer_pool_config: PeerPoolConfig,
+    runtime_health: RuntimeHealth,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+    bare_cli: BareCliRuntime,
+    herdr_config: DaemonHerdrConfig,
+    herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+) -> Result<ReplacementHandlerConfig<F>, AtmError> {
+    Ok(ReplacementHandlerConfig {
+        observability: Arc::clone(observability),
+        selector_factory,
+        daemon_launch_identity,
+        peer_wire_mode,
+        peer_adapter_selection: SelectedPeerAdapterSelection {
+            adapter: peer_stream_adapter,
+            pool_config: peer_pool_config,
+        },
+        runtime_health,
+        diagnostic_counters,
+        bare_cli,
+        herdr_config,
+        herdr_process,
+        daemon_home: atm_core::home::atm_home()?,
+        #[cfg(feature = "test-support")]
+        controlled_hook_deadline: None,
+    })
+}
+
 fn compose_replacement_handler_and_cron(
     assembly: RuntimeAssembly,
     runtime: &atm_core::LocalServiceRuntime,
@@ -532,7 +573,7 @@ fn compose_replacement_handler_and_cron(
             Arc<dyn HerdrProcessAdapter>,
             RuntimeHealth,
             BareCliRuntime,
-        ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+        ) -> received_hook_selector::ReceivedHookTransports,
     >,
 ) -> Result<
     (
@@ -546,11 +587,21 @@ fn compose_replacement_handler_and_cron(
         handler,
         recovery_sweep,
         runner,
+        cron_runner,
         dispatcher,
         local_host,
+        lifecycle_nudge_emitter,
         ..
     } = build_replacement_handler(assembly, config)?;
-    let cron = cron_composition::compose_system(&handler, runtime, runner, dispatcher, local_host)?;
+    let cron = cron_composition::compose_system(cron_composition::RuntimeCronComposition {
+        handler: &handler,
+        runtime,
+        runner,
+        dispatcher,
+        host: local_host,
+        cron_runner,
+        lifecycle_nudge_emitter,
+    })?;
     Ok((handler, recovery_sweep, cron))
 }
 
@@ -1102,10 +1153,7 @@ mod replacement_runtime_tests {
     use std::time::Duration;
 
     use atm_core::api::ApiRequest;
-    use atm_core::boundary::{
-        BuiltInPostSendDispatch, MemberKey, MessageReceivedHookSelector, RosterEntry,
-        TemplateSource,
-    };
+    use atm_core::boundary::{MemberKey, RosterEntry, TemplateSource};
     use atm_core::observability::NullObservability;
     use atm_core::peer_wire::PeerWireMode;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -1123,29 +1171,15 @@ mod replacement_runtime_tests {
     use super::peer_launch_config::parse_peer_pool_config_with_environment;
     use super::{
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
-        SelectedPeerAdapterSelection, ShutdownSignal, active_received_hook_selector_with_health,
-        assemble_host_runtime_with_template_composer, build_replacement_handler,
-        legacy_literal_ip_policy_from_value, parse_peer_wire_mode, peer_stream_adapter_for_mode,
-        replacement_runtime_config_with_direct_peer, start_replacement_runtime_for_test,
-        write_ready_signal_if_requested,
+        SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
+        build_replacement_handler, legacy_literal_ip_policy_from_value, parse_peer_wire_mode,
+        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
+        start_replacement_runtime_for_test, write_ready_signal_if_requested,
     };
     use peer_tls::LegacyLiteralIpPolicy;
 
     /// Test-owned receiver selection prevents an external tmux/graft action
     /// from obscuring the bootstrap's direct-peer persistence proof.
-    struct NoReceivedHookSelector;
-
-    impl atm_core::boundary::sealed::Sealed for NoReceivedHookSelector {}
-
-    impl MessageReceivedHookSelector for NoReceivedHookSelector {
-        fn select_emitter(
-            &self,
-            _dispatch: &BuiltInPostSendDispatch,
-        ) -> Option<&dyn atm_core::boundary::AsyncMessageReceivedHookEmitter> {
-            None
-        }
-    }
-
     #[test]
     fn ready_signal_is_absent_unless_requested() {
         let mut output = Vec::new();
@@ -1355,8 +1389,7 @@ mod replacement_runtime_tests {
                 ReplacementHandlerConfig {
                     observability: Arc::new(NullObservability),
                     selector_factory: |_, _, _, _| {
-                        Arc::new(NoReceivedHookSelector)
-                            as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                        crate::received_hook_selector::ReceivedHookTransports::disabled_for_test()
                     },
                     daemon_launch_identity: DaemonLaunchIdentity::default(),
                     peer_wire_mode: PeerWireMode::plaintext_test(),
@@ -1370,6 +1403,8 @@ mod replacement_runtime_tests {
                     herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                     herdr_process: None,
                     daemon_home: temporary_root.path().join("home"),
+                    #[cfg(feature = "test-support")]
+                    controlled_hook_deadline: None,
                 },
             )
             .expect("compose the replacement daemon handler");
@@ -1558,7 +1593,13 @@ mod replacement_runtime_tests {
                 ReplacementHandlerConfig {
                     observability: Arc::new(NullObservability),
                     selector_factory: |runtime, herdr_process, health, _| {
-                        active_received_hook_selector_with_health(runtime, herdr_process, health)
+                        crate::received_hook_selector::active_received_hook_transports_with_health_and_fifo(
+                            runtime,
+                            herdr_process,
+                            health,
+                            Default::default(),
+                            Default::default(),
+                        )
                     },
                     daemon_launch_identity: DaemonLaunchIdentity::default(),
                     peer_wire_mode: PeerWireMode::plaintext_test(),
@@ -1572,6 +1613,8 @@ mod replacement_runtime_tests {
                     herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                     herdr_process: Some(fake.clone()),
                     daemon_home: temporary_root.path().join("home"),
+                    #[cfg(feature = "test-support")]
+                    controlled_hook_deadline: None,
                 },
             )
             .expect("compose the replacement daemon handler");

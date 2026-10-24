@@ -148,6 +148,19 @@ pub(crate) trait RetainedMailboxRuntime {
         Ok(())
     }
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError>;
+    fn persist_message_state_with_origin(
+        &self,
+        state: boundary::MailMessageState,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
+        if origin == atm_storage::MessageWriteOrigin::Local {
+            self.persist_message_state(state)
+        } else {
+            Err(AtmError::validation(
+                "mailbox runtime does not implement fenced message-state transition",
+            ))
+        }
+    }
 }
 
 impl RetainedMailboxRuntime for LocalServiceRuntime {
@@ -260,8 +273,23 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
     }
 
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
+        self.persist_message_state_with_origin(state, atm_storage::MessageWriteOrigin::Local)
+    }
+
+    fn persist_message_state_with_origin(
+        &self,
+        state: boundary::MailMessageState,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
         if state.deleted_at.is_some() {
-            return self.message_store.delete_message(&state.message_key);
+            return self
+                .message_store
+                .delete_message_with_origin(&state.message_key, origin);
+        }
+        if origin != atm_storage::MessageWriteOrigin::Local {
+            return Err(AtmError::validation(
+                "cron provenance is supported only for atomic mailbox deletion",
+            ));
         }
 
         let mut message = self

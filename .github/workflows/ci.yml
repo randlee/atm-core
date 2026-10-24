@@ -246,6 +246,23 @@ jobs:
       - uses: actions/checkout@v4
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
 
+      - name: Provision protected tool-sender trust root on Unix
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d -o root -g 0 -m 0755 /etc/atm
+          sudo install -o root -g 0 -m 0644 \
+            .github/fixtures/tool-sender-trust-root-ci.json \
+            /etc/atm/tool-sender-trust-root.json
+
+      - name: Provision protected tool-sender trust root on Windows
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          & .github/scripts/provision_windows_trust_root.ps1
+          & .github/scripts/provision_windows_trust_root.ps1
+
       - name: Install Rust toolchain
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: dtolnay/rust-toolchain@stable
@@ -348,8 +365,12 @@ jobs:
         run: cargo test --workspace --exclude atm-daemon --verbose
 
       - name: Run Herdr transport fixtures
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        if: ${{ always() && !cancelled() && needs.ci-scope.outputs.runtime == 'true' }}
         run: cargo test -p atm-herdr --all-features --verbose
+
+      - name: Produce Windows Herdr process-audit doctor fixture
+        if: ${{ always() && !cancelled() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
+        run: cargo test -p atm-herdr --all-features --test windows_transport_cli --verbose
         env:
           # AY.7's Windows-only integration test writes a deterministic
           # doctor-contract fixture here. It is CI evidence, not live Herdr
@@ -357,7 +378,7 @@ jobs:
           ATM_WINDOWS_PROCESS_AUDIT_DIR: ${{ runner.temp }}/atm-herdr-process-audit
 
       - name: Upload Windows Herdr process-audit doctor fixture
-        if: ${{ always() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
+        if: ${{ always() && !cancelled() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
         uses: actions/upload-artifact@v4
         with:
           name: windows-herdr-process-audit-${{ github.run_id }}

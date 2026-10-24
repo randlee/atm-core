@@ -38,10 +38,12 @@ use crate::DaemonLaunchIdentity;
 use crate::bare_cli_runtime::BareCliRuntime;
 use crate::herdr_config::DaemonHerdrConfig;
 use crate::queue_drain;
+use crate::received_hook_selector::ReceivedHookTransports;
 
 struct ComposedStorageRouter {
     handler: StorageAndNudgeRouter,
     runner: Arc<dyn HookRunner>,
+    cron_runner: Arc<dyn atm_core::boundary::CronHookRunner>,
     dispatcher: Arc<UnhookedRouter>,
     local_host: Option<HostName>,
     #[cfg(test)]
@@ -52,8 +54,10 @@ pub(crate) struct ReplacementHandler {
     pub(crate) handler: Arc<StorageAndNudgeRouter>,
     pub(crate) recovery_sweep: queue_drain::RecoverySweepHandle,
     pub(crate) runner: Arc<dyn HookRunner>,
+    pub(crate) cron_runner: Arc<dyn atm_core::boundary::CronHookRunner>,
     pub(crate) dispatcher: Arc<UnhookedRouter>,
     pub(crate) local_host: Option<HostName>,
+    pub(crate) lifecycle_nudge_emitter: Arc<dyn atm_core::boundary::CronLifecycleNudgeEmitter>,
     #[cfg(test)]
     pub(crate) hook_filter: Arc<HookedTaskCommands>,
 }
@@ -81,6 +85,8 @@ pub(crate) struct ReplacementHandlerConfig<F> {
     /// ATM home for daemon-originated writes: the router's normalized request
     /// roots and the queue-wake pump's escalation mail.
     pub(crate) daemon_home: PathBuf,
+    #[cfg(feature = "test-support")]
+    pub(crate) controlled_hook_deadline: Option<Arc<crate::hook_runner::ControlledHookDeadline>>,
 }
 
 fn compose_queue_workers<F>(
@@ -91,6 +97,7 @@ fn compose_queue_workers<F>(
     bare_cli: BareCliRuntime,
 ) -> (
     Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    Arc<dyn atm_core::boundary::CronLifecycleNudgeEmitter>,
     queue_drain::RecoverySweepHandle,
 )
 where
@@ -99,17 +106,21 @@ where
         Arc<dyn HerdrProcessAdapter>,
         RuntimeHealth,
         BareCliRuntime,
-    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    ) -> ReceivedHookTransports,
 {
-    let selector = selector_factory(
+    let transports = selector_factory(
         runtime.clone(),
         herdr_process,
         runtime_health.clone(),
         bare_cli,
     );
     let recovery_sweep =
-        queue_drain::spawn_recovery_sweep(runtime, selector.clone(), runtime_health);
-    (selector, recovery_sweep)
+        queue_drain::spawn_recovery_sweep(runtime, transports.selector.clone(), runtime_health);
+    (
+        transports.selector,
+        transports.lifecycle_nudge_emitter,
+        recovery_sweep,
+    )
 }
 
 struct HerdrBreakerDoctorAdapter {
@@ -233,7 +244,7 @@ pub(crate) fn build_replacement_handler(
             Arc<dyn HerdrProcessAdapter>,
             RuntimeHealth,
             BareCliRuntime,
-        ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+        ) -> ReceivedHookTransports,
     >,
 ) -> Result<ReplacementHandler, AtmError> {
     let ReplacementHandlerConfig {
@@ -248,10 +259,12 @@ pub(crate) fn build_replacement_handler(
         herdr_config,
         herdr_process,
         daemon_home,
+        #[cfg(feature = "test-support")]
+        controlled_hook_deadline,
     } = config;
     let herdr_process = resolve_herdr_process(&mut assembly, herdr_process, herdr_config.client);
     let queue_wake_process = Arc::clone(&herdr_process);
-    let (selector, recovery_sweep) = compose_queue_workers(
+    let (selector, lifecycle_nudge_emitter, recovery_sweep) = compose_queue_workers(
         assembly.service_runtime.clone(),
         selector_factory,
         herdr_process,
@@ -284,13 +297,17 @@ pub(crate) fn build_replacement_handler(
         daemon_launch_identity,
         peer_wire_mode,
         peer_adapter_selection,
+        #[cfg(feature = "test-support")]
+        controlled_hook_deadline,
     )?;
     Ok(ReplacementHandler {
         handler: Arc::new(composed.handler),
         recovery_sweep,
         runner: composed.runner,
+        cron_runner: composed.cron_runner,
         dispatcher: composed.dispatcher,
         local_host: composed.local_host,
+        lifecycle_nudge_emitter,
         #[cfg(test)]
         hook_filter: composed.hook_filter,
     })
@@ -312,12 +329,17 @@ fn compose_storage_router(
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
     peer_adapter_selection: SelectedPeerAdapterSelection,
+    #[cfg(feature = "test-support")] controlled_hook_deadline: Option<
+        Arc<crate::hook_runner::ControlledHookDeadline>,
+    >,
 ) -> Result<ComposedStorageRouter, AtmError> {
-    let snapshot = Arc::new(ActiveHookSnapshot::load(
+    let snapshot = Arc::new(ActiveHookSnapshot::deferred(
         assembly.service_runtime.hook_registration_store()?,
-    )?);
-    let runner: Arc<dyn HookRunner> =
-        Arc::new(crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource));
+    ));
+    let (runner, cron_runner) = compose_hook_runners(
+        #[cfg(feature = "test-support")]
+        controlled_hook_deadline,
+    );
     let async_mailbox_runtime = assembly
         .async_mailbox_runtime
         .clone()
@@ -360,11 +382,38 @@ fn compose_storage_router(
     Ok(ComposedStorageRouter {
         handler: handler.with_hook_filter(Arc::clone(&filter)),
         runner,
+        cron_runner,
         dispatcher,
         local_host,
         #[cfg(test)]
         hook_filter: filter,
     })
+}
+
+fn compose_hook_runners(
+    #[cfg(feature = "test-support")] controlled_hook_deadline: Option<
+        Arc<crate::hook_runner::ControlledHookDeadline>,
+    >,
+) -> (
+    Arc<dyn HookRunner>,
+    Arc<dyn atm_core::boundary::CronHookRunner>,
+) {
+    let daemon_runner = Arc::new({
+        #[cfg(feature = "test-support")]
+        if let Some(deadline) = controlled_hook_deadline {
+            crate::hook_runner::DaemonHookRunner::with_controlled_deadline(
+                &ProcessEnvSource,
+                deadline,
+            )
+        } else {
+            crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource)
+        }
+        #[cfg(not(feature = "test-support"))]
+        crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource)
+    });
+    let runner: Arc<dyn HookRunner> = daemon_runner.clone();
+    let cron_runner: Arc<dyn atm_core::boundary::CronHookRunner> = daemon_runner;
+    (runner, cron_runner)
 }
 
 fn build_queue_wake_pump(

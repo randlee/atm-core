@@ -1,0 +1,18 @@
+error[E0277]: the trait bound `InspectionIssuer: ToolRuntimeAdmissionIssuer` is not satisfied
+ --> tests/ui/registered_sender_issuer_cannot_admit.rs:8:56
+  |
+8 |     let _admission = ToolRuntimeAdmission::from_issuer(&inspection);
+  |                      --------------------------------- ^^^^^^^^^^^ unsatisfied trait bound
+  |                      |
+  |                      required by a bound introduced by this call
+  |
+help: the trait `ToolRuntimeAdmissionIssuer` is not implemented for `InspectionIssuer`
+ --> tests/ui/registered_sender_issuer_fixture.rs
+  |
+  | pub struct InspectionIssuer {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `ToolRuntimeAdmission::from_issuer`
+ --> src/tool_sender.rs
+  |
+  |     pub fn from_issuer(issuer: &impl ToolRuntimeAdmissionIssuer) -> Result<Self, AtmError> {
+  |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `ToolRuntimeAdmission::from_issuer`

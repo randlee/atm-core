@@ -177,7 +177,11 @@ impl Daemon {
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(observability.clone()),
-                selector_factory: move |_, _, _, _| selector,
+                selector_factory: move |_, _, _, _| {
+                    crate::received_hook_selector::ReceivedHookTransports::with_selector_for_test(
+                        selector,
+                    )
+                },
                 daemon_launch_identity: DaemonLaunchIdentity::default(),
                 peer_wire_mode: atm_core::peer_wire::PeerWireMode::plaintext_test(),
                 peer_adapter_selection: SelectedPeerAdapterSelection {
@@ -190,6 +194,8 @@ impl Daemon {
                 herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: Some(herdr.clone()),
                 daemon_home: root.path().join("home"),
+                #[cfg(feature = "test-support")]
+                controlled_hook_deadline: None,
             },
         )
         .expect("compose the replacement daemon handler");

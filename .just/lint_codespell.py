@@ -18,9 +18,11 @@ def build_command(repo_root: Path) -> list[str]:
     ]
 
 
-def emit_console_text(text: str, *, stream = sys.stdout) -> None:
+def emit_console_text(text: str, *, stream = None) -> None:
     if not text:
         return
+    if stream is None:
+        stream = sys.stdout
     encoding = getattr(stream, "encoding", None) or "utf-8"
     if hasattr(stream, "buffer"):
         stream.buffer.write(text.encode(encoding, errors="replace"))
@@ -47,16 +49,26 @@ def main(argv: list[str]) -> int:
             text=True,
             encoding="utf-8",
         )
+    except FileNotFoundError as exc:
+        print(
+            f"error: spelling check executable is unavailable ({exc}); run `just bootstrap` and retry",
+            file=sys.stderr,
+        )
+        return 127
     except OSError as exc:
-        print(f"warning: spelling check could not run: {exc}", file=sys.stderr)
-        return 0
-    if completed.returncode:
-        print(f"warning: spelling check reported findings (exit {completed.returncode})")
+        print(f"error: spelling check could not execute: {exc}", file=sys.stderr)
+        return 2
     if completed.stdout:
         emit_console_text(completed.stdout)
     if completed.stderr:
         emit_console_text(completed.stderr, stream=sys.stderr)
-    return 0
+    if completed.returncode and "No module named 'codespell_lib'" in completed.stderr:
+        print(
+            "error: codespell is unavailable in the Python environment; run `just bootstrap` and retry",
+            file=sys.stderr,
+        )
+        return 2
+    return completed.returncode
 
 
 if __name__ == "__main__":

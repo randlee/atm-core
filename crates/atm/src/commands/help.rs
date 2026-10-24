@@ -97,6 +97,7 @@ Tier-1 concept topics:
 - errors
 
 Tier-2 concept topics:
+- cron
 - hooks
 - identity
 - skills
@@ -212,6 +213,7 @@ Commands:
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HelpTopic {
     Config,
+    Cron,
     Errors,
     Hooks,
     Identity,
@@ -219,8 +221,9 @@ pub(crate) enum HelpTopic {
 }
 
 impl HelpTopic {
-    const ALL: [Self; 5] = [
+    const ALL: [Self; 6] = [
         Self::Config,
+        Self::Cron,
         Self::Errors,
         Self::Hooks,
         Self::Identity,
@@ -237,6 +240,7 @@ impl HelpTopic {
     fn name(self) -> &'static str {
         match self {
             Self::Config => "config",
+            Self::Cron => "cron",
             Self::Errors => "errors",
             Self::Hooks => "hooks",
             Self::Identity => "identity",
@@ -247,6 +251,7 @@ impl HelpTopic {
     fn title(self) -> &'static str {
         match self {
             Self::Config => "ATM Help: config",
+            Self::Cron => "ATM Help: cron",
             Self::Errors => "ATM Help: errors",
             Self::Hooks => "ATM Help: hooks",
             Self::Identity => "ATM Help: identity",
@@ -257,12 +262,15 @@ impl HelpTopic {
     fn tier(self) -> HelpTopicTier {
         match self {
             Self::Config | Self::Errors => HelpTopicTier::Tier1,
-            Self::Hooks | Self::Identity | Self::Skills => HelpTopicTier::Tier2,
+            Self::Cron | Self::Hooks | Self::Identity | Self::Skills => HelpTopicTier::Tier2,
         }
     }
 
     fn summary(self) -> &'static str {
         match self {
+            Self::Cron => {
+                "How to manage persistent hook schedules and interpret their output and lifecycle notices."
+            }
             Self::Config => "Where ATM reads local configuration and what remains host-scoped.",
             Self::Errors => {
                 "How ATM reports typed failures and where to look when delivery degrades."
@@ -275,6 +283,7 @@ impl HelpTopic {
 
     fn body(self) -> &'static str {
         match self {
+            Self::Cron => cron_body(),
             Self::Config => config_body(),
             Self::Errors => errors_body(),
             Self::Hooks => hooks_body(),
@@ -318,6 +327,7 @@ fn canonical_installed_doc_readme(executable_path: &Path) -> Option<PathBuf> {
 fn doc_link_for_topic(topic: HelpTopic) -> Option<HelpDocLink> {
     let relative_path = match topic {
         HelpTopic::Config => "install-layout.md",
+        HelpTopic::Cron => "cron.md",
         HelpTopic::Errors => "troubleshooting.md",
         HelpTopic::Hooks => "hooks.md",
         HelpTopic::Identity => "identity-and-team.md",
@@ -327,6 +337,24 @@ fn doc_link_for_topic(topic: HelpTopic) -> Option<HelpDocLink> {
         topic,
         relative_path,
     })
+}
+
+fn cron_body() -> &'static str {
+    "\
+ATM Help: cron
+
+ATM cron starts, ends, and lists persistent UTC schedules that run a hook
+module. Every schedule requires exactly one future timestamp or a module stop
+hook. Use atm cron start --help, atm cron end --help, and
+atm cron list --help for command details.
+
+Schedules have a fixed stored jitter offset, do not replay missed ticks, and
+keep ended rows available for listing. Module output becomes ordinary mail;
+daemon lifecycle notices use schedule nudge templates.
+
+Use the installed Cron guide for reply examples, sender rules, nudge templates,
+and recovery steps.
+"
 }
 
 fn fallback_doc_readme_hint() -> &'static str {
@@ -502,6 +530,7 @@ mod tests {
         fs::create_dir_all(root.join("share/doc/atm")).expect("doc root");
         fs::write(root.join("share/doc/atm/README.md"), "# ATM\n").expect("readme");
         fs::write(root.join("share/doc/atm/hooks.md"), "# Hooks\n").expect("hooks");
+        fs::write(root.join("share/doc/atm/cron.md"), "# Cron\n").expect("cron");
         fs::write(
             root.join("share/doc/atm/identity-and-team.md"),
             "# Identity\n",
@@ -594,6 +623,12 @@ mod tests {
             result
                 .topics
                 .iter()
+                .any(|topic| topic.name == "cron" && topic.doc_relative_path == Some("cron.md"))
+        );
+        assert!(
+            result
+                .topics
+                .iter()
                 .any(|topic| topic.name == "hooks" && topic.doc_relative_path == Some("hooks.md"))
         );
         assert!(
@@ -637,7 +672,24 @@ mod tests {
     #[test]
     fn concept_topics_are_case_insensitive() {
         assert_eq!(HelpTopic::parse("ConFiG"), Some(HelpTopic::Config));
+        assert_eq!(HelpTopic::parse("CRON"), Some(HelpTopic::Cron));
         assert_eq!(HelpTopic::parse("ERRORS"), Some(HelpTopic::Errors));
+    }
+
+    #[test]
+    fn cron_topic_points_to_the_installed_cron_guide() {
+        let result = HelpCommand {
+            target: Some("cron".to_string()),
+            list: false,
+            json: true,
+        }
+        .render()
+        .expect("cron help");
+
+        assert_eq!(result.title, "ATM Help: cron");
+        assert!(result.body.contains("persistent UTC schedules"));
+        assert!(result.body.contains("Installed docs index:"));
+        assert_eq!(result.installed_doc_topic_path, None);
     }
 
     #[test]
@@ -649,6 +701,13 @@ mod tests {
         }
         .render()
         .expect("hooks help");
+        let cron = HelpCommand {
+            target: Some("cron".to_string()),
+            list: false,
+            json: false,
+        }
+        .render()
+        .expect("cron help");
         let identity = HelpCommand {
             target: Some("identity".to_string()),
             list: false,
@@ -665,6 +724,7 @@ mod tests {
         .expect("skills help");
 
         assert!(hooks.body.contains("[[atm.post_send_hooks]]"));
+        assert!(cron.body.contains("atm cron start --help"));
         assert!(hooks.body.contains("ATM_LOG=debug"));
         assert!(identity.body.contains("`ATM_IDENTITY`"));
         assert!(identity.body.contains("`atm peek --as alice`"));
