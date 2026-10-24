@@ -56,6 +56,19 @@ instant or the phase's stop hook. The store reads no clock. The in-memory
 double lives in `crate::testing::cron_schedule_store`; the rusqlite
 implementation lands in bk-6.
 
+## CronTransitionStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/cron-transition-store.toml](../../boundaries/atm-storage/cron-transition-store.toml)
+
+`CronTransitionStore` owns the atomic transition-and-delivery-intent contract.
+`CronNoticeIntent` is an opaque, read-only projection: the only construction
+seam is a sealed issuer in `cron_transition_store` which consumes its private
+committed-row record. A scheduler, nudger, or caller cannot select the
+lifecycle recipient or body. `SCB-BOUNDARY-003` enforces that no other module
+implements that issuer. BK-10 owns the SQLite transition implementation;
+BK-9 adds no schema or persistence engine.
+
 ## TemplateCatalogStore
 
 Canonical machine-readable boundary source:

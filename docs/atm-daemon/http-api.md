@@ -9,7 +9,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Current — Phase BA |
-| HTTP API SemVer | `1.16.0`; major is `/v1/atm` |
+| HTTP API SemVer | `1.17.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
@@ -169,10 +169,11 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. The current baseline is `1.16.0`.
+The v1 resource paths are durable. The current baseline is `1.17.0`.
 
 | Version | Phase / date | Additive HTTP surface |
 | --- | --- | --- |
+| `1.17.0` | Phase BK.14, 2026-10-23 | Adds local-only signed `POST`/`DELETE` `/v1/atm/tool-senders` installer operations and optional runtime-proof and peer-attestation message fields. Peer ingress refuses installer operations. |
 | `1.16.0` | HTTP compatibility peer-doctor enforcement, 2026-10-22 | Adds optional `DoctorQuery.peer_http_api_version` and `DoctorQuery.peer_wire_security` for authenticated peer doctor ingress. Omitted fields default to the authenticated connector mode; peer doctor rejects a major or mode mismatch before dispatch. |
 | `1.14.0` | Phase BK.8, 2026-10-20 | Adds the stable `ATM_TASK_MAX_ACTIVE_REACHED` code for a task start refused at a member's configured active-task limit, with recovery instructions. The over-limit start formerly returned `ATM_TASK_MOVE_INVALID`; this change stays in the same rejection family and exit code 3 and is covered by the additive-minor classification. See ADR-061. |
 | `1.15.0` | HTTP compatibility peer-security enforcement, 2026-10-22 | Adds optional cross-host `WriteRequest.peer_wire_security`. Omitted values default to the receiver's established connector mode so existing mTLS and explicit plaintext-test peers continue to communicate; peer ingress rejects a mismatched mode before dispatch. |
@@ -224,3 +225,13 @@ references, and certificate material.
 Browser session authentication/authorization UI, CORS policy, static assets,
 and a web frontend are a later phase. They consume this API; they do not add a
 second application handler or a browser-specific persistence path.
+
+### Tool sender endpoint contract
+
+BK-9 freezes the local-only `POST`/`DELETE` `/v1/atm/tool-senders` endpoint
+and its signed installer, runtime-proof, and peer-attestation schemas in both
+OpenAPI documents. Installer operations are signed register/rotate requests
+for `POST` and signed unregister requests for `DELETE`; peer ingress is
+refused. The endpoint and optional message-proof fields are additive HTTP API
+1.17.0 MINOR. They are implemented on the current 1.17.0 wire; the pinned
+1.16 previous-consumer fixture proves the additive compatibility path.

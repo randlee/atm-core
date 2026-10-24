@@ -18,7 +18,9 @@ use atm_storage::{
     TaskStore, TemplateCatalogStore, WriteThroughRosterStore,
 };
 
-use crate::boundary::{CronScheduleStore, HookRegistrationStore, TemplateComposer};
+use crate::boundary::{
+    CronScheduleStore, CronTransitionStore, HookRegistrationStore, TemplateComposer,
+};
 use crate::config::AtmConfig;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -325,6 +327,7 @@ pub struct LocalServiceRuntime {
     task_store: Option<std::sync::Arc<dyn TaskStore + Send + Sync>>,
     hook_registration_store: Option<Arc<dyn HookRegistrationStore>>,
     cron_schedule_store: Option<Arc<dyn CronScheduleStore>>,
+    cron_transition_store: Option<Arc<dyn CronTransitionStore>>,
     graft_receiver_endpoint_store:
         Option<std::sync::Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
@@ -351,6 +354,67 @@ pub struct LocalServiceRuntime {
 }
 
 impl LocalServiceRuntime {
+    /// Loads the team override for a built-in nudge template.
+    pub fn load_nudge_template_override(
+        &self,
+        team: &TeamName,
+        kind: crate::boundary::BuiltInNudgeTemplateKind,
+    ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+        self.nudge_template_override_store
+            .load_template_override(team, kind)
+    }
+
+    /// Resolves the current direct transport for a committed cron lifecycle
+    /// prompt using the same roster and lease policy as message delivery.
+    pub fn resolve_cron_lifecycle_nudge_target(
+        &self,
+        team: &TeamName,
+        recipient: &AgentName,
+        rendered_nudge: String,
+    ) -> Result<Option<crate::boundary::CronLifecycleNudgeTarget>, AtmError> {
+        use crate::boundary::{
+            CronLifecycleNudgeTarget as Target, GraftNudgeTarget, HerdrNudgeTarget,
+            LocalTmuxNudgeTarget,
+        };
+
+        let snapshot = crate::delivery_policy::DeliveryPolicyCoordinator::new()
+            .resolve_recipient_snapshot(self, team, recipient)?;
+        if snapshot.local_tmux_post_send {
+            let member = self
+                .load_roster_member(team, recipient)
+                .ok_or_else(|| AtmError::agent_not_found(recipient, team))?;
+            let Some(pane_id) = member.recipient_pane_id.or(snapshot.recipient_pane_id) else {
+                return Ok(None);
+            };
+            return Ok(Some(Target::Tmux(LocalTmuxNudgeTarget {
+                pane_id,
+                rendered_nudge,
+            })));
+        }
+        if snapshot.local_herdr_post_send {
+            let Some(agent) = crate::delivery_channel::resolve_herdr_agent_target(
+                recipient,
+                snapshot.herdr_agent.clone(),
+                "cron_lifecycle_herdr_dispatch",
+            ) else {
+                return Ok(None);
+            };
+            return Ok(Some(Target::Herdr(HerdrNudgeTarget {
+                agent,
+                session: snapshot.herdr_session,
+                rendered_nudge,
+            })));
+        }
+        if snapshot.graft_post_send {
+            return Ok(Some(Target::Graft(GraftNudgeTarget {
+                recipient: recipient.clone(),
+                recipient_team: team.clone(),
+                rendered_nudge,
+            })));
+        }
+        Ok(None)
+    }
+
     ///
     /// `roster` is the indivisible paired handle returned by the storage
     /// composition root's write-through roster factory. Hydration already
@@ -377,6 +441,7 @@ impl LocalServiceRuntime {
             task_store: None,
             hook_registration_store: None,
             cron_schedule_store: None,
+            cron_transition_store: None,
             graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
@@ -550,6 +615,20 @@ impl LocalServiceRuntime {
         })
     }
 
+    #[must_use]
+    pub fn with_cron_transition_store(mut self, store: Arc<dyn CronTransitionStore>) -> Self {
+        self.cron_transition_store = Some(store);
+        self
+    }
+
+    pub fn cron_transition_store(&self) -> Result<Arc<dyn CronTransitionStore>, AtmError> {
+        self.cron_transition_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the cron transition store was not installed in this runtime",
+            )
+        })
+    }
+
     /// Attaches the durable graft receiver endpoint registry for local-only
     /// registration, refresh, unregistration, and lookup requests.
     #[must_use]
@@ -688,6 +767,24 @@ impl LocalServiceRuntime {
         })?;
         store
             .acknowledge_message_atomically_async(source, builder)
+            .await
+    }
+
+    /// Performs a generation-fenced acknowledgement source transition and
+    /// reply insertion on the same ordered writer transaction.
+    pub async fn acknowledge_message_atomically_with_origin_async(
+        &self,
+        source: atm_storage::AcknowledgementSource,
+        builder: std::sync::Arc<dyn atm_storage::AcknowledgementReplyBuilder>,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::AcknowledgementCommit>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio acknowledgement admission was not installed in this runtime",
+            )
+        })?;
+        store
+            .acknowledge_message_atomically_with_origin_async(source, builder, origin)
             .await
     }
 

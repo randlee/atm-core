@@ -24,3 +24,38 @@ pub(crate) fn parse_syntax(expression: &str) -> Result<cron::Schedule, AtmError>
         .map_err(|error| AtmError::cron_expr_invalid(&error.to_string()))?;
     Ok(schedule)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use serde_json::Value;
+
+    use super::parse_syntax;
+
+    #[test]
+    fn cron_docs_expression_fixtures_use_the_production_parser() {
+        let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repo root");
+        let manifest: Value = serde_json::from_slice(
+            &std::fs::read(repo_root.join("docs/user-documents/examples/cron/manifest.json"))
+                .expect("read cron fixture manifest"),
+        )
+        .expect("parse cron fixture manifest");
+        for fixture in manifest["expressions"]
+            .as_array()
+            .expect("expressions array")
+        {
+            let id = fixture["id"].as_str().expect("fixture id");
+            let expression = fixture["value"].as_str().expect("expression");
+            let expected_valid = fixture["valid"].as_bool().expect("valid flag");
+            assert_eq!(
+                parse_syntax(expression).is_ok(),
+                expected_valid,
+                "production cron parser disagrees with fixture {id}: {expression:?}"
+            );
+        }
+    }
+}

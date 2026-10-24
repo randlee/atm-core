@@ -5,6 +5,7 @@ pub mod address;
 pub mod analyst_query;
 pub mod contract;
 pub mod cron_schedule_store;
+pub mod cron_transition_store;
 pub mod diagnostics;
 pub mod error;
 mod error_catalog;
@@ -29,6 +30,7 @@ pub mod template_workflow;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod testing;
 pub mod tls;
+pub mod tool_sender;
 pub mod types;
 mod validation;
 
@@ -63,6 +65,14 @@ pub use contract::{
 pub use cron_schedule_store::{
     CronGeneration, CronSchedule, CronScheduleId, CronScheduleStore, NewCronSchedule,
     StopCondition, stopped_outcome,
+};
+pub use cron_transition_store::{
+    CRON_DIAGNOSTIC_MAX_BYTES, CRON_OUTPUT_BODY_MAX_BYTES, CronCommitResult,
+    CronCommittedNoticeRecord, CronDeliveryIntent, CronDeliveryKey, CronDiagnosticDetail,
+    CronFailure, CronFailureKey, CronFailureKind, CronLifecycleEvent, CronModuleMailIntent,
+    CronModuleOutput, CronNoticeIntent, CronNoticeKey, CronOutputBody, CronRunTransition,
+    CronSuccess, CronTransitionStore, CronTransitionWrite, DeliveryReceipt, DeliveryRetryCause,
+    PendingCronDelivery,
 };
 pub use diagnostics::{
     DIAGNOSTIC_QUERY_DEFAULT_LIMIT, DIAGNOSTIC_QUERY_MAX_LIMIT, DiagnosticCursor, DiagnosticEvent,
@@ -119,6 +129,13 @@ pub use template_workflow::{
 pub use tls::{
     PinnedClientVerifier, TlsIdentity, certificate_fingerprint, certificate_valid_now,
     install_tls_provider, normalize_fingerprint,
+};
+pub use tool_sender::{
+    InstallerId, MessageDigest, PluginSenderId, RegisteredToolSender, RegisteredToolSenderIssuer,
+    ToolInstallReceipt, ToolInstallerOperation, ToolInstallerRequest, ToolKeyId, ToolNonce,
+    ToolPeerAdmission, ToolPeerAdmissionIssuer, ToolPrincipal, ToolRuntimeAdmission,
+    ToolRuntimeAdmissionIssuer, ToolRuntimeProof, ToolSenderAttestation, ToolSenderFailure,
+    ToolSenderPeerAdmissionStore, ToolSenderRegistry,
 };
 pub use types::{
     AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, LOCAL_CAPABILITY_BYTES,

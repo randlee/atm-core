@@ -3,7 +3,8 @@ use std::time::Duration;
 use atm_core::{
     api::RequestDeadline,
     boundary::{
-        CronSchedule, DispatchSpec, HOOK_ACTION_RESERVE_MS, HookName, HookTarget, StopCondition,
+        CronGeneration, CronRunPermit, CronRunPermitIssuer, CronSchedule, CronScheduleId,
+        DispatchSpec, HOOK_ACTION_RESERVE_MS, HookName, HookTarget, StopCondition, sealed,
     },
     error::AtmError,
     error_codes::AtmErrorCode,
@@ -12,6 +13,33 @@ use atm_core::{
 use chrono::{DateTime, Utc};
 
 use crate::{AtmCron, scheduler::store_call};
+
+/// Private scheduler-owned source for the opaque generation fence.
+pub(crate) struct SchedulePermitIssuer {
+    schedule_id: CronScheduleId,
+    generation: CronGeneration,
+}
+
+impl sealed::Sealed for SchedulePermitIssuer {}
+
+impl CronRunPermitIssuer for SchedulePermitIssuer {
+    fn schedule_id(&self) -> CronScheduleId {
+        self.schedule_id
+    }
+
+    fn generation(&self) -> CronGeneration {
+        self.generation
+    }
+}
+
+impl SchedulePermitIssuer {
+    pub(crate) fn for_schedule(schedule: &CronSchedule) -> Self {
+        Self {
+            schedule_id: schedule.id,
+            generation: schedule.generation,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CronRunOutcome {
@@ -68,6 +96,12 @@ pub(crate) fn log(
 }
 
 pub(crate) async fn record(cron: &AtmCron, schedule: &CronSchedule, outcome: &CronRunOutcome) {
+    if let Some(engine) = &cron.typed_engine {
+        let _ = engine
+            .record(cron, schedule, transition_for_record(outcome))
+            .await;
+        return;
+    }
     let (id, generation, at) = (schedule.id, schedule.generation, cron.deps.clock.now());
     let stopped_reason = match outcome {
         CronRunOutcome::Stopped(reason) => Some(reason.clone()),
@@ -85,6 +119,54 @@ pub(crate) async fn record(cron: &AtmCron, schedule: &CronSchedule, outcome: &Cr
     if let Err(error) = result {
         tracing::error!(subsystem = "atm_cron", action = "record_failed", schedule = %id, %error, "cron record failed: {error}");
     }
+}
+
+fn transition_for_record(outcome: &CronRunOutcome) -> atm_core::boundary::CronRunTransition {
+    use atm_core::boundary::{CronDiagnosticDetail, CronFailure, CronFailureKind, CronSuccess};
+
+    let diagnostic = |detail: &str| {
+        CronDiagnosticDetail::parse(detail.to_owned()).expect("static cron diagnostic is valid")
+    };
+    match outcome {
+        CronRunOutcome::Ok => atm_core::boundary::CronRunTransition::Success {
+            outcome: CronSuccess::Ok,
+        },
+        CronRunOutcome::Actions(count) => atm_core::boundary::CronRunTransition::Success {
+            outcome: CronSuccess::Actions { count: *count },
+        },
+        CronRunOutcome::SkippedInFlight => atm_core::boundary::CronRunTransition::SkippedInFlight,
+        CronRunOutcome::Stopped(reason) => atm_core::boundary::CronRunTransition::Stopped {
+            reason: diagnostic(reason),
+        },
+        CronRunOutcome::Refused(message) => {
+            atm_core::boundary::CronRunTransition::Failure(CronFailure {
+                kind: CronFailureKind::Refused,
+                code: None,
+                detail: diagnostic(message),
+            })
+        }
+        CronRunOutcome::Timeout => failure_for_record(CronFailureKind::Timeout, None),
+        CronRunOutcome::Malformed => failure_for_record(CronFailureKind::MalformedReply, None),
+        CronRunOutcome::Exit(_) => failure_for_record(CronFailureKind::RunnerExit, None),
+        CronRunOutcome::ActionErr(code) => {
+            failure_for_record(CronFailureKind::ActionFailed, Some(*code))
+        }
+        CronRunOutcome::StopCheckFailed(code) => {
+            failure_for_record(CronFailureKind::StopCheckFailed, Some(*code))
+        }
+    }
+}
+
+fn failure_for_record(
+    kind: atm_core::boundary::CronFailureKind,
+    code: Option<AtmErrorCode>,
+) -> atm_core::boundary::CronRunTransition {
+    atm_core::boundary::CronRunTransition::Failure(atm_core::boundary::CronFailure {
+        kind,
+        code,
+        detail: atm_core::boundary::CronDiagnosticDetail::parse("cron run failed".to_owned())
+            .expect("static cron diagnostic is valid"),
+    })
 }
 
 fn deadline_budget(timeout_ms: u32) -> Duration {
@@ -134,10 +216,11 @@ async fn reply_outcome(
         HookReply::PassThrough | HookReply::NotApplicable => CronRunOutcome::Ok,
         HookReply::Handled(actions) => {
             let count = actions.len();
+            let issuer = SchedulePermitIssuer::for_schedule(schedule);
             match cron
                 .deps
                 .dispatcher
-                .dispatch_actions(
+                .dispatch_cron_actions(
                     DispatchSpec {
                         hook: HookName::cron_tick(),
                         team: schedule.team.clone(),
@@ -146,6 +229,7 @@ async fn reply_outcome(
                         deadline: None,
                         dry_run: false,
                     },
+                    CronRunPermit::from_issuer(&issuer),
                     actions,
                 )
                 .await
@@ -158,6 +242,9 @@ async fn reply_outcome(
 }
 
 pub(crate) async fn run_one(cron: &AtmCron, schedule: &CronSchedule) -> CronRunOutcome {
+    if let Some(engine) = &cron.typed_engine {
+        return engine.run_one(cron, schedule).await;
+    }
     let started = cron.deps.clock.now();
     let target = HookTarget::from(schedule);
     if stop_due(&schedule.stop, started) {

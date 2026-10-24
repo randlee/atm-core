@@ -8,7 +8,7 @@ use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{
     HookName, HookRegistration, NewCronSchedule, PhaseId, StopCondition, StorageFactory,
 };
-use atm_storage_rusqlite::{SqliteStorageBackend, SqliteStorageFactory};
+use atm_storage_rusqlite::{STORAGE_SCHEMA_VERSION, SqliteStorageBackend, SqliteStorageFactory};
 use chrono::{TimeZone, Utc};
 use rusqlite::{Connection, params};
 
@@ -61,12 +61,15 @@ fn cron(name: &str) -> NewCronSchedule {
     }
 }
 
-fn hook_tables(path: &std::path::Path) -> Vec<String> {
+fn installed_tables(path: &std::path::Path) -> Vec<String> {
     let connection = Connection::open(path).expect("connection");
     let mut statement = connection
         .prepare(
             "SELECT name FROM sqlite_master
-             WHERE type = 'table' AND name IN ('hook_registration', 'cron_schedule')
+             WHERE type = 'table' AND name IN (
+                'hook_registration', 'cron_schedule', 'tool_sender_registry',
+                'tool_sender_nonce_ledger', 'tool_sender_peer_binding', 'cron_transition_event', 'cron_delivery_intent'
+             )
              ORDER BY name",
         )
         .expect("prepare");
@@ -75,6 +78,18 @@ fn hook_tables(path: &std::path::Path) -> Vec<String> {
         .expect("query")
         .collect::<rusqlite::Result<Vec<String>>>()
         .expect("rows")
+}
+
+fn storage_schema_version(path: &std::path::Path) -> String {
+    Connection::open(path)
+        .expect("connection")
+        .query_row(
+            "SELECT major || '.' || minor || '.' || patch
+             FROM atm_storage_schema_version WHERE singleton = 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("recorded storage schema version")
 }
 
 #[test]
@@ -88,14 +103,23 @@ fn pre_bk_ddl_set_reads_and_writes_after_hook_tables_created() {
             write_pre_bk_rows(&connection, "before");
             assert_pre_bk_rows(&connection, &["before"]);
         }
-        assert!(hook_tables(&path).is_empty());
+        assert!(installed_tables(&path).is_empty());
         drop(connection);
 
         let backend = SqliteStorageBackend::new(&path).expect("backend");
         assert_eq!(
-            hook_tables(&path),
-            vec!["cron_schedule", "hook_registration"]
+            installed_tables(&path),
+            vec![
+                "cron_delivery_intent",
+                "cron_schedule",
+                "cron_transition_event",
+                "hook_registration",
+                "tool_sender_nonce_ledger",
+                "tool_sender_peer_binding",
+                "tool_sender_registry",
+            ]
         );
+        assert_eq!(storage_schema_version(&path), STORAGE_SCHEMA_VERSION);
         backend
             .hook_registration_store()
             .register(registration(stamp(1)))
@@ -120,6 +144,10 @@ fn pre_bk_ddl_set_reads_and_writes_after_hook_tables_created() {
         );
         drop(connection);
 
+        // The frozen previous-consumer DDL and writes leave the version record
+        // untouched while continuing to read/write its supported tables.
+        assert_eq!(storage_schema_version(&path), STORAGE_SCHEMA_VERSION);
+
         let backend = SqliteStorageBackend::new(&path).expect("reopen after old writes");
         assert_eq!(
             backend
@@ -130,6 +158,7 @@ fn pre_bk_ddl_set_reads_and_writes_after_hook_tables_created() {
             1
         );
         assert_eq!(backend.cron_schedule_store().active_all().unwrap().len(), 1);
+        assert_eq!(storage_schema_version(&path), STORAGE_SCHEMA_VERSION);
     }
 }
 
@@ -230,9 +259,18 @@ fn ensure_schema_twice_is_idempotent() {
 
     let second = SqliteStorageBackend::new(&path).expect("second open");
     assert_eq!(
-        hook_tables(&path),
-        vec!["cron_schedule", "hook_registration"]
+        installed_tables(&path),
+        vec![
+            "cron_delivery_intent",
+            "cron_schedule",
+            "cron_transition_event",
+            "hook_registration",
+            "tool_sender_nonce_ledger",
+            "tool_sender_peer_binding",
+            "tool_sender_registry",
+        ]
     );
+    assert_eq!(storage_schema_version(&path), STORAGE_SCHEMA_VERSION);
     assert_eq!(
         second
             .hook_registration_store()

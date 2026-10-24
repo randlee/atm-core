@@ -132,6 +132,67 @@ impl HookActionDispatcher for UnhookedRouter {
         }
         Ok(done)
     }
+
+    async fn dispatch_cron_actions(
+        &self,
+        spec: DispatchSpec,
+        permit: atm_core::boundary::CronRunPermit,
+        actions: Vec<HookAction>,
+    ) -> Result<Vec<DispatchedAction>, AtmError> {
+        let mut requests = Vec::with_capacity(actions.len());
+        for action in &actions {
+            let request = action.into_api_request(&spec.team, &spec.default_as)?;
+            let identity = action.run_as.as_ref().unwrap_or(&spec.default_as);
+            self.router
+                .check_roster_member(&spec.team, identity)
+                .map_err(|_| {
+                    AtmError::hook_malformed(&format!(
+                        "action {}: run_as {identity} is not on the roster",
+                        action.command
+                    ))
+                })?;
+            requests.push((action.command, identity.clone(), request));
+        }
+        // Validate the permit before a dry-run reports a valid action set.
+        let initial_deadline = self.action_deadline(&spec);
+        self.router
+            .admit_cron_run_permit(&permit, &spec.team, &spec.phase, initial_deadline)
+            .await?;
+        if spec.dry_run {
+            return Ok(Vec::new());
+        }
+        let total = requests.len();
+        let mut done = Vec::with_capacity(total);
+        for (index, (command, run_as, request)) in requests.into_iter().enumerate() {
+            let deadline = self.action_deadline(&spec);
+            #[cfg(test)]
+            self.record_deadline(deadline);
+            let started = Instant::now();
+            let result = self
+                .router
+                .dispatch_with_cron_permit(
+                    request,
+                    AuthenticatedIngress::Local,
+                    deadline,
+                    next_request_id(),
+                    crate::storage_and_nudge_router::CronPermitContext {
+                        permit: &permit,
+                        team: &spec.team,
+                        phase: &spec.phase,
+                    },
+                )
+                .await;
+            log_action(&spec, command, &run_as, result.is_ok(), started);
+            let response = result.map_err(|error| {
+                error.with_context(format!(
+                    "cron action {}/{total} ({command}) failed after {index} committed",
+                    index + 1
+                ))
+            })?;
+            done.push(DispatchedAction { command, response });
+        }
+        Ok(done)
+    }
 }
 
 /// One ADR-067 `action` entry per dispatched action.

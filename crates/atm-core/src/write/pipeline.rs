@@ -1,8 +1,13 @@
 //! The canonical write pipeline: `PreparedWrite`, the `send_mail`/`write_mail`
 //! entry family, and persisted-write preparation.
 
+use super::pipeline_terminal_escalation::{
+    TerminalEscalationMail, terminal_episode, terminal_escalation_details,
+    write_terminal_escalations,
+};
 use super::*;
 use crate::boundary::MemberKey;
+use crate::send::async_persistence::validate_async_write_admission;
 use crate::send::{NudgeMode, WriteSourcePreflight, send_mode_for_task_request};
 
 /// Result of the one canonical write operation.
@@ -470,163 +475,6 @@ pub fn write_current_herdr_terminal_escalation_with_runtime(
     )
 }
 
-fn terminal_episode(
-    runtime: &atm_storage::RosterRuntimeObservation,
-) -> Result<(&'static str, IsoTimestamp), AtmError> {
-    let started_at = runtime.state_changed_at.ok_or_else(|| {
-        AtmError::validation("Herdr escalation admission requires a runtime episode epoch")
-    })?;
-    match runtime.state {
-        crate::protocol::RuntimeMemberState::Blocked => Ok(("blocked", started_at)),
-        crate::protocol::RuntimeMemberState::Offline => Ok(("offline", started_at)),
-        _ => Err(AtmError::validation(
-            "Herdr escalation admission requires blocked or offline runtime state",
-        )),
-    }
-}
-
-fn terminal_escalation_details(
-    runtime: &LocalServiceRuntime,
-    task_store: &dyn atm_storage::TaskStore,
-    source_member: &MemberKey,
-    team: &TeamName,
-    state_name: &str,
-    started_at: IsoTimestamp,
-) -> Result<(Vec<crate::address::AgentAddress>, String, String), AtmError> {
-    let tasks = task_store.open_tasks(source_member)?;
-    if tasks.is_empty() {
-        return Err(AtmError::validation(
-            "Herdr escalation admission requires an authoritative open task",
-        ));
-    }
-    let roster = runtime.shared_roster_store_arc().load_roster(team)?;
-    let recipients = terminal_escalation_recipients(task_store, team, &roster)?;
-    let task_ids = tasks
-        .iter()
-        .map(|task| task.task_id.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    let summary = format!("escalation:{state_name}_escalated:{source_member}");
-    let body = format!(
-        "{state_name} member {} has been in this state since {}\nOpen tasks: {}\nRun: atm members --team {}",
-        source_member.agent(),
-        started_at,
-        task_ids,
-        team,
-    );
-    Ok((recipients, summary, body))
-}
-
-fn terminal_escalation_recipients(
-    task_store: &dyn atm_storage::TaskStore,
-    team: &TeamName,
-    roster: &atm_storage::RosterSnapshot,
-) -> Result<Vec<crate::address::AgentAddress>, AtmError> {
-    let leads: Vec<_> = roster
-        .members
-        .iter()
-        .filter(|member| member.agent_type == crate::schema::AgentType::Lead)
-        .map(|member| member.agent_name.clone())
-        .collect();
-    let mut recipients = if leads.len() == 1 {
-        leads
-            .into_iter()
-            .map(|lead| format!("{lead}@{team}").parse())
-            .collect::<Result<Vec<_>, _>>()?
-    } else {
-        Vec::new()
-    };
-    for recipient in task_store.effective_escalation_recipients(team)? {
-        let is_current_member = roster
-            .members
-            .iter()
-            .any(|member| member.agent_name == *recipient.agent());
-        if recipient.host().is_none()
-            && recipient.team().is_none_or(|t| t == team)
-            && is_current_member
-            && !recipients.iter().any(|known| known == &recipient)
-        {
-            recipients.push(recipient);
-        }
-    }
-    Ok(recipients)
-}
-
-struct TerminalEscalationMail {
-    body: String,
-    summary: String,
-    started_at: IsoTimestamp,
-}
-
-fn write_terminal_escalations(
-    daemon_home: std::path::PathBuf,
-    recipients: Vec<crate::address::AgentAddress>,
-    team: TeamName,
-    mail: TerminalEscalationMail,
-    observability: &dyn ObservabilityPort,
-    runtime: &LocalServiceRuntime,
-) -> Result<TerminalHerdrEscalationOutcome, AtmError> {
-    let mut outcome = TerminalHerdrEscalationOutcome::default();
-    for recipient in recipients {
-        let recipient_name = recipient.agent().clone();
-        if terminal_recipient_already_reported(
-            runtime,
-            &team,
-            &recipient_name,
-            &mail.summary,
-            mail.started_at,
-        )? {
-            continue;
-        }
-        let request = WriteRequest::new(
-            daemon_home.clone(),
-            daemon_home.clone(),
-            AgentName::from_validated(boundary::DAEMON_ACTOR_NAME),
-            &recipient.to_string(),
-            team.clone(),
-            SendMessageSource::Inline(mail.body.clone()),
-            Some(mail.summary.clone()),
-            false,
-            None,
-            false,
-        )?
-        .with_internal_daemon_escalation_provenance()
-        .with_nudge_mode(NudgeMode::Deferred);
-        match write_mail_with_runtime(request, observability, runtime) {
-            Ok(written) => outcome
-                .deliveries
-                .push((recipient_name, written.persisted_message_id())),
-            Err(error) => {
-                outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "terminal_escalation_mail_write", outcome = "failed", recipient = %recipient, error = %error, "Terminal escalation recipient write failed");
-            }
-        }
-    }
-    Ok(outcome)
-}
-
-fn terminal_recipient_already_reported(
-    runtime: &LocalServiceRuntime,
-    team: &TeamName,
-    recipient: &AgentName,
-    summary: &str,
-    started_at: IsoTimestamp,
-) -> Result<bool, AtmError> {
-    let messages = runtime
-        .message_store
-        .list_messages(&atm_storage::MessageQuery {
-            team: team.clone(),
-            agent: recipient.clone(),
-            sender: Some(AgentName::from_validated(boundary::DAEMON_ACTOR_NAME)),
-            task_id: None,
-            limit: None,
-        })?;
-    Ok(messages.iter().any(|message| {
-        message.envelope.summary.as_deref() == Some(summary)
-            && message.envelope.timestamp >= started_at
-    }))
-}
-
 pub fn send_mail_with_runtime(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
@@ -680,41 +528,144 @@ pub async fn prepare_write_with_preflight_async_runtime(
     runtime: &LocalServiceRuntime,
     source_preflight: WriteSourcePreflight,
 ) -> Result<WriteExecution, AtmError> {
-    validate_write_provenance(
-        WriteIngress::Canonical,
-        WriteProvenance {
-            target_host: request.to.as_ref().and_then(|address| address.host()),
-            authenticated_source_host: request.authenticated_source_host.as_ref(),
-            origin_message_id: request.origin_message_id.is_some(),
-            origin_timestamp: request.origin_timestamp.is_some(),
-        },
+    prepare_write_with_admission_async_runtime(
+        request,
+        observability,
+        runtime,
+        source_preflight,
+        None,
+        None,
+        None,
+    )
+    .await
+}
+
+/// Persists a write whose virtual sender and stable identity were admitted by
+/// a signed local runtime proof or authenticated peer attestation. The proof
+/// itself remains in the transport request; only this non-serializable
+/// capability authorizes canonical sender/id projection.
+pub async fn prepare_write_with_tool_capability_async_runtime(
+    request: WriteRequest,
+    capability: crate::boundary::ToolSenderCapability,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    source_preflight: WriteSourcePreflight,
+) -> Result<WriteExecution, AtmError> {
+    prepare_write_with_admission_async_runtime(
+        request,
+        observability,
+        runtime,
+        source_preflight,
+        Some(capability),
+        None,
+        None,
+    )
+    .await
+}
+
+/// Builds the internal storage provenance only from the scheduler-owned
+/// capability. Callers cannot turn caller-supplied schedule ids into a fence.
+#[must_use]
+pub fn cron_run_message_write_origin(
+    permit: &crate::boundary::CronRunPermit,
+) -> atm_storage::MessageWriteOrigin {
+    atm_storage::MessageWriteOrigin::CronRun {
+        schedule_id: permit.schedule_id(),
+        generation: permit.generation(),
+    }
+}
+
+/// Persists a cron action through canonical admission with the opaque
+/// scheduler permit retained until the storage provenance is constructed.
+pub async fn prepare_write_with_cron_run_permit_async_runtime(
+    request: WriteRequest,
+    permit: &crate::boundary::CronRunPermit,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    source_preflight: WriteSourcePreflight,
+) -> Result<WriteExecution, AtmError> {
+    prepare_write_with_admission_async_runtime(
+        request,
+        observability,
+        runtime,
+        source_preflight,
+        None,
+        Some((permit.schedule_id(), permit.generation())),
+        None,
+    )
+    .await
+}
+
+/// Persists cron module output as ordinary creator-addressed mail, retaining
+/// both the scheduler capability and the id allocated by the transition
+/// store. The stable id never enters the serializable write request.
+pub async fn prepare_cron_module_mail_async_runtime(
+    request: WriteRequest,
+    permit: &crate::boundary::CronRunPermit,
+    message_id: AtmMessageId,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    source_preflight: WriteSourcePreflight,
+) -> Result<WriteExecution, AtmError> {
+    if request.acknowledges_message_id.is_some()
+        || request.task_id.is_some()
+        || request.task_op.is_some()
+        || request.task_complete.is_some()
+    {
+        return Err(AtmError::validation(
+            "cron module output cannot be an acknowledgement or task operation",
+        ));
+    }
+    prepare_write_with_admission_async_runtime(
+        request,
+        observability,
+        runtime,
+        source_preflight,
+        None,
+        Some((permit.schedule_id(), permit.generation())),
+        Some(message_id),
+    )
+    .await
+}
+
+async fn prepare_write_with_admission_async_runtime(
+    request: WriteRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    source_preflight: WriteSourcePreflight,
+    tool_capability: Option<crate::boundary::ToolSenderCapability>,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
+    stable_message_id: Option<AtmMessageId>,
+) -> Result<WriteExecution, AtmError> {
+    validate_async_write_admission(
+        &request,
+        tool_capability.is_some(),
+        cron_run_fence,
+        stable_message_id,
     )?;
-    if request.acknowledges_message_id.is_none() {
-        if request.to.is_none() {
-            return Err(AtmError::validation(
-                "message write is missing a destination",
-            ));
-        }
+    if request.acknowledges_message_id.is_none() || has_authenticated_peer_provenance(&request) {
         return prepare_persisted_write_async(
             request,
             observability,
             runtime,
-            None,
-            source_preflight,
+            PersistedWritePreparation {
+                acknowledgement: None,
+                source_preflight,
+                tool_capability,
+                cron_run_fence,
+                stable_message_id,
+            },
         )
         .await;
     }
-    if has_authenticated_peer_provenance(&request) {
-        return prepare_persisted_write_async(
-            request,
-            observability,
-            runtime,
-            None,
-            source_preflight,
-        )
-        .await;
-    }
-    let admitted = admit_acknowledgement_write_async(request, runtime).await?;
+    let origin = cron_run_fence.map_or(
+        atm_storage::MessageWriteOrigin::Local,
+        |(schedule_id, generation)| atm_storage::MessageWriteOrigin::CronRun {
+            schedule_id,
+            generation,
+        },
+    );
+    let admitted = admit_acknowledgement_write_async(request, runtime, origin).await?;
     let task_events = admitted.task_events;
     match admitted.operation {
         Ok(acknowledgement) => {
@@ -963,15 +914,86 @@ fn delivery_mode_for(self_task: bool, mode: DeliveryExecutionMode) -> DeliveryEx
     }
 }
 
+/// Verifies that an opaque admission still matches the exact proof and canonical
+/// body carried into persistence, then selects its immutable message id.
+fn verified_tool_message_id(
+    request: &WriteRequest,
+    capability: &crate::boundary::ToolSenderCapability,
+    body: &str,
+) -> Result<AtmMessageId, AtmError> {
+    let actual_digest = atm_storage::MessageDigest::for_message_body(body);
+    if capability.message_digest() != &actual_digest {
+        return Err(AtmError::new(
+            crate::error_codes::AtmErrorCode::ToolSignatureInvalid,
+            "canonical message body does not match the admitted tool proof digest",
+        ));
+    }
+
+    match (
+        capability.is_peer_admission(),
+        request.tool_runtime_proof.as_ref(),
+        request.tool_sender_attestation.as_ref(),
+    ) {
+        (false, Some(proof), None) if capability.matches_runtime_proof(proof) => {
+            if request.origin_message_id.is_some()
+                || request.origin_timestamp.is_some()
+                || request.authenticated_source_host.is_some()
+            {
+                return Err(AtmError::validation(
+                    "local tool proof cannot override peer origin identity or timestamp",
+                ));
+            }
+        }
+        (true, None, Some(attestation)) if capability.matches_peer_attestation(attestation) => {
+            if request.origin_message_id != Some(capability.message_id()) {
+                return Err(AtmError::validation(
+                    "peer tool proof identity does not match authenticated origin metadata",
+                ));
+            }
+            if request.authenticated_source_host.as_ref() != capability.authenticated_source_host()
+            {
+                return Err(atm_storage::ToolSenderFailure::HostMismatch.into_error(
+                    "peer tool proof host does not match authenticated origin metadata",
+                ));
+            }
+        }
+        _ => {
+            return Err(AtmError::new(
+                crate::error_codes::AtmErrorCode::ToolSignatureInvalid,
+                "tool admission capability does not match the exact proof in the write request",
+            ));
+        }
+    }
+    Ok(capability.message_id())
+}
+
 /// Prepares the canonical write after its one asynchronous durable admission.
+struct PersistedWritePreparation {
+    acknowledgement: Option<ResolvedAcknowledgement>,
+    source_preflight: WriteSourcePreflight,
+    tool_capability: Option<crate::boundary::ToolSenderCapability>,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
+    stable_message_id: Option<AtmMessageId>,
+}
+
 async fn prepare_persisted_write_async(
     mut request: SendRequest,
     observability: &(dyn ObservabilityPort + Send + Sync),
     runtime: &LocalServiceRuntime,
-    acknowledgement: Option<ResolvedAcknowledgement>,
-    source_preflight: WriteSourcePreflight,
+    preparation: PersistedWritePreparation,
 ) -> Result<WriteExecution, AtmError> {
-    let mut context = prepare_send_context(runtime, &mut request)?;
+    let PersistedWritePreparation {
+        acknowledgement,
+        source_preflight,
+        tool_capability,
+        cron_run_fence,
+        stable_message_id,
+    } = preparation;
+    let mut context = crate::send::prepare_send_context_with_tool_capability(
+        runtime,
+        &mut request,
+        tool_capability.as_ref(),
+    )?;
     crate::send::validate_task_request(&mut request)?;
     let task_id = request.task_id.clone();
     request.nudge_mode = send_mode_for_task_request(&request, &task_id);
@@ -980,11 +1002,25 @@ async fn prepare_persisted_write_async(
     let requires_ack = request_requires_ack(&request, &task_id);
     let (body, verified_template) =
         crate::send::async_persistence::resolve_async_body(&request, source_preflight)?;
+    let message_id = match tool_capability.as_ref() {
+        Some(capability) => verified_tool_message_id(&request, capability, &body)?,
+        None => stable_message_id
+            .or(request.origin_message_id)
+            .unwrap_or_default(),
+    };
     annotate_path_only_body(&mut request, &mut context, &body);
     let summary = crate::send::summary::build_summary(&body, request.summary_override.clone());
-    let message_id = request.origin_message_id.unwrap_or_default();
-    let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
-    let mut persistence = crate::send::async_persistence::persist_send_message_async(
+    let timestamp = if tool_capability
+        .as_ref()
+        .is_some_and(|capability| !capability.is_peer_admission())
+    {
+        IsoTimestamp::now()
+    } else {
+        stable_message_id
+            .map(|id| id.timestamp())
+            .unwrap_or_else(|| request.origin_timestamp.unwrap_or_else(IsoTimestamp::now))
+    };
+    let persistence = crate::send::async_persistence::persist_send_message_async(
         runtime,
         &request,
         &context,
@@ -995,14 +1031,55 @@ async fn prepare_persisted_write_async(
         requires_ack,
         task_id.clone(),
         verified_template.as_ref(),
+        cron_run_fence,
     )
     .await?;
+    Ok(finish_async_persisted_write(
+        request,
+        observability,
+        runtime,
+        acknowledgement,
+        AsyncPersistedSendCompletion {
+            context,
+            task_id,
+            self_task,
+            is_ack,
+            requires_ack,
+            body,
+            message_id,
+            summary,
+            timestamp,
+        },
+        persistence,
+    ))
+}
+
+fn finish_async_persisted_write(
+    request: SendRequest,
+    observability: &(dyn ObservabilityPort + Send + Sync),
+    runtime: &LocalServiceRuntime,
+    acknowledgement: Option<ResolvedAcknowledgement>,
+    prepared: AsyncPersistedSendCompletion,
+    mut persistence: crate::send::DeliveryPersistenceResult,
+) -> WriteExecution {
+    let AsyncPersistedSendCompletion {
+        context,
+        task_id,
+        self_task,
+        is_ack,
+        requires_ack,
+        body,
+        message_id,
+        summary,
+        timestamp,
+        ..
+    } = prepared;
     let task_events = std::mem::take(&mut persistence.task_events);
     if let Err(error) = &persistence.operation {
-        return Ok(WriteExecution {
+        return WriteExecution {
             operation: Err(error.clone()),
             task_events,
-        });
+        };
     }
     let received_hook = if self_task {
         Ok(None)
@@ -1022,7 +1099,7 @@ async fn prepare_persisted_write_async(
         &persistence,
         DeliveryExecutionMode::Deferred,
     );
-    Ok(WriteExecution {
+    WriteExecution {
         operation: outcome.map(|outcome| {
             PreparedWrite::from_persistence(
                 outcome,
@@ -1034,7 +1111,19 @@ async fn prepare_persisted_write_async(
             )
         }),
         task_events,
-    })
+    }
+}
+
+struct AsyncPersistedSendCompletion {
+    context: crate::send::SendExecutionContext,
+    task_id: Option<TaskId>,
+    self_task: bool,
+    is_ack: bool,
+    requires_ack: bool,
+    body: String,
+    message_id: AtmMessageId,
+    summary: String,
+    timestamp: IsoTimestamp,
 }
 
 pub(crate) fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
@@ -1065,5 +1154,129 @@ pub(crate) fn send_mail_with_runtime_impl<
         WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
             "test send helper cannot finish an acknowledgement write",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tool_sender_admission_tests {
+    use std::str::FromStr;
+
+    use super::verified_tool_message_id;
+    use crate::boundary::{ToolSenderCapability, claim_verified_tool_runtime};
+    use crate::send::{SendMessageSource, WriteRequest};
+    use crate::types::{AgentName, TeamName};
+    use atm_storage::testing::InMemoryToolSenderRegistry;
+    use atm_storage::{
+        AtmMessageId, HostName, InstallerId, MessageDigest, PluginSenderId, ToolInstallerOperation,
+        ToolInstallerRequest, ToolKeyId, ToolNonce, ToolRuntimeProof, ToolSenderRegistry,
+    };
+
+    const MESSAGE_ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+    const BODY: &str = "deterministic tool mail";
+
+    fn admitted() -> (ToolSenderCapability, ToolRuntimeProof) {
+        let sender = PluginSenderId::parse("test-plugin").expect("sender");
+        let key_id = ToolKeyId::parse("runtime-key").expect("runtime key");
+        let host = HostName::from_str("host.example").expect("host");
+        let now = crate::types::IsoTimestamp::now();
+        let registry = InMemoryToolSenderRegistry::default();
+        registry
+            .apply_signed(
+                ToolInstallerRequest {
+                    schema_version: "1.0.0".into(),
+                    operation: ToolInstallerOperation::Register,
+                    installer_id: InstallerId::parse("installer").expect("installer"),
+                    installer_key_id: ToolKeyId::parse("installer-key").expect("installer key"),
+                    sender: sender.clone(),
+                    package_digest: MessageDigest::parse("package-digest").expect("package digest"),
+                    registration_generation: 1,
+                    host_id: host.clone(),
+                    runtime_key_id: key_id.clone(),
+                    runtime_public_key: "test-key".into(),
+                    previous_runtime_key_id: None,
+                    nonce: ToolNonce::parse("install-nonce").expect("installer nonce"),
+                    issued_at: now,
+                    expires_at: now,
+                    signature: "test-signature".into(),
+                },
+                now,
+            )
+            .expect("register deterministic fixture");
+
+        let message_id = AtmMessageId::from_str(MESSAGE_ID).expect("message id");
+        let digest = MessageDigest::for_message_body(BODY);
+        let proof = ToolRuntimeProof {
+            runtime_key_id: key_id,
+            sender,
+            registration_generation: 1,
+            host_id: host,
+            message_id,
+            message_digest: digest.clone(),
+            nonce: ToolNonce::parse("runtime-nonce").expect("runtime nonce"),
+            signature: "runtime-signature".into(),
+        };
+        let admission = registry
+            .admit_signed_message(proof.clone(), message_id, digest, now)
+            .expect("admit deterministic fixture");
+        let claim = claim_verified_tool_runtime(admission);
+        let crate::boundary::SenderClaim::DaemonTool {
+            proof: capability, ..
+        } = claim
+        else {
+            panic!("admission yields a daemon tool claim");
+        };
+        (capability, proof)
+    }
+
+    fn request(proof: ToolRuntimeProof) -> WriteRequest {
+        let mut request = WriteRequest::new(
+            std::path::PathBuf::from("/tmp"),
+            std::path::PathBuf::from("/tmp"),
+            AgentName::from_validated("daemon"),
+            "recipient@team",
+            TeamName::from_validated("team"),
+            SendMessageSource::Inline(BODY.into()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("valid fixed request");
+        request.tool_runtime_proof = Some(proof);
+        request
+    }
+
+    #[test]
+    fn exact_admitted_tool_proof_keeps_the_bound_message_id_on_retry() {
+        let (capability, proof) = admitted();
+        let request = request(proof);
+        let first = verified_tool_message_id(&request, &capability, BODY).expect("first write");
+        let retry = verified_tool_message_id(&request, &capability, BODY).expect("exact retry");
+        assert_eq!(first, retry);
+        assert_eq!(first.to_string(), MESSAGE_ID);
+    }
+
+    #[test]
+    fn tool_admission_rejects_changed_body_and_substituted_proof() {
+        let (capability, proof) = admitted();
+        let original_request = request(proof.clone());
+        assert!(verified_tool_message_id(&original_request, &capability, "changed body").is_err());
+
+        let mut changed_id = proof.clone();
+        changed_id.message_id =
+            AtmMessageId::from_str("01ARZ3NDEKTSV4RRFFQ69G5FAW").expect("alternate id");
+        assert!(verified_tool_message_id(&request(changed_id), &capability, BODY).is_err());
+
+        let mut changed_sender = proof;
+        changed_sender.sender = PluginSenderId::parse("other-plugin").expect("other sender");
+        assert!(verified_tool_message_id(&request(changed_sender), &capability, BODY).is_err());
+    }
+
+    #[test]
+    fn local_tool_admission_rejects_origin_identity_overrides() {
+        let (capability, proof) = admitted();
+        let mut request = request(proof);
+        request.origin_message_id = Some(capability.message_id());
+        assert!(verified_tool_message_id(&request, &capability, BODY).is_err());
     }
 }

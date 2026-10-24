@@ -9,6 +9,7 @@ use super::ops_envelope::StorageEnvelope;
 use super::stmt_cache::WriterStatementCache;
 use super::task_ops::{TaskMessageResult, apply_task_message};
 use crate::shared_db::{SharedDbTarget, SqliteConnection, serialize_json};
+use rusqlite::OptionalExtension;
 
 pub(crate) fn validate_upsert_message_request(record: &Message) -> Result<(), AtmError> {
     let envelope_json = serialize_json(
@@ -30,6 +31,7 @@ pub(super) fn execute_upsert_message(
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
+    validate_cron_generation_fence(provenance, connection)?;
     let inserted = insert_message_canonical(record, connection, cache, target)?;
     let existing = if inserted {
         None
@@ -42,7 +44,7 @@ pub(super) fn execute_upsert_message(
     let mut reassign_notice = None;
     let mut task_rejection = None;
     let mut task_events = Vec::new();
-    if inserted && provenance == MessageWriteOrigin::Local {
+    if inserted && provenance.is_local() {
         match apply_task_message(record, connection, cache, target)? {
             TaskMessageResult::Applied {
                 already_closed: closed,
@@ -73,4 +75,44 @@ pub(super) fn execute_upsert_message(
         task_rejection,
         task_events,
     })
+}
+
+/// Validates the cron run fence before looking up a duplicate or writing any
+/// mailbox/task state. The caller runs this inside the same immediate writer
+/// transaction as canonical admission and task effects.
+pub(super) fn validate_cron_generation_fence(
+    provenance: MessageWriteOrigin,
+    connection: &SqliteConnection,
+) -> Result<(), AtmError> {
+    let MessageWriteOrigin::CronRun {
+        schedule_id,
+        generation,
+    } = provenance
+    else {
+        return Ok(());
+    };
+    let schedule_id = i64::try_from(schedule_id.get())
+        .map_err(|_| AtmError::validation("cron schedule id exceeds the sqlite integer range"))?;
+    let expected_generation = i64::from(generation.get());
+    let actual: Option<(i64, i64)> = connection
+        .query_row(
+            "SELECT generation, active FROM cron_schedule WHERE id = ?1",
+            [schedule_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|error| {
+            AtmError::new(
+                atm_storage::AtmErrorCode::StoreQueryFailed,
+                format!("failed to verify cron message generation fence: {error}"),
+            )
+        })?;
+    if actual == Some((expected_generation, 1)) {
+        Ok(())
+    } else {
+        Err(AtmError::validation_with_recovery(
+            "cron action permit is stale or its schedule is no longer active",
+            "allow the current cron run to stop and let the scheduler start a fresh generation",
+        ))
+    }
 }

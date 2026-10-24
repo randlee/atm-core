@@ -20,8 +20,8 @@ use ulid::Ulid;
 
 use crate::api::RequestDeadline;
 use crate::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, NudgeKind, PostSendBuiltInTarget,
-    PostSendEmissionPath, PostSendHookEvent,
+    BuiltInPostSendDispatch, CronNoticeKey, DeliveryReceipt, GraftNudgeTarget, NudgeKind,
+    PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEvent,
 };
 use crate::error::{AtmError, AtmErrorCode};
 use crate::list::{ListOutcome, ListQuery};
@@ -31,6 +31,7 @@ use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
 use crate::service_runtime::{GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE, RetainedServiceRuntime};
 use crate::types::{AgentName, ChatId, TeamName};
+use atm_storage::DeliveryRetryCause;
 
 pub const MAX_GRAFT_POST_SEND_FRAME_BYTES: usize = 1024 * 1024;
 
@@ -48,6 +49,92 @@ pub struct GraftPostSendRequest {
     /// Canonical database-resolved `<atm …>` nudge text. The receiver must
     /// inject this text, never substitute the stored message description.
     pub rendered_nudge: String,
+}
+
+/// A cron lifecycle nudge sent directly to a Graft receiver.
+///
+/// This request is intentionally separate from [`GraftPostSendRequest`]: a
+/// durable cron transition has its own replay key and must not be represented
+/// as a fabricated received-message event.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CronLifecycleGraftRequest {
+    pub key: CronNoticeKey,
+    pub team: TeamName,
+    pub recipient: AgentName,
+    pub rendered_nudge: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftCronLifecycleWireRequest {
+    pub capability_base64url: String,
+    pub request: CronLifecycleGraftRequest,
+}
+
+/// Wire-only representation of the existing durable receipt contract.
+///
+/// `DeliveryReceipt` deliberately does not derive serde. Keeping the adapter
+/// here makes the new Graft frame explicit while preserving that storage API.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "receipt", rename_all = "snake_case")]
+enum GraftCronLifecycleReceipt {
+    Accepted { receipt_id: String },
+    Suppressed,
+    RecipientUnavailable,
+    Unknown { retry_cause: String },
+}
+
+impl From<&DeliveryReceipt> for GraftCronLifecycleReceipt {
+    fn from(receipt: &DeliveryReceipt) -> Self {
+        match receipt {
+            DeliveryReceipt::Accepted { receipt_id } => Self::Accepted {
+                receipt_id: receipt_id.clone(),
+            },
+            DeliveryReceipt::Suppressed => Self::Suppressed,
+            DeliveryReceipt::RecipientUnavailable => Self::RecipientUnavailable,
+            DeliveryReceipt::Unknown { retry_cause } => Self::Unknown {
+                retry_cause: retry_cause.as_str().to_owned(),
+            },
+        }
+    }
+}
+
+impl TryFrom<GraftCronLifecycleReceipt> for DeliveryReceipt {
+    type Error = AtmError;
+
+    fn try_from(receipt: GraftCronLifecycleReceipt) -> Result<Self, Self::Error> {
+        Ok(match receipt {
+            GraftCronLifecycleReceipt::Accepted { receipt_id } => {
+                DeliveryReceipt::Accepted { receipt_id }
+            }
+            GraftCronLifecycleReceipt::Suppressed => DeliveryReceipt::Suppressed,
+            GraftCronLifecycleReceipt::RecipientUnavailable => {
+                DeliveryReceipt::RecipientUnavailable
+            }
+            GraftCronLifecycleReceipt::Unknown { retry_cause } => DeliveryReceipt::Unknown {
+                retry_cause: DeliveryRetryCause::parse(retry_cause)?,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct GraftCronLifecycleWireResponse {
+    receipt: GraftCronLifecycleReceipt,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+/// A capability-authenticated receiver request, preserving the legacy
+/// post-send payload alongside direct keyed lifecycle delivery.
+pub enum GraftReceiverRequest {
+    PostSend(GraftPostSendRequest),
+    CronLifecycle(CronLifecycleGraftRequest),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct GraftReceiverWireRequest {
+    capability_base64url: String,
+    request: GraftReceiverRequest,
 }
 
 const fn default_graft_kind() -> NudgeKind {
@@ -80,6 +167,91 @@ pub fn deliver_published_receiver_hook_from_local_runtime(
     deadline: RequestDeadline,
 ) -> Result<PostSendEmissionPath, AtmError> {
     deliver_published_receiver_hook(runtime, dispatch, deadline)
+}
+
+/// Delivers a committed cron lifecycle notice to its resolved Graft receiver.
+///
+/// Unlike post-send delivery, this returns the keyed durable receipt directly.
+/// Transport failures and ambiguous handoffs are reported as `Unknown`, never
+/// as a successful delivery.
+pub fn deliver_published_cron_lifecycle_from_local_runtime(
+    runtime: &crate::LocalServiceRuntime,
+    key: CronNoticeKey,
+    target: &GraftNudgeTarget,
+    deadline: RequestDeadline,
+) -> DeliveryReceipt {
+    deliver_published_cron_lifecycle(runtime, key, target, deadline)
+}
+
+pub(crate) fn deliver_published_cron_lifecycle<R>(
+    runtime: &R,
+    key: CronNoticeKey,
+    target: &GraftNudgeTarget,
+    deadline: RequestDeadline,
+) -> DeliveryReceipt
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
+    if runtime
+        .load_roster_member(&target.recipient_team, &target.recipient)
+        .is_none()
+    {
+        return DeliveryReceipt::RecipientUnavailable;
+    }
+    let lease = match runtime.graft_receiver_lease(
+        &target.recipient_team,
+        &target.recipient,
+        GRAFT_RECEIVER_LEASE_LOOKUP_DEADLINE,
+    ) {
+        Ok(Some(lease)) => lease,
+        Ok(None) => return DeliveryReceipt::RecipientUnavailable,
+        Err(_) => return unknown_cron_lifecycle_receipt("graft receiver lease lookup failed"),
+    };
+    let request = CronLifecycleGraftRequest {
+        key,
+        team: target.recipient_team.clone(),
+        recipient: target.recipient.clone(),
+        rendered_nudge: target.rendered_nudge.clone(),
+    };
+    let response = deliver_graft_cron_lifecycle_with_deadline(
+        lease.endpoint,
+        &lease.capability,
+        &request,
+        deadline,
+    );
+    if let Err(error) = &response
+        && error.code() == AtmErrorCode::PostSendGraftUnavailable
+        && let Err(mark_error) = runtime.mark_graft_receiver_unreachable(
+            &target.recipient_team,
+            &target.recipient,
+            &lease.owner_generation,
+            chrono::Utc::now(),
+        )
+    {
+        tracing::warn!(
+            recipient = %target.recipient,
+            recipient_team = %target.recipient_team,
+            error_code = %mark_error.code(),
+            error_message = %mark_error.message(),
+            "failed to record unreachable graft receiver for cron lifecycle delivery"
+        );
+    }
+    response.unwrap_or_else(|_| {
+        unknown_cron_lifecycle_receipt("graft lifecycle receiver handoff result is unknown")
+    })
+}
+
+/// Builds a bounded unknown receipt for a Graft cron lifecycle handoff.
+///
+/// Invalid or oversized caller-provided reasons collapse to a stable safe
+/// reason instead of turning a transport uncertainty into a success.
+pub fn unknown_cron_lifecycle_receipt(reason: &str) -> DeliveryReceipt {
+    DeliveryReceipt::Unknown {
+        retry_cause: DeliveryRetryCause::parse(reason.to_owned()).unwrap_or_else(|_| {
+            DeliveryRetryCause::parse("graft lifecycle handoff outcome is unknown".to_owned())
+                .expect("the stable Graft retry cause is valid and bounded")
+        }),
+    }
 }
 
 pub(crate) fn deliver_published_receiver_hook<R>(
@@ -214,6 +386,44 @@ fn deliver_graft_post_send_with_deadline(
         "failed to read graft post-send response",
         "graft post-send response exceeded the bounded payload cap",
     )
+}
+
+fn deliver_graft_cron_lifecycle_with_deadline(
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
+    request: &CronLifecycleGraftRequest,
+    deadline: RequestDeadline,
+) -> Result<DeliveryReceipt, AtmError> {
+    let connect_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_CONNECT_DEADLINE)?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            "failed to connect to graft cron lifecycle receiver",
+        )
+        .with_cause(source)
+    })?;
+    let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
+    apply_stream_deadlines(&stream, io_deadline)?;
+    let wire = GraftCronLifecycleWireRequest {
+        capability_base64url: capability.to_base64url(),
+        request: request.clone(),
+    };
+    write_graft_post_send_message(
+        &mut stream,
+        &wire,
+        "failed to write graft cron lifecycle request",
+        "graft cron lifecycle request exceeded the bounded payload cap",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft cron lifecycle request")
+            .with_cause(source)
+    })?;
+    let response: GraftCronLifecycleWireResponse = read_graft_post_send_message(
+        &mut stream,
+        "failed to read graft cron lifecycle receipt",
+        "graft cron lifecycle receipt exceeded the bounded payload cap",
+    )?;
+    response.receipt.try_into()
 }
 
 /// Length-prefixed wire request carrying the caller's loopback capability.
@@ -439,15 +649,31 @@ impl GraftReceiverListener {
         stream: &mut TcpStream,
         io_deadline: Duration,
     ) -> Result<GraftPostSendRequest, AtmError> {
+        match self.read_receiver_request(stream, io_deadline)? {
+            GraftReceiverRequest::PostSend(request) => Ok(request),
+            GraftReceiverRequest::CronLifecycle(_) => Err(AtmError::validation(
+                "graft post-send receiver received a cron lifecycle request",
+            )),
+        }
+    }
+
+    /// Read one authenticated request of either supported Graft delivery
+    /// family. The untagged payload keeps the historical post-send JSON shape
+    /// byte-for-byte compatible while allowing keyed cron lifecycle frames.
+    pub fn read_receiver_request(
+        &self,
+        stream: &mut TcpStream,
+        io_deadline: Duration,
+    ) -> Result<GraftReceiverRequest, AtmError> {
         apply_stream_deadlines(stream, io_deadline)?;
-        let wire: GraftPostSendWireRequest = read_graft_post_send_message(
+        let wire: GraftReceiverWireRequest = read_graft_post_send_message(
             stream,
-            "failed to read graft post-send request",
-            "graft post-send request exceeded the bounded payload cap",
+            "failed to read graft receiver request",
+            "graft receiver request exceeded the bounded payload cap",
         )?;
         if !self.capability.matches_header(&wire.capability_base64url) {
             return Err(AtmError::validation(
-                "graft post-send request presented an invalid local capability",
+                "graft receiver request presented an invalid local capability",
             ));
         }
         Ok(wire.request)
@@ -471,6 +697,27 @@ impl GraftReceiverListener {
         )?;
         stream.flush().map_err(|source| {
             AtmError::daemon_unavailable("failed to flush graft post-send response")
+                .with_cause(source)
+        })
+    }
+
+    /// Write a lifecycle receipt returned by the receiving host.
+    pub fn write_cron_lifecycle_receipt(
+        &self,
+        stream: &mut TcpStream,
+        receipt: &DeliveryReceipt,
+    ) -> Result<(), AtmError> {
+        let response = GraftCronLifecycleWireResponse {
+            receipt: GraftCronLifecycleReceipt::from(receipt),
+        };
+        write_graft_post_send_message(
+            stream,
+            &response,
+            "failed to write graft cron lifecycle receipt",
+            "graft cron lifecycle receipt exceeded the bounded payload cap",
+        )?;
+        stream.flush().map_err(|source| {
+            AtmError::daemon_unavailable("failed to flush graft cron lifecycle receipt")
                 .with_cause(source)
         })
     }
@@ -632,15 +879,18 @@ pub trait AtmGraftClient: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AtmGraftClient, GraftPostSendRequest, GraftPostSendResponse, GraftPostSendWireRequest,
-        GraftReceiverListener, RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send,
-        deliver_published_receiver_hook, graft_receiver_lock_path_from_root,
-        graft_receiver_not_registered_error, remaining_hook_budget,
+        AtmGraftClient, CronLifecycleGraftRequest, GraftCronLifecycleReceipt, GraftPostSendRequest,
+        GraftPostSendResponse, GraftPostSendWireRequest, GraftReceiverListener,
+        GraftReceiverRequest, GraftReceiverWireRequest, RECEIVER_HOOK_RESULT_HANDOFF_GRACE,
+        deliver_graft_post_send, deliver_published_cron_lifecycle, deliver_published_receiver_hook,
+        graft_receiver_lock_path_from_root, graft_receiver_not_registered_error,
+        remaining_hook_budget,
     };
     use crate::api::RequestDeadline;
     use crate::boundary::{
-        BuiltInPostSendDispatch, GraftNudgeTarget, NudgeKind, PostSendBuiltInTarget,
-        PostSendEmissionPath, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+        BuiltInPostSendDispatch, CronGeneration, CronNoticeKey, CronScheduleId, DeliveryReceipt,
+        GraftNudgeTarget, NudgeKind, PostSendBuiltInTarget, PostSendEmissionPath,
+        PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
     };
     use crate::config::AtmConfig;
     use crate::delivery_policy::DeliveryRecipientSnapshot;
@@ -653,6 +903,7 @@ mod tests {
     use crate::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
     use crate::types::{AgentName, ChatId, IsoTimestamp, ModelName, TeamName};
     use atm_storage::AgentType;
+    use atm_storage::DeliveryRetryCause;
     use std::fs;
     use std::net::TcpStream;
     use std::path::Path;
@@ -772,6 +1023,101 @@ mod tests {
 
         let response = sender.join().expect("join sender").expect("deliver");
         assert_eq!(response, GraftPostSendResponse::Delivered);
+    }
+
+    #[test]
+    fn receiver_request_union_preserves_post_send_wire_and_carries_keyed_cron() {
+        let capability = crate::local_http::LocalCapability::generate().expect("capability");
+        let old = GraftPostSendWireRequest {
+            capability_base64url: capability.to_base64url(),
+            request: GraftPostSendRequest {
+                event: test_event(),
+                kind: NudgeKind::Queue,
+                rendered_nudge: "existing payload".to_owned(),
+            },
+        };
+        let old_json = serde_json::to_value(&old).expect("old wire JSON");
+        assert_eq!(old_json["request"]["kind"], "queue");
+        assert_eq!(old_json["request"]["rendered_nudge"], "existing payload");
+        assert!(old_json["request"].get("key").is_none());
+        let decoded: GraftReceiverWireRequest =
+            serde_json::from_value(old_json).expect("legacy post-send request remains readable");
+        assert!(matches!(decoded.request, GraftReceiverRequest::PostSend(_)));
+
+        let cron = GraftReceiverWireRequest {
+            capability_base64url: capability.to_base64url(),
+            request: GraftReceiverRequest::CronLifecycle(CronLifecycleGraftRequest {
+                key: CronNoticeKey {
+                    schedule_id: CronScheduleId::new(8),
+                    generation: CronGeneration::FIRST,
+                    transition_seq: 13,
+                },
+                team: TeamName::from_validated(TEST_TEAM),
+                recipient: AgentName::from_validated(TEST_QA),
+                rendered_nudge: "cron stopped".to_owned(),
+            }),
+        };
+        let cron_json = serde_json::to_value(&cron).expect("cron wire JSON");
+        assert_eq!(cron_json["request"]["key"]["schedule_id"], 8);
+        assert_eq!(cron_json["request"]["key"]["transition_seq"], 13);
+        let decoded: GraftReceiverWireRequest =
+            serde_json::from_value(cron_json).expect("keyed cron request");
+        assert!(matches!(
+            decoded.request,
+            GraftReceiverRequest::CronLifecycle(_)
+        ));
+    }
+
+    #[test]
+    fn cron_receipt_wire_round_trips_without_accepting_unknown_as_delivered() {
+        let accepted = DeliveryReceipt::Accepted {
+            receipt_id: "receipt-8-1-13".to_owned(),
+        };
+        let encoded = serde_json::to_vec(&GraftCronLifecycleReceipt::from(&accepted))
+            .expect("accepted receipt JSON");
+        let decoded: GraftCronLifecycleReceipt =
+            serde_json::from_slice(&encoded).expect("decode accepted receipt");
+        assert_eq!(
+            DeliveryReceipt::try_from(decoded).expect("receipt"),
+            accepted
+        );
+
+        let unknown = DeliveryReceipt::Unknown {
+            retry_cause: DeliveryRetryCause::parse("receiver handoff uncertain".to_owned())
+                .expect("retry cause"),
+        };
+        let encoded = serde_json::to_vec(&GraftCronLifecycleReceipt::from(&unknown))
+            .expect("unknown receipt JSON");
+        let decoded: GraftCronLifecycleReceipt =
+            serde_json::from_slice(&encoded).expect("decode unknown receipt");
+        assert_eq!(
+            DeliveryReceipt::try_from(decoded).expect("receipt"),
+            unknown
+        );
+    }
+
+    #[test]
+    fn direct_cron_sender_reports_missing_lease_without_attempting_delivery() {
+        let runtime = GraftLeaseTestRuntime::with_lease(None);
+        let key = CronNoticeKey {
+            schedule_id: CronScheduleId::new(55),
+            generation: CronGeneration::FIRST,
+            transition_seq: 21,
+        };
+        let target = GraftNudgeTarget {
+            recipient: AgentName::from_validated(TEST_QA),
+            recipient_team: TeamName::from_validated(TEST_TEAM),
+            rendered_nudge: "cron stopped".to_owned(),
+        };
+        assert_eq!(
+            deliver_published_cron_lifecycle(
+                &runtime,
+                key,
+                &target,
+                RequestDeadline::after(Duration::from_secs(3)),
+            ),
+            DeliveryReceipt::RecipientUnavailable
+        );
     }
 
     #[test]

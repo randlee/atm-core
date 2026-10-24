@@ -28,6 +28,9 @@ ALLOWED_WRITE_OPS = {
     "AdmitDecomposedMessage",
     "AdmitTemplateMessage",
     "ApplyReadDisplayState",
+    # Queued deletion validates the cron-generation fence before removing
+    # projections and the durable message record in the same writer turn.
+    "DeleteMessage",
     # AW.2 sprint authorizes these lower-priority diagnostic-lane mutations.
     "PruneDiagnostics",
     "RecordDiagnostics",

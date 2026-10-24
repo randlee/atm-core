@@ -66,6 +66,8 @@ impl AckRequest {
             authenticated_source_host: None,
             peer_http_api_version: None,
             peer_wire_security: None,
+            tool_runtime_proof: None,
+            tool_sender_attestation: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: None,
@@ -192,10 +194,13 @@ impl<'de> Deserialize<'de> for ReplyTarget {
 
 mod acknowledgement;
 mod pipeline;
+mod pipeline_terminal_escalation;
 
 pub use pipeline::{
-    PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
-    prepare_write_with_runtime, send_mail, send_mail_with_runtime,
+    PreparedWrite, WriteOutcome, cron_run_message_write_origin,
+    prepare_cron_module_mail_async_runtime, prepare_write_with_cron_run_permit_async_runtime,
+    prepare_write_with_preflight_async_runtime, prepare_write_with_runtime,
+    prepare_write_with_tool_capability_async_runtime, send_mail, send_mail_with_runtime,
     write_current_herdr_terminal_escalation_with_runtime, write_mail, write_mail_with_runtime,
 };
 

@@ -106,9 +106,7 @@ fn rejected_event_subject(
     target: &SharedDbTarget,
 ) -> Result<Option<RejectedSubject>, AtmError> {
     Ok(Some(match op {
-        WriteOp::UpsertMessage { record, provenance }
-            if *provenance == MessageWriteOrigin::Local =>
-        {
+        WriteOp::UpsertMessage { record, provenance } if provenance.is_local() => {
             let Some(task_id) = record.envelope.task_id.as_ref() else {
                 return Ok(None);
             };
@@ -153,7 +151,7 @@ fn is_pre_admission_reassignment_refusal(op: &WriteOp, error: &AtmError) -> bool
     matches!(
         op,
         WriteOp::UpsertMessage { record, provenance }
-            if *provenance == MessageWriteOrigin::Local
+            if provenance.is_local()
                 && record.envelope.task_op.is_none()
                 && error.code() == atm_storage::AtmErrorCode::TaskNotCounterparty
     )

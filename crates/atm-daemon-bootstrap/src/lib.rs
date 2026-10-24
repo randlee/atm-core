@@ -53,6 +53,7 @@ pub mod hook_runner;
 mod owner_gate;
 mod peer_launch_config;
 mod process_deadline;
+mod protected_trust_root;
 mod queue_drain;
 mod received_hook_selector;
 mod replacement_handler;
@@ -73,6 +74,10 @@ pub use daemon_observability::DaemonObservability;
 pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
     configured_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
+};
+pub use protected_trust_root::{
+    ProtectedToolSenderConfigs, load_protected_tool_sender_configs,
+    load_protected_tool_sender_trust_root, system_trust_root_path,
 };
 pub use received_hook_selector::active_received_hook_selector;
 pub use received_hook_selector::active_received_hook_selector_with_health;
@@ -236,9 +241,12 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 pub fn assemble_daemon_runtime(
     owner: Option<&DaemonObservability>,
 ) -> Result<RuntimeAssembly, AtmError> {
+    let tool_sender_configs = load_protected_tool_sender_configs()?;
     let storage_factory = SqliteStorageFactory::host_scoped()
         .with_observability(Arc::new(sqlite_observability::DaemonSqliteObservability))
-        .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline));
+        .with_timeline_observer(Arc::new(diagnostic_timeline::attach_timeline))
+        .with_tool_sender_registry_config(tool_sender_configs.registry())
+        .with_tool_sender_peer_admission_config(tool_sender_configs.peer_admission());
     compose_daemon_assembly(storage_factory, owner)
 }
 
@@ -289,7 +297,7 @@ async fn run_replacement_daemon_with_owner(
     run_replacement_daemon_with_selector(
         observability,
         |service_runtime, herdr_process, runtime_health, bare_cli| {
-            received_hook_selector::active_received_hook_selector_with_health_and_fifo(
+            received_hook_selector::active_received_hook_transports_with_health_and_fifo(
                 service_runtime,
                 herdr_process,
                 runtime_health,
@@ -450,7 +458,7 @@ async fn run_replacement_daemon_with_selector(
         Arc<dyn HerdrProcessAdapter>,
         RuntimeHealth,
         BareCliRuntime,
-    ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+    ) -> received_hook_selector::ReceivedHookTransports,
     daemon_launch_identity: DaemonLaunchIdentity,
     peer_wire_mode: PeerWireMode,
     peer_pool_config: PeerPoolConfig,
@@ -532,7 +540,7 @@ fn compose_replacement_handler_and_cron(
             Arc<dyn HerdrProcessAdapter>,
             RuntimeHealth,
             BareCliRuntime,
-        ) -> Arc<dyn atm_core::boundary::MessageReceivedHookSelector>,
+        ) -> received_hook_selector::ReceivedHookTransports,
     >,
 ) -> Result<
     (
@@ -546,11 +554,21 @@ fn compose_replacement_handler_and_cron(
         handler,
         recovery_sweep,
         runner,
+        cron_runner,
         dispatcher,
         local_host,
+        lifecycle_nudge_emitter,
         ..
     } = build_replacement_handler(assembly, config)?;
-    let cron = cron_composition::compose_system(&handler, runtime, runner, dispatcher, local_host)?;
+    let cron = cron_composition::compose_system(cron_composition::RuntimeCronComposition {
+        handler: &handler,
+        runtime,
+        runner,
+        dispatcher,
+        host: local_host,
+        cron_runner,
+        lifecycle_nudge_emitter,
+    })?;
     Ok((handler, recovery_sweep, cron))
 }
 
@@ -1102,10 +1120,7 @@ mod replacement_runtime_tests {
     use std::time::Duration;
 
     use atm_core::api::ApiRequest;
-    use atm_core::boundary::{
-        BuiltInPostSendDispatch, MemberKey, MessageReceivedHookSelector, RosterEntry,
-        TemplateSource,
-    };
+    use atm_core::boundary::{MemberKey, RosterEntry, TemplateSource};
     use atm_core::observability::NullObservability;
     use atm_core::peer_wire::PeerWireMode;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
@@ -1123,29 +1138,15 @@ mod replacement_runtime_tests {
     use super::peer_launch_config::parse_peer_pool_config_with_environment;
     use super::{
         DaemonLaunchIdentity, REPLACEMENT_DRAIN_DEADLINE, ReplacementHandlerConfig,
-        SelectedPeerAdapterSelection, ShutdownSignal, active_received_hook_selector_with_health,
-        assemble_host_runtime_with_template_composer, build_replacement_handler,
-        legacy_literal_ip_policy_from_value, parse_peer_wire_mode, peer_stream_adapter_for_mode,
-        replacement_runtime_config_with_direct_peer, start_replacement_runtime_for_test,
-        write_ready_signal_if_requested,
+        SelectedPeerAdapterSelection, ShutdownSignal, assemble_host_runtime_with_template_composer,
+        build_replacement_handler, legacy_literal_ip_policy_from_value, parse_peer_wire_mode,
+        peer_stream_adapter_for_mode, replacement_runtime_config_with_direct_peer,
+        start_replacement_runtime_for_test, write_ready_signal_if_requested,
     };
     use peer_tls::LegacyLiteralIpPolicy;
 
     /// Test-owned receiver selection prevents an external tmux/graft action
     /// from obscuring the bootstrap's direct-peer persistence proof.
-    struct NoReceivedHookSelector;
-
-    impl atm_core::boundary::sealed::Sealed for NoReceivedHookSelector {}
-
-    impl MessageReceivedHookSelector for NoReceivedHookSelector {
-        fn select_emitter(
-            &self,
-            _dispatch: &BuiltInPostSendDispatch,
-        ) -> Option<&dyn atm_core::boundary::AsyncMessageReceivedHookEmitter> {
-            None
-        }
-    }
-
     #[test]
     fn ready_signal_is_absent_unless_requested() {
         let mut output = Vec::new();
@@ -1355,8 +1356,7 @@ mod replacement_runtime_tests {
                 ReplacementHandlerConfig {
                     observability: Arc::new(NullObservability),
                     selector_factory: |_, _, _, _| {
-                        Arc::new(NoReceivedHookSelector)
-                            as Arc<dyn atm_core::boundary::MessageReceivedHookSelector>
+                        crate::received_hook_selector::ReceivedHookTransports::disabled_for_test()
                     },
                     daemon_launch_identity: DaemonLaunchIdentity::default(),
                     peer_wire_mode: PeerWireMode::plaintext_test(),
@@ -1558,7 +1558,13 @@ mod replacement_runtime_tests {
                 ReplacementHandlerConfig {
                     observability: Arc::new(NullObservability),
                     selector_factory: |runtime, herdr_process, health, _| {
-                        active_received_hook_selector_with_health(runtime, herdr_process, health)
+                        crate::received_hook_selector::active_received_hook_transports_with_health_and_fifo(
+                            runtime,
+                            herdr_process,
+                            health,
+                            Default::default(),
+                            Default::default(),
+                        )
                     },
                     daemon_launch_identity: DaemonLaunchIdentity::default(),
                     peer_wire_mode: PeerWireMode::plaintext_test(),
