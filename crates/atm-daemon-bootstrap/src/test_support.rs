@@ -212,6 +212,18 @@ impl ControlledCronComposition {
         self.herdr_process.calls()
     }
 
+    /// Whether the production lifecycle transport emitted a concrete Herdr prompt.
+    #[must_use]
+    pub fn has_herdr_prompt(&self, recipient: &str, expected_text: &str) -> bool {
+        self.herdr_process.calls().iter().any(|call| {
+            matches!(
+                call,
+                atm_herdr::testing::FakeHerdrCall::Prompt { agent, text, .. }
+                    if agent == recipient && text == expected_text
+            )
+        })
+    }
+
     /// Rebuilds the production composition over the same isolated SQLite data.
     pub async fn reopen(self) -> Result<Self, AtmError> {
         self.shutdown_cron_worker().await;

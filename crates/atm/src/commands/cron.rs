@@ -584,6 +584,12 @@ mod tests {
         composition
             .advance_clock_settled(chrono::Duration::minutes(1))
             .await;
+        composition
+            .advance_clock_settled(chrono::Duration::minutes(59))
+            .await;
+        composition
+            .advance_clock_settled(chrono::Duration::minutes(1))
+            .await;
         let composition = composition
             .reopen()
             .await
@@ -691,17 +697,46 @@ mod tests {
             "2026-10-24T01:00:00Z",
         ])
         .expect("custom-mail cron argv parses");
+        let malformed_command = CronCommand::try_parse_from([
+            "cron",
+            "start",
+            "lifecycle-error",
+            "--cron",
+            "0 * * * * *",
+            "--phase",
+            TEST_TEAM,
+            "--module",
+            module.to_str().expect("fixture module utf-8"),
+            "--arg",
+            "unknown",
+            "--arg",
+            "lifecycle-error",
+            "--until",
+            "2026-10-24T01:00:00Z",
+        ])
+        .expect("malformed lifecycle cron argv parses");
         let mut lifecycle_caller = caller();
         lifecycle_caller.caller_identity = TEST_RECIPIENT.parse().expect("test recipient");
         assert!(matches!(
             composition
                 .execute(
                     command
-                        .request(lifecycle_caller)
+                        .request(lifecycle_caller.clone())
                         .expect("custom-mail request")
                 )
                 .await
                 .expect("custom-mail start"),
+            ResponseEnvelope::CronStarted(_)
+        ));
+        assert!(matches!(
+            composition
+                .execute(
+                    malformed_command
+                        .request(lifecycle_caller)
+                        .expect("malformed lifecycle request")
+                )
+                .await
+                .expect("malformed lifecycle start"),
             ResponseEnvelope::CronStarted(_)
         ));
         composition
@@ -713,8 +748,12 @@ mod tests {
             .await;
         composition.shutdown_cron_worker().await;
         assert!(
-            !composition.herdr_calls().is_empty(),
-            "production lifecycle transport emits a deterministic Herdr prompt"
+            composition.has_herdr_prompt(
+                TEST_RECIPIENT,
+                "<atm cron name=\"lifecycle-error\" event=\"error\" error=\"cron hook runner failed\">",
+            ),
+            "production lifecycle transport emits the rendered error notice to the configured Herdr recipient: {:?}",
+            composition.herdr_calls()
         );
         let composition = composition
             .reopen()
@@ -751,6 +790,7 @@ mod tests {
                 .parse::<atm_core::types::AgentName>()
                 .expect("daemon sender")
         );
+        assert_eq!(outcome.rows[0].summary, "fixture custom mail");
     }
 }
 
