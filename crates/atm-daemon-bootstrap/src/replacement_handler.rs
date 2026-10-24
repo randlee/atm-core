@@ -336,21 +336,10 @@ fn compose_storage_router(
     let snapshot = Arc::new(ActiveHookSnapshot::deferred(
         assembly.service_runtime.hook_registration_store()?,
     ));
-    let daemon_runner = Arc::new({
+    let (runner, cron_runner) = compose_hook_runners(
         #[cfg(feature = "test-support")]
-        if let Some(deadline) = controlled_hook_deadline {
-            crate::hook_runner::DaemonHookRunner::with_controlled_deadline(
-                &ProcessEnvSource,
-                deadline,
-            )
-        } else {
-            crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource)
-        }
-        #[cfg(not(feature = "test-support"))]
-        crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource)
-    });
-    let runner: Arc<dyn HookRunner> = daemon_runner.clone();
-    let cron_runner: Arc<dyn atm_core::boundary::CronHookRunner> = daemon_runner;
+        controlled_hook_deadline,
+    );
     let async_mailbox_runtime = assembly
         .async_mailbox_runtime
         .clone()
@@ -399,6 +388,32 @@ fn compose_storage_router(
         #[cfg(test)]
         hook_filter: filter,
     })
+}
+
+fn compose_hook_runners(
+    #[cfg(feature = "test-support")] controlled_hook_deadline: Option<
+        Arc<crate::hook_runner::ControlledHookDeadline>,
+    >,
+) -> (
+    Arc<dyn HookRunner>,
+    Arc<dyn atm_core::boundary::CronHookRunner>,
+) {
+    let daemon_runner = Arc::new({
+        #[cfg(feature = "test-support")]
+        if let Some(deadline) = controlled_hook_deadline {
+            crate::hook_runner::DaemonHookRunner::with_controlled_deadline(
+                &ProcessEnvSource,
+                deadline,
+            )
+        } else {
+            crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource)
+        }
+        #[cfg(not(feature = "test-support"))]
+        crate::hook_runner::DaemonHookRunner::new(&ProcessEnvSource)
+    });
+    let runner: Arc<dyn HookRunner> = daemon_runner.clone();
+    let cron_runner: Arc<dyn atm_core::boundary::CronHookRunner> = daemon_runner;
+    (runner, cron_runner)
 }
 
 fn build_queue_wake_pump(

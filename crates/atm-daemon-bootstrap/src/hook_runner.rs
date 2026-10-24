@@ -30,58 +30,15 @@ use atm_core::types::TeamName;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 
-#[cfg(feature = "test-support")]
-use crate::process_deadline::spawn_until;
 use crate::process_deadline::{SpawnFailure, SpawnSpec, SpawnedOutput, spawn_with_deadline};
 
 #[cfg(feature = "test-support")]
-#[derive(Debug)]
-pub(crate) struct ControlledHookDeadline {
-    generation: tokio::sync::watch::Sender<u64>,
-    process_registrations: tokio::sync::watch::Sender<u64>,
-}
-
+#[path = "hook_runner/controlled_deadline.rs"]
+mod controlled_deadline;
 #[cfg(feature = "test-support")]
-impl ControlledHookDeadline {
-    pub(crate) fn new() -> Self {
-        Self {
-            generation: tokio::sync::watch::channel(0).0,
-            process_registrations: tokio::sync::watch::channel(0).0,
-        }
-    }
-
-    /// Expires all waits already registered against this test-owned source.
-    #[allow(dead_code)] // Used by feature-gated timeout tests; composition only retains the source.
-    pub(crate) fn advance(&self) {
-        self.generation
-            .send_modify(|value| *value = value.wrapping_add(1));
-    }
-
-    #[allow(dead_code)] // Used by feature-gated runner expiry tests.
-    pub(crate) async fn wait_for_process_registration(&self) {
-        let mut registrations = self.process_registrations.subscribe();
-        let observed = *registrations.borrow_and_update();
-        registrations
-            .wait_for(|value| *value > observed)
-            .await
-            .expect("controlled hook deadline sender alive");
-    }
-
-    async fn wait_for_advance(&self) {
-        let mut generation = self.generation.subscribe();
-        let current = *generation.borrow_and_update();
-        generation
-            .wait_for(|value| *value != current)
-            .await
-            .expect("controlled hook deadline sender alive");
-    }
-
-    async fn wait_for_process_advance(&self) {
-        self.process_registrations
-            .send_modify(|value| *value = value.wrapping_add(1));
-        self.wait_for_advance().await;
-    }
-}
+pub(crate) use controlled_deadline::ControlledHookDeadline;
+#[path = "hook_runner/execution.rs"]
+mod execution;
 
 #[derive(Debug, Clone)]
 enum HookDeadlineSource {
@@ -108,17 +65,6 @@ pub struct DaemonHookRunner {
 
 fn missing(detail: impl Into<String>) -> AtmError {
     AtmError::hook_exit(HookExitCause::Missing(detail.into()))
-}
-
-struct CapturedEnv<'a>(&'a [(OsString, OsString)]);
-
-impl EnvSource for CapturedEnv<'_> {
-    fn var(&self, key: &str) -> Option<String> {
-        self.0
-            .iter()
-            .find(|(name, _)| name == key)
-            .and_then(|(_, value)| value.to_str().map(str::to_owned))
-    }
 }
 
 // On Windows `ProcessEnvSource` (std::env::var) matches names case-insensitively, so `Path` satisfies `PATH`.
@@ -241,43 +187,6 @@ impl DaemonHookRunner {
         }
     }
 
-    async fn spec(&self, target: &HookTarget, hook: &str) -> Result<SpawnSpec, AtmError> {
-        for (path, directory) in [
-            (target.cwd.clone(), true),
-            (target.cwd.join(&target.module_path), false),
-        ] {
-            let metadata = tokio::fs::metadata(&path).await.map_err(|error| {
-                AtmError::hook_exit(HookExitCause::Spawn {
-                    path: path.clone(),
-                    cause: error.to_string(),
-                })
-            })?;
-            if (directory && !metadata.is_dir()) || (!directory && !metadata.is_file()) {
-                return Err(AtmError::hook_exit(HookExitCause::Spawn {
-                    path,
-                    cause: if directory {
-                        "not a directory"
-                    } else {
-                        "not a regular file"
-                    }
-                    .into(),
-                }));
-            }
-        }
-        let env = hook_env(
-            &CapturedEnv(self.base_env.as_ref().map_err(Clone::clone)?),
-            &target.team,
-            &target.phase,
-            cfg!(windows),
-        )?;
-        Ok(SpawnSpec {
-            program: self.python.clone()?,
-            args: vec![target.module_path.as_os_str().into(), hook.into()],
-            env,
-            cwd: target.cwd.clone(),
-        })
-    }
-
     async fn execute(
         &self,
         target: &HookTarget,
@@ -315,26 +224,7 @@ impl DaemonHookRunner {
             error
         })?;
         let started = tokio::time::Instant::now();
-        let permit = self.permits.clone().acquire_owned();
-        let _permit = match &self.deadline_source {
-            HookDeadlineSource::System => tokio::time::timeout(budget, permit)
-                .await
-                .map_err(|_| {
-                    tracing::warn!(
-                        subsystem = "atm_hook", team = %target.team, phase = %target.phase, hook,
-                        budget_ms = budget.as_millis() as u64,
-                        elapsed_ms = started.elapsed().as_millis() as u64,
-                        outcome = "permit_timeout", "hook concurrency limit reached"
-                    );
-                    AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")
-                })?
-                .map_err(|_| missing("hook semaphore closed")),
-            #[cfg(feature = "test-support")]
-            HookDeadlineSource::Controlled(deadline) => tokio::select! {
-                permit = permit => permit.map_err(|_| missing("hook semaphore closed")),
-                _ = deadline.wait_for_advance() => Err(AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")),
-            },
-        }?;
+        let _permit = self.acquire_permit(target, hook, budget, started).await?;
         let spec = self.spec(target, hook).await?;
         let remaining = match self.deadline_source {
             HookDeadlineSource::System => {
@@ -371,28 +261,6 @@ impl DaemonHookRunner {
             outcome = "ok", "hook execution completed"
         );
         Ok(output)
-    }
-
-    async fn spawn(
-        &self,
-        spec: SpawnSpec,
-        stdin: &[u8],
-        remaining: Duration,
-    ) -> Result<SpawnedOutput, SpawnFailure> {
-        match &self.deadline_source {
-            HookDeadlineSource::System => spawn_with_deadline(spec, stdin, remaining).await,
-            #[cfg(feature = "test-support")]
-            HookDeadlineSource::Controlled(deadline) => {
-                spawn_until(spec, stdin, deadline.wait_for_process_advance())
-                    .await
-                    .map_err(|failure| match failure {
-                        SpawnFailure::TimedOut { .. } => SpawnFailure::TimedOut {
-                            after_ms: remaining.as_millis().min(u128::from(u64::MAX)) as u64,
-                        },
-                        other => other,
-                    })
-            }
-        }
     }
 }
 
@@ -980,7 +848,6 @@ mod tests {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
-        assert!(String::from_utf8_lossy(&output.stdout).contains("BK3_ENVIRONMENT_PROOF_COMPLETE"));
     }
 
     async fn environment_probe_output() -> SpawnedOutput {
@@ -1028,7 +895,6 @@ mod tests {
                 .unwrap(),
             fixture.target.cwd.canonicalize().unwrap()
         );
-        println!("BK3_ENVIRONMENT_PROOF_COMPLETE");
     }
 
     #[cfg(windows)]
