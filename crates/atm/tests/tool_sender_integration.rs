@@ -3,6 +3,7 @@
 use atm_core::{
     boundary::{SenderClaim, resolve_sender_claim},
     caller_context::CallerContext,
+    test_support::TEST_TEAM,
     types::{AgentName, TeamName},
 };
 
@@ -10,7 +11,7 @@ fn caller() -> CallerContext {
     CallerContext {
         caller_identity: AgentName::from_validated("creator"),
         caller_chat_id: None,
-        caller_team: TeamName::from_validated("atm-dev"),
+        caller_team: TeamName::from_validated(TEST_TEAM),
         activity_observation: None,
     }
 }
