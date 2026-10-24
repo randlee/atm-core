@@ -17,6 +17,7 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 SCRIPT = SCRIPTS / "wrap_jev_receipt.py"
 _loader = importlib.machinery.SourceFileLoader("sanity_merge_for_wrap", str(SCRIPTS / "sanity-merge"))
 _spec = importlib.util.spec_from_loader(_loader.name, _loader)
+assert _spec is not None
 merge = importlib.util.module_from_spec(_spec)
 _loader.exec_module(merge)
 

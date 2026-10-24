@@ -13,13 +13,14 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NoReturn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads" / "scripts"))
 import sc_render  # noqa: E402
 from sanity_shared import ledger_path, primary_root, valid_elapsed_s  # noqa: E402
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"sanity-run-history: {message}")
 
 
@@ -60,8 +61,12 @@ def reviewer_elapsed(value):
     """Concurrent Jev calls contribute their maximum wall time, not their sum."""
     if value.get("reviewer") != "sanity-jev":
         return None
-    times = [result.get("elapsed_s") for result in value.get("reviewer_results") or []
-             if isinstance(result, dict) and valid_elapsed_s(result.get("elapsed_s"))]
+    times: list[int | float] = []
+    for result in value.get("reviewer_results") or []:
+        if isinstance(result, dict):
+            elapsed = result.get("elapsed_s")
+            if valid_elapsed_s(elapsed):
+                times.append(elapsed)
     return max(times) if times else None
 
 
@@ -89,7 +94,9 @@ def slot_errors(value: dict[str, object]) -> list[dict[str, object]]:
     """Each failed slot's error, copied verbatim from its failure envelope; vars without reviewer_results have none.
     A malformed envelope (one whose error is not a well-typed code/message/recoverable) is not a slot error: its
     reviewer merge is CANNOT_RUN, whose `error` the row carries, so it never keeps the row from being logged."""
-    results = value.get("reviewer_results") or []
+    results = value.get("reviewer_results")
+    if not isinstance(results, list):
+        return []
     errors = [{key: result["error"].get(key) for key in SLOT_ERROR_KEYS}
               for result in results
               if isinstance(result, dict) and result.get("success") is False and isinstance(result.get("error"), dict)]
@@ -101,7 +108,10 @@ def jev_receipts(value: dict[str, object]) -> list[object]:
     verbatim; sanity-llm rows carry none."""
     if value.get("reviewer") != "sanity-jev":
         return []
-    found = [result["data"].get("jev") for result in value.get("reviewer_results") or []
+    results = value.get("reviewer_results")
+    if not isinstance(results, list):
+        return []
+    found = [result["data"].get("jev") for result in results
              if isinstance(result, dict) and result.get("success") is True and isinstance(result.get("data"), dict)]
     return [receipt for jev in found for receipt in (
         [part.get("receipt") if isinstance(part, dict) else part for part in jev] if isinstance(jev, list) else [jev])]
@@ -173,7 +183,9 @@ def main() -> None:
     checked = vars.get("checked_bead_data")
     if not isinstance(checked, dict):
         checked = {}
-    phase = phase_from_bead(checked, vars["sprint"])
+    sprint = vars["sprint"]
+    assert isinstance(sprint, str)
+    phase = phase_from_bead(checked, sprint)
     record = {
         "run_id": vars["run_id"], "reviewer": vars["reviewer"], "commit": vars["commit"],
         "started_at": vars["started_at"], "duration_seconds": elapsed,

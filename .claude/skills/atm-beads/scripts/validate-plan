@@ -10,6 +10,8 @@ Problems (exit 5), and nothing else:
   5. a depends_on with no `blocks` edge from the dependent's dev bead (`<container>.group-dev`, or its
      container) to the predecessor's initial sanity bead (`<pred>.group-sanity`) or its sprint container.
   6. an open phase root has no stack bead with that root as parent and its integration branch as trunk.
+  7. an open QA bead lacks a non-empty, unique reviewers_round1 list of registered agent identities.
+     Repository reviewer defaults never substitute for missing planned bead data.
 Everything else is a warning on stderr: bd doctor errors, open non-epic beads at the top level, a plan-time
 assignee, a poured sanity bead whose metadata.dev_bead is not its group's dev bead, a group not poured yet
 before import (--file).
@@ -136,7 +138,34 @@ def plan_text(repo: Path, config: dict, index: Path | None) -> tuple[str, str]:
     return proc.stdout, f"origin/{branch}:{config['plan']}"
 
 
-def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], before_import: bool) -> None:
+def check_qa_reviewers(beads: list[dict], repo: Path, problems: list[str]) -> None:
+    """Resolve planned reviewer identities against this repository's agent registry."""
+    import bead_schema
+
+    qa = [bead for bead in beads if "stage:qa" in (bead.get("labels") or [])
+          and not bead_schema.problems(bead, bead_schema.QaBead)]
+    if not qa:
+        return
+    try:
+        import yaml
+    except ImportError as error:
+        raise CannotRun("PyYAML is required to validate reviewer identities (pip install pyyaml)") from error
+    registry = repo / ".claude/agents/registry.yaml"
+    try:
+        document = yaml.safe_load(registry.read_text())
+        agents = document.get("agents") if isinstance(document, dict) else None
+        if not isinstance(agents, dict) or not agents:
+            raise ValueError("expected a non-empty agents mapping")
+    except (OSError, ValueError, yaml.YAMLError) as error:
+        problems.append(f"{registry}: cannot validate reviewers_round1: {error}")
+        return
+    for bead in qa:
+        unknown = sorted(set(bead["metadata"]["reviewers_round1"]) - agents.keys())
+        if unknown:
+            problems.append(f"{bead['id']}: reviewers_round1: unregistered reviewer(s): {', '.join(unknown)}")
+
+
+def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], before_import: bool, repo: Path) -> None:
     import bead_schema  # pydantic; --ci never loads it
     root_id = config["root"]
     prefix = plan_io.bead_prefix(root_id, Path("."))
@@ -180,16 +209,18 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
                 if dev is None:
                     warn(f"{dev_id} does not exist; pour the group with bead-groups")
     phase_label = f"phase-{beads.phase}"
-    problems += bead_schema.validate_phase([bead for bead in beads.everything()
-                                             if bead.get("status") != "closed"
-                                             and (bead.get("id") == root_id or phase_label in (bead.get("labels") or []))])
+    active = [bead for bead in beads.everything() if bead.get("status") != "closed"
+              and (bead.get("id") == root_id or phase_label in (bead.get("labels") or []))]
+    problems += bead_schema.validate_phase(active)
+    check_qa_reviewers(active, repo, problems)
 
 
 def warnings(beads: Beads, root_id: str, file_beads: list[dict] | None) -> None:
     everything = file_beads if file_beads is not None else beads.everything()
     since = next((b.get("created_at") or "" for b in everything if b.get("id") == root_id), "")
-    if not since and beads.get(root_id):
-        since = beads.get(root_id).get("created_at") or ""
+    root_bead = beads.get(root_id)
+    if not since and root_bead:
+        since = root_bead.get("created_at") or ""
     for b in everything:
         if b.get("status") != "closed" and not parent_of(b) and b.get("issue_type") != "epic" \
                 and (b.get("created_at") or "") >= since:
@@ -279,7 +310,7 @@ def main(argv: list[str]) -> int:
         if args.file:
             file_beads = [json.loads(line) for line in args.file.read_text().splitlines() if line.strip()]
         beads = Beads(fixed, file_beads, phase)
-        check(beads, config, rows, problems, before_import=args.file is not None)
+        check(beads, config, rows, problems, before_import=args.file is not None, repo=repo)
         warnings(beads, config["root"], file_beads)
         if not args.no_doctor:
             doctor()

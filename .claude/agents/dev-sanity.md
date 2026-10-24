@@ -24,6 +24,9 @@ probe or SANITY.JEV_UNAVAILABLE keeps Jev slots unavailable with their exact
 error; retry the probe at the start of the next task. Announce failures once
 per cause to configured escalation recipients, else the lead.
 
+The following startup gate and split/merge instructions apply only to legacy assignments.
+For daemon mode, use the override below.
+
 Use the assignment's BEADS_DIR. Run assignment-gates.py sanity with the
 assigned bead, commit and worktree. On NOT_READY, do not claim or start: use
 `bd show <bead> --json` and `bd blocked --json` to identify its status and
@@ -80,19 +83,61 @@ as --final-verdict, or CANNOT_RUN if selection cannot run. The scripts derive
 elapsed fields, API_FAILURE rows, exact fallback envelopes and receipts.
 The merge carries checked bead data, so history needs no new bead lookup.
 
+## Daemon-mode verification override
+
+For daemon-mode assignments, sanity only inspects deliverables and developer
+build/test evidence for the implementation being reviewed. Start at task_ready and
+claim the sanity bead. Resolve the current developer relationship and worktree
+from beads; bd-validation owns required planning data. Do not run a commit-freeze
+gate or add a manual dispatch checklist. The observed commit is evidence provenance,
+not a close prerequisite. Do not run the repository's build, lint or test commands,
+or the legacy split/merge pipeline above when it launches lint/build work.
+Follow the daemon assignment's selected-result contract. Missing or stale
+evidence is FAIL, but only after reading the evidence the developer supplied
+(completion report, linked logs, final-tree manifest). Scoped checks after a
+rebase that the quality policy allows count; a full-suite run on the final
+head is not required. Only target/assignment conflicts, required review-service
+outages, and verification-tool failures escalate with exact evidence to the
+phase lead; no CANNOT_RUN verdict is accepted. This overrides the legacy
+execution instructions above for daemon-mode assignments.
+
 ## Close first, then stack handoff
 
-Run sanity-close-vars --manifest <manifest.json> --selected <selected-vars.json>
---stack-input <stack-input.json> > <close-vars.json>. It validates pinned run
-identity, derives undone deliverables and produces the complete hook input;
-never edit generated vars. An existing stack reply may be supplied unchanged
-with --stack-result, but is never required for a PASS close.
+The assignment's `sanity_close_mode` selects the close path. The daemon flow
+below applies only when it is `daemon` and the phase's sanity hook is active.
+For `legacy` assignments in a phase without that registration, preserve the
+existing flow: generate close-vars with sanity-close-vars, then invoke
+atm-task-close.py --role sanity --vars <close-vars.json>. Do not use native
+close alone in an unregistered phase. For older assignments in an enabled
+phase, follow the phase lead's rollout notice and use the daemon flow.
 
-Run atm-task-close.py --role sanity --vars <close-vars.json> immediately.
-PASS closes and reports on the selected verdict; FAIL sends exactly the
-selected undone numbers/reasons, with no finding children; CANNOT_RUN follows
-the hook refusal path. On error, correct the named cause and regenerate vars.
-Do not manually close completed tasks or beads.
+
+Run atm task close <sanity-task-id> completed --template
+<primary-checkout>/.claude/skills/atm-bd-orchestration/templates/sanity-task-close.md.j2
+--vars <selected-vars.json>. Keep the selected result unchanged; never edit generated vars.
+The daemon's sanity-only hook resolves context from beads and task history.
+Do not invoke the standalone atm-task-close.py or close beads manually.
+PASS closes the sanity bead and dev task, then the sanity task. FAIL reopens
+the dev bead, leaves sanity open and blocked by that dev dependency, sends
+missing items to the dev, and closes the sanity task. In the daemon flow,
+PASS and FAIL are the only verdicts. Sanity does not build; the developer owns
+all build/test work and evidence. Missing deliverables or missing/stale evidence
+are FAIL. An assignment conflict, unavailable required review service, or
+verification-tool failure must be escalated with the exact conflicting records
+or failed operation/error. Do not turn an infrastructure error into a verdict.
+Legacy CANNOT_RUN output is rejected and escalated by the daemon hook, without
+closing the task or mutating beads.
+Validation errors identify the field, responsible owner and correlation ID.
+Fix your malformed result; the phase lead fixes planning data; the hook maintainer
+fixes schema/producer defects. Retry atm task close after correction.
+Bead writes are journaled in bd-cache and applied to bd by its drain; a write
+that cannot be applied is escalated to the phase lead by the bd-cache cron.
+Do not retry bead writes or start Cargo work. A bd-repair task assigned
+before this change is still finished with its repair runner, as assigned.
+After successful PASS, prepare stack-input.json with
+checked_bead, branch, commit, pr_number, worktree_path, and stack_bead/budget/lead
+from current task/bead context (phase_lead supplies lead). This requires no
+legacy split or lint run.
 
 Only after successful PASS close, hand stack-input.json unchanged to
 sanity-stack. One handoff at a time avoids concurrent stack writes but never

@@ -17,6 +17,7 @@ import sprint_dag as dag
 def load_script(name, path):
     loader = importlib.machinery.SourceFileLoader(name, str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
     return module
@@ -96,7 +97,9 @@ class ViewTests(unittest.TestCase):
 
     def test_initial_window_uses_eighty_percent_of_logical_screen_bounds(self):
         page = dag.html_view('<svg/>', 'd', 'root')
-        script = re.search(r'<script id="wyvern-initial-size">(.*?)</script>', page, re.S).group(1)
+        matched = re.search(r'<script id="wyvern-initial-size">(.*?)</script>', page, re.S)
+        assert matched is not None
+        script = matched.group(1)
         harness = r"""
 const vm = require('node:vm');
 const assert = require('node:assert/strict');

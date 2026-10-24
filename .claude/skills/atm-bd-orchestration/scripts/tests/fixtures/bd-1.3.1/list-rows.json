@@ -1,0 +1,92 @@
+[
+  {
+    "id": "ct-2",
+    "title": "cache write test 2",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "owner": "randlee@users.noreply.github.com",
+    "created_at": "2026-10-23T19:57:08Z",
+    "created_by": "fenix",
+    "updated_at": "2026-10-23T19:58:36Z",
+    "metadata": {
+      "flag": false,
+      "n": 42,
+      "q": "\"5\"",
+      "raw": "[1]",
+      "s": "abc",
+      "sha": "deadbeef"
+    },
+    "labels": [
+      "phase-ct",
+      "r1"
+    ],
+    "dependencies": [
+      {
+        "issue_id": "ct-2",
+        "depends_on_id": "ct-1",
+        "type": "blocks",
+        "created_at": "2026-10-23T19:57:24Z",
+        "created_by": "fenix",
+        "metadata": "{}"
+      }
+    ],
+    "dependency_count": 1,
+    "dependent_count": 0,
+    "comment_count": 0
+  },
+  {
+    "id": "ct-3",
+    "title": "cache write test 3",
+    "status": "closed",
+    "priority": 2,
+    "issue_type": "task",
+    "owner": "randlee@users.noreply.github.com",
+    "created_at": "2026-10-23T19:57:08Z",
+    "created_by": "fenix",
+    "updated_at": "2026-10-23T19:57:49Z",
+    "closed_at": "2026-10-23T19:57:26Z",
+    "close_reason": "PASS at abc123",
+    "metadata": {
+      "a": 5,
+      "b": "\"5\"",
+      "c": null,
+      "d": "[1]",
+      "e": "{\"x\":1}",
+      "f": -3,
+      "g": 1000,
+      "h": 7,
+      "i": "True"
+    },
+    "labels": [
+      "phase-ct"
+    ],
+    "dependency_count": 0,
+    "dependent_count": 0,
+    "comment_count": 0
+  },
+  {
+    "id": "ct-1",
+    "title": "cache write test",
+    "notes": "claimed by cache test",
+    "status": "in_progress",
+    "priority": 2,
+    "issue_type": "task",
+    "assignee": "someone-else",
+    "owner": "randlee@users.noreply.github.com",
+    "created_at": "2026-10-23T19:56:38Z",
+    "created_by": "fenix",
+    "updated_at": "2026-10-23T19:57:30Z",
+    "started_at": "2026-10-23T19:57:22Z",
+    "metadata": {
+      "commit": "abc123"
+    },
+    "labels": [
+      "phase-ct",
+      "stage:dev"
+    ],
+    "dependency_count": 0,
+    "dependent_count": 1,
+    "comment_count": 0
+  }
+]

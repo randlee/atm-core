@@ -105,8 +105,10 @@ def test_console_install_record_is_readable_by_the_installed_doctor(tmp_path: Pa
     doctor_path = repo / doctor_rel
     shutil.copy2(SCRIPT, doctor_path)
     app_src = Path(os.environ.get(
-        "ATM_BD_CONSOLE_SRC", Path(__file__).resolve().parents[5] / "apps" / "atm-bd-console" / "src",
+        "ATM_BD_CONSOLE_SRC", Path(__file__).resolve().parents[6] / "apps" / "atm-bd-console" / "src",
     )).resolve()
+    if not (app_src / "atm_bd_console").is_dir():
+        pytest.skip(f"console source not at {app_src} (an installed copy has none); set ATM_BD_CONSOLE_SRC")
     code = """
 import importlib.util, sys
 from pathlib import Path

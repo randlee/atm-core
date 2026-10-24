@@ -255,7 +255,10 @@ def summarize(rows):
  return [{'run_id':k[0],'attempt_role':k[1],'screening_disposition':k[2],'evaluations':v} for k,v in sorted(counts.items(),key=lambda x:str(x[0]))]
 
 def load_client(path):
- spec=importlib.util.spec_from_file_location('jev_client',path);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
+ spec=importlib.util.spec_from_file_location('jev_client',path)
+ if spec is None or spec.loader is None:
+  raise ImportError(f'cannot load Jev client {path}')
+ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
 
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--client',type=Path,default=Path(__file__).resolve().parent / 'jev_client.py')

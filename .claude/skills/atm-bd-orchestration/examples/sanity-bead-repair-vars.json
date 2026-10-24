@@ -1,0 +1,19 @@
+{
+  "task_id": "atm-test-1.sanity.bd-repair-example",
+  "original_task": "atm-test-1.sanity",
+  "journal": "/repo/.atm-bd/sanity-close/journal.sqlite3",
+  "key": "example",
+  "failure": {
+    "command": [
+      "bd",
+      "close",
+      "atm-test-1.sanity"
+    ],
+    "error": "Dolt unavailable"
+  },
+  "root": "/repo",
+  "repair_script": "/installed/atm-bd-integration/scripts/sanity-close-repair.py",
+  "phase": "bk",
+  "team": "my-team",
+  "phase_lead": "phase-lead"
+}

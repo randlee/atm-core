@@ -14,6 +14,7 @@ from unittest import mock
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/sprint-report'
 loader = importlib.machinery.SourceFileLoader('sprint_report', str(SCRIPT))
 spec = importlib.util.spec_from_loader(loader.name, loader)
+assert spec is not None
 report = importlib.util.module_from_spec(spec)
 loader.exec_module(report)
 

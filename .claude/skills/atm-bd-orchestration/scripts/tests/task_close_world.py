@@ -11,11 +11,25 @@ import subprocess
 
 SCRIPTS = Path(__file__).parents[1]
 SPEC = importlib.util.spec_from_file_location("task_close", SCRIPTS / "atm-task-close.py")
+assert SPEC is not None and SPEC.loader is not None
 hook = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(hook)
 EXAMPLES = SCRIPTS.parent / "examples"
 # Completion values the hook derives from git and the PR, so the lead file never carries them.
 DERIVED = ("commit", "generated_at", "pr_number", "pr_url", "rebased_onto")
+BD_SCHEMA = (SCRIPTS / "tests/fixtures/bd-1.3.1/bd-schema.json").read_text()
+
+
+def cache_call(argv):
+    """A bd call the hook's bd-cache makes to apply a write (backend check, pre-read, read-back); never a decision read."""
+    return argv[:2] in (["bd", "version"], ["bd", "schema"]) or (argv[:2] == ["bd", "list"] and "--id" in argv)
+
+
+def bd_row(bead, **fields):
+    """A bead in `bd list --json` shape, so the hook's bd-cache accepts it."""
+    return {"id": bead, "title": bead, "status": "open", "priority": 2, "issue_type": "task", "labels": [],
+            "metadata": {}, "created_at": "2026-10-19T00:00:00Z", "updated_at": "2026-10-19T00:00:00Z",
+            "dependency_count": 0, "dependent_count": 0, "comment_count": 0, **fields}
 
 
 def example_values(role):
@@ -40,6 +54,9 @@ class World:
         self.head = self.values["commit"]
         self.pr_number = self.values["pr_number"]
         (root / ".atm-bd").mkdir()
+        (root / ".beads").mkdir()
+        (root / ".beads/metadata.json").write_text(json.dumps({"dolt_database": "testdb", "project_id": "p-1"}))
+        self.stamps = 0
         (root / ".atm-bd/phase-bj.toml").write_text('lead = "phase-lead"\n')
         (root / ".atm.toml").write_text('[atm]\ndefault_team = "test-team"\n')
         config = root / hook.repo_config.RELATIVE_PATH
@@ -50,7 +67,7 @@ class World:
         self.beads = {}
         for name in ("checked_bead", "sanity_bead", "qa_bead"):
             bead = self.values[name]
-            self.beads[bead] = dict(id=bead, status="in_progress", assignee="developer", metadata={})
+            self.beads[bead] = bd_row(bead, status="in_progress", assignee="developer")
         self.beads[self.values["checked_bead"]]["metadata"]["sanity_bead"] = self.values["sanity_bead"]
         self.beads[self.values["checked_bead"]]["metadata"].update(
             pr_number=self.pr_number, pr_url=self.values["pr_url"])
@@ -59,7 +76,8 @@ class World:
         self.tasks = {self.values[name]: [] for name in ("dev_task_id", "sanity_task_id", "qa_task_id")}
         self.tasks[self.values["dev_task_id"]].append(self.assignment(1))
         self.messages, self.calls, self.writes = [], [], []
-        self.fail_after = None
+        self.sleeps = []
+        self.fail_after: int | None = None
         self.github_failure = False
         self.git_network_failure = None
         self.timeout_command = None
@@ -90,7 +108,7 @@ class World:
         stdout, stderr = io.StringIO(), io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
             args = ["--role", role, "--vars", str(self.path)] + extra + (["--skip-checks"] if skip_checks else [])
-            result = hook.main(args, runner=self, clock=lambda: 42)
+            result = hook.main(args, runner=self, clock=lambda: 42, sleep=self.sleeps.append)
         assert stdout.getvalue() == stderr.getvalue()
         output = json.loads(stdout.getvalue())
         assert result == int("err" in output)
@@ -108,6 +126,12 @@ class World:
         output, write = "", False
         if argv[:3] == ["bd", "where", "--json"]:
             output = {"path": str(self.root / ".beads")}
+        elif argv[:2] == ["bd", "version"]:
+            output = "bd version 1.3.1 (dev: fake)\n"
+        elif argv[:2] == ["bd", "schema"]:
+            output = BD_SCHEMA
+        elif argv[:2] == ["bd", "list"] and "--id" in argv:
+            output = [self.beads[bead] for bead in argv[argv.index("--id") + 1].split(",") if bead in self.beads]
         elif argv[:2] == ["bd", "show"]:
             output = [self.beads[argv[2]]]
         elif argv[:2] == ["bd", "list"]:
@@ -187,6 +211,9 @@ class World:
             output = [{"number": self.values.get("pr_number", self.pr_number), "head": {"sha": self.values.get("commit", self.head)}, "base": {"ref": "deliberately-different"}}]
         else:
             raise AssertionError(argv)
+        if write and argv[0] == "bd":
+            self.stamps += 1
+            self.beads[argv[2]]["updated_at"] = f"2026-10-19T01:{self.stamps // 60:02d}:{self.stamps % 60:02d}Z"
         if write:
             self.writes.append((copy.deepcopy(argv), kwargs["env"]["ATM_IDENTITY"]))
             if len(self.writes) == self.reassign_after_write:

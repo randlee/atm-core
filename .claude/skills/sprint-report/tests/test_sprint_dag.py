@@ -148,8 +148,11 @@ class DagTests(unittest.TestCase):
             self.assertEqual(geometry(old), geometry(new))
         self.assertEqual(sum(g.get('class') == 'state-badge' for g in new.iter(dag.tag('g'))), 8)
         bottom = next(g for g in new.iter(dag.tag('g')) if g.get('class') == 'qa-badge')
-        self.assertEqual(bottom.find(dag.tag('text')).text, '1:5:13')
-        self.assertTrue(bottom.get('transform').endswith(' -19)'))
+        label = bottom.find(dag.tag('text'))
+        transform = bottom.get('transform')
+        assert label is not None and transform is not None
+        self.assertEqual(label.text, '1:5:13')
+        self.assertTrue(transform.endswith(' -19)'))
 
 
 if __name__ == '__main__':

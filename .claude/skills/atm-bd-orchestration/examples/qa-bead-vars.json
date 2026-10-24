@@ -11,5 +11,15 @@
   "pr_target": "integrate/phase-d",
   "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
   "round": 1,
-  "qa_member": "quality-mgr"
+  "qa_member": "quality-mgr",
+  "reviewers_round1": [
+    "req-qa"
+  ],
+  "stack_bead": "atm-phase-d.stack",
+  "checked_title": "d-4: OTLP sync exporter",
+  "phase_feature": "phase-d: OTel export",
+  "lint_command": "just lint",
+  "policy_path": ".claude/project/quality-policy.md",
+  "max_sanity_rounds": 5,
+  "sanity_bead": "atm-d-4-sanity"
 }
