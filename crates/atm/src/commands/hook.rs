@@ -25,9 +25,12 @@ pub struct HookCommand {
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
+    use atm_core::api::ApiResponse;
+    use atm_core::observability::NullObservability;
     use atm_core::protocol::{CLI_SCHEMA_VERSION, CompatibilityVerdict, ReleaseVersion};
     use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
-    use atm_core::transport::testing::FakeClientTransport;
+    use atm_core::transport::testing::{FakeClientTransport, LoopbackClientTransport};
+    use atm_daemon_bootstrap::test_support::ControlledCronComposition;
     use std::sync::{Arc, Mutex};
 
     pub(crate) fn caller() -> CallerContext {
@@ -99,6 +102,224 @@ pub(super) mod tests {
         };
         let requests = recorded.lock().unwrap().clone();
         (result, requests)
+    }
+
+    fn documented_argv(id: &str) -> Vec<String> {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repo root");
+        let manifest: Value = serde_json::from_slice(
+            &std::fs::read(root.join("docs/user-documents/examples/cron/manifest.json"))
+                .expect("read cron fixture manifest"),
+        )
+        .expect("parse cron fixture manifest");
+        let documented = manifest["commands"]
+            .as_array()
+            .expect("commands array")
+            .iter()
+            .find(|fixture| fixture["id"] == id)
+            .unwrap_or_else(|| panic!("missing hook fixture {id}"));
+        let mut argv = documented["argv"]
+            .as_array()
+            .expect("fixture argv")
+            .iter()
+            .map(|value| value.as_str().expect("argument").to_owned())
+            .collect::<Vec<_>>();
+        if let Some(module) = argv.iter().position(|value| value == "--module") {
+            argv[module + 1] = fixture("valid_hook.py").display().to_string();
+        }
+        argv
+    }
+
+    fn controlled_composition<'a>(
+        daemon: Arc<ControlledCronComposition>,
+        observability: &'a CliObservability,
+    ) -> CliComposition<'a> {
+        let transport = Arc::new(LoopbackClientTransport::with_async_handler(
+            Arc::new(NullObservability),
+            move |request| {
+                let daemon = Arc::clone(&daemon);
+                Box::pin(async move {
+                    daemon
+                        .execute(request.into_inner())
+                        .await
+                        .map(ApiResponse::new)
+                })
+            },
+        ));
+        CliComposition::from_loopback_transport(transport, observability)
+    }
+
+    async fn execute_controlled(
+        command: HookCommand,
+        daemon: Arc<ControlledCronComposition>,
+        observability: &CliObservability,
+    ) -> String {
+        let request = command.request(caller()).expect("build CLI request");
+        command
+            .execute_request(&controlled_composition(daemon, observability), request)
+            .await
+            .expect("execute composed CLI command")
+    }
+
+    fn parse_json(output: &str) -> Value {
+        assert_eq!(output.matches('\n').count(), 1, "one JSON line");
+        assert_eq!(output.lines().count(), 1, "one JSON value");
+        serde_json::from_str(output).expect("JSON output")
+    }
+
+    #[tokio::test]
+    async fn hook_register_json_contract_uses_the_composed_daemon() {
+        let daemon = Arc::new(ControlledCronComposition::new().expect("compose daemon"));
+        let observability = CliObservability::fallback();
+        let output = execute_controlled(
+            HookCommand::try_parse_from(documented_argv("hook-register-json-contract"))
+                .expect("parse documented register fixture"),
+            Arc::clone(&daemon),
+            &observability,
+        )
+        .await;
+        let registration = parse_json(&output);
+        assert_eq!(registration["action"], "hook.register");
+        let row = registration["registration"].clone();
+        assert_eq!(row["team"], TEST_TEAM);
+        assert_eq!(row["phase"], "bk");
+        assert_eq!(row["hook"], "task.close");
+        let module_path = fixture("valid_hook.py").canonicalize().unwrap();
+        assert_eq!(row["module_path"], serde_json::json!(module_path));
+        assert_eq!(row["cwd"], serde_json::json!(module_path.parent().unwrap()));
+        assert_eq!(row["timeout_ms"], 2500);
+        assert_eq!(row["custom"], serde_json::json!({}));
+        assert_eq!(row["active"], true);
+        assert_eq!(row["registered_by"], TEST_SENDER);
+        assert!(!row["registered_at"].is_null());
+        assert!(row["disabled_at"].is_null());
+
+        let listed = execute_controlled(
+            HookCommand::try_parse_from(["hook", "list", "--phase", "bk", "--json"])
+                .expect("parse list command"),
+            daemon,
+            &observability,
+        )
+        .await;
+        assert_eq!(parse_json(&listed), serde_json::json!([row]));
+    }
+
+    #[tokio::test]
+    async fn hook_disable_one_json_contract_uses_the_composed_daemon() {
+        let daemon = Arc::new(ControlledCronComposition::new().expect("compose daemon"));
+        let observability = CliObservability::fallback();
+        execute_controlled(
+            HookCommand::try_parse_from(documented_argv("hook-register-json-contract"))
+                .expect("parse documented register fixture"),
+            Arc::clone(&daemon),
+            &observability,
+        )
+        .await;
+
+        let disabled = parse_json(
+            &execute_controlled(
+                HookCommand::try_parse_from(documented_argv("hook-disable-one-json-contract"))
+                    .expect("parse documented single-disable fixture"),
+                Arc::clone(&daemon),
+                &observability,
+            )
+            .await,
+        );
+        assert_eq!(disabled["action"], "hook.disable");
+        assert_eq!(disabled["count"], 1);
+        let rows = disabled["disabled"].as_array().expect("disabled rows");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["hook"], "task.close");
+        assert_eq!(rows[0]["phase"], "bk");
+        assert_eq!(rows[0]["active"], false);
+        assert!(!rows[0]["disabled_at"].is_null());
+
+        let listed = execute_controlled(
+            HookCommand::try_parse_from(["hook", "list", "--phase", "bk", "--json"])
+                .expect("parse list command"),
+            daemon,
+            &observability,
+        )
+        .await;
+        assert_eq!(parse_json(&listed), disabled["disabled"]);
+    }
+
+    #[tokio::test]
+    async fn hook_disable_phase_json_contract_uses_the_composed_daemon() {
+        let daemon = Arc::new(ControlledCronComposition::new().expect("compose daemon"));
+        let observability = CliObservability::fallback();
+        for hook in ["task.close", "task.start"] {
+            let mut argv = documented_argv("hook-register-json-contract");
+            argv[2] = hook.into();
+            execute_controlled(
+                HookCommand::try_parse_from(argv).expect("parse register command"),
+                Arc::clone(&daemon),
+                &observability,
+            )
+            .await;
+        }
+
+        let disabled = parse_json(
+            &execute_controlled(
+                HookCommand::try_parse_from(documented_argv("hook-disable-phase-json-contract"))
+                    .expect("parse documented phase-disable fixture"),
+                Arc::clone(&daemon),
+                &observability,
+            )
+            .await,
+        );
+        assert_eq!(disabled["action"], "hook.disable");
+        assert_eq!(disabled["count"], 2);
+        let rows = disabled["disabled"].as_array().expect("disabled rows");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            rows.iter()
+                .map(|row| row["hook"].as_str().expect("hook"))
+                .collect::<Vec<_>>(),
+            ["task.close", "task.start"]
+        );
+        assert!(rows.iter().all(|row| {
+            row["phase"] == "bk" && row["active"] == false && !row["disabled_at"].is_null()
+        }));
+
+        let listed = execute_controlled(
+            HookCommand::try_parse_from(["hook", "list", "--phase", "bk", "--json"])
+                .expect("parse list command"),
+            daemon,
+            &observability,
+        )
+        .await;
+        assert_eq!(parse_json(&listed), disabled["disabled"]);
+    }
+
+    #[tokio::test]
+    async fn hook_disable_no_match_json_contract_uses_the_composed_daemon() {
+        let daemon = Arc::new(ControlledCronComposition::new().expect("compose daemon"));
+        let observability = CliObservability::fallback();
+        let disabled = parse_json(
+            &execute_controlled(
+                HookCommand::try_parse_from(documented_argv("hook-disable-no-match-json-contract"))
+                    .expect("parse documented no-match fixture"),
+                Arc::clone(&daemon),
+                &observability,
+            )
+            .await,
+        );
+        assert_eq!(
+            disabled,
+            serde_json::json!({"action": "hook.disable", "disabled": [], "count": 0})
+        );
+
+        let listed = execute_controlled(
+            HookCommand::try_parse_from(["hook", "list", "--phase", "missing", "--json"])
+                .expect("parse list command"),
+            daemon,
+            &observability,
+        )
+        .await;
+        assert_eq!(parse_json(&listed), serde_json::json!([]));
     }
 
     #[tokio::test]

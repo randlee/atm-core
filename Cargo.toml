@@ -81,7 +81,7 @@ atm-graft = { path = "crates/atm-graft", version = "1.6.5" }
 atm-herdr = { path = "crates/atm-herdr", version = "1.6.5" }
 atm-http-runtime = { path = "crates/atm-http-runtime", version = "1.6.5" }
 atm-runtime = { path = "crates/atm-runtime", version = "1.6.5" }
-atm-runtime-test-support = { path = "crates/atm-runtime-test-support" }
+atm-runtime-test-support = { path = "crates/atm-runtime-test-support", version = "1.6.5" }
 atm-storage = { path = "crates/atm-storage", version = "1.6.5" }
 atm-storage-rusqlite = { path = "crates/atm-storage-rusqlite", version = "1.6.5" }
 atm-template-sc-compose = { path = "crates/atm-template-sc-compose", version = "1.6.5" }

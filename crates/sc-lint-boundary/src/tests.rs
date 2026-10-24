@@ -1107,6 +1107,148 @@ fn excludes_associated_helper_calls_but_keeps_recursion_and_value_uses() {
 }
 
 #[test]
+fn excludes_associated_constant_reads_and_conventional_clone_construction() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            #[derive(PartialEq)]
+            pub struct Token { value: u8 }
+
+            impl Token {
+                const NONE: Self = Self { value: 0 };
+
+                pub fn is_none(&self) -> bool {
+                    *self == Self::NONE
+                }
+
+                pub fn direct_recursion(&self) {
+                    self.direct_recursion();
+                }
+            }
+
+            impl Clone for Token {
+                fn clone(&self) -> Self {
+                    Self { value: self.value }
+                }
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+
+    let self_loop = report
+        .findings
+        .iter()
+        .find(|finding| finding.rule_id == RuleId::ScbCycle002)
+        .expect("direct recursion remains a positive");
+    assert!(
+        self_loop
+            .node_ids
+            .iter()
+            .any(|id| id.ends_with("::direct_recursion"))
+    );
+    assert!(
+        !self_loop
+            .node_ids
+            .iter()
+            .any(|id| id.ends_with("::is_none"))
+    );
+    assert!(!report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle003
+            && finding.node_ids.iter().any(|id| id.ends_with("::clone"))
+    }));
+}
+
+#[test]
+fn excludes_trait_to_existing_inherent_forwarding_but_keeps_indirect_recursion() {
+    let fixture = WorkspaceFixture::new();
+    fixture.write_workspace_root();
+    fixture.write_package_manifest("example");
+    fixture.write_source(
+        "example",
+        "lib.rs",
+        r#"
+            pub struct Service;
+
+            pub trait Reader {
+                fn value(&self) -> u8;
+                fn display(&self) -> u8;
+            }
+
+            mod inherent;
+
+            impl Reader for Service {
+                fn value(&self) -> u8 {
+                    Self::value(self)
+                }
+
+                fn display(&self) -> u8 {
+                    Self::display(self)
+                }
+            }
+        "#,
+    );
+    fixture.write_source(
+        "example",
+        "inherent.rs",
+        r#"
+            use super::{Reader, Service};
+
+            impl Service {
+                pub fn value(&self) -> u8 { <Self as Reader>::value(self) }
+
+                pub fn display(&self) -> u8 { 8 }
+
+                pub fn first(&self) { self.second(); }
+
+                pub fn second(&self) { self.first(); }
+            }
+        "#,
+    );
+
+    let report = analyze_workspace(&AnalyzeOptions {
+        root: fixture.root().to_path_buf(),
+        format: OutputFormat::Json,
+        rule: Some(RuleFilter::Cycles),
+    })
+    .unwrap();
+
+    assert!(report.findings.iter().any(|finding| {
+        finding.rule_id == RuleId::ScbCycle002
+            && finding.node_ids.iter().any(|id| id.ends_with("::first"))
+            && finding.node_ids.iter().any(|id| id.ends_with("::second"))
+    }));
+    let trait_cycle = report
+        .findings
+        .iter()
+        .find(|finding| finding.rule_id == RuleId::ScbCycle003)
+        .expect("explicit trait-qualified return edge remains a positive");
+    assert!(
+        trait_cycle
+            .node_ids
+            .iter()
+            .any(|id| id.ends_with("::value"))
+    );
+    assert!(
+        !trait_cycle
+            .node_ids
+            .iter()
+            .any(|id| id.ends_with("::display")),
+        "{:#?}",
+        report.findings
+    );
+}
+
+#[test]
 fn does_not_flag_constructor_factory_self_loop() {
     let fixture = WorkspaceFixture::new();
     fixture.write_workspace_root();

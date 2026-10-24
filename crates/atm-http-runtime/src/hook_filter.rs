@@ -45,6 +45,17 @@ pub struct ActiveHookSnapshot {
 }
 
 impl ActiveHookSnapshot {
+    /// Defers the first durable read until a deadline-aware request needs hook state.
+    ///
+    /// A failed initial read stays dirty, so the next request retries before using hooks.
+    pub fn deferred(store: Arc<dyn HookRegistrationStore>) -> Self {
+        Self {
+            map: RwLock::new(Arc::new(HashMap::new())),
+            dirty: AtomicBool::new(true),
+            store,
+        }
+    }
+
     pub fn load(store: Arc<dyn HookRegistrationStore>) -> Result<Self, AtmError> {
         let map = build_chains(store.as_ref())?;
         Ok(Self {
@@ -644,25 +655,6 @@ pub(crate) mod test_support {
             Ok(_) => panic!("expected an error"),
         }
     }
-
-    /// Each leaf replaced by its JSON type name: two responses compare equal when
-    /// they carry the same fields, whatever the generated ids and timestamps are.
-    pub fn shape(value: &serde_json::Value) -> serde_json::Value {
-        use serde_json::Value;
-        let name = match value {
-            Value::Object(map) => {
-                return Value::Object(map.iter().map(|(k, v)| (k.clone(), shape(v))).collect());
-            }
-            Value::Array(items) => {
-                return Value::Array(items.iter().map(shape).collect());
-            }
-            Value::Null => "null",
-            Value::Bool(_) => "bool",
-            Value::Number(_) => "number",
-            Value::String(_) => "string",
-        };
-        Value::String(name.to_owned())
-    }
 }
 
 #[cfg(test)]
@@ -677,6 +669,7 @@ mod tests {
     };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::hook::{HookActionCommand, HookReply};
+    use atm_core::protocol::ResponseEnvelope;
     use atm_runtime_test_support::InMemoryHookRegistrationStore;
     use tracing_subscriber::prelude::*;
 
@@ -685,7 +678,7 @@ mod tests {
     use super::test_support::{
         agent, assign_request, bridge, ctx, deadline, expect_err, handled_action, harness,
         harness_with, hook, install_filter, local_host, phase, register, registration, reply,
-        reply_error, shape, targeted_phases, team,
+        reply_error, targeted_phases, team,
     };
     use crate::hook_chains::ChainTracker;
     use crate::storage_and_nudge_router::StorageAndNudgeRouter;
@@ -1324,11 +1317,70 @@ mod tests {
             .expect("pass-through assign");
 
         assert_eq!(runner.calls.lock().expect("calls").len(), 1);
-        let unhooked_shape =
-            shape(&serde_json::to_value(unhooked_response.into_inner()).expect("json"));
-        let hooked_shape =
-            shape(&serde_json::to_value(hooked_response.into_inner()).expect("json"));
-        assert_eq!(hooked_shape, unhooked_shape);
+        let unhooked_outcome = match unhooked_response.into_inner() {
+            ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) => {
+                outcome
+            }
+            response => panic!("unhooked task assignment returned {response:?}"),
+        };
+        let hooked_outcome = match hooked_response.into_inner() {
+            ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) => {
+                outcome
+            }
+            response => panic!("pass-through task assignment returned {response:?}"),
+        };
+
+        // The generated message IDs are intentionally distinct, but all actual
+        // send payload values must match and each ID must identify its own row.
+        assert_ne!(hooked_outcome.message_id, unhooked_outcome.message_id);
+        assert_eq!(hooked_outcome.action, unhooked_outcome.action);
+        assert_eq!(hooked_outcome.team, unhooked_outcome.team);
+        assert_eq!(hooked_outcome.agent, unhooked_outcome.agent);
+        assert_eq!(hooked_outcome.sender, unhooked_outcome.sender);
+        assert_eq!(hooked_outcome.outcome, unhooked_outcome.outcome);
+        assert_eq!(hooked_outcome.requires_ack, unhooked_outcome.requires_ack);
+        assert_eq!(hooked_outcome.task_id, unhooked_outcome.task_id);
+        assert_eq!(hooked_outcome.task_complete, unhooked_outcome.task_complete);
+        assert_eq!(
+            hooked_outcome.already_closed,
+            unhooked_outcome.already_closed
+        );
+        assert_eq!(hooked_outcome.summary, unhooked_outcome.summary);
+        assert_eq!(hooked_outcome.message, unhooked_outcome.message);
+        assert_eq!(hooked_outcome.warnings, unhooked_outcome.warnings);
+        assert_eq!(hooked_outcome.dry_run, unhooked_outcome.dry_run);
+
+        let task_id = "T-PASS".parse().expect("task id");
+        let unhooked_row = unhooked
+            .task_store
+            .load_task(&team(), &task_id)
+            .expect("load unhooked task")
+            .expect("unhooked task row");
+        let hooked_row = hooked
+            .task_store
+            .load_task(&team(), &task_id)
+            .expect("load pass-through task")
+            .expect("pass-through task row");
+        assert_eq!(hooked_row.team, unhooked_row.team);
+        assert_eq!(hooked_row.task_id, unhooked_row.task_id);
+        assert_eq!(hooked_row.assignee, unhooked_row.assignee);
+        assert_eq!(hooked_row.assigner, unhooked_row.assigner);
+        assert_eq!(hooked_row.state, unhooked_row.state);
+        assert_eq!(hooked_row.position, unhooked_row.position);
+        assert_eq!(hooked_row.description, unhooked_row.description);
+        assert_eq!(hooked_row.last_reminded_at, unhooked_row.last_reminded_at);
+        assert_eq!(hooked_row.reminder_count, unhooked_row.reminder_count);
+        assert_eq!(
+            hooked_row.lead_notified_count,
+            unhooked_row.lead_notified_count
+        );
+        assert_eq!(hooked_row.assignment_message_id, hooked_outcome.message_id);
+        assert_eq!(
+            unhooked_row.assignment_message_id,
+            unhooked_outcome.message_id
+        );
+        assert_eq!(hooked_row.assigned_at, hooked_row.updated_at);
+        assert_eq!(unhooked_row.assigned_at, unhooked_row.updated_at);
     }
 
     #[tokio::test]

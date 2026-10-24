@@ -60,11 +60,13 @@ mod replacement_handler;
 mod shutdown_probe;
 mod singleton_guard;
 mod sqlite_observability;
+#[cfg(feature = "test-support")]
+pub mod test_support;
 
 use atm_temp_config::daemon_atm_config;
 use atm_temp_sweeper_runtime::AtmTempSweeperRuntime;
 use bare_cli_runtime::BareCliRuntime;
-use herdr_config::daemon_herdr_config;
+use herdr_config::{DaemonHerdrConfig, daemon_herdr_config};
 use replacement_handler::{
     ReplacementHandlerConfig, SelectedPeerAdapterSelection, build_replacement_handler,
 };
@@ -481,26 +483,21 @@ async fn run_replacement_daemon_with_selector(
     let diagnostic_counters = diagnostic_timeline::active_counters();
     let peer_stream_adapter = bootstrap_peer_stream_adapter(&assembly, peer_wire_mode)?;
     let runtime = assembly.service_runtime.clone();
-    let (handler, recovery_sweep, cron) = compose_replacement_handler_and_cron(
-        assembly,
-        &runtime,
-        ReplacementHandlerConfig {
-            observability: Arc::clone(&observability),
-            selector_factory,
-            daemon_launch_identity: daemon_launch_identity.clone(),
-            peer_wire_mode,
-            peer_adapter_selection: SelectedPeerAdapterSelection {
-                adapter: peer_stream_adapter.clone(),
-                pool_config: peer_pool_config,
-            },
-            runtime_health: runtime_health.clone(),
-            diagnostic_counters: diagnostic_counters.clone(),
-            bare_cli,
-            herdr_config,
-            herdr_process,
-            daemon_home: atm_core::home::atm_home()?,
-        },
+    let handler_config = replacement_handler_config(
+        &observability,
+        selector_factory,
+        daemon_launch_identity.clone(),
+        peer_wire_mode,
+        peer_stream_adapter.clone(),
+        peer_pool_config,
+        runtime_health.clone(),
+        diagnostic_counters.clone(),
+        bare_cli,
+        herdr_config,
+        herdr_process,
     )?;
+    let (handler, recovery_sweep, cron) =
+        compose_replacement_handler_and_cron(assembly, &runtime, handler_config)?;
     let config = replacement_runtime_config(
         &scope,
         &owner,
@@ -529,6 +526,42 @@ async fn run_replacement_daemon_with_selector(
         return Err(error);
     }
     run_until_shutdown(running, handler, workers, owner, singleton_guards).await
+}
+
+#[allow(clippy::too_many_arguments)]
+fn replacement_handler_config<F>(
+    observability: &Arc<dyn ObservabilityPort + Send + Sync>,
+    selector_factory: F,
+    daemon_launch_identity: DaemonLaunchIdentity,
+    peer_wire_mode: PeerWireMode,
+    peer_stream_adapter: Option<Arc<dyn PeerStreamAdapter>>,
+    peer_pool_config: PeerPoolConfig,
+    runtime_health: RuntimeHealth,
+    diagnostic_counters: Option<
+        Arc<dyn atm_core::observability_counters::DiagnosticCountersSource>,
+    >,
+    bare_cli: BareCliRuntime,
+    herdr_config: DaemonHerdrConfig,
+    herdr_process: Option<Arc<dyn HerdrProcessAdapter>>,
+) -> Result<ReplacementHandlerConfig<F>, AtmError> {
+    Ok(ReplacementHandlerConfig {
+        observability: Arc::clone(observability),
+        selector_factory,
+        daemon_launch_identity,
+        peer_wire_mode,
+        peer_adapter_selection: SelectedPeerAdapterSelection {
+            adapter: peer_stream_adapter,
+            pool_config: peer_pool_config,
+        },
+        runtime_health,
+        diagnostic_counters,
+        bare_cli,
+        herdr_config,
+        herdr_process,
+        daemon_home: atm_core::home::atm_home()?,
+        #[cfg(feature = "test-support")]
+        controlled_hook_deadline: None,
+    })
 }
 
 fn compose_replacement_handler_and_cron(
@@ -1370,6 +1403,8 @@ mod replacement_runtime_tests {
                     herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                     herdr_process: None,
                     daemon_home: temporary_root.path().join("home"),
+                    #[cfg(feature = "test-support")]
+                    controlled_hook_deadline: None,
                 },
             )
             .expect("compose the replacement daemon handler");
@@ -1578,6 +1613,8 @@ mod replacement_runtime_tests {
                     herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                     herdr_process: Some(fake.clone()),
                     daemon_home: temporary_root.path().join("home"),
+                    #[cfg(feature = "test-support")]
+                    controlled_hook_deadline: None,
                 },
             )
             .expect("compose the replacement daemon handler");

@@ -235,7 +235,7 @@ mod tests {
 
     use crate::hook_chains::ChainTracker;
     use crate::hook_filter::test_support::{
-        agent, ctx, deadline, handled_action, hook, phase, reply, shape, team,
+        agent, ctx, deadline, handled_action, hook, phase, reply, team,
     };
     use crate::hook_filter::{ActiveHookSnapshot, HookedTaskCommands};
     use crate::storage_and_nudge_router::StorageAndNudgeRouter;
@@ -622,14 +622,41 @@ mod tests {
             )
             .await
             .expect("direct send");
-        let via_action_json =
-            serde_json::to_value(via_action[0].response.clone().into_inner()).expect("action json");
-        let direct_json = serde_json::to_value(direct.into_inner()).expect("cli json");
-        assert_eq!(shape(&via_action_json), shape(&direct_json));
-        assert!(matches!(
-            via_action[0].response.clone().into_inner(),
-            ResponseEnvelope::Send(_)
-        ));
+        let via_action_outcome = match via_action[0].response.clone().into_inner() {
+            ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) => {
+                outcome
+            }
+            response => panic!("hook action send returned {response:?}"),
+        };
+        let direct_outcome = match direct.into_inner() {
+            ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) => {
+                outcome
+            }
+            response => panic!("direct CLI send returned {response:?}"),
+        };
+
+        // Each execution creates its own message identity. Compare every actual
+        // payload value and retain the distinct IDs instead of erasing all leaves.
+        assert_ne!(via_action_outcome.message_id, direct_outcome.message_id);
+        assert_eq!(via_action_outcome.action, direct_outcome.action);
+        assert_eq!(via_action_outcome.team, direct_outcome.team);
+        assert_eq!(via_action_outcome.agent, direct_outcome.agent);
+        assert_eq!(via_action_outcome.sender, direct_outcome.sender);
+        assert_eq!(via_action_outcome.outcome, direct_outcome.outcome);
+        assert_eq!(via_action_outcome.requires_ack, direct_outcome.requires_ack);
+        assert_eq!(via_action_outcome.task_id, direct_outcome.task_id);
+        assert_eq!(
+            via_action_outcome.task_complete,
+            direct_outcome.task_complete
+        );
+        assert_eq!(
+            via_action_outcome.already_closed,
+            direct_outcome.already_closed
+        );
+        assert_eq!(via_action_outcome.summary, direct_outcome.summary);
+        assert_eq!(via_action_outcome.message, direct_outcome.message);
+        assert_eq!(via_action_outcome.warnings, direct_outcome.warnings);
+        assert_eq!(via_action_outcome.dry_run, direct_outcome.dry_run);
     }
 
     type CapturedEvents = Arc<std::sync::Mutex<Vec<Vec<(String, String)>>>>;

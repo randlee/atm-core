@@ -20,9 +20,15 @@ use crate::observability::CliObservability;
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::super::hook::tests::{caller, fixture, transport};
     use super::*;
-    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
+    use atm_core::list::ListQuery;
+    use atm_core::read::ReadQuery;
+    use atm_core::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    use atm_core::types::ReadSelection;
+    use atm_daemon_bootstrap::test_support::ControlledCronComposition;
 
     fn start(module: &str) -> CronCommand {
         CronCommand::try_parse_from([
@@ -64,6 +70,80 @@ mod tests {
         };
         let requests = recorded.lock().unwrap().clone();
         (result, requests)
+    }
+
+    async fn execute_composed(
+        composition: &ControlledCronComposition,
+        command: &CronCommand,
+    ) -> ResponseEnvelope {
+        composition
+            .execute(command.request(caller()).expect("CLI request"))
+            .await
+            .expect("composed daemon request")
+    }
+
+    async fn assert_empty_mailbox(composition: &ControlledCronComposition, target: &str) {
+        let ResponseEnvelope::List(outcome) = composition
+            .execute(RequestEnvelope::List(
+                ListQuery::new(
+                    composition.root_path().into(),
+                    composition.root_path().into(),
+                    TEST_SENDER.parse().expect("test sender"),
+                    Some(target),
+                    TEST_TEAM.parse().expect("test team"),
+                    ReadSelection::All,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("list request"),
+            ))
+            .await
+            .expect("list mailbox")
+        else {
+            panic!("list response")
+        };
+        assert_eq!(outcome.count, 0, "rejected cron output is not persisted");
+    }
+
+    fn deferred_cron_start(
+        name: &str,
+        module: &std::path::Path,
+        cwd: &std::path::Path,
+    ) -> CronCommand {
+        CronCommand::try_parse_from([
+            "cron",
+            "start",
+            name,
+            "--cron",
+            "0 * * * * *",
+            "--phase",
+            TEST_TEAM,
+            "--module",
+            module.to_str().expect("fixture module utf-8"),
+            "--cwd",
+            cwd.to_str().expect("fixture root utf-8"),
+            "--until",
+            "2026-10-24T03:00:00Z",
+        ])
+        .expect("documented deferred fixture parses")
+    }
+
+    fn manifest_fixture_ids(root: &std::path::Path) -> BTreeSet<String> {
+        let manifest: Value = serde_json::from_slice(
+            &std::fs::read(root.join("docs/user-documents/examples/cron/manifest.json"))
+                .expect("read cron fixture manifest"),
+        )
+        .expect("parse cron fixture manifest");
+        manifest["commands"]
+            .as_array()
+            .expect("commands array")
+            .iter()
+            .map(|fixture| fixture["id"].as_str().expect("fixture id").to_owned())
+            .collect()
     }
 
     #[tokio::test]
@@ -400,6 +480,561 @@ mod tests {
             "2030-11-01T00:00:00Z"
         );
         assert_eq!(start.cron_expr, "0 0 2 * * * 2030");
+    }
+
+    #[tokio::test]
+    async fn documented_cron_argv_fixtures_use_the_composed_daemon() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repo root");
+        let manifest: Value = serde_json::from_slice(
+            &std::fs::read(root.join("docs/user-documents/examples/cron/manifest.json"))
+                .expect("read manifest"),
+        )
+        .expect("parse manifest");
+        let composition = ControlledCronComposition::new().expect("compose daemon");
+        let observability = CliObservability::fallback();
+
+        for documented in manifest["commands"].as_array().expect("commands") {
+            if documented["deferred_execution"].as_bool() == Some(true) {
+                continue;
+            }
+            let Some(argv) = documented["argv"].as_array() else {
+                continue;
+            };
+            let id = documented["id"].as_str().expect("fixture id");
+            let mut argv = argv
+                .iter()
+                .map(|value| value.as_str().expect("argument").to_owned())
+                .collect::<Vec<_>>();
+            if let Some(module) = argv.iter().position(|value| value == "--module") {
+                argv[module + 1] = fixture("valid_hook.py").display().to_string();
+            }
+            let parsed = CronCommand::try_parse_from(argv);
+            if documented["valid"] == false {
+                assert!(
+                    parsed.is_err(),
+                    "fixture {id} must be refused by CLI parsing"
+                );
+                continue;
+            }
+            let command = parsed.unwrap_or_else(|error| panic!("fixture {id}: {error}"));
+            let request = command
+                .request(caller())
+                .unwrap_or_else(|error| panic!("fixture {id} request: {error}"));
+            let response = composition
+                .execute(request)
+                .await
+                .unwrap_or_else(|error| panic!("fixture {id} daemon: {error}"));
+            let output = command
+                .execute_request(
+                    &CliComposition::from_fake_transport(transport(response).0, &observability),
+                    command.request(caller()).expect("repeat request"),
+                )
+                .await
+                .unwrap_or_else(|error| panic!("fixture {id} output: {error}"));
+            assert!(!output.is_empty(), "fixture {id} rendered output");
+        }
+
+        let list = CronCommand::try_parse_from(["cron", "list", "--phase", "bk", "--json"])
+            .expect("documented list argv");
+        let RequestEnvelope::CronList(list_request) = list.request(caller()).expect("list request")
+        else {
+            unreachable!("cron list must build a list request")
+        };
+        let ResponseEnvelope::CronList(rows) = composition
+            .execute(RequestEnvelope::CronList(list_request))
+            .await
+            .expect("list durable cron rows")
+        else {
+            panic!("cron list response")
+        };
+        assert_eq!(rows.len(), 3, "three documented starts persist once each");
+        assert!(
+            rows.iter().all(|row| !row.active),
+            "end-phase stops remaining rows"
+        );
+
+        let composition = composition
+            .reopen()
+            .await
+            .expect("reopen SQLite composition");
+        let ResponseEnvelope::CronList(rows) = composition
+            .execute(RequestEnvelope::CronList(CronListQuery {
+                caller_identity: TEST_SENDER.parse().expect("test sender"),
+                caller_team: TEST_TEAM.parse().expect("test team"),
+                phase: Some(PhaseId::parse("bk").expect("fixture phase")),
+            }))
+            .await
+            .expect("list recovered cron rows")
+        else {
+            panic!("reopened cron list response")
+        };
+        assert_eq!(rows.len(), 3, "restart retains documented schedules");
+        assert!(rows.iter().all(|row| !row.active));
+    }
+
+    #[tokio::test]
+    async fn documented_five_field_cron_fixture_is_refused_by_the_composed_daemon() {
+        let composition = ControlledCronComposition::new().expect("compose daemon");
+        let command = CronCommand::try_parse_from([
+            "cron",
+            "start",
+            "five-fields",
+            "--cron",
+            "0 * * * *",
+            "--phase",
+            TEST_TEAM,
+            "--module",
+            fixture("valid_hook.py")
+                .to_str()
+                .expect("fixture module utf-8"),
+            "--until-hook",
+        ])
+        .expect("five-field argv reaches the production daemon validator");
+        let error = composition
+            .execute(command.request(caller()).expect("five-field cron request"))
+            .await
+            .expect_err("five-field expression must be refused by the composed daemon");
+        assert_eq!(error.code(), atm_core::error::AtmErrorCode::CronExprInvalid);
+    }
+
+    #[tokio::test]
+    async fn every_documented_bk11_fixture_executes_through_the_composed_daemon() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repo root");
+        let manifest: Value = serde_json::from_slice(
+            &std::fs::read(root.join("docs/user-documents/examples/cron/manifest.json"))
+                .expect("read manifest"),
+        )
+        .expect("parse manifest");
+        let commands = manifest["commands"].as_array().expect("commands array");
+        let mut executed = BTreeSet::new();
+
+        let composition = ControlledCronComposition::new().expect("compose daemon");
+        for documented in commands {
+            if documented["deferred_execution"].as_bool() == Some(true) {
+                continue;
+            }
+            let Some(argv) = documented["argv"].as_array() else {
+                continue;
+            };
+            let id = documented["id"].as_str().expect("fixture id");
+            let mut argv = argv
+                .iter()
+                .map(|value| value.as_str().expect("argument").to_owned())
+                .collect::<Vec<_>>();
+            if let Some(module) = argv.iter().position(|value| value == "--module") {
+                argv[module + 1] = fixture("valid_hook.py").display().to_string();
+            }
+            let parsed = CronCommand::try_parse_from(argv);
+            if documented["valid"] == false {
+                assert!(
+                    parsed.is_err(),
+                    "fixture {id} must be refused by CLI parsing"
+                );
+            } else {
+                let command = parsed.unwrap_or_else(|error| panic!("fixture {id}: {error}"));
+                composition
+                    .execute(command.request(caller()).expect("CLI request"))
+                    .await
+                    .unwrap_or_else(|error| panic!("fixture {id} daemon: {error}"));
+            }
+            executed.insert(id.to_owned());
+        }
+
+        let five_fields = CronCommand::try_parse_from([
+            "cron",
+            "start",
+            "five-fields",
+            "--cron",
+            "0 * * * *",
+            "--phase",
+            TEST_TEAM,
+            "--module",
+            fixture("valid_hook.py")
+                .to_str()
+                .expect("fixture module utf-8"),
+            "--until-hook",
+        ])
+        .expect("five-field argv parses");
+        let error = composition
+            .execute(five_fields.request(caller()).expect("five-field request"))
+            .await
+            .expect_err("five-field expression must be refused by the composed daemon");
+        assert_eq!(error.code(), atm_core::error::AtmErrorCode::CronExprInvalid);
+        executed.insert("reject-five-fields".to_owned());
+
+        let module = root.join("crates/atm-daemon-bootstrap/tests/hook_fixture/fixture_hook.py");
+        for (id, reply) in [
+            (
+                "reject-foreign-from",
+                r#"{"result":"handled","atm-action":[{"command":"send","from":"other@atm-dev","request":{"to":"team-lead","message":"status"}}]}"#,
+            ),
+            (
+                "reject-malformed-output",
+                r#"{"result":"pass-through","cron-output":[{"kind":"message","body":""}]}"#,
+            ),
+        ] {
+            let composition = ControlledCronComposition::new().expect("compose daemon");
+            std::fs::write(composition.root_path().join("fixture_reply.json"), reply)
+                .expect("write refusal reply");
+            let command = deferred_cron_start(id, &module, composition.root_path());
+            let ResponseEnvelope::CronStarted(schedule) =
+                execute_composed(&composition, &command).await
+            else {
+                panic!("fixture {id} must start")
+            };
+            composition
+                .start_cron_worker()
+                .await
+                .expect("start controlled worker");
+            composition
+                .advance_clock_and_wait_for_run(&schedule, chrono::Duration::minutes(1))
+                .await
+                .expect("fixture cron run completes");
+            let composition = composition
+                .reopen()
+                .await
+                .expect("reopen after deferred refusal");
+            let ResponseEnvelope::CronList(rows) = composition
+                .execute(RequestEnvelope::CronList(CronListQuery {
+                    caller_identity: TEST_SENDER.parse().expect("test sender"),
+                    caller_team: TEST_TEAM.parse().expect("test team"),
+                    phase: Some(PhaseId::parse(TEST_TEAM).expect("test phase")),
+                }))
+                .await
+                .expect("list refusal outcome")
+            else {
+                panic!("cron list response")
+            };
+            assert!(
+                rows[0]
+                    .last_outcome
+                    .as_deref()
+                    .is_some_and(|outcome| outcome.starts_with("failure:")),
+                "fixture {id} must record its refusal: {:?}",
+                rows[0].last_outcome
+            );
+            executed.insert(id.to_owned());
+        }
+
+        for documented in commands.iter().filter(|fixture| {
+            fixture["id"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("hook-"))
+        }) {
+            let id = documented["id"].as_str().expect("hook fixture id");
+            let mut argv = documented["argv"]
+                .as_array()
+                .expect("hook fixture argv")
+                .iter()
+                .map(|value| value.as_str().expect("argument").to_owned())
+                .collect::<Vec<_>>();
+            let module = argv.iter().position(|value| value == "--module");
+            if let Some(module) = module {
+                argv[module + 1] = fixture("valid_hook.py").display().to_string();
+            }
+            let command = crate::commands::hook::HookCommand::try_parse_from(argv)
+                .unwrap_or_else(|error| panic!("fixture {id}: {error}"));
+            let composition = ControlledCronComposition::new().expect("compose daemon");
+            let response = composition
+                .execute(command.request(caller()).expect("hook CLI request"))
+                .await
+                .unwrap_or_else(|error| panic!("fixture {id} daemon: {error}"));
+            assert!(
+                matches!(
+                    response,
+                    ResponseEnvelope::HookRegistered(_) | ResponseEnvelope::HookDisabled(_)
+                ),
+                "fixture {id} must reach the composed hook daemon"
+            );
+            executed.insert(id.to_owned());
+        }
+        assert_eq!(
+            executed,
+            manifest_fixture_ids(&root),
+            "every manifest fixture must execute before coverage is reported"
+        );
+    }
+
+    #[tokio::test]
+    async fn deferred_rejection_replies_are_refused_by_the_composed_cron_worker() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("repo root");
+        let module = root.join("crates/atm-daemon-bootstrap/tests/hook_fixture/fixture_hook.py");
+        let composition = ControlledCronComposition::new().expect("compose daemon");
+
+        std::fs::write(
+            composition.root_path().join("fixture_reply.json"),
+            r#"{"result":"handled","atm-action":[{"command":"send","from":"other@atm-dev","request":{"to":"team-lead","message":"status"}}]}"#,
+        )
+        .expect("write foreign-sender reply");
+        let foreign = deferred_cron_start("reject-foreign-from", &module, composition.root_path());
+        let ResponseEnvelope::CronStarted(foreign_schedule) =
+            execute_composed(&composition, &foreign).await
+        else {
+            panic!("foreign refusal must start")
+        };
+        composition
+            .start_cron_worker()
+            .await
+            .expect("start controlled cron worker");
+        composition
+            .advance_clock_and_wait_for_run(&foreign_schedule, chrono::Duration::minutes(1))
+            .await
+            .expect("foreign refusal run completes");
+        let composition = composition
+            .reopen()
+            .await
+            .expect("reopen after foreign reply");
+
+        let RequestEnvelope::CronList(list) =
+            CronCommand::try_parse_from(["cron", "list", "--phase", TEST_TEAM])
+                .expect("cron list parses")
+                .request(caller())
+                .expect("cron list request")
+        else {
+            unreachable!("cron list command creates a list request")
+        };
+        let ResponseEnvelope::CronList(rows) = composition
+            .execute(RequestEnvelope::CronList(list))
+            .await
+            .expect("list foreign-sender run")
+        else {
+            panic!("cron list response")
+        };
+        assert_eq!(rows.len(), 1);
+        assert!(
+            rows[0]
+                .last_outcome
+                .as_deref()
+                .is_some_and(|outcome| outcome.starts_with("failure:")),
+            "foreign sender is refused: {:?}",
+            rows[0].last_outcome
+        );
+
+        assert_empty_mailbox(&composition, TEST_SENDER).await;
+        assert_empty_mailbox(&composition, TEST_RECIPIENT).await;
+
+        let end = CronCommand::try_parse_from(["cron", "end", "--phase", TEST_TEAM])
+            .expect("cron end parses");
+        assert!(matches!(
+            execute_composed(&composition, &end).await,
+            ResponseEnvelope::CronEnded(_)
+        ));
+
+        std::fs::write(
+            composition.root_path().join("fixture_reply.json"),
+            r#"{"result":"pass-through","cron-output":[{"kind":"message","body":""}]}"#,
+        )
+        .expect("write malformed-output reply");
+        let malformed =
+            deferred_cron_start("reject-malformed-output", &module, composition.root_path());
+        let ResponseEnvelope::CronStarted(malformed_schedule) =
+            execute_composed(&composition, &malformed).await
+        else {
+            panic!("malformed refusal must start")
+        };
+        composition
+            .start_cron_worker()
+            .await
+            .expect("restart controlled cron worker");
+        composition
+            .advance_clock_and_wait_for_run(&malformed_schedule, chrono::Duration::minutes(1))
+            .await
+            .expect("malformed refusal run completes");
+        let composition = composition
+            .reopen()
+            .await
+            .expect("reopen after malformed reply");
+
+        let ResponseEnvelope::CronList(rows) = composition
+            .execute(RequestEnvelope::CronList(CronListQuery {
+                caller_identity: TEST_SENDER.parse().expect("test sender"),
+                caller_team: TEST_TEAM.parse().expect("test team"),
+                phase: Some(PhaseId::parse(TEST_TEAM).expect("test phase")),
+            }))
+            .await
+            .expect("list malformed-output run")
+        else {
+            panic!("cron list response")
+        };
+        assert_eq!(rows.len(), 2);
+        assert!(
+            rows[1]
+                .last_outcome
+                .as_deref()
+                .is_some_and(|outcome| outcome.starts_with("failure:")),
+            "malformed output is refused: {:?}",
+            rows[1].last_outcome
+        );
+        assert_empty_mailbox(&composition, TEST_SENDER).await;
+        assert_empty_mailbox(&composition, TEST_RECIPIENT).await;
+    }
+
+    #[tokio::test]
+    async fn composed_cron_delivers_custom_mail_and_lifecycle_nudge() {
+        let composition = ControlledCronComposition::new().expect("compose daemon");
+        let module = fixture("cron_composed_actions.py");
+        let command = CronCommand::try_parse_from([
+            "cron",
+            "start",
+            "custom-mail",
+            "--cron",
+            "0 * * * * *",
+            "--phase",
+            TEST_TEAM,
+            "--module",
+            module.to_str().expect("fixture module utf-8"),
+            "--arg",
+            "custom-mail",
+            "--until",
+            "2026-10-24T01:00:00Z",
+        ])
+        .expect("custom-mail cron argv parses");
+        let malformed_command = CronCommand::try_parse_from([
+            "cron",
+            "start",
+            "lifecycle-error",
+            "--cron",
+            "0 * * * * *",
+            "--phase",
+            TEST_TEAM,
+            "--module",
+            module.to_str().expect("fixture module utf-8"),
+            "--arg",
+            "unknown",
+            "--arg",
+            "lifecycle-error",
+            "--until",
+            "2026-10-24T01:00:00Z",
+        ])
+        .expect("malformed lifecycle cron argv parses");
+        let mut lifecycle_caller = caller();
+        lifecycle_caller.caller_identity = TEST_RECIPIENT.parse().expect("test recipient");
+        let ResponseEnvelope::CronStarted(custom_schedule) = composition
+            .execute(
+                command
+                    .request(lifecycle_caller.clone())
+                    .expect("custom-mail request"),
+            )
+            .await
+            .expect("custom-mail start")
+        else {
+            panic!("custom mail must start")
+        };
+        let ResponseEnvelope::CronStarted(lifecycle_schedule) = composition
+            .execute(
+                malformed_command
+                    .request(lifecycle_caller)
+                    .expect("malformed lifecycle request"),
+            )
+            .await
+            .expect("malformed lifecycle start")
+        else {
+            panic!("lifecycle error must start")
+        };
+        composition
+            .start_cron_worker()
+            .await
+            .expect("start controlled cron worker");
+        composition
+            .advance_clock_and_wait_for_runs(
+                &[&custom_schedule, &lifecycle_schedule],
+                chrono::Duration::minutes(1),
+            )
+            .await
+            .expect("custom mail and lifecycle runs complete");
+        let delivery_diagnostics = composition.persisted_cron_diagnostics();
+        let runner_failure = composition.original_cron_runner_failure(&custom_schedule);
+        composition.shutdown_cron_worker().await;
+        assert!(
+            composition.has_herdr_prompt(
+                TEST_RECIPIENT,
+                "<atm cron name=\"lifecycle-error\" event=\"error\" error=\"cron hook runner failed\">",
+            ),
+            "production lifecycle transport emits the rendered error notice to the configured Herdr recipient: {:?}",
+            composition.herdr_calls()
+        );
+        let composition = composition
+            .reopen()
+            .await
+            .expect("reopen after custom mail");
+
+        let ResponseEnvelope::List(outcome) = composition
+            .execute(RequestEnvelope::List(
+                ListQuery::new(
+                    composition.root_path().into(),
+                    composition.root_path().into(),
+                    TEST_RECIPIENT.parse().expect("test recipient"),
+                    Some(TEST_RECIPIENT),
+                    TEST_TEAM.parse().expect("test team"),
+                    ReadSelection::All,
+                    false,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("custom-mail list request"),
+            ))
+            .await
+            .expect("list custom mail")
+        else {
+            panic!("list response")
+        };
+        assert_eq!(
+            outcome.count, 1,
+            "custom cron mail must be durable after completion; persisted cron schedules and pending delivery intents: {delivery_diagnostics:?}; original controlled runner failure: {runner_failure:?}"
+        );
+        assert_eq!(
+            outcome.rows[0].from,
+            "atm-daemon"
+                .parse::<atm_core::types::AgentName>()
+                .expect("daemon sender")
+        );
+        assert_eq!(outcome.rows[0].summary, "fixture custom mail");
+        let message_id = outcome.rows[0]
+            .message_id
+            .as_ref()
+            .expect("persisted custom mail has an id")
+            .to_string();
+        let ResponseEnvelope::Receive(read) = composition
+            .execute(RequestEnvelope::Receive(
+                ReadQuery::new(
+                    composition.root_path().into(),
+                    composition.root_path().into(),
+                    TEST_RECIPIENT.parse().expect("test recipient"),
+                    None,
+                    TEST_TEAM.parse().expect("test team"),
+                    ReadSelection::All,
+                    false,
+                    false,
+                    Some(&message_id),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("custom-mail read request"),
+            ))
+            .await
+            .expect("read persisted custom mail")
+        else {
+            panic!("read response")
+        };
+        assert_eq!(
+            read.message.expect("persisted custom mail").envelope.text,
+            "fixture custom mail"
+        );
     }
 }
 
