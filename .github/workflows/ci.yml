@@ -251,8 +251,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo install -d -o root -g root -m 0755 /etc/atm
-          sudo install -o root -g root -m 0644 \
+          sudo install -d -o root -g 0 -m 0755 /etc/atm
+          sudo install -o root -g 0 -m 0644 \
             .github/fixtures/tool-sender-trust-root-ci.json \
             /etc/atm/tool-sender-trust-root.json
 

@@ -171,6 +171,24 @@ fn verify_file_type(handle: &Handle, expect_directory: bool) -> Result<(), &'sta
 }
 
 fn verify_security(handle: &Handle, is_directory: bool) -> Result<(), &'static str> {
+    let (descriptor, owner) = read_security_descriptor(handle)?;
+    let _descriptor = descriptor;
+    let (admins, system) = trusted_sids()?;
+    let owner_is_trusted = owner_is_trusted(owner, &admins, &system);
+    let (dacl_protected, dacl) = protected_dacl(_descriptor.0)?;
+    let entries = read_dacl_entries(dacl, &admins, &system)?;
+    verify_dacl(
+        owner_is_trusted,
+        dacl_protected,
+        true,
+        is_directory,
+        &entries,
+    )
+}
+
+fn read_security_descriptor(
+    handle: &Handle,
+) -> Result<(LocalSecurityDescriptor, *mut core::ffi::c_void), &'static str> {
     let mut owner = null_mut();
     let mut descriptor: *mut core::ffi::c_void = null_mut();
     // SAFETY: the output pointers are valid; the returned descriptor is freed
@@ -190,14 +208,21 @@ fn verify_security(handle: &Handle, is_directory: bool) -> Result<(), &'static s
     if status != 0 || descriptor.is_null() {
         return Err("cannot read owner and DACL from opened handle");
     }
-    let _descriptor = LocalSecurityDescriptor(descriptor);
+    Ok((LocalSecurityDescriptor(descriptor), owner))
+}
 
-    let (admins, system) = trusted_sids()?;
-    // SAFETY: `descriptor` is a valid descriptor returned by GetSecurityInfo.
-    let owner_is_trusted = unsafe { IsValidSid(owner) } != 0
+fn owner_is_trusted(
+    owner: *mut core::ffi::c_void,
+    admins: &[u8; SECURITY_MAX_SID_SIZE],
+    system: &[u8; SECURITY_MAX_SID_SIZE],
+) -> bool {
+    // SAFETY: `owner` was returned by GetSecurityInfo with a live descriptor.
+    (unsafe { IsValidSid(owner) } != 0)
         && (unsafe { EqualSid(owner, admins.as_ptr().cast_mut().cast()) } != 0
-            || unsafe { EqualSid(owner, system.as_ptr().cast_mut().cast()) } != 0);
+            || unsafe { EqualSid(owner, system.as_ptr().cast_mut().cast()) } != 0)
+}
 
+fn protected_dacl(descriptor: *mut core::ffi::c_void) -> Result<(bool, *mut ACL), &'static str> {
     let mut control = 0_u16;
     let mut revision = 0_u32;
     // SAFETY: descriptor is valid and the output pointers are writable.
@@ -222,7 +247,14 @@ fn verify_security(handle: &Handle, is_directory: bool) -> Result<(), &'static s
     if !dacl_valid {
         return Err("DACL must be present, non-null, and valid");
     }
+    Ok((dacl_protected, dacl))
+}
 
+fn read_dacl_entries(
+    dacl: *mut ACL,
+    admins: &[u8; SECURITY_MAX_SID_SIZE],
+    system: &[u8; SECURITY_MAX_SID_SIZE],
+) -> Result<Vec<Ace>, &'static str> {
     let mut entries = Vec::with_capacity(usize::from(unsafe { (*dacl).AceCount }));
     for index in 0..unsafe { (*dacl).AceCount } {
         let mut ace_ptr = null_mut();
@@ -266,13 +298,7 @@ fn verify_security(handle: &Handle, is_directory: bool) -> Result<(), &'static s
             mask,
         });
     }
-    verify_dacl(
-        owner_is_trusted,
-        dacl_protected,
-        true,
-        is_directory,
-        &entries,
-    )
+    Ok(entries)
 }
 
 fn trusted_sids() -> Result<([u8; SECURITY_MAX_SID_SIZE], [u8; SECURITY_MAX_SID_SIZE]), &'static str>

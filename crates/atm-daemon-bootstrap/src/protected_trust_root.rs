@@ -19,6 +19,7 @@ use atm_storage_rusqlite::{
 use serde::Deserialize;
 
 #[path = "protected_trust_root/policy.rs"]
+#[cfg(any(windows, test))]
 mod policy;
 
 #[cfg(unix)]
@@ -69,7 +70,6 @@ pub fn load_protected_tool_sender_configs() -> Result<ProtectedToolSenderConfigs
 /// The only production location from which the daemon bootstrap accepts this
 /// authority.  It is intentionally not configurable through a launch flag or
 /// environment variable.
-#[must_use]
 pub fn system_trust_root_path() -> Result<PathBuf, AtmError> {
     #[cfg(windows)]
     {
