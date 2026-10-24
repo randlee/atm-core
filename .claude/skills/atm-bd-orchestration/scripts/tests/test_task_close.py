@@ -18,7 +18,7 @@ import pytest
 from unittest.mock import patch
 
 
-from task_close_world import DERIVED, EXAMPLES, SCRIPTS, World, example_values, hook
+from task_close_world import DERIVED, EXAMPLES, SCRIPTS, World, cache_call, example_values, hook
 
 @pytest.fixture
 def world(tmp_path, monkeypatch):
@@ -90,7 +90,7 @@ def test_dev_handoff_is_immediate_and_closes_the_dev_task_as_the_dev(world, monk
     before = dict(hook.os.environ)
     assert "ok" in world.run()
     assert dict(hook.os.environ) == before
-    calls = [argv for argv, _kwargs in world.calls]
+    calls = [argv for argv, _kwargs in world.calls if not cache_call(argv)]
     close_index = next(index for index, argv in enumerate(calls) if argv[:2] == ["bd", "close"])
     assert calls[close_index + 1][:2] == ["atm", "send"]
     assert calls[close_index + 2] == ["bd", "where", "--json"]
@@ -492,7 +492,7 @@ def test_metadata_update_preserves_concurrent_keys_and_writes_fail_counter_atomi
                                           ("sanity", "FAIL"), ("sanity", "CANNOT_RUN"), ("qa", "PASS")])
 def test_replay_state_is_snapshotted_before_writes(world, role, verdict):
     assert "ok" in world.run(role, verdict=verdict, undone=[{"number": 1, "reason": "missing"}])
-    calls = [argv for argv, _ in world.calls]
+    calls = [argv for argv, _ in world.calls if not cache_call(argv)]  # the drain's own reads apply the write
     first_write = next(index for index, argv in enumerate(calls) if argv[:2] in (["bd", "update"], ["bd", "close"], ["atm", "send"]) or argv[:3] in (["atm", "task", "assign"], ["atm", "task", "close"]))
     reads = [argv for argv in calls[first_write + 1:] if argv[:2] in (["bd", "show"], ["bd", "list"]) or argv[:3] == ["atm", "task", "events"]]
     expected = [["atm", "task", "events", world.values["sanity_task_id"], "--all", "--json"]] if role == "sanity" and verdict == "FAIL" else []
@@ -1225,3 +1225,43 @@ def test_load_sample_is_portable(monkeypatch):
         raise OSError
     monkeypatch.setattr(hook.os, "getloadavg", unavailable)
     assert hook.load_sample() == {"load_avg": None, "cpu_pct": None}
+
+
+# -- bead writes go through the bd-cache (#557) ----------------------------------------------------
+
+def test_dev_close_leaves_its_recorded_fields_in_the_cache(world):
+    assert "ok" in world.run()
+    cache = hook.bd_cache.BdCache(world.root, runner=world)
+    checked = cache.cached(world.values["checked_bead"])
+    assert (checked["status"], checked["metadata"]["commit"], checked["metadata"]["pr_number"]) == (
+        "closed", world.values["commit"], int(world.pr_number))
+    journal = cache.status()["journal"]
+    assert journal and all(state.endswith(":applied") for state in journal), journal
+
+
+def test_a_write_bd_does_not_take_stays_journaled_and_applies_once_on_rerun(world):
+    world.timeout_command = ["bd", "close"]
+    result = world.run()
+    assert result["err"]["code"] == "BEADS.WRITE_PENDING" and "journaled" in result["err"]["message"]
+    world.timeout_command = None
+    assert "ok" in world.run()
+    closes = [argv for argv, _ in world.writes if argv[:3] == ["bd", "close", world.values["checked_bead"]]]
+    assert len(closes) == 1 and world.beads[world.values["checked_bead"]]["status"] == "closed"
+
+
+def test_a_write_bd_refuses_is_escalated_not_retried(world):
+    reason = f"dev complete at {world.values['commit']}"
+    world.overrides[("bd", "close", world.values["checked_bead"], "--reason", reason, "--actor", "caller")] = (13, "")
+    result = world.run()
+    assert result["err"]["code"] == "BEADS.WRITE_ESCALATED" and "bd_cache.py resolve" in result["err"]["fix"]
+    assert not any(argv[:3] == ["atm", "task", "assign"] for argv, _ in world.writes)  # nothing is handed off
+
+
+def test_a_busy_drain_is_waited_for_then_reported(world):
+    cache = hook.bd_cache.BdCache(world.root, runner=world)
+    with cache.drain_lock() as held:
+        assert held
+        result = world.run()
+    assert result["err"]["code"] == "BEADS.WRITE_PENDING" and "busy" in result["err"]["message"]
+    assert world.sleeps.count(hook.DRAIN_BUSY_SLEEP_S) == hook.DRAIN_TRIES
+    assert "ok" in world.run()

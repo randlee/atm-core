@@ -65,7 +65,7 @@ class CloseVarsTests(unittest.TestCase):
         sanity = row("t-d-1.f1-sanity", "stage:dev-sanity", "sanity")
         rows = {r["id"]: r for r in (sanity, QA)}
         original = close_vars_cli.read
-        close_vars_cli.read = lambda repo, bead, fallback: rows[bead]
+        close_vars_cli.read = lambda repo, bead, fallback, **_: rows[bead]
         try:
             result = close_vars_cli.build(REPO, sanity["id"], runs=lambda task: 2)
         finally:
@@ -143,8 +143,8 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class FreshReadTests(unittest.TestCase):
-    """close-vars reads bd as it is now: a cached row can lag a direct `bd update` until the next sync (QA 2217)."""
+class CacheFirstReadTests(unittest.TestCase):
+    """close-vars reads the bd-cache, and bd only when a field the vars need is missing there (#557)."""
 
     def setUp(self):
         import os
@@ -160,6 +160,7 @@ class FreshReadTests(unittest.TestCase):
         self.factory(self.root).get("q")  # cached before the direct update below
         self.bd.rows["q"]["metadata"]["layer"] = 37
         self.bd.touch("q")
+        self.bd.calls.clear()
 
     def tearDown(self):
         import os
@@ -167,27 +168,92 @@ class FreshReadTests(unittest.TestCase):
         if self.saved_beads_dir is not None:
             os.environ["BEADS_DIR"] = self.saved_beads_dir
 
-    def test_a_field_set_in_bd_after_the_cache_filled_is_read(self):
+    def lists(self):
+        return [command for command in self.bd.calls if command[1] == "list"]
+
+    def test_a_cached_bead_is_read_without_asking_bd(self):
         fallback: list[str] = []
         row = close_vars_cli.read(self.root, "q", fallback, cache_factory=self.factory)
+        self.assertEqual(row["metadata"], {"round": 1})
+        self.assertEqual((fallback, self.lists()), ([], []))
+
+    def test_a_fresh_read_takes_a_field_set_in_bd_after_the_cache_filled_and_stores_it(self):
+        fallback: list[str] = []
+        row = close_vars_cli.read(self.root, "q", fallback, cache_factory=self.factory, fresh=True)
         self.assertEqual(row["metadata"]["layer"], 37)
         self.assertEqual(fallback, [])
-        self.assertEqual(self.factory(self.root).cached("q")["metadata"]["layer"], 37)  # the fresh row is stored
+        self.assertEqual(self.factory(self.root).cached("q")["metadata"]["layer"], 37)
 
-    def test_pending_journal_writes_are_replayed_on_the_fresh_row(self):
+    def test_pending_journal_writes_are_replayed_on_cached_and_fresh_rows(self):
         self.factory(self.root).write("q", "update", {"set_metadata": {"commit": "abc123"}}, idem_key="k1", actor="t")
-        row = close_vars_cli.read(self.root, "q", [], cache_factory=self.factory)
-        self.assertEqual((row["metadata"]["layer"], row["metadata"]["commit"]), (37, "abc123"))
+        cached = close_vars_cli.read(self.root, "q", [], cache_factory=self.factory)
+        fresh = close_vars_cli.read(self.root, "q", [], cache_factory=self.factory, fresh=True)
+        self.assertEqual(cached["metadata"]["commit"], "abc123")
+        self.assertEqual((fresh["metadata"]["layer"], fresh["metadata"]["commit"]), (37, "abc123"))
 
     def test_a_failed_fresh_read_falls_back_to_the_cached_row_and_says_so(self):
         self.bd.fail.append((lambda command: command[1] == "list", 1))
         fallback: list[str] = []
-        row = close_vars_cli.read(self.root, "q", fallback, cache_factory=self.factory)
+        row = close_vars_cli.read(self.root, "q", fallback, cache_factory=self.factory, fresh=True)
         self.assertNotIn("layer", row["metadata"])
         self.assertEqual(len(fallback), 1)
         self.assertIn("using the cached row", fallback[0])
 
     def test_a_bead_bd_does_not_have_is_refused(self):
         with self.assertRaises(close_fields.CloseFieldsError) as raised:
-            close_vars_cli.read(self.root, "missing", [], cache_factory=self.factory)
+            close_vars_cli.read(self.root, "missing", [], cache_factory=self.factory, fresh=True)
         self.assertEqual(raised.exception.code, "CLOSE_VARS.READ_FAILED")
+
+    def test_a_missing_field_on_cached_rows_is_retried_once_on_fresh_rows(self):
+        seen = []
+
+        def attempt(fresh, fallback):
+            seen.append(fresh)
+            if not fresh:
+                raise close_fields.CloseFieldsError("ASSIGN_VARS.NOT_PLANNED", "t-qa: metadata lacks layer", "fix")
+            return {"read_fallback": fallback}
+
+        result = close_vars_cli.cached_then_fresh(attempt)
+        self.assertEqual(seen, [False, True])
+        self.assertIn("ASSIGN_VARS.NOT_PLANNED on cached rows", result["read_fallback"][0])
+
+    def test_other_refusals_and_a_second_miss_are_not_retried(self):
+        def refuse(code):
+            def attempt(fresh, fallback):
+                seen.append(fresh)
+                raise close_fields.CloseFieldsError(code, "x", "fix")
+            return attempt
+
+        for code, tries in (("CLOSE_VARS.ROLE_MISMATCH", [False]), ("CLOSE_VARS.NOT_POURED", [False, True])):
+            seen = []
+            with self.assertRaises(close_fields.CloseFieldsError) as raised:
+                close_vars_cli.cached_then_fresh(refuse(code))
+            self.assertEqual((raised.exception.code, seen), (code, tries))
+
+
+class TypedFailureTests(unittest.TestCase):
+    """A bd or atm call that hangs or cannot start is a typed refusal, never a traceback (#557)."""
+
+    def run_with(self, outcome, call):
+        import subprocess
+        from unittest import mock
+
+        def fake(*args, **kwargs):
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return subprocess.CompletedProcess(args[0], 0, outcome, "")
+
+        with mock.patch.object(close_vars_cli.subprocess, "run", fake):
+            with self.assertRaises(close_fields.CloseFieldsError) as raised:
+                call()
+        return raised.exception.code
+
+    def test_bd_show_timeout_missing_binary_and_garbage_are_read_failures(self):
+        import subprocess
+        for outcome in (subprocess.TimeoutExpired("bd", 30), FileNotFoundError("bd"), "not json", "[]"):
+            self.assertEqual(self.run_with(outcome, lambda: close_vars_cli.show(REPO, "q")), "CLOSE_VARS.READ_FAILED", outcome)
+
+    def test_atm_events_timeout_missing_binary_and_garbage_are_events_failures(self):
+        import subprocess
+        for outcome in (subprocess.TimeoutExpired("atm", 10), FileNotFoundError("atm"), "not json", "{}"):
+            self.assertEqual(self.run_with(outcome, lambda: close_vars_cli.started_runs("q")), "CLOSE_VARS.EVENTS_FAILED", outcome)

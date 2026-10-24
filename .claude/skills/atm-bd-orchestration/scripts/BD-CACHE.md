@@ -137,6 +137,14 @@ resolved.
 In: one SQLite file per dolt database, every active phase in it; read API;
 journal write API; drain; incremental sync; prune; status; typed errors.
 
+Writers: `sanity-close.py` journals and leaves the drain to a detached
+`bd_cache.py drain` or the cron. `atm-task-close.py` journals each bead update
+and close, keyed by vars, assignment and op. It drains at once, waiting up to
+5 × 2 s on a busy drain. An entry still pending is `BEADS.WRITE_PENDING`
+(rerun with the same vars; the key keeps it applied once), and an escalated
+entry is `BEADS.WRITE_ESCALATED`. `close-vars.py` reads the cache and re-reads
+from bd only when a field the vars need is missing there.
+
 Out (v1): creating beads (pours stay `bd import`/sc-compose), comments,
 dependency removal, float/null/structured metadata values. Agents' own `bd show`/`bd
 ready` keep reading the backend; they lag journaled writes until the drain

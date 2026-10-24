@@ -379,6 +379,13 @@ class BdCache:
         found = self.db.execute("SELECT row_json FROM beads WHERE id=?", (bead,)).fetchone()
         return json.loads(found["row_json"]) if found else None
 
+    def entry(self, seq):
+        """One journal entry by seq (state, attempts, last_error, ...)."""
+        found = self.db.execute("SELECT * FROM journal WHERE seq=?", (seq,)).fetchone()
+        if found is None:
+            raise CacheError("BD_CACHE.NO_ENTRY", f"journal entry {seq} is absent", "check the seq")
+        return dict(found)
+
     def pending(self, bead):
         return self.db.execute("SELECT * FROM journal WHERE bead=? AND state='pending' ORDER BY seq", (bead,)).fetchall()
 

@@ -6,9 +6,10 @@
 
 Every validated open task bead carries its close fields (close_fields.POURED), so the vars come from that one
 bead: the poured fields, the task ids (equal to the bead ids) and the host paths. A sanity close adds its round
-(the task's `started` events) and the reviewers of its QA bead; a QA close adds its round. The bead is read from
-bd as it is now (one `bd list --id`, pending bd-cache journal writes replayed on top); the cached row when that
-read fails, or `bd show` when the cache cannot be opened. Each fallback is named in `read_fallback`.
+(the task's `started` events) and the reviewers of its QA bead; a QA close adds its round. Beads are read from the
+bd-cache (pending journal writes replayed on top); the close hooks write through it, so it holds their recorded
+fields. When a field the vars need is missing there, the beads are re-read from bd once (`bd list --id`) and the
+vars rebuilt; `bd show` is used when the cache cannot be opened. Each fallback is named in `read_fallback`.
 
 It writes `--out` and prints JSON: role, the fields the closing agent still supplies (`remaining`) and the
 manual close commands. A bead missing a poured field is refused with the fix; never assemble its fields from
@@ -34,50 +35,74 @@ import bd_cache  # noqa: E402
 import close_fields  # noqa: E402
 
 ATM_TIMEOUT_S = 10
+BD_SHOW_TIMEOUT_S = 30
 
 
-def read(repo: Path, bead: str, fallback: list[str], cache_factory=bd_cache.BdCache) -> dict:
-    """The bead as bd has it now (one `bd list --id`), with pending journal writes replayed on top.
+# Refusals that a cached row lagging a direct `bd update` could cause; a fresh read from bd settles them.
+MISSING = ("CLOSE_VARS.NOT_POURED", "ASSIGN_VARS.NOT_RECORDED", "ASSIGN_VARS.NOT_PLANNED")
 
-    A cached row can lag a direct `bd update` until the next sync, so it is used only when the fresh read fails.
+
+def read(repo: Path, bead: str, fallback: list[str], cache_factory=bd_cache.BdCache, *, fresh: bool = False) -> dict:
+    """The bead from the bd-cache with pending journal writes replayed on top; `fresh` reads bd first.
+
+    A failed fresh read falls back to the cached row, and a cache that cannot be opened to `bd show`.
     """
     try:
         cache = cache_factory(repo)
     except (bd_cache.CacheError, OSError) as error:
         fallback.append(f"bd-cache: {error}")
         return show(repo, bead)
-    try:
-        fresh = cache.bd_rows([bead]).get(bead)
-    except (bd_cache.CacheError, OSError) as error:
-        fallback.append(f"bd list --id {bead} failed, using the cached row (may lag bd until the next sync): {error}")
+    if fresh:
         try:
-            return cache.get(bead)
-        except (bd_cache.CacheError, OSError) as cached_error:
-            fallback.append(f"bd-cache: {cached_error}")
-            return show(repo, bead)
-    if fresh is None:
-        raise close_fields.CloseFieldsError("CLOSE_VARS.READ_FAILED", f"{bead}: not found in bd",
-                                            "Check the bead id and that bd works here.")
-    cache.store(fresh)
-    return cache.view(fresh)
+            row = cache.bd_rows([bead]).get(bead)
+        except (bd_cache.CacheError, OSError) as error:
+            fallback.append(f"bd list --id {bead} failed, using the cached row: {error}")
+        else:
+            if row is None:
+                raise close_fields.CloseFieldsError("CLOSE_VARS.READ_FAILED", f"{bead}: not found in bd",
+                                                    "Check the bead id and that bd works here.")
+            cache.store(row, force=True)
+            return cache.view(row)
+    try:
+        return cache.get(bead)
+    except (bd_cache.CacheError, OSError) as error:
+        fallback.append(f"bd-cache: {error}")
+        return show(repo, bead)
 
 
 def show(repo: Path, bead: str) -> dict:
-    shown = subprocess.run(["bd", "show", bead, "--json"], cwd=repo, capture_output=True, text=True, timeout=30, check=False)
+    try:
+        shown = subprocess.run(["bd", "show", bead, "--json"], cwd=repo, capture_output=True, text=True,
+                               timeout=BD_SHOW_TIMEOUT_S, check=False)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise close_fields.CloseFieldsError("CLOSE_VARS.READ_FAILED", f"{bead}: bd show failed: {error}",
+                                            "Check that bd and its dolt server answer here (`bd version`), then rerun.") from error
     if shown.returncode != 0:
         raise close_fields.CloseFieldsError("CLOSE_VARS.READ_FAILED", f"{bead}: bd show exited {shown.returncode}: "
                                             f"{(shown.stderr or shown.stdout).strip()[-300:]}", "Check the bead id and that bd works here.")
-    rows = json.loads(shown.stdout)
-    return rows[0] if isinstance(rows, list) else rows
+    try:
+        rows = json.loads(shown.stdout)
+        return rows[0] if isinstance(rows, list) else rows
+    except (ValueError, IndexError) as error:
+        raise close_fields.CloseFieldsError("CLOSE_VARS.READ_FAILED", f"{bead}: bd show printed no bead: {error}",
+                                            "Check the bead id and the bd version.") from error
 
 
 def started_runs(task: str) -> int:
-    events = subprocess.run(["atm", "task", "events", task, "--all", "--json"], capture_output=True, text=True,
-                            timeout=ATM_TIMEOUT_S, check=False)
+    try:
+        events = subprocess.run(["atm", "task", "events", task, "--all", "--json"], capture_output=True, text=True,
+                                timeout=ATM_TIMEOUT_S, check=False)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise close_fields.CloseFieldsError("CLOSE_VARS.EVENTS_FAILED", f"atm task events {task} failed: {error}",
+                                            "Check that the ATM daemon answers (`atm task list`), then rerun.") from error
     if events.returncode != 0:
         raise close_fields.CloseFieldsError("CLOSE_VARS.EVENTS_FAILED", f"atm task events {task} exited {events.returncode}: "
                                             f"{(events.stderr or events.stdout).strip()[-300:]}", "Check that atm can read this task.")
-    count = sum(1 for event in json.loads(events.stdout)["events"] if event.get("event") == "started")
+    try:
+        count = sum(1 for event in json.loads(events.stdout)["events"] if event.get("event") == "started")
+    except (ValueError, KeyError, TypeError) as error:
+        raise close_fields.CloseFieldsError("CLOSE_VARS.EVENTS_FAILED", f"atm task events {task} printed no events: {error}",
+                                            "Check the atm version.") from error
     if count < 1:
         raise close_fields.CloseFieldsError("CLOSE_VARS.NOT_STARTED", f"{task} has no started event",
                                             f"Run `atm task start {task} \"<plan>\"` first.")
@@ -85,8 +110,11 @@ def started_runs(task: str) -> int:
 
 
 def build(repo: Path, bead: str, *, runs=started_runs) -> dict:
-    fallback: list[str] = []
-    row = read(repo, bead, fallback)
+    return cached_then_fresh(lambda fresh, fallback: _build(repo, bead, runs, fresh, fallback))
+
+
+def _build(repo, bead, runs, fresh, fallback):
+    row = read(repo, bead, fallback, fresh=fresh)
     role, values, remaining = close_fields.close_vars(row, repo)
     metadata = row.get("metadata") or {}
     derived = {}
@@ -94,7 +122,7 @@ def build(repo: Path, bead: str, *, runs=started_runs) -> dict:
         derived["round"] = metadata.get("round")
     if role == "sanity":
         derived["round"] = runs(bead)
-        derived["reviewers_round1"] = (read(repo, metadata["qa_bead"], fallback).get("metadata") or {}).get("reviewers_round1")
+        derived["reviewers_round1"] = (read(repo, metadata["qa_bead"], fallback, fresh=fresh).get("metadata") or {}).get("reviewers_round1")
     for name, value in derived.items():
         if name in remaining and value not in (None, "", []):
             values[name] = value
@@ -103,14 +131,29 @@ def build(repo: Path, bead: str, *, runs=started_runs) -> dict:
 
 
 def build_qa_assignment(repo: Path, bead: str) -> dict:
-    fallback: list[str] = []
-    row = read(repo, bead, fallback)
+    return cached_then_fresh(lambda fresh, fallback: _build_qa_assignment(repo, bead, fresh, fallback))
+
+
+def _build_qa_assignment(repo, bead, fresh, fallback):
+    row = read(repo, bead, fallback, fresh=fresh)
     checked = (row.get("metadata") or {}).get("checked_bead")
     if not checked:
         raise close_fields.CloseFieldsError("CLOSE_VARS.NOT_POURED", f"{bead}: metadata lacks checked_bead",
-                                            f"Ask the phase lead to run close_fields_backfill.py for its phase.")
-    values = close_fields.qa_assignment_vars(row, read(repo, checked, fallback), repo)
+                                            "Ask the phase lead to run close_fields_backfill.py for its phase.")
+    values = close_fields.qa_assignment_vars(row, read(repo, checked, fallback, fresh=fresh), repo)
     return {"bead": bead, "role": "qa-assignment", "vars": values, "remaining": [], "read_fallback": fallback}
+
+
+def cached_then_fresh(attempt) -> dict:
+    """Build from cached rows; a refusal for a missing field is retried once on rows read fresh from bd."""
+    fallback: list[str] = []
+    try:
+        return attempt(False, fallback)
+    except close_fields.CloseFieldsError as error:
+        if error.code not in MISSING:
+            raise
+        fallback.append(f"{error.code} on cached rows ({error}); re-read from bd")
+        return attempt(True, fallback)
 
 
 def assign_command(repo: Path, values: dict, out: str) -> list[str]:
@@ -151,7 +194,7 @@ def main(argv: list[str]) -> int:
         print(json.dumps({"ok": False, "error": error.as_json()}, indent=2))
         return 2
     for message in result["read_fallback"]:
-        print(f"close-vars: read fell back to bd show: {message}", file=sys.stderr)
+        print(f"close-vars: {message}", file=sys.stderr)
     Path(args.out).write_text(json.dumps(result["vars"], indent=2) + "\n")
     print(json.dumps({"ok": True, "bead": result["bead"], "role": result["role"], "vars_path": args.out,
                       "remaining": result["remaining"], "read_fallback": result["read_fallback"],
