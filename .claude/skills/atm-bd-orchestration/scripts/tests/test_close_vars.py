@@ -141,3 +141,53 @@ class BackfillTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FreshReadTests(unittest.TestCase):
+    """close-vars reads bd as it is now: a cached row can lag a direct `bd update` until the next sync (QA 2217)."""
+
+    def setUp(self):
+        import os
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).parent))
+        from test_bd_cache import FakeBd, workspace
+        self.saved_beads_dir = os.environ.pop("BEADS_DIR", None)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = workspace(Path(self.tmp.name))
+        self.bd = FakeBd()
+        self.bd.add("q", metadata={"round": 1})
+        self.factory = lambda repo: close_vars_cli.bd_cache.BdCache(repo, runner=self.bd)
+        self.factory(self.root).get("q")  # cached before the direct update below
+        self.bd.rows["q"]["metadata"]["layer"] = 37
+        self.bd.touch("q")
+
+    def tearDown(self):
+        import os
+        self.tmp.cleanup()
+        if self.saved_beads_dir is not None:
+            os.environ["BEADS_DIR"] = self.saved_beads_dir
+
+    def test_a_field_set_in_bd_after_the_cache_filled_is_read(self):
+        fallback: list[str] = []
+        row = close_vars_cli.read(self.root, "q", fallback, cache_factory=self.factory)
+        self.assertEqual(row["metadata"]["layer"], 37)
+        self.assertEqual(fallback, [])
+        self.assertEqual(self.factory(self.root).cached("q")["metadata"]["layer"], 37)  # the fresh row is stored
+
+    def test_pending_journal_writes_are_replayed_on_the_fresh_row(self):
+        self.factory(self.root).write("q", "update", {"set_metadata": {"commit": "abc123"}}, idem_key="k1", actor="t")
+        row = close_vars_cli.read(self.root, "q", [], cache_factory=self.factory)
+        self.assertEqual((row["metadata"]["layer"], row["metadata"]["commit"]), (37, "abc123"))
+
+    def test_a_failed_fresh_read_falls_back_to_the_cached_row_and_says_so(self):
+        self.bd.fail.append((lambda command: command[1] == "list", 1))
+        fallback: list[str] = []
+        row = close_vars_cli.read(self.root, "q", fallback, cache_factory=self.factory)
+        self.assertNotIn("layer", row["metadata"])
+        self.assertEqual(len(fallback), 1)
+        self.assertIn("using the cached row", fallback[0])
+
+    def test_a_bead_bd_does_not_have_is_refused(self):
+        with self.assertRaises(close_fields.CloseFieldsError) as raised:
+            close_vars_cli.read(self.root, "missing", [], cache_factory=self.factory)
+        self.assertEqual(raised.exception.code, "CLOSE_VARS.READ_FAILED")

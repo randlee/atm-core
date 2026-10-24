@@ -7,7 +7,8 @@
 Every validated open task bead carries its close fields (close_fields.POURED), so the vars come from that one
 bead: the poured fields, the task ids (equal to the bead ids) and the host paths. A sanity close adds its round
 (the task's `started` events) and the reviewers of its QA bead; a QA close adds its round. The bead is read from
-bd-cache, or from `bd show` when the cache cannot be read (named as `read_fallback` in the output).
+bd as it is now (one `bd list --id`, pending bd-cache journal writes replayed on top); the cached row when that
+read fails, or `bd show` when the cache cannot be opened. Each fallback is named in `read_fallback`.
 
 It writes `--out` and prints JSON: role, the fields the closing agent still supplies (`remaining`) and the
 manual close commands. A bead missing a poured field is refused with the fix; never assemble its fields from
@@ -35,11 +36,33 @@ import close_fields  # noqa: E402
 ATM_TIMEOUT_S = 10
 
 
-def read(repo: Path, bead: str, fallback: list[str]) -> dict:
+def read(repo: Path, bead: str, fallback: list[str], cache_factory=bd_cache.BdCache) -> dict:
+    """The bead as bd has it now (one `bd list --id`), with pending journal writes replayed on top.
+
+    A cached row can lag a direct `bd update` until the next sync, so it is used only when the fresh read fails.
+    """
     try:
-        return bd_cache.BdCache(repo).get(bead)
+        cache = cache_factory(repo)
     except (bd_cache.CacheError, OSError) as error:
         fallback.append(f"bd-cache: {error}")
+        return show(repo, bead)
+    try:
+        fresh = cache.bd_rows([bead]).get(bead)
+    except (bd_cache.CacheError, OSError) as error:
+        fallback.append(f"bd list --id {bead} failed, using the cached row (may lag bd until the next sync): {error}")
+        try:
+            return cache.get(bead)
+        except (bd_cache.CacheError, OSError) as cached_error:
+            fallback.append(f"bd-cache: {cached_error}")
+            return show(repo, bead)
+    if fresh is None:
+        raise close_fields.CloseFieldsError("CLOSE_VARS.READ_FAILED", f"{bead}: not found in bd",
+                                            "Check the bead id and that bd works here.")
+    cache.store(fresh)
+    return cache.view(fresh)
+
+
+def show(repo: Path, bead: str) -> dict:
     shown = subprocess.run(["bd", "show", bead, "--json"], cwd=repo, capture_output=True, text=True, timeout=30, check=False)
     if shown.returncode != 0:
         raise close_fields.CloseFieldsError("CLOSE_VARS.READ_FAILED", f"{bead}: bd show exited {shown.returncode}: "
