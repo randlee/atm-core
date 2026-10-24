@@ -17,11 +17,15 @@ use async_trait::async_trait;
 use atm_core::api::RequestDeadline;
 use atm_core::atm_temp::EnvSource;
 use atm_core::boundary::{
-    HOOK_ACTION_RESERVE_MS, HookExitCause, HookOutcome, HookRunner, HookTarget, PhaseId, sealed,
+    CronHookRunner, HOOK_ACTION_RESERVE_MS, HookExitCause, HookOutcome, HookRunner, HookTarget,
+    PhaseId, sealed,
 };
 use atm_core::doctor::hooks::{HookDoctorReply, HookDoctorRequest};
 use atm_core::error::AtmError;
-use atm_core::hook::{HookReply, HookRequest, StopReply};
+use atm_core::hook::{
+    CronHookOutcome, CronStopReply, HookReply, HookRequest, StopReply, parse_cron_stop_reply,
+    parse_cron_tick_reply,
+};
 use atm_core::types::TeamName;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
@@ -370,6 +374,40 @@ impl HookRunner for DaemonHookRunner {
             .execute(target, request.hook.as_str(), stdin, deadline, false)
             .await?;
         StopReply::parse(&output.stdout)
+    }
+}
+
+#[async_trait]
+impl CronHookRunner for DaemonHookRunner {
+    async fn run_cron(
+        &self,
+        target: &HookTarget,
+        request: &HookRequest,
+        deadline: RequestDeadline,
+    ) -> Result<CronHookOutcome, AtmError> {
+        let stdin = serde_json::to_vec(request)
+            .map_err(|error| AtmError::hook_malformed(&error.to_string()))?;
+        let output = self
+            .execute(target, request.hook.as_str(), stdin, deadline, false)
+            .await?;
+        Ok(CronHookOutcome {
+            reply: parse_cron_tick_reply(&output.stdout)?,
+            elapsed_ms: output.elapsed_ms,
+        })
+    }
+
+    async fn stop_cron(
+        &self,
+        target: &HookTarget,
+        request: &HookRequest,
+        deadline: RequestDeadline,
+    ) -> Result<CronStopReply, AtmError> {
+        let stdin = serde_json::to_vec(request)
+            .map_err(|error| AtmError::hook_malformed(&error.to_string()))?;
+        let output = self
+            .execute(target, request.hook.as_str(), stdin, deadline, false)
+            .await?;
+        parse_cron_stop_reply(&output.stdout)
     }
 }
 

@@ -18,7 +18,9 @@ use atm_storage::{
     TaskStore, TemplateCatalogStore, WriteThroughRosterStore,
 };
 
-use crate::boundary::{CronScheduleStore, HookRegistrationStore, TemplateComposer};
+use crate::boundary::{
+    CronScheduleStore, CronTransitionStore, HookRegistrationStore, TemplateComposer,
+};
 use crate::config::AtmConfig;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -325,6 +327,7 @@ pub struct LocalServiceRuntime {
     task_store: Option<std::sync::Arc<dyn TaskStore + Send + Sync>>,
     hook_registration_store: Option<Arc<dyn HookRegistrationStore>>,
     cron_schedule_store: Option<Arc<dyn CronScheduleStore>>,
+    cron_transition_store: Option<Arc<dyn CronTransitionStore>>,
     graft_receiver_endpoint_store:
         Option<std::sync::Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
@@ -438,6 +441,7 @@ impl LocalServiceRuntime {
             task_store: None,
             hook_registration_store: None,
             cron_schedule_store: None,
+            cron_transition_store: None,
             graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
@@ -607,6 +611,20 @@ impl LocalServiceRuntime {
         self.cron_schedule_store.clone().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "the cron schedule store was not installed in this runtime",
+            )
+        })
+    }
+
+    #[must_use]
+    pub fn with_cron_transition_store(mut self, store: Arc<dyn CronTransitionStore>) -> Self {
+        self.cron_transition_store = Some(store);
+        self
+    }
+
+    pub fn cron_transition_store(&self) -> Result<Arc<dyn CronTransitionStore>, AtmError> {
+        self.cron_transition_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the cron transition store was not installed in this runtime",
             )
         })
     }

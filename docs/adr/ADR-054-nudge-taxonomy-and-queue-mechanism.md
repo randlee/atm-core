@@ -516,6 +516,9 @@ existing committed cron lifecycle template through an authenticated transport;
 they do not introduce a third nudge kind, a mailbox/task/ack side effect, or a
 change to the Steer/Queue taxonomy. This is a narrow inventory addition under
 the BK-14 authorization recorded in ATM message `01M5NJ8TVNXRFC78ZHKCVR905P`.
+The bootstrap transport wiring also uses `lifecycle_nudge_emitter` and
+`emit_nudge` to carry the same typed payload to its selected transport; these
+identifiers do not change delivery semantics or the nudge-kind taxonomy.
 The associated Graft/Python transport identifiers `HostCronNudge`,
 `inject_cron_nudge`, `spawn_host_cron_nudge_helper`,
 `receive_host_cron_nudge_result`, and `PyCronNudge` are also admitted; they are

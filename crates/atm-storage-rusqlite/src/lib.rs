@@ -941,6 +941,7 @@ impl StorageFactory for SqliteStorageFactory {
             task_store: backend.task_store(),
             hook_registration_store: backend.hook_registration_store(),
             cron_schedule_store: backend.cron_schedule_store(),
+            cron_transition_store: backend.cron_transition_store(),
             graft_receiver_endpoint_store: backend.graft_receiver_endpoint_store(),
             peer_config_store: backend.peer_config_store(),
             template_catalog_store: backend.template_catalog_store(),
