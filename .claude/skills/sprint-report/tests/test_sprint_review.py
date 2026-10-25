@@ -59,13 +59,13 @@ class ViewTests(unittest.TestCase):
         snapshot = {'captured_at': 'now', 'errors': {}}
         calls = [] if calls is None else calls
         plan_html = repo / 'plans/phase-d/phase-d-dag.html'
-        with patch.object(dag, 'run_json', return_value=beads), patch.object(dag, 'collect_state', return_value=snapshot), patch.object(dag, 'states', return_value={'dev': {}, 'gate': {}}), patch.object(dag, 'qa_states', return_value={'dev': {}, 'gate': {}}), patch.object(dag, 'overlay', return_value=svg), patch.object(dag, 'render', side_effect=lambda mode, source, target: target.write_text(svg)), patch.object(dag, 'open_wyvern', side_effect=lambda path: calls.append('view')):
+        with patch.object(dag, 'phase_beads', side_effect=AssertionError('the caller passes the phase beads in')), patch.object(dag, 'collect_state', return_value=snapshot), patch.object(dag, 'states', return_value={'dev': {}, 'gate': {}}), patch.object(dag, 'qa_states', return_value={'dev': {}, 'gate': {}}), patch.object(dag, 'overlay', return_value=svg), patch.object(dag, 'render', side_effect=lambda mode, source, target: target.write_text(svg)), patch.object(dag, 'open_wyvern', side_effect=lambda path: calls.append('view')):
             # Dependency availability is a CLI prerequisite, not part of this boundary test.
             with patch.object(dag, 'RENDERER', scratch):
                 (scratch / 'node_modules/@viz-js/viz').mkdir(parents=True, exist_ok=True)
                 with patch.object(dag, 'html_view', return_value='<html>' + svg + '</html>'):
                     dag.generate(repo, index, {}, 'd', output=scratch / 'out/phase-d-dag', open_view=view,
-                                 plan_html=plan_html)
+                                 plan_html=plan_html, beads=beads)
         return plan_html
 
     def test_generation_writes_plan_html_and_never_views_by_default(self):

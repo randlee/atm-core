@@ -338,7 +338,8 @@ announced per phase; any other sync failure whose cause differs from
 outage not yet announced is sent once to every active phase's lead (every
 configured lead when none is known active), then marked; every escalated entry with no
 `announced_at` is sent to its phase's lead with the `resolve` command, then
-marked. Messages go through `atm send <lead>@<team> --team tool` as `cron`.
+marked. Messages go through `atm send <lead>@<team> --team tool` as `atm-bd@tool`
+(the installer's member; `cron@tool` is atm's daemon-owned scheduler principal and refuses ordinary sends).
 Any message not delivered (or an entry whose phase has no lead) makes the
 reply `refused` with the list, and is retried next tick; otherwise
 `pass-through`. Missing `custom.team` is refused.

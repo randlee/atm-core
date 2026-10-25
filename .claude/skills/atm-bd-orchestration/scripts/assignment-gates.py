@@ -70,6 +70,11 @@ def claimable(bead: dict[str, Any], identity: str) -> bool:
     return bead.get("status") == "open" and (not bead.get("assignee") or bead.get("assignee") == identity)
 
 
+def own_claim(bead: dict[str, Any], identity: str) -> bool:
+    """A replay finds its own claimed bead in progress, which `bd ready` no longer lists."""
+    return bead.get("status") == "in_progress" and bead.get("assignee") == identity
+
+
 def has_prior_pass(output: str) -> bool:
     """A `bd history --json` snapshot of the bead closed with reason `PASS at <sha>`; a note or reason that merely
     mentions PASS is not one. Output that is not a JSON list of snapshots, each with an `Issue` object, raises."""
@@ -139,10 +144,12 @@ def dev_gate(args: argparse.Namespace, runner: Runner, identity: str) -> str:
     if plan.returncode:
         raise RuntimeError(f"validate-plan exit {plan.returncode}: {(plan.stderr or plan.stdout).strip()}")
     ready = run_json(runner, "bd", "ready", "-n", "0", "--json")
-    if not any(row.get("id") == args.bead for row in ready):
-        return "NOT_READY"
     bead = run_json(runner, "bd", "show", args.bead, "--json")[0]
-    if not claimable(bead, identity):
+    if not any(row.get("id") == args.bead for row in ready):
+        if not own_claim(bead, identity) or any(dep.get("dependency_type") == "blocks" and dep.get("status") != "closed"
+                                                for dep in bead.get("dependencies") or []):
+            return "NOT_READY"
+    elif not claimable(bead, identity):
         return "UNCLAIMABLE"
     declared = declared_pr_target(runner, bead)
     if declared is not None and not descends(runner, str(declared), args.pr_target, git_dir(args)):
@@ -157,9 +164,8 @@ def sanity_gate(args: argparse.Namespace, runner: Runner, identity: str) -> str:
         return "COMMIT_REQUIRED"
     ready = run_json(runner, "bd", "ready", "-n", "0", "--json")
     if not any(row.get("id") == args.bead for row in ready):
-        # A replay finds its own claimed bead in progress, which `bd ready` no longer lists.
         bead = run_json(runner, "bd", "show", args.bead, "--json")[0]
-        if not (bead.get("status") == "in_progress" and bead.get("assignee") == identity):
+        if not own_claim(bead, identity):
             return "NOT_READY"
     if has_prior_pass(run(runner, "bd", "history", args.bead, "--json")):
         return "SANITY_FROZEN"

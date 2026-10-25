@@ -1,9 +1,9 @@
 {
-  "version": "0.19.0",
-  "commit": "55896ef5cf35d65bfe8ca996866eefe2430b5d1e",
+  "version": "0.19.2",
+  "commit": "16952200554e5b39707362f6dbf3f352be159e92",
   "source": {
     "ref": "bundled",
-    "manifest_aggregate": "91116bc432441e1ad85fcf96708d1c5285cd8206f95a4b9f4ce857a81c829d1d"
+    "manifest_aggregate": "b18a46a404694c13ae388d33d5aed30f240ed6fd5aa353e857f9035d675e328d"
   },
   "files": [
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/SKILL.md",
-      "sc_sha": "a900a0defbc3d241a4fb93c40dffb119ecf235b8479fddcaf08f4741450aec1f"
+      "sc_sha": "cdd6c8f08b78b9b0e4857071eebbf2a8950bd1f624e3c43abd18ad4edcd9be81"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/blocking-findings-guidelines.md",
@@ -248,15 +248,15 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/BD-CACHE.md",
-      "sc_sha": "fd54732ca25cae1f9c56535b5f5b546331963c5fdd71bf9c49e5351659ab098c"
+      "sc_sha": "fc0a17bd8553c51d336fc411bbef5ecca8e7c11cc804ee75f15b789f97056555"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/SANITY-CLOSE-HOOK.md",
-      "sc_sha": "27b68311613fddf504895344559a2957753405b9a478220878f68da5157b0144"
+      "sc_sha": "26d1a276f67e919b89da7ccd9948e4bd56d4b4ce30d65f4a54262c00ed9a46ba"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/assignment-gates.py",
-      "sc_sha": "bca0f20a25459198e8302c7a548403bafb5dc8ab2109e2b26ea1032574016fe7"
+      "sc_sha": "b643df8cc844efb83e8123cbd18554062a37802edf518518c477a2a36c2d5bdb"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/atm-hook-doctor.py",
@@ -264,7 +264,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/atm-task-close.py",
-      "sc_sha": "5fab1ce9b54052ec150ff72e0614112906989a18ceccac908c70895a0e526cab"
+      "sc_sha": "1bfa1557e1e7584ea456b5df18e913d7078e9f7e64e9253f70d48bedd151aa23"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/bd_cache.py",
@@ -272,7 +272,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/bd_cache_cron.py",
-      "sc_sha": "ef151910d0295747243ff173d7c1f9f4ea5396e932c9a872e296339a79009797"
+      "sc_sha": "42d34de537bfe1e80262938a860c2b86ec12720671d008762cd18940729cc6e3"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/bd_models.py",
@@ -468,7 +468,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/task_close_world.py",
-      "sc_sha": "1e4f2a120a558d05189c92e384162c45c5d54de31584877f5a73c7942e6814af"
+      "sc_sha": "ac8afe88d6d105a412fd91839c7c8f0339e5d889fcd819afc9e2887d00ece747"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_agent_prompts.py",
@@ -476,7 +476,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_assignment_gates.py",
-      "sc_sha": "fb853ecc71634eeeb050c56d3e9be336b241a42960a898a4704e8a1296c6f78f"
+      "sc_sha": "1317d27d1726396205b1f0d3bbecf13aa661758d6318df84426c7cc9e79ce3a8"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_atm_hook_doctor.py",
@@ -492,7 +492,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_bd_cache_cron.py",
-      "sc_sha": "33c692152bf2c41a5b6d9e37bfa752abfb155be46f81f03c08764234ba4849d4"
+      "sc_sha": "cd05229021c52c0e147669cc853d53f3b3de187dd9ef26703ec7f559f8451b8f"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_bead_groups.py",
@@ -512,7 +512,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_close_vars.py",
-      "sc_sha": "be3991d2e204ba6c57ccd08fe1df3071967f9a7016df8c3795796fa04ff260a9"
+      "sc_sha": "0a3886046501f3387bb41c0d65e24d3a09c98ac03a64ff17174b39995ac5bfa1"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_fix_round_scope.py",
@@ -568,11 +568,11 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_task_close.py",
-      "sc_sha": "e65f9609b197d400d9f0c64a0a6cfc2e288bc2e4fdc400d0a81275d36061a8af"
+      "sc_sha": "03aa15689756880f9bf685a14fdb0f49bd25bf2c1061d2deac248e7551c2beb1"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_templates.py",
-      "sc_sha": "e3965e18175fcf066dff7b9ae05a0e417fd908d73de9c345df834dc3c4eba8fc"
+      "sc_sha": "971273a6d105507dcf4fb882327bca599bdf98c99527c0c3888552d6bf04d81d"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_transitions.py",
@@ -612,7 +612,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/templates/dev-template.xml.j2",
-      "sc_sha": "8b2b810015b5b3d596138ab73f3e5876c836098f817e94057fdb6df38abcf9de"
+      "sc_sha": "f81e29b2a9bd8c91293b543861d973feeb65638a4c347ae33982c00bd220e191"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/templates/finding-bead.json.j2",
@@ -620,7 +620,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/templates/fix-assignment.xml.j2",
-      "sc_sha": "89381dec7db4a1749ca8dba92d4a56c26f70bc977429ddfc804bbd8262466d6e"
+      "sc_sha": "9e2a3685421b33d0a1834c2518bf5359c577f50f2347175c2139529471ef694a"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/templates/fix-complete.md.j2",
@@ -732,7 +732,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/SKILL.md",
-      "sc_sha": "97fabf5a2c76adcf5a8c452b799b549090fbd2d7e427f61d0e259ed818915c12"
+      "sc_sha": "2f79fbef7a4ee63d1bdeb4838f3b73204099ae9f81b3ca2cda06878a1b187ab9"
     },
     {
       "path": ".claude/skills/atm-beads/examples/dev-sanity-bead-vars-d-4.json",
@@ -756,7 +756,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/references/installation-and-troubleshooting.md",
-      "sc_sha": "9554eb6e05a4aff4e32f43625ccd7a67fdde1e12bfaf35f2e09705749a07e209"
+      "sc_sha": "2a12fe87fb31472c71fa0ff54b1ecbe8c81e07a4f273e536fb7568d66a75d22b"
     },
     {
       "path": ".claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md",
@@ -828,7 +828,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/scripts/close_fields.py",
-      "sc_sha": "4ffab9fe4252bb301c40aaa172ebfdb7ae0381cb5c860dd76f8681a751d5de25"
+      "sc_sha": "304865a0a6d02fd0b472b5778d3ddfa95e1ffdfef80fe0b2dcb315f79ad708c9"
     },
     {
       "path": ".claude/skills/atm-beads/scripts/phase-config",
@@ -936,7 +936,7 @@
     },
     {
       "path": ".claude/skills/sprint-report/SKILL.md",
-      "sc_sha": "88c53f3385c57ca25d5ec0a3a993fd304a4b9c99c78a10c70bb1d870f1ca795e"
+      "sc_sha": "10fe6118c016f3679a3b645eba36562ade270b761d88450d5a50ba09583a4c79"
     },
     {
       "path": ".claude/skills/sprint-report/dag-view.html",
@@ -948,11 +948,11 @@
     },
     {
       "path": ".claude/skills/sprint-report/renderer/package-lock.json",
-      "sc_sha": "d7ea6972f01eb4326a8e11c32db134ef6213ebe6f00fa87402b6655a7108bc5c"
+      "sc_sha": "e2270337d5ff1f3e45260fd9a8f6224a0212c5e65dc77ef1fbe82cc7236a51d4"
     },
     {
       "path": ".claude/skills/sprint-report/renderer/package.json",
-      "sc_sha": "e6f8675d074a9f1ee32c9dcb062da6e9ef4c6a867e975e9b997f17dd1a3cadbd"
+      "sc_sha": "4963853ce3bce9827bbb6591ab81345aa18b32802fae7ca7d4514c239627b963"
     },
     {
       "path": ".claude/skills/sprint-report/renderer/render.cjs",
@@ -963,16 +963,24 @@
       "sc_sha": "71c48027e35dc2575a3a34aaeb0748b289ee609712ddd0150cf373c06e5c84b5"
     },
     {
+      "path": ".claude/skills/sprint-report/scripts/phase_beads.py",
+      "sc_sha": "b1465f0ccc9d7e45a9b88de5945e4c5b01b2fc269c895837ddab87201b756c59"
+    },
+    {
       "path": ".claude/skills/sprint-report/scripts/sprint-report",
-      "sc_sha": "8d701bb3c0444a27ce8c9e534753d9c82797557548645bf77981d370c930c20a"
+      "sc_sha": "b25bc5a27c9cfeba03afc2be5b0a2fa0799c8188d127a213e39be383ba80c242"
     },
     {
       "path": ".claude/skills/sprint-report/scripts/sprint_dag.py",
-      "sc_sha": "9c33369fcd3bd766387ba28fd50bab83d8b7e0fd009be7bf1199582fc518c347"
+      "sc_sha": "326f87a5378dad4f5be020c252229883a36745bf6e5ae8ba0c2f8d6cac72679b"
     },
     {
       "path": ".claude/skills/sprint-report/scripts/sprint_qa.py",
       "sc_sha": "eb34b586df5cb80553619ec5f91342c163bf01955efe063e32d6b81c514d013b"
+    },
+    {
+      "path": ".claude/skills/sprint-report/tests/test_phase_beads.py",
+      "sc_sha": "f16f979262dd31e5a8324e7eb566f407398e40465d2ef49ceac2aa51dcc5bbbe"
     },
     {
       "path": ".claude/skills/sprint-report/tests/test_sprint_dag.py",
@@ -984,7 +992,7 @@
     },
     {
       "path": ".claude/skills/sprint-report/tests/test_sprint_review.py",
-      "sc_sha": "1cbc396b462ff7b98f09ab0cafb4b9c319c0912e9ad5508bf39b9e1d9ef3dfe2"
+      "sc_sha": "e05cb87c7e23b7c4d0a97bf80d54ee3685928b4eecae3e70bf5f183dc13a59a9"
     },
     {
       "path": ".claude/skills/sprint-review/SKILL.md",

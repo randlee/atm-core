@@ -186,3 +186,24 @@ def test_undelivered_outage_announcement_is_retried(setup):
     assert run(setup)["result"] == "refused"
     assert cache.outage()["announced_at"] is None
     assert run(setup) == {"result": "pass-through"} and len(sender.sent) == 1
+
+
+@pytest.mark.parametrize("code, delivered", [(0, True), (1, False)])
+def test_send_runs_atm_send_as_atm_bd_at_tool_and_reports_delivery(monkeypatch, code, delivered):
+    # cron@tool is atm's daemon-owned scheduler principal and refuses ordinary sends; the module sends as the
+    # installer's atm-bd@tool member, and a refused send stays undelivered.
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, code, "", "" if code == 0 else "refused")
+
+    monkeypatch.setattr(cron.subprocess, "run", run)
+    monkeypatch.setenv("ATM_IDENTITY", "someone")
+    monkeypatch.setenv("ATM_TEAM", "elsewhere")
+    ok, _detail = cron.send("dev-team", "lead", "body")
+    assert ok is delivered
+    [(argv, kwargs)] = calls
+    assert argv == [cron.ATM, "send", "lead@dev-team", "--team", "tool", "--stdin", "--json"]
+    assert kwargs["input"] == "body"
+    assert (kwargs["env"]["ATM_IDENTITY"], kwargs["env"]["ATM_TEAM"]) == ("atm-bd", "tool")
