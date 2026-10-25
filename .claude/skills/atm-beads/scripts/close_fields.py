@@ -81,12 +81,14 @@ def close_vars(row: dict, repo: Path) -> tuple[str, dict, list[str]]:
 
 # The checked bead records these at its dev or fix close (atm-task-close.py); a QA assignment takes them from it.
 RECORDED = ("commit", "branch", "pr_number")
+# Also recorded there: the PR's actual base; a bead closed before it was recorded falls back to the poured base.
+RECORDED_BASE = "pr_base"
 
 
 def qa_assignment_vars(qa_row: dict, checked_row: dict, repo: Path) -> dict:
     """The `templates.qa` vars of one QA bead: its poured fields plus the PR its checked bead recorded.
 
-    The PR, commit and branch come from the checked bead, never from hand-assembled vars, so a QA assignment
+    The PR, its base, commit and branch come from the checked bead, never from hand-assembled vars, so a QA assignment
     cannot render without its PR (#2214). A value the QA bead also holds must agree with the checked bead.
     """
     role, values, _ = close_vars(qa_row, repo)
@@ -114,7 +116,7 @@ def qa_assignment_vars(qa_row: dict, checked_row: dict, repo: Path) -> dict:
             "dev_task_id": values["checked_bead"], "sanity_task_id": metadata.get("sanity_bead") or "",
             "phase": metadata["phase"], "phase_feature": metadata["phase_feature"], "sprint": metadata["sprint"],
             "sprint_bead": metadata["sprint_bead"], "stack": metadata["stack"], "layer": metadata["layer"],
-            "round": metadata["round"], "base": metadata["base"], "worktree_path": values["worktree_path"],
+            "round": metadata["round"], "base": str(checked.get(RECORDED_BASE) or metadata["base"]), "worktree_path": values["worktree_path"],
             "policy_path": metadata["policy_path"], "reviewers_round1": metadata["reviewers_round1"],
             "commit": str(checked["commit"]), "branch": str(checked["branch"]), "pr_number": str(checked["pr_number"]),
             "carry_forward": checked_row["id"] if is_fix else ""}

@@ -104,6 +104,15 @@ class QaAssignmentTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "ASSIGN_VARS.NOT_PLANNED")
 
 
+    def test_base_is_the_pr_base_the_checked_bead_recorded_not_the_poured_target(self):
+        # The poured base is pr_target; the PR's actual base is the layer below, recorded at the dev or fix close.
+        recorded = {**FIX, "metadata": {**FIX["metadata"], "pr_base": "fix/d-1-f0"}}
+        self.assertEqual(close_fields.qa_assignment_vars(QA, recorded, REPO)["base"], "fix/d-1-f0")
+
+    def test_base_falls_back_to_the_poured_base_when_the_checked_bead_recorded_none(self):
+        self.assertEqual(close_fields.qa_assignment_vars(QA, FIX, REPO)["base"], "sprint/d-1")
+
+
 class BackfillTests(unittest.TestCase):
     def group(self, **dev_meta):
         container = {"id": "t-d-1", "status": "open", "labels": ["phase-d"], "title": "d-1: the work", "metadata": {}}

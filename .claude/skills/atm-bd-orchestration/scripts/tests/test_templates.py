@@ -902,3 +902,14 @@ def test_hook_repair_template_uses_installed_runner_path():
     for flag, field in (("--phase", "phase"), ("--team", "team"), ("--original-task", "original_task"), ("--lead", "phase_lead")):
         assert f"{flag} {values[field]}" in result.stdout
     assert "/.claude/skills/atm-bd-orchestration/scripts/" not in result.stdout
+
+
+def test_shipped_dev_and_fix_assignments_carry_no_host_build_policy():
+    # Repository build policy (cargo parallelism, host sharing) belongs in the consumer's policy_path, not in the
+    # templates every installing repository receives.
+    for template, example in (("dev-template.xml.j2", "dev-template-vars.json"),
+                              ("fix-assignment.xml.j2", "fix-assignment-vars.json")):
+        result = _render(template, _example(example))
+        assert result.returncode == 0, result.stderr
+        assert "CARGO_BUILD_JOBS" not in result.stdout, template
+        assert "devs share this host" not in result.stdout, template

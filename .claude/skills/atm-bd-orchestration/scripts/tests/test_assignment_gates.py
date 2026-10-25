@@ -172,6 +172,17 @@ class AssignmentGateTests(unittest.TestCase):
                ("bd", "show", "container", "--json"): (0, dumped([{"metadata": {"pr_target": "other"}}]))}
         self.assertEqual(gates.evaluate(ns("dev"), dev_runner(fix)), "READY")  # a fix layer's target is set at dispatch
 
+    def test_dev_rerun_after_the_callers_own_claim(self):
+        unlisted, show = ("bd", "ready", "-n", "0", "--json"), ("bd", "show", "bead", "--json")
+        def dep(status, kind="blocks"): return {"id": "other", "status": status, "dependency_type": kind}
+        for assignee, deps, expected in (("terra", [], "READY"), ("someone-else", [], "NOT_READY"),
+                                         ("terra", [dep("open")], "NOT_READY"), ("terra", [dep("closed")], "READY"),
+                                         ("terra", [dep("open", "parent-child")], "READY")):
+            runner = dev_runner({unlisted: (0, "[]"), show: (0, dumped([{"status": "in_progress", "assignee": assignee,
+                                 "dependencies": deps, "metadata": {"difficulty": "normal", "pr_target": "target"}}]))})
+            with self.subTest(assignee=assignee, deps=deps):
+                self.assertEqual(gates.evaluate(ns("dev"), runner), expected)
+
     def test_dev_gate_runs_validate_plan_in_primary_and_git_in_worktree(self):
         runner = dev_runner({("git", "-C", "/wt", "merge-base", "--is-ancestor", "origin/target", "HEAD"): (0, "")})
         self.assertEqual(gates.evaluate(ns("dev", worktree="/wt"), runner), "READY")

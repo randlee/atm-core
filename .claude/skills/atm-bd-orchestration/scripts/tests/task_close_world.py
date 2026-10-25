@@ -84,6 +84,7 @@ class World:
         self.concurrent_metadata = None
         self.reassign_after_write = None
         self.overrides = {}
+        self.hooks = []   # `atm hook list --phase <x> --json` rows
         monkeypatch.setenv("ATM_IDENTITY", "caller")
         monkeypatch.delenv("BEADS_DIR", raising=False)
 
@@ -164,6 +165,8 @@ class World:
             self.beads[argv[2]]["close_reason"] = argv[argv.index("--reason") + 1]
         elif argv[:3] == ["atm", "task", "events"]:
             output = {"events": self.tasks.get(argv[3], [])}
+        elif argv[:3] == ["atm", "hook", "list"]:
+            output = [row for row in self.hooks if row["phase"] == argv[argv.index("--phase") + 1]]
         elif argv[:3] == ["atm", "task", "close"]:
             write = True
             if "--template" in argv:

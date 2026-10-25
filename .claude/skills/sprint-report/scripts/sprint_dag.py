@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 
 from sprint_index_common import run_json, index_bead_pairs, validate_index
 from sprint_qa import choose_round, qa_icon, qa_verdict, findings_summary
+from phase_beads import phase_beads
 
 RENDERER = Path(__file__).resolve().parents[1] / 'renderer'
 NS = 'http://www.w3.org/2000/svg'
@@ -64,7 +65,7 @@ def build_graph(index, beads):
             'render_direction': 'prerequisite to dependent'}
 
 
-def collect_state(repo, graph, beads, counts):
+def collect_state(repo, graph, beads, counts, phase):
     errors = {}
     def history(key):
         try:
@@ -84,7 +85,8 @@ def collect_state(repo, graph, beads, counts):
         tasks = {}
         errors['task_list'] = str(exc)
     blocked = {b['id']: b.get('blocked_by', [])
-               for b in run_json(repo, 'bd', 'blocked', '--json')}
+               for b in run_json(repo, 'bd', 'blocked', '-l', f'phase-{phase}',
+                                 '--label-any', 'stage:dev,stage:dev-sanity', '--json')}
     return {'beads': beads, 'tasks': tasks, 'blocked': blocked, 'events': histories,
             'iterations': counts, 'errors': errors,
             'captured_at': datetime.now(timezone.utc).isoformat()}
@@ -365,7 +367,7 @@ def open_wyvern(artifact):
 
 
 def generate(repo, index, counts, phase, output=None, open_image=False, open_view=False,
-             plan_html=None):
+             plan_html=None, beads=None):
     if not (RENDERER / 'node_modules/@viz-js/viz').exists():
         raise RuntimeError(f'DAG renderer dependencies missing; run npm ci --prefix {RENDERER}')
     phase = str(phase).removeprefix('phase-')
@@ -374,9 +376,9 @@ def generate(repo, index, counts, phase, output=None, open_image=False, open_vie
     output.parent.mkdir(parents=True, exist_ok=True)
     def path(suffix):
         return output.parent / (output.name + suffix)
-    beads = {b['id']: b for b in run_json(repo, 'bd', 'list', '--all', '-n', '0', '--json')}
+    beads = {b['id']: b for b in (beads if beads is not None else phase_beads(repo, phase))}
     graph = build_graph(index, beads)
-    snapshot = collect_state(repo, graph, beads, counts)
+    snapshot = collect_state(repo, graph, beads, counts, phase)
     icons = states(graph, snapshot, index)
     qa = qa_states(graph, beads, index)
     for key in icons:

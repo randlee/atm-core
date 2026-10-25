@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
 from sprint_index_common import load_phase_plan, run_json, index_bead_pairs, phase_id, sprint_beads
 from sprint_qa import metadata, choose_round, qa_verdict, qa_icon, findings_summary
+from phase_beads import phase_beads
 from plan_contract import DIFFICULTY_MODELS, difficulty_tiers, model_matches
 import repo_config
 import sc_render
@@ -317,16 +318,16 @@ def main() -> int:
         rows = index.get("sprints")
         if not isinstance(rows, list) or not rows:
             raise RuntimeError("sprint index contains no sprints")
+        all_beads = phase_beads(common_dir.parent, phase)
         if args.dag or args.view:
             from sprint_dag import generate
             plan_html = None if args.output else (
                 repo / repo_config.load(repo)["plans_dir"] / f"phase-{phase}" / f"phase-{phase}-dag.html")
             return generate(repo, index, sanity_runs, phase, args.output, args.open, args.view,
-                            plan_html=plan_html)
+                            plan_html=plan_html, beads=all_beads)
         row_ids = list(index_bead_pairs(index))
-        all_beads = run_json(repo, "bd", "list", "--all", "-n", "0", "--json")
         if args.dispatch:
-            ready = run_json(repo, "bd", "ready", "-n", "0", "--json")
+            ready = run_json(repo, "bd", "ready", "-l", f"phase-{phase}", "-n", "0", "--json")
             members = run_json(repo, "atm", "members", "--json")
             if not isinstance(members, list):
                 members = members.get("members", [])
@@ -345,7 +346,7 @@ def main() -> int:
                         descendants.add(str(bead["id"])); changed = True
             print(render_dispatch(dispatch_rows([bead for bead in ready if str(bead.get("id")) in descendants], members, active), members))
             return 0
-        blocked_ids = {bead["id"] for bead in run_json(repo, "bd", "blocked", "--json")}
+        blocked_ids = {bead["id"] for bead in run_json(repo, "bd", "blocked", "-l", f"phase-{phase}", "-l", "stage:dev", "--json")}
         dev_ids = set(row_ids)
         sanity_by_dev: dict[str, dict[str, Any]] = {}
         qa_by_dev: dict[str, list[dict[str, Any]]] = {}
