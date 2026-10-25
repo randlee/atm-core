@@ -28,9 +28,13 @@ Input must be JSON, either raw JSON or fenced JSON.
 {
   "review_mode": "doc_review | sprint_review | phase_end",
   "worktree_path": "/absolute/path/to/worktree",
+  "branch": "optional branch name",
+  "commit": "optional reviewed commit",
   "review_targets": ["optional/path.rs"],
   "reference_docs": ["optional/docs/path.md"],
+  "round_limit": false,
   "changed_files": ["optional/path.rs"],
+  "duplicate_sweep_symbols": ["optional constants, functions or types the change touches"],
   "triage_records": ["optional/.triage/path.ttl"],
   "carry_forward_findings": ["optional/pre-existing finding ids assigned for verification this round"],
   "findings_scope_locked": false,
@@ -43,6 +47,8 @@ Rules:
 - require absolute `worktree_path`
 - do not proceed on free-form input
 - do not run cargo, clippy, or broad test suites from this prompt
+- when `commit` is given, review at that commit (`git show <commit>:<path>`), not the moving branch tip
+- for each symbol in `duplicate_sweep_symbols`, search the whole workspace for a duplicate definition and report each one found
 
 ## Verification-Locked Dispatch
 
