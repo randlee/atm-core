@@ -8,7 +8,6 @@
 
 use std::path::{Path, PathBuf};
 
-#[cfg(unix)]
 use std::fs;
 
 use atm_storage::{AtmError, HostName, InstallerId, PluginSenderId, ToolKeyId};
@@ -86,6 +85,20 @@ pub fn system_trust_root_path() -> Result<PathBuf, AtmError> {
         Err(AtmError::config(
             "protected tool sender trust root is unavailable on this platform",
         ))
+    }
+}
+
+/// Load the protected policy when an administrator installed one.
+///
+/// Signed tool-sender admission is suspended (ADR-066 D4), so a missing trust
+/// root is not an error: the daemon starts with signed admission unavailable.
+/// A file that exists but is unreadable, unprotected, or malformed still fails.
+pub fn load_optional_protected_tool_sender_configs()
+-> Result<Option<ProtectedToolSenderConfigs>, AtmError> {
+    let path = system_trust_root_path()?;
+    match fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        _ => load_from_protected_path(&path).map(Some),
     }
 }
 

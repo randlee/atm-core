@@ -124,10 +124,15 @@ pub fn claim_verified_tool_runtime(admission: impl Into<ToolSenderCapability>) -
 pub fn resolve_sender_claim(claim: SenderClaim) -> Result<AgentAddress, crate::error::AtmError> {
     match claim {
         SenderClaim::Ordinary { address, caller } => {
-            if address.team() == Some(&TeamName::from_validated("tool")) {
+            // Signed admission is suspended (ADR-066 D4): an ordinary caller
+            // in team `tool` is valid once it matches the authenticated
+            // identity below. The daemon-owned `cron` principal stays reserved.
+            if address.team() == Some(&TeamName::from_validated("tool"))
+                && address.agent().as_str() == "cron"
+            {
                 return Err(crate::error::AtmError::validation_with_recovery(
-                    "virtual tool senders require daemon registry admission",
-                    "use an authenticated ordinary sender or the daemon-owned cron/plugin path",
+                    "cron@tool is the daemon-owned scheduler principal",
+                    "use a different ordinary sender identity or the daemon-owned cron path",
                 ));
             }
             if address.team() != Some(&caller.caller_team)
@@ -182,6 +187,33 @@ mod tests {
                 "{address} must not become an ordinary emission sender"
             );
         }
+    }
+
+    #[test]
+    fn ordinary_tool_team_caller_resolves_but_cron_stays_reserved() {
+        let tool_caller = |name: &str| CallerContext {
+            caller_identity: AgentName::from_validated(name),
+            caller_chat_id: None,
+            caller_team: TeamName::from_validated("tool"),
+            activity_observation: None,
+        };
+        let accepted: atm_storage::AgentAddress = "atm-bd@tool".parse().expect("address");
+        assert_eq!(
+            resolve_sender_claim(SenderClaim::Ordinary {
+                address: accepted.clone(),
+                caller: tool_caller("atm-bd"),
+            })
+            .expect("ADR-066 D4: ordinary tool-team caller"),
+            accepted
+        );
+        assert!(
+            resolve_sender_claim(SenderClaim::Ordinary {
+                address: "cron@tool".parse().expect("address"),
+                caller: tool_caller("cron"),
+            })
+            .is_err(),
+            "the daemon-owned cron principal cannot be claimed as an ordinary sender"
+        );
     }
 
     #[test]
