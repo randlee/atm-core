@@ -37,14 +37,6 @@ bootstrap *args:
 _py *args:
     {{python_cmd}} {{args}}
 
-[private]
-_fmt-write:
-    cargo fmt --all
-
-[private]
-_fmt-check:
-    cargo fmt --all --check
-
 # Format the Rust workspace or run the formatting gate.
 fmt mode='check':
     cargo fmt --all {{if mode == "check" { "-- --check" } else { "" }}}
@@ -63,47 +55,6 @@ _lint-clippy:
 _sc-lint-clippy target:
     {{sc_lint_clippy_cmd}} {{target}}
 
-[private]
-_lint-deny:
-    {{python_cmd}} .just/lint_cargo_deny.py
-
-[private]
-_lint-shear:
-    {{python_cmd}} .just/lint_cargo_shear.py
-
-[private]
-_lint-boundaries:
-    {{python_cmd}} .just/lint_boundaries.py
-
-[private]
-_lint-silent-emit:
-    {{python_cmd}} scripts/check-silent-emit.py
-
-[private]
-_lint-runtime-stderr:
-    {{python_cmd}} scripts/check-runtime-stderr.py
-
-[private]
-_lint-function-length:
-    {{python_cmd}} scripts/check-function-length.py
-
-[private]
-_lint-legacy-mailbox-paths:
-    {{python_cmd}} scripts/check-legacy-mailbox-paths.py
-
-[private]
-_lint-nudge-taxonomy:
-    {{python_cmd}} scripts/check-nudge-taxonomy.py
-
-[private]
-_lint-capability-degradation:
-    {{python_cmd}} scripts/check-capability-degradation.py
-
-# Verify crate/release versions stay aligned.
-[private]
-_lint-version:
-    {{python_cmd}} .just/check_version_sync.py
-
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
     {{python_cmd}} .just/run_version.py {{mode}}
@@ -112,40 +63,6 @@ version mode='current':
 # publish the matching prerelease/vX.Y.Z tag. Use --dry-run to inspect the plan.
 prerelease-tag *args:
     {{python_cmd}} .just/prerelease_tag.py {{args}}
-
-# Enforce RULE-008 for test and cfg(test) code.
-[private]
-_lint-identities:
-    {{python_cmd}} .just/check_test_identity_literals.py
-
-[private]
-_lint-env-var-boundary:
-    {{python_cmd}} .just/check_env_var_boundary.py
-
-[private]
-_lint-fixed-sleep:
-    {{python_cmd}} .just/check_fixed_sleep_hygiene.py
-
-[private]
-_lint-ttl-triage:
-    {{python_cmd}} .just/lint_ttl_triage_consistency.py
-
-# Enforce RULE-003 source file size limits.
-[private]
-_lint-spell:
-    {{python_cmd}} .just/lint_codespell.py
-
-[private]
-_lint-pytests:
-    {{python_cmd}} .just/run_pytests.py
-
-[private]
-_lint-daemon-singleton:
-    {{python_cmd}} scripts/lint_daemon_singleton.py
-
-[private]
-_lint-same-host-portability:
-    {{python_cmd}} .just/lint_same_host_portability.py
 
 # Build the full workspace.
 build:
