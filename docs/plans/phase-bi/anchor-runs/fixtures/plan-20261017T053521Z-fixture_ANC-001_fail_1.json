@@ -1,0 +1,62 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261017T053521Z-fixture_ANC-001_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-17T05:35:21+00:00",
+  "anchors_path": "docs/plans/phase-bi/anchors.json",
+  "plan": "phase-current",
+  "item": {
+    "id": "fixture:ANC-001:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 111,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": null,
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd command must have a skill subcommand that installs the atm-bd-orchestration skill into a repository by running the same installer logic as plugins/atm-bd-orchestration/install.py.",
+      "quote": "it would do the same thing as the install.py does now right?",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: let's anchor this behavior. (not --profile yet)",
+      "anchor_version": 4,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "run 'atm-bd-console skill' and install.py against the same target repo and diff the installed file sets; atm-bd-console skill --help shows no --profile",
+      "kind": "structural",
+      "leaning": null,
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 111,
+      "item_shortened": false
+    }
+  ],
+  "summary": {
+    "counts": {
+      "deterministic_only": 1
+    },
+    "failing": [],
+    "leaning_counts": {},
+    "unstable": [],
+    "errors": [],
+    "shortened": [],
+    "pass": true
+  }
+}

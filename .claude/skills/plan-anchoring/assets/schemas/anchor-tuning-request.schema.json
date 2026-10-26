@@ -21,8 +21,8 @@
         "contract_script": {"type": "string", "minLength": 1},
         "contract_sha256": {"$ref": "#/$defs/sha256"},
         "agent": {"const": "anchor-tuning"},
-        "harness": {"enum": ["claude", "codex"]},
-        "model": {"enum": ["opus", "sol"]}
+        "harness": {"enum": ["claude", "codex", "cursor"]},
+        "model": {"enum": ["opus", "sol", "grok[effort=high]"]}
       }
     },
     "authority": {
@@ -55,7 +55,7 @@
                 "additionalProperties": false,
                 "required": ["id", "version", "state", "statement", "kind", "scope", "check", "fixtures"],
                 "properties": {
-                  "id": {"type": "string", "pattern": "^ANC-[0-9]{3}$"},
+                  "id": {"type": "string", "minLength": 1},
                   "version": {"type": ["integer", "string"]},
                   "state": {"const": "locked"},
                   "statement": {"type": "string", "minLength": 1},
@@ -131,6 +131,7 @@
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "calibrationCorpus": {
       "type": "object",
+      "description": "Versioned descriptor of a frozen corpus, not the corpus payload schema. Descriptor version 2 may reference a plan-anchor/testability-calibration-corpus/1 payload without a version field. sha256 is the canonical JSON digest of that payload.",
       "additionalProperties": false,
       "required": ["schema", "version", "path", "sha256", "case_count", "frozen_before_live"],
       "properties": {
@@ -154,6 +155,13 @@
     },
     "tuningEvent": {
       "type": "object",
+      "if": {
+        "anyOf": [
+          {"properties": {"event_index": {"minimum": 2}}},
+          {"properties": {"event": {"const": "protocol_re_evaluated"}}}
+        ]
+      },
+      "then": {"properties": {"supersedes": {"type": "object"}}},
       "additionalProperties": false,
       "required": ["event_index", "previous_event_sha256", "event", "protocol_version", "authority", "oracle", "candidate", "evidence", "score", "decision", "supersedes"],
       "properties": {
@@ -169,7 +177,7 @@
             "intent_id": {"type": "string", "minLength": 1},
             "intent_version": {"type": ["integer", "string"]},
             "intent_sha256": {"$ref": "#/$defs/sha256"},
-            "anchor_id": {"type": "string", "pattern": "^ANC-[0-9]{3}$"},
+            "anchor_id": {"type": "string", "minLength": 1},
             "anchor_version": {"type": ["integer", "string"]},
             "anchor_record_sha256": {"$ref": "#/$defs/sha256"}
           }
@@ -230,7 +238,7 @@
           }
         },
         "supersedes": {
-          "type": "object",
+          "type": ["object", "null"],
           "additionalProperties": false,
           "required": ["protocol_version", "decision_sha256"],
           "properties": {

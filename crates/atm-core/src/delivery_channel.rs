@@ -15,7 +15,7 @@ use serde_json::Value;
 use crate::error::AtmError;
 use crate::types::{AgentName, PaneId};
 
-pub(crate) const BACKEND_TYPE_METADATA_KEY: &str = "backendType";
+pub const BACKEND_TYPE_METADATA_KEY: &str = "backendType";
 
 /// One non-empty Herdr session identifier from roster metadata.
 ///

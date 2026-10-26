@@ -7,11 +7,11 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use ::atm_graft::{
-    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudge,
+    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostCronNudge, HostNudge,
     HostNudgeInjector, MailboxWorkCounts, SessionSnapshot,
 };
 use atm_core::address::AgentAddress;
-use atm_core::boundary::{NudgeKind, PostSendHookEvent};
+use atm_core::boundary::{DeliveryReceipt, NudgeKind, PostSendHookEvent};
 use atm_core::caller_context::activity_observation_for_resolved_caller;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
@@ -264,6 +264,47 @@ impl PyNudge {
     }
 }
 
+/// Python projection of one keyed cron lifecycle nudge.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug)]
+pub struct PyCronNudge {
+    #[pyo3(get)]
+    schedule_id: u64,
+    #[pyo3(get)]
+    generation: u32,
+    #[pyo3(get)]
+    transition_seq: u64,
+    #[pyo3(get)]
+    team: String,
+    #[pyo3(get)]
+    recipient: String,
+    #[pyo3(get)]
+    body: String,
+}
+
+impl PyCronNudge {
+    fn from_host_nudge(nudge: &HostCronNudge) -> Self {
+        Self {
+            schedule_id: nudge.key.schedule_id.get(),
+            generation: nudge.key.generation.get(),
+            transition_seq: nudge.key.transition_seq,
+            team: nudge.team.to_string(),
+            recipient: nudge.recipient.to_string(),
+            body: nudge.body.clone(),
+        }
+    }
+}
+
+#[pymethods]
+impl PyCronNudge {
+    fn __repr__(&self) -> String {
+        format!(
+            "PyCronNudge(schedule_id={}, generation={}, transition_seq={})",
+            self.schedule_id, self.generation, self.transition_seq
+        )
+    }
+}
+
 #[pymethods]
 impl PyNudge {
     #[new]
@@ -366,6 +407,29 @@ impl HostNudgeInjector for PythonNudgeInjector {
                 .map_err(python_callback_error)
         })
     }
+
+    fn inject_cron_nudge(&self, nudge: &HostCronNudge) -> DeliveryReceipt {
+        Python::attach(|py| {
+            let Ok(nudge) = Py::new(py, PyCronNudge::from_host_nudge(nudge)) else {
+                return unknown_cron_receipt("Python cron nudge projection could not be created");
+            };
+            match self.callback.call1(py, (nudge,)) {
+                Ok(receipt_id) => match receipt_id.extract::<String>(py) {
+                    Ok(receipt_id) if !receipt_id.trim().is_empty() => {
+                        DeliveryReceipt::Accepted { receipt_id }
+                    }
+                    _ => unknown_cron_receipt(
+                        "Python cron nudge callback did not return an explicit receipt id",
+                    ),
+                },
+                Err(_) => unknown_cron_receipt("Python cron nudge callback outcome is unknown"),
+            }
+        })
+    }
+}
+
+fn unknown_cron_receipt(reason: &'static str) -> DeliveryReceipt {
+    atm_core::graft::unknown_cron_lifecycle_receipt(reason)
 }
 
 #[pyclass(skip_from_py_object)]
@@ -895,6 +959,7 @@ fn _atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AtmListResult>()?;
     m.add_class::<AtmToolError>()?;
     m.add_class::<PyNudge>()?;
+    m.add_class::<PyCronNudge>()?;
     m.add_class::<PyGraftSessionSnapshot>()?;
     m.add_class::<PyMailboxWorkCounts>()?;
     m.add_class::<PyGraftSession>()?;
@@ -908,17 +973,23 @@ mod tests {
         PyGraftSessionOptions, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
         observability, observability_paths,
     };
-    use atm_core::boundary::{NudgeKind, PostSendHookEvent, TaskTransition};
+    use atm_core::boundary::{
+        CronGeneration, CronNoticeKey, CronScheduleId, DeliveryReceipt, NudgeKind,
+        PostSendHookEvent, TaskTransition,
+    };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::list::ListOutcome;
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+    use atm_core::protocol::{
+        CLI_SCHEMA_VERSION, CompatibilityVerdict, HttpApiVersion, ReleaseVersion, RequestEnvelope,
+        ResponseEnvelope, SendResponseEnvelope,
+    };
     use atm_core::read::{BucketCounts, ReadOutcome};
     use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendCommandOutcome, SendOutcome};
     use atm_core::test_support::EnvGuard;
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, ChatId, CommandAction, ReadSelection, TeamName};
-    use atm_graft::{GraftClient, HostNudge, HostNudgeInjector, MailboxWorkCounts};
+    use atm_graft::{GraftClient, HostCronNudge, HostNudge, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1040,13 +1111,15 @@ mod tests {
             .expect("caller");
         PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
-            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                with_compatible_preflight(initial),
+            ))),
             receiver: Mutex::new(None),
             fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
                 atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
             )),
             reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
-                replacement,
+                with_compatible_preflight(replacement),
             ))),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
@@ -1062,17 +1135,39 @@ mod tests {
         let caller = PyAgentAddress::new(sender, TEST_TEAM.to_string(), None).expect("caller");
         PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
-            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(initial))),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                with_compatible_preflight(initial),
+            ))),
             receiver: Mutex::new(None),
             fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
                 fallback_path.to_owned(),
             )),
             reconnect_replacement: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
-                replacement,
+                with_compatible_preflight(replacement),
             ))),
             reconnect_attempts: AtomicUsize::new(0),
             reconnect_fallback_attempts: AtomicUsize::new(0),
         }
+    }
+
+    /// Model the daemon's explicit compatibility preflight once for every
+    /// Python session operation; the inner fake sees only the operation under
+    /// test, with no event-loop or network behavior.
+    fn with_compatible_preflight(transport: Arc<FakeClientTransport>) -> Arc<FakeClientTransport> {
+        Arc::new(FakeClientTransport::new(Box::new(
+            move |request| match request {
+                RequestEnvelope::CompatibilityPreflight(_) => Ok(
+                    ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+                        daemon_release: ReleaseVersion::current(),
+                        daemon_schema_version: CLI_SCHEMA_VERSION,
+                        daemon_http_api_version: HttpApiVersion::current(),
+                    }),
+                ),
+                request => transport
+                    .execute_for_test(atm_core::api::ApiRequest::new(request))
+                    .map(atm_core::api::ApiResponse::into_inner),
+            },
+        )))
     }
 
     #[test]
@@ -1523,6 +1618,76 @@ mod tests {
                     "<atm><action>read atm</action></atm>".to_string(),
                     "📬 from test-sender:1234@test-team\nnudge".to_string(),
                 )]
+            );
+        });
+    }
+
+    #[test]
+    fn python_cron_callback_gets_transition_key_and_must_return_receipt_id() {
+        Python::initialize();
+        let nudge = HostCronNudge {
+            key: CronNoticeKey {
+                schedule_id: CronScheduleId::new(42),
+                generation: CronGeneration::FIRST,
+                transition_seq: 9,
+            },
+            team: TeamName::from_validated(TEST_TEAM),
+            recipient: AgentName::from_validated(TEST_RECIPIENT),
+            body: "cron failed".to_owned(),
+        };
+        Python::attach(|py| {
+            let module = PyModule::from_code(
+                py,
+                c"received = []\ndef callback(nudge):\n    received.append((nudge.schedule_id, nudge.generation, nudge.transition_seq, nudge.team, nudge.recipient, nudge.body))\n    return 'receipt-42'\n",
+                c"cron_callback_test.py",
+                c"cron_callback_test",
+            )
+            .expect("callback module");
+            let injector = PythonNudgeInjector {
+                callback: module.getattr("callback").expect("callback").unbind(),
+            };
+            assert_eq!(
+                injector.inject_cron_nudge(&nudge),
+                DeliveryReceipt::Accepted {
+                    receipt_id: "receipt-42".to_owned()
+                }
+            );
+            let received: Vec<(u64, u32, u64, String, String, String)> = module
+                .getattr("received")
+                .expect("received")
+                .extract()
+                .expect("typed cron nudge");
+            assert_eq!(
+                received,
+                vec![(
+                    42,
+                    1,
+                    9,
+                    TEST_TEAM.to_owned(),
+                    TEST_RECIPIENT.to_owned(),
+                    "cron failed".to_owned(),
+                )]
+            );
+        });
+
+        Python::attach(|py| {
+            let module = PyModule::from_code(
+                py,
+                c"def callback(_nudge):\n    return None\n",
+                c"cron_callback_unknown_test.py",
+                c"cron_callback_unknown_test",
+            )
+            .expect("callback module");
+            let injector = PythonNudgeInjector {
+                callback: module.getattr("callback").expect("callback").unbind(),
+            };
+            let DeliveryReceipt::Unknown { retry_cause } = injector.inject_cron_nudge(&nudge)
+            else {
+                panic!("missing Python receipt must remain unknown")
+            };
+            assert_eq!(
+                retry_cause.as_str(),
+                "Python cron nudge callback did not return an explicit receipt id"
             );
         });
     }
@@ -2297,7 +2462,9 @@ mod tests {
         })));
         let session = PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
-            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(transport))),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                with_compatible_preflight(transport),
+            ))),
             receiver: Mutex::new(None),
             fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
                 atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),
@@ -2350,17 +2517,19 @@ mod tests {
         .expect("caller");
         let session = PyGraftSession {
             caller: caller.to_typed().expect("typed caller"),
-            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(Arc::new(
-                FakeClientTransport::new(Box::new(|request| match request {
-                    RequestEnvelope::GraftReceiverRegister(_) => {
-                        Ok(ResponseEnvelope::GraftReceiverRegister)
-                    }
-                    RequestEnvelope::GraftReceiverUnregister(_) => {
-                        Ok(ResponseEnvelope::GraftReceiverUnregister)
-                    }
-                    _ => panic!("receiver activation sent an unexpected daemon request"),
-                })),
-            )))),
+            client: Mutex::new(Some(GraftClient::from_fake_transport_for_test(
+                with_compatible_preflight(Arc::new(FakeClientTransport::new(Box::new(
+                    |request| match request {
+                        RequestEnvelope::GraftReceiverRegister(_) => {
+                            Ok(ResponseEnvelope::GraftReceiverRegister)
+                        }
+                        RequestEnvelope::GraftReceiverUnregister(_) => {
+                            Ok(ResponseEnvelope::GraftReceiverUnregister)
+                        }
+                        _ => panic!("receiver activation sent an unexpected daemon request"),
+                    },
+                )))),
+            ))),
             receiver: Mutex::new(None),
             fallback_logger: Arc::new(observability::GraftFallbackLogger::new(
                 atm_core::observability::graft_fallback_log_path(&leaked_fallback_dir()),

@@ -1,0 +1,140 @@
+{
+  "schema": "plan-anchor/tuning-history/2",
+  "history_id": "ANC-088-plan",
+  "events": [
+    {
+      "event_index": 1,
+      "previous_event_sha256": null,
+      "event": "question_set_sealed",
+      "protocol_version": "plan-anchor/question-tournament/2.0.0",
+      "authority": {
+        "intent_id": "phase-bj",
+        "intent_version": 1,
+        "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+        "anchor_id": "ANC-088",
+        "anchor_version": 2,
+        "anchor_record_sha256": "648af25535b92fc2d68600f9dbe976c52afe16f5d7e012bb9fc145709b96c287"
+      },
+      "oracle": {
+        "sha256": "6618a3a833c5ae5fd9cda95914bea36b06a25e514351d4f1a15e9fc79357cd55",
+        "case_ids": [
+          "fixture_pass",
+          "fixture_fail",
+          "compliant_minimal",
+          "compliant_paraphrase",
+          "silent_in_scope",
+          "topical_only",
+          "direct_conflict",
+          "irrelevant",
+          "boundary_partial",
+          "exception_fail_open",
+          "exception_fail_closed"
+        ],
+        "case_count": 11,
+        "repeat_count": 2
+      },
+      "candidate": {
+        "candidate_id": "candidate-2",
+        "question_sha256": "8b33c4a2f780d7ebf4a6cb6639ed6867026ab51bb06a9be49e39814abfb7b83d"
+      },
+      "evidence": {
+        "canonical_request_sha256": [
+          "1dba4e10a49ea138fe277f3e415bd3e736602fbd36a747f8fc856d95bda1d4d8",
+          "1dba4e10a49ea138fe277f3e415bd3e736602fbd36a747f8fc856d95bda1d4d8",
+          "39d2912003dc6419f04f4c3f43d706fc979132033507908a88bc3b9a9ab80d43",
+          "39d2912003dc6419f04f4c3f43d706fc979132033507908a88bc3b9a9ab80d43",
+          "6a6d1ed9ece1cf5d78231fa5873a50e0569d723a6375b5b77d3b060d6650cff7",
+          "6a6d1ed9ece1cf5d78231fa5873a50e0569d723a6375b5b77d3b060d6650cff7",
+          "d3068d9fd90a40feb99c7e18258a97293d4d2a6f44e288b95c9c651e78b392c6",
+          "d3068d9fd90a40feb99c7e18258a97293d4d2a6f44e288b95c9c651e78b392c6",
+          "51e8d730a0d296ceb1231ab404f38278fc12a5f083de03632b868f7d8bf89138",
+          "51e8d730a0d296ceb1231ab404f38278fc12a5f083de03632b868f7d8bf89138",
+          "e011d9896eed9d8bf506c4e9c49e0221845bf06ac104ddb4816177d8f18d9910",
+          "e011d9896eed9d8bf506c4e9c49e0221845bf06ac104ddb4816177d8f18d9910",
+          "b852b04a6842723b7877c0be02437918307047a6adf91b5fdf9e71ea5077cdc7",
+          "b852b04a6842723b7877c0be02437918307047a6adf91b5fdf9e71ea5077cdc7",
+          "c295c3734965c42c0fde9a559dd6522d739c63f34dcfb6de7869dff9116fca8c",
+          "c295c3734965c42c0fde9a559dd6522d739c63f34dcfb6de7869dff9116fca8c",
+          "dd4e514b68ba4554c524b44432dceef51e49dea8f99e1e4db493132dd02132c3",
+          "dd4e514b68ba4554c524b44432dceef51e49dea8f99e1e4db493132dd02132c3",
+          "0835b4585019bb368d96079ee7dd75a703526478c180ac446b5977c861c73a0f",
+          "0835b4585019bb368d96079ee7dd75a703526478c180ac446b5977c861c73a0f",
+          "7b1e54f6996a33c2a9b7bfae757c115e9cdab5f3adec2e57c8c33415c7171025",
+          "7b1e54f6996a33c2a9b7bfae757c115e9cdab5f3adec2e57c8c33415c7171025"
+        ],
+        "raw_response_sha256": [
+          "9302fb43fba1a9d17449946b4850ac1b7a906b47efbbc026c5b817082918dd19",
+          "2aed5bba40998794ef4a49e8cdcf9ec93702bb0c40c0e63eddac02751df771cc",
+          "4993b3120cd085ac6e9709a72dca4caf0e2221ea52cc45d7009fa955c3899eb8",
+          "4993b3120cd085ac6e9709a72dca4caf0e2221ea52cc45d7009fa955c3899eb8",
+          "4118f2f67b69578b557ea24084f991f8c7394a1c26ab9a6522fd1530b82b62af",
+          "e2970a995fc520aa705ed620a8904f342f465f40c3fa28c3b39b4b9d76b6d533",
+          "d1a56c6aba1101e67f8aba30d9f7fe7871fa6fbdd637507ef067a6fc5c396f87",
+          "d1a56c6aba1101e67f8aba30d9f7fe7871fa6fbdd637507ef067a6fc5c396f87",
+          "026edc10afe98a4bc3056ff799210854a467f8e0c09cdc967619e878e1fb43de",
+          "026edc10afe98a4bc3056ff799210854a467f8e0c09cdc967619e878e1fb43de",
+          "bb94bec1b15965651d606ef0424bd7f6d97f642a0e79f8d28274cbb8b4cfcaa0",
+          "bb94bec1b15965651d606ef0424bd7f6d97f642a0e79f8d28274cbb8b4cfcaa0",
+          "8eb25c0c326425d2548732c0032efb92303bc50ca7a4b09ebfe70702afcd8183",
+          "8eb25c0c326425d2548732c0032efb92303bc50ca7a4b09ebfe70702afcd8183",
+          "33e762882245666308a054a4bd52dc1ecaf53d84a50b25815c6e8842b28c0428",
+          "33e762882245666308a054a4bd52dc1ecaf53d84a50b25815c6e8842b28c0428",
+          "1dcf21d976c10149edafadf40986c02445253b9ab64a50c143ef9b75f844c1ef",
+          "1dcf21d976c10149edafadf40986c02445253b9ab64a50c143ef9b75f844c1ef",
+          "ee2f067d6b2fdb6b686e5727dbd4b4d1c9f10844d537f5d98fbb82b9a109b2fb",
+          "ee2f067d6b2fdb6b686e5727dbd4b4d1c9f10844d537f5d98fbb82b9a109b2fb",
+          "a0c33ad40d6d09123d22fc36b1ede7488f140fbc03c4d01ce5c14844687ed011",
+          "1b16db2e7b91925c0ceccba798d58d5b79c13daad56d4a133cad0b7765fd100a"
+        ],
+        "run_ids": [
+          "ANC-088-tune-candidate-2-fixture_pass-r1",
+          "ANC-088-tune-candidate-2-fixture_pass-r2",
+          "ANC-088-tune-candidate-2-fixture_fail-r1",
+          "ANC-088-tune-candidate-2-fixture_fail-r2",
+          "ANC-088-tune-candidate-2-compliant_minimal-r1",
+          "ANC-088-tune-candidate-2-compliant_minimal-r2",
+          "ANC-088-tune-candidate-2-compliant_paraphrase-r1",
+          "ANC-088-tune-candidate-2-compliant_paraphrase-r2",
+          "ANC-088-tune-candidate-2-silent_in_scope-r1",
+          "ANC-088-tune-candidate-2-silent_in_scope-r2",
+          "ANC-088-tune-candidate-2-topical_only-r1",
+          "ANC-088-tune-candidate-2-topical_only-r2",
+          "ANC-088-tune-candidate-2-direct_conflict-r1",
+          "ANC-088-tune-candidate-2-direct_conflict-r2",
+          "ANC-088-tune-candidate-2-irrelevant-r1",
+          "ANC-088-tune-candidate-2-irrelevant-r2",
+          "ANC-088-tune-candidate-2-boundary_partial-r1",
+          "ANC-088-tune-candidate-2-boundary_partial-r2",
+          "ANC-088-tune-candidate-2-exception_fail_open-r1",
+          "ANC-088-tune-candidate-2-exception_fail_open-r2",
+          "ANC-088-tune-candidate-2-exception_fail_closed-r1",
+          "ANC-088-tune-candidate-2-exception_fail_closed-r2"
+        ]
+      },
+      "score": {
+        "exact_role_cells": 33,
+        "total_role_cells": 33,
+        "exact_semantic_verdicts": 11,
+        "total_semantic_verdicts": 11,
+        "stable_cases": 11,
+        "total_cases": 11,
+        "regressions": 0,
+        "confidence": {
+          "threshold": 0.8,
+          "cells_at_or_above_threshold": 33,
+          "total_cells": 33,
+          "minimum": 0.825,
+          "p10": 0.97,
+          "median": 1.0,
+          "mean": 0.988
+        }
+      },
+      "decision": {
+        "status": "sealed",
+        "question_set_sha256": "8b33c4a2f780d7ebf4a6cb6639ed6867026ab51bb06a9be49e39814abfb7b83d",
+        "reason_code": "TOURNAMENT.ACCEPTED"
+      },
+      "supersedes": null
+    }
+  ]
+}

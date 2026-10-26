@@ -3,13 +3,15 @@
 
 Problems (exit 5), and nothing else:
   1. schema: a plan file line that is not {"sprint": "<name>", "depends_on"?: [...]}, a depends_on naming an
-     unknown sprint, a sprint container failing SprintBead, a poured sanity bead failing SanityBead
-     (scripts/bead_schema.py, published as schemas/);
+     unknown sprint, or an open phase bead failing its model (scripts/bead_schema.py, published as schemas/);
   2. a plan sprint with no sprint container `<prefix>-<sprint>`;
   3. an extra sprint container: a `stage:sprint` bead of the phase that the plan file does not list;
   4. the toml's integration_branch differs from the root's metadata.integration_branch;
   5. a depends_on with no `blocks` edge from the dependent's dev bead (`<container>.group-dev`, or its
      container) to the predecessor's initial sanity bead (`<pred>.group-sanity`) or its sprint container.
+  6. an open phase root has no stack bead with that root as parent and its integration branch as trunk.
+  7. an open QA bead lacks a non-empty, unique reviewers_round1 list of registered agent identities.
+     Repository reviewer defaults never substitute for missing planned bead data.
 Everything else is a warning on stderr: bd doctor errors, open non-epic beads at the top level, a plan-time
 assignee, a poured sanity bead whose metadata.dev_bead is not its group's dev bead, a group not poured yet
 before import (--file).
@@ -24,7 +26,8 @@ before import (--file).
                                                      <plans_dir>/phase-*.jsonl has its tracked phase file;
                                                      one "<file>: <problem>" line per problem
 
-The phase file `.atm-bd/phase-<x>.toml` (tracked) names the plan file, the root and the integration branch.
+The phase file `.atm-bd/phase-<x>.toml` (tracked) names the plan file, root,
+integration branch, lead and six existing installed assignment templates.
 Without --index the plan file is read from origin/<integration_branch>:<plan>. The bead prefix is taken
 from the root id. Prints one "<bead>: <problem>" line per problem. Exit 0 valid, 5 problems, 2 validation
 could not run (no phase file, no plan file, bd or git failed). Report problems to the lead; never edit
@@ -74,6 +77,7 @@ class Beads:
         self.file = {b["id"]: b for b in file_beads} if file_beads is not None else {}
         self.phase = phase
         self.cache: dict[str, dict | None] = {}
+        self._everything: list[dict] | None = None
 
     def bd(self, *args: str) -> str:
         proc = subprocess.run(["bd", *args], capture_output=True, text=True)
@@ -96,20 +100,21 @@ class Beads:
 
     def sprint_containers(self) -> set[str]:
         label = f"phase-{self.phase}"
-        if self.fixed is not None:
-            rows = list(self.fixed.values())
-        else:
-            rows = json.loads(self.bd("list", "-l", label, "-l", SPRINT_LABEL, "--all", "-n", "0", "--json") or "[]")
-            rows += list(self.file.values())
+        rows = self.everything()
         return {b["id"] for b in rows if {label, SPRINT_LABEL} <= set(b.get("labels") or [])
                 and b.get("status") != "tombstone"}
 
     def everything(self) -> list[dict]:
-        if self.fixed is not None:
-            return list(self.fixed.values())
-        if self.file:
-            return list(self.file.values())
-        return json.loads(self.bd("list", "--all", "-n", "0", "--json") or "[]")
+        if self._everything is None:
+            if self.fixed is not None:
+                self._everything = list(self.fixed.values())
+            else:
+                rows = json.loads(self.bd("list", "-l", f"phase-{self.phase}", "--include-gates", "-n", "0", "--json") or "[]")
+                merged = {b["id"]: b for b in rows}
+                merged.update({bead_id: bead for bead_id, bead in self.cache.items() if bead is not None})
+                merged.update(self.file)
+                self._everything = list(merged.values())
+        return self._everything
 
 
 def git(*args: str) -> str:
@@ -133,7 +138,34 @@ def plan_text(repo: Path, config: dict, index: Path | None) -> tuple[str, str]:
     return proc.stdout, f"origin/{branch}:{config['plan']}"
 
 
-def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], before_import: bool) -> None:
+def check_qa_reviewers(beads: list[dict], repo: Path, problems: list[str]) -> None:
+    """Resolve planned reviewer identities against this repository's agent registry."""
+    import bead_schema
+
+    qa = [bead for bead in beads if "stage:qa" in (bead.get("labels") or [])
+          and not bead_schema.problems(bead, bead_schema.QaBead)]
+    if not qa:
+        return
+    try:
+        import yaml
+    except ImportError as error:
+        raise CannotRun("PyYAML is required to validate reviewer identities (pip install pyyaml)") from error
+    registry = repo / ".claude/agents/registry.yaml"
+    try:
+        document = yaml.safe_load(registry.read_text())
+        agents = document.get("agents") if isinstance(document, dict) else None
+        if not isinstance(agents, dict) or not agents:
+            raise ValueError("expected a non-empty agents mapping")
+    except (OSError, ValueError, yaml.YAMLError) as error:
+        problems.append(f"{registry}: cannot validate reviewers_round1: {error}")
+        return
+    for bead in qa:
+        unknown = sorted(set(bead["metadata"]["reviewers_round1"]) - agents.keys())
+        if unknown:
+            problems.append(f"{bead['id']}: reviewers_round1: unregistered reviewer(s): {', '.join(unknown)}")
+
+
+def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], before_import: bool, repo: Path) -> None:
     import bead_schema  # pydantic; --ci never loads it
     root_id = config["root"]
     prefix = plan_io.bead_prefix(root_id, Path("."))
@@ -144,6 +176,12 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
     if branch != config["integration_branch"]:
         problems.append(f"{root_id}: metadata.integration_branch is {json.dumps(branch)}; "
                         f".atm-bd/phase-{beads.phase}.toml names {config['integration_branch']}")
+    stack_id = f"{root_id}.stack"
+    stack = beads.get(stack_id)
+    if root.get("status") != "closed" and (stack is None or parent_of(stack) != root_id
+                                          or (stack.get("metadata") or {}).get("trunk") != branch):
+        problems.append(f"{stack_id}: missing stack bead, wrong parent or wrong trunk; "
+                        "render stack-bead.json.j2 with the root vars and bd import it")
     planned = {r["sprint"]: plan_io.sprint_bead_id(prefix, r["sprint"]) for r in rows}
     for container in sorted(beads.sprint_containers() - set(planned.values())):
         problems.append(f"{container}: stage:sprint bead of phase-{beads.phase} that the plan file does not list")
@@ -153,11 +191,9 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
         if bead is None:
             problems.append(f"{container}: sprint {row['sprint']} is in the plan file but has no sprint bead")
             continue
-        problems += bead_schema.problems(bead, bead_schema.SprintBead)
         dev_id, sanity_id = plan_io.group_id(container, "dev"), plan_io.group_id(container, "sanity")
         dev, sanity = beads.get(dev_id), beads.get(sanity_id)
         if sanity is not None:
-            problems += bead_schema.problems(sanity, bead_schema.SanityBead)
             if (sanity.get("metadata") or {}).get("dev_bead") != dev_id:
                 warn(f"{sanity_id}: metadata.dev_bead is not {dev_id}")
         for pred in row["depends_on"]:
@@ -172,13 +208,19 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
                                 f"or {pred_container} (plan file: {row['sprint']} depends on {pred})")
                 if dev is None:
                     warn(f"{dev_id} does not exist; pour the group with bead-groups")
+    phase_label = f"phase-{beads.phase}"
+    active = [bead for bead in beads.everything() if bead.get("status") != "closed"
+              and (bead.get("id") == root_id or phase_label in (bead.get("labels") or []))]
+    problems += bead_schema.validate_phase(active)
+    check_qa_reviewers(active, repo, problems)
 
 
 def warnings(beads: Beads, root_id: str, file_beads: list[dict] | None) -> None:
-    everything = beads.everything()
+    everything = file_beads if file_beads is not None else beads.everything()
     since = next((b.get("created_at") or "" for b in everything if b.get("id") == root_id), "")
-    if not since and beads.get(root_id):
-        since = beads.get(root_id).get("created_at") or ""
+    root_bead = beads.get(root_id)
+    if not since and root_bead:
+        since = root_bead.get("created_at") or ""
     for b in everything:
         if b.get("status") != "closed" and not parent_of(b) and b.get("issue_type") != "epic" \
                 and (b.get("created_at") or "") >= since:
@@ -268,7 +310,7 @@ def main(argv: list[str]) -> int:
         if args.file:
             file_beads = [json.loads(line) for line in args.file.read_text().splitlines() if line.strip()]
         beads = Beads(fixed, file_beads, phase)
-        check(beads, config, rows, problems, before_import=args.file is not None)
+        check(beads, config, rows, problems, before_import=args.file is not None, repo=repo)
         warnings(beads, config["root"], file_beads)
         if not args.no_doctor:
             doctor()

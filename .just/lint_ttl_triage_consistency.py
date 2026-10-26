@@ -26,6 +26,8 @@ SPRINT_FIELD_RE = re.compile(
     r"(?:triage:)?(?:\"(?P<quoted>[^\"]+)\"|(?P<bare>[A-Za-z0-9_.-]+))"
 )
 CANONICAL_SPRINT_RE = re.compile(r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)\.(?P<number>[1-9][0-9]*)$")
+# Current lowercase naming (phase `bl`, sprint `bl-1`); case-sensitive on purpose.
+CANONICAL_DASH_SPRINT_RE = re.compile(r"^[a-z][a-z0-9]*-[1-9][0-9]*$")
 LEGACY_DASH_SPRINT_RE = re.compile(
     r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)-S(?P<number>[0-9]+)$", re.IGNORECASE
 )
@@ -33,7 +35,7 @@ LEGACY_DASH_NUMBER_SPRINT_RE = re.compile(
     r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)-(?P<number>[1-9][0-9]*)$", re.IGNORECASE
 )
 LEGACY_COMPACT_SPRINT_RE = re.compile(r"^(?P<phase>[A-Za-z][A-Za-z0-9]*?)(?P<number>[0-9]+)$")
-SPRINT_LIKE_RE = re.compile(r"^[A-Za-z]{2}(?:\.\d+|-S?\d+)$", re.IGNORECASE)
+SPRINT_LIKE_RE = re.compile(r"^(?P<phase>[A-Za-z][A-Za-z0-9]*)(?:\.\d+|-S?\d+)$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -81,9 +83,8 @@ def is_allowlisted_legacy(allowlist: list[tuple[str, str]], path: str, raw_value
 def is_managed_phase(repo_root: Path, rel_path: str) -> bool:
     """A phase is managed when `.sprints/<PHASE>` exists (case-insensitive).
 
-    This is the same rule the pre-push hook applies before it accepts a
-    `.triage/phase-*` change, so a legacy phase that the hook freezes is not
-    held to closure contracts that postdate it.
+    A legacy phase without a `.sprints/<PHASE>` directory is not held to
+    closure contracts that postdate it.
     """
     parts = rel_path.split("/")
     if len(parts) < 2 or not parts[1].startswith("phase-"):
@@ -93,6 +94,23 @@ def is_managed_phase(repo_root: Path, rel_path: str) -> bool:
     if not sprints_dir.is_dir():
         return False
     return any(child.is_dir() and child.name.upper() == phase_short for child in sprints_dir.iterdir())
+
+def is_sprint_like(rel_path: str, value: str) -> bool:
+    """True when a `foundIn` value names a sprint.
+
+    Any two-letter phase counts; a longer phase counts only when it is the
+    record's own phase (`.triage/phase-<phase>/`, case-insensitive), so
+    non-sprint keys such as PUB-1085 stay out of the naming contract.
+    """
+    match = SPRINT_LIKE_RE.fullmatch(value)
+    if not match:
+        return False
+    phase = match.group("phase").lower()
+    if len(phase) == 2 and phase.isalpha():
+        return True
+    parts = rel_path.split("/")
+    return len(parts) > 1 and parts[1].lower() == f"phase-{phase}"
+
 
 def extract_finding_block(text: str) -> tuple[list[str], int] | None:
     # This validator intentionally assumes one `triage:Finding` block per TTL
@@ -128,6 +146,8 @@ def canonical_sprint_id(raw_value: str) -> tuple[str | None, str]:
     """
 
     value = raw_value.strip()
+    if CANONICAL_DASH_SPRINT_RE.fullmatch(value):
+        return value, "ok"
     match = CANONICAL_SPRINT_RE.fullmatch(value)
     if match:
         phase = match.group("phase").upper()
@@ -172,8 +192,8 @@ def collect_ttl_triage_violations(repo_root: Path) -> list[TriageConsistencyViol
         for offset, line in enumerate(lines, start=start_line):
             for match in SPRINT_FIELD_RE.finditer(line):
                 raw_value = match.group("quoted") or match.group("bare") or ""
-                if match.group("predicate") == "triage:foundIn" and not SPRINT_LIKE_RE.fullmatch(
-                    raw_value.strip()
+                if match.group("predicate") == "triage:foundIn" and not is_sprint_like(
+                    rel_path, raw_value.strip()
                 ):
                     # `foundIn` also names non-sprint artifacts (for example
                     # HERMES-SMOKE-QA-1). Only sprint-shaped values participate

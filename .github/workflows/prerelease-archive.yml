@@ -157,8 +157,13 @@ jobs:
         with:
           name: ${{ matrix.target }}
           path: ${{ env.ARCHIVE }}
+  build-wheels:
+    needs: plan
+    uses: ./.github/workflows/ci.yml
+    with:
+      build_release_artifacts: true
   release:
-    needs: [plan, build]
+    needs: [plan, build, build-wheels]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -166,19 +171,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { path: assets }
+        with:
+          path: assets
+          pattern: "{x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,x86_64-apple-darwin,aarch64-apple-darwin,x86_64-pc-windows-msvc,hermes-atm-wheels-*,atm-graft-sdist}"
       - name: Generate checksums and publish GitHub prerelease assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          find assets -type f -exec cp {} . \;
-          mapfile -t archives < <(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print | sed 's#^./##' | sort)
-          ((${#archives[@]} > 0)) || { echo "no prerelease archives were downloaded" >&2; exit 1; }
-          shasum -a 256 "${archives[@]}" > checksums.txt
+          find assets -maxdepth 2 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} . \;
+          find assets/hermes-atm-wheels-* -maxdepth 1 -type f \( -name 'atm_graft*.whl' -o -name 'atm_query*.whl' \) -exec cp {} . \;
+          find assets/hermes-atm-wheels-linux-x86_64 -maxdepth 1 -type f -name 'hermes_atm*.whl' -exec cp {} . \;
+          mapfile -t assets_to_publish < <(find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.whl' \) -print | sed 's#^./##' | sort -u)
+          ((${#assets_to_publish[@]} > 0)) || { echo "no prerelease assets were downloaded" >&2; exit 1; }
+          shasum -a 256 "${assets_to_publish[@]}" > checksums.txt
           tag="${GITHUB_REF_NAME}"
-          if gh release create "$tag" --prerelease --title "$tag" --generate-notes "${archives[@]}" checksums.txt; then
+          if gh release create "$tag" --prerelease --title "$tag" --generate-notes "${assets_to_publish[@]}" checksums.txt; then
             exit 0
           fi
 
@@ -186,7 +195,7 @@ jobs:
           metadata="$(gh release view "$tag" --json isDraft,isPrerelease,assets)"
           [[ "$(jq -r .isPrerelease <<<"$metadata")" == "true" ]] || { echo "$tag is not a prerelease" >&2; exit 1; }
           [[ "$(jq -r .isDraft <<<"$metadata")" == "false" ]] || { echo "$tag is still a draft" >&2; exit 1; }
-          expected_assets="$(printf '%s\n' "${archives[@]}" checksums.txt | sort)"
+          expected_assets="$(printf '%s\n' "${assets_to_publish[@]}" checksums.txt | sort)"
           actual_assets="$(jq -r '.assets[].name' <<<"$metadata" | sort)"
           [[ "$actual_assets" == "$expected_assets" ]] || { echo "$tag has a different asset set" >&2; exit 1; }
           mkdir existing-release

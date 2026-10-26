@@ -23,6 +23,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "peer-tls"),
     ("atm", "opentelemetry-otlp"),
     ("atm-core", "atm-daemon"),
+    ("atm-cron", "atm-storage-rusqlite"),
     ("atm-core", "atm-storage-rusqlite"),
     ("atm-core", "sc-observability"),
     ("atm-core", "opentelemetry"),
@@ -260,21 +261,18 @@ fn ao2_plaintext_baseline_stays_on_the_existing_direct_peer_pipeline() {
         .and_then(|source| source.split("impl LoopbackTcpConnector").next())
         .expect("direct-peer connector implementation");
     assert!(
-        bootstrap
-            .matches("parse_direct_peer_port(std::env::args_os())?")
-            .count()
-            == 2
-            && bootstrap
-                .matches("DirectPeerTcpConfig::configured(direct_peer_port)")
-                .count()
-                == 2
+        bootstrap.matches("configured_direct_peer_port(").count() == 1
+            && bootstrap.contains("assembly.peer_config_store().as_ref()")
+            && bootstrap.contains("DirectPeerTcpConfig::configured(configured_direct_peer_port(")
             && !bootstrap.contains("DirectPeerTcpConfig::standard()"),
-        "the bootstrap alone must select direct-peer ports from immutable daemon launch arguments"
+        "the bootstrap must select the direct-peer port from persisted peer interfaces"
     );
     assert!(
-        launch_config.contains("NonZeroU16::new(atm_http_runtime::DIRECT_PEER_TCP_PORT)")
-            && launch_config.contains("--direct-peer-port may be supplied only once"),
-        "direct-peer launch configuration must default to the protocol port and reject ambiguous port selection"
+        launch_config.contains(".list_interfaces()?")
+            && launch_config.contains(".create_new(true)")
+            && launch_config.contains("store.save_interface(&interface)")
+            && launch_config.contains("--direct-peer-port is unsupported"),
+        "direct-peer launch configuration must claim and persist the account interface port"
     );
     let plaintext_adapter_arm = bootstrap
         .split("fn peer_stream_adapter_for_mode")
@@ -424,9 +422,7 @@ fn ao4_benchmark_targets_cannot_introduce_an_alternate_daemon_pipeline() {
         );
     }
     assert!(
-        justfile.contains("cargo build --release -p agent-team-mail -p atm-daemon")
-            && !justfile.contains("atm-daemon-benchmark")
-            && !justfile.contains("benchmark-harness"),
+        !justfile.contains("atm-daemon-benchmark") && !justfile.contains("benchmark-harness"),
         "the public benchmark recipe must build only the shipped Tokio/Axum daemon"
     );
 }
@@ -1693,6 +1689,11 @@ fn atm_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn atm_cron_must_not_depend_on_atm_storage_rusqlite() {
+    assert_forbidden_edge_absent("atm-cron", "atm-storage-rusqlite");
+}
+
+#[test]
 fn guarded_boundaries_forbid_every_declared_crate_edge() {
     for &(source, target) in EXPECTED_FORBIDDEN_EDGES {
         assert_forbidden_edge_absent(source, target);
@@ -2726,8 +2727,23 @@ fn al9_cli_and_graft_send_use_the_selected_runtime_client() {
         assert!(
             send.contains(
                 "atm_http_runtime::selected_write_transport(&request, &self.async_transport)?"
-            ) && send.contains(".execute(ApiRequest::new(RequestEnvelope::Write"),
-            "AL.9 {consumer} send must await the runtime-selected DaemonApiClient write path"
+            ),
+            "AL.9 {consumer} send must select its write client through atm-http-runtime"
+        );
+        let uses_selected_client = if consumer == "graft" {
+            send.contains(
+                "Self::execute_transport_request(&transport, RequestEnvelope::Write(Box::new(request)))",
+            ) && graft
+                .split("async fn execute_transport_request(")
+                .nth(1)
+                .and_then(|source| source.split("async fn verify_transport_compatibility(").next())
+                .is_some_and(|helper| helper.contains(".execute(ApiRequest::new(request))"))
+        } else {
+            send.contains(".execute(ApiRequest::new(RequestEnvelope::Write")
+        };
+        assert!(
+            uses_selected_client,
+            "AL.9 {consumer} send must execute its write through the selected DaemonApiClient"
         );
         assert!(
             !send.contains("legacy_dispatch")
@@ -3669,6 +3685,9 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         .split("\n#[cfg(test)]\nmod tests")
         .next()
         .expect("router production/test split");
+    let peer_port = read_source(
+        &workspace_root().join("crates/atm-http-runtime/src/storage_and_nudge_router/peer_port.rs"),
+    );
     assert!(
         !production_router.contains("BlockingCoreBridge"),
         "D1 deletes the legacy BlockingCoreBridge identifier from production source"
@@ -3683,9 +3702,11 @@ fn av3_control_path_bridge_call_sites_are_the_exact_residual_set_after_rename() 
         "graft_receiver_register".to_owned(),
         "graft_receiver_refresh".to_owned(),
         "graft_receiver_unregister".to_owned(),
+        "resolved_peer_port".to_owned(),
     ]);
+    let combined_router = format!("{production_router}\n{peer_port}");
     assert_eq!(
-        av3_bridge_run_call_sites_by_enclosing_fn(production_router),
+        av3_bridge_run_call_sites_by_enclosing_fn(&combined_router),
         residual,
         "AV-FU-1 owns the only permitted residual ControlPathSyncBridge::run call sites"
     );

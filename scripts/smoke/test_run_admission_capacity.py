@@ -1030,6 +1030,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
                 mock.patch.object(RUNNER, "local_endpoint", side_effect=RUNNER.SmokeError("benchmark failed")),
@@ -1092,6 +1093,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity-test.example.test"),
+                mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("stop after evidence setup")),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=Path(directory) / "raw.json"),
                 mock.patch.object(
@@ -1130,9 +1133,11 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
                 mock.patch.object(RUNNER, "regenerate_mtls_identity", return_value="a" * 64),
                 mock.patch.object(RUNNER, "prepare_capacity_roster"),
+                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity-test.example.test"),
                 mock.patch.object(
                     RUNNER, "start_capacity_daemon", side_effect=RUNNER.SmokeError("setup failed"),
                 ),
+                mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "write_raw_evidence", return_value=root / "raw.json"),
                 mock.patch.object(
                     RUNNER,
@@ -1175,6 +1180,8 @@ class AdmissionCapacityTests(unittest.TestCase):
                 mock.patch.object(RUNNER, "count_atm_daemon_processes", return_value=[]),
                 mock.patch.object(RUNNER, "release_binary", side_effect=[atm, daemon]),
                 mock.patch.object(RUNNER, "runtime_environment", return_value={}),
+                mock.patch.object(RUNNER, "disposable_peer_host", return_value="capacity-test.example.test"),
+                mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}),
                 mock.patch.object(RUNNER, "start_capacity_daemon", return_value=(process, output)),
                 mock.patch.object(
                     RUNNER,
@@ -1964,7 +1971,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             "fatal config failure",
         )
 
-    def test_capacity_daemon_launches_the_shipped_binary_with_explicit_peer_wire_and_port(self):
+    def test_capacity_daemon_launches_with_explicit_peer_wire_and_persisted_port(self):
         process = mock.Mock()
         process.stdout = mock.Mock()
         process.stderr = mock.Mock()
@@ -1984,7 +1991,7 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(Path(launched[0]), Path("/release/atm-daemon"))
         self.assertEqual(
             launched[1:],
-            ["--peer-wire-security", "plaintext-test", "--direct-peer-port", "43102"],
+            ["--peer-wire-security", "plaintext-test"],
         )
 
     def test_managed_mode_rejects_a_doctor_that_reports_the_wrong_wire_mode(self):
@@ -2055,3 +2062,45 @@ class AdmissionCapacityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class PrereleaseBinaryDirectoryTests(unittest.TestCase):
+    def test_bin_dir_uses_shipped_pair_records_versions_and_skips_sqlite_probe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            binaries = Path(directory)
+            suffix = ".exe" if os.name == "nt" else ""
+            for name in ("atm", "atm-daemon"):
+                path = binaries / f"{name}{suffix}"
+                path.write_text(name, encoding="utf-8")
+            captured: list[dict[str, object]] = []
+            def run_capacity(*_args, **kwargs):
+                captured.append(kwargs)
+                metrics = mock.Mock(admissions_per_second=mock.Mock(p50=45_000.0))
+                result = mock.Mock(status="PASS", metrics=metrics, messages_admitted=1, messages_requested=1)
+                return RUNNER.CapacityRunResult(0, Path("evidence.json"), Path("raw.json"), result)
+            with (
+                mock.patch.object(sys, "argv", ["run_admission_capacity.py", "--bin-dir", str(binaries)]),
+                mock.patch.object(RUNNER, "load_baselines", return_value=mock.Mock(entry_for=mock.Mock(return_value=mock.Mock(p50_floor=1)))),
+                mock.patch.object(RUNNER, "release_version", side_effect=["atm 1.6.5", "atm-daemon 1.6.5"]),
+                mock.patch.object(RUNNER, "run_capacity", side_effect=run_capacity),
+                mock.patch.object(RUNNER, "sqlite_writer_probe") as probe,
+                mock.patch.object(RUNNER, "BenchmarkCampaign", return_value=mock.Mock(status="INCOMPLETE", model_dump=mock.Mock(return_value={}))),
+                mock.patch.object(RUNNER, "atomic_json") as atomic,
+                contextlib.redirect_stdout(stdout := io.StringIO()),
+            ):
+                self.assertEqual(RUNNER.main(), 1)
+            probe.assert_not_called()
+            required = RUNNER.required_targets(RUNNER.benchmark_os())
+            expected_targets = [target for target in ("uds", "tcp", "tcp-tls") if target in required]
+            self.assertEqual([call["benchmark_target"] for call in captured], expected_targets)
+            self.assertEqual(RUNNER.release_binary("atm", binaries), binaries / f"atm{suffix}")
+            self.assertIn("NOT MEASURED required f8 target sqlite", stdout.getvalue())
+            self.assertEqual(atomic.call_count, 2)  # sqlite row plus campaign
+
+    def test_release_binary_defaults_to_target_release_without_bin_dir(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(SUPPORT, "ROOT", Path(directory)):
+                suffix = ".exe" if os.name == "nt" else ""
+                expected = Path(directory) / "target" / "release" / f"atm{suffix}"
+                expected.parent.mkdir(parents=True)
+                expected.write_text("atm", encoding="utf-8")
+                self.assertEqual(SUPPORT.release_binary("atm"), expected)

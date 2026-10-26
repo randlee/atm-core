@@ -4,9 +4,10 @@ use std::sync::Arc;
 
 use crate::{
     AsyncGraftReceiverEndpointStore, AsyncMailboxReader, AsyncMessageSearchStore,
-    AsyncMessageStore, AsyncTaskLedgerReader, AtmError, DiagnosticTimelineStore,
-    MessageSearchStore, MessageStore, NudgeTemplateOverrideStore, PeerConfigStore,
-    PendingNudgeStore, RosterRuntimeMirror, RosterStore, TaskStore, TemplateCatalogStore,
+    AsyncMessageStore, AsyncTaskLedgerReader, AtmError, CronScheduleStore, CronTransitionStore,
+    DiagnosticTimelineStore, HookRegistrationStore, MessageSearchStore, MessageStore,
+    NudgeTemplateOverrideStore, PeerConfigStore, PendingNudgeStore, RosterRuntimeMirror,
+    RosterStore, TaskStore, TemplateCatalogStore,
 };
 
 /// Backend-neutral effective capacity settings for the single shared reader
@@ -113,6 +114,9 @@ pub struct StorageHandles {
     nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     task_store: Arc<dyn TaskStore + Send + Sync>,
+    hook_registration_store: Arc<dyn HookRegistrationStore + Send + Sync>,
+    cron_schedule_store: Arc<dyn CronScheduleStore + Send + Sync>,
+    cron_transition_store: Arc<dyn CronTransitionStore + Send + Sync>,
     graft_receiver_endpoint_store: Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
@@ -143,6 +147,9 @@ pub struct StorageHandleParts {
     pub nudge_template_override_store: Arc<dyn NudgeTemplateOverrideStore + Send + Sync>,
     pub pending_nudge_store: Arc<dyn PendingNudgeStore + Send + Sync>,
     pub task_store: Arc<dyn TaskStore + Send + Sync>,
+    pub hook_registration_store: Arc<dyn HookRegistrationStore + Send + Sync>,
+    pub cron_schedule_store: Arc<dyn CronScheduleStore + Send + Sync>,
+    pub cron_transition_store: Arc<dyn CronTransitionStore + Send + Sync>,
     pub graft_receiver_endpoint_store: Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>,
     pub peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     pub template_catalog_store: Arc<dyn TemplateCatalogStore + Send + Sync>,
@@ -167,6 +174,8 @@ impl fmt::Debug for StorageHandles {
             )
             .field("pending_nudge_store", &"dyn PendingNudgeStore")
             .field("task_store", &"dyn TaskStore")
+            .field("hook_registration_store", &"dyn HookRegistrationStore")
+            .field("cron_schedule_store", &"dyn CronScheduleStore")
             .field(
                 "graft_receiver_endpoint_store",
                 &"dyn AsyncGraftReceiverEndpointStore",
@@ -192,6 +201,9 @@ impl StorageHandles {
             nudge_template_override_store: parts.nudge_template_override_store,
             pending_nudge_store: parts.pending_nudge_store,
             task_store: parts.task_store,
+            hook_registration_store: parts.hook_registration_store,
+            cron_schedule_store: parts.cron_schedule_store,
+            cron_transition_store: parts.cron_transition_store,
             graft_receiver_endpoint_store: parts.graft_receiver_endpoint_store,
             peer_config_store: parts.peer_config_store,
             template_catalog_store: parts.template_catalog_store,
@@ -245,6 +257,20 @@ impl StorageHandles {
     /// Returns the durable task-ledger capability selected by composition.
     pub fn task_store(&self) -> Arc<dyn TaskStore + Send + Sync> {
         Arc::clone(&self.task_store)
+    }
+
+    /// Returns the durable hook registration capability selected by composition.
+    pub fn hook_registration_store(&self) -> Arc<dyn HookRegistrationStore + Send + Sync> {
+        Arc::clone(&self.hook_registration_store)
+    }
+
+    /// Returns the durable cron schedule capability selected by composition.
+    pub fn cron_schedule_store(&self) -> Arc<dyn CronScheduleStore + Send + Sync> {
+        Arc::clone(&self.cron_schedule_store)
+    }
+
+    pub fn cron_transition_store(&self) -> Arc<dyn CronTransitionStore + Send + Sync> {
+        Arc::clone(&self.cron_transition_store)
     }
 
     pub fn graft_receiver_endpoint_store(

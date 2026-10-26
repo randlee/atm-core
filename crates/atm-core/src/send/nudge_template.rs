@@ -4,7 +4,9 @@ use crate::boundary::{
     BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate, TaskClosedOutcome,
     TaskTransition, TeamNudgeTemplateOverrideRow,
 };
+use crate::boundary::{CronLifecycleEvent, CronName};
 use crate::error::AtmError;
+use crate::types::TaskId;
 
 pub fn resolve_template(
     override_row: Option<TeamNudgeTemplateOverrideRow>,
@@ -28,21 +30,59 @@ pub fn render_resolved_built_in_nudge(
     let Some(template_body) = template.body.as_deref() else {
         return Ok(None);
     };
-    render_template(template_body, &render_values(event)).map(Some)
+    render_template(template_body, &render_values(event, &[])).map(Some)
 }
 
-pub fn render_template_body(
-    event: &PostSendHookEvent,
-    template_body: &str,
-) -> Result<String, AtmError> {
-    render_template(template_body, &render_values(event))
+/// Render one cron lifecycle nudge from the cron-only template family.
+///
+/// Cron lifecycle notices deliberately do not reuse post-send events: their
+/// values come from committed cron intent, and the only user-configurable
+/// variables are `name`, `event`, and a trusted `detail_attribute` fragment.
+pub fn render_cron_lifecycle_nudge(
+    template: &ResolvedBuiltInNudgeTemplate,
+    name: &CronName,
+    event: &CronLifecycleEvent,
+) -> Result<Option<String>, AtmError> {
+    if template.kind != BuiltInNudgeTemplateKind::Cron {
+        return Err(AtmError::validation(
+            "cron lifecycle rendering requires the cron template kind",
+        ));
+    }
+    let Some(template_body) = template.body.as_deref() else {
+        return Ok(None);
+    };
+    let (event, detail_attribute) = match event {
+        CronLifecycleEvent::Stopped { message } => (
+            "stopped",
+            format!("message=\"{}\"", escape_xml_attribute(message.as_str())),
+        ),
+        CronLifecycleEvent::Error { failure } => (
+            "error",
+            format!(
+                "error=\"{}\"",
+                escape_xml_attribute(failure.detail.as_str())
+            ),
+        ),
+    };
+    render_template(
+        template_body,
+        &BTreeMap::from([
+            ("name", escape_xml_attribute(name.as_str())),
+            ("event", event.to_owned()),
+            ("detail_attribute", detail_attribute),
+        ]),
+    )
+    .map(Some)
 }
 
-pub fn render_built_in_nudge(
+/// Renders a task nudge that lists every open task of the recipient, so one
+/// nudge covers all of a member's tasks rather than one nudge per task.
+pub(crate) fn render_built_in_nudge(
     event: &PostSendHookEvent,
     template_body: &str,
+    open_tasks: &[TaskId],
 ) -> Result<String, AtmError> {
-    render_template_body(event, template_body)
+    render_template(template_body, &render_values(event, open_tasks))
 }
 
 pub(crate) fn validate_built_in_nudge_template_body(template_body: &str) -> Result<(), AtmError> {
@@ -54,6 +94,7 @@ pub(crate) fn validate_built_in_nudge_template_body(template_body: &str) -> Resu
             ("message_id", String::new()),
             ("description", String::new()),
             ("task_id", String::new()),
+            ("open_tasks", String::new()),
             ("position", String::new()),
             ("attempt", String::new()),
             ("assignee", String::new()),
@@ -64,7 +105,39 @@ pub(crate) fn validate_built_in_nudge_template_body(template_body: &str) -> Resu
     .map(|_| ())
 }
 
-fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
+/// Validate a cron-only override at write time, before it reaches storage.
+pub(crate) fn validate_cron_nudge_template_body(template_body: &str) -> Result<(), AtmError> {
+    render_template(
+        template_body,
+        &BTreeMap::from([
+            ("name", String::new()),
+            ("event", String::new()),
+            ("detail_attribute", String::new()),
+        ]),
+    )
+    .map(|_| ())
+}
+
+fn escape_xml_attribute(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '\"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&apos;"),
+            character if character.is_control() => escaped.push(' '),
+            character => escaped.push(character),
+        }
+    }
+    escaped
+}
+
+fn render_values(
+    event: &PostSendHookEvent,
+    open_tasks: &[TaskId],
+) -> BTreeMap<&'static str, String> {
     let (position, attempt, outcome) = match event.task_transition {
         Some(TaskTransition::Queued { position }) => {
             (position.to_string(), String::new(), String::new())
@@ -107,6 +180,14 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
                 .map(ToString::to_string)
                 .unwrap_or_default(),
         ),
+        (
+            "open_tasks",
+            open_tasks
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
         ("position", position),
         ("attempt", attempt),
         ("assignee", assignee),
@@ -136,10 +217,10 @@ pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
             "<atm task=\"{{task_id}}\" queued=\"{{position}}\" message=\"{{message_id}}\" from=\"{{from}}\"/>"
         }
         BuiltInNudgeTemplateKind::TaskReady => {
-            "<atm task=\"{{task_id}}\" ready message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm task=\"{{task_id}}\" open=\"{{open_tasks}}\" ready message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::TaskReminder => {
-            "<atm task=\"{{task_id}}\" reminder=\"{{attempt}}\" message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
+            "<atm task=\"{{task_id}}\" open=\"{{open_tasks}}\" reminder=\"{{attempt}}\" message=\"{{message_id}}\" from=\"{{from}}\">\n  <action>atm read --message-id {{message_id}}</action>\n  <action>atm task start {{task_id}}</action>\n  <action>execute the assigned task</action>\n  <console announce=\"concise\" pause=\"false\"/>\n</atm>"
         }
         BuiltInNudgeTemplateKind::TaskStarted => {
             "<atm task=\"{{task_id}}\" started agent=\"{{assignee}}\" message=\"{{message_id}}\"/>"
@@ -149,6 +230,9 @@ pub fn default_template(kind: BuiltInNudgeTemplateKind) -> &'static str {
         }
         BuiltInNudgeTemplateKind::TaskClosed => {
             "<atm task=\"{{task_id}}\" closed by=\"{{from}}\" outcome=\"{{outcome}}\" message=\"{{message_id}}\"/>"
+        }
+        BuiltInNudgeTemplateKind::Cron => {
+            "<atm cron name=\"{{name}}\" event=\"{{event}}\" {{detail_attribute}}>"
         }
     }
 }
@@ -189,14 +273,19 @@ fn render_template(
 #[cfg(test)]
 mod tests {
     use super::{
-        default_template, qualified_sender_identity, render_built_in_nudge, resolve_template,
+        default_template, qualified_sender_identity, render_built_in_nudge,
+        render_cron_lifecycle_nudge, resolve_template, validate_built_in_nudge_template_body,
+        validate_cron_nudge_template_body,
     };
+    use crate::boundary::CronDiagnosticDetail;
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
         TaskCloseOutcome, TaskClosedOutcome, TaskTransition, TeamNudgeTemplateOverrideMode,
         TeamNudgeTemplateOverrideRow,
     };
+    use crate::boundary::{CronLifecycleEvent, CronName};
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
+    use crate::types::TaskId;
     use crate::types::{AgentName, ChatId, IsoTimestamp, PaneId, TeamName};
 
     fn base_event() -> PostSendHookEvent {
@@ -254,9 +343,13 @@ mod tests {
             format!("{TEST_LEAD}@{TEST_TEAM}.rand-m4.local")
         );
         assert!(
-            render_built_in_nudge(&event, default_template(BuiltInNudgeTemplateKind::Delivery))
-                .expect("render nudge")
-                .contains(&format!("from=\"{TEST_LEAD}@{TEST_TEAM}.rand-m4.local\""))
+            render_built_in_nudge(
+                &event,
+                default_template(BuiltInNudgeTemplateKind::Delivery),
+                &[]
+            )
+            .expect("render nudge")
+            .contains(&format!("from=\"{TEST_LEAD}@{TEST_TEAM}.rand-m4.local\""))
         );
     }
 
@@ -279,10 +372,45 @@ mod tests {
         let rendered = render_built_in_nudge(
             &event,
             default_template(BuiltInNudgeTemplateKind::TaskReady),
+            &[],
         )
         .expect("rendered template");
         assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
         assert!(rendered.contains("01KX1TEST00000000000000000"));
+    }
+
+    #[test]
+    fn task_reminder_body_lists_open_tasks() {
+        let mut event = base_event();
+        event.task_id = Some("task-1".parse().expect("task id"));
+        event.task_transition = Some(TaskTransition::Reminder { attempt: 1 });
+        let open: Vec<TaskId> = ["task-1", "task-2", "task-3"]
+            .iter()
+            .map(|id| id.parse().expect("task id"))
+            .collect();
+        for kind in [
+            BuiltInNudgeTemplateKind::TaskReminder,
+            BuiltInNudgeTemplateKind::TaskReady,
+        ] {
+            let rendered = render_built_in_nudge(&event, default_template(kind), &open)
+                .expect("default task body renders");
+            assert!(
+                rendered.contains("open=\"task-1 task-2 task-3\""),
+                "{kind:?} body must list every open task: {rendered}"
+            );
+        }
+    }
+
+    #[test]
+    fn open_tasks_placeholder_is_valid_in_team_override() {
+        let override_body = "<atm open=\"{{open_tasks}}\"/>";
+        validate_built_in_nudge_template_body(override_body).expect("override validates");
+        let mut event = base_event();
+        event.task_transition = Some(TaskTransition::Reminder { attempt: 1 });
+        let open: Vec<TaskId> = vec!["task-1".parse().expect("task id")];
+        let rendered =
+            render_built_in_nudge(&event, override_body, &open).expect("override renders");
+        assert_eq!(rendered, "<atm open=\"task-1\"/>");
     }
 
     #[test]
@@ -350,8 +478,42 @@ mod tests {
                 has_read_action,
                 "read delivery contract for {kind}"
             );
-            render_built_in_nudge(&event, body).expect("default template renders");
+            render_built_in_nudge(&event, body, &[]).expect("default template renders");
         }
+    }
+
+    #[test]
+    fn cron_template_is_isolated_escaped_and_disableable() {
+        let name = CronName::parse("nightly\"<&").expect("name");
+        let event = CronLifecycleEvent::Stopped {
+            message: CronDiagnosticDetail::parse("done <&\"'\nnext".to_owned()).expect("detail"),
+        };
+        let template = ResolvedBuiltInNudgeTemplate {
+            kind: BuiltInNudgeTemplateKind::Cron,
+            body: Some("<cron n=\"{{name}}\" e=\"{{event}}\" {{detail_attribute}}/>".to_owned()),
+        };
+        let rendered = render_cron_lifecycle_nudge(&template, &name, &event)
+            .expect("render")
+            .expect("enabled");
+        assert_eq!(
+            rendered,
+            "<cron n=\"nightly&quot;&lt;&amp;\" e=\"stopped\" message=\"done &lt;&amp;&quot;&apos; next\"/>"
+        );
+        assert!(
+            render_cron_lifecycle_nudge(
+                &ResolvedBuiltInNudgeTemplate {
+                    kind: BuiltInNudgeTemplateKind::Cron,
+                    body: None
+                },
+                &name,
+                &event,
+            )
+            .expect("disabled")
+            .is_none()
+        );
+        validate_cron_nudge_template_body("<cron {{name}} {{event}} {{detail_attribute}}/>")
+            .expect("cron-only placeholders");
+        assert!(validate_cron_nudge_template_body("{{from}}").is_err());
     }
 
     #[test]
@@ -378,8 +540,8 @@ mod tests {
 
     #[test]
     fn unknown_placeholder_is_a_validation_error() {
-        let error =
-            render_built_in_nudge(&base_event(), "{{unknown}}").expect_err("unknown placeholder");
+        let error = render_built_in_nudge(&base_event(), "{{unknown}}", &[])
+            .expect_err("unknown placeholder");
         assert!(
             error
                 .message()

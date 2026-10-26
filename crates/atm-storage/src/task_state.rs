@@ -1,6 +1,7 @@
 //! Backend-neutral task ledger types and the pure task state machine.
 
 use serde::{Deserialize, Serialize, Serializer};
+use serde_json::Value;
 use std::num::NonZeroU32;
 
 use crate::error::AtmError;
@@ -11,7 +12,7 @@ use crate::{BuiltInNudgeTemplateKind, MessageKey};
 
 use crate::task_store::ReminderOutcome;
 
-/// 1-based queue place; the active task, when one exists, holds 1.
+/// 1-based queue position, with 1 at the head of the member's queue.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
 pub struct QueuePosition(NonZeroU32);
@@ -99,6 +100,57 @@ impl TaskCloseOutcome {
 
 /// The reserved sender identity used by daemon-originated task events.
 pub const DAEMON_ACTOR_NAME: &str = "atm-daemon";
+
+/// Key in a roster member's `metadata_json` that sets how many tasks the
+/// member may hold active at once.
+pub const MAX_TASKS_METADATA_KEY: &str = "max_tasks";
+
+/// Positive active-task limit stored in roster metadata.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+pub struct MaxTasks(NonZeroU32);
+
+impl MaxTasks {
+    /// The default active-task limit when the roster metadata key is absent.
+    pub const DEFAULT: Self = Self(NonZeroU32::MIN);
+
+    /// Creates a task limit when `value` is positive.
+    #[must_use]
+    pub const fn new(value: u32) -> Option<Self> {
+        match NonZeroU32::new(value) {
+            Some(value) => Some(Self(value)),
+            None => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0.get()
+    }
+
+    /// Converts this limit to the JSON number stored in roster metadata.
+    #[must_use]
+    pub fn to_metadata_value(self) -> Value {
+        Value::from(self.get())
+    }
+
+    /// Reads a limit from roster metadata. An absent or null value uses the
+    /// default; a present value must be an integer from 1 through `u32::MAX`.
+    #[must_use]
+    pub fn from_metadata_value(value: Option<&Value>) -> Option<Self> {
+        let Some(value) = value else {
+            return Some(Self::DEFAULT);
+        };
+        if value.is_null() {
+            return Some(Self::DEFAULT);
+        }
+        let value = u32::try_from(value.as_u64()?).ok()?;
+        Self::new(value)
+    }
+}
+
+/// Active-task limit for a member whose roster row has no `max_tasks` key.
+pub const DEFAULT_MAX_TASKS: MaxTasks = MaxTasks::DEFAULT;
 
 /// Open state and a terminal outcome are unrepresentable together. JSON goes
 /// through `TaskRowWire` / `TaskEventRowWire` (scalar `state` + `close_outcome`).
@@ -567,6 +619,37 @@ mod tests {
         assert!(QueuePosition::new(0).is_none());
         assert_eq!(QueuePosition::HEAD.get(), 1);
         assert_eq!(QueuePosition::HEAD.next().get(), 2);
+    }
+
+    #[test]
+    fn max_tasks_metadata_round_trip_and_defaults() {
+        let limit = MaxTasks::new(3).expect("positive limit");
+        let metadata_value = limit.to_metadata_value();
+
+        assert_eq!(metadata_value, serde_json::json!(3));
+        assert_eq!(
+            MaxTasks::from_metadata_value(Some(&metadata_value)),
+            Some(limit)
+        );
+        assert_eq!(MaxTasks::from_metadata_value(None), Some(MaxTasks::DEFAULT));
+        assert_eq!(
+            MaxTasks::from_metadata_value(Some(&Value::Null)),
+            Some(MaxTasks::DEFAULT)
+        );
+    }
+
+    #[test]
+    fn max_tasks_metadata_rejects_zero_and_non_integer_values() {
+        for value in [
+            serde_json::json!(0),
+            serde_json::json!(-1),
+            serde_json::json!(3.5),
+            serde_json::json!("3"),
+            serde_json::json!([]),
+        ] {
+            assert_eq!(MaxTasks::from_metadata_value(Some(&value)), None, "{value}");
+        }
+        assert!(MaxTasks::new(0).is_none());
     }
 
     fn row(task_id: &str, state: TaskState) -> TaskRow {

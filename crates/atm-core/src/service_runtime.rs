@@ -18,7 +18,9 @@ use atm_storage::{
     TaskStore, TemplateCatalogStore, WriteThroughRosterStore,
 };
 
-use crate::boundary::TemplateComposer;
+use crate::boundary::{
+    CronScheduleStore, CronTransitionStore, HookRegistrationStore, TemplateComposer,
+};
 use crate::config::AtmConfig;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -323,6 +325,9 @@ pub struct LocalServiceRuntime {
     /// nudge, e.g. plain-text mailbox tests.
     pending_nudge_store: Option<std::sync::Arc<dyn PendingNudgeStore + Send + Sync>>,
     task_store: Option<std::sync::Arc<dyn TaskStore + Send + Sync>>,
+    hook_registration_store: Option<Arc<dyn HookRegistrationStore>>,
+    cron_schedule_store: Option<Arc<dyn CronScheduleStore>>,
+    cron_transition_store: Option<Arc<dyn CronTransitionStore>>,
     graft_receiver_endpoint_store:
         Option<std::sync::Arc<dyn AsyncGraftReceiverEndpointStore + Send + Sync>>,
     /// Optional renderer selected by the bootstrap composition root. Core send
@@ -349,6 +354,67 @@ pub struct LocalServiceRuntime {
 }
 
 impl LocalServiceRuntime {
+    /// Loads the team override for a built-in nudge template.
+    pub fn load_nudge_template_override(
+        &self,
+        team: &TeamName,
+        kind: crate::boundary::BuiltInNudgeTemplateKind,
+    ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
+        self.nudge_template_override_store
+            .load_template_override(team, kind)
+    }
+
+    /// Resolves the current direct transport for a committed cron lifecycle
+    /// prompt using the same roster and lease policy as message delivery.
+    pub fn resolve_cron_lifecycle_nudge_target(
+        &self,
+        team: &TeamName,
+        recipient: &AgentName,
+        rendered_nudge: String,
+    ) -> Result<Option<crate::boundary::CronLifecycleNudgeTarget>, AtmError> {
+        use crate::boundary::{
+            CronLifecycleNudgeTarget as Target, GraftNudgeTarget, HerdrNudgeTarget,
+            LocalTmuxNudgeTarget,
+        };
+
+        let snapshot = crate::delivery_policy::DeliveryPolicyCoordinator::new()
+            .resolve_recipient_snapshot(self, team, recipient)?;
+        if snapshot.local_tmux_post_send {
+            let member = self
+                .load_roster_member(team, recipient)
+                .ok_or_else(|| AtmError::agent_not_found(recipient, team))?;
+            let Some(pane_id) = member.recipient_pane_id.or(snapshot.recipient_pane_id) else {
+                return Ok(None);
+            };
+            return Ok(Some(Target::Tmux(LocalTmuxNudgeTarget {
+                pane_id,
+                rendered_nudge,
+            })));
+        }
+        if snapshot.local_herdr_post_send {
+            let Some(agent) = crate::delivery_channel::resolve_herdr_agent_target(
+                recipient,
+                snapshot.herdr_agent.clone(),
+                "cron_lifecycle_herdr_dispatch",
+            ) else {
+                return Ok(None);
+            };
+            return Ok(Some(Target::Herdr(HerdrNudgeTarget {
+                agent,
+                session: snapshot.herdr_session,
+                rendered_nudge,
+            })));
+        }
+        if snapshot.graft_post_send {
+            return Ok(Some(Target::Graft(GraftNudgeTarget {
+                recipient: recipient.clone(),
+                recipient_team: team.clone(),
+                rendered_nudge,
+            })));
+        }
+        Ok(None)
+    }
+
     ///
     /// `roster` is the indivisible paired handle returned by the storage
     /// composition root's write-through roster factory. Hydration already
@@ -373,6 +439,9 @@ impl LocalServiceRuntime {
             non_claude_outbound,
             pending_nudge_store: None,
             task_store: None,
+            hook_registration_store: None,
+            cron_schedule_store: None,
+            cron_transition_store: None,
             graft_receiver_endpoint_store: None,
             template_composer: None,
             template_catalog_store: None,
@@ -518,6 +587,48 @@ impl LocalServiceRuntime {
         })
     }
 
+    #[must_use]
+    pub fn with_hook_registration_store(mut self, store: Arc<dyn HookRegistrationStore>) -> Self {
+        self.hook_registration_store = Some(store);
+        self
+    }
+
+    pub fn hook_registration_store(&self) -> Result<Arc<dyn HookRegistrationStore>, AtmError> {
+        self.hook_registration_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the hook registration store was not installed in this runtime",
+            )
+        })
+    }
+
+    #[must_use]
+    pub fn with_cron_schedule_store(mut self, store: Arc<dyn CronScheduleStore>) -> Self {
+        self.cron_schedule_store = Some(store);
+        self
+    }
+
+    pub fn cron_schedule_store(&self) -> Result<Arc<dyn CronScheduleStore>, AtmError> {
+        self.cron_schedule_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the cron schedule store was not installed in this runtime",
+            )
+        })
+    }
+
+    #[must_use]
+    pub fn with_cron_transition_store(mut self, store: Arc<dyn CronTransitionStore>) -> Self {
+        self.cron_transition_store = Some(store);
+        self
+    }
+
+    pub fn cron_transition_store(&self) -> Result<Arc<dyn CronTransitionStore>, AtmError> {
+        self.cron_transition_store.clone().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "the cron transition store was not installed in this runtime",
+            )
+        })
+    }
+
     /// Attaches the durable graft receiver endpoint registry for local-only
     /// registration, refresh, unregistration, and lookup requests.
     #[must_use]
@@ -659,6 +770,24 @@ impl LocalServiceRuntime {
             .await
     }
 
+    /// Performs a generation-fenced acknowledgement source transition and
+    /// reply insertion on the same ordered writer transaction.
+    pub async fn acknowledge_message_atomically_with_origin_async(
+        &self,
+        source: atm_storage::AcknowledgementSource,
+        builder: std::sync::Arc<dyn atm_storage::AcknowledgementReplyBuilder>,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::AcknowledgementCommit>, AtmError> {
+        let store = self.async_message_store.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "Tokio acknowledgement admission was not installed in this runtime",
+            )
+        })?;
+        store
+            .acknowledge_message_atomically_with_origin_async(source, builder, origin)
+            .await
+    }
+
     /// Returns the daemon-owned runtime view. A system daemon must not read a
     /// caller-supplied workspace path while handling an IPC or peer request.
     pub fn without_workspace_config(mut self) -> Self {
@@ -675,6 +804,30 @@ impl LocalServiceRuntime {
         agent: &AgentName,
     ) -> Option<RosterMemberEphemeralState> {
         self.roster_runtime.ephemeral_state(team, agent)
+    }
+
+    /// Runs a terminal escalation admission while holding the source member's
+    /// roster read guard. Accepted roster observations take the paired write
+    /// guard, preventing a kind or epoch transition from racing the durable
+    /// terminal-marker write.
+    pub(crate) fn with_roster_member_runtime_admission<T>(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        operation: impl FnOnce(Option<RosterMemberEphemeralState>) -> Result<T, AtmError>,
+    ) -> Result<T, AtmError> {
+        let mut operation = Some(operation);
+        let mut outcome = None;
+        self.roster_runtime
+            .with_member_runtime_admission(team, agent, &mut |state| {
+                outcome = Some(operation
+                    .take()
+                    .expect("roster admission operation runs exactly once")(
+                    state
+                ));
+                Ok(())
+            })?;
+        outcome.expect("roster admission operation must run")
     }
 
     /// Applies a batch of accepted runtime observations to the canonical
@@ -1284,6 +1437,56 @@ mod tests {
                 .message()
                 .starts_with("the task store was not installed in this runtime")
         );
+    }
+
+    fn hook_store_runtime() -> super::LocalServiceRuntime {
+        let roster = atm_runtime_test_support::build_write_through_roster_for_test(Arc::new(
+            UnusedRuntimeStore,
+        ))
+        .expect("empty write-through roster fixture");
+        super::LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(UnusedRuntimeStore),
+            roster,
+            Arc::new(UnusedRuntimeStore),
+            Arc::new(super::LocalFileNonClaudeOutbound::new()),
+        )
+    }
+
+    #[test]
+    fn hook_and_cron_stores_report_the_not_installed_error() {
+        let runtime = hook_store_runtime();
+        for (result, name) in [
+            (
+                runtime.hook_registration_store().map(|_| ()),
+                "hook registration",
+            ),
+            (runtime.cron_schedule_store().map(|_| ()), "cron schedule"),
+        ] {
+            let error = result.expect_err("store is not installed");
+            assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+            assert!(error.message().starts_with(&format!(
+                "the {name} store was not installed in this runtime"
+            )));
+        }
+    }
+
+    #[test]
+    fn installed_hook_and_cron_stores_are_returned() {
+        let hooks: Arc<dyn crate::boundary::HookRegistrationStore> =
+            Arc::new(atm_runtime_test_support::InMemoryHookRegistrationStore::default());
+        let schedules: Arc<dyn crate::boundary::CronScheduleStore> =
+            Arc::new(atm_runtime_test_support::InMemoryCronScheduleStore::default());
+        let runtime = hook_store_runtime()
+            .with_hook_registration_store(Arc::clone(&hooks))
+            .with_cron_schedule_store(Arc::clone(&schedules));
+        assert!(Arc::ptr_eq(
+            &hooks,
+            &runtime.hook_registration_store().expect("hook store")
+        ));
+        assert!(Arc::ptr_eq(
+            &schedules,
+            &runtime.cron_schedule_store().expect("cron store")
+        ));
     }
 
     #[test]

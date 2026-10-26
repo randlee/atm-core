@@ -30,6 +30,7 @@ fix is pushed -- so a looping caller must track its own already-fixed set
 (see the closing-triage SKILL.md).
 
 Usage (from your sprint worktree; integrate worktree is auto-discovered):
+    python3 query_open_findings.py --branch sprint/bl-1-refresh-core
     python3 query_open_findings.py --branch feature/pAJ-s6-runtime-observation-snapshot
     python3 query_open_findings.py --branch <name> --integration-root /path/to/integrate-worktree
     python3 query_open_findings.py --branch <name> --phase AJ --json
@@ -39,8 +40,9 @@ Stacked layers: a phase structure declares one ``triage:branch`` per sprint,
 but an append-only stack cuts every fix round as a new branch above it.
 Those branches are never declared, so pass ``--sprint <sprint local name>``
 (the ``triage:<ID>`` the findings' ``triage:foundIn`` points at, e.g.
-``BB6``) to select the sprint directly; ``--branch`` then only labels the
-output. ``--phase`` also picks the matching ``integrate/phase-<phase>``
+``BB6``; ``bb-6``, ``bb6`` and ``BB.6`` select the same sprint, since
+sprint ids, branches and ``--phase`` match case-insensitively) to select the
+sprint directly; ``--branch`` then only labels the output. ``--phase`` also picks the matching ``integrate/phase-<phase>``
 worktree when several integration worktrees exist. Each result lists the
 files its occurrences were observed in; that is where the defect was seen,
 not necessarily where the fix lands, so it is never used as a filter.
@@ -175,20 +177,37 @@ def resolve_integration_root(
     return chosen
 
 
-def _branch_from_criteria(criteria: str) -> str | None:
-    """Derive the documented sprint-branch convention from a criteria path.
+def _criteria_branches(criteria: str) -> tuple[str, str] | None:
+    """Derive the sprint branch names a criteria path implies.
 
-    ``triage:branch`` is preferred when a phase records it explicitly; this
-    fallback keeps older phase records usable.
+    Returns the current convention (``sprint/<phase>-<n>-<slug>``, lowercase)
+    first and the older ``feature/p<PHASE>-s<n>-<slug>`` spelling second, so
+    branches cut under either naming still match. ``triage:branch`` is
+    preferred when a phase records it explicitly; this fallback keeps older
+    phase records usable.
     """
     match = re.fullmatch(
         r"sprint-([a-z][a-z0-9]*)-([0-9]+)(?:-(pre))?-(.+)",
         Path(criteria).stem,
+        re.IGNORECASE,
     )
     if not match:
         return None
     prefix, number, suffix, slug = match.groups()
-    return f"feature/p{prefix.upper()}-s{number}{suffix or ''}-{slug}"
+    current = f"sprint/{prefix}-{number}{'-' + suffix if suffix else ''}-{slug}".lower()
+    legacy = f"feature/p{prefix.upper()}-s{number}{suffix or ''}-{slug}"
+    return current, legacy
+
+
+def _branch_from_criteria(criteria: str) -> str | None:
+    """The current-convention sprint branch for a criteria path."""
+    branches = _criteria_branches(criteria)
+    return branches[0] if branches else None
+
+
+def _sprint_key(sprint_id: str) -> str:
+    """Case- and separator-insensitive sprint key: bl-1, BL1, BL.1, AJ-S1 -> bl1/aj1."""
+    return re.sub(r"[.-](?:s(?=[0-9]))?", "", sprint_id.strip().lower())
 
 
 def _sprint_for_branch(
@@ -202,7 +221,8 @@ def _sprint_for_branch(
     Scans ``.sprints/*/structure.ttl`` for a ``triage:Sprint`` whose
     ``triage:branch`` (or branch derived from its criteria filename, for
     older phases without an explicit branch) equals the requested branch.
-    With ``sprint_id`` the sprint whose IRI local name equals it is selected
+    With ``sprint_id`` the sprint whose IRI local name equals it (ignoring
+    case and ``.``/``-``/``-S`` separators, so ``bl-1`` selects ``BL1``) is selected
     instead, so a stacked fix layer that no structure declares still scopes
     to its sprint. Exactly one match is required across the searched phases;
     anything else fails closed. This mapping is what scopes results to the
@@ -211,10 +231,15 @@ def _sprint_for_branch(
     """
     sprints_dir = root / ".sprints"
     if requested_phase:
-        phase = requested_phase.removeprefix("phase-")
-        candidates = [sprints_dir / phase]
-        if not (candidates[0] / "structure.ttl").is_file():
-            raise QueryError(f"missing phase structure: {candidates[0] / 'structure.ttl'}")
+        phase = requested_phase.lower().removeprefix("phase-")
+        candidates = sorted(
+            p.parent for p in sprints_dir.glob("*/structure.ttl") if p.parent.name.lower() == phase
+        )
+        if len(candidates) != 1:
+            raise QueryError(
+                f"missing phase structure: {sprints_dir / phase / 'structure.ttl'} "
+                f"(case-insensitive; found {len(candidates)})"
+            )
     else:
         candidates = sorted(p.parent for p in sprints_dir.glob("*/structure.ttl"))
         if not candidates:
@@ -230,15 +255,17 @@ def _sprint_for_branch(
             raise QueryError(f"{structure_path}: malformed Turtle ({exc})") from exc
         for sprint in structure.subjects(RDF.type, TRIAGE.Sprint):
             if sprint_id is not None:
-                if str(sprint) == str(TRIAGE[sprint_id]):
+                local = str(sprint).removeprefix(str(TRIAGE))
+                if _sprint_key(local) == _sprint_key(sprint_id):
                     matches.append((phase_path.name, phase_path, sprint))
                 continue
-            declared = [str(value) for value in structure.objects(sprint, TRIAGE.branch)]
-            if branch in declared:
+            declared = [str(value).lower() for value in structure.objects(sprint, TRIAGE.branch)]
+            if branch.lower() in declared:
                 matches.append((phase_path.name, phase_path, sprint))
             elif not declared:
                 criteria = next(structure.objects(sprint, TRIAGE.criteria), None)
-                if criteria is not None and _branch_from_criteria(str(criteria)) == branch:
+                derived = _criteria_branches(str(criteria)) if criteria is not None else None
+                if derived and branch.lower() in (name.lower() for name in derived):
                     matches.append((phase_path.name, phase_path, sprint))
     if len(matches) != 1:
         searched = ", ".join(path.name for path in candidates)
@@ -413,8 +440,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--sprint",
         default=None,
-        help="sprint local name (e.g. BB6) to scope by directly; required for a "
-        "stacked fix layer whose branch no phase structure declares",
+        help="sprint id (e.g. bl-1, BB6, AN.8; case and separator insensitive) to scope "
+        "by directly; required for a stacked fix layer whose branch no phase structure declares",
     )
     parser.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     args = parser.parse_args(argv)

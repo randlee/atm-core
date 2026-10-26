@@ -21,6 +21,7 @@ from lint_common import build_report, discover_repo_root, monotonic_now, print_r
 LINT_NAME = "daemon-singleton"
 CONFIG_PATH = Path("scripts/lint_daemon_singleton.toml")
 KNOWN_TEST_ENV_NAMES = frozenset({
+    "ATM_TIMELINE_CONCURRENT_ATTACH_TEST_CHILD",
     "ATM_TEST_FAIL_RESTORE_INBOX_STAGE",
     "ATM_TEST_FAIL_RESTORE_MARKER_REMOVE",
     "ATM_TEST_FAIL_TEAM_CONFIG_WRITE",

@@ -59,6 +59,56 @@ mod tests {
     }
 
     #[test]
+    fn hook_and_cron_error_codes_keep_their_stable_wire_spellings() {
+        for (code, wire) in [
+            (AtmErrorCode::HookModuleInvalid, "ATM_HOOK_MODULE_INVALID"),
+            (AtmErrorCode::CronExprInvalid, "ATM_CRON_EXPR_INVALID"),
+            (AtmErrorCode::HookRefused, "ATM_HOOK_REFUSED"),
+            (AtmErrorCode::HookExit, "ATM_HOOK_EXIT"),
+            (AtmErrorCode::HookTimeout, "ATM_HOOK_TIMEOUT"),
+            (AtmErrorCode::HookMalformed, "ATM_HOOK_MALFORMED"),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
+    fn tool_sender_error_codes_keep_distinct_stable_wire_spellings() {
+        for (code, wire) in [
+            (
+                AtmErrorCode::ToolSenderUnregistered,
+                "ATM_TOOL_SENDER_UNREGISTERED",
+            ),
+            (AtmErrorCode::ToolSenderReserved, "ATM_TOOL_SENDER_RESERVED"),
+            (
+                AtmErrorCode::ToolSenderUnauthorized,
+                "ATM_TOOL_SENDER_UNAUTHORIZED",
+            ),
+            (AtmErrorCode::ToolKeyUnknown, "ATM_TOOL_KEY_UNKNOWN"),
+            (AtmErrorCode::ToolKeyRevoked, "ATM_TOOL_KEY_REVOKED"),
+            (AtmErrorCode::ToolNonceReplay, "ATM_TOOL_NONCE_REPLAY"),
+            (AtmErrorCode::ToolHostMismatch, "ATM_TOOL_HOST_MISMATCH"),
+            (
+                AtmErrorCode::ToolGenerationConflict,
+                "ATM_TOOL_GENERATION_CONFLICT",
+            ),
+            (
+                AtmErrorCode::ToolSignatureInvalid,
+                "ATM_TOOL_SIGNATURE_INVALID",
+            ),
+            (AtmErrorCode::ToolRequestExpired, "ATM_TOOL_REQUEST_EXPIRED"),
+            (
+                AtmErrorCode::ToolCommitUncertain,
+                "ATM_TOOL_COMMIT_UNCERTAIN",
+            ),
+        ] {
+            assert_eq!(code.as_str(), wire);
+            assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));
+        }
+    }
+
+    #[test]
     fn blocking_bridge_deadline_codes_keep_distinct_stable_wire_spellings() {
         for (code, wire) in [
             (
@@ -99,6 +149,10 @@ mod tests {
                 "ATM_TASK_STALE_COUNTERPARTY",
             ),
             (AtmErrorCode::TaskMoveInvalid, "ATM_TASK_MOVE_INVALID"),
+            (
+                AtmErrorCode::TaskMaxActiveReached,
+                "ATM_TASK_MAX_ACTIVE_REACHED",
+            ),
         ] {
             assert_eq!(code.as_str(), wire);
             assert_eq!(wire.parse::<AtmErrorCode>(), Ok(code));

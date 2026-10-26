@@ -196,6 +196,60 @@ fn bare_member(team: &TeamName, agent: &str) -> RosterEntry {
     member
 }
 
+fn enable_herdr_for_escalation_lead(runtime: &LocalServiceRuntime, team: &TeamName) {
+    let mut roster = runtime
+        .shared_roster_store_arc()
+        .load_roster(team)
+        .expect("roster with escalation lead");
+    let mut lead = herdr_member(team, atm_storage::roles::ROLE_TEAM_LEAD);
+    lead.agent_type = atm_storage::AgentType::Lead;
+    let lead_index = roster
+        .members
+        .iter()
+        .position(|member| member.agent_name.as_str() == atm_storage::roles::ROLE_TEAM_LEAD)
+        .expect("escalation lead");
+    roster.members[lead_index] = lead;
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&roster)
+        .expect("Herdr escalation lead");
+}
+
+fn queue_worker_and_lead_statuses(
+    fake: &atm_herdr::testing::FakeHerdrProcessAdapter,
+    worker: &atm_storage::MemberKey,
+    worker_status: HerdrAgentStatus,
+    lead_status: HerdrAgentStatus,
+) {
+    fake.queue_list_result(Ok(HerdrListOutcome {
+        agents: vec![
+            AgentSnapshot {
+                name: Some(worker.agent().to_string()),
+                pane_id: None,
+                status: worker_status,
+                workspace_id: None,
+            },
+            AgentSnapshot {
+                name: Some(atm_storage::roles::ROLE_TEAM_LEAD.to_owned()),
+                pane_id: None,
+                status: lead_status,
+                workspace_id: None,
+            },
+        ],
+    }));
+}
+
+fn queue_lead_only_status(fake: &atm_herdr::testing::FakeHerdrProcessAdapter) {
+    fake.queue_list_result(Ok(HerdrListOutcome {
+        agents: vec![AgentSnapshot {
+            name: Some(atm_storage::roles::ROLE_TEAM_LEAD.to_owned()),
+            pane_id: None,
+            status: HerdrAgentStatus::Idle,
+            workspace_id: None,
+        }],
+    }));
+}
+
 fn install_escalation_targets(
     runtime: &LocalServiceRuntime,
     store: &atm_storage::DummyTaskStore,
@@ -747,6 +801,133 @@ async fn sustained_listing_absence_becomes_offline_after_two_reminder_intervals_
 }
 
 #[tokio::test]
+async fn dormant_offline_member_escalates_once_when_a_task_arrives() {
+    let (root, runtime, fake, pump, key, _tasks, now) = build_real_task_pump(&[]);
+
+    // Establish a normal observation, then drive a sustained absence with
+    // exact clock values. There is no task during this outage, so it must not
+    // consume an escalation episode or emit mail.
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:01Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:01Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        runtime
+            .roster_ephemeral_state(key.team(), key.agent())
+            .expect("offline observation")
+            .runtime
+            .state,
+        RuntimeMemberState::Offline
+    );
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty(),
+        "a dormant outage has no escalation recipient mail"
+    );
+
+    let task: TaskId = "LIFE-DORMANT-OFFLINE".parse().expect("task id");
+    queue_task_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+        task,
+    );
+    clear_pending_markers(root.path(), &runtime, &key);
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "the open task turns the ongoing offline state into one escalation"
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:03:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "the ongoing offline episode remains a single escalation"
+    );
+}
+
+#[tokio::test]
+async fn active_member_with_open_task_escalates_once_after_going_offline() {
+    let (_root, runtime, fake, pump, key, _tasks, now) =
+        build_real_task_pump(&["LIFE-ACTIVE-TO-OFFLINE"]);
+
+    // The fixture's first response is Idle. Drive a concrete Active
+    // observation, then omit only the worker while keeping the lead visible.
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:01Z").expect("timestamp");
+    queue_worker_and_lead_statuses(
+        &fake,
+        &key,
+        HerdrAgentStatus::Working,
+        HerdrAgentStatus::Idle,
+    );
+    pump.tick_once().await;
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty(),
+        "active work does not escalate"
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:00:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:02:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        runtime
+            .roster_ephemeral_state(key.team(), key.agent())
+            .expect("offline observation")
+            .runtime
+            .state,
+        RuntimeMemberState::Offline
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "the active task holder emits exactly one offline escalation"
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:03:02Z").expect("timestamp");
+    queue_lead_only_status(&fake);
+    pump.tick_once().await;
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "the same offline episode is not repeated"
+    );
+}
+
+#[tokio::test]
 async fn daemon_restart_does_not_reescalate_ongoing_episode() {
     let (root, runtime, fake, pump, store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
@@ -920,6 +1101,103 @@ async fn recipients_only_episode_is_not_duplicated_after_restart() {
 }
 
 #[tokio::test]
+async fn terminal_admission_delivers_only_to_recipient_missing_current_epoch_mail() {
+    let (root, runtime, _fake, _pump, store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Idle], false);
+    let source = &keys[0];
+    let episode_started =
+        IsoTimestamp::from_str("2020-01-01T00:00:00Z").expect("fixed episode epoch");
+    let mut lead = bare_member(source.team(), "lead-a");
+    lead.agent_type = atm_storage::AgentType::Lead;
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&RosterSnapshot {
+            team_name: source.team().clone(),
+            members: vec![herdr_member(source.team(), source.agent().as_str()), lead],
+            refreshed_at: None,
+        })
+        .expect("initial terminal roster");
+    runtime.apply_roster_runtime_observations(
+        source.team(),
+        &[
+            atm_core::protocol::RosterRuntimeObservationUpdate::observed(
+                source.agent().clone(),
+                RuntimeMemberState::Offline,
+                atm_core::protocol::RuntimeObservationSource::Heartbeat,
+                episode_started,
+                None,
+            ),
+        ],
+    );
+
+    let home = root.path().join("home");
+    let first = write_current_herdr_terminal_escalation_with_runtime(
+        home.clone(),
+        source,
+        &NullObservability,
+        &runtime,
+    )
+    .expect("first terminal admission");
+    assert_eq!(first.recipients_written(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, source.team(), "lead-a")
+            .await
+            .len(),
+        1
+    );
+
+    runtime
+        .shared_roster_store_arc()
+        .save_roster(&RosterSnapshot {
+            team_name: source.team().clone(),
+            members: vec![
+                herdr_member(source.team(), source.agent().as_str()),
+                {
+                    let mut lead = bare_member(source.team(), "lead-a");
+                    lead.agent_type = atm_storage::AgentType::Lead;
+                    lead
+                },
+                bare_member(source.team(), "observer-b"),
+            ],
+            refreshed_at: None,
+        })
+        .expect("expanded terminal roster");
+    let observer = "observer-b@ax5-task-only"
+        .parse::<atm_core::address::AgentAddress>()
+        .expect("observer address");
+    store
+        .add_escalation_recipient(
+            &atm_storage::EscalationScope::Team(source.team().clone()),
+            &observer,
+            episode_started,
+        )
+        .expect("second terminal recipient");
+
+    let second = write_current_herdr_terminal_escalation_with_runtime(
+        home,
+        source,
+        &NullObservability,
+        &runtime,
+    )
+    .expect("mixed-recipient terminal admission");
+    assert_eq!(second.recipients_written(), 1);
+    assert_eq!(
+        daemon_mail_for(&runtime, source.team(), "lead-a")
+            .await
+            .len(),
+        1,
+        "the current-epoch delivery for the first recipient is retained"
+    );
+    assert_eq!(
+        daemon_mail_for(&runtime, source.team(), "observer-b")
+            .await
+            .len(),
+        1,
+        "the recipient without a current-epoch delivery receives one"
+    );
+}
+
+#[tokio::test]
 async fn episode_message_summary_and_body() {
     let (_root, runtime, _fake, pump, store, keys, now) =
         build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
@@ -973,7 +1251,229 @@ async fn escalation_mail_is_deferred_and_sets_a_queue_marker() {
 }
 
 #[tokio::test]
-async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
+async fn terminal_escalation_is_not_prompted_when_marker_reservation_fails() {
+    let (root, runtime, fake, pump, store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
+    enable_herdr_for_escalation_lead(&runtime, keys[0].team());
+    pump.tick_once().await;
+
+    let lead = atm_storage::MemberKey::new(
+        keys[0].team().clone(),
+        atm_storage::roles::ROLE_TEAM_LEAD
+            .parse()
+            .expect("lead agent"),
+    );
+    let terminal_message = daemon_mail_for(&runtime, keys[0].team(), lead.agent().as_str())
+        .await
+        .into_iter()
+        .find(|message| {
+            message
+                .envelope
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.starts_with("escalation:"))
+        })
+        .expect("daemon escalation to the lead");
+    assert!(atm_core::nudge_dispatch::is_terminal_escalation_message(
+        &terminal_message
+    ));
+
+    atm_runtime_test_support::install_sqlite_terminal_reservation_failure(
+        root.path().join("runtime/mail.sqlite3"),
+    )
+    .expect("install deterministic marker-reservation failure");
+    queue_idle_result(&fake, &lead);
+    pump.tick_once().await;
+
+    assert!(
+        prompt_texts(&fake).is_empty(),
+        "the external one-shot notification must not be accepted when its durable terminal reservation fails"
+    );
+    let (marker, _) = atm_runtime_test_support::inspect_pending_marker_state_for_test(
+        root.path().join("runtime/mail.sqlite3"),
+        lead.team().as_str(),
+        lead.agent().as_str(),
+        terminal_message.message_key.as_str(),
+    )
+    .expect("inspect retryable marker");
+    assert!(
+        marker.is_some(),
+        "the failed reservation leaves the escalation queued for a later attempt"
+    );
+}
+
+#[tokio::test]
+async fn uncertain_terminal_handoff_error_keeps_the_marker_reserved() {
+    let (root, runtime, fake, pump, store, keys, _now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
+    enable_herdr_for_escalation_lead(&runtime, keys[0].team());
+    pump.tick_once().await;
+
+    let lead = atm_storage::MemberKey::new(
+        keys[0].team().clone(),
+        atm_storage::roles::ROLE_TEAM_LEAD
+            .parse()
+            .expect("lead agent"),
+    );
+    let terminal_message = daemon_mail_for(&runtime, keys[0].team(), lead.agent().as_str())
+        .await
+        .into_iter()
+        .find(|message| {
+            message
+                .envelope
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.starts_with("escalation:"))
+        })
+        .expect("daemon escalation to the lead");
+    assert!(atm_core::nudge_dispatch::is_terminal_escalation_message(
+        &terminal_message
+    ));
+
+    fake.queue_prompt_result(Err(atm_herdr::HerdrError::ServerUnavailable {
+        message: "response lost after handoff".to_owned(),
+        retry_after: None,
+        io_error_kind: None,
+    }));
+    queue_idle_result(&fake, &lead);
+    pump.tick_once().await;
+
+    let (marker, _) = atm_runtime_test_support::inspect_pending_marker_state_for_test(
+        root.path().join("runtime/mail.sqlite3"),
+        lead.team().as_str(),
+        lead.agent().as_str(),
+        terminal_message.message_key.as_str(),
+    )
+    .expect("inspect reserved marker");
+    assert!(
+        marker.is_none(),
+        "uncertain delivery must remain terminal; marker={marker:?}, prompts={:?}, stats={:?}",
+        prompt_texts(&fake),
+        pump.stats()
+    );
+    let prompts_after_error = prompt_texts(&fake);
+    assert_eq!(prompts_after_error.len(), 1, "one handoff attempt was made");
+
+    queue_idle_result(&fake, &lead);
+    pump.tick_once().await;
+    assert_eq!(
+        prompt_texts(&fake),
+        prompts_after_error,
+        "the ambiguous error must not requeue a possibly accepted notification"
+    );
+}
+
+#[tokio::test]
+async fn production_escalation_admission_is_one_shot_and_preserves_task_reminders() {
+    let (root, runtime, fake, pump, store, keys, now) =
+        build_task_only_pump(vec![HerdrAgentStatus::Blocked], false);
+    let worker = keys[0].clone();
+    let team = worker.team().clone();
+    let lead = atm_storage::MemberKey::new(
+        team.clone(),
+        atm_storage::roles::ROLE_TEAM_LEAD
+            .parse()
+            .expect("lead agent"),
+    );
+    let task_id: atm_core::types::TaskId = "AX5-TASK-00".parse().expect("task id");
+    install_escalation_targets(&runtime, store.as_ref(), &keys, &[]);
+    enable_herdr_for_escalation_lead(&runtime, &team);
+
+    // The first pump tick observes the worker's real blocked state with an
+    // open task; production admission creates the durable terminal mail.
+    pump.tick_once().await;
+    assert_eq!(pump.stats().blocked_escalations, 1);
+    assert_eq!(pump.stats().task_reminders, 0);
+    let first_episode_mail = daemon_mail_for(&runtime, &team, lead.agent().as_str()).await;
+    assert_eq!(
+        first_episode_mail.len(),
+        1,
+        "one admission per blocked episode"
+    );
+    let first_escalation = &first_episode_mail[0];
+    assert!(atm_core::nudge_dispatch::is_terminal_escalation_message(
+        first_escalation
+    ));
+    let first_escalation_id = first_escalation
+        .message_key
+        .as_atm_message_id()
+        .expect("escalation id");
+    let first_escalation_id_text = first_escalation_id.to_string();
+    assert!(
+        super::pending_state(root.path(), &lead, first_escalation_id)
+            .0
+            .is_some(),
+        "production admission stores the terminal message's wake marker"
+    );
+
+    queue_worker_and_lead_statuses(
+        &fake,
+        &worker,
+        HerdrAgentStatus::Blocked,
+        HerdrAgentStatus::Idle,
+    );
+    pump.tick_once().await;
+    assert_eq!(
+        prompt_texts(&fake).len(),
+        1,
+        "the lead receives one handoff"
+    );
+    assert!(prompt_texts(&fake)[0].contains(&first_escalation_id_text));
+    assert_eq!(
+        super::pending_state(root.path(), &lead, first_escalation_id).0,
+        None,
+        "accepted terminal handoff clears the marker"
+    );
+
+    for _ in 0..3 {
+        queue_worker_and_lead_statuses(
+            &fake,
+            &worker,
+            HerdrAgentStatus::Blocked,
+            HerdrAgentStatus::Idle,
+        );
+        pump.tick_once().await;
+    }
+    assert_eq!(prompt_texts(&fake).len(), 1, "the episode is not replayed");
+    assert_eq!(
+        daemon_mail_for(&runtime, &team, lead.agent().as_str())
+            .await
+            .len(),
+        1,
+        "blocked polling does not admit another notification in the same episode"
+    );
+
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("reminder time");
+    queue_worker_and_lead_statuses(
+        &fake,
+        &worker,
+        HerdrAgentStatus::Idle,
+        HerdrAgentStatus::Idle,
+    );
+    pump.tick_once().await;
+    assert_eq!(
+        pump.stats().task_reminders,
+        1,
+        "recovery resumes task reminders"
+    );
+    let prompts = prompt_texts(&fake);
+    assert_eq!(prompts.len(), 2);
+    assert!(prompts[1].starts_with(&format!("<atm task=\"{}\" open=", task_id.as_str())));
+    assert!(prompts[1].contains(" ready "));
+    assert_eq!(
+        daemon_mail_for(&runtime, &team, lead.agent().as_str())
+            .await
+            .len(),
+        1,
+        "recovery does not duplicate the completed escalation"
+    );
+}
+
+#[tokio::test]
+async fn tenth_reminder_escalates_once_and_holds_the_same_assignment() {
     let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-TENTH"]);
     for minute in 0..10 {
         *now.lock().expect("clock") =
@@ -1020,16 +1520,15 @@ async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
         "the first stall escalation must set a queue marker for the lead"
     );
 
-    // Idle nudging continues past the first escalation instead of holding
-    // "stalled" forever: ten more reminders reach the next budget boundary
-    // and escalate the lead again.
+    // A persistent idle roster must not create a second reminder or lead
+    // burst for the same unstarted assignment.
     for minute in 11..=20 {
         *now.lock().expect("clock") =
             IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
         queue_idle_result(&fake, &key);
         pump.tick_once().await;
     }
-    assert_eq!(prompt_texts(&fake).len(), 20);
+    assert_eq!(prompt_texts(&fake).len(), 10);
     queue_idle_result(&fake, &key);
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:21:00Z").expect("timestamp");
@@ -1038,22 +1537,22 @@ async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
         .load_task(key.team(), &tasks[0])
         .expect("task")
         .expect("row");
-    assert_eq!(row.reminder_count, 20);
-    assert_eq!(row.lead_notified_count, 2);
+    assert_eq!(row.reminder_count, 10);
+    assert_eq!(row.lead_notified_count, 1);
     assert_eq!(
         prompt_texts(&fake).len(),
-        20,
-        "the escalation tick itself holds rather than nudging"
+        10,
+        "the assignment remains held after its one escalation"
     );
     assert_eq!(
         daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
             .await
             .len(),
-        2,
-        "a continued stall escalates the lead again at the next budget boundary"
+        1,
+        "a continued idle observation cannot create another lead notification"
     );
 
-    // Nudging resumes again after the second escalation.
+    // Another accepted idle observation still leaves the task held.
     queue_idle_result(&fake, &key);
     *now.lock().expect("clock") =
         IsoTimestamp::from_str("2030-01-01T00:22:00Z").expect("timestamp");
@@ -1062,9 +1561,226 @@ async fn tenth_reminder_escalates_then_keeps_nudging_and_escalates_again() {
         .load_task(key.team(), &tasks[0])
         .expect("task")
         .expect("row");
-    assert_eq!(row.reminder_count, 21);
-    assert_eq!(row.lead_notified_count, 2);
-    assert_eq!(prompt_texts(&fake).len(), 21);
+    assert_eq!(row.reminder_count, 10);
+    assert_eq!(row.lead_notified_count, 1);
+    assert_eq!(prompt_texts(&fake).len(), 10);
+}
+
+#[tokio::test]
+async fn started_task_with_idle_roster_has_no_reminder_or_lead_burst() {
+    let (root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-ACTIVE-IDLE"]);
+    start_task(root.path(), &runtime, &key, tasks[0].clone());
+    let store = runtime.task_store().expect("task store");
+    assert_eq!(
+        store
+            .load_task(key.team(), &tasks[0])
+            .expect("task")
+            .expect("row")
+            .state,
+        TaskState::Active
+    );
+
+    for minute in 0..=21 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+    }
+
+    let row = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(row.reminder_count, 0);
+    assert_eq!(row.lead_notified_count, 0);
+    assert!(prompt_texts(&fake).is_empty());
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn start_during_exact_task_lookup_cancels_stale_stall_escalation() {
+    let (root, runtime, fake, pump, key, tasks, now) =
+        build_real_task_pump(&["LIFE-START-DURING-LOOKUP"]);
+    for minute in 0..10 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        if minute > 0 {
+            queue_idle_result(&fake, &key);
+        }
+        pump.tick_once().await;
+    }
+    let store = runtime.task_store().expect("task store");
+    let pending = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        (pending.reminder_count, pending.lead_notified_count),
+        (10, 0)
+    );
+
+    let root_path = root.path().to_path_buf();
+    let start_runtime = runtime.clone();
+    let start_key = key.clone();
+    let start_task_id = tasks[0].clone();
+    let reader = Arc::new(
+        atm_storage::testing::InMemoryTaskLedgerReader::delegating_with_load_task_hook(
+            runtime.async_task_ledger_reader().expect("task reader"),
+            move || {
+                start_task(
+                    &root_path,
+                    &start_runtime,
+                    &start_key,
+                    start_task_id.clone(),
+                )
+            },
+        ),
+    );
+    let checked_runtime = runtime.clone().with_async_task_ledger_reader(reader);
+    let checked_pump = pump_with_clock(
+        checked_runtime,
+        fake.clone(),
+        RuntimeHealth::default(),
+        Arc::clone(&now),
+    )
+    .with_daemon_home(root.path().join("home"));
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:10:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    checked_pump.tick_once().await;
+
+    let started = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(started.state, TaskState::Active);
+    assert_eq!(started.lead_notified_count, 0);
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty()
+    );
+    assert_eq!(prompt_texts(&fake).len(), 10);
+}
+
+#[tokio::test]
+async fn close_during_exact_task_lookup_cancels_stale_stall_escalation() {
+    let (root, runtime, fake, pump, key, tasks, now) =
+        build_real_task_pump(&["LIFE-CLOSE-DURING-LOOKUP"]);
+    for minute in 0..10 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        if minute > 0 {
+            queue_idle_result(&fake, &key);
+        }
+        pump.tick_once().await;
+    }
+    let store = runtime.task_store().expect("task store");
+    let pending = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        (pending.reminder_count, pending.lead_notified_count),
+        (10, 0)
+    );
+
+    let root_path = root.path().to_path_buf();
+    let close_runtime = runtime.clone();
+    let close_key = key.clone();
+    let close_task_id = tasks[0].clone();
+    let reader = Arc::new(
+        atm_storage::testing::InMemoryTaskLedgerReader::delegating_with_load_task_hook(
+            runtime.async_task_ledger_reader().expect("task reader"),
+            move || {
+                close_real_task(
+                    &root_path,
+                    &close_runtime,
+                    &close_key,
+                    &close_task_id,
+                    atm_storage::TaskCloseOutcome::Completed,
+                );
+            },
+        ),
+    );
+    let checked_runtime = runtime.clone().with_async_task_ledger_reader(reader);
+    let checked_pump = pump_with_clock(
+        checked_runtime,
+        fake.clone(),
+        RuntimeHealth::default(),
+        Arc::clone(&now),
+    )
+    .with_daemon_home(root.path().join("home"));
+    *now.lock().expect("clock") =
+        IsoTimestamp::from_str("2030-01-01T00:10:00Z").expect("timestamp");
+    queue_idle_result(&fake, &key);
+    checked_pump.tick_once().await;
+
+    let closed = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        closed.state,
+        TaskState::Complete(atm_storage::TaskCloseOutcome::Completed)
+    );
+    assert_eq!(closed.lead_notified_count, 0);
+    assert!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .is_empty()
+    );
+    assert_eq!(prompt_texts(&fake).len(), 10);
+}
+
+#[tokio::test]
+async fn sustained_runtime_activity_does_not_rearm_reported_assignment() {
+    let (_root, runtime, fake, pump, key, tasks, now) = build_real_task_pump(&["LIFE-STALL-LATCH"]);
+    drive_task_to_stall(&pump, &fake, &key, &now).await;
+    let store = runtime.task_store().expect("task store");
+    let stalled = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!(
+        (stalled.reminder_count, stalled.lead_notified_count),
+        (10, 1)
+    );
+
+    for minute in [11, 12] {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        queue_status_result(&fake, std::slice::from_ref(&key), HerdrAgentStatus::Working);
+        pump.tick_once().await;
+    }
+    let reset = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!((reset.reminder_count, reset.lead_notified_count), (0, 1));
+
+    for minute in 13..=24 {
+        *now.lock().expect("clock") =
+            IsoTimestamp::from_str(&format!("2030-01-01T00:{minute:02}:00Z")).expect("timestamp");
+        queue_idle_result(&fake, &key);
+        pump.tick_once().await;
+    }
+    let held = store
+        .load_task(key.team(), &tasks[0])
+        .expect("task")
+        .expect("row");
+    assert_eq!((held.reminder_count, held.lead_notified_count), (0, 1));
+    assert_eq!(prompt_texts(&fake).len(), 10);
+    assert_eq!(
+        daemon_mail_for(&runtime, key.team(), atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -1242,10 +1958,9 @@ async fn tenth_reminder_with_no_targets_records_terminal_audit() {
         IsoTimestamp::from_str("2030-01-01T00:11:00Z").expect("timestamp");
     queue_idle_result(&fake, &key);
     pump.tick_once().await;
-    // Idle nudging to the assignee resumes on the next tick; only the
-    // escalation to the (empty) target list stays quiet until the next
-    // budget boundary.
-    assert_eq!(prompt_texts(&fake).len(), 11);
+    // Even without configured targets, the durable terminal audit holds the
+    // same assignment after its one escalation attempt.
+    assert_eq!(prompt_texts(&fake).len(), 10);
     assert_eq!(
         runtime
             .task_store()
@@ -2105,11 +2820,13 @@ async fn member_without_dispatchable_backend_holds_and_logs_once() {
             .state,
         RuntimeMemberState::Idle
     );
+    let head = store.row(&key, &"AX5-TASK-00".parse().expect("task"));
     assert!(
         atm_core::nudge_dispatch::build_task_reminder_dispatch(
             &runtime,
             &key,
-            &store.row(&key, &"AX5-TASK-00".parse().expect("task")),
+            &head,
+            std::slice::from_ref(&head.task_id),
         )
         .expect("dispatch classification")
         .is_none(),
@@ -2266,5 +2983,190 @@ async fn sustained_active_resets_reminders_and_a_short_burst_does_not() {
     assert!(
         prompt_texts(&fake).len() == 3,
         "the Active member is never nudged while the reset condition is evaluated"
+    );
+}
+
+/// A member and its open tasks as `(task id, state, reminder_count)`, in
+/// queue order.
+type OpenTasksMember<'a> = (&'a str, Vec<(&'a str, TaskState, u32)>);
+
+type OpenTasksFixture = (
+    tempfile::TempDir,
+    LocalServiceRuntime,
+    Arc<atm_herdr::testing::FakeHerdrProcessAdapter>,
+    HerdrQueueWakePump,
+    Arc<atm_storage::DummyTaskStore>,
+    Vec<atm_storage::MemberKey>,
+    Arc<Mutex<IsoTimestamp>>,
+);
+
+/// Builds an in-memory Herdr pump whose members hold the given open tasks.
+fn build_open_tasks_pump(members: Vec<OpenTasksMember<'_>>) -> OpenTasksFixture {
+    let root = tempfile::tempdir().expect("temporary root");
+    let assembly = open_isolated_sqlite_boundary(root.path()).expect("runtime");
+    let team: TeamName = "ax8-open-tasks".parse().expect("team");
+    let agents: Vec<String> = members
+        .iter()
+        .map(|(agent, _)| (*agent).to_owned())
+        .collect();
+    assembly
+        .service_runtime
+        .shared_roster_store_arc()
+        .save_roster(&RosterSnapshot {
+            team_name: team.clone(),
+            members: agents
+                .iter()
+                .map(|agent| herdr_member(&team, agent))
+                .collect(),
+            refreshed_at: None,
+        })
+        .expect("roster");
+    let assigned_at = IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("timestamp");
+    let rows: Vec<TaskRow> = members
+        .iter()
+        .flat_map(|(agent, tasks)| {
+            tasks
+                .iter()
+                .map(|(task_id, state, reminder_count)| TaskRow {
+                    position: None,
+                    team: team.clone(),
+                    task_id: task_id.parse().expect("task id"),
+                    assignee: agent.parse().expect("agent"),
+                    assigner: "sender".parse().expect("assigner"),
+                    state: *state,
+                    assignment_message_id: AtmMessageId::new(),
+                    description: format!("open task {task_id}"),
+                    assigned_at,
+                    updated_at: assigned_at,
+                    last_reminded_at: None,
+                    reminder_count: *reminder_count,
+                    lead_notified_count: 0,
+                })
+        })
+        .collect();
+    let task_store = Arc::new(atm_storage::DummyTaskStore::with_rows(rows.clone(), false));
+    let reader = task_only_reader(rows, &task_store, None);
+    let runtime = assembly
+        .service_runtime
+        .with_task_store(task_store.clone())
+        .with_async_task_ledger_reader(reader);
+    let keys: Vec<atm_storage::MemberKey> = agents
+        .iter()
+        .map(|agent| atm_storage::MemberKey::new(team.clone(), agent.parse().expect("agent")))
+        .collect();
+    let fake = Arc::new(atm_herdr::testing::FakeHerdrProcessAdapter::default());
+    let now = Arc::new(Mutex::new(assigned_at));
+    let pump = pump_with_clock(
+        runtime.clone(),
+        fake.clone(),
+        RuntimeHealth::default(),
+        Arc::clone(&now),
+    )
+    .with_daemon_home(root.path().join("home"));
+    (root, runtime, fake, pump, task_store, keys, now)
+}
+
+#[tokio::test]
+async fn one_nudge_lists_every_open_task_of_an_idle_member() {
+    let (_root, _runtime, fake, pump, task_store, keys, _now) = build_open_tasks_pump(vec![(
+        "ax8-agent-00",
+        vec![
+            ("AX8-A1", TaskState::Assigned, 0),
+            ("AX8-A2", TaskState::Assigned, 0),
+            ("AX8-B1", TaskState::Assigned, 0),
+        ],
+    )]);
+    let team = keys[0].team().clone();
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+
+    let prompts = prompt_texts(&fake);
+    assert_eq!(prompts.len(), 1, "one nudge covers the member's open tasks");
+    for task in ["AX8-A1", "AX8-A2", "AX8-B1"] {
+        assert!(prompts[0].contains(task), "{}", prompts[0]);
+    }
+    let reminder_count = |task: &str| {
+        task_store
+            .load_task(&team, &task.parse().expect("task"))
+            .expect("load")
+            .expect("row")
+            .reminder_count
+    };
+    assert_eq!(
+        reminder_count("AX8-A1"),
+        1,
+        "the reminder is recorded on the head row"
+    );
+    assert_eq!(reminder_count("AX8-A2"), 0);
+    assert_eq!(reminder_count("AX8-B1"), 0);
+}
+
+#[tokio::test]
+async fn stall_escalates_once_per_member() {
+    let stalled = atm_storage::TASK_STALLED_REMINDER_THRESHOLD;
+    let (_root, runtime, fake, pump, task_store, keys, _now) = build_open_tasks_pump(vec![(
+        "ax8-agent-00",
+        vec![
+            ("AX8-A1", TaskState::Assigned, stalled),
+            ("AX8-A2", TaskState::Assigned, stalled),
+            ("AX8-B1", TaskState::Assigned, stalled),
+        ],
+    )]);
+    let team = keys[0].team().clone();
+    install_escalation_targets(&runtime, &task_store, &keys, &[]);
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+
+    assert_eq!(
+        daemon_mail_for(&runtime, &team, atm_storage::roles::ROLE_TEAM_LEAD)
+            .await
+            .len(),
+        1,
+        "one stalled escalation for the member, not one per open task"
+    );
+    assert!(
+        prompt_texts(&fake).is_empty(),
+        "an escalating pass sends no nudge"
+    );
+}
+
+#[tokio::test]
+async fn members_are_nudged_independently() {
+    let (_root, _runtime, fake, pump, _store, keys, _now) = build_open_tasks_pump(vec![
+        (
+            "ax8-alpha",
+            vec![
+                ("AX8-ALPHA-1", TaskState::Assigned, 0),
+                ("AX8-ALPHA-2", TaskState::Assigned, 0),
+            ],
+        ),
+        (
+            "ax8-beta",
+            vec![
+                ("AX8-BETA-1", TaskState::Assigned, 0),
+                ("AX8-BETA-2", TaskState::Assigned, 0),
+            ],
+        ),
+    ]);
+    queue_status_result(&fake, &keys, HerdrAgentStatus::Idle);
+    pump.tick_once().await;
+
+    let prompts = prompt_texts(&fake);
+    assert_eq!(prompts.len(), 2, "each idle member gets one nudge");
+    let alpha = prompts
+        .iter()
+        .find(|prompt| prompt.contains("AX8-ALPHA-1"))
+        .expect("alpha nudge");
+    let beta = prompts
+        .iter()
+        .find(|prompt| prompt.contains("AX8-BETA-1"))
+        .expect("beta nudge");
+    assert!(
+        alpha.contains("AX8-ALPHA-2") && !alpha.contains("AX8-BETA"),
+        "{alpha}"
+    );
+    assert!(
+        beta.contains("AX8-BETA-2") && !beta.contains("AX8-ALPHA"),
+        "{beta}"
     );
 }

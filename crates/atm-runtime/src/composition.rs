@@ -19,6 +19,7 @@ use crate::legacy_storage_adapters::{
     StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
 };
 use crate::mailbox_runtime::StorageAsyncMailboxRuntime;
+use crate::peer_port::PeerPortResolver;
 use crate::task_telemetry::{TaskTelemetryRuntime, TaskTelemetrySetup};
 
 #[derive(Clone)]
@@ -191,6 +192,9 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     .with_async_message_search_store(async_message_search_store)
     .with_pending_nudge_store(pending_nudge_store)
     .with_task_store(task_store)
+    .with_hook_registration_store(storage.hook_registration_store())
+    .with_cron_schedule_store(storage.cron_schedule_store())
+    .with_cron_transition_store(storage.cron_transition_store())
     .with_graft_receiver_endpoint_store(graft_receiver_endpoint_store)
     .with_template_rendering(template_catalog_store, template_composer.clone());
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
@@ -314,6 +318,11 @@ impl RuntimeAssembly {
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         Arc::clone(&self.peer_config_store)
     }
+
+    pub fn peer_port_resolver(&self) -> PeerPortResolver {
+        PeerPortResolver::new(self.peer_config_store())
+    }
+
     /// Returns the bootstrap-provided template-composition port, if enabled.
     pub fn template_composer(&self) -> Option<Arc<dyn TemplateComposer>> {
         self.service_runtime.template_composer()
@@ -386,6 +395,21 @@ mod tests {
 
         assert_eq!(sink.records().len(), 1);
         assert_eq!(assembly.task_telemetry.diagnostics().snapshot().emitted, 1);
+        drop(assembly);
+        std::fs::remove_dir_all(root).expect("remove tempdir");
+    }
+
+    #[test]
+    fn composition_installs_the_hook_and_cron_stores() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-hook-cron-store-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("tempdir");
+        let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&root)
+            .expect("compose sqlite runtime");
+        assert!(assembly.service_runtime.hook_registration_store().is_ok());
+        assert!(assembly.service_runtime.cron_schedule_store().is_ok());
         drop(assembly);
         std::fs::remove_dir_all(root).expect("remove tempdir");
     }

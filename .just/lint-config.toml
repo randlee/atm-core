@@ -109,6 +109,8 @@ max_scoped_code_lines = 0
 [cargo_shear.allowed_unlinked_files]
 "tests/ui/macro_rejected.rs" = "randlee/sc-lint#346: trybuild fixture consumed by the macro UI harness, which cargo-shear does not model."
 "tests/ui/macro_supported.rs" = "randlee/sc-lint#346: trybuild fixture consumed by the macro UI harness, which cargo-shear does not model."
+"tests/ui/registered_sender_issuer_authorized.rs" = "randlee/sc-lint#346: trybuild fixture consumed by atm-storage tests/registered_sender_issuer.rs, which cargo-shear does not model."
+"tests/ui/registered_sender_issuer_cannot_admit.rs" = "randlee/sc-lint#346: trybuild fixture consumed by atm-storage tests/registered_sender_issuer.rs, which cargo-shear does not model."
 
 [boundaries]
 doc_glob = "docs/*/boundaries.md"
@@ -140,7 +142,7 @@ allowed_dependencies = ["serde", "serde_json"]
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-bootstrap/Cargo.toml"
 boundary_record_path = ["boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml", "boundaries/atm-daemon-bootstrap/daemon-observability.toml"]
-allowed_dependencies = ["atm-core", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "opentelemetry", "opentelemetry-proto", "opentelemetry_sdk", "peer-tls", "sc-observability-log", "serial_test", "serde", "serde_json", "tempfile", "tokio", "tokio-stream", "tonic", "toml", "tracing", "tracing-subscriber", "ulid"]
+allowed_dependencies = ["async-trait", "rustix", "atm-core", "atm-cron", "atm-observability", "atm-herdr", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage", "atm-storage-rusqlite", "atm-template-sc-compose", "chrono", "fs4", "opentelemetry", "opentelemetry-proto", "opentelemetry_sdk", "peer-tls", "sc-observability-log", "serial_test", "serde", "serde_json", "tempfile", "tokio", "tokio-stream", "tonic", "toml", "tracing", "tracing-subscriber", "ulid", "windows-sys"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-daemon-client/Cargo.toml"
@@ -174,11 +176,12 @@ allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage/Cargo.toml"
-allowed_dependencies = ["async-trait", "atm-error", "base64", "chrono", "getrandom", "rustls", "serde", "serde_json", "sha2", "toml", "ulid", "x509-parser", "zeroize"]
+allowed_dependencies = ["async-trait", "atm-error", "base64", "chrono", "getrandom", "rustls", "serde", "serde_json", "sha2", "toml", "trybuild", "ulid", "x509-parser", "zeroize"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/atm-storage-rusqlite/Cargo.toml"
-allowed_dependencies = ["async-trait", "atm-storage", "chrono", "rusqlite", "serde", "serde_json", "tempfile", "tokio", "tracing", "tracing-subscriber"]
+boundary_record_path = "boundaries/atm-storage-rusqlite/tool-sender-registry-sqlite.toml"
+allowed_dependencies = ["async-trait", "atm-storage", "base64", "chrono", "ring", "rusqlite", "serde", "serde_json", "sha2", "tempfile", "tokio", "tracing", "tracing-subscriber"]
 
 [[boundaries.manifest_dependency_allowlists]]
 owner_manifest_path = "crates/peer-tls/Cargo.toml"
@@ -189,6 +192,11 @@ allowed_dependencies = ["atm-storage", "rcgen", "rustls", "tempfile", "tokio", "
 owner_manifest_path = "crates/atm-template-sc-compose/Cargo.toml"
 boundary_record_path = "boundaries/atm-template-sc-compose/sc-composer.toml"
 allowed_dependencies = ["atm-core", "atm-storage", "base64", "sc-composer", "sc-sha", "serde_json"]
+
+[[boundaries.manifest_dependency_allowlists]]
+owner_manifest_path = "crates/atm-cron/Cargo.toml"
+boundary_record_path = "boundaries/atm-cron/cron-scheduler.toml"
+allowed_dependencies = ["async-trait", "atm-core", "atm-runtime-test-support", "atm-storage", "chrono", "cron", "getrandom", "serde_json", "syn", "tokio", "tracing", "tracing-subscriber"]
 
 [[boundaries.global_dependency_ownership]]
 dependency = "rusqlite"
@@ -202,6 +210,26 @@ owner_manifest_path = "crates/atm-core/Cargo.toml"
 dependency_package = "atm-storage-rusqlite"
 allowed_sections = ["dev-dependencies"]
 message = "atm-core may reference atm-storage-rusqlite only in dev-dependencies"
+
+[[boundaries.global_dependency_ownership]]
+dependency = "rustix"
+allowed_manifest_paths = ["crates/atm-daemon-bootstrap/Cargo.toml"]
+allowed_source_roots = ["crates/atm-daemon-bootstrap/src/process_deadline.rs"]
+manifest_message = "only atm-daemon-bootstrap may depend on rustix"
+source_message = "only atm-daemon-bootstrap process_deadline may import rustix"
+
+[[boundaries.global_dependency_ownership]]
+dependency = "cron"
+allowed_manifest_paths = ["crates/atm-cron/Cargo.toml"]
+allowed_source_roots = ["crates/atm-cron/src"]
+manifest_message = "only atm-cron may depend on cron"
+source_message = "only atm-cron source may import cron"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-cron/Cargo.toml"
+dependency_package = "atm-runtime-test-support"
+allowed_sections = ["dev-dependencies"]
+message = "atm-cron may reference atm-runtime-test-support only in dev-dependencies"
 
 [[boundaries.manifest_section_rules]]
 owner_manifest_path = "crates/atm/Cargo.toml"

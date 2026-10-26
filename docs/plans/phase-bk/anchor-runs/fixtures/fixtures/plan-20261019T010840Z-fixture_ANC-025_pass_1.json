@@ -1,0 +1,101 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T010840Z-fixture_ANC-025_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-19T01:08:40+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:ANC-025:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 224,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-025",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A schedule started with --until <time> must end when that time is reached: the row is set inactive with ended_at and last_outcome stopped: until reached, and no run happens at or after that time.",
+      "quote": "which would generally be a time",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 6257077671 (Rand, round 4, 2026-10-18), relayed on PR #1877",
+      "anchor_version": 2,
+      "deterministic_check": "a paused-clock test with until_at = now + 90 s on an every-minute schedule asserts one runner call at 60 s, the row ended at 90 s with last_outcome stopped: until reached, and no call at 120 s",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1065,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 224,
+      "item_shortened": false,
+      "request_bytes": 3272
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

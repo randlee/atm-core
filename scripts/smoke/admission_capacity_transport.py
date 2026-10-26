@@ -27,7 +27,6 @@ import uuid
 
 from scripts.smoke.admission_capacity_support import (
     ADMISSIONS_PER_INTERVAL,
-    CAPACITY_DIRECT_PEER_PORT_ENV,
     CROCKFORD_BASE32,
     DAEMON_SWITCH,
     DAEMON_OUTPUT_TAIL_LINES,
@@ -125,8 +124,6 @@ def start_capacity_daemon(
         raise SmokeError("capacity peer-wire security must be `mutual-tls` or `plaintext-test`")
     require_clean_host_daemon_state(smoke_label="admission-capacity daemon launch")
     command = [str(daemon), "--peer-wire-security", peer_wire_security]
-    if direct_peer_port := env.get(CAPACITY_DIRECT_PEER_PORT_ENV):
-        command.extend(("--direct-peer-port", direct_peer_port))
     process = subprocess.Popen(command, cwd=home, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     output = DaemonOutputCapture.start(process, home / "daemon-output.log")
     try:

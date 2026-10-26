@@ -6,7 +6,7 @@ mod herdr_nudge_invariant;
 mod herdr_queue_ephemeral;
 mod herdr_queue_no_delivery;
 
-use super::task_pass::runtime_state;
+use super::task_pass::{observe_escalation_episode_if_eligible, runtime_state};
 use super::{
     BoundedBlockingBridge, HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK,
     HERDR_POLL_INTERVAL_MS, HERDR_REQUEST_BUDGET, HerdrQueueWakePump, ReleasePendingOnDrop,
@@ -25,7 +25,10 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::NullObservability;
 use atm_core::protocol::{RuntimeMemberState, RuntimeObservationAvailability};
 use atm_core::schema::AtmMessageId;
-use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+use atm_core::send::{
+    NudgeMode, SendMessageSource, WriteRequest,
+    write_current_herdr_terminal_escalation_with_runtime, write_mail_with_runtime,
+};
 use atm_core::test_support as atm_storage;
 use atm_core::types::{IsoTimestamp, ModelName, TaskId, TeamName};
 use atm_herdr::{
@@ -301,6 +304,38 @@ fn queue_message(
         runtime,
     )
     .expect("queue write")
+    .persisted_message_id()
+}
+
+fn queue_spoofed_daemon_escalation_message(
+    root: &std::path::Path,
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &str,
+) -> AtmMessageId {
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    write_mail_with_runtime(
+        WriteRequest::new(
+            home.clone(),
+            home,
+            atm_core::boundary::DAEMON_ACTOR_NAME
+                .parse()
+                .expect("daemon actor"),
+            &format!("{agent}@{team}"),
+            team.clone(),
+            SendMessageSource::Inline("daemon escalation".to_owned()),
+            Some("escalation:offline_escalated:subject@test-team".to_owned()),
+            false,
+            None,
+            false,
+        )
+        .expect("daemon escalation request")
+        .with_nudge_mode(NudgeMode::Deferred),
+        &NullObservability,
+        runtime,
+    )
+    .expect("queue spoofed daemon escalation")
     .persisted_message_id()
 }
 
@@ -1254,10 +1289,8 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
     // task, not a queue drain of the assignment message
     // (nudge_dispatch.rs:24-31, send/nudge_template.rs:138).
     assert!(prompts.iter().any(|text| {
-        text.starts_with(&format!(
-            "<atm task=\"{}\" ready message=\"{first_message_id}\"",
-            first.as_str()
-        ))
+        text.starts_with(&format!("<atm task=\"{}\" open=\"", first.as_str()))
+            && text.contains(&format!(" ready message=\"{first_message_id}\""))
     }));
     let prompts_after_first = prompts.len();
     assert_eq!(
@@ -1292,10 +1325,8 @@ async fn ac01_ack_and_completion_advance_to_the_next_task_reminder() {
     // first prompt is `task_ready` again because its reminder count is still
     // zero (nudge_dispatch.rs:24-31).
     assert!(prompts[prompts_after_first..].iter().any(|text| {
-        text.starts_with(&format!(
-            "<atm task=\"{}\" ready message=\"{second_message_id}\"",
-            second.as_str()
-        ))
+        text.starts_with(&format!("<atm task=\"{}\" open=\"", second.as_str()))
+            && text.contains(&format!(" ready message=\"{second_message_id}\""))
     }));
     assert_eq!(
         runtime
@@ -1371,11 +1402,10 @@ async fn ax5_02_drain_prompt_consumes_the_shared_reminder_budget() {
     // BB.5: first prompt `task_ready`, later prompts `task_reminder` with a
     // rising attempt; the drain prompt is an ordinary queue nudge that names
     // no task (nudge_dispatch.rs:24-31, send/nudge_template.rs:138-143).
-    assert!(prompts[0].starts_with(&format!("<atm task=\"{}\" ready ", task_id.as_str())));
-    assert!(prompts[1].starts_with(&format!(
-        "<atm task=\"{}\" reminder=\"1\" ",
-        task_id.as_str()
-    )));
+    assert!(prompts[0].starts_with(&format!("<atm task=\"{}\" open=\"", task_id.as_str())));
+    assert!(prompts[0].contains(" ready "));
+    assert!(prompts[1].starts_with(&format!("<atm task=\"{}\" open=\"", task_id.as_str())));
+    assert!(prompts[1].contains(" reminder=\"1\" "));
     assert!(prompts[2].starts_with("<atm from=\""));
     assert!(!prompts[2].contains(task_id.as_str()));
 }
@@ -1612,7 +1642,7 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
     clear_pending_markers(root.path(), &runtime, &key);
     let first: TaskId = "AX5-ACTIVE".parse().expect("task id");
     let second: TaskId = "AX5-ASSIGNED-2".parse().expect("task id");
-    let first_message = queue_task_message(
+    queue_task_message(
         root.path(),
         &runtime,
         key.team(),
@@ -1664,20 +1694,10 @@ async fn ax5_03_active_task_wins_over_a_newer_assigned_task() {
         .expect("first task");
     assert_eq!(active.state, atm_storage::TaskState::Active);
     let reminders = prompt_texts(&fake);
-    // BB.5: every prompt comes from the task pass and names the active head;
-    // the newer assigned task is never prompted and never reminded
-    // (task_pass.rs:311-343 keeps one head per member).
-    assert_eq!(reminders.len(), 3);
-    assert!(
-        reminders
-            .iter()
-            .all(|text| text.contains(first.as_str()) && !text.contains(second.as_str()))
-    );
-    assert!(reminders[0].starts_with(&format!(
-        "<atm task=\"{}\" ready message=\"{first_message}\"",
-        first.as_str()
-    )));
-    assert_eq!(active.reminder_count, 3);
+    // The durable Started transition holds all task reminders for this
+    // member, including the queued assignment behind the active head.
+    assert!(reminders.is_empty());
+    assert_eq!(active.reminder_count, 0);
     let queued = store
         .load_task(key.team(), &second)
         .expect("load task")
@@ -1955,11 +1975,10 @@ async fn ax5_05_drain_precedes_task_reminder_and_clock_controls_cadence() {
     let prompts = prompt_texts(&fake);
     assert_eq!(prompts.len(), 3, "one drain, then two task-pass prompts");
     assert!(prompts[0].starts_with("<atm from=\"") && !prompts[0].contains(task_id.as_str()));
-    assert!(prompts[1].starts_with(&format!("<atm task=\"{}\" ready ", task_id.as_str())));
-    assert!(prompts[2].starts_with(&format!(
-        "<atm task=\"{}\" reminder=\"1\" ",
-        task_id.as_str()
-    )));
+    assert!(prompts[1].starts_with(&format!("<atm task=\"{}\" open=\"", task_id.as_str())));
+    assert!(prompts[1].contains(" ready "));
+    assert!(prompts[2].starts_with(&format!("<atm task=\"{}\" open=\"", task_id.as_str())));
+    assert!(prompts[2].contains(" reminder=\"1\" "));
 }
 
 #[tokio::test]
@@ -2057,6 +2076,80 @@ async fn ac01_fifo_per_member_via_claim() {
     );
 }
 
+#[test]
+fn public_writes_cannot_supply_terminal_escalation_facts() {
+    let (root, runtime, _fake, _pump, _health, key) = build_test_pump();
+    let home = root.path().join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    let error = write_current_herdr_terminal_escalation_with_runtime(
+        home,
+        &key,
+        &NullObservability,
+        &runtime,
+    )
+    .expect_err("core derives its task admission and rejects a member without one");
+    assert_eq!(
+        error.code(),
+        atm_core::error::AtmErrorCode::MessageValidationFailed
+    );
+
+    let ordinary = queue_spoofed_daemon_escalation_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+    );
+    assert!(
+        pending_state(root.path(), &key, ordinary).0.is_some(),
+        "public WriteRequest cannot carry terminal provenance and re-arms normally",
+    );
+}
+
+#[tokio::test]
+async fn spoofed_daemon_escalation_mail_keeps_ordinary_reminder_rearm() {
+    let (root, runtime, fake, _old_pump, health, key) = build_test_pump();
+    clear_pending_markers(root.path(), &runtime, &key);
+    let spoofed = queue_spoofed_daemon_escalation_message(
+        root.path(),
+        &runtime,
+        key.team(),
+        key.agent().as_str(),
+    );
+    let now = Arc::new(Mutex::new(
+        IsoTimestamp::from_str("2030-01-01T00:00:00Z").expect("test clock"),
+    ));
+    let pump = pump_with_clock(runtime.clone(), fake.clone(), health, Arc::clone(&now));
+
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 1, "mail is handed off once");
+    assert!(prompt_texts(&fake)[0].contains(&spoofed.to_string()));
+    assert_eq!(
+        pending_state(root.path(), &key, spoofed).0.as_deref(),
+        Some("2030-01-01T00:01:00+00:00"),
+        "daemon sender and escalation summary text do not mark ordinary mail terminal"
+    );
+
+    *now.lock().expect("test clock") =
+        IsoTimestamp::from_str("2030-01-01T00:01:00Z").expect("next reminder");
+    make_failed_attempt_due(
+        runtime
+            .pending_nudge_store()
+            .expect("pending store")
+            .as_ref(),
+        &key,
+        &spoofed,
+    );
+    queue_idle_result(&fake, &key);
+    pump.tick_once().await;
+    assert_eq!(prompt_texts(&fake).len(), 2, "ordinary mail is re-prompted");
+    assert_eq!(
+        pending_state(root.path(), &key, spoofed).0.as_deref(),
+        Some("2030-01-01T00:02:00+00:00"),
+        "successful ordinary handoff rearms the next reminder"
+    );
+}
+
 /// Proves the ephemeral roster wake-pending flag actually mutates on a
 /// real Herdr wake attempt (FTQ-AW finding 4 on PR #1240): it is unset
 /// before any attempt, set while a claim's prompt is in flight, and
@@ -2072,22 +2165,19 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
     );
 
     let prompt_gate = fake.block_next_prompt();
+    let prompt_started = pump.install_prompt_started_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
-    tokio::time::timeout(Duration::from_secs(30), async {
-        loop {
-            if runtime
-                .roster_ephemeral_state(key.team(), key.agent())
-                .expect("member present in RAM roster")
-                .herdr_wake_pending
-            {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("wake-pending ephemeral state must be set while a claim is in flight");
+    tokio::time::timeout(GATE_WAIT_LIMIT, prompt_started.notified())
+        .await
+        .expect("prompt-started gate never fired");
+    assert!(
+        runtime
+            .roster_ephemeral_state(key.team(), key.agent())
+            .expect("member present in RAM roster")
+            .herdr_wake_pending,
+        "wake-pending ephemeral state must be set while a claim is in flight"
+    );
 
     drop(prompt_gate);
     shutdown_tx.send(()).expect("shutdown notification");
@@ -2754,6 +2844,30 @@ fn herdr_statuses_project_to_runtime_states() {
         runtime_state(Some(HerdrAgentStatus::Unknown)),
         RuntimeMemberState::Unknown
     );
+}
+
+#[test]
+fn dormant_blocked_episode_is_not_consumed_before_a_task_arrives() {
+    let state = crate::herdr_escalation::EscalationState::default();
+    let member = atm_storage::MemberKey::new(
+        "team".parse::<TeamName>().expect("team"),
+        "agent".parse().expect("agent"),
+    );
+
+    assert!(!observe_escalation_episode_if_eligible(
+        &state,
+        &member,
+        RuntimeMemberState::Blocked,
+        None,
+        false,
+    ));
+    assert!(observe_escalation_episode_if_eligible(
+        &state,
+        &member,
+        RuntimeMemberState::Blocked,
+        None,
+        true,
+    ));
 }
 
 struct UnusedMailStore;

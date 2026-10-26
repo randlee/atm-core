@@ -1,0 +1,101 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T022629Z-fixture_ANC-012_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-19T02:26:29+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:ANC-012:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 147,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The hook runner must kill a hook still running at its timeout_ms deadline, at most 2500 ms for a task hook and 30000 ms for a cron tick or stop check, and fail the command with ATM_HOOK_TIMEOUT.",
+      "quote": "This allows the hook to KNOW when it's caller will timeout so it can set a shorted timeout to complete w/out error.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal) (point 7, second sentence)",
+      "anchor_version": 4,
+      "deterministic_check": "a paused-clock test with a sleeping fixture hook and timeout_ms 100 asserts the child is killed and the error code is ATM_HOOK_TIMEOUT",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.97,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1062,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 147,
+      "item_shortened": false,
+      "request_bytes": 3187
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T232850Z-fixture_ANC-073_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:28:50+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "fixture:ANC-073:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 136,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-073",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd must show a sanity runs page and a quality runs page, newest run on top, one line per run; the sanity line must carry a pass/fail column and an elapsed-time column for JEV and for LLM each, and a column with the name and nerd icon of the dev whose work was checked; elapsed comes from the Jev client's own return and from a timer fenced around the LLM subagent, and the same rows feed the OTel database in the next atm release.",
+      "quote": "sanity agent never does it and I always need to ask.  it is the only thing I want to see from sanity agent.  perhaps we should consider adding a tui page for both sanity and quality which showed the runs sorted by most recent (on top).  the sanity page would have 1 line per run and both jev + llm would have columns for pass/fail AND elapsed time (which is currently not calculated properly).  Regarding calculation, can't this be returned from the jev.py method call and a timer fencing around the llm agent?  I would also like to have a column for what dev (name and nerd icon) did the work under review.  This would remove the agent distraction and show the data I want to see (and get into otel db on next atm release).",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18 (third round): Rand on the sanity runs table, Jev/LLM failures and refusal ceremony",
+      "anchor_version": 2,
+      "deterministic_check": "the console has a sanity page and a quality page; a ledger row has jev_elapsed_s, llm_elapsed_s and dev fields; jev_client.py returns elapsed; the dev-sanity prompt wraps the LLM spawn in a start/end time; the sanity reply template no longer renders the runs table",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "ea38fe6eff6a9f203cbfc2586f0d62726910445e2f230f0bdb5b2e3d4de221be",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item is about a different component or activity (for example the close hook, sanity FAIL routing, the pour, bead validation), even if it mentions sanity, beads or the lead.",
+            "unclear": "The item text is too vague to tell whether it touches any of these things.",
+            "yes": "The item describes work on a runs page or other display of sanity or quality runs, the sanity ledger row, jev_client.py's return value, how elapsed time is measured, or dev-sanity's spawning of its LLM subagent."
+          },
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about how sanity and quality runs are recorded and shown: the atm-bd console runs pages, the sanity ledger row (elapsed per reviewer, dev identity), the value jev_client.py returns, and the dev-sanity spawn of the LLM subagent. Does `item.text` plan, change, or depend on one of these things? Judge subject overlap only, not whether the item obeys the anchor.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item leaves the page out, or names only the goal (visibility, less asking), or covers only some other part of the anchor.",
+            "unclear": "The item hints at a runs page but its contents cannot be told from the text.",
+            "yes": "The item includes that sanity runs page with its per-run columns, in any wording or as an example row."
+          },
+          "instructions": "Does `item.text` contain the concrete display `anchor.statement` asks for: a console page of sanity runs, newest first, one line per run, showing who did the work and the JEV and LLM results with their elapsed times? A wish to make results easier to see is not that display.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item is a ruled-out behaviour: it follows the anchor, is silent about it, or is about something else.",
+            "unclear": "The item describes runs display or timing in a way ambiguous enough that it might or might not be a ruled-out behaviour.",
+            "yes": "The item states a design or step that is one of the ruled-out behaviours."
+          },
+          "instructions": "Does `item.text` plan something that `anchor.statement` rules out? The anchor rules out: showing sanity runs only in dev-sanity's chat reply or rendering the runs table into that reply; having no sanity runs page or no quality runs page; listing oldest runs first or using more than one line per run; a sanity line without the dev, or without pass/fail or elapsed for JEV or for LLM; computing elapsed any other way than from the Jev client's return and a timer around the LLM subagent (for example from the gap between ledger timestamps); and rows that will never feed the OTel database. The quality line's columns, paging, and OTel export arriving in the next atm release are not ruled out. Silence is not a conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "no": 0.01,
+            "unclear": 0.0,
+            "yes": 0.99
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.83,
+          "probabilities": {
+            "no": 0.89,
+            "unclear": 0.03,
+            "yes": 0.08
+          }
+        }
+      },
+      "min_confidence": 0.83,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1237,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 136,
+      "item_shortened": false,
+      "request_bytes": 3774
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

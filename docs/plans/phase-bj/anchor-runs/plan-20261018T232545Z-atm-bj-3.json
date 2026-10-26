@@ -1,0 +1,184 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T232545Z-atm-bj-3",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:25:45+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchors.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "atm-bj-3",
+    "title": "bj-3: sanity-stack subagent and dev-sanity PASS wiring: sequential spawns, lock timeout, lean mode",
+    "source": "/private/tmp/claude-501/-Users-randlee-github-atm-core/48324f08-3c24-4d63-8574-a78f4d2d167d/scratchpad/bj-plan/item-atm-bj-3.txt",
+    "chars": 8939,
+    "truncated": false,
+    "chars_before_reduction": 8939,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-069",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "sanity-stack must take a budget input in its fenced JSON; in lean mode, or whenever GraphQL is unavailable, it must verify only that the PR base equals the recorded top and that the head descends from it with no divergence, using one filtered REST pull list and local git, and must make no GraphQL call.",
+      "quote": "yes, so basically if graphql is out, or we are watching our tokens (this should be an input arg to the fenced json input of the subagent) the subagent should make sure the branches are aligned and there is no divergence.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "phase-bj planning 2026-10-18 (second round): Rand's sanity-stack, stack bead and lock rulings (atm-bd-orchestration PR #342, docs/requirements/sanity-stack.md)",
+      "anchor_version": 2,
+      "deterministic_check": "with GH_TOKEN scoped to REST only, a lean spawn completes with zero graphql calls in the gh debug log and the layer recorded linked false; the REST call is filtered to number, base, head, sha, draft",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "22dccaa4001bfb5a434fdf56fefb4edfc7f1ae19ba682c829e1f94ccc0f4b34d",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item is about a different component or activity (for example another script, sanity pass/fail handling, the console, a CLI command), even if it uses similar words such as git, REST, rebase or budget.",
+            "unclear": "The item text is too vague to tell whether the work it describes is done by the sanity-stack subagent.",
+            "yes": "The item describes work on the sanity-stack subagent: its fenced JSON input, its verification or linking of a stack layer, or its GitHub API or GraphQL usage."
+          },
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`) about the sanity-stack subagent: the subagent that verifies a layer against the recorded stack top and links it. Does `item.text` plan, change, or depend on the sanity-stack subagent itself: its input, how it verifies or links a layer, or how it uses GitHub and git while doing so? Judge subject overlap only, not whether the item obeys the anchor.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not state the lean procedure: it is silent about it, or mentions budget, tokens, economy or lean only as a topic or goal, or describes a lean path made of different steps.",
+            "unclear": "The item refers to a lean or low-budget procedure but its steps are described too loosely to tell whether they are the base and ancestry checks the anchor requires.",
+            "yes": "The item states what the subagent does in lean mode or when GraphQL is unavailable, with the specific content: base compared with the recorded top and an ancestry or no-divergence check, done with a filtered REST pull list and local git (for example fetch, merge-base --is-ancestor) rather than GraphQL. Paraphrases count."
+          },
+          "instructions": "`anchor.statement` requires two things of the sanity-stack subagent: a budget input in its fenced JSON, and a lean procedure used in lean mode or whenever GraphQL is unavailable that checks only that the PR base equals the recorded top and that the head descends from it with no divergence, using one filtered REST pull list and local git, with no GraphQL call. Does `item.text` plan that lean procedure, with its specific checks or method, for the lean or GraphQL-unavailable case? Judge presence of this content only.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item is a ruled-out behaviour: it follows the anchor, is silent about it, only uses GraphQL in full mode while GraphQL is available, or is about something else.",
+            "unclear": "The item describes a lean or rate-limited path whose method is ambiguous enough that it might or might not use GraphQL, an unfiltered list, or extra verification.",
+            "yes": "The item states a design or step that is one of the ruled-out behaviours, such as explicitly having no budget option, calling GraphQL on the lean or GraphQL-unavailable path, waiting on GraphQL rather than falling back, loading the raw pull list, or verifying the whole stack in lean mode."
+          },
+          "instructions": "Does `item.text` plan something that `anchor.statement` rules out for the sanity-stack subagent? The anchor rules out: having no budget input; making any GraphQL call in lean mode or when GraphQL is unavailable (gh stack view, /sc-gh-stack-view and GraphQL API queries are GraphQL); waiting for GraphQL instead of using the REST and git check; reading an unfiltered pull list; or verifying more than base and ancestry in lean mode. GraphQL use in full mode while GraphQL is available is not ruled out. Silence about the anchor is not a conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.69,
+          "probabilities": {
+            "no": 0.18,
+            "unclear": 0.03,
+            "yes": 0.79
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "no": 0.96,
+            "unclear": 0.0,
+            "yes": 0.04
+          }
+        }
+      },
+      "verdict_first": "underspecified",
+      "verdict_second": "satisfied",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.59,
+          "probabilities": {
+            "no": 0.22,
+            "unclear": 0.05,
+            "yes": 0.73
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "no": 0.95,
+            "unclear": 0.0,
+            "yes": 0.05
+          }
+        }
+      },
+      "min_confidence": 0.59,
+      "explanation": "Jev was not confident (min confidence 0.59); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 3773,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "yes",
+          "confidence": 0.59
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 8939,
+      "item_shortened": false,
+      "request_bytes": 13222
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-069"
+    ],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [
+      "ANC-069"
+    ],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

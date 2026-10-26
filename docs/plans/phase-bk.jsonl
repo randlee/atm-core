@@ -1,0 +1,16 @@
+{"sprint": "bk-1"}
+{"sprint": "bk-2"}
+{"sprint": "bk-6", "depends_on": ["bk-1"]}
+{"sprint": "bk-3", "depends_on": ["bk-2"]}
+{"sprint": "bk-7", "depends_on": ["bk-2"]}
+{"sprint": "bk-4", "depends_on": ["bk-2", "bk-3"]}
+{"sprint": "bk-5", "depends_on": ["bk-3", "bk-7", "bk-4", "bk-6"]}
+{"sprint": "bk-8"}
+{"sprint": "bk-9"}
+{"sprint": "bk-10", "depends_on": ["bk-9"]}
+{"sprint": "bk-11", "depends_on": ["bk-9"]}
+{"sprint": "bk-12", "depends_on": ["bk-9"]}
+{"sprint": "bk-13", "depends_on": ["bk-9"]}
+{"sprint": "bk-14", "depends_on": ["bk-9"]}
+{"sprint": "bk-16", "depends_on": ["bk-9"]}
+{"sprint": "bk-15", "depends_on": ["bk-10", "bk-11", "bk-12", "bk-13", "bk-14", "bk-16"]}

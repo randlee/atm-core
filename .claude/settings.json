@@ -1,0 +1,5 @@
+{
+  "env": {
+    "PLAN_ANCHOR_ALLOW_REMOTE_JUDGE": "1"
+  }
+}

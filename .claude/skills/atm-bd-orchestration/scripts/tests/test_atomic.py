@@ -54,6 +54,9 @@ class Atomic(unittest.TestCase):
   with self.assertRaises(ValueError):m.validate_question_specs({'other':Q},self.s,self.c,self.p)
 
 class Pipeline(unittest.TestCase):
+ man: dict
+ repo: Path
+ root: Path
  setUp = legacy.Tests.setUp
  save = legacy.Tests.save
  def test_v2_roundtrip_and_prebuilt_validation(self):

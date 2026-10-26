@@ -1,0 +1,26 @@
+Evidence for sprint atm-bh-10 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/app.py apps/atm-bd-console/tests/test_app.py apps/atm-bd-console/tests/test_tabs.py
+ apps/atm-bd-console/src/atm_bd_console/app.py | 198 ++++++++++++++++++++++++++
+ apps/atm-bd-console/tests/test_app.py         | 181 +++++++++++++++++++++++
+ apps/atm-bd-console/tests/test_tabs.py        | 111 +++++++++++++++
+ 3 files changed, 490 insertions(+)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/app.py apps/atm-bd-console/tests/test_app.py apps/atm-bd-console/tests/test_tabs.py | head -40
+473bf99 fix(console): skip overlapping interval ticks
+b9598ba fix(console): bind runner store for interactive app
+50a88e6 test(console): cover blocked interval ticks
+f966c0d test(console): bound tab test scenarios
+8683a4d test(console): strengthen refresh force assertions
+cf99c52 test(console): share app test helpers
+d81b594 fix(console): prevent queued interval ticks
+128d7e0 fix(console): align app step contract
+3cd2d3e test(console): bound Textual test waits
+92676ca test(console): remove interval timing dependency
+69221c2 fix(console): load interactive state once
+9cb92e1 test(console): remove hardcoded test assignee
+f390473 fix(console): retain app on tick failure
+9116651 fix(console): pass app lock store to ticks
+ea49acc fix(console): centralize initial state
+83ac06e fix: ignore a tick that lands after quit
+28eb3cc feat(console): Textual app with Dispatch, Status and PRs tabs

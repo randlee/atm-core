@@ -1,0 +1,222 @@
+{
+ "authority": {
+  "anchors": {
+   "records": [
+    {
+     "check": "a vars file missing commit fails before any git or gh call with an err naming commit; the assign and send subprocess argv carry --vars <the same path>",
+     "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+     "deterministic_check": "a vars file missing commit fails before any git or gh call with an err naming commit; the assign and send subprocess argv carry --vars <the same path>",
+     "fixtures": {
+      "fail": [
+       "The hook defines a pydantic model of its own fields and builds a second vars dict for the assignment template."
+      ],
+      "pass": [
+       "The hook renders task-close-vars.j2 (required_variables only) with sc-compose in strict mode and refuses a file missing pr_number; the same path is passed as --vars to atm task assign."
+      ]
+     },
+     "id": "ANC-058",
+     "kind": "directive",
+     "quote": "the hook has vars specified by the hook python.  the hook input vars should be sc-compose --vars payload with every setting necessary to complete everything inside the hook.  the input to the hook would verify vars against pydantic model and reject any missing/unpopulated vars you could define this as a 'special unrendered sc-compose j2 w/ only compined header' so validation is trivial.  (this would skip the need for a pydantic model).  the same vars could be sent to ... same vars sent to 'atm ... --template --vars <shared-vars>'  and sc-compose bead ... --template --vars <shared-vars>",
+     "scope": "the input contract of atm-task-close.py; templates/task-close-vars.j2",
+     "source_ref": "",
+     "source_type": "ANC",
+     "state": "locked",
+     "statement": "atm-task-close.py must take its input as one sc-compose --vars file that carries every value the role needs, must validate it by rendering a header-only j2 template in strict mode before any check runs, and must pass that same file unchanged to the atm task assign and atm send templates it runs.",
+     "summary": "hook vars are the shared sc-compose payload validated by a header-only template",
+     "version": 2
+    }
+   ],
+   "sha256": "ee8c1d861cf60cf85fdc208a8f74f634314e32ab7246316994b66b6eb8622f04"
+  },
+  "intent": {
+   "content": "# Intent - phase-bj: mechanical close flow\n\nWritten 2026-10-18 by fenix from Rand's rulings of 2026-10-18 (atm-core #1873 comment 1, atm-bd-orchestration #340, docs PR atm-bd-orchestration #342). One page at most. Jev questions are judged against the anchors, not this document.\n\n## What this plan is for\n\nDev work is not complete until sanity verifies it, and nothing between a dev\npush and the QA assignment should need the lead. Today the dev closes its own\ntask on push, the lead hand-assigns every sanity and QA task, and atm-bd has\nnever issued an assignment because its dispatch reads branch and worktree\nfrom beads the pour never wrote them to. This phase makes the dev, fix,\nsanity and qa closes one script, `atm-task-close.py`, that verifies the\nminimum (PR open on `pr_target`, pushed head, rebased), closes the bead,\nreports to the lead and assigns the next bead as the phase lead; the dev's\ntask stays open until sanity passes.\n\n## What success looks like\n\n- A dev or fix bead closes only through the hook; the dev's ATM task is closed by the sanity hook on PASS and the dev waits meanwhile.\n- Sanity and QA assignment never need the lead: the hook assigns, atm-bd assigns a ready bead with no task, both as the phase lead.\n- A sanity FAIL reopens the bead and sends the dev `sanity-rejected` on the same task and branch; `max_sanity_rounds` (default 5) escalates to the lead.\n- The pour writes branch, worktree, pr_target and difficulty to every bead of a sprint family and a pydantic model per bead kind validates the whole phase.\n- atm-core issue #1873 (task transition hooks, 1.6.2) is the long-term home; the skill script stands in until it ships.\n- Sanity links the layer on PASS under the stack bead's claim: the stack bead holds the whole stack as ledger and lock, first PASS wins the top and the loser gets `rebase-required` (no round counted); a sanity-stack subagent handles one next-top layer per spawn, sequentially, with a lean mode and a lock timeout that never blocks the team.\n\n## What is deliberately out of scope\n\n- Mechanical dev or fix assignment: the lead picks the dev (ANC-060).\n- Whole-stack verification in the hook: the lead owns stack hygiene (ANC-054, ANC-062).\n- The small phase-bi console fixes (self-addressed send, icons, agent rows): they close in phase-bi.\n\n## Anchors\n\nThe phase-bi anchors (ANC-001..050, REQ-BI6-AC6) are carried unchanged in\n`anchors.json` so Jev judges phase-bj items against the same console\nrulings; ANC-051..086 are this phase's; ANC-063 and ANC-074 are retired and replaced by ANC-078..083 and ANC-084..086, respectively (ANC-062 retired to ANC-065). Rendered to `anchors.md`.\n",
+   "id": "phase-bj",
+   "sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+   "version": 1
+  }
+ },
+ "candidate_minimum": 3,
+ "confidence_reference_threshold": 0.8,
+ "correlation_id": "ANC-058-6d0c4455b",
+ "current_questions": {
+  "questions": {
+   "addressed": {
+    "criteria": {
+     "no": "The item does not say this, including when it is silent about the hook's input, mentions it generically, or uses a different method.",
+     "unclear": "The item's wording about validation or forwarding is too vague to decide.",
+     "yes": "The item says the vars file is checked by a strict sc-compose render of a header-only (required_variables only) template and that the same file goes as --vars to the assign or send template."
+    },
+    "instructions": "Does `item.text` say that atm-task-close.py validates its sc-compose --vars file by rendering a header-only template in strict mode and passes that same file as --vars to the templates it runs, as `anchor.statement` directs? A mention of vars or templates without that validation and forwarding does not count. Judge presence only.",
+    "type": "choice"
+   },
+   "contradicted": {
+    "criteria": {
+     "no": "The item states none of the ruled-out approaches for atm-task-close.py; silence, omissions, partial coverage, and work on other components are not conflicts.",
+     "unclear": "The item states an approach for atm-task-close.py's input that might or might not be one of the ruled-out ones.",
+     "yes": "The item explicitly states one of the ruled-out approaches for atm-task-close.py's input."
+    },
+    "instructions": "Does `item.text` state an approach for atm-task-close.py's own input that `anchor.statement` rules out? Ruled out for the hook: taking its values from anything other than one sc-compose --vars file (command-line flags, environment, several files); validating them with a separately defined schema or model of the hook's fields instead of the header-only template render; validating only after checks have started; giving the assign or send templates a rebuilt, edited, or second vars set instead of the same file. Only statements about atm-task-close.py count: an approach stated for another script or component is not a conflict, even if it uses a schema or model. Leaving a part out or naming only some of the commands is not a conflict either. Judge conflict only.",
+    "type": "choice"
+   },
+   "relevant": {
+    "criteria": {
+     "no": "The item plans work only in other components.",
+     "unclear": "The item's component cannot be identified.",
+     "yes": "The item plans work in atm-task-close.py or templates/task-close-vars.j2, whatever part of the hook it covers."
+    },
+    "instructions": "Is `item.text` about atm-task-close.py (the close hook) or templates/task-close-vars.j2, the subject of `anchor.statement` and `anchor.scope`? Answer about subject matter only.",
+    "type": "choice"
+   }
+  },
+  "roles": {
+   "compliance": "addressed",
+   "conflict": "contradicted",
+   "relevance": "relevant"
+  }
+ },
+ "diagnostic_plan": null,
+ "gate": "planning",
+ "production_confidence_threshold": 0.6,
+ "repeat_count": 2,
+ "runtime": {
+  "agent": "anchor-tuning",
+  "contract_script": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/.claude/skills/plan-anchoring/scripts/anchor_tuning_contract.py",
+  "contract_sha256": "8f464aa751aa4ef3e17a04cbe5d5be6aa29e9c86f134819f29610584532aa7eb",
+  "harness": "claude",
+  "model": "opus",
+  "script": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/.claude/skills/plan-anchoring/scripts/jev_judge.py",
+  "sha256": "575229a11ef03dcbf3f26f657639c086dc1915f584f555e78ed940c2c0df9254",
+  "version": "0.6.1",
+  "workspace": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj"
+ },
+ "template": {
+  "sha256": "d8d6796121bb8155af53277053b25fe9cf99ead86ba55f51b19df8962b441ed3"
+ },
+ "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+ "tuning_history": {
+  "events": [
+   {
+    "authority": {
+     "anchor_id": "ANC-058",
+     "anchor_record_sha256": "0ebdc267a93b91d040579aa6b8b1a2a1a187d3f3bafe7fe40915e10bafb919dc",
+     "anchor_version": 2,
+     "intent_id": "phase-bj-intent",
+     "intent_sha256": "193feb73c68194e0c4d676f4b7efbe02e66c2008513d16ff61f0a670d605984d",
+     "intent_version": 1
+    },
+    "candidate": {
+     "candidate_id": "CE",
+     "question_sha256": "e667bf6dafb8cab7b59bbf3cd69394115c81a26b6d5207269161589c55b463d8"
+    },
+    "decision": {
+     "question_set_sha256": "e667bf6dafb8cab7b59bbf3cd69394115c81a26b6d5207269161589c55b463d8",
+     "reason_code": "TOURNAMENT.SEALED",
+     "status": "sealed"
+    },
+    "event": "question_set_sealed",
+    "event_index": 1,
+    "evidence": {
+     "canonical_request_sha256": [
+      "3a8e38a51e9989df36a0a8f71a1fbc7e2e9f4f3f8ad33c4d5f904245bccb551a",
+      "3a8e38a51e9989df36a0a8f71a1fbc7e2e9f4f3f8ad33c4d5f904245bccb551a",
+      "d951a36ba4d449c010e9e4cdde30d46c5fec828eacd1c6f025f412e62bc7a112",
+      "d951a36ba4d449c010e9e4cdde30d46c5fec828eacd1c6f025f412e62bc7a112",
+      "7594e1f2b2eab0f558c32ac51151b2d680a10f7479cda5900b104d89dff1b79f",
+      "7594e1f2b2eab0f558c32ac51151b2d680a10f7479cda5900b104d89dff1b79f",
+      "798990273cc61309f8b03d8b8744c8eda50f6f1e8206e5843f74262717a6b585",
+      "798990273cc61309f8b03d8b8744c8eda50f6f1e8206e5843f74262717a6b585",
+      "26d447bbbb9c1c09d1ce7b1b40ead041129b6751855a1a921ba81ff2c25240ca",
+      "26d447bbbb9c1c09d1ce7b1b40ead041129b6751855a1a921ba81ff2c25240ca",
+      "12d55884b4a494a044b6821ccc9477e79daa49b08a2eba6a688a766f1bb6e3cb",
+      "12d55884b4a494a044b6821ccc9477e79daa49b08a2eba6a688a766f1bb6e3cb",
+      "59dce3c05f92e9b5c2de161880dd7f8b7e6a2d6ef82c6ccdeff66fb053d40066",
+      "59dce3c05f92e9b5c2de161880dd7f8b7e6a2d6ef82c6ccdeff66fb053d40066",
+      "b0af54199a169d57bdee344e207b68b0322a6b9e9dd899a080a9f7ecaf7bfa7c",
+      "b0af54199a169d57bdee344e207b68b0322a6b9e9dd899a080a9f7ecaf7bfa7c",
+      "a2d3408f3ca00ec47b2c609e56f9e3a0981fff7ac0adf38cd5e44aa98e46b868",
+      "a2d3408f3ca00ec47b2c609e56f9e3a0981fff7ac0adf38cd5e44aa98e46b868"
+     ],
+     "raw_response_sha256": [
+      "66f846f6f44af2cf59d550b33b28107c8e60393bd7638e2cbeb128422e07a99b",
+      "a56fa5d34674d83a4c9b2cba95dd7a22360f3a954a907b10237a2c4a860bb925",
+      "2c3b051afda1f395eb0a2f0de504d6730860d68ef95813ed6870b60a81a292f2",
+      "ccb3715282552a88bdc811541f16607c194fe135aaccb9ccbda6b8425f4c38f4",
+      "82ffbab43b12a52d7d90115286f53a3f50ef85380373e05e00a0be62e78a4ff6",
+      "82ffbab43b12a52d7d90115286f53a3f50ef85380373e05e00a0be62e78a4ff6",
+      "c47803d6bac6993400ac7ccdaa57254985212a4a46cbd0f0fcf3075e881d3447",
+      "35c068eb757cc42e8ea2805030e4706d674a110af269350d152397a4dc4d7d2d",
+      "7ea76ba32862369f9ec8730a0a768cd100342bd4bd647205f54b83991f3a1062",
+      "7ea76ba32862369f9ec8730a0a768cd100342bd4bd647205f54b83991f3a1062",
+      "b95d1d3e8f07cae2a18a39dc4d7f3128be70549d27b82540fdd73bf22aaf43e0",
+      "b95d1d3e8f07cae2a18a39dc4d7f3128be70549d27b82540fdd73bf22aaf43e0",
+      "f4b234062adaa04391a9c3b133bbe13e1fa2505bb60e72d9a1210232f4f33ef8",
+      "f4b234062adaa04391a9c3b133bbe13e1fa2505bb60e72d9a1210232f4f33ef8",
+      "920cd1ccc25dacf1be78008d9a0bd44f4b86236077540f97459b3d6e057d5071",
+      "b661484d6261b1c6074346ab03f7bd00d43717e63c434e125548b99ec512d748",
+      "aa038b62828ae08ccab3d185bfb69aca8bc07c1106aa1a0bf3c81e24a6076dc7",
+      "aa038b62828ae08ccab3d185bfb69aca8bc07c1106aa1a0bf3c81e24a6076dc7"
+     ],
+     "run_ids": [
+      "plan-20261018T231824Z-tune-ANC-058_fx-pass-1@CE/fx-pass-1/r1",
+      "plan-20261018T231824Z-tune-ANC-058_fx-pass-1@CE/fx-pass-1/r2",
+      "plan-20261018T231824Z-tune-ANC-058_fx-fail-1@CE/fx-fail-1/r1",
+      "plan-20261018T231824Z-tune-ANC-058_fx-fail-1@CE/fx-fail-1/r2",
+      "plan-20261018T231824Z-tune-ANC-058_compliant@CE/compliant/r1",
+      "plan-20261018T231824Z-tune-ANC-058_compliant@CE/compliant/r2",
+      "plan-20261018T231824Z-tune-ANC-058_silent@CE/silent/r1",
+      "plan-20261018T231824Z-tune-ANC-058_silent@CE/silent/r2",
+      "plan-20261018T231824Z-tune-ANC-058_topical@CE/topical/r1",
+      "plan-20261018T231824Z-tune-ANC-058_topical@CE/topical/r2",
+      "plan-20261018T231824Z-tune-ANC-058_conflicting@CE/conflicting/r1",
+      "plan-20261018T231824Z-tune-ANC-058_conflicting@CE/conflicting/r2",
+      "plan-20261018T231824Z-tune-ANC-058_irrelevant@CE/irrelevant/r1",
+      "plan-20261018T231824Z-tune-ANC-058_irrelevant@CE/irrelevant/r2",
+      "plan-20261018T231824Z-tune-ANC-058_boundary-pour@CE/boundary-pour/r1",
+      "plan-20261018T231824Z-tune-ANC-058_boundary-pour@CE/boundary-pour/r2",
+      "plan-20261018T231824Z-tune-ANC-058_exception-qa-no-assign@CE/exception-qa-no-assign/r1",
+      "plan-20261018T231824Z-tune-ANC-058_exception-qa-no-assign@CE/exception-qa-no-assign/r2"
+     ]
+    },
+    "oracle": {
+     "case_count": 9,
+     "case_ids": [
+      "fx-pass-1",
+      "fx-fail-1",
+      "compliant",
+      "silent",
+      "topical",
+      "conflicting",
+      "irrelevant",
+      "boundary-pour",
+      "exception-qa-no-assign"
+     ],
+     "repeat_count": 2,
+     "sha256": "3051405197da98c8c0777e98354784bb32807d8790e7262331cfa132299eb876"
+    },
+    "previous_event_sha256": null,
+    "protocol_version": "plan-anchor/question-tournament/2.0.0",
+    "score": {
+     "confidence": {
+      "cells_at_or_above_threshold": 54,
+      "mean": 0.98,
+      "median": 1.0,
+      "minimum": 0.83,
+      "p10": 0.92,
+      "threshold": 0.8,
+      "total_cells": 54
+     },
+     "exact_role_cells": 54,
+     "exact_semantic_verdicts": 18,
+     "regressions": 0,
+     "stable_cases": 9,
+     "total_cases": 9,
+     "total_role_cells": 54,
+     "total_semantic_verdicts": 18
+    },
+    "supersedes": null
+   }
+  ],
+  "history_id": "phase-bj-ANC-058-planning",
+  "schema": "plan-anchor/tuning-history/2"
+ }
+}

@@ -1,0 +1,132 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T022629Z-fixture_ANC-003_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-19T02:26:29+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:ANC-003:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 127,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm passes every hook one JSON request of a single published schema carrying the full subcommand request plus the caller's identity, team and host; the top-level shape is the same for every hooked command.",
+      "quote": "2. atm would call the hook w/ all info passed in + info of caller (who ran the hook) in a single json schema which is known and same for every command for that hook.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 3,
+      "deterministic_check": "one test serializes HookRequest for all six task hooks, cron.tick and cron.stop and asserts the same top-level keys: schema_version, hook, team, phase, caller, request, custom; for each task hook request equals the bare HTTP body the CLI sends",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "81d4a64e3f65a76abae8341a68142d3e270f452f7866d1a20f40513720032e6f",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item works on something else, such as the hook registry, hook listing, cron storage, other command output, or an unrelated component, and makes no command call a hook.",
+            "unclear": "The item text is too vague to tell whether it involves calling a hook or the request a hook receives.",
+            "yes": "The item works on the hook request (its type, fields, serialization, or what is written to the hook's stdin) or makes a command call a hook."
+          },
+          "instructions": "Does `item.text` describe work on the hook request: the data structure atm sends to a hook, how it is serialized, what the hook runner writes to a hook's stdin, or a command that is made to call a hook? Use `anchor.scope` for the area the anchor governs. Do not judge whether the item obeys `anchor.statement`.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item text does not plan this complete request: it is silent, generic, or missing the shared shape or any of the caller's identity, team and host.",
+            "unclear": "The item text alludes to such a request but it is not possible to tell whether the complete directive is included.",
+            "yes": "The item text plans one request shape shared by all hooked commands, holding the subcommand request and the caller's identity, team and host."
+          },
+          "instructions": "Does `item.text` plan what `anchor.statement` asks for: every hooked command passes its hook the same top-level request shape, and that request holds the subcommand request together with the caller's identity, team and host? A generic mention of hooks, of JSON on stdin, or of a request, without both the shared shape and all three caller fields, does not count. Judge presence only; do not judge conflict.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item rules out the directive; the item may be silent or incomplete about the request.",
+            "unclear": "The item says something about the hook request that might or might not exclude the shared shape or the caller information.",
+            "yes": "The item states a design that cannot be reconciled with one shared request shape carrying the subcommand request and the caller's identity, team and host."
+          },
+          "instructions": "`anchor.statement` requires every hooked command to pass its hook one request with the same top-level shape, holding the full subcommand request and the caller's identity, team and host. Does `item.text` state a design that rules this out? Conflicts include: different request types or top-level fields for different commands or for cron ticks; ad-hoc JSON per subcommand; the caller's identity, team or host kept out of the request (for example passed only as environment variables) or stated as not sent. An item that does not mention the request, or describes it incompletely without excluding anything, is not a conflict. Different contents inside the request field for different commands are not a conflict. Judge conflict only.",
+          "type": "choice"
+        }
+      },
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 1.0,
+            "unclear": 0.0,
+            "yes": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 0.0,
+            "unclear": 0.0,
+            "yes": 1.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1140,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 127,
+      "item_shortened": false,
+      "request_bytes": 3574
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-003"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

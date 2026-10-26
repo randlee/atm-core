@@ -5,13 +5,16 @@ use std::time::Duration;
 
 use atm_core::boundary::{
     AsyncTaskLedgerReader, MemberKey, ReadDeadline, ReminderOutcome, TaskEventKind, TaskEventRow,
-    TaskRow,
+    TaskRow, TaskState,
 };
 use atm_core::types::IsoTimestamp;
+use atm_core::types::TaskId;
 
-use crate::herdr_escalation::{EscalationKind, escalate_mail, escalation_summary};
+use crate::herdr_escalation::{
+    EpisodeObservation, EscalationKind, escalate_mail, escalation_summary,
+};
 use crate::herdr_queue_wake::{HerdrQueueWakePump, HerdrQueueWakeStats, herdr_request_deadline};
-use crate::herdr_task_disposition::EpisodeKind;
+use crate::herdr_task_disposition::{EpisodeKind, escalation_due};
 
 const TASK_READ_DEADLINE: Duration = Duration::from_secs(5);
 const MAX_BLOCKED_MAIL_BODY_BYTES: usize = 4_096;
@@ -43,11 +46,16 @@ pub(crate) async fn escalate_stalled_task(
             return;
         }
     };
-    let body = task_escalation_body(row, now, &events);
+    let Some(current) = current_stalled_task(reader, row).await else {
+        return;
+    };
+    let body = task_escalation_body(&current, now, &events);
     let Ok(outcome) = escalate_mail(
         &pump.blocking_bridge,
         &pump.service_runtime,
         Some(task_store),
+        row,
+        None,
         &pump.daemon_home,
         &row.team,
         &escalation_summary(
@@ -71,6 +79,29 @@ pub(crate) async fn escalate_stalled_task(
         )
     });
     record_stall_audit(pump, task_store, row, now, audit_actor, message_id, stats).await;
+}
+
+async fn current_stalled_task(
+    reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
+    row: &TaskRow,
+) -> Option<TaskRow> {
+    let deadline = ReadDeadline::new(TASK_READ_DEADLINE).ok()?;
+    let current = match reader
+        .load_task(row.team.clone(), row.task_id.clone(), deadline)
+        .await
+    {
+        Ok(Some(current)) => current,
+        Ok(None) => return None,
+        Err(error) => {
+            tracing::warn!(subsystem = "herdr_queue_wake", action = "task_escalation_verify", outcome = "failed", task_id = %row.task_id, error = %error, "Task stall escalation held because its current state is unavailable");
+            return None;
+        }
+    };
+    (current.state == TaskState::Assigned
+        && current.assignee == row.assignee
+        && current.assignment_message_id == row.assignment_message_id
+        && escalation_due(&current))
+    .then_some(current)
 }
 
 async fn reminder_events(
@@ -166,15 +197,33 @@ pub(crate) async fn escalate_episode(
     pump: &HerdrQueueWakePump,
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     member: &MemberKey,
+    task_id: &TaskId,
     kind: EpisodeKind,
     since: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
+    // The accepted poll observation may be stale by the time this path gets
+    // to its write boundary. Re-read the canonical runtime record and require
+    // both the episode kind and epoch to match before emitting mail.
+    if !episode_is_current(pump, member, kind, since) {
+        return;
+    }
+    // The task snapshot that admitted this escalation can close while target
+    // lookup and mailbox suppression await. Re-read this exact task identity
+    // at the mail boundary so a stale open row cannot emit an escalation.
+    let Ok(Some(task)) = task_store.load_task(member.team(), task_id) else {
+        return;
+    };
+    if !task.state.is_open() || task.assignee != *member.agent() {
+        return;
+    }
     let body = episode_body(member, kind, since);
     let Ok(outcome) = escalate_mail(
         &pump.blocking_bridge,
         &pump.service_runtime,
         Some(task_store),
+        &task,
+        Some((kind.runtime_state(), since)),
         &pump.daemon_home,
         member.team(),
         &escalation_summary(kind.into(), member, None),
@@ -191,10 +240,29 @@ pub(crate) async fn escalate_episode(
     stats.blocked_escalations += usize::from(outcome.reached_anyone());
 }
 
+fn episode_is_current(
+    pump: &HerdrQueueWakePump,
+    member: &MemberKey,
+    kind: EpisodeKind,
+    since: IsoTimestamp,
+) -> bool {
+    pump.service_runtime
+        .roster_ephemeral_state(member.team(), member.agent())
+        .is_some_and(|record| {
+            pump.escalation_state.observe(
+                member,
+                record.runtime.state,
+                record.runtime.state_changed_at,
+                EpisodeObservation::Verify { kind, since },
+            )
+        })
+}
+
 pub(crate) async fn escalate_refusals(
     pump: &HerdrQueueWakePump,
     task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
     member: &MemberKey,
+    source_task: &TaskRow,
     since: IsoTimestamp,
     stats: &mut HerdrQueueWakeStats,
 ) {
@@ -208,6 +276,8 @@ pub(crate) async fn escalate_refusals(
         &pump.blocking_bridge,
         &pump.service_runtime,
         Some(task_store),
+        source_task,
+        None,
         &pump.daemon_home,
         member.team(),
         &escalation_summary(EscalationKind::RefusalsEscalated, member, None),

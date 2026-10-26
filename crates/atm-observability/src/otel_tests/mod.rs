@@ -341,8 +341,13 @@ async fn late_old_close_never_closes_new_assignment_and_missing_start_is_partial
 #[tokio::test]
 async fn receiver_metrics_cap_series_without_identity_labels() {
     let receiver = Receiver::start(false).await;
-    let setup =
-        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    let setup = setup_with_timeouts(
+        &config(&receiver.endpoint),
+        64,
+        Duration::from_secs(5),
+        Duration::from_secs(5),
+    )
+    .unwrap();
     for index in 0..40 {
         let task = format!("distinct-task-{index}");
         for (kind, seq, second) in [
@@ -353,6 +358,18 @@ async fn receiver_metrics_cap_series_without_identity_labels() {
             setup.0.sink.emit(record(&task, kind, seq, second)).unwrap();
         }
     }
+    receiver
+        .capture
+        .wait("the task metric export", || {
+            receiver
+                .capture
+                .metrics
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|metric| metric.name == "atm.task.events")
+        })
+        .await;
     shutdown(setup).await;
     {
         let metrics = receiver.capture.metrics.lock().unwrap();

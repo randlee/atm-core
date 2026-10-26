@@ -1,0 +1,22 @@
+# Phase BJ tuning installation at 72178a07c
+
+The planner installed the accepted plan-question seals verbatim for ANC-051, 056, 057, 059, 061, 068, 070 and 071. ANC-052, 060, 069 and 073 were re-sealed against the current intent with questions unchanged; exact equality with the existing overrides was checked. Each canonical history sidecar below was verified equal to `data.tuning_history_after` in its result envelope. Only plan questions were touched.
+
+| Anchor | Result and canonical tuning history | Sealed questions SHA-256 | History SHA-256 |
+| --- | --- | --- | --- |
+| ANC-051 | `anchor-runs/tuning/ANC-051/tune-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-051/tune-6d0c4455b/tuning-history.json` | `e759503dd29a3f364e823cef9165e10b7cb670bd5e3fbbcd105587b3f37488f7` | `6b27a5b60c8c13e8cb199636e4ddcceebcdaaefb933520fdcc5b3a38acfe0408` |
+| ANC-056 | `anchor-runs/tuning/ANC-056/tune-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-056/tune-6d0c4455b/tuning-history.json` | `b2939b34b145782ba8d6df35543d2cc927ddb26d690c6c714ee11c59ad55ee70` | `7de99b17523fec39d64d9dc6d062de1e0d386822955e7a7360165f883e32c860` |
+| ANC-057 | `anchor-runs/tuning/ANC-057/rebind-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-057/rebind-6d0c4455b/tuning-history.json` | `9eddf1a5247f7ce1fba90ab949738414abb99fd929f610c0d66154420e87201e` | `fbe1250c03f8b029dc98c4b525a42a1aea4dc09b2d57b56d9549c955f8302466` |
+| ANC-059 | `anchor-runs/tuning/ANC-059/tune-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-059/tune-6d0c4455b/tuning-history.json` | `59cc6f22c27aea466423a298efef77cdfa8f10b97d10e767f21d99cf18e79966` | `6959edf7d47f8b81ef9339d93bda98128cad80e49f7670b1ae71f26f65ce0548` |
+| ANC-061 | `anchor-runs/tuning/ANC-061/tune-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-061/tune-6d0c4455b/tuning-history.json` | `bda0b1117180520bbd0f41c668d8f61f8c100a50751d73e522feb8ba731b87a4` | `bdee292cb7e1a2efd99f6afdbd67b9654a984e3936f716583797d42d08b3abb2` |
+| ANC-068 | `anchor-runs/tuning/ANC-068/tune-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-068/tune-6d0c4455b/tuning-history.json` | `0168baed51cf78290b6decb88fb1f71ea6fed14d19ade7ea3bb534c90a931e10` | `1bd012c49e01d55b34b2618d21035afab0d36267e082341baf25503bf1399b72` |
+| ANC-070 | `anchor-runs/tuning/ANC-070/tune-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-070/tune-6d0c4455b/tuning-history.json` | `3418dce89e124eb8512584d95798f25958ca2f3a4ed84c503a8ddce76593de11` | `8088122c097dde1d5f9bc15bdbcc6b00f7a8ea54110bcc714dffacc0d1bfb71f` |
+| ANC-071 | `anchor-runs/tuning/ANC-071/tune-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-071/tune-6d0c4455b/tuning-history.json` | `d15a7d459def1618199c146fc5f4edb95c5e6cb53715b18bf583252269f6cc81` | `cac48726b094480de5ec3775acd94af1881a3bfbb33eb5a4331dabb5a4ab8957` |
+| ANC-052 | `anchor-runs/tuning/ANC-052/rebind-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-052/rebind-6d0c4455b/tuning-history.json` | `fd2fb8d6bbd1f6c191d007d0274150c7b48d9b2a92df053ac86699f39793de58` | `20de5a4b2d465d4888742588f7301a0eee0423f4cd000859a50ea0845451f88a` |
+| ANC-060 | `anchor-runs/tuning/ANC-060/rebind-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-060/rebind-6d0c4455b/tuning-history.json` | `6badd41125d89853cc7c1cf0c50819e9d2d7b099abcb85b3ab49f5c99cbd98f1` | `d3a0ad9d36dd837ca7a219456977833f6429614433c45ec1204ec993172d8bb3` |
+| ANC-069 | `anchor-runs/tuning/ANC-069/rebind-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-069/rebind-6d0c4455b/tuning-history.json` | `33764582ae268e29d5df0ca31f3989ef892074e42744bc04b3accfa0527be81c` | `d074b424455401eb7e7722d1dc9214de02e5a96a4386dedeeb68285a81ce02dc` |
+| ANC-073 | `anchor-runs/tuning/ANC-073/rebind-6d0c4455b/result.json`, `anchor-runs/tuning/ANC-073/rebind-6d0c4455b/tuning-history.json` | `7aee727422a5cfa6fbf1477993df8b5081d4bc614a1f8fdf0e5f771a09713232` | `6131171f6be34330a227a70ae46c0ad1f580201eaa320324bb002a429ccaee38` |
+
+ANC-053 and ANC-058 retain their prior seals unchanged under the team-lead's ruling. Each reconfirmation returned 40/42 exact role cells, not a pass: ANC-053 missed the `exception_fail` probe and ANC-058 missed the `silent` probe. The lead ruled those probes outside the respective anchor's scope. No replacement was installed and neither result is represented as accepted.
+
+ANC-055, ANC-065, ANC-066, ANC-067 and ANC-072 returned null replacements; the default plan questions remain in place. ANC-083, ANC-087 and ANC-088 were not modified.

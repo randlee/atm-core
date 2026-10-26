@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -12,12 +13,14 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NoReturn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads" / "scripts"))
 import sc_render  # noqa: E402
+from sanity_shared import ledger_path, primary_root, valid_elapsed_s  # noqa: E402
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     raise SystemExit(f"sanity-run-history: {message}")
 
 
@@ -47,7 +50,36 @@ def read_vars(path: Path) -> dict[str, object]:
 
 
 SLOT_ERROR_KEYS = ("code", "message", "recoverable", "deliverable")
-LATER_FIELDS = ("errors", "jev_receipts")  # record fields added after rows were first logged
+LATER_FIELDS = ("errors", "jev_receipts", "dev", "jev_elapsed_s", "llm_elapsed_s", "kind")
+API_FAILURE_MATCHERS = {
+    "sanity-llm": (lambda code: code == "SANITY.LLM_API_FAILURE",),
+    "sanity-jev": (lambda code: code.startswith("SANITY.JEV_"),),
+}
+
+
+def reviewer_elapsed(value):
+    """Concurrent Jev calls contribute their maximum wall time, not their sum."""
+    if value.get("reviewer") != "sanity-jev":
+        return None
+    times: list[int | float] = []
+    for result in value.get("reviewer_results") or []:
+        if isinstance(result, dict):
+            elapsed = result.get("elapsed_s")
+            if valid_elapsed_s(elapsed):
+                times.append(elapsed)
+    return max(times) if times else None
+
+
+def checked_dev(bead):
+    assignee = bead.get("assignee") if isinstance(bead, dict) else None
+    return assignee if isinstance(assignee, str) and assignee else None
+
+
+def result_kind(value):
+    error = value.get("error")
+    code = error.get("code") if isinstance(error, dict) else None
+    matchers = API_FAILURE_MATCHERS.get(value.get("reviewer"), ())
+    return "API_FAILURE" if isinstance(code, str) and any(matcher(code) for matcher in matchers) else "verdict"
 
 
 def valid_slot_error(error: object) -> bool:
@@ -62,7 +94,9 @@ def slot_errors(value: dict[str, object]) -> list[dict[str, object]]:
     """Each failed slot's error, copied verbatim from its failure envelope; vars without reviewer_results have none.
     A malformed envelope (one whose error is not a well-typed code/message/recoverable) is not a slot error: its
     reviewer merge is CANNOT_RUN, whose `error` the row carries, so it never keeps the row from being logged."""
-    results = value.get("reviewer_results") or []
+    results = value.get("reviewer_results")
+    if not isinstance(results, list):
+        return []
     errors = [{key: result["error"].get(key) for key in SLOT_ERROR_KEYS}
               for result in results
               if isinstance(result, dict) and result.get("success") is False and isinstance(result.get("error"), dict)]
@@ -74,7 +108,10 @@ def jev_receipts(value: dict[str, object]) -> list[object]:
     verbatim; sanity-llm rows carry none."""
     if value.get("reviewer") != "sanity-jev":
         return []
-    found = [result["data"].get("jev") for result in value.get("reviewer_results") or []
+    results = value.get("reviewer_results")
+    if not isinstance(results, list):
+        return []
+    found = [result["data"].get("jev") for result in results
              if isinstance(result, dict) and result.get("success") is True and isinstance(result.get("data"), dict)]
     return [receipt for jev in found for receipt in (
         [part.get("receipt") if isinstance(part, dict) else part for part in jev] if isinstance(jev, list) else [jev])]
@@ -87,31 +124,13 @@ def phase_from_sprint(sprint: str) -> str:
     return match.group(1)
 
 
-def phase_from_bead(bead: str, sprint: str) -> str:
-    try:
-        result = subprocess.run(
-            ["bd", "show", bead, "--json"], check=True, capture_output=True, text=True
-        )
-        issues = json.loads(result.stdout)
-        metadata = issues[0].get("metadata") if isinstance(issues, list) and issues else None
-        value = metadata.get("phase") if isinstance(metadata, dict) else None
-        match = re.fullmatch(r"(?:phase-)?([a-z][a-z0-9_-]*)", value.lower()) if isinstance(value, str) else None
-        if match:
-            return match.group(1)
-    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError):
-        pass
+def phase_from_bead(bead: dict, sprint: str) -> str:
+    metadata = bead.get("metadata") if isinstance(bead, dict) else None
+    value = metadata.get("phase") if isinstance(metadata, dict) else None
+    match = re.fullmatch(r"(?:phase-)?([a-z][a-z0-9_-]*)", value.lower()) if isinstance(value, str) else None
+    if match:
+        return match.group(1)
     return phase_from_sprint(sprint)
-
-
-def primary_root() -> Path:
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            check=True, capture_output=True, text=True,
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        fail(f"cannot locate repository common directory: {exc}")
-    return Path(result.stdout.strip()).parent
 
 
 def load_log(path: Path) -> list[dict[str, object]]:
@@ -161,11 +180,20 @@ def main() -> None:
     vars = read_vars(args.vars)
     completed = utc_timestamp(vars["completed_at"])
     elapsed = max(0, round(completed.timestamp() - utc_timestamp(vars["started_at"]).timestamp()))
-    phase = phase_from_bead(args.bead, vars["sprint"])
+    checked = vars.get("checked_bead_data")
+    if not isinstance(checked, dict):
+        checked = {}
+    sprint = vars["sprint"]
+    assert isinstance(sprint, str)
+    phase = phase_from_bead(checked, sprint)
     record = {
         "run_id": vars["run_id"], "reviewer": vars["reviewer"], "commit": vars["commit"],
         "started_at": vars["started_at"], "duration_seconds": elapsed,
         "error": vars.get("error"),
+        "dev": checked_dev(checked),
+        "jev_elapsed_s": reviewer_elapsed(vars),
+        "llm_elapsed_s": elapsed if vars["reviewer"] == "sanity-llm" else None,
+        "kind": result_kind(vars),
         "errors": slot_errors(vars),
         "jev_receipts": jev_receipts(vars),
         "task": args.task, "sprint": vars["sprint"], "phase": phase,
@@ -177,12 +205,16 @@ def main() -> None:
         "duration": f"{elapsed // 60}m{elapsed % 60:02d}s",
     }
     record = render_record(record)
-    log_path = primary_root() / ".sc" / "sanity-log" / f"phase-{phase}.jsonl"
+    try:
+        log_path = ledger_path(primary_root(), phase)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        fail(f"cannot locate sanity ledger: {exc}")
     append_record(log_path, record)
     print(log_path)
 
 
 RECORD_TEMPLATE = Path(__file__).resolve().parent.parent / "templates/sanity-run-record.json.j2"
+APPEND_TIMEOUT_SECONDS = 60
 RECORD_TYPES = {
     "run_id": str, "reviewer": str, "commit": str, "task": str, "sprint": str,
     "phase": str, "started_at": str, "completed_at": str, "completed_local": str, "duration": str,
@@ -192,8 +224,15 @@ RECORD_TYPES = {
 
 
 def validate_record(record):
-    if not isinstance(record, dict) or set(record) != set(RECORD_TYPES) | {"findings", "error", "errors", "jev_receipts"}:
+    if not isinstance(record, dict) or set(record) != set(RECORD_TYPES) | {"findings", "error", "errors", "jev_receipts", "dev", "jev_elapsed_s", "llm_elapsed_s", "kind"}:
         fail("rendered record has incorrect fields")
+    if record["dev"] is not None and (not isinstance(record["dev"], str) or not record["dev"]):
+        fail("rendered record.dev must be a nonempty string or null")
+    for field in ("jev_elapsed_s", "llm_elapsed_s"):
+        if record[field] is not None and not valid_elapsed_s(record[field]):
+            fail(f"rendered record.{field} must be a finite nonnegative number or null")
+    if record["kind"] not in {"verdict", "API_FAILURE"}:
+        fail("rendered record.kind must be verdict or API_FAILURE")
     for field, expected in RECORD_TYPES.items():
         exact_types = expected if isinstance(expected, tuple) else (expected,)
         if type(record[field]) not in exact_types or (expected is str and not record[field]):
@@ -246,11 +285,19 @@ def render_record(variables):
 
 
 def append_record(log_path, record):
-    """Append one row; an identical retry of a logged run/reviewer is a no-op, a differing one fails.
-    `sc-compose render --strict --append` renders the row again from the same values and writes it as one
-    compact line under its lock, so concurrent writers never interleave."""
+    """Serialize the whole read/check/append transaction, including duplicate detection.
+
+    This lock is separate from sc-compose's append lock: taking that lock here
+    would deadlock the child. All history writers must use this sidecar lock.
+    """
     validate_record(record)
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.with_suffix(log_path.suffix + ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        _append_locked(log_path, record)
+
+
+def _append_locked(log_path, record):
     records = load_log(log_path)
     same_run = [r for r in records if r.get("run_id") == record["run_id"]]
     if any(any(r.get(k) != record[k] for k in ("commit", "task", "sprint", "pr_number", "iteration", "final_verdict")) for r in same_run):
@@ -263,12 +310,22 @@ def append_record(log_path, record):
         if {**prior[-1], "completed_local": None} != {**{k: v for k, v in record.items() if k not in later}, "completed_local": None}:
             fail("run/reviewer already logged with different results")
         return
+    original_size = log_path.stat().st_size if log_path.exists() else 0
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as var_file:
         json.dump(record, var_file)
     try:
-        proc = subprocess.run(["sc-compose", "render", "--strict", "--root", str(RECORD_TEMPLATE.parent),
-                               "--file", str(RECORD_TEMPLATE), "--var-file", var_file.name, "--append", str(log_path)],
-                              text=True, capture_output=True)
+        try:
+            proc = subprocess.run(["sc-compose", "render", "--strict", "--root", str(RECORD_TEMPLATE.parent),
+                                   "--file", str(RECORD_TEMPLATE), "--var-file", var_file.name, "--append", str(log_path)],
+                                  text=True, capture_output=True, timeout=APPEND_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            try:
+                if original_size or log_path.exists():
+                    with log_path.open("r+b") as log:
+                        log.truncate(original_size)
+            except OSError as exc:
+                fail(f"SANITY.LOG_APPEND_TIMEOUT: sc-compose append to {log_path} exceeded {APPEND_TIMEOUT_SECONDS}s; rollback failed: {exc}")
+            fail(f"SANITY.LOG_APPEND_TIMEOUT: sc-compose append to {log_path} exceeded {APPEND_TIMEOUT_SECONDS}s")
     finally:
         os.unlink(var_file.name)
     if proc.returncode:

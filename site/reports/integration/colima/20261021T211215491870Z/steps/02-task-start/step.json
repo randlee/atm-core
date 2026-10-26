@@ -1,0 +1,14 @@
+{
+  "feature": "colima-task-start",
+  "generated_at": "2026-10-21T21:12:32.221143+00:00",
+  "source_revision": "2958ae37a65eba59bb6604ba10e56a38489e8dcf",
+  "container": "hermes-testbed",
+  "status": "FAIL",
+  "cases": [
+    {
+      "name": "report",
+      "status": "FAIL",
+      "detail": "report missing; see run-prompts.log"
+    }
+  ]
+}

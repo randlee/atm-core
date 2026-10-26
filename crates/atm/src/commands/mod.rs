@@ -8,9 +8,12 @@ pub mod api;
 pub(crate) mod caller_context;
 pub mod clear;
 pub mod compose;
+pub mod cron;
 pub mod doctor;
 pub mod escalation;
 pub mod help;
+pub mod hook;
+pub mod hook_module;
 pub(crate) mod internal_heartbeat;
 pub(crate) mod internal_nudge;
 pub(crate) mod internal_queue_get;
@@ -116,6 +119,8 @@ impl Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    Hook(hook::HookCommand),
+    Cron(self::cron::CronCommand),
     Api(ApiCommand),
     Send(SendCommand),
     Queue(QueueCommand),
@@ -128,6 +133,9 @@ enum Command {
     Ack(AckCommand),
     Clear(ClearCommand),
     Log(LogCommand),
+    #[command(
+        after_long_help = "Hooks: calls each registered module's doctor once per module/cwd/team/phase for the caller's team, reports findings without changing the overall summary; JSON includes hooks even when empty."
+    )]
     Doctor(DoctorCommand),
     Escalation(EscalationCommand),
     Help(HelpCommand),
@@ -149,6 +157,8 @@ enum Command {
 impl Command {
     async fn run(self, observability: &CliObservability) -> Result<()> {
         match self {
+            Self::Hook(command) => command.run(observability).await,
+            Self::Cron(command) => command.run(observability).await,
             Self::Api(command) => command.run(observability),
             Self::Send(command) => command.run(observability).await,
             Self::Queue(command) => command.run(observability).await,

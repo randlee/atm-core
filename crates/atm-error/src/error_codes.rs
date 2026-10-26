@@ -81,6 +81,7 @@ pub enum AtmErrorCode {
     TaskNotCounterparty,
     TaskStaleCounterparty,
     TaskMoveInvalid,
+    TaskMaxActiveReached,
     /// Search is intentionally local-only until a separately authorized peer
     /// query protocol exists.
     SearchLocalOnly,
@@ -173,6 +174,42 @@ pub enum AtmErrorCode {
     PostSendAdvisoryDeliveryFailed,
     TestFakeTransportInjectionFailed,
     HelpTopicNotFound,
+    /// A hook module path or registration key is not an accepted hook module.
+    HookModuleInvalid,
+    /// A cron expression or until-time is not a valid schedule.
+    CronExprInvalid,
+    /// A hook refused the request; its message is returned verbatim.
+    HookRefused,
+    /// A hook process could not run or exited without a usable reply.
+    HookExit,
+    /// A hook did not reply within its deadline.
+    HookTimeout,
+    /// A hook reply did not match the reply contract.
+    HookMalformed,
+    /// A runtime store query failed; `ATM_STORE_QUERY_FAILED` in the error-code doc.
+    StoreQueryFailed,
+    /// A plug-in sender has no active registration.
+    ToolSenderUnregistered,
+    /// A request attempted to claim a reserved virtual sender.
+    ToolSenderReserved,
+    /// A registered sender is not authorized for the requested operation.
+    ToolSenderUnauthorized,
+    /// A signing key id is not present in the active trust or registration record.
+    ToolKeyUnknown,
+    /// A signing key has been revoked and cannot authenticate new operations.
+    ToolKeyRevoked,
+    /// A nonce was already consumed by a different signed operation.
+    ToolNonceReplay,
+    /// A signed proof names a host outside the sender's allowed host binding.
+    ToolHostMismatch,
+    /// A signed operation was based on a stale or unexpected registration generation.
+    ToolGenerationConflict,
+    /// A signature is malformed or does not verify against its canonical payload.
+    ToolSignatureInvalid,
+    /// A signed installer request is outside its validity interval.
+    ToolRequestExpired,
+    /// A registry transaction outcome is unknown and requires reconciliation.
+    ToolCommitUncertain,
 }
 
 impl AtmErrorCode {
@@ -271,6 +308,7 @@ impl AtmErrorCode {
             Self::TaskNotCounterparty => "ATM_TASK_NOT_COUNTERPARTY",
             Self::TaskStaleCounterparty => "ATM_TASK_STALE_COUNTERPARTY",
             Self::TaskMoveInvalid => "ATM_TASK_MOVE_INVALID",
+            Self::TaskMaxActiveReached => "ATM_TASK_MAX_ACTIVE_REACHED",
             Self::SearchLocalOnly => "ATM_SEARCH_LOCAL_ONLY",
             Self::LocalHttpCapabilityInvalid => "ATM_LOCAL_HTTP_CAPABILITY_INVALID",
             Self::LocalHttpEndpointSchemaUnsupported => {
@@ -362,6 +400,24 @@ impl AtmErrorCode {
             Self::PostSendAdvisoryDeliveryFailed => "ATM_POST_SEND_ADVISORY_DELIVERY_FAILED",
             Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
             Self::HelpTopicNotFound => "ATM_HELP_TOPIC_NOT_FOUND",
+            Self::HookModuleInvalid => "ATM_HOOK_MODULE_INVALID",
+            Self::CronExprInvalid => "ATM_CRON_EXPR_INVALID",
+            Self::HookRefused => "ATM_HOOK_REFUSED",
+            Self::HookExit => "ATM_HOOK_EXIT",
+            Self::HookTimeout => "ATM_HOOK_TIMEOUT",
+            Self::HookMalformed => "ATM_HOOK_MALFORMED",
+            Self::StoreQueryFailed => "ATM_STORE_QUERY_FAILED",
+            Self::ToolSenderUnregistered => "ATM_TOOL_SENDER_UNREGISTERED",
+            Self::ToolSenderReserved => "ATM_TOOL_SENDER_RESERVED",
+            Self::ToolSenderUnauthorized => "ATM_TOOL_SENDER_UNAUTHORIZED",
+            Self::ToolKeyUnknown => "ATM_TOOL_KEY_UNKNOWN",
+            Self::ToolKeyRevoked => "ATM_TOOL_KEY_REVOKED",
+            Self::ToolNonceReplay => "ATM_TOOL_NONCE_REPLAY",
+            Self::ToolHostMismatch => "ATM_TOOL_HOST_MISMATCH",
+            Self::ToolGenerationConflict => "ATM_TOOL_GENERATION_CONFLICT",
+            Self::ToolSignatureInvalid => "ATM_TOOL_SIGNATURE_INVALID",
+            Self::ToolRequestExpired => "ATM_TOOL_REQUEST_EXPIRED",
+            Self::ToolCommitUncertain => "ATM_TOOL_COMMIT_UNCERTAIN",
             _ => unreachable!("all AtmErrorCode variants must be covered by as_str helpers"),
         }
     }
@@ -466,6 +522,7 @@ fn parse_mailbox_or_validation_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_TASK_NOT_COUNTERPARTY" => AtmErrorCode::TaskNotCounterparty,
         "ATM_TASK_STALE_COUNTERPARTY" => AtmErrorCode::TaskStaleCounterparty,
         "ATM_TASK_MOVE_INVALID" => AtmErrorCode::TaskMoveInvalid,
+        "ATM_TASK_MAX_ACTIVE_REACHED" => AtmErrorCode::TaskMaxActiveReached,
         "ATM_SEARCH_LOCAL_ONLY" => AtmErrorCode::SearchLocalOnly,
         "ATM_LOCAL_HTTP_CAPABILITY_INVALID" => AtmErrorCode::LocalHttpCapabilityInvalid,
         "ATM_LOCAL_HTTP_ENDPOINT_SCHEMA_UNSUPPORTED" => {
@@ -567,6 +624,24 @@ fn parse_post_send_or_misc_code(value: &str) -> Option<AtmErrorCode> {
             AtmErrorCode::TestFakeTransportInjectionFailed
         }
         "ATM_HELP_TOPIC_NOT_FOUND" => AtmErrorCode::HelpTopicNotFound,
+        "ATM_HOOK_MODULE_INVALID" => AtmErrorCode::HookModuleInvalid,
+        "ATM_CRON_EXPR_INVALID" => AtmErrorCode::CronExprInvalid,
+        "ATM_HOOK_REFUSED" => AtmErrorCode::HookRefused,
+        "ATM_HOOK_EXIT" => AtmErrorCode::HookExit,
+        "ATM_HOOK_TIMEOUT" => AtmErrorCode::HookTimeout,
+        "ATM_HOOK_MALFORMED" => AtmErrorCode::HookMalformed,
+        "ATM_STORE_QUERY_FAILED" => AtmErrorCode::StoreQueryFailed,
+        "ATM_TOOL_SENDER_UNREGISTERED" => AtmErrorCode::ToolSenderUnregistered,
+        "ATM_TOOL_SENDER_RESERVED" => AtmErrorCode::ToolSenderReserved,
+        "ATM_TOOL_SENDER_UNAUTHORIZED" => AtmErrorCode::ToolSenderUnauthorized,
+        "ATM_TOOL_KEY_UNKNOWN" => AtmErrorCode::ToolKeyUnknown,
+        "ATM_TOOL_KEY_REVOKED" => AtmErrorCode::ToolKeyRevoked,
+        "ATM_TOOL_NONCE_REPLAY" => AtmErrorCode::ToolNonceReplay,
+        "ATM_TOOL_HOST_MISMATCH" => AtmErrorCode::ToolHostMismatch,
+        "ATM_TOOL_GENERATION_CONFLICT" => AtmErrorCode::ToolGenerationConflict,
+        "ATM_TOOL_SIGNATURE_INVALID" => AtmErrorCode::ToolSignatureInvalid,
+        "ATM_TOOL_REQUEST_EXPIRED" => AtmErrorCode::ToolRequestExpired,
+        "ATM_TOOL_COMMIT_UNCERTAIN" => AtmErrorCode::ToolCommitUncertain,
         _ => return None,
     })
 }

@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 import tempfile
+from collections import deque
 from pathlib import Path
 
 CLI_SUBPROCESS_TIMEOUT_SECONDS = 45
@@ -20,6 +23,8 @@ from daemon_lifecycle import (
     wait_for_process_exit,
 )
 from fixtures import create_shared_host_fixture_pair, repo_root, smoke_env
+
+DaemonProcess = subprocess.Popen[str]
 
 AF1_REQUIRED_MARKERS = (
     "require_clean_host_daemon_state",
@@ -167,6 +172,97 @@ def assert_replacement_runtime_status(payload: dict[str, object], *, label: str)
     return owner_pid
 
 
+def start_smoke_daemon(
+    daemon_binary: str,
+    env: dict[str, str],
+    *,
+    daemon_args: tuple[str, ...] = (),
+) -> subprocess.Popen[str]:
+    """Start the fixture daemon and wait for its explicit post-bind ready signal."""
+    require_clean_host_daemon_state(smoke_label="shared-host smoke daemon launch")
+    daemon_env = env.copy()
+    daemon_env["ATM_DAEMON_READY_STDOUT"] = "1"
+    process = subprocess.Popen(
+        [daemon_binary, *daemon_args],
+        env=daemon_env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert process.stdout is not None and process.stderr is not None
+    ready_output: queue.Queue[str] = queue.Queue(maxsize=1)
+    stderr_lines: deque[str] = deque(maxlen=40)
+
+    def read_ready_signal() -> None:
+        first_line = True
+        try:
+            for line in process.stdout:
+                if first_line:
+                    ready_output.put(line.strip())
+                    first_line = False
+            if first_line:
+                ready_output.put("")
+        except OSError as error:
+            ready_output.put(f"<read failed: {error}>")
+        finally:
+            process.stdout.close()
+
+    def collect_stderr() -> None:
+        try:
+            for line in process.stderr:
+                stderr_lines.append(line.rstrip())
+        finally:
+            process.stderr.close()
+
+    stdout_reader = threading.Thread(target=read_ready_signal, daemon=True)
+    stderr_reader = threading.Thread(target=collect_stderr, daemon=True)
+    stdout_reader.start()
+    stderr_reader.start()
+
+    def stop_after_startup_failure() -> int | None:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        stdout_reader.join(timeout=1)
+        stderr_reader.join(timeout=1)
+        return process.poll()
+
+    try:
+        ready = ready_output.get(timeout=CLI_SUBPROCESS_TIMEOUT_SECONDS)
+        if ready != "ATM_DAEMON_READY":
+            reason = f"exited before its ready signal (output={ready!r})"
+        else:
+            return process
+    except queue.Empty:
+        reason = f"did not emit its ready signal within {CLI_SUBPROCESS_TIMEOUT_SECONDS}s"
+
+    status = stop_after_startup_failure()
+    stderr = "\n".join(stderr_lines).strip()
+    raise RuntimeError(
+        "shared-host smoke daemon "
+        f"{reason} (status={status}, stderr={stderr!r})"
+    )
+
+
+def start_shared_host_smoke_daemon(
+    daemon_binary: str,
+    env: dict[str, str],
+) -> DaemonProcess:
+    """Run the local-only fixture with its explicit plaintext test profile."""
+    return start_smoke_daemon(
+        daemon_binary,
+        env,
+        daemon_args=("--peer-wire-security", "plaintext-test"),
+    )
+
+
 def verify_af1_preflight_contract() -> None:
     source = Path(__file__).read_text(encoding="utf-8")
     missing = [marker for marker in AF1_REQUIRED_MARKERS if marker not in source]
@@ -219,17 +315,21 @@ def main() -> int:
     shared_b = shared_host_fixture_pair.workspace_b
     shared_env_a = smoke_env(shared_a, identity=shared_a.operator, root=root)
     shared_env_b = smoke_env(shared_b, identity=shared_b.operator, root=root)
-    debug_daemon = str(smoke_binary(root, "atm-daemon"))
-    shared_env_a["ATM_DAEMON_BIN"] = debug_daemon
-    shared_env_b["ATM_DAEMON_BIN"] = debug_daemon
+    daemon_binary = str(smoke_binary(root, "atm-daemon"))
+    shared_env_a["ATM_DAEMON_BIN"] = daemon_binary
+    shared_env_b["ATM_DAEMON_BIN"] = daemon_binary
     shared_daemon_pid: int | None = None
     injected_leak_child = maybe_inject_leaked_child()
     try:
         verify_removed_cli_flags_stay_rejected(root, shared_env_a, shared_a.workspace_dir)
-        # `doctor` is the first CLI invocation that may auto-start a daemon.
-        # Recheck here so no process can appear during the build/fixture setup
-        # window after the initial fail-closed check.
+        # The replacement runtime is an explicitly managed host singleton;
+        # `doctor` reports it but does not launch it. Recheck here so no process
+        # can appear during the build/fixture setup window, then wait for the
+        # daemon's post-bind readiness signal before querying through either
+        # workspace.
         require_clean_host_daemon_state(smoke_label="shared-host smoke")
+        daemon = start_shared_host_smoke_daemon(daemon_binary, shared_env_a)
+        shared_daemon_pid = daemon.pid
         shared_doctor_a = parse_json_output(
             run_atm(root, shared_env_a, shared_a.workspace_dir, "doctor", "--json")
         )

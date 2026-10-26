@@ -11,6 +11,10 @@ use serde::de::DeserializeOwned;
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
+use crate::hook::{
+    CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse, HookDisableRequest,
+    HookListQuery, HookRegisterRequest,
+};
 use crate::list::ListQuery;
 use crate::protocol::{
     CompatibilityPreflight, QueueGetNextRequest, RequestEnvelope, ResponseEnvelope,
@@ -29,6 +33,9 @@ pub use crate::protocol::HTTP_API_VERSION;
 /// clear route. Framework adapters use this shared contract instead of
 /// inventing a JSON body for a no-content response.
 pub const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
+/// HTTP response header carrying the dispatched-action count for a hooked command
+/// that ran hook actions in place of the write (ADR-068). The body repeats the count.
+pub const HOOK_ACTIONS_HEADER: &str = "X-ATM-Hook-Actions";
 const MESSAGES_PATH: &str = "/v1/atm/messages";
 const INSPECT_PATH: &str = "/v1/atm/messages/inspect";
 const READ_PATH: &str = "/v1/atm/messages/read";
@@ -43,6 +50,13 @@ const GRAFT_RECEIVER_UNREGISTER_PATH: &str = "/v1/atm/graft/receiver/unregister"
 const GRAFT_RECEIVER_LOOKUP_PATH: &str = "/v1/atm/graft/receiver/lookup";
 const RUNTIME_RELOAD_PATH: &str = "/v1/atm/runtime/reload";
 const SEARCH_PATH: &str = "/v1/atm/messages/search";
+const HOOK_REGISTER_PATH: &str = "/v1/atm/hooks/register";
+const HOOK_DISABLE_PATH: &str = "/v1/atm/hooks/disable";
+const HOOK_LIST_PATH: &str = "/v1/atm/hooks/list";
+const CRON_START_PATH: &str = "/v1/atm/cron/start";
+const CRON_END_PATH: &str = "/v1/atm/cron/end";
+const CRON_LIST_PATH: &str = "/v1/atm/cron/list";
+const TOOL_SENDERS_PATH: &str = "/v1/atm/tool-senders";
 
 /// One registered HTTP route, published from the same constants as request encoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -69,6 +83,14 @@ pub enum HttpRouteKind {
     GraftReceiverUnregister,
     GraftReceiverLookup,
     Search,
+    HookRegister,
+    HookDisable,
+    HookList,
+    CronStart,
+    CronEnd,
+    CronList,
+    ToolSenderApply,
+    ToolSenderUnregister,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -192,6 +214,62 @@ const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
             path_template: TASK_MOVE_PATH,
         },
     },
+    HttpRouteSpec {
+        kind: HttpRouteKind::HookRegister,
+        route: HttpRoute {
+            method: "POST",
+            path_template: HOOK_REGISTER_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::HookDisable,
+        route: HttpRoute {
+            method: "POST",
+            path_template: HOOK_DISABLE_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::HookList,
+        route: HttpRoute {
+            method: "POST",
+            path_template: HOOK_LIST_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::CronStart,
+        route: HttpRoute {
+            method: "POST",
+            path_template: CRON_START_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::CronEnd,
+        route: HttpRoute {
+            method: "POST",
+            path_template: CRON_END_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::CronList,
+        route: HttpRoute {
+            method: "POST",
+            path_template: CRON_LIST_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::ToolSenderApply,
+        route: HttpRoute {
+            method: "POST",
+            path_template: TOOL_SENDERS_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::ToolSenderUnregister,
+        route: HttpRoute {
+            method: "DELETE",
+            path_template: TOOL_SENDERS_PATH,
+        },
+    },
 ];
 
 /// Registered HTTP route inventory for documentation conformance tests.
@@ -219,6 +297,14 @@ fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
         HttpRouteKind::GraftReceiverLookup => &HTTP_ROUTE_SPECS[13],
         HttpRouteKind::GraftReceiverRefresh => &HTTP_ROUTE_SPECS[14],
         HttpRouteKind::TaskMove => &HTTP_ROUTE_SPECS[15],
+        HttpRouteKind::HookRegister => &HTTP_ROUTE_SPECS[16],
+        HttpRouteKind::HookDisable => &HTTP_ROUTE_SPECS[17],
+        HttpRouteKind::HookList => &HTTP_ROUTE_SPECS[18],
+        HttpRouteKind::CronStart => &HTTP_ROUTE_SPECS[19],
+        HttpRouteKind::CronEnd => &HTTP_ROUTE_SPECS[20],
+        HttpRouteKind::CronList => &HTTP_ROUTE_SPECS[21],
+        HttpRouteKind::ToolSenderApply => &HTTP_ROUTE_SPECS[22],
+        HttpRouteKind::ToolSenderUnregister => &HTTP_ROUTE_SPECS[23],
     }
 }
 
@@ -233,6 +319,14 @@ fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
         RequestEnvelope::Doctor(_) => HttpRouteKind::Doctor,
         RequestEnvelope::Search(_) => HttpRouteKind::Search,
         RequestEnvelope::ReloadRuntimeView => HttpRouteKind::RuntimeReload,
+        RequestEnvelope::HookRegister(_) => HttpRouteKind::HookRegister,
+        RequestEnvelope::HookDisable(_) => HttpRouteKind::HookDisable,
+        RequestEnvelope::HookList(_) => HttpRouteKind::HookList,
+        RequestEnvelope::CronStart(_) => HttpRouteKind::CronStart,
+        RequestEnvelope::CronEnd(_) => HttpRouteKind::CronEnd,
+        RequestEnvelope::CronList(_) => HttpRouteKind::CronList,
+        RequestEnvelope::ToolSenderApply(_) => HttpRouteKind::ToolSenderApply,
+        RequestEnvelope::ToolSenderUnregister(_) => HttpRouteKind::ToolSenderUnregister,
         RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
         RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
         RequestEnvelope::QueueGetNext(_) => HttpRouteKind::QueueGetNext,
@@ -323,7 +417,34 @@ pub fn decode_http_response(
     if !(200..300).contains(&status) {
         return decode_response_body(body, "error").map(ResponseEnvelope::Error);
     }
+    if let Some(count) = http_header(headers, HOOK_ACTIONS_HEADER) {
+        return decode_hook_actions_response(count, body).map(ResponseEnvelope::HookActions);
+    }
     decode_success_response(request, body)
+}
+
+/// A hook-actions body is only valid with its header, and the two counts must agree.
+fn decode_hook_actions_response(
+    header_count: &str,
+    body: &[u8],
+) -> Result<HookActionsResponse, AtmError> {
+    let response: HookActionsResponse = decode_response_body(body, "hook actions")?;
+    let header_count: usize = header_count.parse().map_err(|_| {
+        AtmError::validation_with_recovery(
+            "daemon hook actions header is not a count",
+            "ensure the daemon sends X-ATM-Hook-Actions as a decimal count",
+        )
+    })?;
+    if header_count != response.dispatched {
+        return Err(AtmError::validation_with_recovery(
+            format!(
+                "daemon hook actions header says {header_count} but body says {}",
+                response.dispatched
+            ),
+            "ensure the daemon sends the same count in the header and the body",
+        ));
+    }
+    Ok(response)
 }
 
 fn decode_no_content_response(
@@ -386,6 +507,14 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         // URL-safe `request` query value in `encode_http_request`.
         RequestEnvelope::Search(_) => Ok(Vec::new()),
         RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
+        RequestEnvelope::HookRegister(value) => serde_json::to_vec(value),
+        RequestEnvelope::HookDisable(value) => serde_json::to_vec(value),
+        RequestEnvelope::HookList(value) => serde_json::to_vec(value),
+        RequestEnvelope::CronStart(value) => serde_json::to_vec(value),
+        RequestEnvelope::CronEnd(value) => serde_json::to_vec(value),
+        RequestEnvelope::CronList(value) => serde_json::to_vec(value),
+        RequestEnvelope::ToolSenderApply(value) => serde_json::to_vec(value),
+        RequestEnvelope::ToolSenderUnregister(value) => serde_json::to_vec(value),
     }
     .map_err(AtmError::from)
 }
@@ -402,6 +531,14 @@ fn decode_response_body<T: DeserializeOwned>(
     })
 }
 
+fn decode_response_as<T: DeserializeOwned>(
+    body: &[u8],
+    response_kind: &str,
+    wrap: impl FnOnce(T) -> ResponseEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    decode_response_body(body, response_kind).map(wrap)
+}
+
 fn decode_success_response(
     request: &RequestEnvelope,
     body: &[u8],
@@ -415,50 +552,132 @@ fn decode_success_response(
         RequestEnvelope::Write(_) => decode_response_body(body, "write").map(|value| {
             ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value))
         }),
+        RequestEnvelope::List(_)
+        | RequestEnvelope::Peek(_)
+        | RequestEnvelope::Receive(_)
+        | RequestEnvelope::Clear(_)
+        | RequestEnvelope::Doctor(_)
+        | RequestEnvelope::Search(_) => decode_read_success_response(body, request),
+        RequestEnvelope::TaskMove(_)
+        | RequestEnvelope::CompatibilityPreflight(_)
+        | RequestEnvelope::Heartbeat(_)
+        | RequestEnvelope::QueueGetNext(_)
+        | RequestEnvelope::GraftReceiverRegister(_)
+        | RequestEnvelope::GraftReceiverRefresh(_)
+        | RequestEnvelope::GraftReceiverUnregister(_)
+        | RequestEnvelope::GraftReceiverLookup { .. }
+        | RequestEnvelope::ReloadRuntimeView
+        | RequestEnvelope::HookRegister(_)
+        | RequestEnvelope::HookDisable(_)
+        | RequestEnvelope::HookList(_)
+        | RequestEnvelope::CronStart(_)
+        | RequestEnvelope::CronEnd(_)
+        | RequestEnvelope::CronList(_) => decode_control_success_response(body, request),
+        RequestEnvelope::ToolSenderApply(_) | RequestEnvelope::ToolSenderUnregister(_) => {
+            decode_control_success_response(body, request)
+        }
+    }
+}
+
+fn decode_read_success_response(
+    body: &[u8],
+    request: &RequestEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    match request {
+        RequestEnvelope::List(_) => decode_response_as(body, "list", ResponseEnvelope::List),
+        RequestEnvelope::Peek(_) => decode_response_as(body, "peek", |value| {
+            ResponseEnvelope::Peek(Box::new(value))
+        }),
+        RequestEnvelope::Receive(_) => decode_response_as(body, "receive", |value| {
+            ResponseEnvelope::Receive(Box::new(value))
+        }),
+        RequestEnvelope::Clear(_) => decode_response_as(body, "clear", ResponseEnvelope::Clear),
+        RequestEnvelope::Doctor(_) => decode_response_as(body, "doctor", |value| {
+            ResponseEnvelope::Doctor(Box::new(value))
+        }),
+        RequestEnvelope::Search(_) => decode_response_as(body, "search", |value| {
+            ResponseEnvelope::Search(Box::new(value))
+        }),
+        _ => unreachable!("read response helper only receives read requests"),
+    }
+}
+
+fn decode_control_success_response(
+    body: &[u8],
+    request: &RequestEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    match request {
         RequestEnvelope::TaskMove(_) => {
-            decode_response_body(body, "task move").map(ResponseEnvelope::TaskMove)
+            decode_response_as(body, "task move", ResponseEnvelope::TaskMove)
         }
-        RequestEnvelope::CompatibilityPreflight(_) => {
-            decode_response_body(body, "compatibility").map(ResponseEnvelope::CompatibilityVerdict)
-        }
+        RequestEnvelope::CompatibilityPreflight(_) => decode_response_as(
+            body,
+            "compatibility",
+            ResponseEnvelope::CompatibilityVerdict,
+        ),
         RequestEnvelope::Heartbeat(_) => {
-            decode_response_body(body, "heartbeat").map(ResponseEnvelope::Heartbeat)
+            decode_response_as(body, "heartbeat", ResponseEnvelope::Heartbeat)
         }
         RequestEnvelope::QueueGetNext(_) => {
-            decode_response_body(body, "queue get next").map(ResponseEnvelope::QueueGetNext)
+            decode_response_as(body, "queue get next", ResponseEnvelope::QueueGetNext)
         }
-        RequestEnvelope::GraftReceiverRegister(_) => {
-            decode_response_body::<()>(body, "graft receiver register")
-                .map(|()| ResponseEnvelope::GraftReceiverRegister)
-        }
-        RequestEnvelope::GraftReceiverRefresh(_) => {
-            decode_response_body::<()>(body, "graft receiver refresh")
-                .map(|()| ResponseEnvelope::GraftReceiverRefresh)
-        }
-        RequestEnvelope::GraftReceiverUnregister(_) => {
-            decode_response_body::<()>(body, "graft receiver unregister")
-                .map(|()| ResponseEnvelope::GraftReceiverUnregister)
-        }
-        RequestEnvelope::GraftReceiverLookup { .. } => {
-            decode_response_body(body, "graft receiver lookup")
-                .map(ResponseEnvelope::GraftReceiverLookup)
-        }
-        RequestEnvelope::List(_) => decode_response_body(body, "list").map(ResponseEnvelope::List),
-        RequestEnvelope::Peek(_) => {
-            decode_response_body(body, "peek").map(|value| ResponseEnvelope::Peek(Box::new(value)))
-        }
-        RequestEnvelope::Receive(_) => decode_response_body(body, "receive")
-            .map(|value| ResponseEnvelope::Receive(Box::new(value))),
-        RequestEnvelope::Clear(_) => {
-            decode_response_body(body, "clear").map(ResponseEnvelope::Clear)
-        }
-        RequestEnvelope::Doctor(_) => decode_response_body(body, "doctor")
-            .map(|value| ResponseEnvelope::Doctor(Box::new(value))),
-        RequestEnvelope::Search(_) => decode_response_body(body, "search")
-            .map(|value| ResponseEnvelope::Search(Box::new(value))),
+        RequestEnvelope::GraftReceiverRegister(_) => decode_unit_response(
+            body,
+            "graft receiver register",
+            ResponseEnvelope::GraftReceiverRegister,
+        ),
+        RequestEnvelope::GraftReceiverRefresh(_) => decode_unit_response(
+            body,
+            "graft receiver refresh",
+            ResponseEnvelope::GraftReceiverRefresh,
+        ),
+        RequestEnvelope::GraftReceiverUnregister(_) => decode_unit_response(
+            body,
+            "graft receiver unregister",
+            ResponseEnvelope::GraftReceiverUnregister,
+        ),
+        RequestEnvelope::GraftReceiverLookup { .. } => decode_response_as(
+            body,
+            "graft receiver lookup",
+            ResponseEnvelope::GraftReceiverLookup,
+        ),
         RequestEnvelope::ReloadRuntimeView => decode_response_body::<()>(body, "runtime reload")
             .map(|()| ResponseEnvelope::RuntimeViewReloaded),
+        RequestEnvelope::HookRegister(_) => {
+            decode_response_as(body, "hook register", ResponseEnvelope::HookRegistered)
+        }
+        RequestEnvelope::HookDisable(_) => {
+            decode_response_as(body, "hook disable", ResponseEnvelope::HookDisabled)
+        }
+        RequestEnvelope::HookList(_) => {
+            decode_response_as(body, "hook list", ResponseEnvelope::HookList)
+        }
+        RequestEnvelope::CronStart(_) => {
+            decode_response_as(body, "cron start", ResponseEnvelope::CronStarted)
+        }
+        RequestEnvelope::CronEnd(_) => {
+            decode_response_as(body, "cron end", ResponseEnvelope::CronEnded)
+        }
+        RequestEnvelope::CronList(_) => {
+            decode_response_as(body, "cron list", ResponseEnvelope::CronList)
+        }
+        RequestEnvelope::ToolSenderApply(_) | RequestEnvelope::ToolSenderUnregister(_) => {
+            decode_response_as(
+                body,
+                "tool sender operation",
+                ResponseEnvelope::ToolSenderApplied,
+            )
+        }
+        _ => unreachable!("control response helper only receives control requests"),
     }
+}
+
+fn decode_unit_response(
+    body: &[u8],
+    response_kind: &str,
+    wrap: ResponseEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
+    decode_response_body::<()>(body, response_kind).map(|()| wrap)
 }
 
 fn http_header<'a>(headers: &'a [String], name: &str) -> Option<&'a str> {
@@ -489,6 +708,14 @@ pub enum ApiRequest {
         agent: crate::types::AgentName,
     },
     ReloadRuntimeView,
+    HookRegister(HookRegisterRequest),
+    HookDisable(HookDisableRequest),
+    HookList(HookListQuery),
+    CronStart(CronStartRequest),
+    CronEnd(CronEndRequest),
+    CronList(CronListQuery),
+    ToolSenderApply(crate::protocol::ToolInstallerRequest),
+    ToolSenderUnregister(crate::protocol::ToolInstallerRequest),
 }
 
 #[derive(Debug, Clone)]
@@ -529,6 +756,14 @@ impl ApiRequest {
                 RequestEnvelope::GraftReceiverLookup { team, agent }
             }
             Self::ReloadRuntimeView => RequestEnvelope::ReloadRuntimeView,
+            Self::HookRegister(request) => RequestEnvelope::HookRegister(request),
+            Self::HookDisable(request) => RequestEnvelope::HookDisable(request),
+            Self::HookList(query) => RequestEnvelope::HookList(query),
+            Self::CronStart(request) => RequestEnvelope::CronStart(request),
+            Self::CronEnd(request) => RequestEnvelope::CronEnd(request),
+            Self::CronList(query) => RequestEnvelope::CronList(query),
+            Self::ToolSenderApply(request) => RequestEnvelope::ToolSenderApply(request),
+            Self::ToolSenderUnregister(request) => RequestEnvelope::ToolSenderUnregister(request),
         }
     }
 }
@@ -564,6 +799,14 @@ impl From<RequestEnvelope> for ApiRequest {
                 Self::GraftReceiverLookup { team, agent }
             }
             RequestEnvelope::ReloadRuntimeView => Self::ReloadRuntimeView,
+            RequestEnvelope::HookRegister(request) => Self::HookRegister(request),
+            RequestEnvelope::HookDisable(request) => Self::HookDisable(request),
+            RequestEnvelope::HookList(query) => Self::HookList(query),
+            RequestEnvelope::CronStart(request) => Self::CronStart(request),
+            RequestEnvelope::CronEnd(request) => Self::CronEnd(request),
+            RequestEnvelope::CronList(query) => Self::CronList(query),
+            RequestEnvelope::ToolSenderApply(request) => Self::ToolSenderApply(request),
+            RequestEnvelope::ToolSenderUnregister(request) => Self::ToolSenderUnregister(request),
         }
     }
 }
@@ -596,6 +839,53 @@ mod tests {
     use crate::search::SearchRequest;
     use crate::types::{AgentName, TeamName};
     use atm_storage::MoveTarget;
+
+    #[test]
+    fn request_deadline_uses_injected_instants() {
+        let now = std::time::Instant::now();
+        let deadline =
+            super::RequestDeadline::after_at(now, std::time::Duration::from_millis(20500));
+        assert_eq!(deadline.remaining_ms_at(now), 20500);
+        assert_eq!(
+            deadline.remaining_ms_at(now + std::time::Duration::from_millis(500)),
+            20000
+        );
+        assert_eq!(
+            deadline.remaining_ms_at(now + std::time::Duration::from_millis(20500)),
+            0
+        );
+        assert_eq!(
+            deadline.remaining_ms_at(now + std::time::Duration::from_secs(30)),
+            0
+        );
+    }
+
+    #[test]
+    fn request_deadline_equality_minus_and_remaining_ms() {
+        let deadline = super::RequestDeadline::after(std::time::Duration::from_secs(10));
+        assert_eq!(
+            deadline.minus(std::time::Duration::from_secs(4)),
+            deadline
+                .minus(std::time::Duration::from_secs(1))
+                .minus(std::time::Duration::from_secs(3))
+        );
+        assert_ne!(
+            deadline,
+            deadline.minus(std::time::Duration::from_millis(1))
+        );
+        assert_eq!(
+            super::RequestDeadline::after(std::time::Duration::ZERO).remaining_ms(),
+            0
+        );
+        assert!(deadline.remaining_ms() <= 10_000);
+        assert_eq!(
+            deadline
+                .minus(std::time::Duration::from_secs(20))
+                .remaining_ms(),
+            0
+        );
+        assert_eq!(deadline.minus(std::time::Duration::MAX).remaining_ms(), 0);
+    }
 
     #[test]
     fn search_is_encoded_as_one_bodyless_get_query_parameter() {
@@ -725,6 +1015,196 @@ mod tests {
         assert_eq!(decoded.task_id.as_str(), "T1");
         assert_eq!(decoded.target, MoveTarget::Head);
     }
+
+    #[test]
+    fn pre_1_13_write_decode_fails_typed_on_a_hook_actions_body() {
+        use super::decode_http_response;
+        use crate::error::AtmErrorCode;
+        use crate::send::{SendMessageSource, WriteRequest};
+
+        let home = tempfile::tempdir().expect("home");
+        let write = WriteRequest::new(
+            home.path().to_path_buf(),
+            home.path().to_path_buf(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline("hooked".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request");
+        let request = RequestEnvelope::Write(Box::new(write));
+
+        // A 1.13 daemon answers a hooked write with this body and the
+        // X-ATM-Hook-Actions header. A pre-1.13 client has no header branch, so
+        // it decodes the body as its write response, with no header.
+        let body = br#"{"dispatched":1}"#;
+        let Err(error) = decode_http_response(&request, 200, &[], body) else {
+            panic!("a pre-1.13 write response must not decode a hook-actions body");
+        };
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(
+            error
+                .message()
+                .contains("daemon HTTP write response body is invalid"),
+            "message was: {}",
+            error.message()
+        );
+    }
+
+    #[test]
+    fn hook_routes_round_trip_and_check_the_header() {
+        use super::{HOOK_ACTIONS_HEADER, decode_http_response};
+        use crate::boundary::{PhaseId, StopCondition};
+        use crate::hook::{
+            CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse,
+            HookDisableRequest, HookListQuery, HookRegisterRequest,
+        };
+        use crate::list::ListQuery;
+        use crate::protocol::{ResponseEnvelope, TaskMoveRequest};
+        use crate::types::ReadSelection;
+        use atm_storage::MoveTarget;
+        use std::path::PathBuf;
+
+        let caller: AgentName = "sender".parse().expect("agent");
+        let team: TeamName = "test-team".parse().expect("team");
+        let phase = PhaseId::parse("bk").expect("phase");
+        let routes = [
+            (
+                RequestEnvelope::HookRegister(HookRegisterRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: phase.clone(),
+                    hook: "task.assign".to_owned(),
+                    module_path: "/modules/gate.wasm".into(),
+                    cwd: "/work".into(),
+                    timeout_ms: 1_000,
+                    custom: serde_json::json!({}),
+                }),
+                "/v1/atm/hooks/register",
+            ),
+            (
+                RequestEnvelope::HookDisable(HookDisableRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: phase.clone(),
+                    hook: None,
+                }),
+                "/v1/atm/hooks/disable",
+            ),
+            (
+                RequestEnvelope::HookList(HookListQuery {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: None,
+                }),
+                "/v1/atm/hooks/list",
+            ),
+            (
+                RequestEnvelope::TaskMove(TaskMoveRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    task_id: "T1".parse().expect("task id"),
+                    target: MoveTarget::Head,
+                }),
+                "/v1/atm/tasks/move",
+            ),
+            (
+                RequestEnvelope::List(
+                    ListQuery::new(
+                        PathBuf::from("/home"),
+                        PathBuf::from("/work"),
+                        caller.clone(),
+                        None,
+                        team.clone(),
+                        ReadSelection::All,
+                        false,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                    .expect("list query"),
+                ),
+                "/v1/atm/messages",
+            ),
+            (
+                RequestEnvelope::CronStart(CronStartRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: phase.clone(),
+                    name: "nightly".to_owned(),
+                    cron_expr: "0 3 * * *".to_owned(),
+                    module_path: "/modules/nightly.wasm".into(),
+                    cwd: "/work".into(),
+                    args: Vec::new(),
+                    timeout_ms: 1_000,
+                    stop: StopCondition::Hook,
+                    custom: serde_json::json!({}),
+                }),
+                "/v1/atm/cron/start",
+            ),
+            (
+                RequestEnvelope::CronEnd(CronEndRequest {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: phase.clone(),
+                    name: None,
+                }),
+                "/v1/atm/cron/end",
+            ),
+            (
+                RequestEnvelope::CronList(CronListQuery {
+                    caller_identity: caller.clone(),
+                    caller_team: team.clone(),
+                    phase: None,
+                }),
+                "/v1/atm/cron/list",
+            ),
+        ];
+        for (request, path) in &routes {
+            let http = encode_http_request(request, &[]).expect("encode hook route");
+            let expected_method = if matches!(request, RequestEnvelope::List(_)) {
+                "GET"
+            } else {
+                "POST"
+            };
+            assert_eq!(http.method, expected_method);
+            assert_eq!(http.path, *path);
+            let body: serde_json::Value = serde_json::from_slice(&http.body).expect("json body");
+            assert!(body.is_object(), "{path} sends a JSON object");
+        }
+
+        let actions =
+            serde_json::to_vec(&HookActionsResponse { dispatched: 2 }).expect("actions body");
+        let with_header = vec![format!("{HOOK_ACTIONS_HEADER}: 2")];
+        let without_header = [];
+        let mismatch = vec![format!("{HOOK_ACTIONS_HEADER}: 3")];
+        for request in [
+            &routes[0].0, // HookRegister
+            &routes[3].0, // TaskMove
+            &routes[4].0, // List
+        ] {
+            match decode_http_response(request, 200, &with_header, &actions) {
+                Ok(ResponseEnvelope::HookActions(HookActionsResponse { dispatched })) => {
+                    assert_eq!(dispatched, 2);
+                }
+                other => panic!("expected HookActions with the header, got {other:?}"),
+            }
+            assert!(
+                decode_http_response(request, 200, &without_header, &actions).is_err(),
+                "HookActions without the header is refused for {request:?}"
+            );
+            assert!(
+                decode_http_response(request, 200, &mismatch, &actions).is_err(),
+                "the header and body counts must agree for {request:?}"
+            );
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -757,12 +1237,16 @@ impl UntrustedSmokeProvenance {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RequestDeadline(Instant);
 
 impl RequestDeadline {
     pub fn after(duration: Duration) -> Self {
-        Self(Instant::now() + duration)
+        Self::after_at(Instant::now(), duration)
+    }
+
+    pub fn after_at(now: Instant, duration: Duration) -> Self {
+        Self(now + duration)
     }
 
     pub fn expired(self) -> bool {
@@ -773,6 +1257,21 @@ impl RequestDeadline {
         self.0
             .checked_duration_since(Instant::now())
             .filter(|remaining| !remaining.is_zero())
+    }
+
+    pub fn remaining_ms(self) -> u64 {
+        self.remaining_ms_at(Instant::now())
+    }
+
+    pub fn remaining_ms_at(self, now: Instant) -> u64 {
+        self.0
+            .checked_duration_since(now)
+            .map(|remaining| remaining.as_millis().min(u128::from(u64::MAX)) as u64)
+            .unwrap_or(0)
+    }
+
+    pub fn minus(self, duration: Duration) -> Self {
+        Self(self.0.checked_sub(duration).unwrap_or_else(Instant::now))
     }
 }
 

@@ -47,6 +47,17 @@ benchmark account with a locked Apple Development keychain must be provisioned
 with its account-local, untracked keychain secret; the signing helper unlocks
 it without printing the secret or prompting the operator.
 
+On the M5 (`ssh atmbench`):
+- Use `ATM_CAPACITY_HOST_LABEL=m5-atmbench`. Its floors in `baselines.json`
+  differ from those of `rand-m5`, which is the `randlee` account's label.
+- Keep the host quiet. Screen sharing to the M5 (`screensharingd`) drew about
+  150% CPU on 2026-10-21 and every target dropped about 10%. Check
+  `ps -Ao pcpu,comm -r | head` before an official run.
+- Run `just bootstrap` when `.bootstrap-venv` predates the current sc-compose
+  pin (`ModuleNotFoundError: No module named 'sc_compose'`).
+- Install tools and set the environment as in the smoke-test skill section
+  "Isolated test account on a shared host".
+
 ## 2. Run
 
 The ordinary command runs the complete required matrix: `sqlite`, `uds`,
@@ -56,14 +67,14 @@ The ordinary command runs the complete required matrix: `sqlite`, `uds`,
 macOS M5:
 
 ```sh
-ATM_CAPACITY_HOST_LABEL=rand-m5 just benchmark
+ATM_CAPACITY_HOST_LABEL=rand-m5 just benchmark --bin-dir ~/.atm-builds/v1.6.5/bin
 ```
 
 Windows PowerShell:
 
 ```powershell
 $env:ATM_CAPACITY_HOST_LABEL = 'windows-x64-01'
-just benchmark
+just benchmark --bin-dir ~/.atm-builds/v1.6.5/bin
 ```
 
 The runner writes per-target JSON, envelopes, campaign JSON, and raw local

@@ -103,7 +103,7 @@ enum TrustSubcommand {
         #[arg(long)]
         fingerprint: String,
         /// HTTPS port exposed by the trusted peer.
-        #[arg(long, default_value_t = 43101)]
+        #[arg(long)]
         https_port: u16,
         /// Confirm adding the trusted peer.
         #[arg(long)]
@@ -117,7 +117,7 @@ enum TrustSubcommand {
         #[arg(long)]
         fingerprint: String,
         /// HTTPS port exposed by the trusted peer.
-        #[arg(long, default_value_t = 43101)]
+        #[arg(long)]
         https_port: u16,
         /// Confirm replacing the trusted-peer configuration.
         #[arg(long)]
@@ -693,6 +693,8 @@ mod tests {
                 "peer.example",
                 "--fingerprint",
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "--https-port",
+                "43201",
                 "--yes",
             ],
             vec![
@@ -703,6 +705,8 @@ mod tests {
                 "peer.example",
                 "--fingerprint",
                 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "--https-port",
+                "43201",
                 "--yes",
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example", "--yes"],
@@ -791,6 +795,8 @@ mod tests {
                 "peer.example",
                 "--fingerprint",
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "--https-port",
+                "43201",
                 "--yes",
             ],
         )
@@ -806,6 +812,8 @@ mod tests {
                 "peer.example",
                 "--fingerprint",
                 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "--https-port",
+                "43201",
                 "--yes",
             ],
         )
@@ -844,6 +852,8 @@ mod tests {
                     host,
                     "--fingerprint",
                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "--https-port",
+                    "43201",
                     "--yes",
                 ],
             )
@@ -867,6 +877,8 @@ mod tests {
                     "peer.example",
                     "--fingerprint",
                     "sha256:test-peer",
+                    "--https-port",
+                    "43201",
                     "--yes",
                 ],
             )
@@ -1037,6 +1049,8 @@ mod tests {
                 "peer.example",
                 "--fingerprint",
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "--https-port",
+                "43201",
             ],
             vec![
                 "atm",
@@ -1046,6 +1060,8 @@ mod tests {
                 "peer.example",
                 "--fingerprint",
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "--https-port",
+                "43201",
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example"],
         ];

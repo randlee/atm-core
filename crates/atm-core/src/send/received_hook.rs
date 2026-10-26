@@ -50,6 +50,8 @@ pub(crate) fn prepare_received_hook<R: RetainedServiceRuntime + ?Sized>(
     let hook_context = SendExecutionContext {
         recipient: context.recipient.clone(),
         canonical_sender: context.canonical_sender.clone(),
+        canonical_sender_team: context.canonical_sender_team.clone(),
+        canonical_sender_chat_id: context.canonical_sender_chat_id.clone(),
         inbox_path: context.inbox_path.clone(),
         delivery_snapshot: delivery_snapshot.clone(),
         delivery_family: context.delivery_family,

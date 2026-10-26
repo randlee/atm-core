@@ -1,0 +1,2371 @@
+{
+ "accepted": false,
+ "at_reference_cells": 72,
+ "candidate_id": "C6-negative-first",
+ "cases": [
+  {
+   "calls": 2,
+   "case_id": "a0-01-valid-directive",
+   "cells": {
+    "faithful": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.88
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.92
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.88,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "3978d4e0ccfe73c2696de23305efa6b6333fe905176ea793d97b2eef49453d0b",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-02-valid-prohibition",
+   "cells": {
+    "faithful": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.72
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.67
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.67,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "f3cf813fb8183526029819a79b32885d0b3b0370f655a590037dcef4acf7bce6",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-03-structural-scope",
+   "cells": {
+    "faithful": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.67
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.7
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.67,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "b04041798f8e84449334f5076cd54f63a4f03c033eefde34fbbb0457f0416b75",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-04-global-scope",
+   "cells": {
+    "faithful": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.45
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.45
+      }
+     ],
+     "choice": "yes",
+     "confident": false,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.45,
+     "stable": true,
+     "status": "inconclusive",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.95,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.97,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.92
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.92,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "37e81cd581044f8d5b7a005e228858c6c31a498d11066dcc4c5f0ffccbd35125",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-05-atomic-from-multi-directive",
+   "cells": {
+    "faithful": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.86
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.77
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.77,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.94,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.97,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.76
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.76
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.76,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "4df35d272dffc3ec1bee99514a87c6473e52ba4c4f0287178d73316e914bdcf5",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-06-genuinely-bundled",
+   "cells": {
+    "faithful": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.94,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.94,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.95,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "no",
+       "confidence": 1.0
+      },
+      {
+       "choice": "no",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "no",
+     "confident": true,
+     "exact": true,
+     "expected": "no",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "340cebdb68cc5f4190af1228b3d78fc474a7f08f78f79545f0bb43a77e4a89a7",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-07-unsupported-elaboration",
+   "cells": {
+    "faithful": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "no",
+       "confidence": 0.89
+      },
+      {
+       "choice": "no",
+       "confidence": 0.92
+      }
+     ],
+     "choice": "no",
+     "confident": true,
+     "exact": true,
+     "expected": "no",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.89,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.97,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.97,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "776263c0a35a1b2aba6f328a6427a27aac4a0305d48947ee3e2a8cd285c9c1a0",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-08-vague-outcome",
+   "cells": {
+    "faithful": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.79
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.83
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.79,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "no",
+       "confidence": 0.98
+      },
+      {
+       "choice": "no",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "no",
+     "confident": true,
+     "exact": true,
+     "expected": "no",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.97,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "no",
+       "confidence": 1.0
+      },
+      {
+       "choice": "no",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "no",
+     "confident": true,
+     "exact": true,
+     "expected": "no",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "f7655ec379fc41cac97ce4dc4f6e408550061b65975f668f311af009d4a9b3d4",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-09-explicit-testable-condition",
+   "cells": {
+    "faithful": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.43
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.43
+      }
+     ],
+     "choice": "yes",
+     "confident": false,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.43,
+     "stable": true,
+     "status": "inconclusive",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.95,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.94,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.91
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.88
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.88,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "c5cf8519071219ef38e4557d12e644796dc690d2145e1f6efa1c82279b320c21",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-10-api-key-redaction",
+   "cells": {
+    "faithful": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.69
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.67
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.67,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.92
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.91
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.91,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "9fadd9717faf67b51a8f2abe80cbea0483c808a474a6d5c502d56d3e4fa89816",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-11-private-shorthand",
+   "cells": {
+    "faithful": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.88
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.86
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.86,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "no",
+       "confidence": 0.89
+      },
+      {
+       "choice": "no",
+       "confidence": 0.85
+      }
+     ],
+     "choice": "no",
+     "confident": true,
+     "exact": true,
+     "expected": "no",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.85,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.91
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.88
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.88,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "no",
+       "confidence": 0.89
+      },
+      {
+       "choice": "no",
+       "confidence": 0.85
+      }
+     ],
+     "choice": "no",
+     "confident": true,
+     "exact": true,
+     "expected": "no",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.85,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "bc07e7a6e9517d0f4c35fa0e9c366094d01e55e945f6f286d06b777dea5a3329",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-12-unrecorded-approval",
+   "cells": {
+    "faithful": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.85
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.86
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.85,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "no",
+       "confidence": 0.33
+      },
+      {
+       "choice": "no",
+       "confidence": 0.27
+      }
+     ],
+     "choice": "no",
+     "confident": false,
+     "exact": true,
+     "expected": "no",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.27,
+     "stable": true,
+     "status": "inconclusive",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.97,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "no",
+       "confidence": 0.8
+      },
+      {
+       "choice": "no",
+       "confidence": 0.83
+      }
+     ],
+     "choice": "no",
+     "confident": true,
+     "exact": true,
+     "expected": "no",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.8,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "48dbd34d630568ee0da76d03f990519771bb949b4847b47f021400bad2c17c69",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-13-shared-quote-first-atomic",
+   "cells": {
+    "faithful": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.95,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.92
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.92,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.67
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.72
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.67,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "8cb051ddc4ffcf8ebd1c7a1c9529047b9965b21e3afa4353e3253c212ae82f12",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-14-shared-quote-second-atomic",
+   "cells": {
+    "faithful": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.91
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.91,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.89
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.89
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.89,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.61
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.74
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.61,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.7
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.72
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.7,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "9f4337f82fd14940f01669fb80f5d3634543f7b1f56735d59a2937c2274295d5",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-15-duplicate-first",
+   "cells": {
+    "faithful": {
+     "at_reference": false,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.66
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.59
+      }
+     ],
+     "choice": "yes",
+     "confident": false,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.59,
+     "stable": true,
+     "status": "inconclusive",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.97,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.95,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.92
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.92
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.92,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "8d29646cd37912e736ff382f8e0f7966e974e4ba6331f1d64fd81c58dfed0898",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-16-duplicate-second",
+   "cells": {
+    "faithful": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.82
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.86
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.82,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.95,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.95
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.95,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.92
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.92,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "2337064ba7262c5053890540f7c2998361da62c795eb061215b9b21151d39227",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  },
+  {
+   "calls": 2,
+   "case_id": "a0-17-nondeclarative-form",
+   "cells": {
+    "faithful": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.94,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "observable": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.97
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.97,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "scoped": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.94
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.94,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "self_contained": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      },
+      {
+       "choice": "yes",
+       "confidence": 0.98
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 0.98,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    },
+    "single_constraint": {
+     "at_reference": true,
+     "calls": [
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      },
+      {
+       "choice": "yes",
+       "confidence": 1.0
+      }
+     ],
+     "choice": "yes",
+     "confident": true,
+     "exact": true,
+     "expected": "yes",
+     "matching_calls": [
+      1,
+      2
+     ],
+     "min_confidence": 1.0,
+     "stable": true,
+     "status": "match",
+     "third_call": false
+    }
+   },
+   "identical": true,
+   "request_sha256": "07e890964877fdda1743795dd4f2c05c098a77bc7d49b1d50d66dafd1fdc6ba3",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ]
+  }
+ ],
+ "complexity_chars": 3013,
+ "confirmation_summary": {
+  "inconclusive_cells": 4,
+  "third_call_cells": 0,
+  "two_call_cells": 85,
+  "unstable_cells": 0
+ },
+ "digest": "a45b13d195bfa2f607a28ebfc2e0b6849e394dad874838e8b38704c94f7d31ea",
+ "errors": 0,
+ "mismatches": 0,
+ "repeat_requests_byte_identical": true,
+ "retries": 0,
+ "semantic_score": {
+  "confident_cells": 81,
+  "exact_cells": 81,
+  "stable_cells": 85,
+  "total_cells": 85
+ }
+}

@@ -1,0 +1,100 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261017T053524Z-fixture_ANC-024_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-17T05:35:24+00:00",
+  "anchors_path": "docs/plans/phase-bi/anchors.json",
+  "plan": "phase-current",
+  "item": {
+    "id": "fixture:ANC-024:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 150,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-024",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must choose an agent's model icon by lower-casing the roster model string and testing it with contains for sol, luna, terra, astra, haiku, sonnet, opus and fable.",
+      "quote": "when you pull agent type from atm model, you will to a to lower and use contains to pull out sol, luna, haiku, ...",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: how the model is matched",
+      "anchor_version": 3,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "feed models GPT-5.6-Terra, Claude-Opus-5-5, claude, codex and unknown to icon_for and assert terra, opus, sonnet, terra icons and the unknown fallback",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1048,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 150,
+      "item_shortened": false,
+      "request_bytes": 3142
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "shortened": [],
+    "pass": true
+  }
+}

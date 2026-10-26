@@ -1,0 +1,119 @@
+{
+ "events": [
+  {
+   "authority": {
+    "anchor_id": "ANC-067",
+    "anchor_record_sha256": "94f6074bd793587ceb47c9e5c7ecfb1d86a1767187029e040b3fc2df0379f73d",
+    "anchor_version": 2,
+    "intent_id": "phase-bj",
+    "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+    "intent_version": 1
+   },
+   "candidate": {
+    "candidate_id": "default",
+    "question_sha256": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05"
+   },
+   "decision": {
+    "question_set_sha256": null,
+    "reason_code": "TOURNAMENT.DEFAULT_EXACT_NO_OVERRIDE",
+    "status": "rejected"
+   },
+   "event": "candidate_evaluated",
+   "event_index": 1,
+   "evidence": {
+    "canonical_request_sha256": [
+     "f95ece4ac72b221deba3ed5b15ff0e468d28a6ef81f461576f810cdbb1959f44",
+     "f95ece4ac72b221deba3ed5b15ff0e468d28a6ef81f461576f810cdbb1959f44",
+     "80737b1f02cbe3463ffd07b50132313c351110db4ab9d635babc178f58b66c24",
+     "80737b1f02cbe3463ffd07b50132313c351110db4ab9d635babc178f58b66c24",
+     "dac45c3ed2e7d1ed2965b2e08d1020d401fbb195cfebe6c0e8ca61372f255dfa",
+     "dac45c3ed2e7d1ed2965b2e08d1020d401fbb195cfebe6c0e8ca61372f255dfa",
+     "7897558b19ae6d455e55e0def8279b6659cfcd79c510c243752707d80c5c27ef",
+     "7897558b19ae6d455e55e0def8279b6659cfcd79c510c243752707d80c5c27ef",
+     "5f84a283650b3197ed3e4257edfabb794fe1a7e80e0c75c893adec960180d8f9",
+     "5f84a283650b3197ed3e4257edfabb794fe1a7e80e0c75c893adec960180d8f9",
+     "08cb15e97f913612baea98e0301c08d7ae6fad52007abffb9136839cbdc2bde0",
+     "08cb15e97f913612baea98e0301c08d7ae6fad52007abffb9136839cbdc2bde0",
+     "dd5ff538922f0bca014965969475d3411178d14facf20f42951952cdf48da722",
+     "dd5ff538922f0bca014965969475d3411178d14facf20f42951952cdf48da722",
+     "b776cdff0e12bbb35d70a017a8916300aeae210685969818292a6e6842a43c0d",
+     "b776cdff0e12bbb35d70a017a8916300aeae210685969818292a6e6842a43c0d"
+    ],
+    "raw_response_sha256": [
+     "48d6b7e17d598e4a61f2fdfd87bbffaca037bc47591a99adb0e6772c2406d621",
+     "8b365eec41a5adcfc280f1f768edacf60f118239de62d17c5583178d72a1cd45",
+     "34eb137505004f6dd6b90669fa83d03a9cd418618a645ad4f50d8c5bf610bfc2",
+     "293c445f3b177956a06482edbc5978fb55f5d8209896a3eb27944d78d4039bc7",
+     "32f1ab0a474dc361f425791ada57fe82a6d816ff22a4b00526a00a23fc257934",
+     "76c609d00b0b28122e88a761d0cbe4368ad844b97783b119bca659608c46bde3",
+     "eff101e63d759e724903d335d0254783e8149a40aef4f3ea2d58d63658986517",
+     "9eb03ffd6b342de0a03f1ba4f9e0f1d1dc20008a33eb704d4c6abf944ef7119b",
+     "fddb40c1b6a54d72433ff1e58eba9ed5d896d259f1017a66ebba6f768bd94ecb",
+     "19197a9530d599b7d0af6e5bdd402972b96d8cabd9b0ceae3748753d10da220c",
+     "3f37e85840d8a5278d3e82f9be98a609888ef566405a366161388e9f829fcd38",
+     "748466c1711bd794c451d0e68691d60120488f7ffc3bf30dd1f6e8f6c1adb145",
+     "d92b4c50c6100134e9626e8157631d5567b18aad9b83043608ceaa944b034513",
+     "79ec395a41ecd58d588361805c950d4a01587cca31fb7e77aebaf2cce9cbd13f",
+     "a55a46cb8bd727c47dcb233f6d83fec941717a7303e3e7c8535aa9174ccb4cf5",
+     "a55a46cb8bd727c47dcb233f6d83fec941717a7303e3e7c8535aa9174ccb4cf5"
+    ],
+    "run_ids": [
+     "ANC-067-default-fixture_pass-r1",
+     "ANC-067-default-fixture_pass-r2",
+     "ANC-067-default-fixture_fail-r1",
+     "ANC-067-default-fixture_fail-r2",
+     "ANC-067-default-paraphrase-r1",
+     "ANC-067-default-paraphrase-r2",
+     "ANC-067-default-silent-r1",
+     "ANC-067-default-silent-r2",
+     "ANC-067-default-conflict_second_record-r1",
+     "ANC-067-default-conflict_second_record-r2",
+     "ANC-067-default-conflict_no_claim-r1",
+     "ANC-067-default-conflict_no_claim-r2",
+     "ANC-067-default-conflict_stays_open-r1",
+     "ANC-067-default-conflict_stays_open-r2",
+     "ANC-067-default-irrelevant-r1",
+     "ANC-067-default-irrelevant-r2"
+    ]
+   },
+   "oracle": {
+    "case_count": 8,
+    "case_ids": [
+     "fixture_pass",
+     "fixture_fail",
+     "paraphrase",
+     "silent",
+     "conflict_second_record",
+     "conflict_no_claim",
+     "conflict_stays_open",
+     "irrelevant"
+    ],
+    "repeat_count": 2,
+    "sha256": "44258397c2a3232e79ed1a45a1f0fab452bb4169115d314d5c8d580f20bc249f"
+   },
+   "previous_event_sha256": null,
+   "protocol_version": "plan-anchor/question-tournament/2.0.0",
+   "score": {
+    "confidence": {
+     "cells_at_or_above_threshold": 33,
+     "mean": 0.86,
+     "median": 0.98,
+     "minimum": 0.37,
+     "p10": 0.49,
+     "threshold": 0.8,
+     "total_cells": 48
+    },
+    "exact_role_cells": 48,
+    "exact_semantic_verdicts": 16,
+    "regressions": 0,
+    "stable_cases": 8,
+    "total_cases": 8,
+    "total_role_cells": 48,
+    "total_semantic_verdicts": 16
+   },
+   "supersedes": null
+  }
+ ],
+ "history_id": "ANC-067-plan",
+ "schema": "plan-anchor/tuning-history/2"
+}

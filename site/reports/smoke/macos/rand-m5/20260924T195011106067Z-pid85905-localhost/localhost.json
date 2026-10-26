@@ -1,0 +1,330 @@
+{
+  "feature": "localhost",
+  "host": "rand-m5",
+  "platform": "macos",
+  "run_id": "20260924T195011106067Z",
+  "status": "PASS",
+  "source_revision": "139a1ede641b9c9821d5240f8b9c7f67e1508beb",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 1
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFQVPFEZ2QXVZ4YA7ZAG3",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 1
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFQXPN52FCZF498WVGWD6",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 1
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFQZ2GTFE93MJ1RG5C11V",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 1
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 2
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFR1P3VHMBR94MBBBVYH7",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 2
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFR2YMXM3K853G0NKTPJ0",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 2
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFR45WMHV3JB7GHX09GTB",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 2
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 3
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFR6K4S4J7F0PSN9XKSPY",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 3
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFR7WV03M751CZTZE4D83",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 3
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFR93ZYW2R03H0AFDSVV3",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 3
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 4
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFRBMASGBEWHWW5FN8P03",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 4
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFRCT82QD91AEHM967V6V",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 4
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFRDZAK6R116B9DC55V5F",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 4
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 5
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFRGHDAWYCYF8V5DRY676",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 5
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFRHYCNQ20C7QQT7S1XJV",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 5
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFRK44T7A69AXKCAMKXHR",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 5
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 6
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFRNTGN4QY6868MCTMJJ4",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 6
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFRPYYDAT1NX76A709D1X",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 6
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFRR2DEB8CP0GXWHWJQNJ",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 6
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 7
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFRTPFBFD1FVV2D6WVRNW",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 7
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFRVW7E09JC9E9G3HZZS9",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 7
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFRX0HJ00GCX3VR0EN2CP",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 7
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 8
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFRZNK3SDA5VKZTRBPS0Y",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 8
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFS0WJW660K3QTS0PMZSA",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 8
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFS21E3XJTP6N413FSKZX",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 8
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 9
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFS4KFB6J4KC0D4SEH667",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 9
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFS5VS0EZ05XWD5KXYJHD",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 9
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFS6Y4DMCQ4K412SR48Y0",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 9
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 10
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M3AFFS9E211N24KRRJBC32ST",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 10
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFSAW22CDT3VPFVBA5YC0",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 10
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M3AFFSC300CT2B694K9RBV5Y",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 10
+    }
+  ]
+}

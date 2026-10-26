@@ -1,4 +1,7 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::atomic::{AtomicI64, Ordering},
+};
 
 use atm_storage::contract::{Message, MessageKey};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope};
@@ -9,7 +12,7 @@ use atm_storage::{
     TaskEventKind, TaskId, TaskOp, TaskState, TeamName,
 };
 use atm_storage_rusqlite::SqliteStorageBackend;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use rusqlite::{Connection, params};
 use serde_json::Map;
 use tempfile::TempDir;
@@ -50,7 +53,7 @@ fn bd2_rejected_move_returns_committed_rejection() {
         &"MISSING".parse().unwrap(),
         &"alice".parse().unwrap(),
         &MoveTarget::Head,
-        IsoTimestamp::now(),
+        h.timestamp(),
     );
     let result = result.expect("audit transaction committed");
     assert_eq!(
@@ -145,6 +148,7 @@ struct Harness {
     path: std::path::PathBuf,
     backend: SqliteStorageBackend,
     team: TeamName,
+    timestamp_counter: AtomicI64,
 }
 
 impl Harness {
@@ -157,7 +161,18 @@ impl Harness {
             path,
             backend,
             team: "ba2".parse().expect("team"),
+            timestamp_counter: AtomicI64::new(0),
         }
+    }
+
+    fn timestamp(&self) -> IsoTimestamp {
+        let offset = self.timestamp_counter.fetch_add(1, Ordering::Relaxed);
+        IsoTimestamp::from_datetime(
+            "2026-10-20T00:00:00Z"
+                .parse::<chrono::DateTime<Utc>>()
+                .unwrap()
+                + Duration::seconds(offset),
+        )
     }
 
     fn save(&self, message: &Message) -> Result<(), atm_storage::AtmError> {
@@ -237,7 +252,7 @@ impl Harness {
                 from: from.parse().expect("sender"),
                 source_chat_id: None,
                 text: text.to_owned(),
-                timestamp: IsoTimestamp::from_datetime(Utc::now()),
+                timestamp: self.timestamp(),
                 read: false,
                 source_team: Some(self.team.clone()),
                 destination_chat_id: None,
@@ -293,7 +308,35 @@ impl Harness {
             .collect()
     }
 
-    fn move_task(&self, task: &str, actor: &str, target: MoveTarget) {
+    /// Writes the member's roster `metadata_json` directly; the roster row is
+    /// created when the member has none yet.
+    fn set_roster_metadata(&self, member: &str, metadata_json: &str) {
+        Connection::open(&self.path)
+            .unwrap()
+            .execute(
+                "INSERT INTO team_roster(team_name, agent_name, member_kind, harness, agent_type, model, metadata_json, updated_at)
+                 VALUES (?1, ?2, 'permanent', 'claude-code', '', '', ?3, ?4)
+                 ON CONFLICT(team_name, agent_name) DO UPDATE SET metadata_json = excluded.metadata_json",
+                params![
+                    self.team.as_str(),
+                    member,
+                    metadata_json,
+                    self.timestamp().to_string()
+                ],
+            )
+            .unwrap();
+    }
+
+    fn reopen(&mut self) {
+        self.backend = SqliteStorageBackend::new(&self.path).expect("reopen backend");
+    }
+
+    fn move_task(
+        &self,
+        task: &str,
+        actor: &str,
+        target: MoveTarget,
+    ) -> atm_storage::TaskMoveRecord {
         self.backend
             .task_store()
             .move_task(
@@ -301,11 +344,11 @@ impl Harness {
                 &task.parse().expect("task"),
                 &actor.parse().expect("actor"),
                 &target,
-                IsoTimestamp::now(),
+                self.timestamp(),
             )
             .expect("move commit")
             .operation
-            .expect("move task");
+            .expect("move task")
     }
 }
 
@@ -359,7 +402,7 @@ pub(crate) fn assignee_task_report_is_plain_message_and_leaves_task_unchanged() 
         .record_reminder(
             &MemberKey::new(h.team.clone(), "alice".parse().unwrap()),
             &"T1".parse().unwrap(),
-            IsoTimestamp::now(),
+            h.timestamp(),
             ReminderOutcome::Emitted,
         )
         .expect("record reminder");
@@ -737,9 +780,26 @@ pub(crate) fn start_while_another_task_is_active_is_rejected() {
     h.assign("T2", "alice", "lead", None);
     h.start("T1", "alice").unwrap();
     let error = h.start("T2", "alice").expect_err("active conflict");
-    assert_eq!(error.code(), AtmErrorCode::TaskMoveInvalid);
-    assert!(error.message().contains("already has an active task"));
+    assert_eq!(error.code(), AtmErrorCode::TaskMaxActiveReached);
+    assert!(error.message().contains("max_tasks is 1"), "{error}");
+    assert!(
+        error
+            .message()
+            .contains("Complete or cancel an active task"),
+        "{error}"
+    );
+    assert!(
+        error
+            .message()
+            .contains("atm teams update-member ba2 alice --max-tasks <N>"),
+        "{error}"
+    );
     assert_eq!(h.row("T2").state, TaskState::Assigned);
+    assert!(
+        h.events("T2")
+            .iter()
+            .any(|event| event.event == TaskEventKind::Rejected)
+    );
 }
 
 #[test]
@@ -1000,7 +1060,7 @@ pub(crate) fn move_of_complete_task_appends_rejected_row() {
             &"T1".parse().unwrap(),
             &"lead".parse().unwrap(),
             &MoveTarget::Head,
-            IsoTimestamp::now(),
+            h.timestamp(),
         )
         .expect("rejection committed")
         .operation
@@ -1259,7 +1319,7 @@ fn trailing_refusal_run_counts_raw_stored_event_values() {
     .into_iter()
     .enumerate()
     {
-        connection.execute("INSERT INTO task_events(team,task_id,assignee,seq,at,event,actor) VALUES (?1,?2,'alice',?3,?4,?5,'alice')", params![h.team.as_str(), format!("T{seq}"), seq + 1, IsoTimestamp::now().to_string(), event]).unwrap();
+        connection.execute("INSERT INTO task_events(team,task_id,assignee,seq,at,event,actor) VALUES (?1,?2,'alice',?3,?4,?5,'alice')", params![h.team.as_str(), format!("T{seq}"), seq + 1, h.timestamp().to_string(), event]).unwrap();
     }
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -1323,7 +1383,7 @@ async fn refusal_run_reads_the_trailing_run() {
 }
 
 #[test]
-fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
+fn reset_reminders_zeroes_budget_but_preserves_lead_latch() {
     let h = Harness::new();
     h.assign("T1", "alice", "lead", None);
     let member = MemberKey::new(h.team.clone(), "alice".parse().unwrap());
@@ -1331,26 +1391,16 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
     let task_store = h.backend.task_store();
 
     task_store
-        .record_reminder(
-            &member,
-            &task_id,
-            IsoTimestamp::now(),
-            ReminderOutcome::Emitted,
-        )
+        .record_reminder(&member, &task_id, h.timestamp(), ReminderOutcome::Emitted)
         .expect("record reminder");
     task_store
-        .record_reminder(
-            &member,
-            &task_id,
-            IsoTimestamp::now(),
-            ReminderOutcome::Emitted,
-        )
+        .record_reminder(&member, &task_id, h.timestamp(), ReminderOutcome::Emitted)
         .expect("record second reminder");
     task_store
         .record_lead_notified(
             &member,
             &task_id,
-            IsoTimestamp::now(),
+            h.timestamp(),
             &"lead".parse().unwrap(),
             &AtmMessageId::new(),
         )
@@ -1360,12 +1410,12 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
     assert_eq!(reminded.lead_notified_count, 1);
     assert!(reminded.last_reminded_at.is_some());
 
-    let reset_at = IsoTimestamp::now();
+    let reset_at = h.timestamp();
     let reset = task_store
         .reset_reminders(&member, &task_id, reset_at)
         .expect("reset reminders");
     assert_eq!(reset.row.reminder_count, 0);
-    assert_eq!(reset.row.lead_notified_count, 0);
+    assert_eq!(reset.row.lead_notified_count, 1);
     assert!(reset.row.last_reminded_at.is_none());
     assert_eq!(reset.row.updated_at, reset_at);
     assert_eq!(
@@ -1375,12 +1425,185 @@ fn reset_reminders_zeroes_the_budget_and_appends_an_event() {
 
     // A reminder recorded after the reset starts the budget over from one.
     let after_reset = task_store
-        .record_reminder(
-            &member,
-            &task_id,
-            IsoTimestamp::now(),
-            ReminderOutcome::Emitted,
-        )
+        .record_reminder(&member, &task_id, h.timestamp(), ReminderOutcome::Emitted)
         .expect("record reminder after reset");
     assert_eq!(after_reset.row.reminder_count, 1);
+}
+
+#[test]
+pub(crate) fn max_tasks_three_allows_three_active_and_refuses_a_fourth() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":3}"#);
+    for task in ["T1", "T2", "T3", "T4"] {
+        h.assign(task, "alice", "lead", None);
+    }
+    for task in ["T1", "T2", "T3"] {
+        h.start(task, "alice").expect("start within max_tasks");
+        assert_eq!(h.row(task).state, TaskState::Active);
+    }
+    let error = h.start("T4", "alice").expect_err("fourth start refused");
+    assert_eq!(error.code(), AtmErrorCode::TaskMaxActiveReached);
+    assert!(error.message().contains("max_tasks is 3"), "{error}");
+    assert!(
+        error
+            .message()
+            .contains("atm teams update-member ba2 alice --max-tasks <N>"),
+        "{error}"
+    );
+    assert_eq!(h.row("T4").state, TaskState::Assigned);
+}
+
+#[test]
+pub(crate) fn explicit_max_tasks_one_refuses_a_second_start() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":1}"#);
+    h.assign("T1", "alice", "lead", None);
+    h.assign("T2", "alice", "lead", None);
+    h.start("T1", "alice").expect("first start");
+    let error = h.start("T2", "alice").expect_err("second start refused");
+    assert_eq!(error.code(), AtmErrorCode::TaskMaxActiveReached);
+    assert!(error.message().contains("max_tasks is 1"), "{error}");
+    assert!(
+        error
+            .message()
+            .contains("atm teams update-member ba2 alice --max-tasks <N>"),
+        "{error}"
+    );
+    assert_eq!(h.row("T2").state, TaskState::Assigned);
+}
+
+#[test]
+pub(crate) fn invalid_stored_max_tasks_refuses_the_start() {
+    for stored in [
+        r#"{"max_tasks":0}"#,
+        r#"{"max_tasks":"3"}"#,
+        r#"{"max_tasks":true}"#,
+    ] {
+        let h = Harness::new();
+        h.set_roster_metadata("alice", stored);
+        h.assign("T1", "alice", "lead", None);
+        let error = h
+            .start("T1", "alice")
+            .expect_err("invalid max_tasks refuses the start");
+        assert_eq!(
+            error.code(),
+            AtmErrorCode::MessageValidationFailed,
+            "{stored}"
+        );
+        assert!(error.message().contains("max_tasks"), "{error}");
+        assert_eq!(h.row("T1").state, TaskState::Assigned, "{stored}");
+    }
+}
+
+#[test]
+pub(crate) fn started_tasks_sort_ahead_in_start_order() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":3}"#);
+    for task in ["T1", "T2", "T3", "T4"] {
+        h.assign(task, "alice", "lead", None);
+    }
+    h.start("T3", "alice").expect("start T3");
+    h.start("T1", "alice").expect("start T1");
+    assert_eq!(
+        h.positions("alice"),
+        BTreeMap::from([
+            ("T3".into(), 1),
+            ("T1".into(), 2),
+            ("T2".into(), 3),
+            ("T4".into(), 4)
+        ])
+    );
+}
+
+#[test]
+pub(crate) fn head_move_skips_every_active_task() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":3}"#);
+    for task in ["T1", "T2", "T3", "T4"] {
+        h.assign(task, "alice", "lead", None);
+    }
+    h.start("T3", "alice").expect("start T3");
+    h.start("T1", "alice").expect("start T1");
+    h.move_task("T4", "lead", MoveTarget::Head);
+    assert_eq!(
+        h.positions("alice"),
+        BTreeMap::from([
+            ("T3".into(), 1),
+            ("T1".into(), 2),
+            ("T4".into(), 3),
+            ("T2".into(), 4)
+        ])
+    );
+}
+
+#[test]
+pub(crate) fn move_of_second_active_task_reports_its_position() {
+    let h = Harness::new();
+    h.set_roster_metadata("alice", r#"{"max_tasks":3}"#);
+    for task in ["T1", "T2", "T3"] {
+        h.assign(task, "alice", "lead", None);
+    }
+    h.start("T3", "alice").expect("start T3");
+    h.start("T1", "alice").expect("start T1");
+    let moved = h.move_task("T1", "lead", MoveTarget::End);
+    assert_eq!(moved.from.get(), 2);
+    assert_eq!(moved.to.get(), 2);
+    let event = h.events("T1").pop().expect("moved event");
+    assert_eq!(event.event, TaskEventKind::Moved);
+    assert_eq!(event.detail.as_deref(), Some("2→2"));
+    assert_eq!(
+        h.positions("alice"),
+        BTreeMap::from([("T3".into(), 1), ("T1".into(), 2), ("T2".into(), 3)])
+    );
+}
+
+/// The full pre-bk-8 `TASK_INDEX_DDL`, before that unique index was dropped.
+const PRE_BK8_TASK_INDEX_DDL: &str = r#"
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_agent
+    ON tasks(team, assignee) WHERE state = 'active';
+
+CREATE UNIQUE INDEX IF NOT EXISTS tasks_position_per_member
+    ON tasks(team, assignee, position) WHERE state <> 'complete';
+
+CREATE INDEX IF NOT EXISTS tasks_open_by_member
+    ON tasks(team, assignee, assigned_at) WHERE state <> 'complete';
+"#;
+
+#[test]
+pub(crate) fn ensure_schema_drops_one_active_task_per_agent() {
+    let mut h = Harness::new();
+    Connection::open(&h.path)
+        .unwrap()
+        .execute_batch(PRE_BK8_TASK_INDEX_DDL)
+        .unwrap();
+    let index_count = |path: &std::path::Path| -> i64 {
+        Connection::open(path)
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'one_active_task_per_agent'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap()
+    };
+    assert_eq!(index_count(&h.path), 1, "the pre-bk-8 index is present");
+
+    h.reopen();
+    assert_eq!(index_count(&h.path), 0, "ensure_schema drops the index");
+
+    h.set_roster_metadata("alice", r#"{"max_tasks":2}"#);
+    h.assign("T1", "alice", "lead", None);
+    h.assign("T2", "alice", "lead", None);
+    h.start("T1", "alice").expect("first start");
+    h.start("T2", "alice")
+        .expect("two active rows for one member insert once the index is gone");
+    assert_eq!(h.row("T2").state, TaskState::Active);
+
+    h.reopen();
+    assert_eq!(
+        index_count(&h.path),
+        0,
+        "a second ensure_schema is idempotent"
+    );
+    assert_eq!(h.row("T2").state, TaskState::Active);
 }

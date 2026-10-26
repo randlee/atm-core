@@ -1,0 +1,17 @@
+{
+  "task_id": "sanity.close-error-abc",
+  "original_task": "sanity",
+  "error_id": "abc",
+  "code": "SANITY_CLOSE.INTERNAL",
+  "detail": "Example read failure",
+  "owner": "hook-maintainer",
+  "recovery": "Repair reader and retry close",
+  "state_summary": "Unknown; inspect current beads",
+  "command": [
+    "bd",
+    "show",
+    "sanity",
+    "--json"
+  ],
+  "escalation_to": "phase-lead"
+}

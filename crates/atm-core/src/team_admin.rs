@@ -380,7 +380,11 @@ pub fn set_nudge_template_override_with_store(
         "set-nudge-template",
     )?;
     validate_nudge_template_body(&request.template_body)?;
-    crate::send::nudge_template::validate_built_in_nudge_template_body(&request.template_body)?;
+    if request.kind == BuiltInNudgeTemplateKind::Cron {
+        crate::send::nudge_template::validate_cron_nudge_template_body(&request.template_body)?;
+    } else {
+        crate::send::nudge_template::validate_built_in_nudge_template_body(&request.template_body)?;
+    }
 
     let row = override_store.save_template_override(
         &request.team,
@@ -486,6 +490,8 @@ mod tests {
 
     use serial_test::serial;
     use tempfile::tempdir;
+
+    use crate::delivery_channel::BACKEND_TYPE_METADATA_KEY;
 
     use super::{
         AddMemberRequest, BackendOptions, BackupRequest, ClearNudgeTemplateOverrideRequest,
@@ -857,6 +863,7 @@ mod tests {
                 alias: None,
                 backend_warning: None,
                 host: None,
+                max_tasks: None,
             },
         )
         .expect_err("reserved sender must be rejected");
@@ -1336,6 +1343,131 @@ mod tests {
         );
     }
 
+    fn stored_member_metadata(
+        roster_store: &RecordingRosterStore,
+        team: &str,
+        agent: &str,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        let teams = roster_store.teams.lock().expect("roster store lock");
+        teams
+            .get(&team.parse().expect("team"))
+            .and_then(|members| {
+                members
+                    .iter()
+                    .find(|member| member.agent_name.as_str() == agent)
+            })
+            .expect("member is seeded")
+            .metadata_json
+            .clone()
+    }
+
+    #[test]
+    #[serial(team_config_write_env)]
+    fn update_member_max_tasks_writes_roster_metadata() {
+        let roster_store = RecordingRosterStore::default();
+        let mut member = roster_member(TEST_TEAM, TEST_SENDER);
+        member
+            .metadata_json
+            .insert("alias".into(), serde_json::json!("arch"));
+        member
+            .metadata_json
+            .insert(BACKEND_TYPE_METADATA_KEY.into(), serde_json::json!("local"));
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![roster_member(TEST_TEAM, ROLE_TEAM_LEAD), member],
+        );
+        let host_request = UpdateMemberRequest::new(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            TEST_SENDER,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("request")
+        .with_host(Some("fastpc4.local"))
+        .expect("valid host");
+        update_member_with_roster_store(&roster_store, host_request).expect("set host");
+
+        let max_tasks_request = UpdateMemberRequest::new(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            TEST_SENDER,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("request")
+        .with_max_tasks(Some(3))
+        .expect("valid max_tasks");
+        update_member_with_roster_store(&roster_store, max_tasks_request).expect("set max_tasks");
+
+        let metadata = stored_member_metadata(&roster_store, TEST_TEAM, TEST_SENDER);
+        assert_eq!(metadata.get("max_tasks"), Some(&serde_json::json!(3)));
+        assert_eq!(
+            metadata.get(crate::send_to::ROSTER_HOST_METADATA_KEY),
+            Some(&serde_json::json!("fastpc4.local")),
+            "setting max_tasks leaves the host unchanged"
+        );
+        assert_eq!(metadata.get("alias"), Some(&serde_json::json!("arch")));
+        assert_eq!(
+            metadata.get(BACKEND_TYPE_METADATA_KEY),
+            Some(&serde_json::json!("local"))
+        );
+
+        let untouched_request = UpdateMemberRequest::new(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            TEST_SENDER,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("request")
+        .with_max_tasks(None)
+        .expect("None leaves max_tasks unset");
+        update_member_with_roster_store(&roster_store, untouched_request).expect("no-op update");
+        assert_eq!(
+            stored_member_metadata(&roster_store, TEST_TEAM, TEST_SENDER).get("max_tasks"),
+            Some(&serde_json::json!(3)),
+            "None leaves the stored max_tasks unchanged"
+        );
+    }
+
+    #[test]
+    fn update_member_max_tasks_zero_is_a_validation_error() {
+        let Err(error) = UpdateMemberRequest::new(
+            ROLE_TEAM_LEAD.parse().expect("caller"),
+            TEST_TEAM.parse().expect("caller team"),
+            TEST_TEAM,
+            TEST_SENDER,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("request")
+        .with_max_tasks(Some(0)) else {
+            panic!("max_tasks 0 must be refused");
+        };
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("at least 1"), "{error}");
+    }
+
     #[test]
     #[serial(team_config_write_env)]
     fn update_member_repairs_existing_roster_metadata_and_projects_config() {
@@ -1367,6 +1499,7 @@ mod tests {
                 alias: None,
                 backend_warning: None,
                 host: None,
+                max_tasks: None,
             },
         )
         .expect("update member");
@@ -1431,6 +1564,7 @@ mod tests {
                 alias: None,
                 backend_warning: None,
                 host: None,
+                max_tasks: None,
             },
         )
         .expect("repair team-lead pane");
@@ -1452,6 +1586,7 @@ mod tests {
                 alias: None,
                 backend_warning: None,
                 host: None,
+                max_tasks: None,
             },
         )
         .expect("repair secondary member pane");
@@ -1502,6 +1637,7 @@ mod tests {
                 alias: None,
                 backend_warning: None,
                 host: None,
+                max_tasks: None,
             },
         )
         .expect_err("caller team mismatch");
@@ -1534,6 +1670,7 @@ mod tests {
                 alias: None,
                 backend_warning: None,
                 host: None,
+                max_tasks: None,
             },
         )
         .expect_err("missing caller");
@@ -1566,6 +1703,7 @@ mod tests {
                 alias: None,
                 backend_warning: None,
                 host: None,
+                max_tasks: None,
             },
         )
         .expect_err("missing member");

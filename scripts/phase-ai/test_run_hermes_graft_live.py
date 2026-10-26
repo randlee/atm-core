@@ -110,6 +110,31 @@ class HermesGraftLiveSmokeTests(unittest.TestCase):
         _feature, cases = write_report.call_args.args
         self.assertEqual([case["status"] for case in cases], ["FAIL"])
 
+    def test_prerequisite_uses_the_real_predicate_and_names_the_failed_condition(self) -> None:
+        doctor = {
+            "summary": {"status": "healthy", "error_count": 0},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.6.2", "cli_schema_version": 1, "http_api_version": "1.4.0"},
+            "daemon_context": {"version": "1.6.1", "cli_schema_version": 2, "http_api_version": "2.0.0"},
+        }
+        with (
+            mock.patch.object(self.module.feature_smoke, "require_environment", return_value=("atm", "sender", "hermes")),
+            mock.patch.object(self.module.feature_smoke, "command", return_value={"exit_code": 0, "stdout": "{}", "stderr": ""}),
+            mock.patch.object(self.module.feature_smoke, "parse_json", return_value=doctor),
+            mock.patch.object(self.module.feature_smoke, "branch_version", return_value="1.6.2"),
+            mock.patch.object(self.module.subprocess, "run") as run,
+            mock.patch.object(self.module.feature_smoke, "write_report", return_value=Path("report.json")) as write_report,
+        ):
+            self.assertEqual(self.module.run_live([]), 1)
+
+        run.assert_not_called()
+        _feature, cases = write_report.call_args.args
+        self.assertEqual(cases[0]["status"], "FAIL")
+        self.assertEqual(
+            cases[0]["detail"],
+            "cli schema 1 != daemon schema 2; client HTTP API major 1 != daemon HTTP API major 2",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -78,12 +78,57 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
+mod cron_hook_runner;
+mod cron_lifecycle_nudge_emitter;
+mod cron_lifecycle_nudger;
+mod cron_module_mail_delivery;
+mod cron_run_permit;
+mod cron_scheduler;
 mod herdr_breaker;
 mod herdr_endpoint;
+mod hook_action_dispatcher;
+mod hook_runner;
 mod mail;
 mod message_received_hook_emitter;
 mod store;
+mod task_commands;
 mod template_composer;
+mod tool_sender;
+
+pub use crate::hook::HookTarget;
+pub use atm_storage::request_budget::{
+    CRON_TIMEOUT_MAX_MS, HOOK_ACTION_RESERVE_MS, HOOK_TIMEOUT_MAX_MS, SERVER_REQUEST_BUDGET,
+};
+pub use atm_storage::{
+    CronCommitResult, CronDeliveryIntent, CronDeliveryKey, CronDiagnosticDetail, CronFailure,
+    CronFailureKey, CronFailureKind, CronGeneration, CronLifecycleEvent, CronModuleMailIntent,
+    CronModuleOutput, CronName, CronNoticeIntent, CronNoticeKey, CronOutputBody, CronRunTransition,
+    CronSchedule, CronScheduleId, CronScheduleStore, CronSuccess, CronTransitionStore,
+    CronTransitionWrite, DeliveryReceipt, DeliveryRetryCause, HookExitCause, HookName,
+    HookRegistration, HookRegistrationStore, NewCronSchedule, PendingCronDelivery, PhaseId,
+    StopCondition, TaskHook, stopped_outcome,
+};
+pub use cron_hook_runner::CronHookRunner;
+pub use cron_lifecycle_nudge_emitter::{
+    CronLifecycleNudge, CronLifecycleNudgeEmitter, CronLifecycleNudgeTarget,
+};
+pub use cron_lifecycle_nudger::CronLifecycleNudger;
+pub use cron_module_mail_delivery::CronModuleMailDelivery;
+pub use cron_run_permit::{CronRunPermit, CronRunPermitIssuer};
+pub use cron_scheduler::{CronScheduler, CronStartSpec};
+pub use hook_action_dispatcher::{DispatchSpec, DispatchedAction, HookActionDispatcher};
+pub use hook_runner::{HookOutcome, HookRunner};
+#[cfg(any(test, feature = "test-utils"))]
+pub use task_commands::RecordingTaskCommands;
+pub use task_commands::{
+    TaskAssign, TaskCallCtx, TaskClose, TaskCommand, TaskCommands, TaskEvents, TaskList, TaskStart,
+};
+#[cfg(any(test, feature = "test-utils"))]
+pub use {
+    cron_scheduler::RecordingCronScheduler,
+    hook_action_dispatcher::{DispatchCall, RecordingHookActionDispatcher},
+    hook_runner::{BeforeReply, DummyHookRunner, HookCall},
+};
 
 // Intentional re-export façade: the boundary module is the stable public import
 // surface for Phase R/AA contracts, so callers should not need to know whether
@@ -101,6 +146,9 @@ pub use store::*;
 pub use template_composer::{
     RenderedBody, SourceSpan, TemplateComposer, TemplateInspection, TemplateReference,
     TemplateReferenceKind, TemplateRoot, TemplateSource,
+};
+pub use tool_sender::{
+    SenderClaim, ToolSenderCapability, claim_verified_tool_runtime, resolve_sender_claim,
 };
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.

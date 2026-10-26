@@ -10,6 +10,7 @@ use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::send::NudgeMode;
 use crate::service_runtime::RetainedServiceRuntime;
+use crate::types::TaskId;
 
 /// Builds the built-in receiver dispatch planned after a durable write.
 ///
@@ -25,13 +26,30 @@ pub(crate) fn build_built_in_dispatch<R>(
 where
     R: RetainedServiceRuntime + ?Sized,
 {
+    build_built_in_dispatch_with_open_tasks(runtime, delivery_snapshot, event, nudge_mode, &[])
+}
+
+/// Same as [`build_built_in_dispatch`], with the recipient's open tasks made
+/// available to the task nudge body as `{{open_tasks}}`.
+pub(crate) fn build_built_in_dispatch_with_open_tasks<R>(
+    runtime: &R,
+    delivery_snapshot: &DeliveryRecipientSnapshot,
+    event: &PostSendHookEvent,
+    nudge_mode: NudgeMode,
+    open_tasks: &[TaskId],
+) -> Result<Option<BuiltInPostSendDispatch>, AtmError>
+where
+    R: RetainedServiceRuntime + ?Sized,
+{
     let kind = nudge_kind_for_mode(nudge_mode);
     if delivery_snapshot.local_tmux_post_send {
         let pane_id = tmux_pane_id(event, delivery_snapshot);
         let Some(pane_id) = pane_id else {
             return Ok(None);
         };
-        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+        let Some(rendered_nudge) =
+            render_built_in_nudge_for_dispatch(runtime, event, kind, open_tasks)?
+        else {
             return Ok(None);
         };
         return Ok(Some(BuiltInPostSendDispatch {
@@ -46,10 +64,12 @@ where
         }));
     }
     if delivery_snapshot.local_herdr_post_send {
-        return build_herdr_dispatch(runtime, delivery_snapshot, event, kind);
+        return build_herdr_dispatch(runtime, delivery_snapshot, event, kind, open_tasks);
     }
     if delivery_snapshot.graft_post_send {
-        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+        let Some(rendered_nudge) =
+            render_built_in_nudge_for_dispatch(runtime, event, kind, open_tasks)?
+        else {
             return Ok(None);
         };
         return Ok(Some(BuiltInPostSendDispatch {
@@ -63,7 +83,9 @@ where
         }));
     }
     if delivery_snapshot.bare_cli_post_send {
-        let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+        let Some(rendered_nudge) =
+            render_built_in_nudge_for_dispatch(runtime, event, kind, open_tasks)?
+        else {
             return Ok(None);
         };
         return Ok(Some(BuiltInPostSendDispatch {
@@ -86,6 +108,7 @@ fn build_herdr_dispatch<R>(
     delivery_snapshot: &DeliveryRecipientSnapshot,
     event: &PostSendHookEvent,
     kind: NudgeKind,
+    open_tasks: &[TaskId],
 ) -> Result<Option<BuiltInPostSendDispatch>, AtmError>
 where
     R: RetainedServiceRuntime + ?Sized,
@@ -97,7 +120,9 @@ where
     ) else {
         return Ok(None);
     };
-    let Some(rendered_nudge) = render_built_in_nudge_for_dispatch(runtime, event, kind)? else {
+    let Some(rendered_nudge) =
+        render_built_in_nudge_for_dispatch(runtime, event, kind, open_tasks)?
+    else {
         return Ok(None);
     };
     Ok(Some(BuiltInPostSendDispatch {
@@ -139,6 +164,7 @@ fn render_built_in_nudge_for_dispatch<R>(
     runtime: &R,
     event: &PostSendHookEvent,
     delivery_kind: NudgeKind,
+    open_tasks: &[TaskId],
 ) -> Result<Option<String>, AtmError>
 where
     R: RetainedServiceRuntime + ?Sized,
@@ -162,7 +188,7 @@ where
     let Some(template_body) = template.body.as_deref() else {
         return Ok(None);
     };
-    nudge_template::render_built_in_nudge(event, template_body).map(Some)
+    nudge_template::render_built_in_nudge(event, template_body, open_tasks).map(Some)
 }
 
 pub(crate) fn post_send_event_from_message(

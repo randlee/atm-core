@@ -497,6 +497,32 @@ fn write_ingress_carries_canonical_roster_members_forward() {
 }
 
 #[test]
+fn ordinary_caller_in_team_tool_is_admitted_as_an_ordinary_sender() {
+    let root = tempdir().expect("root");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("atm-bd");
+    request.caller_team = TeamName::from_validated("tool");
+
+    let context = prepare_send_context(&runtime, &mut request)
+        .expect("ADR-066 D4: an ordinary tool-team caller sends like any other caller");
+
+    assert_eq!(context.canonical_sender.as_str(), "atm-bd");
+    assert_eq!(context.canonical_sender_team.as_str(), "tool");
+}
+
+#[test]
+fn ordinary_caller_cannot_take_the_daemon_owned_cron_tool_principal() {
+    let root = tempdir().expect("root");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let mut request = send_request(root.path());
+    request.caller_identity = AgentName::from_validated("cron");
+    request.caller_team = TeamName::from_validated("tool");
+
+    assert!(prepare_send_context(&runtime, &mut request).is_err());
+}
+
+#[test]
 fn unique_name_d03_default_retained_runtime_resolves_bare_alias_to_remote_owner() {
     let root = tempdir().expect("root");
     let local_team = TeamName::from_validated(TEST_TEAM);
@@ -830,6 +856,8 @@ fn path_body_detection_emits_structured_warning_event() {
             team: TeamName::from_validated(TEST_TEAM),
         },
         canonical_sender: AgentName::from_validated(TEST_SENDER),
+        canonical_sender_team: TeamName::from_validated(TEST_TEAM),
+        canonical_sender_chat_id: None,
         inbox_path: tempdir.path().join("recipient.jsonl"),
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::NonClaude),
         delivery_family: DeliveryEventFamily::NewMessage,
@@ -1052,6 +1080,8 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
             team: TeamName::from_validated(TEST_TEAM),
         },
         canonical_sender: AgentName::from_validated(TEST_SENDER),
+        canonical_sender_team: TeamName::from_validated(TEST_TEAM),
+        canonical_sender_chat_id: None,
         inbox_path: tempdir.path().join("recipient.jsonl"),
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
         delivery_family: DeliveryEventFamily::NewMessage,

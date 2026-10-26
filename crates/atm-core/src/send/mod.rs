@@ -20,6 +20,7 @@ use crate::schema::{
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, TaskId, TeamName};
+pub use atm_storage::MessageWriteOrigin;
 use atm_storage::{MoveTarget, TaskOp};
 
 pub(crate) mod async_persistence;
@@ -38,16 +39,21 @@ mod request;
 pub(crate) mod summary;
 mod template;
 mod write_context;
+pub(crate) use write_context::prepare_send_context_with_tool_capability;
 
 pub use async_persistence::{TemplateVerification, WriteSourcePreflight};
 pub use async_persistence::{preflight_write_source_request, verify_template_request};
+pub use atm_storage::{
+    ToolInstallReceipt, ToolInstallerOperation, ToolInstallerRequest, ToolRuntimeProof,
+    ToolSenderAttestation, ToolSenderPeerAdmissionStore, ToolSenderRegistry,
+};
 pub(crate) use delivery_persistence::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, DuplicateWriteDisposition,
 };
 #[doc(hidden)]
 pub use nudge_template::{
     default_template, qualified_sender_identity as qualified_nudge_sender_identity,
-    render_resolved_built_in_nudge,
+    render_cron_lifecycle_nudge, render_resolved_built_in_nudge,
 };
 pub use outcome::{SendCommandOutcome, SendOutcome, WarningEntry};
 pub(crate) use peer_routing::direct_peer_destination;
@@ -76,9 +82,11 @@ pub fn preflight_template_send(
 // The canonical write pipeline lives in `crate::write`; `send` re-exports the
 // public entry points so external paths are unchanged.
 pub use crate::write::{
-    PreparedWrite, WriteOutcome, prepare_write_with_preflight_async_runtime,
-    prepare_write_with_runtime, send_mail, send_mail_with_runtime, write_mail,
-    write_mail_with_runtime,
+    PreparedWrite, WriteOutcome, cron_run_message_write_origin,
+    prepare_cron_module_mail_async_runtime, prepare_write_with_cron_run_permit_async_runtime,
+    prepare_write_with_preflight_async_runtime, prepare_write_with_runtime,
+    prepare_write_with_tool_capability_async_runtime, send_mail, send_mail_with_runtime,
+    write_current_herdr_terminal_escalation_with_runtime, write_mail, write_mail_with_runtime,
 };
 
 #[cfg(test)]
@@ -155,6 +163,21 @@ pub struct WriteRequest {
     /// compatible with the deployed 1.x baseline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub peer_http_api_version: Option<crate::protocol::HttpApiVersion>,
+    /// Security mode selected by the sending daemon for a peer write. Peer
+    /// ingress compares this with its adapter mode before the writer runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_wire_security: Option<crate::peer_wire::PeerWireSecurity>,
+    /// Signed origin-runtime proof for a local plug-in message. The daemon
+    /// verifies it against the protected tool-sender registry before writing;
+    /// an authenticated caller cannot turn this JSON value into a capability.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_runtime_proof: Option<atm_storage::ToolRuntimeProof>,
+    /// Origin-host assertion for a virtual sender forwarded over an
+    /// authenticated peer connection. TLS peer identity alone does not
+    /// authorize this sender; peer admission verifies this signature and its
+    /// durable replay binding before canonical write admission.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_sender_attestation: Option<atm_storage::ToolSenderAttestation>,
     /// The immutable identity assigned by the origin canonical writer.
     /// Authenticated peer ingress preserves it so both hosts store one ULID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -196,6 +219,15 @@ pub struct WriteRequest {
     /// deferred to durable at-most-once queue delivery.
     #[serde(default)]
     pub nudge_mode: NudgeMode,
+    /// Internal-only provenance set by the daemon escalation admission path.
+    /// This is skipped by serde so a client write payload cannot claim it.
+    #[serde(skip)]
+    pub(crate) daemon_escalation_provenance: bool,
+    /// Transport-only carrier for the marker. The HTTP adapter clears it for
+    /// local and untrusted-socket writes, and promotes it only after an
+    /// authenticated peer admission.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(crate) peer_daemon_escalation_provenance: bool,
 }
 
 impl WriteRequest {
@@ -241,6 +273,9 @@ impl WriteRequest {
             activity_observation: None,
             authenticated_source_host: None,
             peer_http_api_version: None,
+            peer_wire_security: None,
+            tool_runtime_proof: None,
+            tool_sender_attestation: None,
             origin_message_id: None,
             origin_timestamp: None,
             to: Some(to.parse()?),
@@ -259,6 +294,8 @@ impl WriteRequest {
             acknowledges_message_id: None,
             dry_run,
             nudge_mode: NudgeMode::default(),
+            daemon_escalation_provenance: false,
+            peer_daemon_escalation_provenance: false,
         })
     }
 
@@ -295,6 +332,34 @@ impl WriteRequest {
         self
     }
 
+    /// Stamps a write admitted by the internal Herdr escalation path.
+    /// The flag is not represented on the wire; production calls this only
+    /// after Herdr has selected a daemon-owned escalation recipient.
+    #[must_use]
+    pub(crate) fn with_internal_daemon_escalation_provenance(mut self) -> Self {
+        self.daemon_escalation_provenance = true;
+        self.peer_daemon_escalation_provenance = true;
+        self
+    }
+
+    /// Removes any wire-carried marker before a local or untrusted admission.
+    pub fn clear_untrusted_daemon_escalation_provenance(&mut self) {
+        self.daemon_escalation_provenance = false;
+        self.peer_daemon_escalation_provenance = false;
+    }
+
+    /// Promotes the transport carrier after authenticated peer admission.
+    pub fn admit_authenticated_peer_daemon_escalation_provenance(&mut self) {
+        self.daemon_escalation_provenance = self.peer_daemon_escalation_provenance;
+    }
+
+    /// Returns whether this request carries provenance admitted by the local
+    /// escalation path or authenticated peer ingress.
+    #[must_use]
+    pub const fn has_daemon_escalation_provenance(&self) -> bool {
+        self.daemon_escalation_provenance
+    }
+
     #[must_use]
     pub fn with_activity_observation(
         mut self,
@@ -313,6 +378,12 @@ impl WriteRequest {
     #[must_use]
     pub fn with_peer_http_api_version(mut self) -> Self {
         self.peer_http_api_version = Some(crate::protocol::HttpApiVersion::current());
+        self
+    }
+
+    #[must_use]
+    pub fn with_peer_wire_security(mut self, security: crate::peer_wire::PeerWireSecurity) -> Self {
+        self.peer_wire_security = Some(security);
         self
     }
 
@@ -339,6 +410,10 @@ impl WriteRequest {
         self.origin_timestamp = Some(timestamp);
         self
     }
+}
+
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Compatibility name for existing callers.  There is one write payload;
@@ -629,7 +704,7 @@ fn build_send_envelope(
     let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
     let mut envelope = InboxMessage {
         from: context.canonical_sender.clone(),
-        source_chat_id: request.caller_chat_id.clone(),
+        source_chat_id: context.canonical_sender_chat_id.clone(),
         text: body.to_string(),
         timestamp,
         // A member's task addressed to itself keeps its body and record but is
@@ -640,7 +715,7 @@ fn build_send_envelope(
                 &request.caller_team,
                 &context.recipient,
             ),
-        source_team: Some(request.caller_team.clone()),
+        source_team: Some(context.canonical_sender_team.clone()),
         destination_chat_id: request
             .to
             .as_ref()
@@ -662,6 +737,10 @@ fn build_send_envelope(
     };
     insert_classification_metadata(&mut envelope, &request.classification);
     set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
+    crate::schema::set_daemon_escalation_provenance(
+        &mut envelope,
+        request.daemon_escalation_provenance,
+    );
     envelope
 }
 
@@ -851,5 +930,49 @@ mod path_body_tests {
             send_mode_for_task_request(&ordinary_request, &task_id),
             NudgeMode::Immediate
         );
+    }
+}
+
+#[cfg(test)]
+mod tool_sender_wire_tests {
+    use super::{SendMessageSource, WriteRequest};
+
+    fn write_request() -> WriteRequest {
+        WriteRequest::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline("body".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request")
+    }
+
+    #[test]
+    fn ordinary_write_constructor_omits_tool_provenance_fields() {
+        let request = write_request();
+
+        assert!(request.tool_runtime_proof.is_none());
+        assert!(request.tool_sender_attestation.is_none());
+        let value = serde_json::to_value(request).expect("serialize request");
+        assert!(value.get("tool_runtime_proof").is_none());
+        assert!(value.get("tool_sender_attestation").is_none());
+    }
+
+    #[test]
+    fn legacy_write_json_defaults_tool_provenance_to_absent() {
+        let mut value = serde_json::to_value(write_request()).expect("serialize request");
+        let object = value.as_object_mut().expect("request object");
+        object.remove("tool_runtime_proof");
+        object.remove("tool_sender_attestation");
+
+        let request: WriteRequest = serde_json::from_value(value).expect("legacy request");
+        assert!(request.tool_runtime_proof.is_none());
+        assert!(request.tool_sender_attestation.is_none());
     }
 }

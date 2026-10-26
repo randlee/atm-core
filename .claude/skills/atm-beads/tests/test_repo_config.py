@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+from phase_fixtures import run_subprocess
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -16,7 +17,7 @@ import sprint_index_common  # noqa: E402
 
 def make_repo(base: Path, config: str | None) -> Path:
     repo = base / "repo"
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    run_subprocess(["git", "init", "-q", str(repo)], check=True)
     if config is not None:
         path = repo / repo_config.RELATIVE_PATH
         path.parent.mkdir(parents=True)
@@ -58,14 +59,19 @@ class LoadTests(unittest.TestCase):
             repo_config.load(repo)
 
     def test_cli_get_prints_scalars_plainly_and_lists_as_json(self):
-        repo = make_repo(self.base, "lead: my-lead\nreviewers_round1: [req-x, arch-x]\n")
-        run = lambda *a: subprocess.run([sys.executable, str(SCRIPTS / "repo_config.py"), *a], cwd=repo,
+        repo = make_repo(self.base, "dev_sanity_member: my-sanity\nreviewers_round1: [req-x, arch-x]\n")
+        run = lambda *a: run_subprocess([sys.executable, str(SCRIPTS / "repo_config.py"), *a], cwd=repo,
                                         capture_output=True, text=True)
-        self.assertEqual(run("get", "lead").stdout, "my-lead\n")
+        self.assertEqual(run("get", "dev_sanity_member").stdout, "my-sanity\n")
         self.assertEqual(json.loads(run("get", "reviewers_round1").stdout), ["req-x", "arch-x"])
         missing = run("get", "test_command")
         self.assertEqual(missing.returncode, 2)
         self.assertIn("required key 'test_command' is missing", missing.stderr)
+
+    def test_repository_lead_is_rejected_with_phase_migration(self):
+        repo = make_repo(self.base, "lead: stale-lead\n")
+        with self.assertRaisesRegex(repo_config.ConfigError, r"lead belongs in .atm-bd/phase-<x>.toml"):
+            repo_config.load(repo)
 
 
 class RunTimeValuesTests(unittest.TestCase):

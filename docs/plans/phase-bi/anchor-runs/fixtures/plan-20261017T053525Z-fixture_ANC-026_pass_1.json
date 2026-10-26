@@ -1,0 +1,100 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261017T053525Z-fixture_ANC-026_pass_1",
+  "gate": "plan",
+  "created_at": "2026-10-17T05:35:25+00:00",
+  "anchors_path": "docs/plans/phase-bi/anchors.json",
+  "plan": "phase-current",
+  "item": {
+    "id": "fixture:ANC-026:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 76,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-026",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console must show every sanity agent with the icon U+F01A6 in #E551BA, whatever its harness or model.",
+      "quote": "\"jev\":        \"[#E551BA]\\U000f01a6[/]\",",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17: jev is the sanity icon, followed by the three qa states",
+      "anchor_version": 2,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "deterministic_check": "render sanity members with differing harness and model and assert U+F01A6 in #E551BA each",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.03,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.95,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1016,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 76,
+      "item_shortened": false,
+      "request_bytes": 2986
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "shortened": [],
+    "pass": true
+  }
+}

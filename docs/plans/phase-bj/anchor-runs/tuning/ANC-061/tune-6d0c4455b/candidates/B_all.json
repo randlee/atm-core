@@ -1,0 +1,31 @@
+{
+ "questions": {
+  "addressed": {
+   "criteria": {
+    "no": "The item is silent about the directive, names the subject only, or plans a different approach.",
+    "unclear": "The item refers to the directive's content in words too vague to tell whether it is planned.",
+    "yes": "The item states it. The item says atm-bd reads bd ready first and then checks the ATM tasks for that bead id, assigning only when none exists."
+   },
+   "instructions": "Read `item.text` for this directive from `anchor.statement`: atm-bd assigns a sanity or qa bead only when bd ready lists it and, checked after that, no ATM task with that bead id exists, so a bead whose task the hook already assigned is never assigned twice. Answer yes only when the item itself states that content. Answer no when the item is silent, mentions the subject without that content, or plans a different approach (for example it checks in another order, uses an earlier or cached task list, or skips the task check). Do not judge conflict.",
+   "type": "choice"
+  },
+  "contradicted": {
+   "criteria": {
+    "no": "The item plans none of the numbered cases; it may be silent about the directive.",
+    "unclear": "The item may describe one of the numbered cases but its wording does not settle it.",
+    "yes": "The item plans one of the numbered cases."
+   },
+   "instructions": "`anchor.statement` says atm-bd assigns a sanity or qa bead only when bd ready lists it and, checked after that, no ATM task with that bead id exists, so a bead whose task the hook already assigned is never assigned twice. Does `item.text` plan any of these: (1) checking ATM tasks before reading bd ready, or using a task list read earlier in the tick or in a previous tick; (2) assigning a ready sanity or qa bead without checking for an existing ATM task; (3) assigning a bead a second time? Silence is never a conflict. Also not a conflict: silence about the filter order; building vars or templates for the assignment. Judge conflict only.",
+   "type": "choice"
+  },
+  "relevant": {
+   "criteria": {
+    "no": "No when the item works on something else, such as console display, logging or release packaging, and does not touch how atm-bd decides whether to assign a sanity or qa bead: reading bd ready and checking for an existing ATM task.",
+    "unclear": "The item text is too vague to tell whether it touches the anchor's subject.",
+    "yes": "Yes when the item plans or changes how atm-bd picks, filters or assigns sanity or qa beads."
+   },
+   "instructions": "Does `item.text` touch how atm-bd decides whether to assign a sanity or qa bead: reading bd ready and checking for an existing ATM task? Answer about subject matter only; whether the item follows `anchor.statement` is judged elsewhere.",
+   "type": "choice"
+  }
+ }
+}

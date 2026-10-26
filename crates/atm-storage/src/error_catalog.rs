@@ -6,8 +6,15 @@ use crate::error_codes::AtmErrorCode;
 ///
 /// Adapters may provide bounded, non-secret detail, but the catalog owns the
 /// recovery guidance so no protocol or adapter creates another error shape.
+///
+/// A code whose guidance is empty renders the detail alone, so a hook's own
+/// refusal text is returned verbatim without a `Recovery:` line.
 pub(crate) fn render(code: AtmErrorCode, detail: impl Into<String>) -> String {
-    format!("{}\n  Recovery: {}", detail.into(), guidance(code))
+    let guidance = guidance(code);
+    if guidance.is_empty() {
+        return detail.into();
+    }
+    format!("{}\n  Recovery: {}", detail.into(), guidance)
 }
 
 pub(crate) fn render_code(code: AtmErrorCode) -> String {
@@ -49,6 +56,12 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
     if let Some(message) = post_send_guidance(code) {
         return message;
     }
+    if let Some(message) = hook_guidance(code) {
+        return message;
+    }
+    if let Some(message) = tool_sender_guidance(code) {
+        return message;
+    }
 
     match code {
         AtmErrorCode::InternalError => "Inspect the logged diagnostic context before retrying.",
@@ -64,6 +77,68 @@ const fn guidance_inner(code: AtmErrorCode) -> &'static str {
         }
         AtmErrorCode::HelpTopicNotFound => "Use `atm help --list` to inspect available topics.",
         _ => "Inspect the logged diagnostic context before retrying.",
+    }
+}
+
+const fn tool_sender_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
+        AtmErrorCode::ToolSenderUnregistered => {
+            Some("Register this plug-in sender through an authenticated installer, then retry.")
+        }
+        AtmErrorCode::ToolSenderReserved => Some(
+            "Use the daemon-owned virtual sender flow; do not register or claim a reserved sender.",
+        ),
+        AtmErrorCode::ToolSenderUnauthorized => Some(
+            "Use an authorized sender or have the administrator update its explicit sender allowlist.",
+        ),
+        AtmErrorCode::ToolKeyUnknown => {
+            Some("Use a key id enrolled in the protected trust root or active sender registration.")
+        }
+        AtmErrorCode::ToolKeyRevoked => Some(
+            "Enroll and activate a replacement key through the administrator-controlled rotation flow.",
+        ),
+        AtmErrorCode::ToolNonceReplay => Some(
+            "For an exact retry, query the prior operation receipt; for a new operation, issue and sign a fresh nonce.",
+        ),
+        AtmErrorCode::ToolHostMismatch => Some(
+            "Send the request to its authorized host or have the administrator update the signed host allowlist.",
+        ),
+        AtmErrorCode::ToolGenerationConflict => Some(
+            "Read the current registration generation and create a newly signed request against it.",
+        ),
+        AtmErrorCode::ToolSignatureInvalid => Some(
+            "Canonicalize the request fields and sign them again with the enrolled private key.",
+        ),
+        AtmErrorCode::ToolRequestExpired => {
+            Some("Issue a request with a current validity interval and sign the new request.")
+        }
+        AtmErrorCode::ToolCommitUncertain => Some(
+            "Reconcile the operation by its original nonce and digest before retrying; do not submit a new operation blindly.",
+        ),
+        _ => None,
+    }
+}
+
+const fn hook_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
+        AtmErrorCode::HookModuleInvalid => Some(
+            "Register a task hook module path and name the hook from the supported list, then retry.",
+        ),
+        AtmErrorCode::CronExprInvalid => {
+            Some("Use a five-field cron expression or an --until time later than now, then retry.")
+        }
+        // Empty on purpose: the hook's refusal text is the whole message.
+        AtmErrorCode::HookRefused => Some(""),
+        AtmErrorCode::HookExit => {
+            Some("Fix the hook module so it starts and exits with a valid reply, then retry.")
+        }
+        AtmErrorCode::HookTimeout => Some(
+            "Make the hook reply within its timeout or raise the timeout within the budget, then retry.",
+        ),
+        AtmErrorCode::HookMalformed => {
+            Some("Make the hook reply match the JSON reply contract, then retry.")
+        }
+        _ => None,
     }
 }
 
@@ -178,6 +253,7 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::TaskNotCounterparty
         | AtmErrorCode::TaskStaleCounterparty
         | AtmErrorCode::TaskMoveInvalid
+        | AtmErrorCode::TaskMaxActiveReached
         | AtmErrorCode::WorkflowQueryInvalid
         | AtmErrorCode::SearchLocalOnly
         | AtmErrorCode::LocalHttpCapabilityInvalid

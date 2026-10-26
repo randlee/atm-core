@@ -1,6 +1,6 @@
 ---
 name: finding-group
-version: 6.1.0
+version: 6.2.0
 description: Beads formula for the fix, sanity and QA tasks of one blocking finding, attached under its sprint container. bead-groups supplies every variable.
 format: toml
 required_variables:
@@ -20,8 +20,20 @@ required_variables:
   - sprint
   - stack
   - difficulty
+  - branch
+  - worktree
+  - pr_target
   - priority
   - edge_option
+  - stack_bead
+  - checked_title
+  - phase_feature
+  - lint_command
+  - policy_path
+  - max_sanity_rounds
+defaults:
+  found_on_layer: ""
+  has_found_on_layer: false
 ---
 {#
 sc-compose beads formula (sc-compose/beads/v1, ADR-0021): the fix group of one
@@ -57,7 +69,12 @@ container and the repository configuration):
   ref            attach reference, "<finding_ref>-r<round>"
   finding_ref, round, severity, reviewer, remedy, finding_title, filed_by
   found_at_commit, requirements, adrs
+  found_on_layer  optional provenance copied from the checked bead
   phase, sprint, stack, difficulty, priority
+  stack_bead, checked_title, phase_feature, lint_command, policy_path,
+  max_sanity_rounds
+                 the close fields (close_fields.POURED) every step carries, so
+                 its close reads no other bead; max_sanity_rounds is bare
   edge_option    E1 option "C" (default), "B" or "A", as in sprint-group
 #}
 formula = "finding-group"
@@ -80,6 +97,9 @@ sprint = "{{{ sprint }}}"
 stack = "{{{ stack }}}"
 round = {{{ round }}}
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 sprint_bead = "{{{ parent }}}"
 finding_ref = "{{{ finding_ref }}}"
 severity = "{{{ severity }}}"
@@ -87,8 +107,20 @@ reviewer = "{{{ reviewer }}}"
 remedy = "{{{ remedy }}}"
 filed_by = "{{{ filed_by }}}"
 found_at_commit = "{{{ found_at_commit }}}"
+{% if has_found_on_layer %}found_on_layer = {{{ found_on_layer | tojson }}}
+{% endif %}
 requirements = [{% for r in requirements %}"{{{ r }}}"{% if not loop.last %}, {% endif %}{% endfor %}]
 adrs = [{% for r in adrs %}"{{{ r }}}"{% if not loop.last %}, {% endif %}{% endfor %}]
+checked_bead = "{{{ parent }}}.{{{ ref }}}-fix"
+stack_bead = "{{{ stack_bead }}}"
+base = "{{{ pr_target }}}"
+checked_title = "{{{ checked_title }}}"
+sanity_bead = "{{{ parent }}}.{{{ ref }}}-sanity"
+qa_bead = "{{{ parent }}}.{{{ ref }}}-qa"
+phase_feature = "{{{ phase_feature }}}"
+lint_command = "{{{ lint_command }}}"
+policy_path = "{{{ policy_path }}}"
+max_sanity_rounds = {{{ max_sanity_rounds }}}
 {% if edge_option != "A" %}
 
 [[steps]]
@@ -101,8 +133,26 @@ labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:dev-sanity"]
 {% if edge_option == "C" %}needs = ["fix"]
 {% endif %}
 [steps.metadata]
+role = "sanity"
+phase = "{{{ phase }}}"
+sprint = "{{{ sprint }}}"
+stack = "{{{ stack }}}"
+sprint_bead = "{{{ parent }}}"
+checked_bead = "{{{ parent }}}.{{{ ref }}}-fix"
+stack_bead = "{{{ stack_bead }}}"
+base = "{{{ pr_target }}}"
+checked_title = "{{{ checked_title }}}"
+sanity_bead = "{{{ parent }}}.{{{ ref }}}-sanity"
+qa_bead = "{{{ parent }}}.{{{ ref }}}-qa"
+phase_feature = "{{{ phase_feature }}}"
+lint_command = "{{{ lint_command }}}"
+policy_path = "{{{ policy_path }}}"
+max_sanity_rounds = {{{ max_sanity_rounds }}}
 dev_bead = "{{{ parent }}}.{{{ ref }}}-fix"
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 
 [[steps]]
 id = "qa"
@@ -120,8 +170,21 @@ sprint = "{{{ sprint }}}"
 stack = "{{{ stack }}}"
 round = {{{ round }}}
 difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
 checked_bead = "{{{ parent }}}.{{{ ref }}}-fix"
 finding_ref = "{{{ finding_ref }}}"
 reviewer = "{{{ reviewer }}}"
+reviewers_round1 = ["{{{ reviewer }}}"]
 sprint_bead = "{{{ parent }}}"
+stack_bead = "{{{ stack_bead }}}"
+base = "{{{ pr_target }}}"
+checked_title = "{{{ checked_title }}}"
+sanity_bead = "{{{ parent }}}.{{{ ref }}}-sanity"
+qa_bead = "{{{ parent }}}.{{{ ref }}}-qa"
+phase_feature = "{{{ phase_feature }}}"
+lint_command = "{{{ lint_command }}}"
+policy_path = "{{{ policy_path }}}"
+max_sanity_rounds = {{{ max_sanity_rounds }}}
 {% endif %}

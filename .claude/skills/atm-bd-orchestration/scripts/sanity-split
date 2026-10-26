@@ -155,7 +155,9 @@ def parse_deliverables(description):
         elif TOP_BULLET.match(line):
             raise Fail(2, f"`## Deliverables` has an unnumbered top-level bullet: {stripped!r}")
         elif FENCE.match(line):
-            fence = FENCE.match(line).group(1)       # closes on the same character, at least this long
+            fence_match = FENCE.match(line)
+            assert fence_match is not None
+            fence = fence_match.group(1)       # closes on the same character, at least this long
             items[-1][1] += " " + stripped
         elif line[0] in " \t" or not prev_blank:    # indented sub-item, or wrapped item text
             items[-1][1] += " " + stripped
@@ -219,6 +221,7 @@ def layer_ranges(worktree, prs):
     if run.returncode != 0:
         raise Fail(3, f"gh api pulls failed: {run.stderr.strip()}")
     listed = {}
+    line = ""
     try:
         for line in run.stdout.splitlines():
             if line.strip():
@@ -392,6 +395,7 @@ def main():
     for flag in ("--task", "--bead", "--worktree", "--branch", "--commit", "--base", "--lint-command", "--scratch"):
         parser.add_argument(flag, required=True)
     parser.add_argument("--bead-json")
+    parser.add_argument("--close-context", type=Path)
     parser.add_argument("--layer-pr", action="append", default=[])
     parser.add_argument("--split-only", action="store_true")
     parser.add_argument("--template", type=Path, default=TEMPLATE)
@@ -413,7 +417,13 @@ def main():
             files = layer_files(args.worktree, args.layer_pr, sha) if args.layer_pr else changed_files(args.worktree, base_sha, sha)
             lint = None
         outside = outside_fence(files, owned)
-        external = ([{"kind": "bead_notes", "bead": bead["id"]}] if bead.get("notes") else []) + (
+        try:
+            close_context = json.loads(args.close_context.read_text()) if args.close_context else {}
+        except (OSError, ValueError) as error:
+            raise Fail(1, f"cannot read --close-context: {error}") from error
+        if not isinstance(close_context, dict):
+            raise Fail(1, "close context must be a JSON object")
+        external = ([{"kind": "bead_notes", "bead": bead["id"], "text": bead["notes"]}] if bead.get("notes") else []) + (
             [{"kind": "pr_body", "repo": "{owner}/{repo}", "pr": int(args.layer_pr[-1])}] if args.layer_pr and args.layer_pr[-1].isdigit() else [])
         assignments = []
         for item in deliverables:
@@ -435,6 +445,8 @@ def main():
                "sha": sha, "base_sha": base_sha, "sanity_bead": args.task, "dev_bead": bead["id"],
                "branch": args.branch, "worktree_path": args.worktree, "deliverables_total": len(deliverables),
                "changed_files": files, "files_outside_owned_paths": outside, "lint": lint,
+               "close_context": close_context, "bead_notes": bead.get("notes") or "",
+               "checked_bead_data": bead,
                "assignments": assignments}, sys.stdout, indent=2)
     print()
     return 0

@@ -1,0 +1,119 @@
+{
+ "events": [
+  {
+   "authority": {
+    "anchor_id": "ANC-070",
+    "anchor_record_sha256": "6923bb92f0850ccf9547d24f95023928b5c743c20cc1c7dd2e1d894c061a2dbd",
+    "anchor_version": 2,
+    "intent_id": "phase-bj",
+    "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+    "intent_version": 1
+   },
+   "candidate": {
+    "candidate_id": "E_relA_addrE",
+    "question_sha256": "3418dce89e124eb8512584d95798f25958ca2f3a4ed84c503a8ddce76593de11"
+   },
+   "decision": {
+    "question_set_sha256": "3418dce89e124eb8512584d95798f25958ca2f3a4ed84c503a8ddce76593de11",
+    "reason_code": "TOURNAMENT.SEMANTIC_EXACT",
+    "status": "sealed"
+   },
+   "event": "question_set_sealed",
+   "event_index": 1,
+   "evidence": {
+    "canonical_request_sha256": [
+     "b129ca5ac6051a887572fd1f3b72f336cfa077c37a7cc7b3f6b1c5f947aec39f",
+     "b129ca5ac6051a887572fd1f3b72f336cfa077c37a7cc7b3f6b1c5f947aec39f",
+     "5009f9db4a9921d9f89092848b89bb5d6bec701951681a168f4c2762866429a6",
+     "5009f9db4a9921d9f89092848b89bb5d6bec701951681a168f4c2762866429a6",
+     "4c9253bb5c0c4d4a78f748a57c39c199479940f9f9b8b77c8ac75360784391c4",
+     "4c9253bb5c0c4d4a78f748a57c39c199479940f9f9b8b77c8ac75360784391c4",
+     "b2a84650972e20b35769fddbcf21ad7649c18a2dacb28b3c11409077cddc63bb",
+     "b2a84650972e20b35769fddbcf21ad7649c18a2dacb28b3c11409077cddc63bb",
+     "945aabddb81e1a0a816cbc269c864af5609108d5704db1137cef11639487b7aa",
+     "945aabddb81e1a0a816cbc269c864af5609108d5704db1137cef11639487b7aa",
+     "4f1c15b8adc3100e4457c829fdbe1304bb8ca8429302e48d584fb6f697d3f685",
+     "4f1c15b8adc3100e4457c829fdbe1304bb8ca8429302e48d584fb6f697d3f685",
+     "3a5e931dd54babbe2d0d10fd5de17571ffca15175cea8816d962e44a5a444436",
+     "3a5e931dd54babbe2d0d10fd5de17571ffca15175cea8816d962e44a5a444436",
+     "b2697ee39745fee2d0c59797716878d579c90be91a7624c691bdb7098c44b775",
+     "b2697ee39745fee2d0c59797716878d579c90be91a7624c691bdb7098c44b775"
+    ],
+    "raw_response_sha256": [
+     "f5af66b24f9df60dad4bf59e61f818edc288cafefbcddb9b481ac9056f9ace26",
+     "3f1967565de5f99839927fd9202302670ff61d2612d1528a53bebfcdc0795962",
+     "4a8ca9db573cb793496797605d99f9ae5324ed18158a6d3fa70195ccbd2a1b04",
+     "4a8ca9db573cb793496797605d99f9ae5324ed18158a6d3fa70195ccbd2a1b04",
+     "429cdbe953cbb175091aee089f478a1d568f897478dae2560cef0948dff6d721",
+     "0d525b33ec261f3b47ac5f3e29d3224f19dc12b4e89c4477a38ae5bef57cced5",
+     "a28af1c58e69408a1a521d0eb0a505ddf04d4d5489bf907b4300866bac849716",
+     "c0a770208030172c47d668baa7c24db78f3d87747e66943300a149c0eb8fc887",
+     "27daf242f936c0ebce9415603b06f2e092317b62aed8b1dfca7409d96d55014a",
+     "27daf242f936c0ebce9415603b06f2e092317b62aed8b1dfca7409d96d55014a",
+     "07770633e8c097f7651f3c7735fcb9531e9120b76dd17abc0229457e38296a79",
+     "07770633e8c097f7651f3c7735fcb9531e9120b76dd17abc0229457e38296a79",
+     "96f66560662cbbdb1698f7108a299b1bb5bcf234f9eadcefd33f33d330c2f526",
+     "93dfe9c576bfd438fb76036b5c7831ed67f82cccc3319617d54d11626d376893",
+     "8e9c53eec87474a7a50bfa9948e522640be4912f1a931f43001e25ba092968be",
+     "8e9c53eec87474a7a50bfa9948e522640be4912f1a931f43001e25ba092968be"
+    ],
+    "run_ids": [
+     "ANC-070-E_relA_addrE-fixture_pass-r1",
+     "ANC-070-E_relA_addrE-fixture_pass-r2",
+     "ANC-070-E_relA_addrE-fixture_fail-r1",
+     "ANC-070-E_relA_addrE-fixture_fail-r2",
+     "ANC-070-E_relA_addrE-paraphrase-r1",
+     "ANC-070-E_relA_addrE-paraphrase-r2",
+     "ANC-070-E_relA_addrE-silent-r1",
+     "ANC-070-E_relA_addrE-silent-r2",
+     "ANC-070-E_relA_addrE-conflict_fail_only-r1",
+     "ANC-070-E_relA_addrE-conflict_fail_only-r2",
+     "ANC-070-E_relA_addrE-conflict_assign-r1",
+     "ANC-070-E_relA_addrE-conflict_assign-r2",
+     "ANC-070-E_relA_addrE-conflict_hook_pours-r1",
+     "ANC-070-E_relA_addrE-conflict_hook_pours-r2",
+     "ANC-070-E_relA_addrE-irrelevant-r1",
+     "ANC-070-E_relA_addrE-irrelevant-r2"
+    ]
+   },
+   "oracle": {
+    "case_count": 8,
+    "case_ids": [
+     "fixture_pass",
+     "fixture_fail",
+     "paraphrase",
+     "silent",
+     "conflict_fail_only",
+     "conflict_assign",
+     "conflict_hook_pours",
+     "irrelevant"
+    ],
+    "repeat_count": 2,
+    "sha256": "3fb0d1c38bfb38f30ac30e7a1174283b96e481ede409ade45751955b538885e3"
+   },
+   "previous_event_sha256": null,
+   "protocol_version": "plan-anchor/question-tournament/2.0.0",
+   "score": {
+    "confidence": {
+     "cells_at_or_above_threshold": 44,
+     "mean": 0.96,
+     "median": 1.0,
+     "minimum": 0.51,
+     "p10": 0.72,
+     "threshold": 0.8,
+     "total_cells": 48
+    },
+    "exact_role_cells": 48,
+    "exact_semantic_verdicts": 16,
+    "regressions": 0,
+    "stable_cases": 8,
+    "total_cases": 8,
+    "total_role_cells": 48,
+    "total_semantic_verdicts": 16
+   },
+   "supersedes": null
+  }
+ ],
+ "history_id": "ANC-070-plan",
+ "schema": "plan-anchor/tuning-history/2"
+}

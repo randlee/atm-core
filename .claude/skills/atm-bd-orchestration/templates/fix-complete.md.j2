@@ -1,17 +1,20 @@
 ---
 name: fix-complete
 version: 2.3.0
-description: Developer completion report for one finding bead (fix-task); the body of `atm task close <task-id> completed`. The task assigner reads `commit`, `rebased_onto` and the PR (required when `outcome` is `fixed`) for the fix's sanity check and link.
+description: Body of the hook's atm send --template report; the hook closes the dev task at dev complete.
 format: markdown
 required_variables:
   - generated_at
   - task_id
   - sprint
-  - branch
   - outcome
   - resolution_md
   - validation_md
 defaults:
+  qa_task_id: ""
+  sanity_task_id: ""
+  dev_task_id: ""
+  branch: ""
   commit: ""
   rebased_onto: ""
   pr_number: ""
@@ -31,6 +34,7 @@ metadata:
     stage: fix
     transition: complete
 ---
+{% set task_id = dev_task_id if dev_task_id else task_id %}
 {% if outcome not in ["fixed", "not_reproducible"] %}{{ outcome | outcome_must_be_fixed_or_not_reproducible }}ERROR: outcome must be fixed or not_reproducible, got {{ outcome }}
 {% endif %}{% if outcome == "fixed" and not (commit and rebased_onto) %}{{ outcome | fixed_requires_commit_and_rebased_onto }}ERROR: outcome fixed requires commit and rebased_onto
 {% endif %}{% if outcome == "fixed" and not (pr_number and pr_url and stack_view) %}{{ outcome | fixed_requires_pr_and_stack_view }}ERROR: outcome fixed requires pr_number, pr_url and stack_view
@@ -44,16 +48,8 @@ Rebased onto: `{{ rebased_onto }}`
 PR: [#{{ pr_number }}]({{ pr_url }})
 {% endif %}Outcome: **{{ outcome }}**
 
-{% if outcome == "fixed" %}
-{% if "VERDICT: ✅ COHERENT" not in stack_view or "LANDING: ✅" not in stack_view or "NOT COHERENT" in stack_view or "LANDING: ❌" in stack_view or "LANDING: ❓" in stack_view %}
-## Stack issue
-The `/sc-gh-stack-view` output below is not COHERENT with LANDING ✅.
+Sanity verifies this outcome on its own task; the dev task is already closed. QA follows sanity PASS.
 
-{% endif %}## Next (task assigner)
-1. Verify PR #{{ pr_number }} exists and link it on top of the phase stack (`/sc-gh-stack`), run `/sc-gh-stack-view`, and fix any stack problem yourself. The dev has already started its next queued task; do not message or re-dispatch the dev for stacking.
-2. `atm task assign` the bead's sanity check (for an important or minor finding bead, create it first: `SKILL.md` close table).
-
-{% endif %}
 ## Machine Status (JSON)
 ```json
 {

@@ -1,0 +1,11 @@
+06e975a7e50326d3b5efd41b927547263c2988aa5a8d1555b9173d2c19c9921f  docs/plans/phase-bj/anchor-tuning-notes.md
+ba1b528c760a84098261f5216952e9bc4ba8f16aaa7fc46dd505f3e4e3a57d17  docs/plans/phase-bj/anchors.json
+ff0d38283df80fd0b46ddbbad888d5e21a93cb5279ef7ce37fc664d90ef3224c  docs/plans/phase-bj/anchors.md
+57aa497b2a992e9ce0a5bb005b285665d9702df06038f929ef9052c5d6ccfb39  docs/plans/phase-bj/beads/atm-bj-1.vars.json
+ca4a8c981fb4d95c22781ee6615118ed98b015328fa143e83339cd2c834a46d0  docs/plans/phase-bj/beads/atm-bj-2.vars.json
+1e53e23f33d747c479110a0cf04b57182d2c0b4d81e7ff58f4f0781d35a7e693  docs/plans/phase-bj/beads/atm-bj-3.vars.json
+7a90a50a92e1c5f6edd63bdfe0ed0dc6638a9dead4fc5fc284d6db7611f06d90  docs/plans/phase-bj/beads/atm-bj-4.vars.json
+c6cdee815b9cf15c89c2200238aeb444f3e7688d8d62d6e254954ddc9b0196dc  docs/plans/phase-bj/beads/atm-bj-5.vars.json
+2ee6ad88733911f9f25aded985bbcceee947c41e77cb79b8f547c776f7e3f762  docs/plans/phase-bj/beads/atm-phase-bj.vars.json
+e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382  docs/plans/phase-bj/intent.md
+739496b63c9b9e95d31fc59b6ef85acff9481db396c8ef008f00eeb6acabf03f  docs/plans/phase-bj/anchor-runs/gate/root/item.txt

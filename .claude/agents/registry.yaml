@@ -86,6 +86,15 @@ agents:
   sc-adversarial-fuzz-probe:
     version: 1.0.0
     path: .claude/agents/sc-adversarial-fuzz-probe.md
+  anchor-plan-review:
+    version: 0.6.1
+    path: .claude/agents/anchor-plan-review.md
+  anchor-sprint-review:
+    version: 0.6.1
+    path: .claude/agents/anchor-sprint-review.md
+  anchor-tuning:
+    version: 0.6.1
+    path: .claude/agents/anchor-tuning.md
 # Values the atm-bd-orchestration package renders at install time (install.py).
 bead_prefix: atm
 worktree_base: ../atm-core-worktrees

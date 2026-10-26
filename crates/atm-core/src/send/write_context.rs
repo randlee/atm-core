@@ -79,6 +79,8 @@ pub(super) fn build_send_delivery_plan(
 pub(crate) struct SendExecutionContext {
     pub(crate) recipient: ResolvedRecipient,
     pub(crate) canonical_sender: AgentName,
+    pub(crate) canonical_sender_team: crate::types::TeamName,
+    pub(crate) canonical_sender_chat_id: Option<crate::types::ChatId>,
     pub(crate) inbox_path: PathBuf,
     pub(crate) delivery_snapshot: DeliveryRecipientSnapshot,
     pub(crate) delivery_family: DeliveryEventFamily,
@@ -90,6 +92,16 @@ pub(crate) fn prepare_send_context<
 >(
     runtime: &R,
     request: &mut SendRequest,
+) -> Result<SendExecutionContext, AtmError> {
+    prepare_send_context_with_tool_capability(runtime, request, None)
+}
+
+pub(crate) fn prepare_send_context_with_tool_capability<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    runtime: &R,
+    request: &mut SendRequest,
+    tool_capability: Option<&crate::boundary::ToolSenderCapability>,
 ) -> Result<SendExecutionContext, AtmError> {
     // This is the durable-admission half of the pipeline. A daemon must not
     // inspect caller workspace or hook configuration before a durable reply.
@@ -105,7 +117,8 @@ pub(crate) fn prepare_send_context<
         request.caller_team = team;
         request.caller_identity = member;
     }
-    let canonical_sender = request.caller_identity.clone();
+    let (canonical_sender, canonical_sender_team, canonical_sender_chat_id) =
+        canonical_sender_identity(request, tool_capability)?;
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
@@ -146,9 +159,62 @@ pub(crate) fn prepare_send_context<
     Ok(SendExecutionContext {
         recipient,
         canonical_sender,
+        canonical_sender_team,
+        canonical_sender_chat_id,
         inbox_path,
         delivery_snapshot,
         delivery_family,
         warnings,
     })
+}
+
+fn canonical_sender_identity(
+    request: &SendRequest,
+    tool_capability: Option<&crate::boundary::ToolSenderCapability>,
+) -> Result<
+    (
+        AgentName,
+        crate::types::TeamName,
+        Option<crate::types::ChatId>,
+    ),
+    AtmError,
+> {
+    if let Some(capability) = tool_capability {
+        let address = capability.sender_address();
+        if address.team() != Some(&crate::types::TeamName::from_validated("tool"))
+            || address.host().is_some()
+            || address.chat_id().is_some()
+        {
+            return Err(AtmError::validation(
+                "verified tool admission contains an invalid virtual sender address",
+            ));
+        }
+        return Ok((
+            address.agent().clone(),
+            address.team().expect("validated tool team").clone(),
+            address.chat_id().cloned(),
+        ));
+    }
+    if request.tool_runtime_proof.is_some() || request.tool_sender_attestation.is_some() {
+        return Err(AtmError::validation_with_recovery(
+            "tool sender proof was not admitted by the daemon",
+            "submit the signed proof through the configured local or authenticated-peer admission route",
+        ));
+    }
+    // Signed tool-sender admission is suspended (ADR-066 D4 is in force): an
+    // ordinary roster caller in team `tool` sends like any other caller. Only
+    // the daemon-owned `cron` principal name stays unavailable to them.
+    if request.caller_team == crate::types::TeamName::from_validated("tool")
+        && request.caller_identity.as_str() == "cron"
+    {
+        return Err(AtmError::validation_with_recovery(
+            "cron@tool is the daemon-owned scheduler principal",
+            "use a different ordinary sender identity",
+        ));
+    }
+    Ok((
+        request.caller_identity.clone(),
+        request.caller_team.clone(),
+        request.caller_chat_id.clone(),
+    ))
 }

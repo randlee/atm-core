@@ -1,0 +1,132 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T010801Z-fixture_ANC-005_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-19T01:08:01+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:ANC-005:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 93,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a hook replies success true with no atm-action list, atm runs the subcommand's normal logic with the original request, giving the same result as when no hook is registered.",
+      "quote": "or if 'bd ready' the hook either retruns { success = \"true\" } and atm proceeds w/ normal atm task assign logic",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "a test with a hook replying {\"success\": true} asserts the resulting task row equals the row produced with no hook registered",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "75b1906048743eea918e3f96fd1a784d3d465651be4ad5a8f9d3a9f89d23b76c",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item is about something else, such as messaging, cron storage, logging or the user interface, and does not touch how atm handles a hook's reply.",
+            "unclear": "The item mentions hooks, but it cannot be told whether it touches how atm handles a hook's reply.",
+            "yes": "The item adds, changes or tests hook reply parsing, or what atm does after a hook replies for an `atm task` subcommand."
+          },
+          "instructions": "Does `item.text` describe work on how atm handles a hook's reply for a hooked `atm task` subcommand (assign, start, close, move, list, events)? This includes parsing the hook's JSON reply, deciding what atm does for a success, refusal or action-list reply, and the path by which atm continues to the subcommand's own logic after its hook returns. Judge subject matter only, not whether the item handles the reply correctly.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not state that behaviour: it is silent about the success-true reply, only names the case or a branch without saying what happens, covers only other replies such as refusals or action lists, or describes a different outcome for that reply.",
+            "unclear": "The item describes what happens on a success-true reply in words that may or may not mean the normal logic runs on the original request.",
+            "yes": "The item states that a success-true reply without actions leads atm to run the subcommand's normal or existing logic on the request as received (falls through, proceeds, continues, runs the unhooked path), or plans a test that the outcome equals the outcome with no hook registered."
+          },
+          "instructions": "`anchor.statement` requires that when a hook replies {\"success\": true} with no actions list, atm runs the subcommand's normal logic with the caller's original request, giving the same result as with no hook registered. Does `item.text` state this behaviour for that reply? Judge presence of this behaviour only, not whether something in the item conflicts with it.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+            "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+            "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+          },
+          "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only. For this anchor, examples of contradiction are: on a success-true reply without actions the item reports success without doing the work, changes the request before running it, bypasses part of the normal logic, or rejects the reply. Handling a success-false reply or a reply with an actions list is not a contradiction.",
+          "type": "choice"
+        }
+      },
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "no": 0.02,
+            "unclear": 0.01,
+            "yes": 0.97
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "no": 0.98,
+            "unclear": 0.01,
+            "yes": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "no": 0.02,
+            "unclear": 0.0,
+            "yes": 0.98
+          }
+        }
+      },
+      "min_confidence": 0.95,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1167,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 93,
+      "item_shortened": false,
+      "request_bytes": 3764
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-005"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

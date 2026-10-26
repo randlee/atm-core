@@ -1,0 +1,172 @@
+{
+  "default": {
+    "candidate_id": "default",
+    "complexity": 2554,
+    "question_sha256": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+    "questions": {
+      "addressed": {
+        "criteria": {
+          "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+          "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included.",
+          "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point."
+        },
+        "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+        "type": "choice"
+      },
+      "contradicted": {
+        "criteria": {
+          "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+          "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+          "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+        },
+        "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+        "type": "choice"
+      },
+      "relevant": {
+        "criteria": {
+          "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+          "unclear": "The item text is too vague to tell what part of the system it touches.",
+          "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+        },
+        "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+        "type": "choice"
+      }
+    }
+  },
+  "installer_contract": {
+    "candidate_id": "installer_contract",
+    "complexity": 1878,
+    "question_sha256": "c9f9126ba59d67656edc71666004082c33ad9b393c1b7bff6f585169c4ac2f86",
+    "questions": {
+      "addressed": {
+        "criteria": {
+          "no": "The item lacks that requirement: no manifest, no per-file hashes, an archive-level hash only, or hashes for only part of the shipped files.",
+          "unclear": "The item mentions hashes or a manifest but does not settle whether every shipped file has one.",
+          "yes": "The item requires a published manifest containing a hash for each shipped skill file, including agents, skills and Python files."
+        },
+        "instructions": "Does `item.text` require the published skill to carry a manifest with the hash of every shipped file, so each installed file can be checked against it? The required content is per-file hashes covering all shipped files, recorded in a published manifest. Judge presence only.",
+        "type": "choice"
+      },
+      "contradicted": {
+        "criteria": {
+          "no": "The item states no such decision; silence, a compliant plan, or omitting non-shipped repository files is no conflict.",
+          "unclear": "The item may ship some files without hashes, but it cannot be told.",
+          "yes": "The item decides to ship some files unhashed, to publish only an archive-level hash, or to publish no manifest."
+        },
+        "instructions": "Does `item.text` state a decision under which the published manifest would not hold a hash of every shipped file? Silence about the manifest is not conflict.",
+        "type": "choice"
+      },
+      "relevant": {
+        "criteria": {
+          "no": "The item concerns a different activity than publishing the atm-bd skill, such as LLM call retries.",
+          "unclear": "The item mentions packaging or hashing but not clearly for the atm-bd skill.",
+          "yes": "The item concerns publishing or packaging the atm-bd skill, or the manifest or file hashes published with it."
+        },
+        "instructions": "The anchor is about what the atm-bd skill ships when it is published so an installer can verify files. Does `item.text` touch publishing the atm-bd skill or the file hashes and manifest that ship with it? Judge subject overlap only.",
+        "type": "choice"
+      }
+    }
+  },
+  "per_file_manifest": {
+    "candidate_id": "per_file_manifest",
+    "complexity": 2224,
+    "question_sha256": "14d44c56dc427b9cb33d9f045816e79b4ddd505e9e317287af515908df810445",
+    "questions": {
+      "addressed": {
+        "criteria": {
+          "no": "The item does not require a hash of every shipped file: it is silent, mentions integrity or verification only in general, hashes only the archive as a whole, or hashes only some shipped files.",
+          "unclear": "The item mentions a manifest or file hashes but it cannot be told whether every shipped file gets a hash.",
+          "yes": "The item states that the published skill ships a manifest or hash list containing a hash for each shipped file, in wording such as every file, each file, or all agent, skill and Python files."
+        },
+        "instructions": "Does `item.text` require the published skill to include a manifest that records a hash (for example a SHA-256) of every shipped file, as `anchor.statement` requires? Shipped files include the skill's agent, skill and Python files. Judge presence only, not conflict.",
+        "type": "choice"
+      },
+      "contradicted": {
+        "criteria": {
+          "no": "No explicit incompatible decision exists: the item is silent about hashes or manifests, or leaves out only files that are not shipped in the skill.",
+          "unclear": "The item may leave some shipped files unhashed, but which files are shipped or hashed is unresolved.",
+          "yes": "The item states that a shipped file is left unhashed or out of the manifest, that only a whole-archive hash is published instead of per-file hashes, or that no manifest is published."
+        },
+        "instructions": "Does an explicit decision in `item.text` prevent the published skill's manifest from holding a hash of every shipped file? Silence is not conflict.",
+        "type": "choice"
+      },
+      "relevant": {
+        "criteria": {
+          "no": "The item concerns a different activity, such as runtime retry behavior or task assignment, and does not touch skill publishing.",
+          "unclear": "The item mentions a release or package but it cannot be told whether it concerns publishing the atm-bd skill.",
+          "yes": "The item plans, changes, or depends on publishing or releasing the atm-bd skill, its package contents, or a release manifest or hash list."
+        },
+        "instructions": "Does `item.text` touch how the atm-bd skill is published or released, including what the published package contains, a release manifest, or file hashes shipped with it? Judge subject overlap only; the item need not mention hashes to be relevant.",
+        "type": "choice"
+      }
+    }
+  },
+  "release_artifact": {
+    "candidate_id": "release_artifact",
+    "complexity": 1914,
+    "question_sha256": "542ecd882565d750215e95a7d9e5b2dc9dcf2dc86259482f93970a967daff3e9",
+    "questions": {
+      "addressed": {
+        "criteria": {
+          "no": "No when the item has no such manifest: silence, general integrity or tamper detection, one hash of the whole archive, or hashes of only some shipped files.",
+          "unclear": "Unclear when the item mentions a manifest of hashes but its coverage of the shipped files cannot be determined.",
+          "yes": "Yes when the item has the published skill carry a manifest with a hash for each shipped file (every file, each file, the entire skill, all agents/skills/python files)."
+        },
+        "instructions": "Is a per-file hash manifest for the published skill present in `item.text`: one manifest, shipped with the skill, with a hash entry for every shipped file? Judge presence only.",
+        "type": "choice"
+      },
+      "contradicted": {
+        "criteria": {
+          "no": "The item commits to nothing that leaves a shipped file unhashed; it may be silent, compliant, or exclude files that are not part of the shipped skill.",
+          "unclear": "The item's approach might leave some shipped files unhashed, but it is ambiguous.",
+          "yes": "The item commits to an approach that leaves shipped files unhashed: only some file kinds hashed, only one whole-archive hash, or no manifest at all."
+        },
+        "instructions": "Does `item.text` commit to a publication approach under which some shipped file of the skill has no hash in the published manifest? Silence is not a contradiction.",
+        "type": "choice"
+      },
+      "relevant": {
+        "criteria": {
+          "no": "Completing the item would neither publish the atm-bd skill nor change its release package or manifest.",
+          "unclear": "It cannot be told from the item whether it touches the atm-bd skill release.",
+          "yes": "The item plans, changes or depends on the published atm-bd skill package, its release process, or its integrity manifest."
+        },
+        "instructions": "Does the work in `item.text` touch the atm-bd skill release: what is published, how the published package is built or verified, or a manifest of file hashes? Judge overlap of subject only.",
+        "type": "choice"
+      }
+    }
+  },
+  "shipped_set": {
+    "candidate_id": "shipped_set",
+    "complexity": 2151,
+    "question_sha256": "3dcf2a465488163bbdefd681e4402ae1a19b38eea7fae47a565c8931ef243956",
+    "questions": {
+      "addressed": {
+        "criteria": {
+          "no": "The item is silent about per-file hashes, describes integrity checks without a per-file manifest, hashes only the release archive, or hashes only a subset of shipped files.",
+          "unclear": "The item mentions per-file hashes but does not say which files they cover.",
+          "yes": "The item says a manifest published with the skill records a hash for each file the skill ships, or for every agent, skill and Python file, which together cover all shipped files."
+        },
+        "instructions": "`anchor.statement` requires a manifest in the published skill holding a hash for every shipped file. Does `item.text` state that obligation for the complete set of shipped files, not just some of them? Judge presence only.",
+        "type": "choice"
+      },
+      "contradicted": {
+        "criteria": {
+          "no": "Nothing in the item rules out a per-file hash manifest; it is silent, compliant, or omits only files that are not shipped.",
+          "unclear": "The item may exclude some shipped files from hashing but it is ambiguous whether those files are shipped.",
+          "yes": "The item explicitly leaves some shipped files without a hash, replaces per-file hashes with one archive hash, or publishes no manifest."
+        },
+        "instructions": "Does `item.text` decide something that rules out a published manifest holding a hash of every shipped file? Examples: a shipped file kind is left without a hash, a single archive hash replaces per-file hashes, or no manifest is published. Silence and leaving out files that are not shipped are not conflict.",
+        "type": "choice"
+      },
+      "relevant": {
+        "criteria": {
+          "no": "The item is about another part of the system, for example slot retries, task closing or the console, and not about publishing the skill.",
+          "unclear": "The item is too vague to tell whether it concerns publishing the atm-bd skill.",
+          "yes": "The item is about publishing, releasing or packaging the atm-bd skill, or about its release manifest or file hashes."
+        },
+        "instructions": "The anchor governs atm-bd skill publishing. Does `item.text` plan or change the publication of the atm-bd skill: building, releasing or packaging it, or the manifest and hashes that accompany a release? Judge subject overlap only.",
+        "type": "choice"
+      }
+    }
+  }
+}

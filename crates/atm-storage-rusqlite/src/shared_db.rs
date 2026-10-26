@@ -197,6 +197,21 @@ impl SharedDb {
         self.read_with_deadline(self.read_pool.request_deadline(), operation)
     }
 
+    /// Runs the daemon-startup snapshot read on a dedicated read-only
+    /// connection rather than queueing behind live reader-pool work.
+    ///
+    /// Startup happens before the daemon admits requests, so this preserves
+    /// the bounded shared pool for request traffic while making the snapshot
+    /// independent of reader-worker scheduling.
+    pub(crate) fn read_startup<T>(
+        &self,
+        operation: impl FnOnce(&Connection) -> Result<T, AtmError>,
+    ) -> Result<T, AtmError> {
+        let connection =
+            crate::shared_db_reader_lanes::open_read_connection_for_target(self.target.as_ref())?;
+        operation(&connection)
+    }
+
     /// Runs one pure synchronous read with the caller's bounded deadline.
     pub(crate) fn read_with_deadline<T>(
         &self,
@@ -407,6 +422,7 @@ impl SharedDb {
         mailbox: atm_storage::MailboxScope,
         message_ids: Vec<atm_storage::MessageKey>,
         seen_watermark: Option<atm_storage::IsoTimestamp>,
+        provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<(), AtmError> {
         match self
             .writer
@@ -414,12 +430,29 @@ impl SharedDb {
                 mailbox,
                 message_ids,
                 seen_watermark,
+                provenance,
             })
             .await?
         {
             WriteOpResult::ReadDisplayStateApplied => Ok(()),
             other => Err(AtmError::daemon_unavailable(format!(
                 "sqlite writer returned the wrong result for async read display state: {other:?}"
+            ))),
+        }
+    }
+
+    pub(crate) fn submit_delete_message(
+        &self,
+        key: atm_storage::MessageKey,
+        provenance: atm_storage::MessageWriteOrigin,
+    ) -> Result<(), AtmError> {
+        match self
+            .writer
+            .submit(WriteOp::DeleteMessage { key, provenance })?
+        {
+            WriteOpResult::MessageDeleted => Ok(()),
+            other => Err(AtmError::daemon_unavailable(format!(
+                "sqlite writer returned the wrong result for message deletion: {other:?}"
             ))),
         }
     }
@@ -450,6 +483,7 @@ impl SharedDb {
         match result {
             WriteOpResult::UpsertMessages => Ok(()),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::MessageDeleted
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::Acknowledged(_)
             | WriteOpResult::TemplateRegistration(_)
@@ -468,12 +502,14 @@ impl SharedDb {
         source: AcknowledgementSource,
         builder: std::sync::Arc<dyn AcknowledgementReplyBuilder>,
     ) -> Result<AcknowledgementCommit, AtmError> {
-        match self
-            .writer
-            .submit(WriteOp::Acknowledge { source, builder })?
-        {
+        match self.writer.submit(WriteOp::Acknowledge {
+            source,
+            builder,
+            provenance: atm_storage::MessageWriteOrigin::Local,
+        })? {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::MessageDeleted
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -491,14 +527,20 @@ impl SharedDb {
         &self,
         source: AcknowledgementSource,
         builder: std::sync::Arc<dyn AcknowledgementReplyBuilder>,
+        provenance: atm_storage::MessageWriteOrigin,
     ) -> Result<atm_storage::CommittedTaskWrite<AcknowledgementCommit>, AtmError> {
         let committed = self
             .writer
-            .submit_committed_async(WriteOp::Acknowledge { source, builder })
+            .submit_committed_async(WriteOp::Acknowledge {
+                source,
+                builder,
+                provenance,
+            })
             .await?;
         Ok(committed.and_then(|result| match result {
             WriteOpResult::Acknowledged(commit) => Ok(*commit),
             WriteOpResult::ReadDisplayStateApplied
+            | WriteOpResult::MessageDeleted
             | WriteOpResult::UpsertMessage { .. }
             | WriteOpResult::UpsertMessages
             | WriteOpResult::TemplateRegistration(_)
@@ -675,6 +717,7 @@ pub(crate) fn ensure_schema(
     ensure_mail_message_states_nudge_columns(connection, target)?;
     crate::graft_receiver_endpoint_schema::ensure_schema(connection, target)?;
     crate::task_store::ensure_schema(connection, target)?;
+    crate::hook_schema::ensure_schema(connection, target)?;
     let normalized = crate::writer::normalize_legacy_assignment_markers(connection, target)?;
     if normalized > 0 {
         tracing::info!(
@@ -692,6 +735,7 @@ pub(crate) fn ensure_schema(
         "https_port",
         "ALTER TABLE peer_trusted_peers ADD COLUMN https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535);",
     )?;
+    crate::schema_version::ensure_schema_version(connection, target)?;
     Ok(())
 }
 

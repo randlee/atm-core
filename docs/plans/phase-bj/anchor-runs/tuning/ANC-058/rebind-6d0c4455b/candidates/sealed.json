@@ -1,0 +1,31 @@
+{
+ "questions": {
+  "addressed": {
+   "criteria": {
+    "no": "The item does not say this, including when it is silent about the hook's input, mentions it generically, or uses a different method.",
+    "unclear": "The item's wording about validation or forwarding is too vague to decide.",
+    "yes": "The item says the vars file is checked by a strict sc-compose render of a header-only (required_variables only) template and that the same file goes as --vars to the assign or send template."
+   },
+   "instructions": "Does `item.text` say that atm-task-close.py validates its sc-compose --vars file by rendering a header-only template in strict mode and passes that same file as --vars to the templates it runs, as `anchor.statement` directs? A mention of vars or templates without that validation and forwarding does not count. Judge presence only.",
+   "type": "choice"
+  },
+  "contradicted": {
+   "criteria": {
+    "no": "The item states none of the ruled-out approaches for atm-task-close.py; silence, omissions, partial coverage, and work on other components are not conflicts.",
+    "unclear": "The item states an approach for atm-task-close.py's input that might or might not be one of the ruled-out ones.",
+    "yes": "The item explicitly states one of the ruled-out approaches for atm-task-close.py's input."
+   },
+   "instructions": "Does `item.text` state an approach for atm-task-close.py's own input that `anchor.statement` rules out? Ruled out for the hook: taking its values from anything other than one sc-compose --vars file (command-line flags, environment, several files); validating them with a separately defined schema or model of the hook's fields instead of the header-only template render; validating only after checks have started; giving the assign or send templates a rebuilt, edited, or second vars set instead of the same file. Only statements about atm-task-close.py count: an approach stated for another script or component is not a conflict, even if it uses a schema or model. Leaving a part out or naming only some of the commands is not a conflict either. Judge conflict only.",
+   "type": "choice"
+  },
+  "relevant": {
+   "criteria": {
+    "no": "The item plans work only in other components.",
+    "unclear": "The item's component cannot be identified.",
+    "yes": "The item plans work in atm-task-close.py or templates/task-close-vars.j2, whatever part of the hook it covers."
+   },
+   "instructions": "Is `item.text` about atm-task-close.py (the close hook) or templates/task-close-vars.j2, the subject of `anchor.statement` and `anchor.scope`? Answer about subject matter only.",
+   "type": "choice"
+  }
+ }
+}

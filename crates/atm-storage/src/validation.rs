@@ -24,6 +24,7 @@ pub(crate) fn parse_built_in_template_kind(
         "task_started" => Ok(Kind::TaskStarted),
         "task_complete" => Ok(Kind::TaskComplete),
         "task_closed" => Ok(Kind::TaskClosed),
+        "cron" => Ok(Kind::Cron),
         retired if RETIRED_TEMPLATE_KINDS.contains(&retired) => Err(AtmError::validation(format!(
             "template kind `{value}` was retired; use one of task_queued, task_ready, task_reminder, task_started, task_complete, task_closed"
         ))),

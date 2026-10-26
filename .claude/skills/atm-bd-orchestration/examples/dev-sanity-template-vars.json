@@ -9,5 +9,8 @@
   "pr_number": 262,
   "pr_url": "https://github.com/randlee/atm-core/pull/262",
   "primary_checkout": "/path/to/atm-core",
-  "lint_command": "make lint"
+  "lint_command": "make lint",
+  "beads_dir": "/path/to/atm-core/.beads",
+  "close_context": {"example": "lead-supplied close contract"},
+  "sanity_close_mode": "daemon"
 }

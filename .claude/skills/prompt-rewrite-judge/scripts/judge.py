@@ -12,6 +12,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
 MODEL = "jev-1.13.0"
 MAX_REQUEST_BYTES = 96000  # jev_client.py refuses larger requests
@@ -39,7 +40,7 @@ def reduce(answers):
     """Jev answers -> {'dropped': [(n, p_no)], question: (choice, p_choice)}."""
     pick = lambda a: (a["choice"], a["probabilities"][a["choice"]])
     keeps = sorted((int(k.split("_")[1]), a) for k, a in answers.items() if k.startswith("keep_"))
-    out = {"dropped": [(n, a["probabilities"]["no"]) for n, a in keeps if a["choice"] == "no"]}
+    out: dict[str, Any] = {"dropped": [(n, a["probabilities"]["no"]) for n, a in keeps if a["choice"] == "no"]}
     out.update({k: pick(answers[k]) for k in EXTRA})
     return out
 
@@ -54,6 +55,7 @@ def row(name, words, verdict, error=None):
 
 def run(client, path):
     """-> (answers, None) or (None, the last attempt's verbatim error)."""
+    error = None
     for _ in range(2):  # one rerun on failure; never answer for Jev
         p = subprocess.run([sys.executable, str(client), "--request", str(path)], capture_output=True, text=True)
         try:
@@ -67,7 +69,7 @@ def run(client, path):
 
 
 def main(argv=None):
-    a = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    a = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else "")
     a.add_argument("--key", required=True, type=Path)
     a.add_argument("--original", required=True, type=Path)
     a.add_argument("--out", required=True, type=Path)

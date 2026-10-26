@@ -1,0 +1,39 @@
+{
+  "schema": "plan-anchoring/questions/1",
+  "gate": "plan",
+  "version": 1,
+  "roles": {
+    "relevance": "relevant",
+    "compliance": "addressed",
+    "conflict": "contradicted"
+  },
+  "questions": {
+    "relevant": {
+      "type": "choice",
+      "instructions": "Read `item.text` and `anchor.statement`. Would the item's work produce or consume a decision about sanity or QA dispatch under the anchor? Classify only applicability.",
+      "criteria": {
+        "yes": "It defines or consumes ready status, pushed branch, worktree existence, PR-target fetch or merge result, or the final dispatch/hold decision.",
+        "no": "It only renders or records unrelated information and does not consume a dispatch decision.",
+        "unclear": "The relationship to dispatch decisions cannot be determined from the item."
+      }
+    },
+    "addressed": {
+      "type": "choice",
+      "instructions": "Does `item.text` spell out a decision that matches `anchor.statement`? Look at the conditions the item actually names. A failed fetch leaves branch safety unavailable until refreshed evidence exists.",
+      "criteria": {
+        "yes": "The item explicitly sends under proven readiness and ok merge result regardless of PR/CI, or holds for a missing readiness/branch/worktree condition, conflict, or unavailable fetch/merge result.",
+        "no": "The item contains no matching dispatch/hold decision or states only a disallowed decision.",
+        "unclear": "The item discusses these inputs without saying whether they cause dispatch or hold."
+      }
+    },
+    "contradicted": {
+      "type": "choice",
+      "instructions": "Does `item.text` commit to dispatch when `anchor.statement` requires a hold, or to a hold outside the anchor's allowed reasons? Judge the proposed decision, not a lack of detail.",
+      "criteria": {
+        "yes": "It sends with unready bead, unpushed branch, missing worktree, merge conflict, or unavailable fetch/merge result; substitutes stale refs after failed fetch; or holds solely for PR, CI, or stack position.",
+        "no": "Any described decision uses only the allowed conditions, or the item makes no dispatch decision.",
+        "unclear": "The decision is stated but its prerequisite state or reason cannot be identified."
+      }
+    }
+  }
+}

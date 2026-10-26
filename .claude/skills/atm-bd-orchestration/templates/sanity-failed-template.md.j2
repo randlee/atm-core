@@ -1,0 +1,17 @@
+---
+name: sanity-failed
+version: 1.0.0
+format: markdown
+required_variables: [task_id, checked_bead, findings]
+defaults:
+  commit: ""
+metadata:
+  type: sanity-failed
+---
+# Sanity FAIL: {{ checked_bead }}
+Review: {{ task_id }}{% if commit %} at {{ commit }}{% endif %}.
+The dev bead is reopened; its sanity bead is blocked by that dependency.
+Fix these missing items, then complete your dev/fix workflow again:
+{% for item in findings %}
+- {% if item.deliverable == 0 %}Verification evidence{% else %}Deliverable {{ item.deliverable }}{% endif %}: {{ item.issue }}
+{% endfor %}

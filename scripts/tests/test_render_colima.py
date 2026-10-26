@@ -28,6 +28,32 @@ SHAPES = {
     "hermes-skills": "20260912T111004Z",
 }
 FAILED_HERMES_SKILLS = "20260909T001110Z"
+# The committed renderer fixtures at this test's authored revision. Keep this
+# explicit: a live Colima run creates its directory before its derived pages,
+# so discovering the shared reports tree makes this unit test race a writer.
+COMMITTED_RUNS = (
+    "20260908T162312Z",
+    "20260909T001110Z",
+    "20260909T062404Z",
+    "20260912T111004Z",
+    "20260912T211350137931Z",
+    "20260912T234940144098Z",
+    "20260913T025601172318Z",
+    "20260913T050015564593Z",
+    "20260913T080203865232Z",
+    "20260913T080346160928Z",
+    "20260913T080436184071Z",
+    "20260913T084626438924Z",
+    "20260914T055811024606Z",
+    "20260914T153243230345Z",
+    "20260914T161939745081Z",
+    "20260914T183334075088Z",
+    "20260915T042150991782Z",
+    "20260923T215040310333Z",
+    "20261021T211215491870Z",
+    "20261022T000502266784Z",
+    "20261022T022903682342Z",
+)
 
 
 def make_root(tempdir: str) -> Path:
@@ -49,6 +75,11 @@ def make_root(tempdir: str) -> Path:
 
 def committed_step(name: str, run: str) -> Path:
     return COLIMA / run / "steps" / f"01-{name}"
+
+
+def committed_runs(root: Path = COLIMA) -> tuple[Path, ...]:
+    """Return only the immutable, versioned fixtures this test owns."""
+    return tuple(root / run for run in COMMITTED_RUNS)
 
 
 class RenderColimaTests(unittest.TestCase):
@@ -159,13 +190,14 @@ class RenderColimaTests(unittest.TestCase):
 
     def test_committed_runs_are_the_output_of_this_renderer(self) -> None:
         """Every committed run re-renders identically in place (payloads are the only inputs)."""
-        for run in sorted(path.name for path in COLIMA.iterdir() if path.is_dir()):
+        for source in committed_runs():
+            run = source.name
             with self.subTest(run=run), tempfile.TemporaryDirectory() as tempdir:
                 root = Path(tempdir)
                 shutil.copytree(ROOT / "site/reports/procedures", root / "site/reports/procedures")
                 shutil.copytree(ROOT / render_colima.TEMPLATES, root / render_colima.TEMPLATES)
                 out = root / "site/reports/integration/colima" / run
-                shutil.copytree(COLIMA / run, out)
+                shutil.copytree(source, out)
                 for rendered in (out / "index.html", out / "integration.json"):
                     rendered.unlink()
                 for panel in out.glob("steps/*/panel.xhtml"):
@@ -180,8 +212,18 @@ class RenderColimaTests(unittest.TestCase):
                 self.assertEqual(summary, committed)
                 self.assertEqual(
                     sorted(path.name for path in (out / "steps").rglob("*")),
-                    sorted(path.name for path in (COLIMA / run / "steps").rglob("*")),
+                    sorted(path.name for path in (source / "steps").rglob("*")),
                 )
+
+    def test_committed_fixture_selector_ignores_incomplete_report_directory(self) -> None:
+        """Fixture selection never observes a live run before its pages exist."""
+        with tempfile.TemporaryDirectory() as tempdir:
+            reports = Path(tempdir)
+            incomplete = reports / "20261023T225700000000Z"
+            (incomplete / "steps/01-hermes-skills").mkdir(parents=True)
+            selected = committed_runs(reports)
+            self.assertEqual(selected, tuple(reports / run for run in COMMITTED_RUNS))
+            self.assertNotIn(incomplete, selected)
 
 
 if __name__ == "__main__":

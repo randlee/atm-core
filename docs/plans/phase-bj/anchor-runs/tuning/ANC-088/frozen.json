@@ -1,0 +1,10 @@
+{
+  "oracle_sha256": "6618a3a833c5ae5fd9cda95914bea36b06a25e514351d4f1a15e9fc79357cd55",
+  "candidates_sha256": "b98dffd4ae1ee65275c081672bd1863c5a91249bffd75368d05342fcb60327b4",
+  "candidate_question_sha256": {
+    "candidate-1-default": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+    "candidate-2": "8b33c4a2f780d7ebf4a6cb6639ed6867026ab51bb06a9be49e39814abfb7b83d",
+    "candidate-3": "f9e8a1265d030c44957786f1064725a6c1e503ba9aea65ffa7c65486b4a9b882",
+    "candidate-4": "178f02aaa25b7016d14c79bed16041aaf6316a859d0abb41e5829afd4ae488f7"
+  }
+}

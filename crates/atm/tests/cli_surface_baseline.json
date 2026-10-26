@@ -408,6 +408,218 @@
       "args": [
         {
           "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "cron",
+      "subcommands": [
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "name",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "phase",
+              "long": "phase",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "end",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "phase",
+              "long": "phase",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "list",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "args",
+              "long": "arg",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "cron_expr",
+              "long": "cron",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "custom",
+              "long": "custom",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "cwd",
+              "long": "cwd",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "module",
+              "long": "module",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "name",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "phase",
+              "long": "phase",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "until",
+              "long": "until",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "until_hook",
+              "long": "until-hook",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "start",
+          "subcommands": []
+        }
+      ]
+    },
+    {
+      "args": [
+        {
+          "has_default": true,
           "id": "all_teams",
           "long": "all-teams",
           "num_args": {
@@ -660,6 +872,196 @@
       ],
       "name": "help",
       "subcommands": []
+    },
+    {
+      "args": [
+        {
+          "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "hook",
+      "subcommands": [
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "hook",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "phase",
+              "long": "phase",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "disable",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "phase",
+              "long": "phase",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "list",
+          "subcommands": []
+        },
+        {
+          "args": [
+            {
+              "has_default": false,
+              "id": "custom",
+              "long": "custom",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "cwd",
+              "long": "cwd",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "hook",
+              "long": null,
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "json",
+              "long": "json",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "module",
+              "long": "module",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "phase",
+              "long": "phase",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": true,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "register",
+          "subcommands": []
+        }
+      ]
     },
     {
       "args": [
@@ -1702,14 +2104,14 @@
                   "short": null
                 },
                 {
-                  "has_default": true,
+                  "has_default": false,
                   "id": "https_port",
                   "long": "https-port",
                   "num_args": {
                     "max": 1,
                     "min": 1
                   },
-                  "required": false,
+                  "required": true,
                   "short": null
                 },
                 {
@@ -1830,14 +2232,14 @@
                   "short": null
                 },
                 {
-                  "has_default": true,
+                  "has_default": false,
                   "id": "https_port",
                   "long": "https-port",
                   "num_args": {
                     "max": 1,
                     "min": 1
                   },
-                  "required": false,
+                  "required": true,
                   "short": null
                 },
                 {
@@ -1992,6 +2394,17 @@
           "has_default": false,
           "id": "file",
           "long": "file",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "from",
+          "long": "from",
           "num_args": {
             "max": 1,
             "min": 1
@@ -2901,6 +3314,17 @@
           "has_default": false,
           "id": "file",
           "long": "file",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "from",
+          "long": "from",
           "num_args": {
             "max": 1,
             "min": 1
@@ -4425,6 +4849,17 @@
               "num_args": {
                 "max": 0,
                 "min": 0
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": false,
+              "id": "max_tasks",
+              "long": "max-tasks",
+              "num_args": {
+                "max": 1,
+                "min": 1
               },
               "required": false,
               "short": null

@@ -205,6 +205,7 @@ pub(crate) fn admit_acknowledgement_write<
 pub(crate) async fn admit_acknowledgement_write_async(
     mut request: SendRequest,
     runtime: &LocalServiceRuntime,
+    origin: atm_storage::MessageWriteOrigin,
 ) -> Result<atm_storage::CommittedTaskWrite<AtomicAcknowledgementWrite>, AtmError> {
     canonicalize_local_acknowledgement_caller(runtime, &mut request);
     let provenance = validate_write_provenance(
@@ -263,7 +264,7 @@ pub(crate) async fn admit_acknowledgement_write_async(
         )
     };
     let committed = runtime
-        .acknowledge_message_atomically_async(source, builder.clone())
+        .acknowledge_message_atomically_with_origin_async(source, builder.clone(), origin)
         .await?;
     // A refused acknowledgement carries its committed rejection-audit rows
     // out with the error, so the caller can still export them.
@@ -447,6 +448,9 @@ pub(crate) fn canonical_ack_write_request(
         activity_observation: request.activity_observation.clone(),
         authenticated_source_host: None,
         peer_http_api_version: None,
+        peer_wire_security: None,
+        tool_runtime_proof: None,
+        tool_sender_attestation: None,
         origin_message_id: None,
         origin_timestamp: None,
         to: Some(crate::address::AgentAddress::new(
@@ -468,6 +472,8 @@ pub(crate) fn canonical_ack_write_request(
         acknowledges_message_id: Some(request.message_id),
         dry_run: false,
         nudge_mode: crate::send::NudgeMode::default(),
+        daemon_escalation_provenance: false,
+        peer_daemon_escalation_provenance: false,
     })
 }
 

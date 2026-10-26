@@ -1,0 +1,1 @@
+{"id":"atm-phase-bj.stack","title":"phase-bj: stack","issue_type":"task","status":"open","labels":["phase-bj","stage:stack"],"dependencies":[{"issue_id":"atm-phase-bj.stack","depends_on_id":"atm-phase-bj","type":"parent-child"}],"metadata":{"phase":"bj","trunk":"integrate/phase-bj","stack_number":null,"layers":[]}}

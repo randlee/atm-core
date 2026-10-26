@@ -37,6 +37,10 @@ name = "escalation_cli"
 path = "tests/escalation_cli.rs"
 
 [[test]]
+name = "http_api_doc_version"
+path = "tests/http_api_doc_version.rs"
+
+[[test]]
 name = "openapi_surface"
 path = "tests/openapi_surface.rs"
 
@@ -55,6 +59,22 @@ path = "tests/command_error_log.rs"
 [[test]]
 name = "cli_log_destination"
 path = "tests/cli_log_destination.rs"
+
+[[test]]
+name = "cron_examples"
+path = "tests/cron_examples.rs"
+
+[[test]]
+name = "cron_integration"
+path = "tests/cron_integration.rs"
+
+[[test]]
+name = "cron_composed_actions"
+path = "tests/cron_composed_actions.rs"
+
+[[test]]
+name = "tool_sender_integration"
+path = "tests/tool_sender_integration.rs"
 
 [[test]]
 name = "task_ledger_cli"
@@ -94,11 +114,12 @@ tokio.workspace = true
 ulid.workspace = true
 
 [dev-dependencies]
+atm-daemon-bootstrap = { workspace = true, features = ["test-support"] }
 atm-graft = { workspace = true, features = ["test-support"] }
 atm-core = { workspace = true, features = ["test-utils"] }
 atm-runtime-test-support.workspace = true
 # In-process OTLP gRPC log collector for the CLI log-destination proof.
-opentelemetry-proto = { version = "=0.33.0", default-features = false, features = ["gen-tonic", "logs"] }
+opentelemetry-proto = { version = "=0.33.1", default-features = false, features = ["gen-tonic", "logs"] }
 sc-observability = { workspace = true, features = ["fault-injection"] }
 serial_test = "3"
 tempfile = "3"

@@ -107,6 +107,7 @@ env = { ATM_IDENTITY = "fenix", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID =
 
 [[rmux.windows.panes]]
 name = "atm-sanity"
+alias = "atm-sanity"
 model = "sonnet"
 color = "green"
 env = { ATM_IDENTITY = "atm-sanity", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
@@ -127,3 +128,18 @@ env = { ATM_IDENTITY = "publisher", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_
 name = "solar"
 command = "codex -c features.hooks=true --yolo"
 env = { ATM_IDENTITY = "solar", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+# Window 4: Dev (codex terra + codex luna)
+[[rmux.windows]]
+name = "dev"
+layout = "even-horizontal"
+
+[[rmux.windows.panes]]
+name = "trinity"
+command = "codex -c features.hooks=true --model gpt-5.6-terra --yolo"
+env = { ATM_IDENTITY = "trinity", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+[[rmux.windows.panes]]
+name = "lumen"
+command = "codex -c features.hooks=true --model gpt-6-luna --yolo"
+env = { ATM_IDENTITY = "lumen", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }

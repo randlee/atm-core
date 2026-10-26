@@ -1,0 +1,144 @@
+{
+ "anchor_id": "ANC-057",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "b799deeb6d08e4ba999dd5b9bdfc28e6eff2e8c021a5ce1376d56c98746d2792",
+ "anchor_scope": "atm-task-close.py sanity role FAIL branch; .claude/project/atm-bd-orchestration.yaml key max_sanity_rounds rendered from registry.yaml",
+ "anchor_statement": "The sanity close hook must count FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), must escalate to the phase lead instead of reopening the checked bead.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-057-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "sanity_round goes 1, 2, 3, 4, 5; on the fifth FAIL the hook sends the lead SANITY.ROUND_CAP and reopens nothing; max_sanity_rounds: 2 in the repo config escalates on the second.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-057-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook reopens the dev bead on every FAIL forever, or the cap is a constant in the script with no repository setting.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-057-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Each sanity FAIL increments metadata.sanity_round on that sanity bead; once it reaches max_sanity_rounds from the repository configuration, or 5 when the key is unset, the hook escalates to the phase lead instead of reopening the checked bead.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-057-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope FAIL branch, silent about counting and the cap.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "On a sanity FAIL the hook sends the dev the sanity-fail template on the open task.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_hardcoded",
+   "item_id": "ANC-057-probe-conflict_hardcoded",
+   "probe": "conflict",
+   "rationale": "The cap must come from repository configuration with default 5.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook escalates to the lead after a fixed three FAILs coded in the script, with no configuration key.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_count_store",
+   "item_id": "ANC-057-probe-conflict_count_store",
+   "probe": "conflict",
+   "rationale": "The count must be metadata.sanity_round on the sanity bead.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The FAIL count is kept in a local file under ~/.cache rather than on the sanity bead.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-057-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The console shows the sol icon next to every Codex agent of model sol in the agent list.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

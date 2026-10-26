@@ -1,0 +1,21 @@
+{
+ "success": false,
+ "canceled": false,
+ "aborted_by": null,
+ "data": null,
+ "error": {
+  "code": "VALIDATION.INPUT",
+  "message": "The triage request fails anchor-tuning-request.schema.json, although anchor_tuning_contract.py request passes. At $.authority.anchors.records[0] (ANC-022 v4), the required property 'state' is missing; the schema requires state == 'locked'. Also at $.authority.anchors.records[0].source_ref, null is not of type 'string'. Without state the payload does not show that ANC-022 is a locked, normative record, so triage stops here and returns no disposition.",
+  "recoverable": true,
+  "suggested_action": "Re-render the request with anchor-tuning-review-feedback.md.j2 using sc-compose render --strict --check-render. In the ANC-022 record, set \"state\": \"locked\" (anchors.json has status 'locked') and drop source_ref or give it a string value. Then validate against anchor-tuning-request.schema.json and with anchor_tuning_contract.py request, and dispatch triage again. Keep the same evidence and sealed set (b2a1f73bcfb3ea27dda58605a24e82c90b7e29a33cc409c68fae08d37bda84f5)."
+ },
+ "metadata": {
+  "duration_ms": 540000,
+  "tool_calls": 20,
+  "retry_count": 0,
+  "correlation_id": "triage-ANC-022-atm-bj-3-plan-20261019T013524Z-atm-bj-3.json",
+  "jev_run_ids": [],
+  "planner_observation_trust": "untrusted",
+  "authoritative_sources_unchanged": true
+ }
+}

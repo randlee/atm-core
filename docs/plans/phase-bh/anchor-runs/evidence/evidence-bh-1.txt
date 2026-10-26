@@ -1,0 +1,56 @@
+Evidence for sprint atm-bh-1 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/pyproject.toml apps/atm-bd-console/src/atm_bd_console/__init__.py apps/atm-bd-console/src/atm_bd_console/result.py apps/atm-bd-console/src/atm_bd_console/types.py apps/atm-bd-console/tests/test_types.py apps/atm-bd-console/tests/conftest.py apps/atm-bd-console/tests/fixtures/contract/ apps/atm-bd-console/src/atm_bd_console/codec.py apps/atm-bd-console/tests/test_boundaries.py apps/atm-bd-console/tests/test_codec.py apps/atm-bd-console/tests/test_fixtures.py apps/atm-bd-console/uv.lock
+ apps/atm-bd-console/pyproject.toml                 |  21 ++
+ apps/atm-bd-console/src/atm_bd_console/__init__.py |   3 +
+ apps/atm-bd-console/src/atm_bd_console/codec.py    | 177 ++++++++++
+ apps/atm-bd-console/src/atm_bd_console/result.py   |  94 ++++++
+ apps/atm-bd-console/src/atm_bd_console/types.py    | 373 +++++++++++++++++++++
+ apps/atm-bd-console/tests/conftest.py              |  88 +++++
+ .../tests/fixtures/contract/actions.jsonl          |   5 +
+ .../tests/fixtures/contract/inputs.json            |   1 +
+ .../tests/fixtures/contract/merge.json             |   1 +
+ .../tests/fixtures/contract/prs.json               |   1 +
+ .../tests/fixtures/contract/snapshot-gh-err.json   |   1 +
+ .../tests/fixtures/contract/snapshot-gh-off.json   |   1 +
+ .../tests/fixtures/contract/snapshot-running.json  |   1 +
+ .../fixtures/contract/snapshot-stopped-closed.json |   1 +
+ .../fixtures/contract/snapshot-stopped-idle.json   |   1 +
+ apps/atm-bd-console/tests/test_boundaries.py       | 125 +++++++
+ apps/atm-bd-console/tests/test_codec.py            | 200 +++++++++++
+ apps/atm-bd-console/tests/test_fixtures.py         | 105 ++++++
+ apps/atm-bd-console/tests/test_types.py            | 176 ++++++++++
+ apps/atm-bd-console/uv.lock                        | 227 +++++++++++++
+ 20 files changed, 1602 insertions(+)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/pyproject.toml apps/atm-bd-console/src/atm_bd_console/__init__.py apps/atm-bd-console/src/atm_bd_console/result.py apps/atm-bd-console/src/atm_bd_console/types.py apps/atm-bd-console/tests/test_types.py apps/atm-bd-console/tests/conftest.py apps/atm-bd-console/tests/fixtures/contract/ apps/atm-bd-console/src/atm_bd_console/codec.py apps/atm-bd-console/tests/test_boundaries.py apps/atm-bd-console/tests/test_codec.py apps/atm-bd-console/tests/test_fixtures.py apps/atm-bd-console/uv.lock | head -40
+50a88e6 test(console): cover blocked interval ticks
+f966c0d test(console): bound tab test scenarios
+cf99c52 test(console): share app test helpers
+128d7e0 fix(console): align app step contract
+dbaaa2c fix(console): require caller-owned runner store
+1cde025 test(console): update step callback contract
+9116651 fix(console): pass app lock store to ticks
+10d23ee fix(console): allow absent roster timestamps
+3570690 fix(console): use configured ATM team
+ea49acc fix(console): centralize initial state
+e5978f2 refactor(bh-7): one owner for console runtime paths
+2ddc212 refactor(bh-5): one subprocess runner with a timeout for the git, gh and bd sources
+0a6783a test(bh-1): use neutral codec identities
+8894d57 docs(bh-1): define inputs interval source
+6993c04 test(bh-1): cover populated tick context fields
+6ff7707 test(bh-1): use neutral IoFailed path
+58f5635 fix(bh-1): enforce datetime wire format
+130e7d5 fix(bh-1): derive codec error kinds from union
+21f6326 style(bh-1): expand type fields onto separate lines
+ef495b8 fix(console): mark out-of-phase task beads red, missing beads yellow
+fb4fa81 test(bh-1): atm-bh-1.group-qa-f6 contract field names, literals, D2
+dec582b test(bh-1): atm-bh-1.group-qa-f5 ast boundary checks with planted cases
+05f2ad9 test(bh-1): atm-bh-1.group-qa-f4 fake_bin owns its log and PATH
+aa3a1a7 test(bh-1): atm-bh-1.group-qa-f1 populated contract shape fixtures
+05f6186 fix(bh-1): atm-bh-1.group-qa-f3 snapshot_stale takes a Snapshot
+97ac316 test(bh-1): atm-bh-1.qa1-f1-r1-fix round trip every contract type
+5a78477 fix(bh-1): atm-bh-1.group-qa-f2 strict from_json with path in source
+9b95c40 fix(bh-1): atm-bh-1.qf-tick-context-qa-f1 one owner for the stack
+d7ec505 fix(console): carry tick context in contract types
+8bfc413 feat: add ATM BD console contract
