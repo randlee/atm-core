@@ -1,11 +1,19 @@
 # `sc-lint` Graph Schema
 
-This document records the current export contract for `sc-lint-boundary`.
+> **Historical snapshot:** this document describes the `0.1.0` graph exporter
+> from the former in-tree `sc-lint-boundary` scaffold. That crate was removed
+> during ATM's adoption of published `sc-lint` v0.8.0. This is not the current
+> CLI or export contract. Current analyzer integration and rule configuration
+> live in [`sc-lint.toml`](../../sc-lint.toml); the required published tool
+> version is in [`.sc-lint/install.json`](../../.sc-lint/install.json).
+
+The sections below are retained as a historical record of the internal
+scaffold's graph format.
 
 ## Versioning
 
 - tool: `sc-lint-boundary`
-- current schema version: `0.1.0`
+- schema version at the time: `0.1.0`
 
 Both graph JSON and findings JSON include:
 
@@ -22,7 +30,7 @@ Supported export formats:
 - `json`
 - `turtle`
 
-Current CLI:
+Former in-tree CLI:
 
 ```text
 sc-lint-boundary export-graph --root <repo> --format json
@@ -31,7 +39,7 @@ sc-lint-boundary export-graph --root <repo> --format turtle
 
 ## Node Model
 
-Current node kinds:
+Node kinds at the time:
 
 - `crate`
 - `module`
@@ -44,7 +52,7 @@ Current node kinds:
 - `method`
 - `impl`
 
-Current shared node fields:
+Shared node fields at the time:
 
 - `id`
 - `kind`
@@ -71,7 +79,7 @@ Notes:
 
 ## Edge Model
 
-Current edge kinds:
+Edge kinds at the time:
 
 - `contains`
 - `declares`
@@ -91,7 +99,7 @@ Notes:
 
 ## Findings Model
 
-Current finding fields:
+Finding fields at the time:
 
 - `rule_id`
 - `kind`
@@ -99,7 +107,7 @@ Current finding fields:
 - `owner_ids`
 - `node_ids`
 
-Current implemented rule ids:
+Implemented rule ids at the time:
 
 - `SCB-CYCLE-001`
 - `SCB-CYCLE-002`
@@ -113,7 +121,7 @@ Current implemented rule ids:
 
 ## Source-Level Allowances
 
-Current implemented source-level allowances:
+Implemented source-level allowances at the time:
 
 - `boundary.allow("cycle.type_method_self_loop")`
 - `boundary.allow("cycle.recursive_value_container")`
@@ -124,11 +132,16 @@ opts in explicitly.
 
 ## Default Trait Policy
 
-The analyzer includes an embedded default policy file:
+The former in-tree analyzer read its embedded default policy from:
 
-- `crates/sc-lint-boundary/config/defaults.toml`
+- `crates/sc-lint-boundary/config/defaults.toml` (deleted with the scaffold)
 
-Current trait self-loop filtering is configured through:
+Current rule policy is configured for the published analyzer in the repository
+configuration, [`sc-lint.toml`](../../sc-lint.toml), under
+`[tool.sc-lint.analyzers.boundary]` and
+`[tool.sc-lint.analyzers.portability]`.
+
+At the time, trait self-loop filtering was configured through:
 
 - `trait_self_loop.ignored_trait_paths`
 - `trait_self_loop.ignored_trait_names`
@@ -138,14 +151,14 @@ repo-specific names into analyzer code.
 
 ## Stability Notes
 
-Stable enough to build against now:
+Stable enough to build against at the time:
 
 - `tool`
 - `schema_version`
 - node/edge top-level field names
-- current rule ids
+- rule ids at the time
 
-Still expected to evolve:
+Expected to evolve:
 
 - exact node kind inventory
 - exact edge kind inventory
