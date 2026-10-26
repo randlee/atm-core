@@ -68,6 +68,14 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_SYSTEM": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1",
+            # A fixture commit of the tracked tree exceeds gc.auto's loose-object
+            # threshold; a detached `gc --auto` would keep writing .git while
+            # TemporaryDirectory removes it.
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_0": "gc.auto",
+            "GIT_CONFIG_VALUE_0": "0",
+            "GIT_CONFIG_KEY_1": "maintenance.auto",
+            "GIT_CONFIG_VALUE_1": "false",
         })
         return env
 
@@ -650,6 +658,19 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ).stdout,
                 "",
             )
+
+    def test_fixture_env_disables_background_git_gc(self) -> None:
+        with self.fixture_repo() as (repo, env):
+            for key, expected in (("gc.auto", "0"), ("maintenance.auto", "false")):
+                value = self.run_fixture(
+                    ["git", "config", "--get", key],
+                    cwd=repo,
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip()
+                self.assertEqual(value, expected, key)
 
     def test_just_prerelease_tag_dry_run_is_end_to_end_and_clean(self) -> None:
         root = discover_repo_root()
