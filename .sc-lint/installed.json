@@ -8,7 +8,7 @@
     ".sc-lint/bootstrap": "f4702f7425932a1a540ae9030899c6792e47c2ce5437f0099f414a7e9ce081ad",
     ".sc-lint/bootstrap.ps1": "3c463be467f2b91ac8031caffca3a1382231b51b7d078309e511851e7c0362e9",
     ".sc-lint/bootstrap.py": "c51c58bb14a1b0d59015544a006c88e478d1e662d65dc42bb3e1d5e3c15e0e96",
-    ".sc-lint/install.json": "b905706ab9388da8bde1b989b17512488b0aa012fcc53dc60768ce3d99415463",
+    ".sc-lint/install.json": "6b87505f2ebd65569e2dd52840b6b659ea63203ffe2e2bb2ee51adcbf7ff07c3",
     ".sc-lint/justfile": "83c9f2f9ad2a6d106782e4779728afcd5528a1b94a17c20198bf92a59da8a5ae",
     "Justfile": "9f41fb58687b168dc11c0ca81bff57f21af5b9527eb74d5e4dfb14cde26254ee",
     "README.sc-lint.md": "c2df414597671cc47cb278fb6160d2800545f270e34e68fd043d8565f2124524",
@@ -37,6 +37,6 @@
     "plugins/sc-lint/templates/sc-lint-workflow.yml.j2": "79554e773c0c9d6de568f1349f31d37960bce22cfd2fa732142d6fa9cf7abe96",
     "plugins/sc-lint/templates/sc-lint.toml.j2": "0175d6b1d3d642bdb5c7b57a6d5e8d3edbf4092bcc1d94a959ea4851bd3575aa",
     "plugins/sc-lint/templates/test.just": "afd5457ca224a8c24159a73ec64c0d79e9ad7173a2af533734870806cdfd1c31",
-    "sc-lint.toml": "31b4d9f1bcdb466ea8e54d708022457dde64fba2da4a6fe9d40fe674b7aef896"
+    "sc-lint.toml": "5f39d4e063db143e10360e93624ef60300c8bc8e49c81229577045539567b708"
   }
 }

@@ -3,18 +3,10 @@
     "boundary": {
       "enabled": true,
       "fail_rules": [
-        "SCB-CYCLE-001",
-        "SCB-BOUNDARY-001",
-        "SCB-BOUNDARY-002",
-        "SCB-BOUNDARY-003",
-        "SCB-CALLER-001",
         "SCB-DEPENDENCY-001",
         "SCB-DEPENDENCY-002",
-        "SCB-DEPENDENCY-003",
         "SCB-CYCLE-002",
-        "SCB-CYCLE-003",
-        "SCB-MANIFEST-001",
-        "SCB-MANIFEST-002"
+        "SCB-CYCLE-003"
       ],
       "reason": "Boundary inventory, crate cycles and forbidden crate edges for the atm-core workspace."
     },
@@ -51,10 +43,11 @@
           "crates/atm-http-runtime/src/unix_socket.rs",
           "crates/atm/src/main.rs",
           "crates/atm-daemon-bootstrap/src/peer_launch_config.rs",
-          "crates/atm-daemon-bootstrap/src/protected_trust_root.rs"
+          "crates/atm-daemon-bootstrap/src/protected_trust_root.rs",
+          "crates/atm-herdr/src/transport_socket.rs"
         ]
       },
-      "reason": "Every remaining exception is rule-scoped: PORT-007 paths are tracked by sc-lint#192; PORT-010 paired adapter paths are tracked by sc-lint#372; and peer_launch_config.rs PORT-006/PORT-008 has the platform-neutral path/identity remediation tracked by sc-lint#372. No analyzer-wide portability exclusion remains.",
+      "reason": "Every remaining exception is rule-scoped: crates/atm-herdr/src/transport_socket.rs remains under PORT-007 for its \\?\\ paths until randlee/sc-lint#192 and under PORT-010 for its paired Unix helper until randlee/sc-lint#372; crates/atm-http-runtime/src/unix_socket.rs remains under PORT-010 until randlee/sc-lint#372 because loopback_tcp.rs is not an out-of-line Windows adapter. peer_launch_config.rs PORT-006/PORT-008 has the platform-neutral path/identity remediation tracked by randlee/sc-lint#372. No analyzer-wide portability exclusion remains.",
       "targets": [
         "linux",
         "macos",

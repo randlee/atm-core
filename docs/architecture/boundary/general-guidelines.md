@@ -71,9 +71,11 @@ Treat these as mandatory evidence:
 - `sc-lint lint sc-boundary` (published analyzer, configured by
   `analyzers.boundary` in `.sc-lint/install.json`): boundary inventory schema
   and workspace dependency edges
-- `.just/lint_boundaries.py`: atm-only rules (impl sites, `SCB-*` rule
-  families) and the gap checks the published analyzer does not cover yet
-- `.just/lint_manifests.py`
+- published `sc-lint` analyzer profiles for reusable checks; any temporary
+  exception is per rule, documented in `.sc-lint/install.json`, and linked to
+  its upstream retirement issue
+- `.just/lint_boundaries.py` for ATM-specific boundary records and checks that
+  are not reusable analyzer policy
 - `.just/run_lint.py`
 - `crates/atm-architecture/tests/boundary_enforcement.rs`
 - `docs/sc-lint/README.md`

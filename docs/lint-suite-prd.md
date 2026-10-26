@@ -105,6 +105,9 @@ Current execution model:
 - Python/read-only lints run in parallel.
 - Each lint writes its own log file under `.just/logs/`.
 - The umbrella runner prints short pass/fail summaries.
+- `just lint` is the repository-owned parallel, keep-going runner;
+  `just lint ci` selects host CI checks and `just lint ci all` also includes
+  the Windows-target Clippy profile.
 
 ### Current custom Python lint tools
 
@@ -114,6 +117,10 @@ Current execution model:
   - distinguishes `total`, `prod`, `test`, and `prod+test`
 - `sc-lint lint identity-literals`
   - enforces `RULE-008` and `RULE-009`
+- `sc-lint lint sc-boundary`, `sc-lint lint sc-portability`, and
+  `sc-lint lint sc-runtime`
+  - are the published reusable analyzers enabled from `.sc-lint/install.json`
+  - use per-rule, documented exceptions where an upstream analyzer gap remains
 - `.just/check_version_sync.py`
   - verifies workspace/crate/release-version alignment
 - `.just/lint_boundaries.py`
@@ -427,6 +434,7 @@ Includes:
 - spelling/content checks
 - Python lint-tool unit tests
 - external dependency-policy tools that are acceptable in local full runs
+- published `sc-lint` boundary, portability, runtime, and line-count analyzers
 
 #### `just lint fast`
 

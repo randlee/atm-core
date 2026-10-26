@@ -40,9 +40,7 @@ SECTIONS = (
             ("lint deny", "Run cargo-deny advisories/bans/source checks."),
             ("lint shear", "Run cargo-shear unused-dependency checks."),
             ("lint boundaries", "Run the crate/source boundary checks."),
-            ("lint runtime-waits", "Run the production Condvar wait lint subset."),
-            ("lint sc-boundary", "Run the preliminary syn-based boundary analyzer."),
-            ("lint sc-portability", "Run the preliminary syn-based portability analyzer."),
+            ("lint sc-runtime", "Run the published runtime analyzer."),
             ("lint manifests", "Run the Cargo manifest policy checks."),
             ("lint silent-emit", "Run the observability silent-discard regression gate."),
             ("lint function-length", "Run the RULE-002 function-length gate."),
@@ -57,6 +55,7 @@ SECTIONS = (
             ("lint spell", "Run the spelling/content check."),
             ("lint daemon-singleton", "Run the daemon singleton/no-spawn test gate."),
             ("lint pytests", "Run the Python lint-tool unit tests."),
+            ("lint ci [host|all]", "Run the parallel CI lint suite (all includes Windows Clippy)."),
         ),
     ),
     (

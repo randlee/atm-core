@@ -158,8 +158,9 @@ jobs:
           wyvern --version
 
       - name: Run just lint
-        # Phase BG-6 switches this lane to the sc-lint profile runner.
-        run: just _py .just/run_lint.py all
+        # The ATM runner remains parallel and keep-going; `all` includes the
+        # Windows-target Clippy profile on every host.
+        run: just lint ci all
 
       - name: Show clippy diagnostics on lint failure
         if: failure()

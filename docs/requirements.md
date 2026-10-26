@@ -5256,13 +5256,11 @@ Task ledger shape (Phase BA):
   rediscoveries.
 
   Required behavior:
-  - `atm-core` is the proving ground for new postmortem lint rules; a rule
-    lands here first, is tuned against the live codebase, and is migrated to
-    standalone `sc-lint` only after the rule shape is stable and demonstrably
-    reusable
-  - reusable Rust/static-analysis rules must be implemented against the
-    embedded `crates/sc-lint-*` surface on the `atm-core` branch before any
-    upstream migration
+  - `atm-core` contributes evidence and regression fixtures for new postmortem
+    lint rules; reusable rules are implemented and released by the published
+    `sc-lint` tool, then enabled here through its declarative configuration
+  - analyzer exceptions must be per-rule, name the affected path and upstream
+    issue, and remain platform-scoped where the behavior is platform-specific
   - ATM-specific repository policy rules may stay as `.just/` or `scripts/`
     lints when the semantics are tied to ATM-only names, documents, or review
     process state
