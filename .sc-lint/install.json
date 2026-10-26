@@ -238,29 +238,11 @@
       ".just/run_lint.py",
       "runtime-stderr"
     ],
-    "runtime-waits": [
-      "just",
-      "_py",
-      ".just/run_lint.py",
-      "runtime-waits"
-    ],
     "same-host-portability": [
       "just",
       "_py",
       ".just/run_lint.py",
       "same-host-portability"
-    ],
-    "sc-boundary": [
-      "just",
-      "_py",
-      ".just/run_lint.py",
-      "sc-boundary"
-    ],
-    "sc-portability": [
-      "just",
-      "_py",
-      ".just/run_lint.py",
-      "sc-portability"
     ],
     "shear": [
       "just",

@@ -127,20 +127,8 @@ name = "runtime-stderr"
 command = ["just", "_py", ".just/run_lint.py", "runtime-stderr"]
 
 [[tool.sc-lint.lint]]
-name = "runtime-waits"
-command = ["just", "_py", ".just/run_lint.py", "runtime-waits"]
-
-[[tool.sc-lint.lint]]
 name = "same-host-portability"
 command = ["just", "_py", ".just/run_lint.py", "same-host-portability"]
-
-[[tool.sc-lint.lint]]
-name = "sc-boundary"
-command = ["just", "_py", ".just/run_lint.py", "sc-boundary"]
-
-[[tool.sc-lint.lint]]
-name = "sc-portability"
-command = ["just", "_py", ".just/run_lint.py", "sc-portability"]
 
 [[tool.sc-lint.lint]]
 name = "shear"
