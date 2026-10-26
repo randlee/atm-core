@@ -2,6 +2,8 @@
 
 Rendered from the beads plan (`bd show`). The beads are authoritative; this file is for review.
 
+> **As landed (2026-10-25, atm-phase-bg.landed-qa-f3).** bg-1..bg-5 landed on the 0.7.x line, not 0.7.0: the 0.7.1 kit at d5a17e3b1, and `sc-lint.toml` `minimum_version` 0.7.3 at the develop sync. bg-4 did **not** delete `crates/sc-lint-boundary` or `crates/sc-lint-directives`, and `analyzers.runtime` is still disabled (sc-lint#373). Both moved to bg-6. bg-6 now adopts sc-lint v0.8.0. The parallel runner, test manifest and speed work is out of phase-bg: sc-lint 0.8.0 keeps consumer profiles sequential and fail-fast (ADR-017 item 4), and that work is tracked on sc-lint#195/#196. The bg-6 section below is the pre-0.8.0 text: `bd show atm-bg-6` is the current plan.
+
 ---
 
 ## atm-phase-bg: phase-bg: migrate atm-core lint to published sc-lint 0.7.0
