@@ -485,24 +485,26 @@ def print_result(result: LintResult, repo_root: Path) -> None:
     print_console_line(f"  full log: {log_display}")
 
 
+def plan_lanes(tasks: list[LintTask]) -> list[list[LintTask]]:
+    cargo_tasks = [task for task in tasks if task.name in CARGO_LOCK_LINTS]
+    independent_tasks = [task for task in tasks if task.name not in CARGO_LOCK_LINTS]
+    lanes = [cargo_tasks] if cargo_tasks else []
+    lanes.extend([[task] for task in independent_tasks])
+    return lanes
+
+
+def run_lane(lane: list[LintTask], repo_root: Path) -> list[LintResult]:
+    return [run_task(task, repo_root) for task in lane]
+
 def run_parallel(tasks: list[LintTask], repo_root: Path) -> list[LintResult]:
     if not tasks:
         return []
     results: dict[str, LintResult] = {}
-    cargo_tasks = [task for task in tasks if task.name in CARGO_LOCK_LINTS]
-    independent_tasks = [task for task in tasks if task.name not in CARGO_LOCK_LINTS]
-
-    def run_cargo_lane() -> list[LintResult]:
-        return [run_task(task, repo_root) for task in cargo_tasks]
-
-    with ThreadPoolExecutor(max_workers=max(1, len(independent_tasks) + bool(cargo_tasks))) as executor:
-        futures = {executor.submit(run_task, task, repo_root): task.name for task in independent_tasks}
-        cargo_future = executor.submit(run_cargo_lane) if cargo_tasks else None
+    lanes = plan_lanes(tasks)
+    with ThreadPoolExecutor(max_workers=len(lanes)) as executor:
+        futures = [executor.submit(run_lane, lane, repo_root) for lane in lanes]
         for future in as_completed(futures):
-            result = future.result()
-            results[result.task.name] = result
-        if cargo_future is not None:
-            for result in cargo_future.result():
+            for result in future.result():
                 results[result.task.name] = result
     return [results[task.name] for task in tasks]
 

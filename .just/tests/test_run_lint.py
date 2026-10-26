@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from concurrent.futures import Future
 import io
 import importlib.util
 import json
@@ -24,6 +26,7 @@ from run_lint import LintResult
 from run_lint import LintTask
 from run_lint import main
 from run_lint import preview_lines_for_task
+from run_lint import plan_lanes
 from run_lint import prioritize_error_lines
 from run_lint import print_result
 from run_lint import resolve_task_names
@@ -396,67 +399,50 @@ resolver = "2"
         self.assertEqual(status, 1)
         self.assertIn("lint failed: 2 check(s) failed: version, pytests", output.getvalue())
 
-    def test_parallel_scheduler_runs_independent_work_while_serializing_cargo(self) -> None:
-        import queue
-        import threading
+    def test_parallel_scheduler_plans_serial_cargo_and_independent_lanes(self) -> None:
+        tasks = [LintTask(name, [name]) for name in ("clippy", "version", "pytests", "spell", "arch-gates")]
+        expected_cargo = [tasks[0], tasks[2], tasks[4]]
+        expected_independent = [[tasks[1]], [tasks[3]]]
 
-        # The workers and test thread rendezvous here. The test releases both
-        # lanes only after the independent task and cargo lane have reached
-        # the controlled start point, proving they can overlap without relying
-        # on host scheduling speed.
-        ready_to_run = threading.Barrier(3, timeout=10)
-        independent_started = False
-        cargo_active = 0
-        cargo_overlap = False
-        lock = threading.Lock()
+        lanes = plan_lanes(tasks)
+
+        self.assertEqual(lanes, [expected_cargo, *expected_independent])
+        flattened = [task for lane in lanes for task in lane]
+        self.assertCountEqual(flattened, tasks)
+        self.assertEqual(len(lanes), 3)
+
+        worker_counts: list[int] = []
+
+        class SynchronousExecutor:
+            def __init__(self, max_workers: int) -> None:
+                worker_counts.append(max_workers)
+
+            def __enter__(self) -> SynchronousExecutor:
+                return self
+
+            def __exit__(self, *_exc_info: object) -> None:
+                return None
+
+            def submit(
+                self, function: Callable[..., list[LintResult]], *args: object
+            ) -> Future[list[LintResult]]:
+                future: Future[list[LintResult]] = Future()
+                try:
+                    future.set_result(function(*args))
+                except BaseException as error:
+                    future.set_exception(error)
+                return future
 
         def fake_run_task(task: LintTask, _root: Path) -> LintResult:
-            nonlocal cargo_active, cargo_overlap, independent_started
-            if task.name == "version":
-                with lock:
-                    independent_started = True
-                ready_to_run.wait()
-            else:
-                with lock:
-                    cargo_active += 1
-                    cargo_overlap |= cargo_active > 1
-                if task.name == "clippy":
-                    ready_to_run.wait()
-                with lock:
-                    cargo_active -= 1
             return LintResult(task, 0, "", "", 0.0, Path("log"))
 
-        tasks = [LintTask(name, [name]) for name in ("clippy", "pytests", "arch-gates", "version")]
-        with tempfile.TemporaryDirectory() as tempdir, mock.patch("run_lint.run_task", side_effect=fake_run_task):
-            completed: queue.Queue[tuple[list[LintResult] | None, BaseException | None]] = queue.Queue()
+        with tempfile.TemporaryDirectory() as tempdir, \
+            mock.patch("run_lint.ThreadPoolExecutor", SynchronousExecutor), \
+            mock.patch("run_lint.run_task", side_effect=fake_run_task):
+            results = run_parallel(tasks, Path(tempdir))
 
-            def run_scheduler() -> None:
-                try:
-                    completed.put((run_parallel(tasks, Path(tempdir)), None))
-                except BaseException as error:
-                    completed.put((None, error))
-
-            runner = threading.Thread(target=run_scheduler, daemon=True)
-            runner.start()
-            # The test thread is the third participant and releases both
-            # workers only after the independent and cargo lanes rendezvous.
-            # The barrier timeout only bounds failure if a worker hangs.
-            ready_to_run.wait()
-            try:
-                results, error = completed.get(timeout=12)
-            except queue.Empty:
-                self.fail("scheduler did not finish after the test released both lanes")
-            if error is not None:
-                raise error
-            assert results is not None
-
-        with lock:
-            self.assertTrue(independent_started)
-        self.assertFalse(cargo_overlap)
-        self.assertEqual(
-            [result.task.name for result in results],
-            ["clippy", "pytests", "arch-gates", "version"],
-        )
+        self.assertEqual(worker_counts, [len(lanes)])
+        self.assertEqual([result.task for result in results], tasks)
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
