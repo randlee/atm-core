@@ -397,45 +397,61 @@ resolver = "2"
         self.assertIn("lint failed: 2 check(s) failed: version, pytests", output.getvalue())
 
     def test_parallel_scheduler_runs_independent_work_while_serializing_cargo(self) -> None:
+        import queue
         import threading
 
-        cargo_started = threading.Event()
-        independent_started = threading.Event()
-        release = threading.Event()
+        # The workers and test thread rendezvous here. The test releases both
+        # lanes only after the independent task and cargo lane have reached
+        # the controlled start point, proving they can overlap without relying
+        # on host scheduling speed.
+        ready_to_run = threading.Barrier(3, timeout=10)
+        independent_started = False
         cargo_active = 0
         cargo_overlap = False
         lock = threading.Lock()
 
         def fake_run_task(task: LintTask, _root: Path) -> LintResult:
-            nonlocal cargo_active, cargo_overlap
+            nonlocal cargo_active, cargo_overlap, independent_started
             if task.name == "version":
-                independent_started.set()
-                if not release.wait(timeout=2):
-                    raise AssertionError("independent task was not released")
+                with lock:
+                    independent_started = True
+                ready_to_run.wait()
             else:
                 with lock:
                     cargo_active += 1
                     cargo_overlap |= cargo_active > 1
-                cargo_started.set()
-                if task.name == "clippy" and not independent_started.wait(timeout=2):
-                    raise AssertionError("independent task did not overlap cargo lane")
+                if task.name == "clippy":
+                    ready_to_run.wait()
                 with lock:
                     cargo_active -= 1
             return LintResult(task, 0, "", "", 0.0, Path("log"))
 
         tasks = [LintTask(name, [name]) for name in ("clippy", "pytests", "arch-gates", "version")]
         with tempfile.TemporaryDirectory() as tempdir, mock.patch("run_lint.run_task", side_effect=fake_run_task):
-            # Run the scheduler in a controlled helper thread so the test can
-            # release the independent task only after both lanes have started.
-            results: list[LintResult] = []
-            runner = threading.Thread(target=lambda: results.extend(run_parallel(tasks, Path(tempdir))), daemon=True)
-            runner.start()
-            self.assertTrue(cargo_started.wait(timeout=2))
-            self.assertTrue(independent_started.wait(timeout=2))
-            release.set()
-            runner.join(timeout=2)
+            completed: queue.Queue[tuple[list[LintResult] | None, BaseException | None]] = queue.Queue()
 
-        self.assertFalse(runner.is_alive())
+            def run_scheduler() -> None:
+                try:
+                    completed.put((run_parallel(tasks, Path(tempdir)), None))
+                except BaseException as error:
+                    completed.put((None, error))
+
+            runner = threading.Thread(target=run_scheduler, daemon=True)
+            runner.start()
+            # The test thread is the third participant and releases both
+            # workers only after the independent and cargo lanes rendezvous.
+            # The barrier timeout only bounds failure if a worker hangs.
+            ready_to_run.wait()
+            try:
+                results, error = completed.get(timeout=12)
+            except queue.Empty:
+                self.fail("scheduler did not finish after the test released both lanes")
+            if error is not None:
+                raise error
+            assert results is not None
+
+        with lock:
+            self.assertTrue(independent_started)
         self.assertFalse(cargo_overlap)
         self.assertEqual(
             [result.task.name for result in results],
