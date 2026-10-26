@@ -17,14 +17,25 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
+from subprocess_helpers import run_command
 import rendering
 
 ROOT = Path(__file__).parents[2]
 AGENTS = ROOT.parents[1] / "agents"
 TEMPLATES = ROOT / "templates"
 EXAMPLES = ROOT / "examples"
+def jev_environment():
+    return {key: os.environ[key] for key in ("PATH", "HOME") if key in os.environ}
+
+
+class BoundedCommandTests(unittest.TestCase):
+    def test_jev_environment_excludes_ambient_settings(self):
+        with patch.dict(os.environ, {"PATH": "/test/bin", "HOME": "/test/home", "TYPESAFE_API_KEY": "secret",
+                                     "JEV_URL": "ambient"}, clear=True):
+            self.assertEqual(jev_environment(), {"PATH": "/test/bin", "HOME": "/test/home"})
 
 
 def render(template: str, variables: Path) -> str:
@@ -37,8 +48,13 @@ def render(template: str, variables: Path) -> str:
 INPUTS = re.compile(r"^## (?:Inputs|Input Contract)\b.*?```json\n(.*?)\n```", re.S | re.M)
 
 
+def required_match(match: re.Match[str] | None) -> re.Match[str]:
+    assert match is not None
+    return match
+
+
 def inputs_json(agent: str) -> dict:
-    return json.loads(INPUTS.search((AGENTS / agent).read_text()).group(1))
+    return json.loads(required_match(INPUTS.search((AGENTS / agent).read_text())).group(1))
 
 
 # Fenced JSON as agents send and return it.
@@ -69,11 +85,12 @@ def fenced_json(text: str, heading: str):
 
 
 def section_fence(agent: str, heading: str) -> str:
-    return re.search(r"^## " + heading + r"\b.*?```json\n(.*?)\n```", (AGENTS / agent).read_text(), re.S | re.M).group(1)
+    return required_match(re.search(r"^## " + heading + r"\b.*?```json\n(.*?)\n```", (AGENTS / agent).read_text(), re.S | re.M)).group(1)
 
 
 def load_client():
     spec = importlib.util.spec_from_file_location("jev_client", ROOT / "scripts" / "jev_client.py")
+    assert spec is not None and spec.loader is not None
     client = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(client)
     return client
@@ -81,7 +98,9 @@ def load_client():
 
 def load_merge():
     loader = importlib.machinery.SourceFileLoader("sanity_merge", str(ROOT / "scripts" / "sanity-merge"))
-    merge = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    merge = importlib.util.module_from_spec(spec)
     loader.exec_module(merge)
     return merge
 
@@ -102,7 +121,7 @@ class DevSanityHandoffTests(unittest.TestCase):
         repo.mkdir()
 
         def git(*args):
-            return subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+            return run_command(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", *args],
                                   check=True, capture_output=True, text=True).stdout.strip()
 
         git("init", "-q")
@@ -144,19 +163,20 @@ class DevSanityHandoffTests(unittest.TestCase):
         self.assertNotIn("{path, why}", paragraph)
         match = re.search(r"--argjson context '<\[(.*?)\]>'", paragraph)
         self.assertIsNotNone(match, "dev-sanity.md must show the rerun context as a JSON array of path strings")
+        assert match is not None
         self.assertEqual(match.group(1), '"path", ...')
         self.assertIn("`path:start-end`", paragraph)
         base = self.assignment("dev-sanity-assignment-vars.json")
         manifest = Path(self.tmp.name) / "manifest.json"
         manifest.write_text(json.dumps({"assignments": [{"number": 1, "assignment": base}]}))
-        jq = re.search(r"`(jq --argjson n <n> .*?)`;", paragraph, re.S).group(1)
+        jq = required_match(re.search(r"`(jq --argjson n <n> .*?)`;", paragraph, re.S)).group(1)
         jq = jq.replace("<n>", "1").replace("'<[\"path\", ...]>'", "\"$CONTEXT\"").replace("$manifest", str(manifest))
         pinned = {"worktree_path": str(self.repo), "sha": self.commit}
         # the documented shapes, a whole file and a line range, filled with real entries at the pinned commit
         for context, read in ((["docs/retry.md"], {"docs/retry.md": "retry policy\n"}),
                               (["docs/limits.md:2-3"], {"docs/limits.md:2-3": "backoff 2s\njitter on\n"})):
             with self.subTest(context=context):
-                rerun = subprocess.run(["bash", "-c", jq], env={"CONTEXT": json.dumps(context), "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin"},
+                rerun = run_command(["bash", "-c", jq], env={"CONTEXT": json.dumps(context), "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin"},
                                        capture_output=True, text=True)
                 self.assertEqual(rerun.returncode, 0, rerun.stderr)
                 sent = json.loads(rerun.stdout)
@@ -176,11 +196,12 @@ class DevSanityHandoffTests(unittest.TestCase):
         text = (AGENTS / "dev-sanity.md").read_text()
         anchor = re.search(r"`sanity-merge` accepts exactly these keys(?: per entry)?:", text)
         self.assertIsNotNone(anchor, "dev-sanity.md must list the selection entry keys sanity-merge accepts")
+        assert anchor is not None
         paragraph = text[anchor.start():]
         paragraph = paragraph[:paragraph.index("\n\n")]
         documented = set(re.findall(r"`(\w+)`", paragraph[anchor.end() - anchor.start():].split(". ", 1)[0]))
         merge = (ROOT / "scripts/sanity-merge").read_text()
-        required = ast.literal_eval(re.search(r"required = (\{[^}]*\})", merge).group(1))
+        required = ast.literal_eval(required_match(re.search(r"required = (\{[^}]*\})", merge)).group(1))
         self.assertEqual(documented, required)
         self.assertIn("`{reviewer, context, reply}`", paragraph)
         self.assertIn("set(rerun) != {'reviewer', 'context', 'reply'}".replace("'", '"'), merge)
@@ -191,12 +212,12 @@ class DevSanityHandoffTests(unittest.TestCase):
         runs `jev_client.py --assignment <file>`; the client must read past the fence. With no key set the call stops at
         the key check, so reaching it proves the assignment was parsed and its committed evidence read."""
         sent = self.assignment("dev-sanity-assignment-vars.json")
-        env = {k: v for k, v in os.environ.items() if k != "TYPESAFE_API_KEY"}
+        env = jev_environment()
 
         def run(body: str) -> dict:
             path = Path(self.tmp.name) / "assignment.md"
             path.write_text(body)
-            proc = subprocess.run([sys.executable, str(ROOT / "scripts/jev_client.py"), "--assignment", str(path)],
+            proc = run_command([sys.executable, str(ROOT / "scripts/jev_client.py"), "--assignment", str(path)],
                                   capture_output=True, text=True, env=env)
             self.assertEqual(proc.returncode, 2, proc.stderr)
             return json.loads(proc.stdout)["error"]
@@ -242,7 +263,7 @@ class ReviewerHandoffTests(unittest.TestCase):
     def test_fix_round_scope_flags_in_the_senders_exist_in_the_script(self):
         script = (ROOT / "scripts/fix-round-scope").read_text()
         declared = set(re.findall(r'add_argument\("(--[\w-]+)"', script)) | {"-h", "--help"}
-        commands = set(re.search(r'choices=\(([^)]*)\)', script).group(1).replace('"', "").replace(" ", "").split(","))
+        commands = set(required_match(re.search(r'choices=\(([^)]*)\)', script)).group(1).replace('"', "").replace(" ", "").split(","))
         seen = 0
         for template in ("qa-template.xml.j2", "plan-review-template.xml.j2"):
             text = (TEMPLATES / template).read_text()
@@ -342,7 +363,7 @@ class SanityReplyHandoffTests(unittest.TestCase):
         for agent in ("sc-sanity-llm.md", "sc-sanity-jev.md"):
             with self.subTest(agent=agent):
                 text = (AGENTS / agent).read_text()
-                keys = re.search(r"`error: \{([^}]*)\}`", text).group(1).replace(" ", "").split(",")
+                keys = required_match(re.search(r"`error: \{([^}]*)\}`", text)).group(1).replace(" ", "").split(",")
                 assignment = inputs_json(agent)
                 number = assignment["deliverable"]["number"]
                 error = {key: typed.get(key, number) for key in keys}
@@ -382,7 +403,7 @@ class FixRoundResultHandoffTests(unittest.TestCase):
 
             def run(body: str) -> subprocess.CompletedProcess:
                 result_path.write_text(body)
-                return subprocess.run([sys.executable, str(ROOT / "scripts/fix-round-scope"), "filter", "--carried",
+                return run_command([sys.executable, str(ROOT / "scripts/fix-round-scope"), "filter", "--carried",
                                        str(carried_path), "--reviewer", "arch-qa", "--result", str(result_path)],
                                       capture_output=True, text=True)
 
@@ -465,7 +486,7 @@ def step(rendered: str, step_id: str) -> str:
 def named_fields(instruction: str) -> dict:
     """The fenced JSON an instruction tells its sender to write: each `key` = `value` it names (a described value as text)."""
     sent = {key: value or "<as described>" for key, value in re.findall(r"`(\w+)` = (?:`([^`]*)`)?", instruction)}
-    return json.loads(FENCE.search(fence(sent)).group(2))
+    return json.loads(required_match(FENCE.search(fence(sent))).group(2))
 
 
 def required_inputs(agent: str) -> set:
@@ -492,7 +513,7 @@ class PlanReviewHandoffTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "vars.json"
             path.write_text(json.dumps({**base, **values}))
-            return json.loads(FENCE.search(fence(json.loads(render(f"{reviewer}-assignment.json.j2", path)))).group(2))
+            return json.loads(required_match(FENCE.search(fence(json.loads(render(f"{reviewer}-assignment.json.j2", path))))).group(2))
 
     def renders_assignments(self, step_c: str, worktree: str) -> bool:
         return RENDER_ASSIGNMENTS in step_c and f"Each carries worktree `{worktree}`" in step_c and '("Rendering")' in step_c
@@ -506,7 +527,7 @@ class PlanReviewHandoffTests(unittest.TestCase):
             with self.subTest(reviewer=reviewer):
                 sent = self.assignment(reviewer, worktree_path=worktree, branch=branch)
                 self.assertEqual((sent["worktree_path"], sent["branch"]), (worktree, branch))
-        mention = re.search(r"Run `ceremony-qa` with (.*?)\. Run ", step_c, re.S).group(1)
+        mention = required_match(re.search(r"Run `ceremony-qa` with (.*?)\. Run ", step_c, re.S)).group(1)
         sent = named_fields(mention)
         self.assertLessEqual(required_inputs("ceremony-qa.md"), set(sent))
         self.assertLessEqual(set(sent), set(inputs_json("ceremony-qa.md")))
@@ -531,7 +552,7 @@ class PlanReviewHandoffTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:  # the reviewers step c dispatches: what `fix-round-scope owned --plan` prints
             carried = Path(tmp) / "carried.txt"
             carried.write_text(re.sub(r"\{\{[^}]*\}\}", "x", values["carry_forward"]))  # an install-time prefix
-            proc = subprocess.run([sys.executable, str(ROOT / "scripts/fix-round-scope"), "owned", "--plan", "--carried",
+            proc = run_command([sys.executable, str(ROOT / "scripts/fix-round-scope"), "owned", "--plan", "--carried",
                                    str(carried)], capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         owned = {k: v for k, v in json.loads(proc.stdout).items() if k != "validate-plan"}  # step b re-checks those
@@ -563,24 +584,25 @@ class PlanReviewHandoffTests(unittest.TestCase):
 def blocking_shape(rendered: str) -> str:
     """The `<scratch>/<qa bead>-blocking.json` content step g of a rendered qa-template tells quality-mgr to write."""
     step = rendered[rendered.index('<step id="g">'):rendered.index('<step id="h">')]
-    return re.search(r"-blocking\.json` = `(\{.*?\})` and run", step, re.S).group(1)
+    return required_match(re.search(r"-blocking\.json` = `(\{.*?\})` and run", step, re.S)).group(1)
 
 
-@unittest.skipIf(shutil.which("bd") is None or shutil.which("dolt") is None or shutil.which("sc-compose") is None,
-                 "bd, dolt or sc-compose not on PATH: the real bead-groups receiver cannot run")
 class BlockingFindingsHandoffTests(unittest.TestCase):
-    """qa-template step g (fix verification) -> `<qa bead>-blocking.json` -> `bead-groups --findings` on a real bd."""
+    """Rendered QA JSON is accepted by the in-process bead-groups receiver."""
 
-    @classmethod
-    def setUpClass(cls):
-        from test_bead_pour_mock import Workspace, init_workspace, stop_server
-        root = Path(tempfile.mkdtemp(prefix="handoff-blocking-")).resolve()
-        cls.ws = Workspace(root)
-        cls.addClassCleanup(shutil.rmtree, root, ignore_errors=True)
-        cls.addClassCleanup(stop_server, root)
-        init_workspace(cls.ws)
+    def setUp(self):
+        from test_bead_pour_plan import PlanFixture
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.ws = PlanFixture(Path(temporary.name))
 
-    def written(self, sprint: str, qa: str, severity: str) -> Path:
+    def received(self, sprint, path):
+        from test_bead_pour_plan import groups
+        phase = self.ws.rows[sprint]["metadata"]["phase"]
+        with patch.object(groups.sprint_index_common, "load_phase_config", return_value={"root": f"t-phase-{phase}"}):
+            return self.ws.runner.finding_targets(path)[0]
+
+    def written(self, sprint: str, qa: str, severity: str, found_on_layer=None) -> Path:
         values = json.loads((EXAMPLES / "qa-template-fix-round-vars.json").read_text())
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "vars.json"
@@ -594,23 +616,22 @@ class BlockingFindingsHandoffTests(unittest.TestCase):
             self.assertIn(placeholder, shape)
             shape = shape.replace(placeholder, value)
         out = self.ws.root / f"{sprint}-{severity}-blocking.json"
-        out.write_text(json.dumps(json.loads(shape)))
+        document = json.loads(shape)
+        if found_on_layer is not None:
+            document["findings"][0]["found_on_layer"] = found_on_layer
+        out.write_text(json.dumps(document))
         return out
 
-    def test_the_fix_round_shape_pours_and_a_non_blocking_one_is_refused(self):
-        from test_bead_pour_mock import fix_group, group
+    def test_the_fix_round_shape_is_accepted_and_a_non_blocking_one_is_refused(self):
         ws = self.ws
         sprint = ws.sprint("hz", 1)
-        dev, sanity, qa = group(sprint)
-        ws.groups("--sprint", sprint)
-        ws.close(dev, "done")
-        ws.close(sanity, "PASS")
-        result = ws.groups("--findings", self.written(sprint, qa, "blocking"))
-        fix = fix_group(sprint, "qa1-f1", 2)[0]
-        self.assertEqual(ws.show(fix)["metadata"]["reviewer"], "arch-qa")
-        refused = ws.groups("--findings", self.written(sprint, qa, "important"), expect=2)  # planted negative
-        self.assertEqual(refused["targets"][0]["error"]["code"], "BEAD_GROUPS_NOT_BLOCKING")
-        self.assertTrue(result["targets"])
+        qa = f"{sprint}.group-qa"
+        result = self.received(sprint, self.written(sprint, qa, "blocking", found_on_layer=15))
+        self.assertEqual(result["compose"]["reviewer"], "arch-qa")
+        self.assertEqual(result["compose"]["found_on_layer"], 15)
+        self.assertEqual(result["compose"]["ref"], "qa1-f1-r2")
+        refused = self.received(sprint, self.written(sprint, qa, "important"))
+        self.assertEqual(refused.code, "BEAD_GROUPS_NOT_BLOCKING")
 
 
     def round_one(self, sprint: str, qa: str, **finding) -> Path:
@@ -631,27 +652,26 @@ class BlockingFindingsHandoffTests(unittest.TestCase):
         out.write_text(json.dumps({**sent, "findings": [{k: v for k, v in row.items() if v is not None}]}))
         return out
 
-    def test_the_round_one_shape_parses_and_pours_and_one_without_its_remedy_is_refused(self):
-        from test_bead_pour_mock import fix_group, group
+    def test_the_round_one_shape_is_accepted_and_one_without_its_remedy_is_refused(self):
         ws = self.ws
         sprint = ws.sprint("hx", 1)
-        _, _, qa = group(sprint)
-        ws.groups("--sprint", sprint)
-        ws.groups("--findings", self.round_one(sprint, qa))
-        fix = fix_group(sprint, "qa1-f1")[0]
-        self.assertEqual({k: ws.show(fix)["metadata"][k] for k in ("reviewer", "difficulty")},
+        qa = f"{sprint}.group-qa"
+        target = self.received(sprint, self.round_one(sprint, qa, found_on_layer=15))
+        self.assertEqual(target["compose"]["found_on_layer"], 15)
+        self.assertEqual({key: target["compose"][key] for key in ("reviewer", "difficulty")},
                          {"reviewer": "arch-qa", "difficulty": "normal"})
-        ws.groups("--findings", self.round_one(sprint, qa, ref="qa1-f2", difficulty="hard"))
-        self.assertEqual(ws.show(fix_group(sprint, "qa1-f2")[0])["metadata"]["difficulty"], "hard")
+        target = self.received(sprint, self.round_one(sprint, qa, ref="qa1-f2", difficulty="hard"))
+        self.assertEqual(target["compose"]["difficulty"], "hard")
+        self.assertFalse(target["compose"]["has_found_on_layer"])
         # planted negatives: the old key-list shape is not JSON, and a finding without its remedy is refused
         with self.assertRaises(ValueError):
             json.loads('{"findings": [{"ref": "qa1-f1", "severity": "blocking", "reviewer", "title", "remedy", '
                        '"priority": 1, optional "difficulty"}]}')
-        refused = ws.groups("--findings", self.round_one(sprint, qa, ref="qa1-f3", remedy=None), expect=2)
-        self.assertEqual(refused["targets"][0]["error"]["code"], "BEAD_GROUPS_FINDINGS_INVALID")
-        self.assertIsNone(ws.show(fix_group(sprint, "qa1-f3")[0]))
+        refused = self.received(sprint, self.round_one(sprint, qa, ref="qa1-f3", remedy=None))
+        self.assertEqual(refused.code, "BEAD_GROUPS_FINDINGS_INVALID")
+        self.assertIn("remedy", str(refused))
 
-    def test_a_workflow_issue_bead_imports_and_a_render_without_its_remedy_is_refused(self):
+    def test_a_workflow_issue_jsonl_has_its_parent_and_requires_its_remedy(self):
         ws = self.ws
         parent = ws.sprint("hy", 1)
         values = {**json.loads((EXAMPLES / "workflow-issue-bead-vars.json").read_text()), "id": "t-wf-jev-outage", "parent": parent}
@@ -665,10 +685,9 @@ class BlockingFindingsHandoffTests(unittest.TestCase):
         rows = ws.root / "workflow.jsonl"
         path.write_text(json.dumps(values))
         rows.write_text(json.dumps(json.loads(render("workflow-issue-bead.json.j2", path))) + "\n")
-        ws.bd("import", "-i", rows)
-        bead = ws.show("t-wf-jev-outage")
+        bead = json.loads(rows.read_text())
         self.assertIn("workflow-issue", bead["labels"])
-        self.assertEqual(ws.deps("t-wf-jev-outage"), {parent: "parent-child"})
+        self.assertEqual(bead["dependencies"], [{"issue_id": "t-wf-jev-outage", "depends_on_id": parent, "type": "parent-child"}])
 
 
 if __name__ == "__main__":

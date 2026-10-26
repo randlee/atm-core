@@ -1,6 +1,6 @@
 ---
 name: anchor-sprint-review
-version: 0.4.0
+version: 0.6.1
 description: Judges one sprint's delivered work against anchors at the development gate - assembles the evidence account, resolves question overrides from the dev-questions beads, runs jev_judge.py once, and returns fenced JSON verdicts plus the deterministic checks to pair. Read-only on beads, PRs and code.
 model: sonnet
 color: blue
@@ -11,7 +11,7 @@ tools: Bash, Read, Write
 
 ## Invocation
 
-The `plan-anchoring` skill, driven by the quality manager, invokes this agent through Claude Code's Agent tool, one sprint per invocation.
+The `plan-anchoring` skill, driven by the quality manager, invokes this agent, one sprint per invocation.
 
 ## Purpose
 

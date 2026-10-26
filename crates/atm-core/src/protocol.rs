@@ -7,6 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use atm_storage::{CronSchedule, HookRegistration};
 use interprocess::local_socket::Name;
 #[cfg(not(windows))]
 use interprocess::local_socket::{GenericFilePath, ToFsName};
@@ -19,6 +20,10 @@ use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::home;
+use crate::hook::{
+    CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse, HookDisableRequest,
+    HookListQuery, HookRegisterRequest,
+};
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::schema::AtmMessageId;
@@ -34,6 +39,7 @@ pub use atm_storage::{
     RuntimeObservationAvailability, RuntimeObservationSource,
 };
 use atm_storage::{MoveTarget, QueuePosition};
+pub use atm_storage::{ToolInstallReceipt, ToolInstallerRequest};
 
 /// Body representation for the local graft receiver lookup route.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -75,6 +81,14 @@ pub enum RequestEnvelope {
     Search(Box<SearchRequest>),
     /// Authenticated local control request that reloads the daemon's durable runtime view.
     ReloadRuntimeView,
+    HookRegister(HookRegisterRequest),
+    HookDisable(HookDisableRequest),
+    HookList(HookListQuery),
+    CronStart(CronStartRequest),
+    CronEnd(CronEndRequest),
+    CronList(CronListQuery),
+    ToolSenderApply(ToolInstallerRequest),
+    ToolSenderUnregister(ToolInstallerRequest),
 }
 
 /// Shared protocol response envelope.
@@ -96,11 +110,20 @@ pub enum ResponseEnvelope {
     Doctor(Box<DoctorReport>),
     Search(Box<SearchResponse>),
     RuntimeViewReloaded,
+    HookRegistered(HookRegistration),
+    HookList(Vec<HookRegistration>),
+    HookDisabled(Vec<HookRegistration>),
+    CronStarted(CronSchedule),
+    CronList(Vec<CronSchedule>),
+    CronEnded(Vec<CronSchedule>),
+    ToolSenderApplied(ToolInstallReceipt),
+    /// Hook actions ran in place of the hooked command; the count is also sent in `X-ATM-Hook-Actions`.
+    HookActions(HookActionsResponse),
     Error(AtmError),
 }
 
 pub const CLI_SCHEMA_VERSION: u16 = 1;
-pub const HTTP_API_VERSION: &str = "1.12.0";
+pub const HTTP_API_VERSION: &str = "1.17.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskMoveRequest {
@@ -557,23 +580,81 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
+        CLI_SCHEMA_VERSION, CompatibilityPreflight, CompatibilityVerdict,
+        GraftReceiverRefreshRequest, GraftReceiverRegistration, GraftReceiverUnregistration,
+        HttpApiVersion, QueueGetNextResponse, QueuedNudgeMessage, ReleaseVersion,
+        SendResponseEnvelope, TaskMoveOutcome,
+    };
+    use super::{
         DAEMON_SOCKET_FILENAME, HeartbeatActivity, QueueGetNextRequest, RequestEnvelope,
         ResponseEnvelope, RosterStateRevision, RuntimeLivenessState, RuntimeMemberObservation,
         RuntimeMemberState, RuntimeObservationAvailability, RuntimeReadinessState,
         RuntimeStatusCounts, RuntimeStatusSnapshot, TaskMoveRequest, TeamMemberHeartbeatRequest,
         TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
     };
+    use crate::boundary::NudgeKind;
+    use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
+    use crate::doctor::DoctorQuery;
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
-    use crate::list::ListQuery;
-    use crate::search::{SearchInput, SearchRequest};
-    use crate::send::{SendMessageSource, SendRequest};
+    use crate::list::{ListOutcome, ListQuery};
+    use crate::read::{BucketCounts, MailboxQueryFilters, PeekQuery, ReadOutcome, ReadQuery};
+    use crate::search::{SearchInput, SearchRequest, SearchResponse};
+    use crate::send::{
+        SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest, WriteRequest,
+    };
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, ReadSelection, SessionId, TeamName};
-    use atm_storage::MoveTarget;
-    use serde::Deserialize;
+    use crate::types::{
+        AgentName, CommandAction, IsoTimestamp, ReadSelection, SessionId, TeamName,
+    };
+    use atm_storage::{AtmMessageId, LocalCapability, MoveTarget, OwnerGeneration, QueuePosition};
+    use serde::{Deserialize, Serialize};
     use serial_test::serial;
     use tempfile::TempDir;
+
+    // Frozen copies of the 1.12 envelope declarations from git b2726d423^.
+    // Keep these independent of the current envelope enums so wire changes
+    // that a 1.12 consumer cannot decode are caught by the compatibility test.
+    #[derive(Debug, Serialize, Deserialize)]
+    enum RequestEnvelope12 {
+        Write(Box<super::WriteRequest>),
+        TaskMove(super::TaskMoveRequest),
+        CompatibilityPreflight(super::CompatibilityPreflight),
+        Heartbeat(super::TeamMemberHeartbeatRequest),
+        QueueGetNext(super::QueueGetNextRequest),
+        GraftReceiverRegister(super::GraftReceiverRegistration),
+        GraftReceiverRefresh(super::GraftReceiverRefreshRequest),
+        GraftReceiverUnregister(super::GraftReceiverUnregistration),
+        GraftReceiverLookup { team: TeamName, agent: AgentName },
+        List(super::ListQuery),
+        Peek(super::PeekQuery),
+        Receive(super::ReadQuery),
+        Clear(super::ClearQuery),
+        Doctor(super::DoctorQuery),
+        Search(Box<super::SearchRequest>),
+        ReloadRuntimeView,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    enum ResponseEnvelope12 {
+        Send(super::SendResponseEnvelope),
+        TaskMove(super::TaskMoveOutcome),
+        CompatibilityVerdict(super::CompatibilityVerdict),
+        Heartbeat(super::TeamMemberHeartbeatResponse),
+        QueueGetNext(super::QueueGetNextResponse),
+        GraftReceiverRegister,
+        GraftReceiverRefresh,
+        GraftReceiverUnregister,
+        GraftReceiverLookup(Option<super::GraftReceiverLease>),
+        List(super::ListOutcome),
+        Peek(Box<super::ReadOutcome>),
+        Receive(Box<super::ReadOutcome>),
+        Clear(super::ClearOutcome),
+        Doctor(Box<super::DoctorReport>),
+        Search(Box<super::SearchResponse>),
+        RuntimeViewReloaded,
+        Error(super::AtmError),
+    }
 
     #[test]
     fn heartbeat_request_envelope_round_trips() {
@@ -939,6 +1020,635 @@ mod tests {
         let error = serde_json::from_slice::<RequestEnvelope15>(&task_move)
             .expect_err("1.5 enum must reject the 1.6-only variant");
         assert!(error.to_string().contains("unknown variant `TaskMove`"));
+    }
+
+    /// Wire tag of every request variant. Exhaustive, so a new variant fails to compile here.
+    fn request_tag(request: &RequestEnvelope) -> &'static str {
+        match request {
+            RequestEnvelope::Write(_) => "Write",
+            RequestEnvelope::TaskMove(_) => "TaskMove",
+            RequestEnvelope::CompatibilityPreflight(_) => "CompatibilityPreflight",
+            RequestEnvelope::Heartbeat(_) => "Heartbeat",
+            RequestEnvelope::QueueGetNext(_) => "QueueGetNext",
+            RequestEnvelope::GraftReceiverRegister(_) => "GraftReceiverRegister",
+            RequestEnvelope::GraftReceiverRefresh(_) => "GraftReceiverRefresh",
+            RequestEnvelope::GraftReceiverUnregister(_) => "GraftReceiverUnregister",
+            RequestEnvelope::GraftReceiverLookup { .. } => "GraftReceiverLookup",
+            RequestEnvelope::List(_) => "List",
+            RequestEnvelope::Peek(_) => "Peek",
+            RequestEnvelope::Receive(_) => "Receive",
+            RequestEnvelope::Clear(_) => "Clear",
+            RequestEnvelope::Doctor(_) => "Doctor",
+            RequestEnvelope::Search(_) => "Search",
+            RequestEnvelope::ReloadRuntimeView => "ReloadRuntimeView",
+            RequestEnvelope::HookRegister(_) => "HookRegister",
+            RequestEnvelope::HookDisable(_) => "HookDisable",
+            RequestEnvelope::HookList(_) => "HookList",
+            RequestEnvelope::CronStart(_) => "CronStart",
+            RequestEnvelope::CronEnd(_) => "CronEnd",
+            RequestEnvelope::CronList(_) => "CronList",
+            RequestEnvelope::ToolSenderApply(_) => "ToolSenderApply",
+            RequestEnvelope::ToolSenderUnregister(_) => "ToolSenderUnregister",
+        }
+    }
+
+    /// Wire tag of every response variant. Exhaustive, so a new variant fails to compile here.
+    fn response_tag(response: &ResponseEnvelope) -> &'static str {
+        match response {
+            ResponseEnvelope::Send(_) => "Send",
+            ResponseEnvelope::TaskMove(_) => "TaskMove",
+            ResponseEnvelope::CompatibilityVerdict(_) => "CompatibilityVerdict",
+            ResponseEnvelope::Heartbeat(_) => "Heartbeat",
+            ResponseEnvelope::QueueGetNext(_) => "QueueGetNext",
+            ResponseEnvelope::GraftReceiverRegister => "GraftReceiverRegister",
+            ResponseEnvelope::GraftReceiverRefresh => "GraftReceiverRefresh",
+            ResponseEnvelope::GraftReceiverUnregister => "GraftReceiverUnregister",
+            ResponseEnvelope::GraftReceiverLookup(_) => "GraftReceiverLookup",
+            ResponseEnvelope::List(_) => "List",
+            ResponseEnvelope::Peek(_) => "Peek",
+            ResponseEnvelope::Receive(_) => "Receive",
+            ResponseEnvelope::Clear(_) => "Clear",
+            ResponseEnvelope::Doctor(_) => "Doctor",
+            ResponseEnvelope::Search(_) => "Search",
+            ResponseEnvelope::RuntimeViewReloaded => "RuntimeViewReloaded",
+            ResponseEnvelope::Error(_) => "Error",
+            ResponseEnvelope::HookRegistered(_) => "HookRegistered",
+            ResponseEnvelope::HookList(_) => "HookList",
+            ResponseEnvelope::HookDisabled(_) => "HookDisabled",
+            ResponseEnvelope::HookActions(_) => "HookActions",
+            ResponseEnvelope::CronStarted(_) => "CronStarted",
+            ResponseEnvelope::CronList(_) => "CronList",
+            ResponseEnvelope::CronEnded(_) => "CronEnded",
+            ResponseEnvelope::ToolSenderApplied(_) => "ToolSenderApplied",
+        }
+    }
+
+    /// A `DoctorReport` wire captured in phase aq (972fb36ce) before 1.13 added `hooks`. It is an
+    /// earlier producer's output, not an exact 1.12 release capture: no such capture is in the tree.
+    fn doctor_report_pre_1_13() -> serde_json::Value {
+        serde_json::from_str(include_str!(
+            "../tests/fixtures/doctor-report-pre-1-13.json"
+        ))
+        .expect("pre-1.13 doctor report fixture is JSON")
+    }
+
+    /// Frozen HTTP API 1.12 doctor wire shape. Keep this independent of the
+    /// current `DoctorReport` so additive fields cannot silently join the old
+    /// consumer.
+    #[derive(Debug, Serialize, Deserialize)]
+    struct DoctorReport12 {
+        summary: crate::doctor::DoctorSummary,
+        findings: Vec<crate::doctor::DoctorFinding>,
+        recommendations: Vec<String>,
+        environment: crate::doctor::DoctorEnvironmentVisibility,
+        #[serde(default)]
+        client_context: crate::doctor::DoctorExecutionContext,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        daemon_context: Option<crate::doctor::DoctorExecutionContext>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reader_lanes: Option<crate::doctor::ReaderPoolDoctorReport>,
+        #[serde(default)]
+        team_scope: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        member_roster: Option<crate::team_admin::MembersList>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        team_rosters: Vec<crate::team_admin::MembersList>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        alias_mismatches: Vec<crate::doctor::DoctorAliasMismatch>,
+        #[serde(default)]
+        graft_receivers: crate::doctor::GraftReceiversDoctorReport,
+        observability: crate::observability::AtmObservabilityHealth,
+        #[serde(default)]
+        herdr_breaker: crate::doctor::HerdrBreakerDoctorReport,
+        #[serde(default)]
+        herdr_queue_pump: crate::doctor::HerdrQueuePumpDoctorReport,
+        #[serde(default)]
+        herdr: crate::doctor::HerdrDoctorReport,
+        #[serde(default)]
+        post_send: crate::doctor::PostSendDoctorReport,
+        #[serde(default)]
+        escalation_recipients: crate::doctor::EscalationRecipientsDoctorReport,
+        config: crate::boundary::ConfigDoctorReport,
+        mail_store: crate::boundary::MailStoreDoctorReport,
+        roster_store: crate::boundary::RosterStoreDoctorReport,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        daemon_runtime: Option<crate::doctor::DaemonRuntimeDoctorReport>,
+        #[serde(default)]
+        drift_findings: Vec<crate::doctor::DoctorFinding>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        runtime_status: Option<RuntimeStatusSnapshot>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bootstrap_trace: Option<crate::doctor::BootstrapTraceReport>,
+    }
+
+    fn assert_1_12_doctor_report_preserves_fields(wire: serde_json::Value) -> DoctorReport12 {
+        let current: crate::doctor::DoctorReport =
+            serde_json::from_value(wire.clone()).expect("current reader decodes doctor report");
+        let frozen: DoctorReport12 =
+            serde_json::from_value(wire).expect("1.12 reader decodes doctor report");
+
+        let mut expected = serde_json::to_value(current).expect("encode current doctor report");
+        expected
+            .as_object_mut()
+            .expect("doctor report encodes as object")
+            .remove("hooks");
+        assert_eq!(
+            serde_json::to_value(&frozen).expect("encode frozen 1.12 doctor report"),
+            expected,
+            "every frozen 1.12 doctor field retains its value"
+        );
+        frozen
+    }
+
+    /// One value per 1.12 request variant.
+    fn request_samples_12() -> Vec<RequestEnvelope> {
+        let team = TeamName::from_validated(TEST_TEAM);
+        let sender = AgentName::from_validated(TEST_SENDER);
+        let mut requests = message_and_task_requests_12(&team, &sender);
+        requests.extend(runtime_requests_12(&team, &sender));
+        requests
+    }
+
+    /// The 1.12 requests that carry write, mailbox and task payloads.
+    fn message_and_task_requests_12(team: &TeamName, sender: &AgentName) -> Vec<RequestEnvelope> {
+        let write = WriteRequest::new(
+            test_atm_home_dir(),
+            test_workspace_dir(),
+            sender.clone(),
+            "recipient@test-team",
+            team.clone(),
+            SendMessageSource::Inline("hi".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request");
+        let list = ListQuery::new(
+            test_atm_home_dir(),
+            test_workspace_dir(),
+            sender.clone(),
+            Some("recipient@test-team"),
+            team.clone(),
+            ReadSelection::Unread,
+            false,
+            Some(25),
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+        let peek = PeekQuery::from_filters(
+            test_atm_home_dir(),
+            test_workspace_dir(),
+            sender.clone(),
+            team.clone(),
+            ReadSelection::Unread,
+            false,
+            MailboxQueryFilters::default(),
+        )
+        .expect("peek query");
+        let receive = ReadQuery::from_filters(
+            test_atm_home_dir(),
+            test_workspace_dir(),
+            sender.clone(),
+            team.clone(),
+            ReadSelection::Unread,
+            false,
+            true,
+            MailboxQueryFilters::default(),
+        )
+        .expect("receive query");
+        vec![
+            RequestEnvelope::Write(Box::new(write)),
+            RequestEnvelope::TaskMove(TaskMoveRequest {
+                caller_identity: sender.clone(),
+                caller_team: team.clone(),
+                task_id: "task-1".parse().expect("task id"),
+                target: MoveTarget::Head,
+            }),
+            RequestEnvelope::List(list),
+            RequestEnvelope::Peek(peek),
+            RequestEnvelope::Receive(receive),
+        ]
+    }
+
+    /// The remaining 1.12 requests: preflight, heartbeat, queue, graft receivers, clear,
+    /// doctor, search and reload.
+    fn runtime_requests_12(team: &TeamName, sender: &AgentName) -> Vec<RequestEnvelope> {
+        let generation =
+            OwnerGeneration::new("01ARZ3NDEKTSV4RRFFQ69G5FAV").expect("owner generation");
+        vec![
+            RequestEnvelope::CompatibilityPreflight(CompatibilityPreflight {
+                client_release: ReleaseVersion::current(),
+                cli_schema_version: CLI_SCHEMA_VERSION,
+                http_api_version: HttpApiVersion::parse("1.12.0").expect("1.12.0"),
+            }),
+            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: sender.clone(),
+                pid: 4242,
+                observed_at: "2026-10-19T00:00:00Z".parse().expect("timestamp"),
+                activity: HeartbeatActivity::Idle,
+                session_id: None,
+            }),
+            RequestEnvelope::QueueGetNext(QueueGetNextRequest {
+                team: team.clone(),
+                member: sender.clone(),
+            }),
+            RequestEnvelope::GraftReceiverRegister(GraftReceiverRegistration {
+                team: team.clone(),
+                agent: sender.clone(),
+                endpoint: "127.0.0.1:7001".parse().expect("endpoint"),
+                capability: LocalCapability::generate().expect("capability"),
+                owner_generation: generation.clone(),
+            }),
+            RequestEnvelope::GraftReceiverRefresh(GraftReceiverRefreshRequest {
+                team: team.clone(),
+                agent: sender.clone(),
+                owner_generation: generation.clone(),
+            }),
+            RequestEnvelope::GraftReceiverUnregister(GraftReceiverUnregistration {
+                team: team.clone(),
+                agent: sender.clone(),
+                owner_generation: generation,
+            }),
+            RequestEnvelope::GraftReceiverLookup {
+                team: team.clone(),
+                agent: sender.clone(),
+            },
+            RequestEnvelope::Clear(ClearQuery {
+                home_dir: test_atm_home_dir(),
+                current_dir: test_workspace_dir(),
+                caller_identity: sender.clone(),
+                caller_team: team.clone(),
+                older_than: None,
+                idle_only: false,
+                dry_run: true,
+            }),
+            RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: test_atm_home_dir(),
+                current_dir: test_workspace_dir(),
+                team_override: None,
+                all_teams: false,
+                caller_team: Some(team.clone()),
+                caller_identity: Some(sender.clone()),
+                peer_http_api_version: None,
+                peer_wire_security: None,
+            }),
+            RequestEnvelope::Search(Box::new(SearchRequest {
+                query: SearchInput::default(),
+                lifecycle: None,
+            })),
+            RequestEnvelope::ReloadRuntimeView,
+        ]
+    }
+
+    /// One value per 1.12 response variant.
+    fn response_samples_12() -> Vec<ResponseEnvelope> {
+        let team = TeamName::from_validated(TEST_TEAM);
+        let sender = AgentName::from_validated(TEST_SENDER);
+        let mut responses = send_and_control_responses_12(&team, &sender);
+        responses.extend(query_responses_12(&team, &sender));
+        responses
+    }
+
+    /// The 1.12 responses for send, task move, compatibility, heartbeat, queue and graft routes.
+    fn send_and_control_responses_12(team: &TeamName, sender: &AgentName) -> Vec<ResponseEnvelope> {
+        let message_id: AtmMessageId = "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().expect("message id");
+        vec![
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+                action: CommandAction::Send,
+                team: team.clone(),
+                agent: sender.clone(),
+                sender: sender.clone(),
+                outcome: SendCommandOutcome::Sent,
+                message_id,
+                requires_ack: false,
+                task_id: None,
+                task_complete: None,
+                already_closed: None,
+                summary: None,
+                message: None,
+                warnings: Vec::new(),
+                dry_run: false,
+            })),
+            ResponseEnvelope::TaskMove(TaskMoveOutcome {
+                task_id: "task-1".parse().expect("task id"),
+                assignee: sender.clone(),
+                from: QueuePosition::HEAD,
+                to: QueuePosition::HEAD,
+            }),
+            ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+                daemon_release: ReleaseVersion::current(),
+                daemon_schema_version: CLI_SCHEMA_VERSION,
+                daemon_http_api_version: HttpApiVersion::parse("1.12.0").expect("1.12.0"),
+            }),
+            ResponseEnvelope::Heartbeat(TeamMemberHeartbeatResponse {
+                team: team.clone(),
+                member: sender.clone(),
+                pid: 4242,
+                pid_changed: false,
+                state: RuntimeMemberState::Idle,
+                last_active_at: None,
+                session_id: None,
+            }),
+            ResponseEnvelope::QueueGetNext(QueueGetNextResponse {
+                messages: vec![QueuedNudgeMessage {
+                    kind: NudgeKind::Queue,
+                    msg_id: message_id,
+                    body: "queued".to_owned(),
+                }],
+            }),
+            ResponseEnvelope::GraftReceiverRegister,
+            ResponseEnvelope::GraftReceiverRefresh,
+            ResponseEnvelope::GraftReceiverUnregister,
+            ResponseEnvelope::GraftReceiverLookup(None),
+        ]
+    }
+
+    /// The 1.12 responses for list, peek, receive, clear, doctor, search, reload and error.
+    fn query_responses_12(team: &TeamName, sender: &AgentName) -> Vec<ResponseEnvelope> {
+        let read_outcome = || ReadOutcome {
+            action: CommandAction::Read,
+            team: team.clone(),
+            agent: sender.clone(),
+            selection_mode: ReadSelection::Unread,
+            mutation_applied: false,
+            count: 0,
+            message: None,
+            selected_message_id: None,
+            match_count: 0,
+            additional_match_count: 0,
+            bucket_counts: BucketCounts {
+                unread: 0,
+                pending_ack: 0,
+                history: 0,
+            },
+        };
+        vec![
+            ResponseEnvelope::List(ListOutcome {
+                action: CommandAction::List,
+                team: team.clone(),
+                agent: sender.clone(),
+                selection_mode: ReadSelection::Unread,
+                history_collapsed: false,
+                count: 0,
+                rows: Vec::new(),
+                bucket_counts: BucketCounts {
+                    unread: 0,
+                    pending_ack: 0,
+                    history: 0,
+                },
+                task_rows: Vec::new(),
+                task_event_rows: Vec::new(),
+                handoffs: Vec::new(),
+            }),
+            ResponseEnvelope::Peek(Box::new(read_outcome())),
+            ResponseEnvelope::Receive(Box::new(read_outcome())),
+            ResponseEnvelope::Clear(ClearOutcome {
+                action: CommandAction::Clear,
+                team: team.clone(),
+                agent: sender.clone(),
+                removed_total: 0,
+                remaining_total: 0,
+                removed_by_class: RemovedByClass {
+                    acknowledged: 0,
+                    read: 0,
+                },
+            }),
+            ResponseEnvelope::Doctor(Box::new(
+                serde_json::from_value(doctor_report_pre_1_13()).expect("1.13 decodes 1.12 report"),
+            )),
+            ResponseEnvelope::Search(Box::new(SearchResponse {
+                hits: Vec::new(),
+                aggregate: None,
+                next_cursor: None,
+                lifecycle: None,
+            })),
+            ResponseEnvelope::RuntimeViewReloaded,
+            ResponseEnvelope::Error(AtmError::validation("pinned 1.12 error")),
+        ]
+    }
+
+    #[test]
+    fn codec_preserves_protocol_1_12_0_fixtures() {
+        // Pinned from `RequestEnvelope` and `ResponseEnvelope` at HTTP API 1.12.0
+        // (git b2726d423^). A 1.12 reader decodes exactly these tags.
+        const REQUEST_VARIANTS_12: &[&str] = &[
+            "Write",
+            "TaskMove",
+            "CompatibilityPreflight",
+            "Heartbeat",
+            "QueueGetNext",
+            "GraftReceiverRegister",
+            "GraftReceiverRefresh",
+            "GraftReceiverUnregister",
+            "GraftReceiverLookup",
+            "List",
+            "Peek",
+            "Receive",
+            "Clear",
+            "Doctor",
+            "Search",
+            "ReloadRuntimeView",
+        ];
+        const RESPONSE_VARIANTS_12: &[&str] = &[
+            "Send",
+            "TaskMove",
+            "CompatibilityVerdict",
+            "Heartbeat",
+            "QueueGetNext",
+            "GraftReceiverRegister",
+            "GraftReceiverRefresh",
+            "GraftReceiverUnregister",
+            "GraftReceiverLookup",
+            "List",
+            "Peek",
+            "Receive",
+            "Clear",
+            "Doctor",
+            "Search",
+            "RuntimeViewReloaded",
+            "Error",
+        ];
+        // Added in 1.13.0. No 1.12 reader knows these tags.
+        const REQUEST_VARIANTS_13: &[&str] = &[
+            "HookRegister",
+            "HookDisable",
+            "HookList",
+            "CronStart",
+            "CronEnd",
+            "CronList",
+        ];
+        const RESPONSE_VARIANTS_13: &[&str] = &[
+            "HookRegistered",
+            "HookList",
+            "HookDisabled",
+            "HookActions",
+            "CronStarted",
+            "CronList",
+            "CronEnded",
+        ];
+        let wire_tag = |bytes: &[u8]| -> String {
+            match serde_json::from_slice::<serde_json::Value>(bytes).expect("message is json") {
+                serde_json::Value::String(tag) => tag,
+                serde_json::Value::Object(map) if map.len() == 1 => {
+                    map.keys().next().cloned().expect("one variant key")
+                }
+                other => panic!("unexpected message shape: {other}"),
+            }
+        };
+
+        // Every 1.12 request variant encodes under its pinned tag and decodes back to itself.
+        let mut request_tags = Vec::new();
+        for request in request_samples_12() {
+            let tag = request_tag(&request);
+            let bytes = serde_json::to_vec(&request).expect("encode 1.12 request");
+            let encoded_value: serde_json::Value =
+                serde_json::from_slice(&bytes).expect("encoded request is JSON");
+            assert_eq!(wire_tag(&bytes), tag);
+            assert!(
+                REQUEST_VARIANTS_12.contains(&tag),
+                "{tag} is not a 1.12 request"
+            );
+            let decoded_12: RequestEnvelope12 = serde_json::from_slice(&bytes)
+                .unwrap_or_else(|error| panic!("1.12 reader rejects {tag}: {error}"));
+            let consumed_value = serde_json::to_value(decoded_12)
+                .unwrap_or_else(|error| panic!("1.12 reader cannot re-encode {tag}: {error}"));
+            assert_eq!(
+                consumed_value, encoded_value,
+                "the frozen 1.12 reader must preserve the full {tag} payload"
+            );
+            let decoded_current: RequestEnvelope =
+                serde_json::from_slice(&bytes).expect("1.13 decodes the 1.12 request");
+            assert_eq!(request_tag(&decoded_current), tag);
+            request_tags.push(tag);
+        }
+        let mut pinned_requests = REQUEST_VARIANTS_12.to_vec();
+        request_tags.sort_unstable();
+        pinned_requests.sort_unstable();
+        assert_eq!(
+            request_tags, pinned_requests,
+            "every pinned 1.12 request is sampled"
+        );
+
+        // Every 1.12 response variant does the same.
+        let mut response_tags = Vec::new();
+        for response in response_samples_12() {
+            let tag = response_tag(&response);
+            let bytes = serde_json::to_vec(&response).expect("encode 1.12 response");
+            let encoded_value: serde_json::Value =
+                serde_json::from_slice(&bytes).expect("encoded response is JSON");
+            assert_eq!(wire_tag(&bytes), tag);
+            assert!(
+                RESPONSE_VARIANTS_12.contains(&tag),
+                "{tag} is not a 1.12 response"
+            );
+            let decoded_12: ResponseEnvelope12 = serde_json::from_slice(&bytes)
+                .unwrap_or_else(|error| panic!("1.12 reader rejects {tag}: {error}"));
+            let consumed_value = serde_json::to_value(decoded_12)
+                .unwrap_or_else(|error| panic!("1.12 reader cannot re-encode {tag}: {error}"));
+            assert_eq!(
+                consumed_value, encoded_value,
+                "the frozen 1.12 reader must preserve the full {tag} payload"
+            );
+            let decoded_current: ResponseEnvelope =
+                serde_json::from_slice(&bytes).expect("1.13 decodes the 1.12 response");
+            assert_eq!(response_tag(&decoded_current), tag);
+            response_tags.push(tag);
+        }
+        let mut pinned_responses = RESPONSE_VARIANTS_12.to_vec();
+        response_tags.sort_unstable();
+        pinned_responses.sort_unstable();
+        assert_eq!(
+            response_tags, pinned_responses,
+            "every pinned 1.12 response is sampled"
+        );
+
+        // Literal bytes pinned from the 1.12 externally tagged wire format.
+        // Decode these with the current enums so the test covers actual old
+        // consumer bytes as well as bytes emitted by today's types.
+        const LITERAL_REQUESTS_12: &[&[u8]] = &[
+            br#"{"QueueGetNext":{"team":"test-team","member":"test-agent"}}"#,
+            br#""ReloadRuntimeView""#,
+        ];
+        for fixture in LITERAL_REQUESTS_12 {
+            let expected: serde_json::Value =
+                serde_json::from_slice(fixture).expect("pinned request fixture is JSON");
+            let decoded: RequestEnvelope = serde_json::from_slice(fixture)
+                .expect("current request enum decodes pinned 1.12 bytes");
+            let reencoded = serde_json::to_value(decoded).expect("re-encode pinned request");
+            assert_eq!(reencoded, expected, "pinned request payload changed");
+        }
+
+        const LITERAL_RESPONSES_12: &[&[u8]] = &[
+            br#"{"Search":{"hits":[],"aggregate":null,"next_cursor":null,"lifecycle":null}}"#,
+            br#""RuntimeViewReloaded""#,
+        ];
+        for fixture in LITERAL_RESPONSES_12 {
+            let expected: serde_json::Value =
+                serde_json::from_slice(fixture).expect("pinned response fixture is JSON");
+            let decoded: ResponseEnvelope = serde_json::from_slice(fixture)
+                .expect("current response enum decodes pinned 1.12 bytes");
+            let reencoded = serde_json::to_value(decoded).expect("re-encode pinned response");
+            assert_eq!(reencoded, expected, "pinned response payload changed");
+        }
+
+        // A 1.13-only route is not a 1.12 request.
+        let hook_list = RequestEnvelope::HookList(crate::hook::HookListQuery {
+            caller_identity: AgentName::from_validated(TEST_SENDER),
+            caller_team: TeamName::from_validated(TEST_TEAM),
+            phase: None,
+        });
+        assert!(REQUEST_VARIANTS_13.contains(&request_tag(&hook_list)));
+        assert!(!REQUEST_VARIANTS_12.contains(&request_tag(&hook_list)));
+        for tag in RESPONSE_VARIANTS_13 {
+            assert!(
+                !RESPONSE_VARIANTS_12.contains(tag),
+                "{tag} is a 1.13 response"
+            );
+        }
+
+        // A frozen 1.12 DoctorReport decodes both the pre-1.13 fixture and a
+        // 1.13 report, preserving every 1.12 field while ignoring `hooks`.
+        let pre_13 = doctor_report_pre_1_13();
+        assert!(pre_13.get("hooks").is_none());
+        let from_pre_13 = assert_1_12_doctor_report_preserves_fields(pre_13);
+        assert_eq!(
+            from_pre_13.summary.status,
+            crate::doctor::DoctorStatus::Healthy
+        );
+        assert!(from_pre_13.recommendations.is_empty());
+
+        let entry = crate::doctor::hooks::HookDoctorEntry {
+            module_path: "/modules/gate.wasm".into(),
+            cwd: "/work".into(),
+            team: TeamName::from_validated(TEST_TEAM),
+            phase: crate::boundary::PhaseId::parse("bk").expect("phase"),
+            hooks: vec![crate::boundary::HookName::parse("task.assign").expect("hook")],
+            schedules: Vec::new(),
+            timeout_ms: 1_000,
+            success: Some(true),
+            message: Some("ok".to_owned()),
+            findings: Vec::new(),
+            error: None,
+        };
+        let mut with_hooks = doctor_report_pre_1_13();
+        with_hooks["hooks"] =
+            serde_json::json!([serde_json::to_value(&entry).expect("entry json")]);
+        let report: crate::doctor::DoctorReport =
+            serde_json::from_value(with_hooks.clone()).expect("1.13 decodes the 1.13 report");
+        assert_eq!(report.hooks.len(), 1);
+        let encoded = serde_json::to_value(&report).expect("encode 1.13 report");
+        assert!(encoded["hooks"].is_array());
+        let from_1_13 = assert_1_12_doctor_report_preserves_fields(with_hooks);
+        assert_eq!(
+            from_1_13.summary.status,
+            crate::doctor::DoctorStatus::Healthy
+        );
+        assert!(from_1_13.recommendations.is_empty());
     }
 
     #[test]

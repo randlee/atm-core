@@ -281,7 +281,7 @@ class ReleaseScriptTests(unittest.TestCase):
         script = SCRIPTS / "bootstrap_sc_compose.py"
         text = script.read_text(encoding="utf-8")
         probe = text[text.index("def installed_version"):text.index("def require_pinned_version")]
-        self.assertEqual(BOOTSTRAP.SC_COMPOSE_VERSION, "1.5.0")
+        self.assertEqual(BOOTSTRAP.SC_COMPOSE_VERSION, "1.7.0")
         self.assertIn('"venv"', text)
         self.assertIn('f"sc-compose=={SC_COMPOSE_VERSION}"', text)
         self.assertIn("from importlib.metadata import version", probe)
@@ -296,22 +296,22 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_bootstrap_rejects_every_non_pinned_wheel(self) -> None:
         with self.assertRaisesRegex(
             SystemExit,
-            r"found '1\.4\.1'; required exactly 1\.5\.0",
+            r"found '1\.4\.1'; required exactly 1\.7\.0",
         ):
             BOOTSTRAP.require_pinned_version("1.4.1")
         with self.assertRaisesRegex(
             SystemExit,
-            r"found '1\.5\.1'; required exactly 1\.5\.0",
+            r"found '1\.7\.1'; required exactly 1\.7\.0",
         ):
-            BOOTSTRAP.require_pinned_version("1.5.1")
+            BOOTSTRAP.require_pinned_version("1.7.1")
 
     def test_bootstrap_accepts_only_the_pinned_wheel(self) -> None:
-        BOOTSTRAP.require_pinned_version("1.5.0")
+        BOOTSTRAP.require_pinned_version("1.7.0")
 
     def test_bootstrap_replaces_any_existing_non_pinned_wheel(self) -> None:
         python = Path("/tmp/sc-compose-python")
         with (
-            patch.object(BOOTSTRAP, "installed_version", side_effect=["1.4.1", "1.5.0"]),
+            patch.object(BOOTSTRAP, "installed_version", side_effect=["1.4.1", "1.7.0"]),
             patch.object(BOOTSTRAP, "install_pinned_wheel") as install,
         ):
             BOOTSTRAP.provision_pinned_wheel(python)
@@ -320,7 +320,7 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_bootstrap_does_not_reinstall_the_exact_pinned_wheel(self) -> None:
         python = Path("/tmp/sc-compose-python")
         with (
-            patch.object(BOOTSTRAP, "installed_version", return_value="1.5.0"),
+            patch.object(BOOTSTRAP, "installed_version", return_value="1.7.0"),
             patch.object(BOOTSTRAP, "install_pinned_wheel") as install,
         ):
             BOOTSTRAP.provision_pinned_wheel(python)
@@ -349,13 +349,13 @@ class ReleaseScriptTests(unittest.TestCase):
         package_readme = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertEqual(bootstrap.count('SC_COMPOSE_VERSION = "'), 1)
-        self.assertIn('SC_COMPOSE_VERSION = "1.5.0"', bootstrap)
+        self.assertIn('SC_COMPOSE_VERSION = "1.7.0"', bootstrap)
         self.assertIn("bootstrap_sc_compose.py", ci)
         self.assertNotRegex(ci, r"sc-compose-[0-9]")
         self.assertIn('"$SC_COMPOSE_PYTHON"', ci)
         self.assertIn("bootstrap_sc_compose.py", root_readme)
         self.assertNotRegex(root_readme, r"sc-publish-[0-9]")
-        self.assertIn("exact pinned sc-compose 1.5.0 renderer wheel", package_readme)
+        self.assertIn("exact pinned sc-compose 1.7.0 renderer wheel", package_readme)
 
         for path in repository.rglob("*"):
             if not path.is_file() or ".git" in path.parts or "tests" in path.parts:

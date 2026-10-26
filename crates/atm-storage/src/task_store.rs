@@ -204,6 +204,23 @@ pub enum MessageWriteOrigin {
     #[default]
     Local,
     Peer,
+    /// Internal admission from one scheduler-minted cron generation.
+    ///
+    /// The opaque permit is verified in core/runtime before this fence is
+    /// constructed; rusqlite rechecks it inside the canonical writer
+    /// transaction before either insertion or duplicate success.
+    CronRun {
+        schedule_id: crate::CronScheduleId,
+        generation: crate::CronGeneration,
+    },
+}
+
+impl MessageWriteOrigin {
+    /// Cron messages retain every local task-ledger effect and rejection rule.
+    #[must_use]
+    pub const fn is_local(self) -> bool {
+        matches!(self, Self::Local | Self::CronRun { .. })
+    }
 }
 
 /// Read and audit capability for the task ledger, including the prompt-handoff
@@ -246,6 +263,26 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
             "task store does not implement ordered task movement",
         ))
     }
+    /// Moves a task under an internal writer provenance. Backends that do not
+    /// implement cron fencing retain ordinary local behavior and fail closed
+    /// for cron or peer provenance.
+    fn move_task_with_origin(
+        &self,
+        team: &TeamName,
+        task_id: &TaskId,
+        actor: &AgentName,
+        target: &MoveTarget,
+        at: IsoTimestamp,
+        origin: crate::MessageWriteOrigin,
+    ) -> Result<CommittedTaskWrite<TaskMoveRecord>, AtmError> {
+        if origin.is_local() && origin == crate::MessageWriteOrigin::Local {
+            self.move_task(team, task_id, actor, target, at)
+        } else {
+            Err(AtmError::validation(
+                "task store does not implement fenced cron task movement",
+            ))
+        }
+    }
     fn record_reminder(
         &self,
         member: &MemberKey,
@@ -254,8 +291,8 @@ pub trait TaskStore: sealed::Sealed + Send + Sync {
         outcome: ReminderOutcome,
     ) -> Result<TaskReminderRecord, AtmError>;
     /// Zeroes the reminder budget after the assignee is observed sustained
-    /// active. The budget then counts from the assignee's last observed
-    /// activity rather than from task assignment.
+    /// active. A recorded lead notification remains latched for the current
+    /// assignment, so activity cannot rearm a reported stall.
     fn reset_reminders(
         &self,
         member: &MemberKey,
@@ -662,7 +699,6 @@ impl TaskStore for DummyTaskStore {
                 AtmError::new(crate::AtmErrorCode::InternalError, "dummy task row missing")
             })?;
         row.reminder_count = 0;
-        row.lead_notified_count = 0;
         row.last_reminded_at = None;
         row.updated_at = at;
         Ok(TaskReminderRecord {

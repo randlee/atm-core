@@ -24,6 +24,15 @@ use crate::types::{AgentName, IsoTimestamp, MemberKey, OwnerGeneration, TaskId, 
 
 pub use crate::contract::DummyPendingNudgeStore;
 
+pub mod cron_schedule_store;
+pub mod cron_transition_store;
+pub mod hook_registration_store;
+pub mod tool_sender_registry;
+pub use cron_schedule_store::InMemoryCronScheduleStore;
+pub use cron_transition_store::{InMemoryCommittedCronNoticeRecord, InMemoryCronTransitionStore};
+pub use hook_registration_store::{ActiveAllPause, InMemoryHookRegistrationStore};
+pub use tool_sender_registry::InMemoryToolSenderRegistry;
+
 /// A `GraftReceiverEndpointStore` that accepts every write and reports no
 /// lease. Used by callers that need a wired store to compile against but
 /// exercise no graft-receiver behavior in the fixture under test.
@@ -479,6 +488,7 @@ pub struct InMemoryTaskLedgerReader {
     events: std::sync::Mutex<Vec<TaskEventRow>>,
     prompt_handoffs: std::sync::Mutex<Vec<PromptHandoff>>,
     delegate: Option<Arc<dyn AsyncTaskLedgerReader + Send + Sync>>,
+    load_task_hook: std::sync::Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     open_tasks_hook: std::sync::Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     refusal_error: std::sync::Mutex<Option<ReadLaneError>>,
     /// Counts calls to `list_task_events_for_tasks`, so a test can prove a
@@ -494,6 +504,7 @@ impl Default for InMemoryTaskLedgerReader {
             events: std::sync::Mutex::new(Vec::new()),
             prompt_handoffs: std::sync::Mutex::new(Vec::new()),
             delegate: None,
+            load_task_hook: std::sync::Mutex::new(None),
             open_tasks_hook: std::sync::Mutex::new(None),
             refusal_error: std::sync::Mutex::new(None),
             event_batch_calls: Arc::new(AtomicUsize::new(0)),
@@ -509,6 +520,7 @@ impl InMemoryTaskLedgerReader {
             events: std::sync::Mutex::new(events),
             prompt_handoffs: std::sync::Mutex::new(Vec::new()),
             delegate: None,
+            load_task_hook: std::sync::Mutex::new(None),
             open_tasks_hook: std::sync::Mutex::new(None),
             refusal_error: std::sync::Mutex::new(None),
             event_batch_calls: Arc::new(AtomicUsize::new(0)),
@@ -523,6 +535,21 @@ impl InMemoryTaskLedgerReader {
         Self {
             delegate: Some(inner),
             open_tasks_hook: std::sync::Mutex::new(Some(Box::new(hook))),
+            ..Self::default()
+        }
+    }
+
+    /// Runs a one-shot, controlled transition immediately before delegating
+    /// an async exact-task read. Useful for proving a stale task-pass snapshot
+    /// is revalidated without timing or scheduler assumptions.
+    #[must_use]
+    pub fn delegating_with_load_task_hook(
+        inner: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
+        hook: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            delegate: Some(inner),
+            load_task_hook: std::sync::Mutex::new(Some(Box::new(hook))),
             ..Self::default()
         }
     }
@@ -575,6 +602,14 @@ impl AsyncTaskLedgerReader for InMemoryTaskLedgerReader {
         task_id: TaskId,
         deadline: ReadDeadline,
     ) -> Result<Option<TaskRow>, ReadLaneError> {
+        if let Some(hook) = self
+            .load_task_hook
+            .lock()
+            .expect("in-memory load hook lock")
+            .take()
+        {
+            hook();
+        }
         if let Some(delegate) = &self.delegate {
             return delegate.load_task(team, task_id, deadline).await;
         }

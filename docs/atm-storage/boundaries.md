@@ -27,6 +27,48 @@ decode values.
 `MessageWriteOrigin::Peer` deliberately persists a peer receipt without
 changing the local task ledger.
 
+## HookRegistrationStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/hook-registration-store.toml](../../boundaries/atm-storage/hook-registration-store.toml)
+
+`HookRegistrationStore` is the sealed, backend-neutral hook registration
+capability (ADR-068 D1, ADR-069 D1). A row is keyed by `(team, phase, hook)`.
+Any number of phases may be active for one hook (D-5), `disable` clears
+`active` and sets `disabled_at` without deleting the row, and `active_all` is
+the daemon's snapshot source (D-8). The store reads no clock: every timestamp
+is an argument. `HookName` and `PhaseId` are validated at construction. The
+in-memory double lives in `crate::testing::hook_registration_store`; the
+rusqlite implementation lands in bk-6.
+
+## CronScheduleStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/cron-schedule-store.toml](../../boundaries/atm-storage/cron-schedule-store.toml)
+
+`CronScheduleStore` is the sealed, backend-neutral cron schedule capability
+(ADR-069 D4, D-i, D-9). A schedule is one row per `(team, phase, name)`. Ending
+a schedule keeps its id, and a restart updates the row in place with
+`generation + 1`. `record_run` and `record_stop` write only while the row is
+active and its generation matches, so a run that outlives its slot never writes
+the restarted row. Every stop condition is an explicit `StopCondition`: an
+instant or the phase's stop hook. The store reads no clock. The in-memory
+double lives in `crate::testing::cron_schedule_store`; the rusqlite
+implementation lands in bk-6.
+
+## CronTransitionStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/cron-transition-store.toml](../../boundaries/atm-storage/cron-transition-store.toml)
+
+`CronTransitionStore` owns the atomic transition-and-delivery-intent contract.
+`CronNoticeIntent` is an opaque, read-only projection: the only construction
+seam is a sealed issuer in `cron_transition_store` which consumes its private
+committed-row record. A scheduler, nudger, or caller cannot select the
+lifecycle recipient or body. `SCB-BOUNDARY-003` enforces that no other module
+implements that issuer. BK-10 owns the SQLite transition implementation;
+BK-9 adds no schema or persistence engine.
+
 ## TemplateCatalogStore
 
 Canonical machine-readable boundary source:

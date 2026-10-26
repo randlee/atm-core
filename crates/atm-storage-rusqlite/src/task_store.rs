@@ -67,8 +67,7 @@ CREATE INDEX IF NOT EXISTS prompt_handoffs_task ON prompt_handoffs(team, task_id
 "#;
 
 pub(crate) const TASK_INDEX_DDL: &str = r#"
-CREATE UNIQUE INDEX IF NOT EXISTS one_active_task_per_agent
-    ON tasks(team, assignee) WHERE state = 'active';
+DROP INDEX IF EXISTS one_active_task_per_agent;
 
 CREATE UNIQUE INDEX IF NOT EXISTS tasks_position_per_member
     ON tasks(team, assignee, position) WHERE state <> 'complete';
@@ -425,6 +424,30 @@ impl TaskStore for SqliteTaskStore {
         target: &MoveTarget,
         at: IsoTimestamp,
     ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::TaskMoveRecord>, AtmError> {
+        self.move_task_with_origin(
+            team,
+            task_id,
+            actor,
+            target,
+            at,
+            atm_storage::MessageWriteOrigin::Local,
+        )
+    }
+
+    fn move_task_with_origin(
+        &self,
+        team: &TeamName,
+        task_id: &TaskId,
+        actor: &AgentName,
+        target: &MoveTarget,
+        at: IsoTimestamp,
+        origin: atm_storage::MessageWriteOrigin,
+    ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::TaskMoveRecord>, AtmError> {
+        if matches!(origin, atm_storage::MessageWriteOrigin::Peer) {
+            return Err(AtmError::validation(
+                "peer provenance cannot move local tasks",
+            ));
+        }
         let committed = self
             .db
             .submit_committed_writer_op(crate::writer::WriteOp::TaskMove {
@@ -433,6 +456,7 @@ impl TaskStore for SqliteTaskStore {
                 actor: actor.clone(),
                 target: target.clone(),
                 at,
+                provenance: origin,
             })?;
         let operation = committed.operation.and_then(|result| match result {
             crate::writer::WriteOpResult::TaskMoved(outcome) => Ok(outcome),
@@ -499,7 +523,7 @@ impl TaskStore for SqliteTaskStore {
                 .ok_or_else(|| AtmError::validation("cannot reset reminders for a missing task"))?;
             connection
                 .execute(
-                    "UPDATE tasks SET reminder_count = 0, lead_notified_count = 0,
+                    "UPDATE tasks SET reminder_count = 0,
                      last_reminded_at = NULL, updated_at = ?4
                      WHERE team = ?1 AND task_id = ?2 AND assignee = ?3",
                     params![

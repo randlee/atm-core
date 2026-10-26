@@ -1,0 +1,144 @@
+{
+ "anchor_id": "ANC-068",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "cb104d17be029e1e42c49099320b8aaec83ede25bb2cd864acc3e88264801452",
+ "anchor_scope": "sanity-stack input timeout_s (default 60, retry 5 s), its lock_timeout result, dev-sanity's handling, the stack bead lease",
+ "anchor_statement": "sanity-stack must take a timeout for the stack bead claim, and on expiry must return the holder's identity, claim time and active task; dev-sanity must then keep the sanity task active, ask the holder once, continue other sanity work and retry; neither may refuse the task, fail the dev or escalate to a person.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-068-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "sanity-stack returns lock_timeout {holder: team-lead, since: ..., task: ...} after 60 s; dev-sanity notes STACK.LOCK_WAIT, messages team-lead once, runs its other sanity checks, retries.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-068-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "dev-sanity closes the sanity task refused because the lock was busy, or sends the dev a FAIL, or sends the user a message asking who holds the lock.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-068-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase of every clause.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "sanity-stack accepts a timeout for the stack bead claim; if the claim is not obtained in time it returns lock_timeout with the holder, the claim time and the holder's active task. dev-sanity then keeps the sanity task active, messages the holder once, carries on with its other sanity work and retries; nobody refuses the task, fails the dev or asks a person.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-068-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope claim, silent about the timeout path.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "sanity-stack claims the stack bead before appending a layer and releases it afterwards.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_no_timeout",
+   "item_id": "ANC-068-probe-conflict_no_timeout",
+   "probe": "conflict",
+   "rationale": "A claim timeout is required.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "sanity-stack waits on the stack bead claim with no time limit until the bead is free.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_human",
+   "item_id": "ANC-068-probe-conflict_human",
+   "probe": "conflict",
+   "rationale": "Escalation to a person is ruled out.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "On lock_timeout dev-sanity messages Rand to ask who holds the stack lock.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-068-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Every time atm-bd prints for a person is rendered in 24-hour local time.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

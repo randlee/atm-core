@@ -53,10 +53,7 @@ bead and blocks every dev bead that requires it. Its assignment is
 1. The dev agent completes its dev task and closes it; the task assigner receives the
    dev-task completion.
 2. Lead assigns the sanity check.
-3. If sanity check fails, the sanity member files every reported undone
-   deliverable (never lint) as a child finding bead of the checked bead. It adds `blocks` edges only between those new beads, where one fix depends on another. It then reopens the checked
-   bead and leaves the sanity check open, re-blocked by its edge. Lead reviews
-   those child findings and gives the dev agent a dev-fix assignment.
+3. If sanity check fails, the close hook reopens the checked bead and sends the dev its undone deliverables on the existing task. The sanity bead stays open and is re-blocked; no finding bead or new dev assignment is created.
 
 4. Steps 1 to 3 repeat until the task is done.
 
@@ -148,10 +145,15 @@ Dev and fix work runs in parallel and is stacked when it completes: the dev
 completes the work, rebases it onto the current top of its stack, and the
 stack writer (lead) links it. Layers therefore stack in the order they
 complete, and lead records each bead's actual `layer` when it
-is linked; `pr_target` stays the planned lower bound until a dev-fix records the sprint's first layer's branch there. The mechanics are the
+is linked; `pr_target` stays the planned lower bound after the cut. The mechanics are the
 `sc-gh-stack` skill (`/sc-gh-stack` in Claude): its `workflow.md`,
 `recipe-cut-layer.md` and `recipe-link.md` are plain markdown any agent can
 follow.
+
+## Stack Bead
+
+The phase stack bead is the ordered layer ledger and lock. Its `layers` list is the only record of layer order; the last entry is the top. Before a stack write, claim it with `bd update <stack bead> --claim`; keep its 900-second lease alive with `bd heartbeat <stack bead>`, and release it using `bd update <stack bead> --if-assignee "$ATM_IDENTITY" --status open --assignee ""`. Recover an abandoned claim only with `bd reclaim --id <stack bead> --older-than 1800s`, then re-derive `layers` from the hosted stack if the ledger disagrees. Unscoped reclaim and event-age lease expiry are forbidden.
+A claim that is not granted within the timeout (60 seconds by default, `--timeout` on sanity-stack) returns the holder's identity, claim time and active task. The waiter keeps its task active, asks the holder once, continues other work and retries; it never refuses the task, fails the dev or escalates to a person.
 
 ## Lifecycle
 
@@ -163,8 +165,8 @@ refusal) is defined once, in the `atm-bd-orchestration` skill ("Dispatch").
 
 1. `bd ready -l phase-<x> -n 0` lists the dev, sanity check, QA and finding beads
    whose blockers are closed, highest priority first.
-2. Assign each ready bead to the agent the lead picks with the matching assignment
-   template, using the bead id as `task_id`.
+2. Assign each ready bead to the agent the phase lead picks with the matching
+   purpose from `.atm-bd/phase-<x>.toml` `[templates]`, using the bead id as `task_id`.
 3. When a task closes, its bead closes with it, except after a failed sanity check or plan review, which leaves the bead open. Run `bd sync`, then `bd ready` again. After a
    green sanity check or a triaged QA, create and wire the QA or finding beads
    first, then run `bd ready`.

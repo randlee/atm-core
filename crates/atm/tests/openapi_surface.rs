@@ -172,6 +172,7 @@ fn documented_route_surface(document: &Value) -> BTreeSet<(String, String)> {
 
     object(&document["paths"])
         .iter()
+        .filter(|(_, item)| item["x-atm-contract-status"] != "planned")
         .flat_map(|(path, item)| {
             OPENAPI_HTTP_METHODS.iter().filter_map(move |method| {
                 item.get(*method)
@@ -424,4 +425,41 @@ fn documented_message_bodies_match_serialized_outcomes() {
     assert_required_properties_are_serialized(&document, "/messages", "get", &list_json);
     assert_required_properties_are_serialized(&document, "/messages/inspect", "post", &read_json);
     assert_required_properties_are_serialized(&document, "/messages/read", "post", &read_json);
+}
+
+#[test]
+fn documented_hook_actions_header_and_timeout_bounds_match_the_runtime() {
+    let source = std::fs::read_to_string(document_path()).expect("read OpenAPI contract");
+    let document: Value =
+        noyalib::compat::serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
+
+    // A hooked task command answers 200 with HookActions and X-ATM-Hook-Actions, and list and
+    // events are served by GET /messages, so both operations must document the header.
+    for (path, method) in [("/messages", "get"), ("/tasks/move", "post")] {
+        let pointer = format!(
+            "/paths/{}/{method}/responses/200/headers/X-ATM-Hook-Actions",
+            path.replace('/', "~1")
+        );
+        assert!(
+            document.pointer(&pointer).is_some(),
+            "{method} {path} must document the 200 X-ATM-Hook-Actions header"
+        );
+    }
+
+    let hook_maximum = document
+        .pointer("/components/schemas/HookRegisterRequest/properties/timeout_ms/maximum")
+        .and_then(Value::as_u64);
+    assert_eq!(
+        hook_maximum,
+        Some(u64::from(atm_core::boundary::HOOK_TIMEOUT_MAX_MS)),
+        "HookRegisterRequest.timeout_ms must document the runtime hook bound"
+    );
+    let cron_maximum = document
+        .pointer("/components/schemas/CronStartRequest/properties/timeout_ms/maximum")
+        .and_then(Value::as_u64);
+    assert_eq!(
+        cron_maximum,
+        Some(u64::from(atm_core::boundary::CRON_TIMEOUT_MAX_MS)),
+        "CronStartRequest.timeout_ms must document the runtime cron bound"
+    );
 }

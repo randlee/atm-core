@@ -5,7 +5,7 @@ title: Task State Machine
 # ADR-062 — Task State Machine
 
 Date: 2026-09-04
-Amended: 2026-09-11 (Phase BA); 2026-09-26 (#1598)
+Amended: 2026-09-11 (Phase BA); 2026-09-26 (#1598); 2026-10-22 (#2152)
 
 ## Phase AX decision (as built; superseded where marked)
 
@@ -65,7 +65,7 @@ BA.3): the reminder cycle runs regardless of delivery backend; a task reminder
 is emitted only when the assignee is Idle with no pending mail, at most once
 per `TASK_REMINDER_INTERVAL_MS`;
 the assignee's runtime state selects one of three dispositions (BA.3 `dispose`):
-`Idle` → nudge the head task; `Active` →
+`Idle` → one nudge per member listing every open task (BK.8); `Active` →
 hold, no reminder; `Blocked`/`Offline` → escalate once per episode to the lead
 and every configured recipient with
 zero task reminders and no reminder outcome recorded. Escalation for a stalled
@@ -73,7 +73,7 @@ zero task reminders and no reminder outcome recorded. Escalation for a stalled
 `TASK_STALLED_REMINDER_THRESHOLD` reminders and then holds until the task
 changes state or is reassigned/reopened.
 
-Amendment (2026-09-26, #1598): a task reminder is emitted every
+*Superseded (2026-10-22, #2152):* a task reminder is emitted every
 `TASK_REMINDER_INTERVAL_MS` while the assignee is Idle with an open task,
 with no cap — the reminder cycle no longer holds "stalled" forever after the
 first escalation. The lead and configured escalation recipients are notified
@@ -91,7 +91,7 @@ audited as `LeadNotified` only when the lead write succeeds. A missing or
 ambiguous lead suppresses that audit event without suppressing configured
 escalation-recipient fan-out.
 
-The every-tenth-reminder escalation boundary marked *Superseded (BA)* above
+*Superseded (2026-10-22, #2152):* the every-tenth-reminder escalation boundary marked *Superseded (BA)* above
 is reinstated by the 2026-09-26 amendment: escalation recurs at every
 budget of `TASK_STALLED_REMINDER_THRESHOLD` reminders rather than firing
 once.
@@ -122,7 +122,7 @@ event, is never gated on task state, and never transitions a task.
 | Rule | Form |
 | --- | --- |
 | One row per task | `PRIMARY KEY (team, task_id)`; `assignee` is a column, not identity |
-| At most one active task per agent | `CREATE UNIQUE INDEX one_active_task_per_agent ON tasks(team, assignee) WHERE state = 'active'`; any number of `assigned` rows per agent |
+| At most `max_tasks` active tasks per agent | roster `metadata_json` `max_tasks` (default 1), checked by the writer at start; no unique index (BK.8, see the 2026-10-20 amendment); any number of `assigned` rows per agent |
 | Queue order | `ORDER BY position, assigned_at, task_id`; `position` is a separate column, default end of queue; `assigned_at` records the current assignment and is reset by reassign/reopen, never by move |
 | Close outcome | typed `completed \| refused \| cancelled`; free text is a human-facing reason only |
 | Reassignment | `assign` on an existing open id updates assignee/state/placement in place and appends `reassigned`; a closed id is reopened in place with `reopened` |
@@ -176,15 +176,74 @@ ADR-054 capability. `task_events.reminded` remains the task-side counter;
 
 | Condition | Action |
 | --- | --- |
-| assignee `Idle` with an incomplete task | remind, at most once per `TASK_REMINDER_INTERVAL_MS` (60 s) per member; queued messages are discharged first (ADR-054, Phase BA amendment) |
+| assignee `Idle` with an `assigned` task | remind, at most once per `TASK_REMINDER_INTERVAL_MS` (60 s) per member and up to the stall threshold; queued messages are discharged first (ADR-054, Phase BA amendment) |
+| assignee `Idle` with an `active` task | hold the task reminder; the durable `Started` transition takes precedence over roster `Idle` |
 | assignee `Active` | none; never divert |
 | assignee `Blocked` or `Offline` | no reminder; one escalation message per episode (first accepted observation of the state until the first accepted observation of another state), no cooldown, no re-notification |
 | `reminder_count` reaches `TASK_STALLED_REMINDER_THRESHOLD` (10) | *Superseded (2026-09-26, #1598):* escalate once; reminders stop until the task changes state (start or close) or is reassigned or reopened; a change in the assignee's runtime state alone does not resume nudging. |
-| `reminder_count` reaches a `TASK_STALLED_REMINDER_THRESHOLD` budget boundary (10, 20, 30, ...) | escalate the lead and configured escalation recipients again; reminders to the assignee continue in between escalations, with no cap and no terminal hold. Only sustained assignee activity — `Active` observed continuously for at least one `TASK_REMINDER_INTERVAL_MS` — resets `reminder_count` and `lead_notified_count`; a shorter burst of activity does not. |
+| *Superseded (2026-10-22, #2152):* `reminder_count` reaches a `TASK_STALLED_REMINDER_THRESHOLD` budget boundary (10, 20, 30, ...) | Escalate repeatedly; reminders continue with no cap. |
+| `assigned` task reaches `TASK_STALLED_REMINDER_THRESHOLD` (10), #2152 | Escalate once, then hold for that assignment; a recorded lead notification stays latched across runtime activity. |
 
-Task selection for an idle member: the active task, else the first `assigned`
-task in queue order. A `reminded` event is recorded only against the task the
-prompt was rendered for.
+### Active-task reminder correction (2026-10-22, #2152, normative)
+
+The task ledger's `Started` transition is authoritative progress. For a task
+whose durable state is `active`, an `Idle` roster observation does not prompt
+another task reminder or stalled-task notification. A Codex worker can report
+roster `Idle` while doing work; it cannot override the task's durable state.
+An explicit `Blocked` or `Offline` observation still triggers the existing
+once-per-episode escalation, including for an active task. A continuously
+`Active` runtime observation for a full reminder interval still resets any
+reminders accrued before task start.
+
+For a task still `assigned`, at most `TASK_STALLED_REMINDER_THRESHOLD` reminder
+prompts are emitted. Reaching the threshold sends one lead notification and
+then holds reminders and stalled notifications for that assignment. If the
+notification write fails, the same threshold remains eligible for retry until
+it is recorded. A task start, close, reassignment, or reopen changes the
+disposition; reassignment and reopen reset the reminder and lead counters.
+Sustained runtime activity can reset the reminder counter, but it preserves
+the lead-notified latch for the same assignment; it cannot rearm that task's
+stall escalation. Only an assignment state transition can rearm it.
+Before sending a stalled-task escalation, the pump reads the exact current
+task again and verifies that it is still the same `assigned` episode at the
+threshold. An unavailable read holds the escalation. This closes stale
+task-pass observations when `Started` commits during the subsequent lookup;
+the read and outbound mail are not one transaction, so an intervening start
+after the read remains a separate admission-boundary concern.
+This bounds notifications per task state and removes repeated decile alerts
+that were observed during live Codex work. The ledger state does not establish
+that an active worker is making continuous progress; liveness of an active
+worker is represented by explicit `Blocked`/`Offline` observations or a
+separate task progress signal, not inferred from roster `Idle`.
+
+Task selection for an idle member: the task at the head of the member's queue
+(started tasks first, then unstarted tasks). A `reminded` event is recorded
+only against the task the prompt was rendered for.
+
+## Task limit and per-member nudge (2026-10-20 amendment, BK.8, normative)
+
+Issue #1932, with Rand's agreed scope (2026-10-20):
+
+1. `max_tasks` lives only in roster member `metadata_json`; no typed HTTP API
+   field (no `HTTP_API_VERSION` bump), no doctor change.
+   The separate `1.14.0` bump records `ATM_TASK_MAX_ACTIVE_REACHED`; it does
+   not add an HTTP representation for the `max_tasks` setting.
+2. Nudge, reminder and stall/escalation state are per member: one nudge lists
+   all of the member's open tasks.
+3. Ordering: started tasks sort ahead of all unstarted tasks; each group keeps
+   its order. Starting a task moves it into the started group. No other
+   placement rules.
+4. Rollback: drop `one_active_task_per_agent`; no downgrade compatibility.
+   Release note: before running an older daemon, close each member's extra
+   active tasks.
+5. `atm teams update-member --max-tasks <N>` (optional). Default 1 when unset;
+   `0` is rejected with a validation error (minimum 1).
+
+ADR-061 classification: dropping the unique index leaves every older statement
+valid against the new database. The previous release binary re-creates
+`one_active_task_per_agent` on open and fails while a member has two active
+tasks; Rand approved this with no downgrade compatibility (item 4). No
+`STORAGE_SCHEMA_VERSION` is added, for the reason in ADR-061 D6 Phase BB.1.
 
 ## History view (2026-09-26 amendment, issue #1599)
 

@@ -815,6 +815,26 @@ mod tests {
     /// this module that touches the process-global bridge/timeline statics.
     #[test]
     fn concurrent_attach_timeline_has_one_writer_and_keeps_it_on_reattach() {
+        const CHILD_MARKER: &str = "ATM_TIMELINE_CONCURRENT_ATTACH_TEST_CHILD";
+        if std::env::var_os(CHILD_MARKER).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+                .args([
+                    "--exact",
+                    "diagnostic_timeline::tests::concurrent_attach_timeline_has_one_writer_and_keeps_it_on_reattach",
+                    "--nocapture",
+                ])
+                .env(CHILD_MARKER, "1")
+                .output()
+                .expect("isolated timeline test finishes");
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                output.status.success() && stdout.contains("1 passed; 0 failed"),
+                "isolated timeline assertions failed: {}\n{stdout}\n{stderr}",
+                output.status
+            );
+            return;
+        }
         let log_dir = tempfile::tempdir().expect("temp log dir");
         let logger = std::sync::Arc::new(
             atm_observability::build_retained_logger(
@@ -829,14 +849,23 @@ mod tests {
         super::register_bridge(std::sync::Arc::clone(&bridge));
 
         const CONTENDERS: usize = 8;
-        let barrier = std::sync::Arc::new(std::sync::Barrier::new(CONTENDERS));
-        let contenders = (0..CONTENDERS)
+        // SQLite initializes process-global state while opening a connection. Prepare every
+        // independent backend before creating the attach race so this regression controls only
+        // the ownership transition it is intended to prove.
+        let backends = (0..CONTENDERS)
             .map(|index| {
+                atm_storage_rusqlite::SqliteStorageBackend::new(
+                    log_dir.path().join(format!("contender-{index}.db")),
+                )
+                .expect("contender backend opens")
+            })
+            .collect::<Vec<_>>();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(CONTENDERS));
+        let contenders = backends
+            .into_iter()
+            .map(|backend| {
                 let barrier = std::sync::Arc::clone(&barrier);
-                let database_path = log_dir.path().join(format!("contender-{index}.db"));
                 std::thread::spawn(move || {
-                    let backend = atm_storage_rusqlite::SqliteStorageBackend::new(database_path)
-                        .expect("contender backend opens");
                     barrier.wait();
                     super::try_attach_timeline(backend.diagnostic_timeline())
                 })

@@ -1,0 +1,31 @@
+{
+ "questions": {
+  "addressed": {
+   "criteria": {
+    "no": "The item is silent about the directive, names the subject only, or plans a different approach.",
+    "unclear": "The item refers to the directive's content in words too vague to tell whether it is planned.",
+    "yes": "The item states it. The item says FAILs are counted in metadata.sanity_round on the sanity bead and that reaching max_sanity_rounds from the repository configuration (default 5) escalates to the lead instead of reopening."
+   },
+   "instructions": "Read `item.text` for this directive from `anchor.statement`: the sanity close hook counts FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), escalates to the phase lead instead of reopening the checked bead. Answer yes only when the item itself states that content. Answer no when the item is silent, mentions the subject without that content, or plans a different approach (for example it keeps the count somewhere else, uses a fixed cap, or never escalates). Do not judge conflict.",
+   "type": "choice"
+  },
+  "contradicted": {
+   "criteria": {
+    "no": "The item plans none of the numbered cases; it may be silent about the directive.",
+    "unclear": "The item may describe one of the numbered cases but its wording does not settle it.",
+    "yes": "The item plans one of the numbered cases."
+   },
+   "instructions": "`anchor.statement` says the sanity close hook counts FAIL rounds per sanity bead in metadata.sanity_round and, when the count reaches max_sanity_rounds from the repository configuration (default 5 when unset), escalates to the phase lead instead of reopening the checked bead. Does `item.text` plan any of these: (1) keeping the FAIL count anywhere other than metadata.sanity_round on the sanity bead, such as a local file or the dev bead; (2) a cap fixed in the script with no repository setting, or a default other than 5; (3) reopening the checked bead on every FAIL with no escalation; (4) reopening instead of escalating once the cap is reached? Silence is never a conflict. Also not a conflict: silence about counting; sending the sanity-fail template on a FAIL below the cap. Judge conflict only.",
+   "type": "choice"
+  },
+  "relevant": {
+   "criteria": {
+    "no": "No when the item works on something else, such as console display, logging or release packaging, and does not touch counting sanity FAIL rounds in metadata.sanity_round, the max_sanity_rounds setting, and escalation to the phase lead at the cap.",
+    "unclear": "The item text is too vague to tell whether it touches the anchor's subject.",
+    "yes": "Yes when the item plans or changes the sanity close hook's FAIL handling, the FAIL round count, max_sanity_rounds, or escalation at the cap."
+   },
+   "instructions": "Does `item.text` touch counting sanity FAIL rounds in metadata.sanity_round, the max_sanity_rounds setting, and escalation to the phase lead at the cap? Answer about subject matter only; whether the item follows `anchor.statement` is judged elsewhere.",
+   "type": "choice"
+  }
+ }
+}

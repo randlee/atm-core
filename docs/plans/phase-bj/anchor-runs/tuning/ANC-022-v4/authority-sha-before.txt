@@ -1,0 +1,10 @@
+2759569f2dae4040388c98c43fea1b72549c41569e9521b59d33e7354fe2f544  docs/plans/phase-bj/anchors.json
+df1c69097919d684a5cca1a9cce41097144d9755ae36b6fcfe8b39101d3020a6  docs/plans/phase-bj/anchors.md
+19ed8747a9566a994c2a27dd405eea6579d3e4eda5136896d2eb1f0ccdc001f8  docs/plans/phase-bj/intent.md
+98cf31a363d3bad0d5ceb99ba3abaae728de976f55a418cabee2ff9f4cd6db3f  docs/plans/phase-bj/beads/atm-bj-1.vars.json
+ca4a8c981fb4d95c22781ee6615118ed98b015328fa143e83339cd2c834a46d0  docs/plans/phase-bj/beads/atm-bj-2.vars.json
+4934c058c558037c03ded4ad8638c706dee0424c689389e8020adf034b58d6e7  docs/plans/phase-bj/beads/atm-bj-3.vars.json
+b2cc039b556536a95564c54e2e5eab8d467fbb1b494728307824aec45f68b6e8  docs/plans/phase-bj/beads/atm-bj-4.vars.json
+dab208125f1e198a58c1970af1e327f3b6a7c77cbf8d46a5972012c9d09b210c  docs/plans/phase-bj/beads/atm-bj-5.vars.json
+ba7b81d7691665696918f264f45de2c91ed7363fc8de529cc4c3d625b9830dcb  docs/plans/phase-bj/beads/atm-phase-bj.vars.json
+39008e915a5af91ce6d9c9b74b5b6901b7940aff7572dd32638358b5bb26bee2  .claude/skills/plan-anchoring/assets/questions/plan.json

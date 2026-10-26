@@ -474,6 +474,110 @@ surface.
 - `ATM_DAEMON_AUTO_START_FAILED`
 - `ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED`
 
+### 5.11 Task Hooks And Cron
+
+- `ATM_HOOK_MODULE_INVALID`
+- `ATM_CRON_EXPR_INVALID`
+- `ATM_HOOK_REFUSED`
+- `ATM_HOOK_EXIT`
+- `ATM_HOOK_TIMEOUT`
+- `ATM_HOOK_MALFORMED`
+
+#### 5.11.1 `ATM_HOOK_MODULE_INVALID`
+
+- code: `ATM_HOOK_MODULE_INVALID`
+- display prefix: `HOOK.MODULE_INVALID:`
+- description: a hook registration names a module path or hook name that the
+  register route does not accept, or a task hook's timeout exceeds
+  `HOOK_TIMEOUT_MAX_MS`
+- HTTP status: `400 Bad Request` (`is_validation` is true)
+- context:
+  - raised by `HookName::parse_task_hook` and the register route before any row is written
+  - recovery names the supported task hook names and the timeout cap
+  - the CLI exit code is `3`
+
+#### 5.11.2 `ATM_CRON_EXPR_INVALID`
+
+- code: `ATM_CRON_EXPR_INVALID`
+- display prefix: `CRON.EXPR_INVALID:`
+- description: a cron expression or `--until` time is not a valid schedule, or
+  the `--until` time is not later than now
+- HTTP status: `400 Bad Request` (`is_validation` is true)
+- context:
+  - raised by `AtmCron::start` before any schedule row is written
+  - the CLI exit code is `3`
+
+#### 5.11.3 `ATM_HOOK_REFUSED`
+
+- code: `ATM_HOOK_REFUSED`
+- display prefix: none; the hook's own message is returned verbatim
+- description: a hook replied `{"result": "refused", "message": ...}` and the
+  chain stopped
+- HTTP status: `400 Bad Request` (`is_validation` is true)
+- context:
+  - the message is returned to the caller and logged; nothing is written
+  - the error has empty catalog guidance, so no `Recovery:` line is appended
+  - the CLI exit code is `3`
+
+#### 5.11.4 `ATM_HOOK_EXIT`
+
+- code: `ATM_HOOK_EXIT`
+- display prefix: `HOOK.EXIT:`
+- description: a hook process could not run, was terminated by a signal,
+  exited non-zero, panicked in the runner, or lacked a required interpreter
+- HTTP status: `503 Service Unavailable` (`is_validation` is false)
+- context:
+  - the stderr tail is included for a non-zero exit
+  - the CLI exit code is `1`
+
+#### 5.11.5 `ATM_HOOK_TIMEOUT`
+
+- code: `ATM_HOOK_TIMEOUT`
+- display prefix: `HOOK.TIMEOUT:`
+- description: a hook did not reply within its deadline, or the request budget
+  was exhausted before the hook ran
+- HTTP status: `503 Service Unavailable` (`is_validation` is false)
+- context:
+  - the detail names the phase and the budget that ran out
+  - the CLI exit code is `1`
+
+#### 5.11.6 `ATM_HOOK_MALFORMED`
+
+- code: `ATM_HOOK_MALFORMED`
+- display prefix: `HOOK.MALFORMED:`
+- description: a hook reply does not match the reply contract
+- HTTP status: `503 Service Unavailable` (`is_validation` is false)
+- context:
+  - the reply is rejected before any action runs
+  - the CLI exit code is `1`
+
+### 5.12 Authenticated Tool Sender Admission
+
+Tool sender registry and signed-proof failures use distinct codes so callers
+can distinguish a rejected claim, a stale credential, and an operation whose
+durable outcome is unknown. Registry adapters return these codes through the
+shared `AtmError` contract and include bounded detail; they do not replace them
+with generic validation or storage errors.
+
+| Code | Meaning | Recovery |
+|---|---|---|
+| `ATM_TOOL_SENDER_UNREGISTERED` | No active registration exists for the requested plug-in sender. | Register it through an authenticated installer, then retry. |
+| `ATM_TOOL_SENDER_RESERVED` | The request attempted to register or claim a daemon-reserved virtual sender. | Use the daemon-owned virtual sender flow. |
+| `ATM_TOOL_SENDER_UNAUTHORIZED` | The sender or installer is not allowed to perform this operation. | Use an authorized sender or update the administrator-controlled allowlist. |
+| `ATM_TOOL_KEY_UNKNOWN` | The key id is absent from the protected trust root or active registration. | Enroll the key or use the active registered key id. |
+| `ATM_TOOL_KEY_REVOKED` | The signing key has been revoked. | Enroll and activate a replacement through the administrator-controlled rotation flow. |
+| `ATM_TOOL_NONCE_REPLAY` | A consumed nonce was presented with a different signed operation. | Query the exact prior receipt or use a fresh nonce for a new operation. |
+| `ATM_TOOL_HOST_MISMATCH` | The proof host does not match the sender's authorized host binding. | Use the authorized host or update the signed host allowlist. |
+| `ATM_TOOL_GENERATION_CONFLICT` | The request generation is stale or differs from the active registration. | Read the active generation and create a newly signed request. |
+| `ATM_TOOL_SIGNATURE_INVALID` | The signature is malformed or does not authenticate the canonical fields. | Canonicalize the fields and sign again with the enrolled private key. |
+| `ATM_TOOL_REQUEST_EXPIRED` | The signed installer request is outside its validity interval. | Issue and sign a request with a current validity interval. |
+| `ATM_TOOL_COMMIT_UNCERTAIN` | The registry cannot determine whether the durable operation committed. | Reconcile by the original nonce and digest before retrying; do not submit a new operation blindly. |
+
+An exact replay of the same signed operation may return its original receipt;
+`ATM_TOOL_NONCE_REPLAY` is reserved for reuse with different operation bytes.
+`ATM_TOOL_COMMIT_UNCERTAIN` is not proof of rollback. It must not be treated as
+a safe retry signal until reconciliation determines the original outcome.
+
 ## 6. Mapping Rules
 
 Required mapping rules:
@@ -655,6 +759,23 @@ Classification rules:
 | `ATM_GRAFT_RECEIVER_ALREADY_ACTIVE` | `operator_actionable` |
 | `ATM_POST_SEND_ADVISORY_DELIVERY_FAILED` | `retryable` |
 | `ATM_HELP_TOPIC_NOT_FOUND` | `operator_actionable` |
+| `ATM_HOOK_MODULE_INVALID` | `operator_actionable` |
+| `ATM_CRON_EXPR_INVALID` | `operator_actionable` |
+| `ATM_HOOK_REFUSED` | `operator_actionable` |
+| `ATM_HOOK_EXIT` | `retryable` |
+| `ATM_HOOK_TIMEOUT` | `retryable` |
+| `ATM_HOOK_MALFORMED` | `retryable` |
+| `ATM_TOOL_SENDER_UNREGISTERED` | `operator_actionable` |
+| `ATM_TOOL_SENDER_RESERVED` | `fail_closed` |
+| `ATM_TOOL_SENDER_UNAUTHORIZED` | `fail_closed` |
+| `ATM_TOOL_KEY_UNKNOWN` | `operator_actionable` |
+| `ATM_TOOL_KEY_REVOKED` | `fail_closed` |
+| `ATM_TOOL_NONCE_REPLAY` | `fail_closed` |
+| `ATM_TOOL_HOST_MISMATCH` | `fail_closed` |
+| `ATM_TOOL_GENERATION_CONFLICT` | `operator_actionable` |
+| `ATM_TOOL_SIGNATURE_INVALID` | `operator_actionable` |
+| `ATM_TOOL_REQUEST_EXPIRED` | `operator_actionable` |
+| `ATM_TOOL_COMMIT_UNCERTAIN` | `fail_closed` |
 
 ## 8. Evolution Rules
 

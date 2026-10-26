@@ -1,0 +1,32 @@
+{
+ "digest": "b2a1f73bcfb3ea27dda58605a24e82c90b7e29a33cc409c68fae08d37bda84f5",
+ "questions": {
+  "relevant": {
+   "type": "choice",
+   "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. Do not judge whether the item obeys `anchor.statement`.",
+   "criteria": {
+    "yes": "The item touches a command or entry-point name, an install script, installer or install path, or a script, document, test or workflow that starts, runs or describes the console.",
+    "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule, and does not run or describe the console.",
+    "unclear": "The item text is too vague to tell whether it touches any of the three."
+   }
+  },
+  "addressed": {
+   "type": "choice",
+   "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+   "criteria": {
+    "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point.",
+    "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+    "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included."
+   }
+  },
+  "contradicted": {
+   "type": "choice",
+   "instructions": "`anchor.statement` forbids one thing: a command named atm-bd-console (one hyphenated word) existing after installation, or any script, document, test or workflow running that hyphenated command. Decide whether `item.text` keeps, adds, aliases or runs that hyphenated atm-bd-console command. `atm-bd console`, written with a space, is a different command: the `console` subcommand of the `atm-bd` command; running, documenting or extending it is not a conflict. The directory apps/atm-bd-console and the Python module atm_bd_console are not the command either. Silence about atm-bd-console is not a conflict. Judge conflict only.",
+   "criteria": {
+    "yes": "The item text keeps, adds, aliases or runs a command named atm-bd-console (hyphenated), for example as an installed entry point, a console script, a compatibility alias, or a command line in a script, document, test or workflow.",
+    "no": "The item text does not keep, add or run a hyphenated atm-bd-console command: it is silent about it, removes it, or names only the `atm-bd console` subcommand (with a space), the directory apps/atm-bd-console or the module atm_bd_console.",
+    "unclear": "The item text refers to a console command but it is not possible to tell whether it means the hyphenated atm-bd-console command or the `atm-bd console` subcommand."
+   }
+  }
+ }
+}

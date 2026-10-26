@@ -1,0 +1,812 @@
+{
+ "aborted_by": null,
+ "canceled": false,
+ "data": {
+  "acceptance_table": [
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       0.97
+      ],
+      "conflict": [
+       "no",
+       0.94
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       0.95
+      ],
+      "conflict": [
+       "no",
+       0.94
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "fixture_pass",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "approved_fixture_pass",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.7
+      ],
+      "relevance": [
+       "yes",
+       0.92
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.67
+      ],
+      "relevance": [
+       "yes",
+       0.94
+      ]
+     }
+    },
+    "case_id": "fixture_fail",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "approved_fixture_fail",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "paraphrase",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "compliant_paraphrase",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       0.76
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       0.61
+      ]
+     }
+    },
+    "case_id": "silent",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "not_addressed",
+    "probe": "silence",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "verdict_threshold_0": [
+     "not_applicable",
+     "not_applicable"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.88
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.86
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     }
+    },
+    "case_id": "conflict_flags",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.34
+      ],
+      "relevance": [
+       "yes",
+       0.85
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.37
+      ],
+      "relevance": [
+       "yes",
+       0.79
+      ]
+     }
+    },
+    "case_id": "conflict_late_validation",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_addressed",
+     "not_addressed"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       0.98
+      ]
+     }
+    },
+    "case_id": "irrelevant",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "probe": "irrelevant",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "verdict_threshold_0": [
+     "not_applicable",
+     "not_applicable"
+    ]
+   }
+  ],
+  "accepted": false,
+  "authority_citations": [
+   "ANC-058 v2 locked statement, scope and quote (anchors.json at 6d0c4455b)",
+   "ANC-058 v2 approved pass/fail fixtures",
+   "INTENT phase-bj v1 sha256 e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382 (context only)"
+  ],
+  "authority_recommendations": [],
+  "candidate_rankings": [
+   {
+    "accepted": false,
+    "candidate_id": "sealed",
+    "complexity": 2499,
+    "confidence": {
+     "cells_at_or_above_threshold": 35,
+     "mean": 0.92,
+     "median": 1.0,
+     "minimum": 0.34,
+     "p10": 0.67,
+     "threshold": 0.8,
+     "total_cells": 42
+    },
+    "production_threshold_0_6_verdict_mismatches": [
+     "silent-r1:not_applicable",
+     "silent-r2:not_applicable",
+     "conflict_late_validation-r1:not_addressed",
+     "conflict_late_validation-r2:not_addressed"
+    ],
+    "question_sha256": "e667bf6dafb8cab7b59bbf3cd69394115c81a26b6d5207269161589c55b463d8",
+    "score": {
+     "exact_role_cells": 40,
+     "exact_semantic_verdicts": 12,
+     "regressions": 0,
+     "stable_cases": 7,
+     "total_cases": 7,
+     "total_role_cells": 42,
+     "total_semantic_verdicts": 14
+    },
+    "selection_reason": "not confirmed: see explanation; no replacement is proposed",
+    "semantic_mismatches": [
+     [
+      "silent",
+      1,
+      "relevance",
+      "no",
+      "yes",
+      0.76
+     ],
+     [
+      "silent",
+      1,
+      "VERDICT",
+      "not_applicable",
+      "not_addressed",
+      null
+     ],
+     [
+      "silent",
+      2,
+      "relevance",
+      "no",
+      "yes",
+      0.61
+     ],
+     [
+      "silent",
+      2,
+      "VERDICT",
+      "not_applicable",
+      "not_addressed",
+      null
+     ]
+    ]
+   }
+  ],
+  "confidence_diagnostics": {
+   "cells_at_or_above_threshold": 35,
+   "mean": 0.92,
+   "median": 1.0,
+   "minimum": 0.34,
+   "p10": 0.67,
+   "threshold": 0.8,
+   "total_cells": 42
+  },
+  "confidence_reference_threshold": 0.8,
+  "evidence": {
+   "authoritative_sources_sha256": {
+    "docs/plans/phase-bj/anchors.json": "29cba9e93578617a95706f04fafb2c133ff1665b369f034b9a5fcc6754afbfdc",
+    "docs/plans/phase-bj/anchors.md": "95056af0a544ae410f2042744012c29bf4cefa33ab24aaa3c4a2586e0badc63c",
+    "docs/plans/phase-bj/intent.md": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382"
+   },
+   "baseline_candidate": "sealed",
+   "evidence_dir": "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b",
+   "files_sha256": {
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/candidates/sealed.json": "af049e05e600e7884212a97eaaf028668ff383ebdc320a146ea46d75a0ca2459",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/oracle.json": "feb9f1670cda578fa48fa31fbe58e5740e41dba010527244a1f0349a8ef1a4af",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/oracle.sha256": "1e402299199d98bb86859121c680d19d0cfaf646adda0d35237fb533466a2d0f",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/request-vars.json": "cff02cb4937ec59b51673513237bfc2070eba3db568d965e3e650d757397ee69",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/request.json": "a062df6404eb012ff8b4c6abc9b0c2bad17d7ce5b6aca95de67de989b618654c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/request.md": "d88888745c59a64ad2a964c34f99f59ed84cf398340618c1432066d4d48380f1",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-conflict_flags-r1.request.json": "957a08f2fcc3efe7d33109a369c5e1966a0b071a533d85727aca055508403b9c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-conflict_flags-r1.response.json": "021ad7ce18810888d034acd2484fa76009aff1b861cd2d62480fc10adf03205e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-conflict_flags-r2.request.json": "957a08f2fcc3efe7d33109a369c5e1966a0b071a533d85727aca055508403b9c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-conflict_flags-r2.response.json": "a620a69a1d1a903896594ab4c79be43c4a4d349fd3da63e04d1837ccd2be4507",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-conflict_late_validation-r1.request.json": "eeac789d716ba8015c6697b0de91d7cc5f7b742c68d489ef44c1de1f3f0013cc",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-conflict_late_validation-r1.response.json": "280a57d82ed967d7251abb0f572ef61b3ead522537d666f27fc8394979088799",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-conflict_late_validation-r2.request.json": "eeac789d716ba8015c6697b0de91d7cc5f7b742c68d489ef44c1de1f3f0013cc",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-conflict_late_validation-r2.response.json": "33f09d7392c6f1d21b2af3bc93ccef1fad092ae1e7efcaf31efbc26cc530ac41",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-fixture_fail-r1.request.json": "6feeb084fd5bbde70d33878ba54399525e4aec347716c03241e31171678da822",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-fixture_fail-r1.response.json": "314da82926755773b5e28b04b2cf1bdb966fd78536d6113a3f9f13fac2a279e2",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-fixture_fail-r2.request.json": "6feeb084fd5bbde70d33878ba54399525e4aec347716c03241e31171678da822",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-fixture_fail-r2.response.json": "1374679fba78c760e4eb471971b4a4c1657ee25b5b508d1e6e66c6bd99f75d47",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-fixture_pass-r1.request.json": "a0d49f6eb291945da6bcf38ab1e2ba2ad580bd4e87ebc1af52b125980ca5352e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-fixture_pass-r1.response.json": "9f00151f2a56dcf93a7b93e0fd21bbd4f291b596e5ee8fed1defe14a1acd8f17",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-fixture_pass-r2.request.json": "a0d49f6eb291945da6bcf38ab1e2ba2ad580bd4e87ebc1af52b125980ca5352e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-fixture_pass-r2.response.json": "b0a2da8cfa5ebb4289a322b54618ac1fd87a5d934af7d88fecbd7323111b14cc",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-irrelevant-r1.request.json": "332eb151f21a41e427868bc5b55fe0ec9bafcd28710bc3ade5894a24231a457d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-irrelevant-r1.response.json": "1b4970893723fded005e1bfee264a7b9afaeea16f5c4b94047216d9ee9f5d0df",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-irrelevant-r2.request.json": "332eb151f21a41e427868bc5b55fe0ec9bafcd28710bc3ade5894a24231a457d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-irrelevant-r2.response.json": "ab72c86dc8a22d8fe0651fc070ad13bc85e3d4aac88378a6a2c93d2f810c967f",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-paraphrase-r1.request.json": "1b555a9b02c3b34e4b751cdb909d18146ae28a2b38553afc09a50607b3d604b1",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-paraphrase-r1.response.json": "ca7bd9d8fb583f29f4e24401f4167292275bb1b3e88257fd2418e52af318954c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-paraphrase-r2.request.json": "1b555a9b02c3b34e4b751cdb909d18146ae28a2b38553afc09a50607b3d604b1",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-paraphrase-r2.response.json": "ca7bd9d8fb583f29f4e24401f4167292275bb1b3e88257fd2418e52af318954c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-silent-r1.request.json": "7c2c28ccd2ac18d0165899af3656b466d05fd3057c84097093223d614ff6bf2d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-silent-r1.response.json": "4876f16f38bcded4f98f9c3d4571bd16664266a1d615a3970e70dcada2194a6c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-silent-r2.request.json": "7c2c28ccd2ac18d0165899af3656b466d05fd3057c84097093223d614ff6bf2d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/runs/ANC-058-sealed-silent-r2.response.json": "06d71068f3e09a90b6526b42470e40257fb569c2783930e897985ff6ac394f65",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/score-sealed.json": "b13658b5aaf1dae4bcf7754ec33aa81106c0de172c006b26cfb2e2d9b3eaefec"
+   },
+   "max_parallel_calls": 3,
+   "model_requested": "jev-latest",
+   "models_answered": [
+    "jev-1.13.0"
+   ],
+   "oracle_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/oracle.json",
+   "oracle_frozen_before_first_jev_call": true,
+   "raw_response_hash_note": "raw_response_sha256 is the canonical-JSON digest of the validated Jev response object; canonical_request_sha256 is the digest of the exact request bytes sent",
+   "request_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-058/rebind-6d0c4455b/request.json",
+   "request_sha256": "97f982ec047aaffbbd02bc6afcf79942fb960823e389d87c570db34e8cacb0c7",
+   "unselected_candidates_excluded_from_production": true
+  },
+  "explanation": "Seal not re-confirmed. The installed override equals the prior sealed set and the anchor record digest reproduces; the intent digest changed only in the anchor-index sentence. On my independent oracle the sealed set matched every case except 'silent': My frozen label says an item that only adds a PR-head check is relevant; the sealed relevant question answers no (0.76, 0.61). ANC-058's scope is 'the input contract of atm-task-close.py; templates/task-close-vars.j2', so the authority does not settle whether a check-only item touches the input contract; I froze a label the record does not determine. I may not relabel after seeing answers, so this re-check does not confirm the seal, and it does not show a question defect either. Mismatches: [[\"silent\", 1, \"relevance\", \"no\", \"yes\", 0.76], [\"silent\", 1, \"VERDICT\", \"not_applicable\", \"not_addressed\", null], [\"silent\", 2, \"relevance\", \"no\", \"yes\", 0.61], [\"silent\", 2, \"VERDICT\", \"not_applicable\", \"not_addressed\", null]].",
+  "gate": "planning",
+  "operation": "tune",
+  "oracle_sha256": "a5ba87a8ddd2f8fe659ff25c059a9697dd4d83de8a0ebc6ee84b02f6713c94d7",
+  "planner_action": "Do not replace the ANC-058 override; no replacement is proposed. Choose one: (a) keep the prior seal, which was accepted on its own frozen oracle; the anchor record is unchanged and the intent change does not touch ANC-058; or (b) have a fresh tuner that has not seen these answers re-evaluate ANC-058 on its own oracle. Do not tune toward my 'silent' label.",
+  "production_confidence_threshold": 0.6,
+  "production_semantics_unchanged": true,
+  "question_action": null,
+  "sealed_question_set": null,
+  "sealed_question_set_digest_after": null,
+  "sealed_question_set_digest_before": null,
+  "semantic_score": {
+   "exact_role_cells": 40,
+   "exact_semantic_verdicts": 12,
+   "regressions": 0,
+   "stable_cases": 7,
+   "total_cases": 7,
+   "total_role_cells": 42,
+   "total_semantic_verdicts": 14
+  },
+  "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+  "tuning_history_after": {
+   "events": [
+    {
+     "authority": {
+      "anchor_id": "ANC-058",
+      "anchor_record_sha256": "0ebdc267a93b91d040579aa6b8b1a2a1a187d3f3bafe7fe40915e10bafb919dc",
+      "anchor_version": 2,
+      "intent_id": "phase-bj-intent",
+      "intent_sha256": "193feb73c68194e0c4d676f4b7efbe02e66c2008513d16ff61f0a670d605984d",
+      "intent_version": 1
+     },
+     "candidate": {
+      "candidate_id": "CE",
+      "question_sha256": "e667bf6dafb8cab7b59bbf3cd69394115c81a26b6d5207269161589c55b463d8"
+     },
+     "decision": {
+      "question_set_sha256": "e667bf6dafb8cab7b59bbf3cd69394115c81a26b6d5207269161589c55b463d8",
+      "reason_code": "TOURNAMENT.SEALED",
+      "status": "sealed"
+     },
+     "event": "question_set_sealed",
+     "event_index": 1,
+     "evidence": {
+      "canonical_request_sha256": [
+       "3a8e38a51e9989df36a0a8f71a1fbc7e2e9f4f3f8ad33c4d5f904245bccb551a",
+       "3a8e38a51e9989df36a0a8f71a1fbc7e2e9f4f3f8ad33c4d5f904245bccb551a",
+       "d951a36ba4d449c010e9e4cdde30d46c5fec828eacd1c6f025f412e62bc7a112",
+       "d951a36ba4d449c010e9e4cdde30d46c5fec828eacd1c6f025f412e62bc7a112",
+       "7594e1f2b2eab0f558c32ac51151b2d680a10f7479cda5900b104d89dff1b79f",
+       "7594e1f2b2eab0f558c32ac51151b2d680a10f7479cda5900b104d89dff1b79f",
+       "798990273cc61309f8b03d8b8744c8eda50f6f1e8206e5843f74262717a6b585",
+       "798990273cc61309f8b03d8b8744c8eda50f6f1e8206e5843f74262717a6b585",
+       "26d447bbbb9c1c09d1ce7b1b40ead041129b6751855a1a921ba81ff2c25240ca",
+       "26d447bbbb9c1c09d1ce7b1b40ead041129b6751855a1a921ba81ff2c25240ca",
+       "12d55884b4a494a044b6821ccc9477e79daa49b08a2eba6a688a766f1bb6e3cb",
+       "12d55884b4a494a044b6821ccc9477e79daa49b08a2eba6a688a766f1bb6e3cb",
+       "59dce3c05f92e9b5c2de161880dd7f8b7e6a2d6ef82c6ccdeff66fb053d40066",
+       "59dce3c05f92e9b5c2de161880dd7f8b7e6a2d6ef82c6ccdeff66fb053d40066",
+       "b0af54199a169d57bdee344e207b68b0322a6b9e9dd899a080a9f7ecaf7bfa7c",
+       "b0af54199a169d57bdee344e207b68b0322a6b9e9dd899a080a9f7ecaf7bfa7c",
+       "a2d3408f3ca00ec47b2c609e56f9e3a0981fff7ac0adf38cd5e44aa98e46b868",
+       "a2d3408f3ca00ec47b2c609e56f9e3a0981fff7ac0adf38cd5e44aa98e46b868"
+      ],
+      "raw_response_sha256": [
+       "66f846f6f44af2cf59d550b33b28107c8e60393bd7638e2cbeb128422e07a99b",
+       "a56fa5d34674d83a4c9b2cba95dd7a22360f3a954a907b10237a2c4a860bb925",
+       "2c3b051afda1f395eb0a2f0de504d6730860d68ef95813ed6870b60a81a292f2",
+       "ccb3715282552a88bdc811541f16607c194fe135aaccb9ccbda6b8425f4c38f4",
+       "82ffbab43b12a52d7d90115286f53a3f50ef85380373e05e00a0be62e78a4ff6",
+       "82ffbab43b12a52d7d90115286f53a3f50ef85380373e05e00a0be62e78a4ff6",
+       "c47803d6bac6993400ac7ccdaa57254985212a4a46cbd0f0fcf3075e881d3447",
+       "35c068eb757cc42e8ea2805030e4706d674a110af269350d152397a4dc4d7d2d",
+       "7ea76ba32862369f9ec8730a0a768cd100342bd4bd647205f54b83991f3a1062",
+       "7ea76ba32862369f9ec8730a0a768cd100342bd4bd647205f54b83991f3a1062",
+       "b95d1d3e8f07cae2a18a39dc4d7f3128be70549d27b82540fdd73bf22aaf43e0",
+       "b95d1d3e8f07cae2a18a39dc4d7f3128be70549d27b82540fdd73bf22aaf43e0",
+       "f4b234062adaa04391a9c3b133bbe13e1fa2505bb60e72d9a1210232f4f33ef8",
+       "f4b234062adaa04391a9c3b133bbe13e1fa2505bb60e72d9a1210232f4f33ef8",
+       "920cd1ccc25dacf1be78008d9a0bd44f4b86236077540f97459b3d6e057d5071",
+       "b661484d6261b1c6074346ab03f7bd00d43717e63c434e125548b99ec512d748",
+       "aa038b62828ae08ccab3d185bfb69aca8bc07c1106aa1a0bf3c81e24a6076dc7",
+       "aa038b62828ae08ccab3d185bfb69aca8bc07c1106aa1a0bf3c81e24a6076dc7"
+      ],
+      "run_ids": [
+       "plan-20261018T231824Z-tune-ANC-058_fx-pass-1@CE/fx-pass-1/r1",
+       "plan-20261018T231824Z-tune-ANC-058_fx-pass-1@CE/fx-pass-1/r2",
+       "plan-20261018T231824Z-tune-ANC-058_fx-fail-1@CE/fx-fail-1/r1",
+       "plan-20261018T231824Z-tune-ANC-058_fx-fail-1@CE/fx-fail-1/r2",
+       "plan-20261018T231824Z-tune-ANC-058_compliant@CE/compliant/r1",
+       "plan-20261018T231824Z-tune-ANC-058_compliant@CE/compliant/r2",
+       "plan-20261018T231824Z-tune-ANC-058_silent@CE/silent/r1",
+       "plan-20261018T231824Z-tune-ANC-058_silent@CE/silent/r2",
+       "plan-20261018T231824Z-tune-ANC-058_topical@CE/topical/r1",
+       "plan-20261018T231824Z-tune-ANC-058_topical@CE/topical/r2",
+       "plan-20261018T231824Z-tune-ANC-058_conflicting@CE/conflicting/r1",
+       "plan-20261018T231824Z-tune-ANC-058_conflicting@CE/conflicting/r2",
+       "plan-20261018T231824Z-tune-ANC-058_irrelevant@CE/irrelevant/r1",
+       "plan-20261018T231824Z-tune-ANC-058_irrelevant@CE/irrelevant/r2",
+       "plan-20261018T231824Z-tune-ANC-058_boundary-pour@CE/boundary-pour/r1",
+       "plan-20261018T231824Z-tune-ANC-058_boundary-pour@CE/boundary-pour/r2",
+       "plan-20261018T231824Z-tune-ANC-058_exception-qa-no-assign@CE/exception-qa-no-assign/r1",
+       "plan-20261018T231824Z-tune-ANC-058_exception-qa-no-assign@CE/exception-qa-no-assign/r2"
+      ]
+     },
+     "oracle": {
+      "case_count": 9,
+      "case_ids": [
+       "fx-pass-1",
+       "fx-fail-1",
+       "compliant",
+       "silent",
+       "topical",
+       "conflicting",
+       "irrelevant",
+       "boundary-pour",
+       "exception-qa-no-assign"
+      ],
+      "repeat_count": 2,
+      "sha256": "3051405197da98c8c0777e98354784bb32807d8790e7262331cfa132299eb876"
+     },
+     "previous_event_sha256": null,
+     "protocol_version": "plan-anchor/question-tournament/2.0.0",
+     "score": {
+      "confidence": {
+       "cells_at_or_above_threshold": 54,
+       "mean": 0.98,
+       "median": 1.0,
+       "minimum": 0.83,
+       "p10": 0.92,
+       "threshold": 0.8,
+       "total_cells": 54
+      },
+      "exact_role_cells": 54,
+      "exact_semantic_verdicts": 18,
+      "regressions": 0,
+      "stable_cases": 9,
+      "total_cases": 9,
+      "total_role_cells": 54,
+      "total_semantic_verdicts": 18
+     },
+     "supersedes": null
+    },
+    {
+     "authority": {
+      "anchor_id": "ANC-058",
+      "anchor_record_sha256": "2a5f7ee417a9f392582cece367d92ea79cf534aaa6199cb3ca18fb7e0659ec4b",
+      "anchor_version": 2,
+      "intent_id": "phase-bj",
+      "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+      "intent_version": 1
+     },
+     "candidate": {
+      "candidate_id": "sealed",
+      "question_sha256": "e667bf6dafb8cab7b59bbf3cd69394115c81a26b6d5207269161589c55b463d8"
+     },
+     "decision": {
+      "question_set_sha256": null,
+      "reason_code": "TOURNAMENT.REBIND_NOT_CONFIRMED",
+      "status": "rejected"
+     },
+     "event": "candidate_evaluated",
+     "event_index": 2,
+     "evidence": {
+      "canonical_request_sha256": [
+       "a0d49f6eb291945da6bcf38ab1e2ba2ad580bd4e87ebc1af52b125980ca5352e",
+       "a0d49f6eb291945da6bcf38ab1e2ba2ad580bd4e87ebc1af52b125980ca5352e",
+       "6feeb084fd5bbde70d33878ba54399525e4aec347716c03241e31171678da822",
+       "6feeb084fd5bbde70d33878ba54399525e4aec347716c03241e31171678da822",
+       "1b555a9b02c3b34e4b751cdb909d18146ae28a2b38553afc09a50607b3d604b1",
+       "1b555a9b02c3b34e4b751cdb909d18146ae28a2b38553afc09a50607b3d604b1",
+       "7c2c28ccd2ac18d0165899af3656b466d05fd3057c84097093223d614ff6bf2d",
+       "7c2c28ccd2ac18d0165899af3656b466d05fd3057c84097093223d614ff6bf2d",
+       "957a08f2fcc3efe7d33109a369c5e1966a0b071a533d85727aca055508403b9c",
+       "957a08f2fcc3efe7d33109a369c5e1966a0b071a533d85727aca055508403b9c",
+       "eeac789d716ba8015c6697b0de91d7cc5f7b742c68d489ef44c1de1f3f0013cc",
+       "eeac789d716ba8015c6697b0de91d7cc5f7b742c68d489ef44c1de1f3f0013cc",
+       "332eb151f21a41e427868bc5b55fe0ec9bafcd28710bc3ade5894a24231a457d",
+       "332eb151f21a41e427868bc5b55fe0ec9bafcd28710bc3ade5894a24231a457d"
+      ],
+      "raw_response_sha256": [
+       "dd6ef3bfdb1fb35095411f5802173604994174e075039a881572e1bf53ddc5b9",
+       "617f8437f78e71633bcc967e3bfb2cced11a4489c8953a9256b78b5fb95d315a",
+       "d41eea5ccd9eea086ea5d679e56ec5e5ea78dc25ebcfd53f2e943914770d02ca",
+       "d6bed3ad6ba2f3f1565fc7d9d3fbe7ae0a15cd1a9e51c0d267796bc08550f397",
+       "2f036a2b533e4c5adfce0a138126473097bfa12305d8fd46821077c9b2f23df7",
+       "2f036a2b533e4c5adfce0a138126473097bfa12305d8fd46821077c9b2f23df7",
+       "55e82f6182e93b9f6b2e27088a6e23ca214b990054a8cb330fbeae478a632665",
+       "2bd00737c9adad8dc068ccc4f0f1444fecac253a33d3aa7a151804dd3ce32bfa",
+       "c03ce0c7f1303afe2174882d74c21b81a791ad35b295ec27ff39d45828ba1a86",
+       "7cdbd7bf8ca3dddd72cc04c1d7f7c4aa0914d763fc65b20d1650e63992c0fce1",
+       "4780dca4d0a3fc5cc9324409f6aac5ac52b0502cd94daaa68b8f394740879cba",
+       "ac90b1dcfd381559e2e16ac88593e6530a0b5bd5bbcd2da61b6050d55b83e60c",
+       "41ad08dc15b4999b502901f39d15b567b98b054d405e204c133bb942069a6956",
+       "fbf7a64b78c8fca2e3c5f82c9b938e3a7114cbf81d02cf0f571fccdf073e8ce9"
+      ],
+      "run_ids": [
+       "ANC-058-sealed-fixture_pass-r1",
+       "ANC-058-sealed-fixture_pass-r2",
+       "ANC-058-sealed-fixture_fail-r1",
+       "ANC-058-sealed-fixture_fail-r2",
+       "ANC-058-sealed-paraphrase-r1",
+       "ANC-058-sealed-paraphrase-r2",
+       "ANC-058-sealed-silent-r1",
+       "ANC-058-sealed-silent-r2",
+       "ANC-058-sealed-conflict_flags-r1",
+       "ANC-058-sealed-conflict_flags-r2",
+       "ANC-058-sealed-conflict_late_validation-r1",
+       "ANC-058-sealed-conflict_late_validation-r2",
+       "ANC-058-sealed-irrelevant-r1",
+       "ANC-058-sealed-irrelevant-r2"
+      ]
+     },
+     "oracle": {
+      "case_count": 7,
+      "case_ids": [
+       "fixture_pass",
+       "fixture_fail",
+       "paraphrase",
+       "silent",
+       "conflict_flags",
+       "conflict_late_validation",
+       "irrelevant"
+      ],
+      "repeat_count": 2,
+      "sha256": "a5ba87a8ddd2f8fe659ff25c059a9697dd4d83de8a0ebc6ee84b02f6713c94d7"
+     },
+     "previous_event_sha256": "fb7ff018827dce47e337695569319afa94d5c8cd0d43f3d3153c5ae1d48a1929",
+     "protocol_version": "plan-anchor/question-tournament/2.0.0",
+     "score": {
+      "confidence": {
+       "cells_at_or_above_threshold": 35,
+       "mean": 0.92,
+       "median": 1.0,
+       "minimum": 0.34,
+       "p10": 0.67,
+       "threshold": 0.8,
+       "total_cells": 42
+      },
+      "exact_role_cells": 40,
+      "exact_semantic_verdicts": 12,
+      "regressions": 0,
+      "stable_cases": 7,
+      "total_cases": 7,
+      "total_role_cells": 42,
+      "total_semantic_verdicts": 14
+     },
+     "supersedes": {
+      "decision_sha256": "8c5ef5c65c5e3c46950935127d427d85d35b3bd3d043b8cabf61283b4e51d9a1",
+      "protocol_version": "plan-anchor/question-tournament/2.0.0"
+     }
+    }
+   ],
+   "history_id": "phase-bj-ANC-058-planning",
+   "schema": "plan-anchor/tuning-history/2"
+  },
+  "tuning_history_after_sha256": "46be6372cbbe5d65418b797f9ecb40f42b686bcdc6b5f5479dd69cc37a800306",
+  "tuning_history_before_sha256": "de6d542bbe6fb3a424024e31f01dcc46670f1991ed2c4aefd37b639a1dd862da"
+ },
+ "error": null,
+ "metadata": {
+  "authoritative_sources_unchanged": true,
+  "correlation_id": "ANC-058-6d0c4455b",
+  "duration_ms": 500,
+  "jev_run_ids": [
+   "ANC-058-sealed-fixture_pass-r1",
+   "ANC-058-sealed-fixture_pass-r2",
+   "ANC-058-sealed-fixture_fail-r1",
+   "ANC-058-sealed-fixture_fail-r2",
+   "ANC-058-sealed-paraphrase-r1",
+   "ANC-058-sealed-paraphrase-r2",
+   "ANC-058-sealed-silent-r1",
+   "ANC-058-sealed-silent-r2",
+   "ANC-058-sealed-conflict_flags-r1",
+   "ANC-058-sealed-conflict_flags-r2",
+   "ANC-058-sealed-conflict_late_validation-r1",
+   "ANC-058-sealed-conflict_late_validation-r2",
+   "ANC-058-sealed-irrelevant-r1",
+   "ANC-058-sealed-irrelevant-r2"
+  ],
+  "planner_observation_trust": null,
+  "retry_count": 0,
+  "tool_calls": 14
+ },
+ "schema_version": "1.0.0",
+ "success": true
+}

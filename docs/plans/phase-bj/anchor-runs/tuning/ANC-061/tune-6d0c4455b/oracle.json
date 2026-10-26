@@ -1,0 +1,162 @@
+{
+ "anchor_id": "ANC-061",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "d1a160f6d96dc0d835cbbda2ee12c7c6ad1df2f0482fc721839e2491d50af86e",
+ "anchor_scope": "atm-bd dispatch candidate filter order for sanity and qa beads",
+ "anchor_statement": "atm-bd must assign a sanity or qa bead only when bd ready lists it and, checked afterwards, no ATM task with that bead id exists; a bead whose task the hook already assigned is never assigned a second time.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-061-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd reads bd ready, then atm task list, and skips the sanity bead because its task already exists.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-061-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture: cached task list leads to a second assignment.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd caches the task list from the previous tick and assigns the sanity bead a second time.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-061-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "For each sanity or qa bead in the bd ready output, dispatch then queries atm task list for a task carrying that bead id and assigns the bead only if no such task exists.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-061-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope dispatch, silent about the filter order.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd dispatch builds the qa-template vars file for each qa bead it assigns.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "topical",
+   "item_id": "ANC-061-probe-topical",
+   "probe": "topical_only",
+   "rationale": "Topic only.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd dispatch chooses which sanity and qa beads to assign.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_order",
+   "item_id": "ANC-061-probe-conflict_order",
+   "probe": "conflict",
+   "rationale": "The task check must come after bd ready; an earlier snapshot can miss a task the hook just assigned.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd dispatch reads atm task list once at the start of the tick and checks bd ready later, assigning ready beads missing from that earlier list.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_no_check",
+   "item_id": "ANC-061-probe-conflict_no_check",
+   "probe": "conflict",
+   "rationale": "No task check: a bead the hook already assigned would be assigned twice.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "atm-bd assigns every sanity bead that bd ready lists.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-061-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Every time atm-bd prints for a person is rendered in 24-hour local time.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

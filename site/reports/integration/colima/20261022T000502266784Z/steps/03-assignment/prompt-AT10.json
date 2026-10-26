@@ -1,0 +1,50 @@
+{
+ "schema": "prompt-report-1",
+ "test_id": "AT10-assignment",
+ "agent": "claude-code",
+ "steps": [
+  {
+   "name": "three-queued-then-one-ready",
+   "status": "pass",
+   "detail": "assigned c1-1792628000-1..3 to fx-at10-beta as alpha. 'atm list --pending-ack --json' as beta after each assignment: count 0, bucket_counts {unread:1|2|3, pending_ack:0, history:0}. 'atm task events c1-1792628000-N --json' handoffs[].kind: task-1 task_queued + task_ready (reminded event); task-2 task_queued only; task-3 task_queued only (exactly one task_ready). Events JSON carries no position field; positions from 'atm task list --json' as beta: c1-1792628000-1 position 1, -2 position 2, -3 position 3, all state assigned."
+  },
+  {
+   "name": "close-releases-next",
+   "status": "pass",
+   "detail": "beta ran 'atm task start c1-1792628000-1' -> 'started c1-1792628000-1' and 'atm task close c1-1792628000-1 completed done' -> sent summary done. Task-1 events: started, completed; handoffs task_started, task_complete. After 2 one-second polls 'atm task events c1-1792628000-2 --json' handoffs contain kind task_ready; atm task list shows c1-1792628000-2 position 1, c1-1792628000-3 position 2."
+  },
+  {
+   "name": "reassign-notifies-both",
+   "status": "pass",
+   "detail": "alpha ran 'atm task assign fx-at10-gamma ... --task-id c1-1792628000-3' (returned {\"task_id\":\"c1-1792628000-3\"}). Events: event reassigned (assignee fx-at10-gamma, actor fx-at10-alpha); handoffs: task_closed agent fx-at10-beta, task_queued agent fx-at10-gamma, then task_ready agent fx-at10-gamma. 'atm read --message-id 01M5GFA0XFKV7A0DS6P4VGNGXN' as beta: summary 'task_closed:c1-1792628000-3', text 'task c1-1792628000-3 was reassigned to fx-at10-gamma'. gamma 'atm task list --json': c1-1792628000-3 assignee fx-at10-gamma position 1."
+  },
+  {
+   "name": "move-head-readies-once",
+   "status": "pass",
+   "detail": "assigned c4-1792628047-A then -B to beta; A handoffs showed task_ready after 2 polls. 'atm task move c4-1792628047-B --head --json' -> {\"task_id\":\"c4-1792628047-B\",\"assignee\":\"fx-at10-beta\",\"from\":2,\"to\":1}. Afterwards B events: assigned, moved (detail 2\u21921), reminded; handoffs task_queued, task_ready (exactly one). A handoffs: task_queued, task_ready (exactly one; recount before close: A=1, B=1). task list: B position 1, A position 2."
+  },
+  {
+   "name": "cancel-notifies-assignee",
+   "status": "pass",
+   "detail": "alpha assigned c5-1792628061-blk then c5-1792628061-t to beta, then 'atm task close c5-1792628061-t cancelled \"cancelled by alpha\" --json' -> outcome sent, message_id 01M5GFAZ8PCJ2XCTNPJXS60VPX. As beta 'atm task events c5-1792628061-t --json': event cancelled with close_outcome cancelled, to_state complete, detail 'cancelled by alpha'; handoff kind task_closed agent fx-at10-beta; beta 'atm list --json' row message_id 01M5GFAZ8PCJ2XCTNPJXS60VPX summary 'cancelled by alpha'. No task_ready for it."
+  },
+  {
+   "name": "busy-assigner-sees-terminal-lines",
+   "status": "pass",
+   "detail": "gamma assigned c6-1792628073-alpha to alpha; alpha ran 'atm task start c6-1792628073-alpha' -> summary 'started c6-1792628073-alpha'. Alpha 'atm task list --json': task_id c6-1792628073-alpha, assignee fx-at10-alpha, state active, position 1. Then alpha assigned c6-1792628073-beta to beta; beta started (summary 'started c6-1792628073-beta') and completed it (summary 'done'). Alpha 'atm list --json' contains message 01M5GFCB30XG1AHQN4YR16W9RN 'started c6-1792628073-beta' timestamp 00:15:08.384823614Z and 01M5GFCB3BD47BET8QTGRJCRZF 'done' timestamp 00:15:08.395657730Z (started precedes done). Note: the alpha task never showed task_ready within a 30-poll wait, so it was started directly."
+  },
+  {
+   "name": "cleanup",
+   "status": "pass",
+   "detail": "Closed every created task with 'atm task close'. Final 'atm task list --json' as alpha, beta, gamma: [] , [] , []; 'atm task list --all --json' as alpha: []."
+  }
+ ],
+ "verdict": "pass",
+ "atm_versions": {
+  "atm": "1.6.4",
+  "hermes_atm": "",
+  "atm_graft": ""
+ },
+ "started_at": "2026-10-22T00:13:16Z",
+ "finished_at": "2026-10-22T00:15:30Z"
+}

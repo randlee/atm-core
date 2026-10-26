@@ -169,11 +169,19 @@ impl Daemon {
         let runtime = assembly.service_runtime.clone();
         let task_telemetry = assembly.task_telemetry.clone();
         let runtime_health = RuntimeHealth::with_owner(std::process::id());
-        let (handler, recovery_sweep) = build_replacement_handler(
+        let crate::replacement_handler::ReplacementHandler {
+            handler,
+            recovery_sweep,
+            ..
+        } = build_replacement_handler(
             assembly,
             ReplacementHandlerConfig {
                 observability: Arc::new(observability.clone()),
-                selector_factory: move |_, _, _, _| selector,
+                selector_factory: move |_, _, _, _| {
+                    crate::received_hook_selector::ReceivedHookTransports::with_selector_for_test(
+                        selector,
+                    )
+                },
                 daemon_launch_identity: DaemonLaunchIdentity::default(),
                 peer_wire_mode: atm_core::peer_wire::PeerWireMode::plaintext_test(),
                 peer_adapter_selection: SelectedPeerAdapterSelection {
@@ -186,6 +194,8 @@ impl Daemon {
                 herdr_config: crate::herdr_config::DaemonHerdrConfig::default(),
                 herdr_process: Some(herdr.clone()),
                 daemon_home: root.path().join("home"),
+                #[cfg(feature = "test-support")]
+                controlled_hook_deadline: None,
             },
         )
         .expect("compose the replacement daemon handler");
@@ -236,6 +246,7 @@ impl Daemon {
             running,
             handler,
             workers: DaemonWorkers {
+                cron: None,
                 task_telemetry,
                 recovery_sweep,
                 atm_temp_sweeper,
@@ -537,9 +548,11 @@ fn export_health(doctor: &serde_json::Value) -> AtmTelemetryExportHealth {
         .expect("doctor JSON carries export health")
 }
 
-/// The daemon shutdown steps, in call order, each given the shared deadline.
-const SHUTDOWN_STEPS: [&str; 8] = [
+/// The daemon shutdown steps in call order; cron gets its own bounded slice.
+const SHUTDOWN_STEPS: [&str; 10] = [
     "entry",
+    "cron_worker",
+    "hook_chains",
     "listener",
     "recovery_sweep",
     "peer_connections",
@@ -569,15 +582,15 @@ fn assert_one_shutdown_deadline(steps: &[ShutdownStep]) -> Instant {
     deadline
 }
 
-/// Proves the shutdown deadline is passed through unchanged, from the
-/// recorded steps: it is fixed once at entry `REPLACEMENT_DRAIN_DEADLINE`
-/// ahead, every step receives exactly that deadline and starts only after the
-/// previous one returned, and the logger and exporter waits compute bounds no
-/// later than it and no later than their own 1 s bound from their start. It
-/// does not prove a step returned in time. Only a shutdown whose stalled step
-/// is ended by the shared deadline itself calls it alone, since that step
-/// returns after the deadline by its timer's wake latency; every other caller
-/// uses [`assert_one_shutdown_deadline`]. Returns the shared deadline.
+/// Proves the shared shutdown deadline is fixed at entry and passed through to
+/// every top-level step except cron, which receives the earlier of that
+/// deadline and its bounded grace. Each step starts after the prior one
+/// returned, and logger/exporter waits compute bounds no later than the shared
+/// deadline and their own 1 s bound. It does not prove a step returned in time.
+/// Only a shutdown whose stalled step is ended by the shared deadline itself
+/// calls it alone, since that step returns after the deadline by timer wake
+/// latency; every other caller uses [`assert_one_shutdown_deadline`]. Returns
+/// the shared deadline.
 fn assert_shutdown_deadline_passed_through(steps: &[ShutdownStep]) -> Instant {
     let entry = steps.first().expect("the shutdown recorded its entry");
     assert_eq!(entry.step, "entry", "{steps:#?}");
@@ -596,7 +609,18 @@ fn assert_shutdown_deadline_passed_through(steps: &[ShutdownStep]) -> Instant {
         "{steps:#?}"
     );
     for pair in called.windows(2) {
-        assert_eq!(pair[1].deadline, entry.deadline, "{steps:#?}");
+        let expected_deadline = if pair[1].step == "cron_worker" {
+            entry
+                .deadline
+                .min(pair[1].started + super::cron_composition::CRON_WORKER_SHUTDOWN_GRACE)
+        } else {
+            entry.deadline
+        };
+        if pair[1].step == "cron_worker" {
+            assert!(pair[1].deadline <= expected_deadline, "{steps:#?}");
+        } else {
+            assert_eq!(pair[1].deadline, expected_deadline, "{steps:#?}");
+        }
         assert!(pair[1].started >= pair[0].returned, "{steps:#?}");
     }
     for inner in steps
@@ -630,10 +654,15 @@ fn steps_meeting_the_deadline() -> Vec<ShutdownStep> {
         .map(|&step| {
             let started = at;
             at = started + Duration::from_millis(1);
+            let step_deadline = if step == "cron_worker" {
+                deadline.min(started + super::cron_composition::CRON_WORKER_SHUTDOWN_GRACE)
+            } else {
+                deadline
+            };
             ShutdownStep {
                 step,
                 started,
-                deadline,
+                deadline: step_deadline,
                 returned: if step == "entry" { started } else { at },
             }
         })

@@ -10,7 +10,7 @@ use atm_core::boundary::{
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::nudge_dispatch::build_task_reminder_dispatch;
 use atm_core::protocol::RuntimeMemberState;
-use atm_core::types::IsoTimestamp;
+use atm_core::types::{IsoTimestamp, TaskId};
 use atm_herdr::{AgentSnapshot, HerdrAgentStatus};
 
 use crate::herdr_task_disposition::{TaskDisposition, dispose, escalation_due};
@@ -57,10 +57,34 @@ pub(super) fn runtime_state_with_absence(
     runtime_state(Some(status))
 }
 
+pub(super) fn observe_escalation_episode_if_eligible(
+    escalation_state: &crate::herdr_escalation::EscalationState,
+    member: &atm_core::boundary::MemberKey,
+    state: RuntimeMemberState,
+    state_changed_at: Option<IsoTimestamp>,
+    has_open_task: bool,
+) -> bool {
+    let is_episode_state = matches!(
+        state,
+        RuntimeMemberState::Blocked | RuntimeMemberState::Offline
+    );
+    if is_episode_state && !has_open_task {
+        return false;
+    }
+    escalation_state.observe(
+        member,
+        state,
+        state_changed_at,
+        crate::herdr_escalation::EpisodeObservation::Transition,
+    )
+}
+
 pub(super) struct PreparedTaskPass {
     reader: Arc<dyn AsyncTaskLedgerReader + Send + Sync>,
     task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-    heads: HashMap<MemberKey, TaskRow>,
+    /// Every open task per member, in queue order. The first row is the
+    /// member's bookkeeping head; the whole list is named in one nudge.
+    open: HashMap<MemberKey, Vec<TaskRow>>,
 }
 
 impl HerdrQueueWakePump {
@@ -71,11 +95,11 @@ impl HerdrQueueWakePump {
     ) -> Option<PreparedTaskPass> {
         let (reader, task_store) = self.task_capabilities(stats)?;
         self.note_task_step_availability(true, None);
-        let heads = self.open_task_heads(reader.as_ref(), candidates).await;
+        let open = self.open_tasks_by_member(reader.as_ref(), candidates).await;
         Some(PreparedTaskPass {
             reader,
             task_store,
-            heads,
+            open,
         })
     }
 
@@ -91,7 +115,7 @@ impl HerdrQueueWakePump {
             self.process_task_candidate(
                 prepared.reader.as_ref(),
                 &prepared.task_store,
-                &prepared.heads,
+                &prepared.open,
                 candidate,
                 open_mail,
                 now,
@@ -185,18 +209,28 @@ impl HerdrQueueWakePump {
         &self,
         reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
-        heads: &HashMap<MemberKey, TaskRow>,
+        open: &HashMap<MemberKey, Vec<TaskRow>>,
         candidate: MemberObservation,
         open_mail: &HashSet<MemberKey>,
         now: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
     ) {
-        let head = heads.get(&candidate.member);
+        let member_open = open.get(&candidate.member).map_or(&[][..], Vec::as_slice);
+        let head = member_open.first();
         let mail_pending = open_mail.contains(&candidate.member);
         let active_since = candidate.state_changed_at;
-        let new_episode = self
-            .escalation_state
-            .observe(&candidate.member, candidate.state);
+        // A dormant Blocked/Offline member is not an escalation episode. In
+        // particular, do not consume its episode marker: a task assigned
+        // while that same outage persists must still produce one escalation.
+        // Non-episode states continue through `observe` so recovery clears a
+        // previously reported episode.
+        let new_episode = observe_escalation_episode_if_eligible(
+            &self.escalation_state,
+            &candidate.member,
+            candidate.state,
+            candidate.state_changed_at,
+            head.is_some(),
+        );
         let provisional = dispose(
             mail_pending,
             candidate.state,
@@ -210,7 +244,7 @@ impl HerdrQueueWakePump {
             self.apply_task_disposition(
                 task_store,
                 reader,
-                head,
+                member_open,
                 candidate,
                 now,
                 stats,
@@ -219,33 +253,12 @@ impl HerdrQueueWakePump {
             .await;
             return;
         }
-        let (refusal_count, refusal_started_at) =
-            match self.refusal_run(reader, &candidate.member).await {
-                Ok(run) => run,
-                Err(error) => {
-                    tracing::warn!(
-                        subsystem = "herdr_queue_wake",
-                        action = "refusal_history_read",
-                        outcome = "failed",
-                        member = %candidate.member,
-                        error = %error,
-                        "Task disposition held because refusal history is unavailable"
-                    );
-                    return;
-                }
-            };
-        if refusal_count >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD
-            && let Some(since) = refusal_started_at
-        {
-            crate::herdr_queue_wake_escalation::escalate_refusals(
-                self,
-                task_store,
-                &candidate.member,
-                since,
-                stats,
-            )
-            .await;
-        }
+        let Some(refusal_count) = self
+            .refusal_check(reader, task_store, &candidate.member, head, stats)
+            .await
+        else {
+            return;
+        };
         let disposition = dispose(
             mail_pending,
             candidate.state,
@@ -255,8 +268,16 @@ impl HerdrQueueWakePump {
             new_episode,
             refusal_count,
         );
-        self.apply_task_disposition(task_store, reader, head, candidate, now, stats, disposition)
-            .await;
+        self.apply_task_disposition(
+            task_store,
+            reader,
+            member_open,
+            candidate,
+            now,
+            stats,
+            disposition,
+        )
+        .await;
     }
 
     #[expect(
@@ -267,18 +288,22 @@ impl HerdrQueueWakePump {
         &self,
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
         reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
-        head: Option<&TaskRow>,
+        open: &[TaskRow],
         candidate: MemberObservation,
         now: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
         disposition: TaskDisposition,
     ) {
+        let head = open.first();
         match disposition {
             TaskDisposition::EscalateEpisode(kind) => {
                 crate::herdr_queue_wake_escalation::escalate_episode(
                     self,
                     task_store,
                     &candidate.member,
+                    &head
+                        .expect("episode escalation requires an open task")
+                        .task_id,
                     kind,
                     candidate.state_changed_at.unwrap_or(now),
                     stats,
@@ -294,10 +319,8 @@ impl HerdrQueueWakePump {
                 }
             }
             TaskDisposition::Nudge => {
-                if stats.prompted < HERDR_MAX_PROMPTS_PER_TICK
-                    && let Some(row) = head.cloned()
-                {
-                    self.emit_task_reminder(task_store, candidate, row, now, stats)
+                if stats.prompted < HERDR_MAX_PROMPTS_PER_TICK && head.is_some() {
+                    self.emit_task_reminder(task_store, candidate, open, now, stats)
                         .await;
                 }
             }
@@ -324,30 +347,70 @@ impl HerdrQueueWakePump {
             .map_err(Into::into)
     }
 
-    async fn open_task_heads(
+    /// Reads the member's refusal run and escalates it once it reaches the
+    /// threshold. `None` holds the disposition because the history is unreadable.
+    async fn refusal_check(
+        &self,
+        reader: &(dyn AsyncTaskLedgerReader + Send + Sync),
+        task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
+        member: &MemberKey,
+        source_task: Option<&TaskRow>,
+        stats: &mut HerdrQueueWakeStats,
+    ) -> Option<u32> {
+        let (refusal_count, refusal_started_at) = match self.refusal_run(reader, member).await {
+            Ok(run) => run,
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "herdr_queue_wake",
+                    action = "refusal_history_read",
+                    outcome = "failed",
+                    member = %member,
+                    error = %error,
+                    "Task disposition held because refusal history is unavailable"
+                );
+                return None;
+            }
+        };
+        if refusal_count >= TASK_CONSECUTIVE_REFUSAL_THRESHOLD
+            && let (Some(since), Some(source_task)) = (refusal_started_at, source_task)
+        {
+            crate::herdr_queue_wake_escalation::escalate_refusals(
+                self,
+                task_store,
+                member,
+                source_task,
+                since,
+                stats,
+            )
+            .await;
+        }
+        Some(refusal_count)
+    }
+
+    async fn open_tasks_by_member(
         &self,
         reader: &dyn AsyncTaskLedgerReader,
         candidates: &[MemberObservation],
-    ) -> HashMap<MemberKey, TaskRow> {
+    ) -> HashMap<MemberKey, Vec<TaskRow>> {
         let teams: HashSet<_> = candidates
             .iter()
             .map(|candidate| candidate.member.team().clone())
             .collect();
-        let mut heads = HashMap::new();
+        let mut open: HashMap<MemberKey, Vec<TaskRow>> = HashMap::new();
         let deadline = match ReadDeadline::new(HERDR_REQUEST_BUDGET) {
             Ok(deadline) => deadline,
             Err(error) => {
                 tracing::warn!(subsystem = "herdr_queue_wake", action = "task_reminder_read", outcome = "deadline_invalid", error = %error, "Herdr task reminder read skipped");
-                return heads;
+                return open;
             }
         };
         for team in teams {
             match reader.open_tasks_for_team(team.clone(), deadline).await {
                 Ok(rows) => {
                     for row in rows {
-                        heads
-                            .entry(MemberKey::new(team.clone(), row.assignee.clone()))
-                            .or_insert(row);
+                        open.entry(MemberKey::new(team.clone(), row.assignee.clone()))
+                            .or_default()
+                            .push(row);
                     }
                 }
                 Err(error) => {
@@ -355,17 +418,20 @@ impl HerdrQueueWakePump {
                 }
             }
         }
-        heads
+        open
     }
 
     async fn emit_task_reminder(
         &self,
         task_store: &Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
         candidate: MemberObservation,
-        row: TaskRow,
+        open: &[TaskRow],
         now: IsoTimestamp,
         stats: &mut HerdrQueueWakeStats,
     ) {
+        let Some(row) = open.first().cloned() else {
+            return;
+        };
         let context = crate::herdr_queue_wake_escalation::TaskReminderContext {
             task_store,
             member: &candidate.member,
@@ -376,10 +442,11 @@ impl HerdrQueueWakePump {
         let runtime = self.service_runtime.clone();
         let member = candidate.member.clone();
         let row_for_dispatch = row.clone();
+        let open_tasks: Vec<TaskId> = open.iter().map(|task| task.task_id.clone()).collect();
         let dispatch = self
             .blocking_bridge
             .run(herdr_request_deadline(), move || {
-                build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch)
+                build_task_reminder_dispatch(&runtime, &member, &row_for_dispatch, &open_tasks)
             })
             .await;
         let dispatch = match dispatch {
@@ -596,8 +663,9 @@ impl PreparedTaskPass {
     /// held only in the tick where a stall escalation is about to fire, not
     /// for the whole time a task remains open.
     pub(super) fn queue_drain_allowed(&self, member: &MemberKey) -> bool {
-        self.heads
+        self.open
             .get(member)
+            .and_then(|rows| rows.first())
             .is_none_or(|head| !escalation_due(head))
     }
 }

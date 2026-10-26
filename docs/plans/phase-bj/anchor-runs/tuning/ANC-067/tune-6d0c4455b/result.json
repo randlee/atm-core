@@ -1,0 +1,722 @@
+{
+ "aborted_by": null,
+ "canceled": false,
+ "data": {
+  "acceptance_table": [
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       0.95
+      ],
+      "conflict": [
+       "no",
+       0.76
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       0.97
+      ],
+      "conflict": [
+       "no",
+       0.74
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "fixture_pass",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "approved_fixture_pass",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.48
+      ],
+      "conflict": [
+       "yes",
+       0.64
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.49
+      ],
+      "conflict": [
+       "yes",
+       0.64
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "fixture_fail",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "approved_fixture_fail",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.95
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.97
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "paraphrase",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "compliant_paraphrase",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.37
+      ],
+      "conflict": [
+       "no",
+       0.79
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.46
+      ],
+      "conflict": [
+       "no",
+       0.74
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     }
+    },
+    "case_id": "silent",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "not_addressed",
+    "probe": "silence",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "underspecified",
+     "underspecified"
+    ],
+    "verdict_threshold_0": [
+     "not_addressed",
+     "not_addressed"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.82
+      ],
+      "conflict": [
+       "yes",
+       0.66
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.85
+      ],
+      "conflict": [
+       "yes",
+       0.53
+      ],
+      "relevance": [
+       "yes",
+       0.98
+      ]
+     }
+    },
+    "case_id": "conflict_second_record",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "not_addressed"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.58
+      ],
+      "conflict": [
+       "yes",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.55
+      ],
+      "conflict": [
+       "yes",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "conflict_no_claim",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       0.74
+      ],
+      "conflict": [
+       "yes",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       0.8
+      ],
+      "conflict": [
+       "yes",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "conflict_stays_open",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       1.0
+      ]
+     }
+    },
+    "case_id": "irrelevant",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "probe": "irrelevant",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "verdict_threshold_0": [
+     "not_applicable",
+     "not_applicable"
+    ]
+   }
+  ],
+  "accepted": false,
+  "authority_citations": [
+   "ANC-067 v2 locked statement, scope and quote (anchors.json at 6d0c4455b)",
+   "ANC-067 v2 approved pass/fail fixtures",
+   "INTENT phase-bj v1 sha256 e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382 (context only)"
+  ],
+  "authority_recommendations": [],
+  "candidate_rankings": [
+   {
+    "accepted": true,
+    "candidate_id": "default",
+    "complexity": 2554,
+    "confidence": {
+     "cells_at_or_above_threshold": 33,
+     "mean": 0.86,
+     "median": 0.98,
+     "minimum": 0.37,
+     "p10": 0.49,
+     "threshold": 0.8,
+     "total_cells": 48
+    },
+    "production_threshold_0_6_verdict_mismatches": [
+     "silent-r1:underspecified",
+     "silent-r2:underspecified",
+     "conflict_second_record-r2:not_addressed"
+    ],
+    "question_sha256": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+    "score": {
+     "exact_role_cells": 48,
+     "exact_semantic_verdicts": 16,
+     "regressions": 0,
+     "stable_cases": 8,
+     "total_cases": 8,
+     "total_role_cells": 48,
+     "total_semantic_verdicts": 16
+    },
+    "selection_reason": "selected: the default set is semantically exact and stable; no override is needed",
+    "semantic_mismatches": []
+   }
+  ],
+  "confidence_diagnostics": {
+   "cells_at_or_above_threshold": 33,
+   "mean": 0.86,
+   "median": 0.98,
+   "minimum": 0.37,
+   "p10": 0.49,
+   "threshold": 0.8,
+   "total_cells": 48
+  },
+  "confidence_reference_threshold": 0.8,
+  "evidence": {
+   "authoritative_sources_sha256": {
+    "docs/plans/phase-bj/anchors.json": "29cba9e93578617a95706f04fafb2c133ff1665b369f034b9a5fcc6754afbfdc",
+    "docs/plans/phase-bj/anchors.md": "95056af0a544ae410f2042744012c29bf4cefa33ab24aaa3c4a2586e0badc63c",
+    "docs/plans/phase-bj/intent.md": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382"
+   },
+   "baseline_candidate": "default",
+   "evidence_dir": "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b",
+   "files_sha256": {
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/candidates/default.json": "4efa5c07be9bd1c47710c54afd225d0b9123f7be287981e28b5603d16ba48eca",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/oracle.json": "c972ef3f99c1c09bc969738753adeb5eba9a6fb4850fa64cd1752cd79f6cf0b0",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/oracle.sha256": "5bbc1a8c8ac9e6b79fd77dd8447a03e110210f39d9b9a4afdccbac2407e7769c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/request-vars.json": "db2e106bf094e050bd5cf5b66ae29de677448519cc73cc61b255ce3462c1663b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/request.json": "a2ac65bcc2687238f214f697a9ca755e0310734f302aa105db050e3e0b307ae4",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/request.md": "daab75217d05a12175dc395167cefff56e35b3f637da892780ac6d5073bb7f33",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_no_claim-r1.request.json": "08cb15e97f913612baea98e0301c08d7ae6fad52007abffb9136839cbdc2bde0",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_no_claim-r1.response.json": "caed83c70a8d769cab0efc8fa1f9ed13712c7feadca1a8dad45629c3d8cea92e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_no_claim-r2.request.json": "08cb15e97f913612baea98e0301c08d7ae6fad52007abffb9136839cbdc2bde0",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_no_claim-r2.response.json": "566477e4da0303a20dff38feb1888c61c6d2b47d64ab2871dabc06d303d2ddb8",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_second_record-r1.request.json": "5f84a283650b3197ed3e4257edfabb794fe1a7e80e0c75c893adec960180d8f9",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_second_record-r1.response.json": "69f5c2ed9498dd8a5bbe64f04f0a3aae64ef7b94aaebf3ac6e1615a9a7488c82",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_second_record-r2.request.json": "5f84a283650b3197ed3e4257edfabb794fe1a7e80e0c75c893adec960180d8f9",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_second_record-r2.response.json": "e7c76a79e52b92e7323794b75b4819be8a03b7ec55898d940abb9fe15d831417",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_stays_open-r1.request.json": "dd5ff538922f0bca014965969475d3411178d14facf20f42951952cdf48da722",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_stays_open-r1.response.json": "8a9c13079ed25c48d7ab8920c3674ba9be77777f189a6d2d3739151f10d61665",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_stays_open-r2.request.json": "dd5ff538922f0bca014965969475d3411178d14facf20f42951952cdf48da722",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-conflict_stays_open-r2.response.json": "1dfd7741821bd627ae753cb65e228dd223a94b3243bbb554fa34315eb5da605e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-fixture_fail-r1.request.json": "80737b1f02cbe3463ffd07b50132313c351110db4ab9d635babc178f58b66c24",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-fixture_fail-r1.response.json": "75c13de0594f4c1a1cdc80f8322cea272831bd8a7668517062ba985c028b87d9",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-fixture_fail-r2.request.json": "80737b1f02cbe3463ffd07b50132313c351110db4ab9d635babc178f58b66c24",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-fixture_fail-r2.response.json": "a7facfad4070dfc92775febad873f14fbbbb15124e4ef0d43bc9624d52557950",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-fixture_pass-r1.request.json": "f95ece4ac72b221deba3ed5b15ff0e468d28a6ef81f461576f810cdbb1959f44",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-fixture_pass-r1.response.json": "648375ecfc533078df76d3ab53e841522e4b840eff31b353b621f9cbe840f03d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-fixture_pass-r2.request.json": "f95ece4ac72b221deba3ed5b15ff0e468d28a6ef81f461576f810cdbb1959f44",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-fixture_pass-r2.response.json": "a2aed1f9518b1c90eec029f89c69bee6d812f89052780e779a10a3fcd4fedf11",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-irrelevant-r1.request.json": "b776cdff0e12bbb35d70a017a8916300aeae210685969818292a6e6842a43c0d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-irrelevant-r1.response.json": "d9f8f2acecae35e9765ac50d086f52e60e46fd539eb8f4b18b456d7a9b17c072",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-irrelevant-r2.request.json": "b776cdff0e12bbb35d70a017a8916300aeae210685969818292a6e6842a43c0d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-irrelevant-r2.response.json": "d9f8f2acecae35e9765ac50d086f52e60e46fd539eb8f4b18b456d7a9b17c072",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-paraphrase-r1.request.json": "dac45c3ed2e7d1ed2965b2e08d1020d401fbb195cfebe6c0e8ca61372f255dfa",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-paraphrase-r1.response.json": "b2ec633103f4c4ffb917441b7063eec968a71af14bb7103169fdebf454ff4724",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-paraphrase-r2.request.json": "dac45c3ed2e7d1ed2965b2e08d1020d401fbb195cfebe6c0e8ca61372f255dfa",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-paraphrase-r2.response.json": "b2c1f38ba5e65f8f6740467f6d2b4a93274cae8b0316ee10128395446d091242",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-silent-r1.request.json": "7897558b19ae6d455e55e0def8279b6659cfcd79c510c243752707d80c5c27ef",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-silent-r1.response.json": "ccf172aa4af69c9b94a5d6a411ebc0d7a8253942ed7e81c693b58fc586a9930e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-silent-r2.request.json": "7897558b19ae6d455e55e0def8279b6659cfcd79c510c243752707d80c5c27ef",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/runs/ANC-067-default-silent-r2.response.json": "effff80d214cd607e0d859595b915b6d7fbdf06a725f32387070854249c0ddb0",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/score-default.json": "37b83f65a80afbacc7670c5c8a1ed937f15b39bef406cffbce47914fa0b62867"
+   },
+   "max_parallel_calls": 3,
+   "model_requested": "jev-latest",
+   "models_answered": [
+    "jev-1.13.0"
+   ],
+   "oracle_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/oracle.json",
+   "oracle_frozen_before_first_jev_call": true,
+   "raw_response_hash_note": "raw_response_sha256 is the canonical-JSON digest of the validated Jev response object; canonical_request_sha256 is the digest of the exact request bytes sent",
+   "request_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-067/tune-6d0c4455b/request.json",
+   "request_sha256": "57d100b915c19a2d74e42e22b01d1bf5ae91622d7b77cea48c88c0028765e617",
+   "unselected_candidates_excluded_from_production": true
+  },
+  "explanation": "Null result. The default plan questions were judged on 8 frozen cases x 2 byte-identical repeats and matched every role label and threshold-0 verdict (48/48 cells, 16/16 verdicts, all cases stable). No override is sealed.",
+  "gate": "planning",
+  "operation": "tune",
+  "oracle_sha256": "44258397c2a3232e79ed1a45a1f0fab452bb4169115d314d5c8d580f20bc249f",
+  "planner_action": "Keep the default plan questions for ANC-067; write no override. Production review keeps the 0.6 threshold.",
+  "production_confidence_threshold": 0.6,
+  "production_semantics_unchanged": true,
+  "question_action": null,
+  "sealed_question_set": null,
+  "sealed_question_set_digest_after": null,
+  "sealed_question_set_digest_before": null,
+  "semantic_score": {
+   "exact_role_cells": 48,
+   "exact_semantic_verdicts": 16,
+   "regressions": 0,
+   "stable_cases": 8,
+   "total_cases": 8,
+   "total_role_cells": 48,
+   "total_semantic_verdicts": 16
+  },
+  "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+  "tuning_history_after": {
+   "events": [
+    {
+     "authority": {
+      "anchor_id": "ANC-067",
+      "anchor_record_sha256": "94f6074bd793587ceb47c9e5c7ecfb1d86a1767187029e040b3fc2df0379f73d",
+      "anchor_version": 2,
+      "intent_id": "phase-bj",
+      "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+      "intent_version": 1
+     },
+     "candidate": {
+      "candidate_id": "default",
+      "question_sha256": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05"
+     },
+     "decision": {
+      "question_set_sha256": null,
+      "reason_code": "TOURNAMENT.DEFAULT_EXACT_NO_OVERRIDE",
+      "status": "rejected"
+     },
+     "event": "candidate_evaluated",
+     "event_index": 1,
+     "evidence": {
+      "canonical_request_sha256": [
+       "f95ece4ac72b221deba3ed5b15ff0e468d28a6ef81f461576f810cdbb1959f44",
+       "f95ece4ac72b221deba3ed5b15ff0e468d28a6ef81f461576f810cdbb1959f44",
+       "80737b1f02cbe3463ffd07b50132313c351110db4ab9d635babc178f58b66c24",
+       "80737b1f02cbe3463ffd07b50132313c351110db4ab9d635babc178f58b66c24",
+       "dac45c3ed2e7d1ed2965b2e08d1020d401fbb195cfebe6c0e8ca61372f255dfa",
+       "dac45c3ed2e7d1ed2965b2e08d1020d401fbb195cfebe6c0e8ca61372f255dfa",
+       "7897558b19ae6d455e55e0def8279b6659cfcd79c510c243752707d80c5c27ef",
+       "7897558b19ae6d455e55e0def8279b6659cfcd79c510c243752707d80c5c27ef",
+       "5f84a283650b3197ed3e4257edfabb794fe1a7e80e0c75c893adec960180d8f9",
+       "5f84a283650b3197ed3e4257edfabb794fe1a7e80e0c75c893adec960180d8f9",
+       "08cb15e97f913612baea98e0301c08d7ae6fad52007abffb9136839cbdc2bde0",
+       "08cb15e97f913612baea98e0301c08d7ae6fad52007abffb9136839cbdc2bde0",
+       "dd5ff538922f0bca014965969475d3411178d14facf20f42951952cdf48da722",
+       "dd5ff538922f0bca014965969475d3411178d14facf20f42951952cdf48da722",
+       "b776cdff0e12bbb35d70a017a8916300aeae210685969818292a6e6842a43c0d",
+       "b776cdff0e12bbb35d70a017a8916300aeae210685969818292a6e6842a43c0d"
+      ],
+      "raw_response_sha256": [
+       "48d6b7e17d598e4a61f2fdfd87bbffaca037bc47591a99adb0e6772c2406d621",
+       "8b365eec41a5adcfc280f1f768edacf60f118239de62d17c5583178d72a1cd45",
+       "34eb137505004f6dd6b90669fa83d03a9cd418618a645ad4f50d8c5bf610bfc2",
+       "293c445f3b177956a06482edbc5978fb55f5d8209896a3eb27944d78d4039bc7",
+       "32f1ab0a474dc361f425791ada57fe82a6d816ff22a4b00526a00a23fc257934",
+       "76c609d00b0b28122e88a761d0cbe4368ad844b97783b119bca659608c46bde3",
+       "eff101e63d759e724903d335d0254783e8149a40aef4f3ea2d58d63658986517",
+       "9eb03ffd6b342de0a03f1ba4f9e0f1d1dc20008a33eb704d4c6abf944ef7119b",
+       "fddb40c1b6a54d72433ff1e58eba9ed5d896d259f1017a66ebba6f768bd94ecb",
+       "19197a9530d599b7d0af6e5bdd402972b96d8cabd9b0ceae3748753d10da220c",
+       "3f37e85840d8a5278d3e82f9be98a609888ef566405a366161388e9f829fcd38",
+       "748466c1711bd794c451d0e68691d60120488f7ffc3bf30dd1f6e8f6c1adb145",
+       "d92b4c50c6100134e9626e8157631d5567b18aad9b83043608ceaa944b034513",
+       "79ec395a41ecd58d588361805c950d4a01587cca31fb7e77aebaf2cce9cbd13f",
+       "a55a46cb8bd727c47dcb233f6d83fec941717a7303e3e7c8535aa9174ccb4cf5",
+       "a55a46cb8bd727c47dcb233f6d83fec941717a7303e3e7c8535aa9174ccb4cf5"
+      ],
+      "run_ids": [
+       "ANC-067-default-fixture_pass-r1",
+       "ANC-067-default-fixture_pass-r2",
+       "ANC-067-default-fixture_fail-r1",
+       "ANC-067-default-fixture_fail-r2",
+       "ANC-067-default-paraphrase-r1",
+       "ANC-067-default-paraphrase-r2",
+       "ANC-067-default-silent-r1",
+       "ANC-067-default-silent-r2",
+       "ANC-067-default-conflict_second_record-r1",
+       "ANC-067-default-conflict_second_record-r2",
+       "ANC-067-default-conflict_no_claim-r1",
+       "ANC-067-default-conflict_no_claim-r2",
+       "ANC-067-default-conflict_stays_open-r1",
+       "ANC-067-default-conflict_stays_open-r2",
+       "ANC-067-default-irrelevant-r1",
+       "ANC-067-default-irrelevant-r2"
+      ]
+     },
+     "oracle": {
+      "case_count": 8,
+      "case_ids": [
+       "fixture_pass",
+       "fixture_fail",
+       "paraphrase",
+       "silent",
+       "conflict_second_record",
+       "conflict_no_claim",
+       "conflict_stays_open",
+       "irrelevant"
+      ],
+      "repeat_count": 2,
+      "sha256": "44258397c2a3232e79ed1a45a1f0fab452bb4169115d314d5c8d580f20bc249f"
+     },
+     "previous_event_sha256": null,
+     "protocol_version": "plan-anchor/question-tournament/2.0.0",
+     "score": {
+      "confidence": {
+       "cells_at_or_above_threshold": 33,
+       "mean": 0.86,
+       "median": 0.98,
+       "minimum": 0.37,
+       "p10": 0.49,
+       "threshold": 0.8,
+       "total_cells": 48
+      },
+      "exact_role_cells": 48,
+      "exact_semantic_verdicts": 16,
+      "regressions": 0,
+      "stable_cases": 8,
+      "total_cases": 8,
+      "total_role_cells": 48,
+      "total_semantic_verdicts": 16
+     },
+     "supersedes": null
+    }
+   ],
+   "history_id": "ANC-067-plan",
+   "schema": "plan-anchor/tuning-history/2"
+  },
+  "tuning_history_after_sha256": "d7246c48127d56deb339f71f8ab87a246366392d501ee115d7bd7128c55ae8d6",
+  "tuning_history_before_sha256": "a856d77b551cb10889f5fa22bb07f4b3a2515660e34ae37ec283e1c9d8650289"
+ },
+ "error": null,
+ "metadata": {
+  "authoritative_sources_unchanged": true,
+  "correlation_id": "ANC-067-6d0c4455b",
+  "duration_ms": 700,
+  "jev_run_ids": [
+   "ANC-067-default-fixture_pass-r1",
+   "ANC-067-default-fixture_pass-r2",
+   "ANC-067-default-fixture_fail-r1",
+   "ANC-067-default-fixture_fail-r2",
+   "ANC-067-default-paraphrase-r1",
+   "ANC-067-default-paraphrase-r2",
+   "ANC-067-default-silent-r1",
+   "ANC-067-default-silent-r2",
+   "ANC-067-default-conflict_second_record-r1",
+   "ANC-067-default-conflict_second_record-r2",
+   "ANC-067-default-conflict_no_claim-r1",
+   "ANC-067-default-conflict_no_claim-r2",
+   "ANC-067-default-conflict_stays_open-r1",
+   "ANC-067-default-conflict_stays_open-r2",
+   "ANC-067-default-irrelevant-r1",
+   "ANC-067-default-irrelevant-r2"
+  ],
+  "planner_observation_trust": null,
+  "retry_count": 0,
+  "tool_calls": 16
+ },
+ "schema_version": "1.0.0",
+ "success": true
+}

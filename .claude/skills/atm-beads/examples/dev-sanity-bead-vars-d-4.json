@@ -4,5 +4,17 @@
   "dev_bead": "atm-d-4",
   "phase": "d",
   "sprint": "d-4",
-  "stack": "phase-d"
+  "stack": "phase-d",
+  "branch": "fix/d-4-example",
+  "worktree": "../atm-core-worktrees/fix/d-4-example",
+  "pr_target": "integrate/phase-d",
+  "difficulty": "normal",
+  "stack_bead": "atm-phase-d.stack",
+  "checked_title": "d-4: OTLP sync exporter",
+  "phase_feature": "phase-d: OTel export",
+  "lint_command": "just lint",
+  "policy_path": ".claude/project/quality-policy.md",
+  "max_sanity_rounds": 5,
+  "sprint_bead": "atm-d-4",
+  "qa_bead": "atm-d-4-qa1"
 }

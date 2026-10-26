@@ -16,6 +16,7 @@ use atm_core::api::{
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::peer_wire::PeerWireSecurity;
 use atm_core::protocol::{
     CompatibilityPreflight, GraftReceiverLookupRequest, GraftReceiverRefreshRequest,
     GraftReceiverRegistration, GraftReceiverUnregistration, HttpApiVersion, QueueGetNextRequest,
@@ -170,11 +171,17 @@ impl AuthenticatedConnector {
         match self {
             Self::Local => {
                 request.authenticated_source_host = None;
+                request.clear_untrusted_daemon_escalation_provenance();
                 Ok(AuthenticatedIngress::Local)
             }
             Self::Peer { source_host } => {
                 validate_peer_write_version(request.peer_http_api_version.take())?;
+                validate_peer_write_security(
+                    request.peer_wire_security.take(),
+                    PeerWireSecurity::Mtls,
+                )?;
                 request.authenticated_source_host = Some(source_host.clone());
+                request.admit_authenticated_peer_daemon_escalation_provenance();
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
                 }
@@ -199,7 +206,12 @@ impl AuthenticatedConnector {
                 // explicit plaintext test reply to the actual socket peer
                 // without accepting a JSON-forged value.
                 request.authenticated_source_host = Some(source_host.clone());
+                request.clear_untrusted_daemon_escalation_provenance();
                 validate_peer_write_version(request.peer_http_api_version.take())?;
+                validate_peer_write_security(
+                    request.peer_wire_security.take(),
+                    PeerWireSecurity::PlaintextTest,
+                )?;
                 if let Some(destination) = request.to.take() {
                     request.to = Some(destination.without_host());
                 }
@@ -217,6 +229,7 @@ impl AuthenticatedConnector {
     ) -> Result<AuthenticatedIngress, AtmError> {
         match request {
             ApiRequest::Write(write) => self.normalize_write(write, peer_address),
+            ApiRequest::Doctor(query) => self.normalize_doctor(query),
             _ => match self {
                 Self::Local => Ok(AuthenticatedIngress::Local),
                 Self::Peer { .. } => Ok(AuthenticatedIngress::Peer),
@@ -224,6 +237,56 @@ impl AuthenticatedConnector {
             },
         }
     }
+
+    fn normalize_doctor(&self, query: &mut DoctorQuery) -> Result<AuthenticatedIngress, AtmError> {
+        match self {
+            Self::Local => {
+                query.peer_http_api_version = None;
+                query.peer_wire_security = None;
+                Ok(AuthenticatedIngress::Local)
+            }
+            Self::Peer { .. } => {
+                validate_peer_write_version(query.peer_http_api_version.take())?;
+                validate_peer_write_security(
+                    query.peer_wire_security.take(),
+                    PeerWireSecurity::Mtls,
+                )?;
+                Ok(AuthenticatedIngress::Peer)
+            }
+            // Direct plain-TCP smoke remains anonymous, but its doctor
+            // request still crosses the peer HTTP boundary. Reject explicit
+            // incompatible metadata before dispatch, as for peer writes.
+            Self::PeerSocket => {
+                validate_peer_write_version(query.peer_http_api_version.take())?;
+                validate_peer_write_security(
+                    query.peer_wire_security.take(),
+                    PeerWireSecurity::PlaintextTest,
+                )?;
+                Ok(AuthenticatedIngress::AnonymousSmoke)
+            }
+        }
+    }
+}
+
+fn validate_peer_write_security(
+    peer_security: Option<PeerWireSecurity>,
+    local_security: PeerWireSecurity,
+) -> Result<(), AtmError> {
+    // The field is additive. An older sender omitted it while using the
+    // receiver's established connector mode, so omission defaults to that
+    // mode for both authenticated mTLS and explicit plaintext-test smoke.
+    let peer_security = peer_security.unwrap_or(local_security);
+    if peer_security == local_security {
+        return Ok(());
+    }
+    Err(AtmError::new(
+        AtmErrorCode::ClientDaemonVersionIncompatible,
+        format!(
+            "peer wire-security mismatch: sender {}, receiver {}",
+            peer_security.as_launch_value(),
+            local_security.as_launch_value()
+        ),
+    ))
 }
 
 fn validate_peer_write_version(peer_version: Option<HttpApiVersion>) -> Result<(), AtmError> {
@@ -481,43 +544,33 @@ fn decode_framework_request(
     let body = request.body.as_slice();
     let method = request.method.to_ascii_uppercase();
     match http_route_kind(&method, &request.path) {
-        Some(HttpRouteKind::Write) => serde_json::from_slice::<WriteRequest>(body)
-            .map(|value| ApiRequest::Write(Box::new(value)))
-            .map_err(|source| invalid_framework_body("write", source)),
-        Some(HttpRouteKind::List) => serde_json::from_slice(body)
-            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
-            .map_err(|source| invalid_framework_body("messages list", source)),
-        Some(HttpRouteKind::Inspect) => serde_json::from_slice::<PeekQuery>(body)
-            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
-            .map_err(|source| invalid_framework_body("message inspect", source)),
-        Some(HttpRouteKind::Receive) => serde_json::from_slice::<ReadQuery>(body)
-            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
-            .map_err(|source| invalid_framework_body("message read", source)),
-        Some(HttpRouteKind::Clear) => serde_json::from_slice::<ClearQuery>(body)
-            .map(ApiRequest::Clear)
-            .map_err(|source| invalid_framework_body("messages clear", source)),
-        Some(HttpRouteKind::Doctor) => serde_json::from_slice::<DoctorQuery>(body)
-            .map(ApiRequest::Doctor)
-            .map_err(|source| invalid_framework_body("doctor", source)),
-        Some(HttpRouteKind::Search) => decode_search_query(&request.path)
-            .map(Box::new)
-            .map(ApiRequest::Search),
-        Some(HttpRouteKind::Compatibility) => {
-            serde_json::from_slice::<CompatibilityPreflight>(body)
-                .map(ApiRequest::CompatibilityPreflight)
-                .map_err(|source| invalid_framework_body("compatibility", source))
+        Some(
+            kind @ (HttpRouteKind::Write
+            | HttpRouteKind::List
+            | HttpRouteKind::Inspect
+            | HttpRouteKind::Receive
+            | HttpRouteKind::Clear
+            | HttpRouteKind::Doctor
+            | HttpRouteKind::Search),
+        ) => decode_framework_message_request(kind, body, &request.path)
+            .expect("message route kind must decode to a message request"),
+        Some(
+            kind @ (HttpRouteKind::Compatibility
+            | HttpRouteKind::Heartbeat
+            | HttpRouteKind::QueueGetNext
+            | HttpRouteKind::TaskMove),
+        ) => decode_framework_control_request(kind, body)
+            .expect("control route kind must decode to a control request"),
+        Some(HttpRouteKind::ToolSenderApply) => {
+            serde_json::from_slice::<atm_core::protocol::ToolInstallerRequest>(body)
+                .map(ApiRequest::ToolSenderApply)
+                .map_err(|source| invalid_framework_body("tool sender apply", source))
         }
-        Some(HttpRouteKind::Heartbeat) => {
-            serde_json::from_slice::<TeamMemberHeartbeatRequest>(body)
-                .map(ApiRequest::Heartbeat)
-                .map_err(|source| invalid_framework_body("heartbeat", source))
+        Some(HttpRouteKind::ToolSenderUnregister) => {
+            serde_json::from_slice::<atm_core::protocol::ToolInstallerRequest>(body)
+                .map(ApiRequest::ToolSenderUnregister)
+                .map_err(|source| invalid_framework_body("tool sender unregister", source))
         }
-        Some(HttpRouteKind::QueueGetNext) => serde_json::from_slice::<QueueGetNextRequest>(body)
-            .map(ApiRequest::QueueGetNext)
-            .map_err(|source| invalid_framework_body("queue get next", source)),
-        Some(HttpRouteKind::TaskMove) => serde_json::from_slice::<TaskMoveRequest>(body)
-            .map(ApiRequest::TaskMove)
-            .map_err(|source| invalid_framework_body("task move", source)),
         Some(
             kind @ (HttpRouteKind::GraftReceiverRegister
             | HttpRouteKind::GraftReceiverRefresh
@@ -528,11 +581,109 @@ fn decode_framework_request(
         Some(HttpRouteKind::RuntimeReload) => serde_json::from_slice::<()>(body)
             .map(|()| ApiRequest::ReloadRuntimeView)
             .map_err(|source| invalid_framework_body("runtime reload", source)),
+        Some(
+            kind @ (HttpRouteKind::HookRegister
+            | HttpRouteKind::HookDisable
+            | HttpRouteKind::HookList
+            | HttpRouteKind::CronStart
+            | HttpRouteKind::CronEnd
+            | HttpRouteKind::CronList),
+        ) => decode_hook_cron_request(kind, body)
+            .expect("hook and cron route kind must decode to a hook or cron request"),
         None => Err(AtmError::validation_with_recovery(
             format!("unsupported daemon HTTP route {method} {}", request.path),
             "use a method and path from the daemon HTTP route contract and retry",
         )),
     }
+}
+
+fn decode_framework_message_request(
+    kind: HttpRouteKind,
+    body: &[u8],
+    path: &str,
+) -> Option<Result<ApiRequest, AtmError>> {
+    Some(match kind {
+        HttpRouteKind::Write => serde_json::from_slice::<WriteRequest>(body)
+            .map(|value| ApiRequest::Write(Box::new(value)))
+            .map_err(|source| invalid_framework_body("write", source)),
+        HttpRouteKind::List => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
+            .map_err(|source| invalid_framework_body("messages list", source)),
+        HttpRouteKind::Inspect => serde_json::from_slice::<PeekQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
+            .map_err(|source| invalid_framework_body("message inspect", source)),
+        HttpRouteKind::Receive => serde_json::from_slice::<ReadQuery>(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
+            .map_err(|source| invalid_framework_body("message read", source)),
+        HttpRouteKind::Clear => serde_json::from_slice::<ClearQuery>(body)
+            .map(ApiRequest::Clear)
+            .map_err(|source| invalid_framework_body("messages clear", source)),
+        HttpRouteKind::Doctor => serde_json::from_slice::<DoctorQuery>(body)
+            .map(ApiRequest::Doctor)
+            .map_err(|source| invalid_framework_body("doctor", source)),
+        HttpRouteKind::Search => decode_search_query(path)
+            .map(Box::new)
+            .map(ApiRequest::Search),
+        _ => return None,
+    })
+}
+
+fn decode_framework_control_request(
+    kind: HttpRouteKind,
+    body: &[u8],
+) -> Option<Result<ApiRequest, AtmError>> {
+    Some(match kind {
+        HttpRouteKind::Compatibility => serde_json::from_slice::<CompatibilityPreflight>(body)
+            .map(ApiRequest::CompatibilityPreflight)
+            .map_err(|source| invalid_framework_body("compatibility", source)),
+        HttpRouteKind::Heartbeat => serde_json::from_slice::<TeamMemberHeartbeatRequest>(body)
+            .map(ApiRequest::Heartbeat)
+            .map_err(|source| invalid_framework_body("heartbeat", source)),
+        HttpRouteKind::QueueGetNext => serde_json::from_slice::<QueueGetNextRequest>(body)
+            .map(ApiRequest::QueueGetNext)
+            .map_err(|source| invalid_framework_body("queue get next", source)),
+        HttpRouteKind::TaskMove => serde_json::from_slice::<TaskMoveRequest>(body)
+            .map(ApiRequest::TaskMove)
+            .map_err(|source| invalid_framework_body("task move", source)),
+        _ => return None,
+    })
+}
+
+/// Decodes one of the six hook and cron routes added in HTTP API 1.13.0.
+///
+/// Returns `None` for any other route kind so the caller's route dispatch
+/// stays exhaustive over `HttpRouteKind` without duplicating these arms.
+fn decode_hook_cron_request(
+    kind: HttpRouteKind,
+    body: &[u8],
+) -> Option<Result<ApiRequest, AtmError>> {
+    Some(match kind {
+        HttpRouteKind::HookRegister => {
+            serde_json::from_slice::<atm_core::hook::HookRegisterRequest>(body)
+                .map(ApiRequest::HookRegister)
+                .map_err(|source| invalid_framework_body("hook register", source))
+        }
+        HttpRouteKind::HookDisable => {
+            serde_json::from_slice::<atm_core::hook::HookDisableRequest>(body)
+                .map(ApiRequest::HookDisable)
+                .map_err(|source| invalid_framework_body("hook disable", source))
+        }
+        HttpRouteKind::HookList => serde_json::from_slice::<atm_core::hook::HookListQuery>(body)
+            .map(ApiRequest::HookList)
+            .map_err(|source| invalid_framework_body("hook list", source)),
+        HttpRouteKind::CronStart => {
+            serde_json::from_slice::<atm_core::hook::CronStartRequest>(body)
+                .map(ApiRequest::CronStart)
+                .map_err(|source| invalid_framework_body("cron start", source))
+        }
+        HttpRouteKind::CronEnd => serde_json::from_slice::<atm_core::hook::CronEndRequest>(body)
+            .map(ApiRequest::CronEnd)
+            .map_err(|source| invalid_framework_body("cron end", source)),
+        HttpRouteKind::CronList => serde_json::from_slice::<atm_core::hook::CronListQuery>(body)
+            .map(ApiRequest::CronList)
+            .map_err(|source| invalid_framework_body("cron list", source)),
+        _ => return None,
+    })
 }
 
 /// Decodes one of the four local-ingress-only graft receiver routes.
@@ -704,7 +855,7 @@ fn map_write_response(response: ApiResponse) -> Result<Response, AtmError> {
     }
 }
 
-fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
+pub(crate) fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
     match response.into_inner() {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => json_response(
             StatusCode::CREATED,
@@ -733,8 +884,33 @@ fn map_api_response(response: ApiResponse) -> Result<Response, AtmError> {
         ResponseEnvelope::Doctor(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::Search(value) => json_response(StatusCode::OK, &value, None),
         ResponseEnvelope::RuntimeViewReloaded => json_response(StatusCode::OK, &(), None),
+        ResponseEnvelope::HookRegistered(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::HookList(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::HookDisabled(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::ToolSenderApplied(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::CronStarted(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::CronList(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::CronEnded(value) => json_response(StatusCode::OK, &value, None),
+        ResponseEnvelope::HookActions(value) => hook_actions_response(&value),
         ResponseEnvelope::Error(error) => Ok(error_response(error)),
     }
+}
+
+fn hook_actions_response(
+    outcome: &atm_core::hook::HookActionsResponse,
+) -> Result<Response, AtmError> {
+    let mut response = json_response(StatusCode::OK, outcome, None)?;
+    let count = HeaderValue::from_str(&outcome.dispatched.to_string()).map_err(|source| {
+        AtmError::new(
+            atm_core::error::AtmErrorCode::SerializationFailed,
+            "failed to serialize hook actions header",
+        )
+        .with_cause(source)
+    })?;
+    response
+        .headers_mut()
+        .insert(atm_core::api::HOOK_ACTIONS_HEADER, count);
+    Ok(response)
 }
 
 fn clear_response(outcome: &atm_core::clear::ClearOutcome) -> Result<Response, AtmError> {
@@ -845,8 +1021,10 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex, MutexGuard};
     use std::time::{Duration, Instant};
 
-    use atm_core::api::HttpRequest;
+    use atm_core::api::{ApiRequest, HttpRequest};
+    use atm_core::doctor::DoctorQuery;
     use atm_core::error::{AtmError, AtmErrorCode};
+    use atm_core::peer_wire::PeerWireSecurity;
     use atm_core::protocol::{HttpApiVersion, ResponseEnvelope};
     use atm_core::search::{SearchRequest, SearchResponse};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome};
@@ -859,6 +1037,7 @@ mod tests {
         SearchResultKey, SearchTimestampField, StoredSearchAddress,
     };
     use axum::body::{Body, to_bytes};
+    use axum::extract::ConnectInfo;
     use axum::http::header::{CONTENT_TYPE, HeaderName};
     use axum::http::{HeaderMap, HeaderValue, Request, StatusCode};
     use base64::Engine as _;
@@ -1334,7 +1513,9 @@ mod tests {
     async fn local_and_peer_use_identical_write_json_and_one_dispatch() {
         let mut request = write_request();
         request.authenticated_source_host = Some("forged.example.test".parse().expect("host"));
-        let body = serde_json::to_vec(&request).expect("typed write JSON");
+        let mut body: serde_json::Value = serde_json::to_value(&request).expect("typed write JSON");
+        body["peer_daemon_escalation_provenance"] = serde_json::Value::Bool(true);
+        let body = serde_json::to_vec(&body).expect("wire-carried marker JSON");
         let response = sent_response();
         let expected = match &response {
             ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) => {
@@ -1371,12 +1552,15 @@ mod tests {
         assert_eq!(peer_response.status(), StatusCode::CREATED);
         assert_eq!(response_body(peer_response).await, expected);
 
-        assert_eq!(body, serde_json::to_vec(&request).expect("same typed JSON"));
         let local_calls = local_calls.lock().expect("local calls");
         let peer_calls = peer_calls.lock().expect("peer calls");
         assert_eq!(local_calls.len(), 1, "local request has one core dispatch");
         assert_eq!(peer_calls.len(), 1, "peer request has one core dispatch");
         assert_eq!(local_calls[0].0.authenticated_source_host, None);
+        assert!(
+            !local_calls[0].0.has_daemon_escalation_provenance(),
+            "local JSON cannot forge the daemon escalation marker"
+        );
         assert_eq!(local_calls[0].1, AuthenticatedIngress::Local);
         assert_eq!(
             peer_calls[0].0.authenticated_source_host,
@@ -1393,6 +1577,52 @@ mod tests {
             "the physical peer qualifier is consumed before shared mailbox routing"
         );
         assert_eq!(peer_calls[0].1, AuthenticatedIngress::Peer);
+        assert!(
+            peer_calls[0].0.has_daemon_escalation_provenance(),
+            "the authenticated peer path retains daemon escalation provenance"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn peer_socket_ingress_clears_a_forged_daemon_escalation_carrier() {
+        let mut body: serde_json::Value =
+            serde_json::to_value(write_request()).expect("typed write JSON");
+        body["peer_daemon_escalation_provenance"] = serde_json::Value::Bool(true);
+        let body = serde_json::to_vec(&body).expect("wire-carried marker JSON");
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::peer_socket(),
+            limits(4096, 2),
+            timeouts(),
+        );
+        let socket: std::net::SocketAddr = "127.0.0.1:43210".parse().expect("socket");
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(canonical_write_path())
+                    .header(CONTENT_TYPE, "application/json")
+                    .extension(ConnectInfo(socket))
+                    .body(Body::from(body))
+                    .expect("HTTP request"),
+            )
+            .await
+            .expect("infallible Axum service");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let calls = calls.lock().expect("record calls");
+        assert_eq!(calls.len(), 1);
+        assert!(matches!(
+            calls[0].1,
+            AuthenticatedIngress::UntrustedSmoke(_)
+        ));
+        assert!(
+            !calls[0].0.has_daemon_escalation_provenance(),
+            "the untrusted direct-peer socket cannot forge daemon provenance"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -1804,6 +2034,146 @@ mod tests {
     }
 
     #[test]
+    fn peer_write_security_requires_the_same_mode() {
+        super::validate_peer_write_security(Some(PeerWireSecurity::Mtls), PeerWireSecurity::Mtls)
+            .expect("matching mTLS modes are compatible");
+        super::validate_peer_write_security(None, PeerWireSecurity::Mtls)
+            .expect("an older mTLS peer may omit the additive field");
+        super::validate_peer_write_security(
+            Some(PeerWireSecurity::PlaintextTest),
+            PeerWireSecurity::PlaintextTest,
+        )
+        .expect("matching explicit plaintext-test modes are compatible");
+        super::validate_peer_write_security(None, PeerWireSecurity::PlaintextTest)
+            .expect("an older plaintext-test peer may omit the additive field");
+
+        let error = super::validate_peer_write_security(
+            Some(PeerWireSecurity::PlaintextTest),
+            PeerWireSecurity::Mtls,
+        )
+        .expect_err("different peer security modes are incompatible");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(error.message().contains("peer wire-security mismatch"));
+    }
+
+    #[test]
+    fn authenticated_peer_doctor_requires_matching_compatibility_metadata() {
+        let connector =
+            AuthenticatedConnector::peer("trusted.example.test".parse().expect("source host"));
+        let mut compatible = ApiRequest::Doctor(DoctorQuery {
+            peer_http_api_version: Some(
+                HttpApiVersion::parse("1.0.0").expect("same-major minor-skew fixture"),
+            ),
+            peer_wire_security: Some(PeerWireSecurity::Mtls),
+            ..DoctorQuery::default()
+        });
+        assert_eq!(
+            connector
+                .normalize_request(&mut compatible, None)
+                .expect("same-major mTLS peer doctor is compatible"),
+            AuthenticatedIngress::Peer
+        );
+
+        let mut major_mismatch = ApiRequest::Doctor(DoctorQuery {
+            peer_http_api_version: Some(
+                HttpApiVersion::parse("2.0.0").expect("major-skew fixture"),
+            ),
+            peer_wire_security: Some(PeerWireSecurity::Mtls),
+            ..DoctorQuery::default()
+        });
+        let error = connector
+            .normalize_request(&mut major_mismatch, None)
+            .expect_err("different-major peer doctor is incompatible");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+
+        let mut security_mismatch = ApiRequest::Doctor(DoctorQuery {
+            peer_wire_security: Some(PeerWireSecurity::PlaintextTest),
+            ..DoctorQuery::default()
+        });
+        let error = connector
+            .normalize_request(&mut security_mismatch, None)
+            .expect_err("different peer doctor security modes are incompatible");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+
+        let mut older_peer = ApiRequest::Doctor(DoctorQuery::default());
+        assert_eq!(
+            connector
+                .normalize_request(&mut older_peer, None)
+                .expect("older peer doctor may omit additive metadata"),
+            AuthenticatedIngress::Peer
+        );
+    }
+
+    #[test]
+    fn peer_socket_doctor_rejects_incompatible_metadata_before_dispatch() {
+        let socket = AuthenticatedConnector::peer_socket();
+        let mut compatible_smoke = ApiRequest::Doctor(DoctorQuery {
+            peer_http_api_version: Some(
+                HttpApiVersion::parse("1.0.0").expect("same-major minor-skew fixture"),
+            ),
+            peer_wire_security: Some(PeerWireSecurity::PlaintextTest),
+            ..DoctorQuery::default()
+        });
+        assert_eq!(
+            socket
+                .normalize_request(&mut compatible_smoke, None)
+                .expect("compatible direct smoke remains anonymous"),
+            AuthenticatedIngress::AnonymousSmoke
+        );
+
+        let mut major_mismatch_smoke = ApiRequest::Doctor(DoctorQuery {
+            peer_http_api_version: Some(
+                HttpApiVersion::parse("2.0.0").expect("major-skew fixture"),
+            ),
+            peer_wire_security: Some(PeerWireSecurity::PlaintextTest),
+            ..DoctorQuery::default()
+        });
+        let error = socket
+            .normalize_request(&mut major_mismatch_smoke, None)
+            .expect_err("direct smoke rejects a different HTTP major");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+
+        let mut security_mismatch_smoke = ApiRequest::Doctor(DoctorQuery {
+            peer_wire_security: Some(PeerWireSecurity::Mtls),
+            ..DoctorQuery::default()
+        });
+        let error = socket
+            .normalize_request(&mut security_mismatch_smoke, None)
+            .expect_err("direct smoke rejects a different wire-security mode");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+
+        let mut older_smoke = ApiRequest::Doctor(DoctorQuery::default());
+        assert_eq!(
+            socket
+                .normalize_request(&mut older_smoke, None)
+                .expect("older direct smoke may omit additive metadata"),
+            AuthenticatedIngress::AnonymousSmoke
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn authenticated_peer_rejects_a_security_mismatch_before_dispatch() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let app = canonical_message_router(
+            Arc::new(RecordingRouter {
+                response: sent_response(),
+                calls: Arc::clone(&calls),
+            }),
+            AuthenticatedConnector::peer("trusted.example.test".parse().expect("host")),
+            limits(4096, 2),
+            timeouts(),
+        );
+        let request = write_request().with_peer_wire_security(PeerWireSecurity::PlaintextTest);
+        let response = post(app, serde_json::to_vec(&request).expect("typed write JSON")).await;
+        let status = response.status();
+        let error: AtmError = serde_json::from_slice(&response_body(response).await)
+            .expect("typed mismatch response");
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{error:?}");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+        assert!(calls.lock().expect("record calls").is_empty());
+    }
+
+    #[test]
     fn canonical_route_is_selected_from_the_core_route_surface() {
         assert!(atm_core::api::http_route_surface().any(|route| {
             route.method == "POST" && route.path_template == canonical_write_path()
@@ -1950,6 +2320,20 @@ mod tests {
                     }
                 },
                 "responses": {
+                    "200": {
+                        "description": "A task hook handled the command and its actions ran in order; the body counts them. Added in HTTP API 1.13.0.",
+                        "headers": {
+                            "X-ATM-Hook-Actions": {
+                                "description": "Decimal count of hook actions dispatched; equals HookActions.dispatched.",
+                                "schema": {"type": "string"}
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/HookActions"}
+                            }
+                        }
+                    },
                     "201": {
                         "description": "Created message",
                         "content": {
@@ -1961,7 +2345,7 @@ mod tests {
                     "default": {"$ref": "#/components/responses/AtmError"}
                 }
             }),
-            "the parsed OpenAPI write operation must remain the AL.1 compatibility oracle"
+            "the parsed OpenAPI write operation must remain the AL.1 compatibility oracle; HTTP API 1.13.0 adds only the 200 HookActions response"
         );
 
         let search_operation = openapi
@@ -2022,5 +2406,341 @@ mod tests {
         assert!(!include_str!("message_handler.rs").contains(&forbidden));
         let forbidden = ["Peer", "Message", "Array"].concat();
         assert!(!include_str!("message_handler.rs").contains(&forbidden));
+    }
+
+    #[tokio::test]
+    async fn peer_ingress_hook_and_cron_routes_are_refused() {
+        use crate::storage_and_nudge_router::tests::fixture;
+        use atm_core::api::{ApiRequest, RequestDeadline};
+        use atm_core::boundary::StopCondition;
+        use atm_core::hook::{
+            CronEndRequest, CronListQuery, CronStartRequest, HookDisableRequest, HookListQuery,
+            HookRegisterRequest,
+        };
+
+        let fixture = fixture(true, None, None);
+        let caller = |name: &str| name.parse().expect("agent");
+        let team: atm_core::types::TeamName = "test-team".parse().expect("team");
+        let phase = crate::hook_filter::test_support::phase("bk");
+        let requests = vec![
+            ApiRequest::HookRegister(HookRegisterRequest {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: phase.clone(),
+                hook: "task.assign".to_owned(),
+                module_path: "/modules/gate.wasm".into(),
+                cwd: "/work".into(),
+                timeout_ms: 1_000,
+                custom: serde_json::json!({}),
+            }),
+            ApiRequest::HookDisable(HookDisableRequest {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: phase.clone(),
+                hook: None,
+            }),
+            ApiRequest::HookList(HookListQuery {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: None,
+            }),
+            ApiRequest::CronStart(CronStartRequest {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: phase.clone(),
+                name: "nightly".to_owned(),
+                cron_expr: "0 3 * * *".to_owned(),
+                module_path: "/modules/nightly.wasm".into(),
+                cwd: "/work".into(),
+                args: Vec::new(),
+                timeout_ms: 1_000,
+                stop: StopCondition::Hook,
+                custom: serde_json::json!({}),
+            }),
+            ApiRequest::CronEnd(CronEndRequest {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: phase.clone(),
+                name: None,
+            }),
+            ApiRequest::CronList(CronListQuery {
+                caller_identity: caller("sender"),
+                caller_team: team.clone(),
+                phase: None,
+            }),
+        ];
+        assert_eq!(requests.len(), 6, "every hook and cron route is covered");
+        for request in requests {
+            let route = format!("{request:?}");
+            let error = fixture
+                .router
+                .dispatch(
+                    request,
+                    atm_core::api::AuthenticatedIngress::Peer,
+                    RequestDeadline::after(Duration::from_secs(5)),
+                )
+                .await
+                .expect_err("peer ingress is refused");
+            assert!(error.is_validation(), "{route} was refused: {error}");
+        }
+    }
+
+    #[test]
+    fn error_response_maps_hook_codes_to_400_and_503() {
+        use atm_core::boundary::HookExitCause;
+        use atm_core::error::AtmError;
+
+        let phase = crate::hook_filter::test_support::phase("bk");
+        let client_errors = [
+            AtmError::hook_module_invalid("module path is not absolute"),
+            AtmError::cron_expr_invalid("expected five fields"),
+            AtmError::hook_refused("refused by the hook"),
+        ];
+        for error in client_errors {
+            assert_eq!(
+                super::error_response(error).status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        let server_errors = [
+            AtmError::hook_exit(HookExitCause::Panic("boom".to_owned())),
+            AtmError::hook_timeout(&phase, "exceeded 1000 ms"),
+            AtmError::hook_malformed("reply is not JSON"),
+        ];
+        for error in server_errors {
+            let status = super::error_response(error).status();
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+            assert_ne!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn hook_and_cron_routes_round_trip_through_the_handler_and_client_decoder() {
+        use super::map_api_response;
+        use atm_core::api::{
+            ApiRequest, MessageCollectionRequest, decode_http_response, encode_http_request,
+        };
+        use atm_core::boundary::{
+            CronGeneration, CronSchedule, CronScheduleId, HookName, HookRegistration, PhaseId,
+            StopCondition,
+        };
+        use atm_core::hook::{
+            CronEndRequest, CronListQuery, CronStartRequest, HookActionsResponse,
+            HookDisableRequest, HookListQuery, HookRegisterRequest,
+        };
+        use atm_core::list::ListQuery;
+        use atm_core::protocol::{RequestEnvelope, TaskMoveRequest};
+        use atm_core::send::{SendMessageSource, WriteRequest};
+        use atm_core::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
+        use atm_storage::MoveTarget;
+
+        let caller: AgentName = "sender".parse().expect("agent");
+        let team: TeamName = "test-team".parse().expect("team");
+        let phase = PhaseId::parse("bk").expect("phase");
+        let at: IsoTimestamp = "2026-10-19T00:00:00Z".parse().expect("timestamp");
+        let registration = HookRegistration {
+            team: team.clone(),
+            phase: phase.clone(),
+            hook: HookName::parse("task.assign").expect("hook"),
+            module_path: "/modules/gate.wasm".into(),
+            cwd: "/work".into(),
+            timeout_ms: 1_000,
+            custom: serde_json::Map::new(),
+            active: true,
+            registered_by: caller.clone(),
+            registered_at: at,
+            disabled_at: None,
+        };
+        let schedule = CronSchedule {
+            id: CronScheduleId::new(1),
+            generation: CronGeneration::FIRST,
+            team: team.clone(),
+            phase: phase.clone(),
+            name: "nightly".to_owned(),
+            cron_expr: "0 3 * * *".to_owned(),
+            module_path: "/modules/nightly.wasm".into(),
+            cwd: "/work".into(),
+            args: Vec::new(),
+            timeout_ms: 1_000,
+            jitter_s: 0,
+            custom: serde_json::Map::new(),
+            stop: StopCondition::Hook,
+            active: true,
+            created_by: caller.clone(),
+            created_at: "2026-10-19T00:00:00Z".parse().expect("timestamp"),
+            last_run_at: None,
+            last_outcome: None,
+            ended_at: None,
+        };
+        let write = WriteRequest::new(
+            std::path::PathBuf::from("/atm-home"),
+            std::path::PathBuf::from("/work"),
+            caller.clone(),
+            "recipient@test-team",
+            team.clone(),
+            SendMessageSource::Inline("hooked".to_owned()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request");
+        let task_move = RequestEnvelope::TaskMove(TaskMoveRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            task_id: "T1".parse().expect("task id"),
+            target: MoveTarget::Head,
+        });
+        let messages_list = RequestEnvelope::List(
+            ListQuery::new(
+                std::path::PathBuf::from("/atm-home"),
+                std::path::PathBuf::from("/work"),
+                caller.clone(),
+                None,
+                team.clone(),
+                ReadSelection::All,
+                false,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("list query"),
+        );
+
+        let register = RequestEnvelope::HookRegister(HookRegisterRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: phase.clone(),
+            hook: "task.assign".to_owned(),
+            module_path: "/modules/gate.wasm".into(),
+            cwd: "/work".into(),
+            timeout_ms: 1_000,
+            custom: serde_json::json!({}),
+        });
+        let disable = RequestEnvelope::HookDisable(HookDisableRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: phase.clone(),
+            hook: None,
+        });
+        let list = RequestEnvelope::HookList(HookListQuery {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: None,
+        });
+        let cron_start = RequestEnvelope::CronStart(CronStartRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: phase.clone(),
+            name: "nightly".to_owned(),
+            cron_expr: "0 3 * * *".to_owned(),
+            module_path: "/modules/nightly.wasm".into(),
+            cwd: "/work".into(),
+            args: Vec::new(),
+            timeout_ms: 1_000,
+            stop: StopCondition::Hook,
+            custom: serde_json::json!({}),
+        });
+        let cron_end = RequestEnvelope::CronEnd(CronEndRequest {
+            caller_identity: caller.clone(),
+            caller_team: team.clone(),
+            phase: phase.clone(),
+            name: None,
+        });
+        let cron_list = RequestEnvelope::CronList(CronListQuery {
+            caller_identity: caller,
+            caller_team: team,
+            phase: None,
+        });
+
+        // Each of the six routes encodes, reaches the handler's decoder, and decodes to the
+        // same payload it was encoded from.
+        for (request, route) in [
+            (&register, "HookRegister"),
+            (&disable, "HookDisable"),
+            (&list, "HookList"),
+            (&task_move, "TaskMove"),
+            (&messages_list, "List"),
+            (&cron_start, "CronStart"),
+            (&cron_end, "CronEnd"),
+            (&cron_list, "CronList"),
+        ] {
+            let http = encode_http_request(request, &[]).expect("encode route");
+            let decoded = decode_framework_request(http, 1 << 20).expect("handler decodes route");
+            let decoded_payload = match decoded {
+                ApiRequest::HookRegister(value) => serde_json::to_value(value),
+                ApiRequest::HookDisable(value) => serde_json::to_value(value),
+                ApiRequest::HookList(value) => serde_json::to_value(value),
+                ApiRequest::TaskMove(value) => serde_json::to_value(value),
+                ApiRequest::Messages(value) => match *value {
+                    MessageCollectionRequest::List(value) => serde_json::to_value(value),
+                    _ => panic!("{route} decoded to a different message route"),
+                },
+                ApiRequest::CronStart(value) => serde_json::to_value(value),
+                ApiRequest::CronEnd(value) => serde_json::to_value(value),
+                ApiRequest::CronList(value) => serde_json::to_value(value),
+                _ => panic!("{route} decoded to a different route"),
+            }
+            .expect("encode decoded payload");
+            let encoded = serde_json::to_value(request).expect("encode request");
+            assert_eq!(
+                decoded_payload, encoded[route],
+                "{route} payload round-trips"
+            );
+        }
+
+        // HookActions maps through the handler and decodes on the client for writes, task
+        // moves, and list requests, as each route can dispatch hook actions.
+        let write_request = RequestEnvelope::Write(Box::new(write));
+        let cases = [
+            (
+                &register,
+                ResponseEnvelope::HookRegistered(registration.clone()),
+            ),
+            (
+                &list,
+                ResponseEnvelope::HookList(vec![registration.clone()]),
+            ),
+            (&disable, ResponseEnvelope::HookDisabled(vec![registration])),
+            (
+                &write_request,
+                ResponseEnvelope::HookActions(HookActionsResponse { dispatched: 2 }),
+            ),
+            (
+                &task_move,
+                ResponseEnvelope::HookActions(HookActionsResponse { dispatched: 2 }),
+            ),
+            (
+                &messages_list,
+                ResponseEnvelope::HookActions(HookActionsResponse { dispatched: 2 }),
+            ),
+            (&cron_start, ResponseEnvelope::CronStarted(schedule.clone())),
+            (
+                &cron_list,
+                ResponseEnvelope::CronList(vec![schedule.clone()]),
+            ),
+            (&cron_end, ResponseEnvelope::CronEnded(vec![schedule])),
+        ];
+        for (request, envelope) in cases {
+            let response = map_api_response(ApiResponse::new(envelope.clone()))
+                .expect("handler maps response");
+            let status = response.status().as_u16();
+            let headers: Vec<String> = response
+                .headers()
+                .iter()
+                .map(|(name, value)| format!("{name}: {}", value.to_str().expect("ascii header")))
+                .collect();
+            let body = to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("response body");
+            let decoded = decode_http_response(request, status, &headers, &body)
+                .expect("client decodes response");
+            assert_eq!(
+                serde_json::to_value(&decoded).expect("encode decoded response"),
+                serde_json::to_value(&envelope).expect("encode response"),
+            );
+        }
     }
 }

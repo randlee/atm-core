@@ -1,5 +1,6 @@
 //! Tokio durable-admission preparation for the canonical send pipeline.
 
+use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
 use tracing::warn;
 
 use super::*;
@@ -12,6 +13,59 @@ type TemplateAdmissionParts = (
     Vec<atm_storage::InstanceTag>,
     Option<atm_storage::WorkflowSnapshot>,
 );
+
+pub(crate) fn validate_async_write_admission(
+    request: &WriteRequest,
+    has_tool_capability: bool,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
+    stable_message_id: Option<AtmMessageId>,
+) -> Result<(), AtmError> {
+    if has_tool_capability && cron_run_fence.is_some() {
+        return Err(AtmError::validation(
+            "tool sender admission cannot be combined with a cron run permit",
+        ));
+    }
+    if stable_message_id.is_some() && cron_run_fence.is_none() {
+        return Err(AtmError::validation(
+            "a caller-selected stable message id requires a cron run permit",
+        ));
+    }
+    if stable_message_id.is_some()
+        && (request.origin_message_id.is_some() || request.origin_timestamp.is_some())
+    {
+        return Err(AtmError::validation(
+            "cron module mail cannot override canonical origin metadata",
+        ));
+    }
+    if has_tool_capability && request.acknowledges_message_id.is_some() {
+        return Err(AtmError::validation(
+            "virtual tool sender admission cannot authorize acknowledgement writes",
+        ));
+    }
+    if !has_tool_capability
+        && (request.tool_runtime_proof.is_some() || request.tool_sender_attestation.is_some())
+    {
+        return Err(AtmError::validation_with_recovery(
+            "tool sender proof was not admitted by the daemon",
+            "submit the signed proof through the configured local or authenticated-peer admission route",
+        ));
+    }
+    validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
+    if request.acknowledges_message_id.is_none() && request.to.is_none() {
+        return Err(AtmError::validation(
+            "message write is missing a destination",
+        ));
+    }
+    Ok(())
+}
 
 /// Opaque proof that a template request was verified before durable admission.
 ///
@@ -88,6 +142,11 @@ pub fn preflight_write_source_request(
         }),
         SendMessageSource::File { .. } => {
             let mut canonical_request = request.clone();
+            // Source preflight resolves paths and policy only; it is not an
+            // emission admission. Strip wire proofs here and require the later
+            // canonical write to supply a verified capability.
+            canonical_request.tool_runtime_proof = None;
+            canonical_request.tool_sender_attestation = None;
             let context = prepare_send_context(runtime, &mut canonical_request)?;
             Ok(WriteSourcePreflight {
                 kind: PreflightSourceKind::File,
@@ -164,6 +223,7 @@ pub(crate) async fn persist_send_message_async(
     requires_ack: bool,
     task_id: Option<TaskId>,
     verified_template: Option<&template::VerifiedTemplateSend>,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let mut envelope = build_send_envelope(
         request,
@@ -183,11 +243,17 @@ pub(crate) async fn persist_send_message_async(
     warn_template_fallback(verified_template, request, plain_template_fallback);
     if let Some(verified) = verified_template.filter(|_| !plain_template_fallback) {
         return admit_verified_template(
-            runtime, request, context, envelope, message_id, timestamp, verified,
+            runtime,
+            request,
+            context,
+            envelope,
+            (message_id, timestamp),
+            verified,
+            cron_run_fence,
         )
         .await;
     }
-    persist_plain_async_message(runtime, request, context, &envelope).await
+    persist_plain_async_message(runtime, request, context, &envelope, cron_run_fence).await
 }
 
 fn set_async_peer_delivery_target(request: &SendRequest, envelope: &mut InboxMessage) {
@@ -243,12 +309,20 @@ async fn admit_verified_template(
     request: &SendRequest,
     context: &SendExecutionContext,
     envelope: InboxMessage,
-    message_id: AtmMessageId,
-    timestamp: IsoTimestamp,
+    identity: (AtmMessageId, IsoTimestamp),
     verified: &template::VerifiedTemplateSend,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
-    let admission =
-        build_template_admission(request, context, &envelope, message_id, timestamp, verified)?;
+    let (message_id, timestamp) = identity;
+    let admission = build_template_admission(
+        request,
+        context,
+        &envelope,
+        message_id,
+        timestamp,
+        verified,
+        cron_run_fence,
+    )?;
     let committed = runtime.admit_template_message_async(admission).await?;
     let admission = match committed.operation {
         Ok(admission) => admission,
@@ -279,6 +353,7 @@ fn build_template_admission(
     message_id: AtmMessageId,
     timestamp: IsoTimestamp,
     verified: &template::VerifiedTemplateSend,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<atm_storage::TemplateMessageAdmission, AtmError> {
     let (template_type, template_name, frontmatter, vars, tags, workflow_snapshot) =
         template_admission_parts(request, verified)?;
@@ -315,7 +390,12 @@ fn build_template_admission(
                 workflow: None,
             },
         },
-        provenance: if request.authenticated_source_host.is_some() {
+        provenance: if let Some((schedule_id, generation)) = cron_run_fence {
+            atm_storage::MessageWriteOrigin::CronRun {
+                schedule_id,
+                generation,
+            }
+        } else if request.authenticated_source_host.is_some() {
             atm_storage::MessageWriteOrigin::Peer
         } else {
             atm_storage::MessageWriteOrigin::Local
@@ -388,6 +468,7 @@ async fn persist_plain_async_message(
     request: &SendRequest,
     context: &SendExecutionContext,
     envelope: &InboxMessage,
+    cron_run_fence: Option<(atm_storage::CronScheduleId, atm_storage::CronGeneration)>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     persistence::persist_message_with_async_admission(
         runtime,
@@ -400,7 +481,12 @@ async fn persist_plain_async_message(
             .authenticated_source_host
             .as_ref()
             .zip(request.to.as_ref().and_then(|recipient| recipient.host())),
-        if request.authenticated_source_host.is_some() {
+        if let Some((schedule_id, generation)) = cron_run_fence {
+            atm_storage::MessageWriteOrigin::CronRun {
+                schedule_id,
+                generation,
+            }
+        } else if request.authenticated_source_host.is_some() {
             atm_storage::MessageWriteOrigin::Peer
         } else {
             atm_storage::MessageWriteOrigin::Local
@@ -449,6 +535,8 @@ mod tests {
                 team: team.clone(),
             },
             canonical_sender: "sender".parse().expect("sender"),
+            canonical_sender_team: team.clone(),
+            canonical_sender_chat_id: None,
             inbox_path: PathBuf::from("/tmp/atm-an10-test-inbox"),
             delivery_snapshot: DeliveryRecipientSnapshot::remote(agent, team),
             delivery_family: crate::delivery_policy::DeliveryEventFamily::NewMessage,
@@ -525,7 +613,7 @@ mod tests {
         );
 
         let admission = build_template_admission(
-            &request, &context, &envelope, message_id, timestamp, &verified,
+            &request, &context, &envelope, message_id, timestamp, &verified, None,
         )
         .expect("admission");
         assert_eq!(
@@ -608,7 +696,7 @@ mod tests {
             None,
         );
         let message = build_template_admission(
-            &request, &context, &envelope, message_id, timestamp, &verified,
+            &request, &context, &envelope, message_id, timestamp, &verified, None,
         )
         .expect("admission")
         .decomposition

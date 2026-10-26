@@ -1,0 +1,345 @@
+#!/usr/bin/env python3
+"""Append one PR under a bead claim, keeping bd's TTL alive with 120 s heartbeats."""
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+from typing import Any
+import tempfile
+import time
+
+from stack_top import select_stack_top
+
+
+PULL_FILTER = '.[] | {number, base: .base.ref, head: .head.ref, sha: .head.sha, draft}'
+STACK_FILTER = '.[] | {number, base: .base.ref, prs: [.pull_requests[].number]}'
+COMMAND_TIMEOUT = 120
+HEARTBEAT_INTERVAL = 120
+
+
+class StackError(Exception):
+    pass
+
+
+class Parser(argparse.ArgumentParser):
+    def error(self, message):
+        raise StackError(message)
+
+
+def rows(output):
+    try:
+        value = json.loads(output)
+        return value if isinstance(value, list) else [value]
+    except json.JSONDecodeError:
+        try:
+            return [json.loads(line) for line in output.splitlines() if line.strip()]
+        except json.JSONDecodeError as error:
+            raise StackError(f"invalid JSON from command: {error}") from error
+
+
+class Linker:
+    def __init__(self, values, runner, clock, actor):
+        self.values = values
+        self.runner = runner
+        self.clock = clock
+        self.actor = actor
+        self.held = False
+        self.heartbeat_at = 0
+        self.mode = None
+        self.lean_reason = None
+
+    def command(self, argv, *, check=True, allow_transport_failure=False):
+        if self.held and argv[:2] != ['bd', 'heartbeat'] and self.clock() - self.heartbeat_at >= HEARTBEAT_INTERVAL:
+            self.heartbeat()
+        # git and gh act on the checked layer's repository; bd and atm stay in the caller's checkout.
+        options = {'cwd': self.values['worktree_path']} if argv[0] in ('git', 'gh') and self.values.get('worktree_path') else {}
+        try:
+            result = self.runner(argv, capture_output=True, text=True, timeout=COMMAND_TIMEOUT, **options)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            if allow_transport_failure:
+                return subprocess.CompletedProcess(argv, 1, '', str(error))
+            raise StackError(f"{' '.join(argv)}: {error}") from error
+        if check and result.returncode:
+            detail = (result.stderr or '').strip().splitlines()
+            raise StackError(f"{' '.join(argv)} [{result.returncode}] {detail[0] if detail else 'command failed'}")
+        return result
+
+    def heartbeat(self):
+        self.command(['bd', 'heartbeat', self.values['stack_bead'], '--actor', self.actor])
+        self.heartbeat_at = self.clock()
+
+    def bead(self):
+        result = self.command(['bd', 'show', self.values['stack_bead'], '--json'])
+        found = rows(result.stdout)
+        if len(found) != 1 or not isinstance(found[0], dict):
+            raise StackError('bd show returned an invalid stack bead')
+        return found[0]
+
+    def acquire(self):
+        result = self.command(['bd', 'update', self.values['stack_bead'], '--claim', '--actor', self.actor], check=False)
+        if result.returncode == 0:
+            self.held = True
+            self.heartbeat_at = self.clock()
+            return None
+        bead = self.bead()
+        if not bead.get('assignee') or bead.get('assignee') == self.actor:
+            detail = (result.stderr or '').strip().splitlines()
+            raise StackError(f"bd update --claim [{result.returncode}] {detail[0] if detail else 'claim failed'}")
+        return {'result': 'lock_timeout', 'holder': bead.get('assignee'), 'claimed_at': bead.get('started_at')}
+
+    def release(self):
+        if self.held:
+            self.held = False
+            self.command(['bd', 'update', self.values['stack_bead'], '--if-assignee', self.actor,
+                          '--status', 'open', '--assignee', '', '--actor', self.actor])
+
+    def pulls(self):
+        result = self.command(['gh', 'api', 'repos/{owner}/{repo}/pulls?state=open&per_page=100',
+                               '--paginate', '--jq', PULL_FILTER])
+        found = rows(result.stdout) if result.stdout.strip() else []
+        if any(not isinstance(item, dict) or type(item.get('number')) is not int or
+               not all(isinstance(item.get(key), str) and item[key] for key in ('base', 'head', 'sha')) or
+               type(item.get('draft')) is not bool for item in found):
+            raise StackError('filtered pull list has invalid fields')
+        if len({item['number'] for item in found}) != len(found):
+            raise StackError('filtered pull list contains duplicate pull requests')
+        return found
+
+    def lean_mode(self):
+        if self.values['budget'] == 'lean':
+            self.lean_reason = 'budget_lean'
+        else:
+            quota = self.command(['gh', 'api', 'rate_limit', '--jq', '.resources.graphql'], check=False, allow_transport_failure=True)
+            if quota.returncode:
+                self.lean_reason = 'rate_limit_call_failed'
+            else:
+                try:
+                    self.lean_reason = None if json.loads(quota.stdout)['remaining'] > 0 else 'graphql_remaining_0'
+                except (ValueError, KeyError, TypeError):
+                    self.lean_reason = 'rate_limit_response_invalid'
+        self.mode = 'lean' if self.lean_reason else 'full'
+        if self.lean_reason:
+            print(f'sanity-stack-link: lean mode: {self.lean_reason}', file=sys.stderr)
+        return self.mode == 'lean'
+
+    def stacks(self):
+        result = self.command(['gh', 'api', 'repos/{owner}/{repo}/stacks', '--paginate', '--jq', STACK_FILTER])
+        found = rows(result.stdout) if result.stdout.strip() else []
+        if any(not isinstance(item, dict) or type(item.get('number')) is not int or
+               not isinstance(item.get('base'), str) or not isinstance(item.get('prs'), list) or
+               any(type(number) is not int for number in item['prs']) for item in found):
+            raise StackError('filtered hosted stack list has invalid fields')
+        return found
+
+    def reconcile(self, metadata, pulls, stacks):
+        layers = metadata['layers']
+        known = {entry['pr'] for entry in layers}
+        matching = [stack for stack in stacks if stack['number'] == metadata['stack_number'] or
+                    (stack['base'] == metadata['trunk'] and known.intersection(stack['prs']))]
+        if len(matching) > 1:
+            raise StackError('ambiguous hosted stacks overlap the ledger')
+        if not matching:
+            if metadata['stack_number'] is not None or any(layer['linked'] for layer in layers):
+                raise StackError('hosted stack missing for linked ledger')
+            return
+        stack = matching[0]
+        if stack['base'] != metadata['trunk'] or len(set(stack['prs'])) != len(stack['prs']):
+            raise StackError('hosted stack has conflicting ancestry')
+        by_number = {pull['number']: pull for pull in pulls}
+        previous = metadata['trunk']
+        for index, number in enumerate(stack['prs']):
+            pull = by_number.get(number)
+            if not pull or pull['draft'] or pull['base'] != previous:
+                raise StackError('hosted stack pull chain is missing or ambiguous')
+            ref = self.command(['git', 'rev-parse', 'refs/remotes/origin/' + pull['head']])
+            if ref.stdout.strip() != pull['sha']:
+                raise StackError('hosted stack head differs from fetched branch')
+            ancestry = self.command(['git', 'merge-base', '--is-ancestor', 'origin/' + previous, pull['sha']], check=False)
+            if ancestry.returncode:
+                raise StackError('hosted stack has conflicting git ancestry')
+            if index < len(layers):
+                layer = layers[index]
+                if (layer['pr'], layer['branch'], layer['head'], layer['base']) != (number, pull['head'], pull['sha'], previous):
+                    raise StackError('hosted stack conflicts with ledger ancestry')
+                layer['linked'] = True
+            else:
+                if (sum(other['head'] == pull['head'] for other in pulls) != 1 or
+                        any(layer['branch'] == pull['head'] or layer['pr'] == number for layer in layers)):
+                    raise StackError('hosted-only stack layer is not uniquely attributable')
+                layers.append({'branch': pull['head'], 'pr': number, 'head': pull['sha'], 'base': previous, 'linked': True})
+            previous = pull['head']
+        if any(layer['linked'] for layer in layers[len(stack['prs']):]):
+            raise StackError('linked ledger layer is absent from hosted stack')
+        metadata['stack_number'] = stack['number']
+
+    def write(self, metadata):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', encoding='utf-8') as stream:
+            json.dump(metadata, stream)
+            stream.flush()
+            self.command(['bd', 'update', self.values['stack_bead'], '--if-assignee', self.actor,
+                          '--metadata', '@' + stream.name, '--actor', self.actor])
+
+    def execute(self):
+        timeout = self.acquire()
+        if timeout:
+            return timeout
+        bead = self.bead()
+        metadata = copy.deepcopy(bead.get('metadata'))
+        if (not isinstance(metadata, dict) or not isinstance(metadata.get('trunk'), str) or not metadata['trunk'] or
+                not isinstance(metadata.get('layers'), list) or
+                (metadata.get('stack_number') is not None and (type(metadata['stack_number']) is not int or metadata['stack_number'] <= 0))):
+            raise StackError('stack bead metadata is invalid')
+        layers = metadata['layers']
+        previous = metadata['trunk']
+        branches, numbers = set(), set()
+        for layer in layers:
+            if (not isinstance(layer, dict) or not isinstance(layer.get('branch'), str) or not layer['branch'] or
+                    type(layer.get('pr')) is not int or layer['pr'] <= 0 or not isinstance(layer.get('head'), str) or
+                    not re.fullmatch(r'[0-9a-fA-F]{7,64}', layer['head']) or type(layer.get('linked')) is not bool or
+                    layer.get('base') != previous or layer['branch'] in branches or layer['pr'] in numbers):
+                raise StackError('stack bead has an invalid layer')
+            previous = layer['branch']
+            branches.add(layer['branch'])
+            numbers.add(layer['pr'])
+        original = copy.deepcopy(metadata)
+        lean = self.lean_mode()
+        pulls = self.pulls()
+        if not lean and layers:
+            self.command(['git', 'fetch', 'origin'])
+            self.reconcile(metadata, pulls, self.stacks())
+        candidate = next((pull for pull in pulls if pull['number'] == self.values['pr_number']), None)
+        if not candidate or candidate['head'] != self.values['branch'] or candidate['sha'] != self.values['commit'] or candidate['draft']:
+            raise StackError('checked pull request is missing, draft, or differs from the pinned branch and commit')
+        refreshed = self.bead()
+        if refreshed.get('assignee') != self.actor or refreshed.get('metadata') != original:
+            raise StackError('stack claim or ledger changed during reconciliation')
+        self.command(['git', 'fetch', 'origin'])
+
+        def resolve_head(branch):
+            return self.command(['git', 'rev-parse', 'refs/remotes/origin/' + branch]).stdout.strip()
+
+        base, recorded_head = select_stack_top({'metadata': metadata}, metadata['trunk'], resolve_head)
+        recorded = next((layer for layer in layers
+                         if layer['pr'] == self.values['pr_number'] or layer['branch'] == self.values['branch']), None)
+        if recorded is not None:
+            if (recorded['pr'] != self.values['pr_number'] or recorded['branch'] != self.values['branch'] or
+                    recorded['head'] != self.values['commit'] or candidate['base'] != recorded['base'] or
+                    resolve_head(recorded['branch']) != self.values['commit']):
+                raise StackError('checked layer conflicts with its recorded pinned commit')
+            selected_head = resolve_head(base)
+            if selected_head != recorded_head:
+                raise StackError('recorded stack top differs from the fetched branch head')
+            if recorded['linked']:
+                if metadata != original:
+                    self.write(metadata)
+                return {'result': 'stacked', 'top': layers[-1], 'stack_number': metadata.get('stack_number')}
+            if recorded is not layers[-1]:
+                raise StackError('checked unlinked layer is not the next stack layer')
+            base = recorded['base']
+            recorded_head = resolve_head(base)
+        ancestor = self.command(['git', 'merge-base', '--is-ancestor', 'origin/' + base, self.values['commit']], check=False)
+        actual = resolve_head(base) if layers else recorded_head
+        if actual != recorded_head:
+            raise StackError('fetched stack top differs from its recorded head')
+        if ancestor.returncode == 1:
+            return {'result': 'rebase_required', 'top': {'branch': base, 'head': actual},
+                    'evidence': f"origin/{base} is not an ancestor of {self.values['commit']}"}
+        if ancestor.returncode:
+            raise StackError(f"git merge-base --is-ancestor [{ancestor.returncode}] {(ancestor.stderr or '').strip()}")
+        if (lean or not layers) and candidate['base'] != base:
+            raise StackError(f"pull request base {candidate['base']} differs from stack top {base}")
+        new = recorded or {'branch': self.values['branch'], 'pr': self.values['pr_number'], 'head': self.values['commit'], 'base': base, 'linked': False}
+        if not lean and layers:
+            pending = [entry for entry in layers if not entry['linked']]
+            if new not in pending and not new['linked']:
+                pending.append(new)
+            stack_number = metadata.get('stack_number')
+            if stack_number is None:
+                self.command(['gh', 'stack', 'link', '--base', metadata['trunk']] + [str(entry['pr']) for entry in pending])
+            else:
+                for entry in pending:
+                    self.command(['gh', 'stack', 'link', str(stack_number), str(entry['pr'])])
+            hosted = self.stacks()
+            expected = [entry['pr'] for entry in layers]
+            if new not in layers:
+                expected.append(new['pr'])
+            matches = [stack for stack in hosted if stack['base'] == metadata['trunk'] and stack['prs'] == expected
+                       and (stack_number is None or stack['number'] == stack_number)]
+            if len(matches) != 1:
+                raise StackError('linked hosted stack identity or order is missing or ambiguous')
+            metadata['stack_number'] = matches[0]['number']
+            for entry in pending:
+                entry['linked'] = True
+        if recorded is None:
+            layers.append(new)
+        self.write(metadata)
+        return {'result': 'stacked', 'top': new, 'stack_number': metadata.get('stack_number')}
+
+
+def main(argv=None, runner=subprocess.run, clock=time.time):
+    parser = Parser(description=__doc__)
+    parser.add_argument('--input', required=True, type=Path)
+    parser.add_argument('--notify-lead')
+    linker = None
+    args = None
+    values = {}
+    result: dict[str, Any] | None = None
+    try:
+        args = parser.parse_args(argv)
+        values = json.loads(args.input.read_text(encoding='utf-8'))
+        if not isinstance(values, dict) or any(not isinstance(values.get(key), str) or not values[key] for key in ('checked_bead', 'branch', 'commit', 'stack_bead')):
+            raise StackError('input requires checked_bead, branch, commit and stack_bead strings')
+        if type(values.get('pr_number')) is not int or values['pr_number'] <= 0 or values.get('budget') not in ('full', 'lean'):
+            raise StackError('input requires a positive pr_number and budget full or lean')
+        if not re.fullmatch(r'[0-9a-fA-F]{7,64}', values['commit']):
+            raise StackError('commit must be a hexadecimal Git object ID')
+        if not isinstance(values.get('worktree_path', ''), str):
+            raise StackError('worktree_path must be a string')
+        actor = os.environ.get('ATM_IDENTITY')
+        if not actor:
+            raise StackError('ATM_IDENTITY is required')
+        linker = Linker(values, runner, clock, actor)
+        try:
+            try:
+                result = linker.execute()
+            except (StackError, OSError, ValueError, TypeError, KeyError) as error:
+                result = {'result': 'stack_failed', 'evidence': str(error)}
+        finally:
+            try:
+                linker.release()
+            except StackError as error:
+                if result is None:
+                    raise
+                if result['result'] == 'stacked':
+                    result['release_warning'] = str(error)
+                elif result['result'] == 'stack_failed':
+                    result['evidence'] += f'; release failed: {error}'
+                else:
+                    result = {'result': 'stack_failed', 'evidence': f'release failed after {result["result"]}: {error}'}
+    except (StackError, OSError, ValueError, TypeError, KeyError) as error:
+        result = {'result': 'stack_failed', 'evidence': str(error)}
+    assert result is not None
+    if linker is not None and linker.mode is not None:
+        result.update(mode=linker.mode, lean_reason=linker.lean_reason)
+    lead = (args.notify_lead if args is not None else None) or (values.get('lead') if isinstance(values, dict) else None)
+    if lead and result['result'] != 'stacked':
+        try:
+            notice = runner(['atm', 'send', lead,
+                             'Sanity task already closed; stack handoff needs lead action: ' + json.dumps(result)],
+                            capture_output=True, text=True, timeout=30)
+            if notice.returncode:
+                result['notification_error'] = notice.stderr or notice.stdout
+        except (OSError, subprocess.TimeoutExpired) as error:
+            result['notification_error'] = str(error)
+    print(json.dumps(result))
+    return int(result['result'] == 'stack_failed')
+
+
+if __name__ == '__main__':
+    sys.exit(main())

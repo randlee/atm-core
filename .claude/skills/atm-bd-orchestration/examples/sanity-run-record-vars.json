@@ -17,5 +17,9 @@
   "findings": 0,
   "error": null,
   "errors": [],
-  "jev_receipts": []
+  "jev_receipts": [],
+  "dev": "arch-ctm",
+  "jev_elapsed_s": null,
+  "llm_elapsed_s": 65.0,
+  "kind": "verdict"
 }

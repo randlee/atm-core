@@ -46,6 +46,9 @@ reported as a missing bead.
 No poured bead gets an assignee: each carries `difficulty`, and the lead
 picks the agent at dispatch. Variables come from the target beads, the
 phase file `.atm-bd/phase-<p>.toml` (plan file, root) and the relations file.
+For a finding, the branch is `fix/<sprint>-<normalized finding ref>`, the
+worktree is beneath the configured `worktree_base`, and `pr_target` is the
+stack ledger's last layer branch, or its trunk when no layers exist.
 Requests and receipts are written to <repo>/.atm-bd/pour/.
 
 Exit: 0 succeeded (validate: nothing missing or wrong), 5 validate found
@@ -68,10 +71,11 @@ import bead_formulas  # noqa: E402
 import repo_config  # noqa: E402
 import sprint_index_common  # noqa: E402
 from bead_formulas import Bd, BdError, attach_id  # noqa: E402
+from stack_top import stack_bead_id  # noqa: E402
 
 SCHEMA = "atm-bd-orchestration/bead-groups/v1"
 SUCCESS, FAILED, USAGE, PROBLEMS = 0, 2, 3, 5
-SPRINT_KEYS = ("phase", "sprint", "stack", "layer", "difficulty")
+SPRINT_KEYS = ("phase", "sprint", "stack", "layer", "difficulty", "branch", "worktree", "pr_target")
 FINDING_FIELDS = ("ref", "severity", "reviewer", "title", "remedy")
 REF = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 
@@ -80,6 +84,7 @@ class TargetError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
+        self.target_id: str | None = None
 
 
 class Strict(dict):
@@ -118,8 +123,8 @@ def split_ids(values: list[str]) -> list[str]:
 
 
 class Run:
-    def __init__(self, repo: Path, option: str | None, validate: bool):
-        self.repo, self.option, self.validate = repo, option, validate
+    def __init__(self, repo: Path, option: str | None):
+        self.repo, self.option = repo, option
         self.config = repo_config.load(repo)
         self.bd = Bd()
         self.plans: dict[str, dict] = {}
@@ -156,6 +161,20 @@ class Run:
             raise TargetError("BEAD_GROUPS_TARGET_NOT_FOUND", f"{bead} does not exist")
         return row
 
+    def close_compose(self, phase: str, checked_title: str, stack_bead: str | None = None) -> dict:
+        """The close-field compose variables (close_fields.POURED) every poured step carries."""
+        features = self.__dict__.setdefault("features", {})
+        if phase not in features:
+            root = sprint_index_common.load_phase_config(self.repo, phase)["root"]
+            title = self.show(root).get("title")
+            if not title:
+                raise TargetError("BEAD_GROUPS_TARGET_INVALID", f"phase root {root} has no title for phase_feature")
+            features[phase] = {"stack_bead": stack_bead or stack_bead_id(root), "phase_feature": title}
+        if not checked_title:
+            raise TargetError("BEAD_GROUPS_TARGET_INVALID", "the checked work has no title for checked_title")
+        return {**features[phase], "checked_title": checked_title, "lint_command": self.config["lint_command"],
+                "policy_path": self.config["policy_path"], "max_sanity_rounds": self.config["max_sanity_rounds"]}
+
     def option_for(self, sidecar: dict) -> str:
         option = self.option or sidecar["default_option"]
         if option not in sidecar["options"]:
@@ -176,7 +195,8 @@ class Run:
         deps = plan[meta["sprint"]][2]
         compose = {"parent": bead, "phase": meta["phase"], "sprint": meta["sprint"], "stack": meta["stack"],
                    "layer": meta["layer"], "difficulty": meta["difficulty"], "priority": container.get("priority", 2),
-                   "edge_option": option}
+                   "branch": meta["branch"], "worktree": meta["worktree"], "pr_target": meta["pr_target"],
+                   "edge_option": option, **self.close_compose(str(meta["phase"]), container.get("title") or "")}
         compose["ref"] = fmt(sidecar["ref"], {"vars": compose})
         relate_vars = {**sidecar.get("defaults", {}), "predecessor_sanity": [plan[d][1] for d in deps],
                        "predecessors": [plan[d][0] for d in deps],
@@ -197,21 +217,47 @@ class Run:
             raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"{path}: found_at_commit must be a commit sha")
         container = self.show(sprint)
         meta = container.get("metadata") or {}
+        phase_end = bool(re.fullmatch(r".+-phase-[a-z0-9]+", sprint)) and not any(meta.get(k) for k in ("sprint", "stack"))
+        if phase_end:
+            # A phase-end finding traces to the phase epic, which carries phase metadata but no sprint/stack facts: the epic is the "sprint",
+            # the phase comes from its id (it wins over the epic's own phase key), the stack is the phase's stack ledger, and difficulty must come per finding.
+            meta = {**meta, "phase": sprint_index_common.phase_of_root(sprint), "sprint": sprint, "stack": "stack"}
         missing = [k for k in ("phase", "sprint", "stack", "difficulty") if meta.get(k) in (None, "")]
-        if missing:
+        if missing and not (phase_end and missing == ["difficulty"]):
             raise TargetError("BEAD_GROUPS_TARGET_INVALID", f"{sprint} lacks {', '.join(missing)}")
         qa_closed = self.show(filed_by).get("status") == "closed"
         sidecar = self.sidecar("finding-group")
         option = self.option_for(sidecar)
+        import bead_schema
+        stack_id = stack_bead_id(sprint_index_common.load_phase_config(self.repo, str(meta['phase']))['root'])
+        stack = self.show(stack_id)
+        issues = bead_schema.problems(stack, bead_schema.StackBead)
+        if issues:
+            raise TargetError("BEAD_GROUPS_TARGET_INVALID", "; ".join(issues))
+        stack_meta = bead_schema.StackMetadata.model_validate(stack["metadata"])
+        pr_target = stack_meta.layers[-1].branch if stack_meta.layers else stack_meta.trunk
         out: list[dict | TargetError] = []
         for finding in findings:
             ref = finding.get("ref") if isinstance(finding, dict) else None
             try:
-                if not isinstance(ref, str) or not REF.fullmatch(ref):
-                    raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"finding ref {ref!r} must be lowercase letters, digits and single hyphens")
+                slug = re.sub(r"[^a-z0-9-]", "-", ref.lower()) if isinstance(ref, str) else ""
+                if not REF.fullmatch(slug):
+                    raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"finding ref {ref!r} must normalize to letters, digits and single hyphens")
                 lacking = [k for k in FINDING_FIELDS if finding.get(k) in (None, "")]
+                if phase_end and finding.get("difficulty") in (None, ""):
+                    lacking.append("difficulty (a phase-end finding has no sprint to take it from)")
                 if lacking:
                     raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"finding {ref} lacks {', '.join(lacking)}")
+                # Deleted when a released sc-compose pours a string layer (preview-attach passes).
+                layer = finding.get("found_on_layer")
+                if layer not in (None, "") and (not isinstance(layer, int) or isinstance(layer, bool)):
+                    raise TargetError("BEAD_GROUPS_FOUND_ON_LAYER_NOT_INTEGER",
+                                      f"finding {ref}: found_on_layer {layer!r} is not an integer; pass the integer stack layer, "
+                                      "or omit found_on_layer and put free text in the finding description")
+                branch = f"fix/{meta['sprint']}-{slug}"
+                # Layer records carry no difficulty, so the cut takes it from the finding or the sprint and the fix group carries all four keys together.
+                cut = {"branch": branch, "worktree": str(Path(self.config["worktree_base"]) / branch), "pr_target": pr_target,
+                       "difficulty": finding.get("difficulty") or meta["difficulty"]}
                 if finding["severity"] != "blocking":
                     raise TargetError("BEAD_GROUPS_NOT_BLOCKING", f"finding {ref} is {finding['severity']}; only blocking findings are poured, file it as a finding bead")
                 ids = {k: finding[k] if k in finding else meta.get(k) for k in ("requirements", "adrs")}
@@ -222,9 +268,16 @@ class Run:
                            "reviewer": finding["reviewer"], "finding_title": finding["title"], "remedy": finding["remedy"],
                            "filed_by": filed_by, "found_at_commit": found_at, **ids,
                            "phase": meta["phase"], "sprint": meta["sprint"], "stack": meta["stack"],
-                           "difficulty": finding.get("difficulty") or meta["difficulty"], "priority": finding.get("priority", 1),
-                           "edge_option": option}
-                compose["ref"] = fmt(sidecar["ref"], {"vars": compose})
+                           **cut,
+                           "found_on_layer": finding.get("found_on_layer", ""),
+                           "has_found_on_layer": finding.get("found_on_layer") not in (None, ""),
+                           "priority": finding.get("priority", 1),
+                           "edge_option": option, **self.close_compose(str(meta["phase"]), f"{meta['sprint']}: fix {ref}: {finding['title']}", stack_id)}
+                compose["ref"] = fmt(sidecar["ref"], {"vars": {**compose, "finding_ref": slug}})
+                existing = self.bd.show(attach_id(sprint, compose["ref"], "fix"))
+                existing_cut = (existing or {}).get("metadata") or {}
+                if all(existing_cut.get(key) for key in cut):
+                    compose.update({key: existing_cut[key] for key in cut})
                 out.append({"kind": "finding", "id": f"{sprint}.{compose['ref']}", "formula": "finding-group", "option": option,
                             "compose": compose, "vars": dict(sidecar.get("defaults", {})), "qa_closed": qa_closed})
             except TargetError as exc:
@@ -236,12 +289,8 @@ class Run:
         names = ("dev", "sanity", "qa") if target["kind"] == "sprint" else ("fix", "sanity", "qa")
         return list(names[:1] if target["option"] == "A" else names)
 
-    def pour(self, target: dict) -> dict:
+    def pour(self, target: dict, *, preview: bool) -> dict:
         formula = target["formula"]
-        if target.get("qa_closed") and not self.validate:
-            parent, ref = target["compose"]["parent"], target["compose"]["ref"]
-            if any(self.bd.show(attach_id(parent, ref, step)) is None for step in self.steps(target)):
-                raise TargetError("BEAD_GROUPS_QA_CLOSED", f"{target['compose']['filed_by']} is closed; quality-mgr pours the fix groups of its blocking findings before closing it")
         template = bead_formulas.template(formula, self.repo).resolve()
         try:
             template = template.relative_to(self.repo.resolve())
@@ -253,15 +302,15 @@ class Run:
         if not ignore.exists():
             ignore.write_text("*\n")
         stem = f"{target['id']}.{target['compose']['ref']}.{formula}"
-        relations, missing = self.relations(target)
+        relations, missing = self.relations(target, preview=preview)
         # The attach reads the rendered formula by path, so it stays beside its request; nothing goes in bd's registry.
-        operation = "preview_attach" if self.validate else "attach"
+        operation = "preview_attach" if preview else "attach"
         request = {
             "schema": "sc-compose/beads/v1", "operation": operation, "working_directory": str(self.repo),
             "template": str(template), "rendered_formula": str(out / f"{stem}.formula.toml"),
             "compose_variables": target["compose"], "formula_name": formula, "bead_variables": {},
             "parent": target["compose"]["parent"], "ref": target["compose"]["ref"], "relations": relations,
-            **({} if self.validate else {"pour_authorization": "CreatePersistentBeads"}),
+            **({} if preview else {"pour_authorization": "CreatePersistentBeads"}),
         }
         path = out / f"{stem}.request.json"
         path.write_text(json.dumps(request, indent=2) + "\n")
@@ -283,15 +332,17 @@ class Run:
             raise TargetError(code, f"attach of {target['id']} (sc-compose exit {proc.returncode}): {detail}")
         graph = payload["graph"]
         wanted = {(self.endpoint(graph, r["from"]), self.endpoint(graph, r["to"]), r["type"]) for r in relations}
-        return {"ids": graph["ids"], "nodes": graph["nodes"], "missing": missing,
+        return {"ids": graph["ids"], "nodes": graph["nodes"], "missing": missing, "graph": graph,
                 "edges": [e for e in graph["edges"] if (e["from"], e["to"], e["type"]) in wanted]}
 
     @staticmethod
     def endpoint(graph: dict, value: str) -> str:
         kind, _, name = value.partition(":")
-        return graph["ids"][name] if kind == "step" else name
+        if kind == "step":
+            return graph["ids"][name]
+        return name if kind == "bead" else value
 
-    def relations(self, target: dict) -> tuple[list[dict], list[str]]:
+    def relations(self, target: dict, *, preview: bool) -> tuple[list[dict], list[str]]:
         """The attach `relations` from the formula's relations file, and (validate only) a problem for each one
         whose bead does not exist yet; the preview leaves those out, the attach refuses them."""
         sidecar = self.sidecar(target["formula"])
@@ -306,22 +357,30 @@ class Run:
                 if relation in relations:
                     continue
                 beads = [e.partition(":")[2] for e in (relation["from"], relation["to"]) if e.startswith("bead:")]
-                absent = [b for b in beads if self.validate and self.bd.show(b) is None]
+                absent = [b for b in beads if preview and self.bd.show(b) is None]
                 if absent:
                     missing += [f"missing bead {b} for {relation['from']} -{relation['type']}-> {relation['to']}" for b in absent]
                 else:
                     relations.append(relation)
         return relations, missing
 
-    def schema_problems(self, attachment: dict) -> list[str]:
-        import bead_schema
-        out = []
-        for step, bead in attachment["ids"].items():
-            if step == "sanity":
-                row = self.bd.show(bead)
-                if row is not None:
-                    out += bead_schema.problems(row, bead_schema.SanityBead)
-        return out
+    def prospective(self, attachment: dict) -> list[dict]:
+        graph = attachment["graph"]
+        if not graph.get("plan_path"):
+            if all(node["action"] == "existing" for node in graph["nodes"]):
+                return []
+            raise ValueError("sc-compose preview did not provide its rendered plan")
+        path = Path(graph["plan_path"])
+        if not path.is_absolute():
+            path = self.repo / path
+        plan = json.loads(path.read_text())
+        nodes = {node["id"]: node for node in plan["nodes"]}
+        for edge in graph["edges"]:
+            source = self.endpoint(graph, edge["from"])
+            target = self.endpoint(graph, edge["to"])
+            if source in nodes:
+                nodes[source].setdefault("dependencies", []).append({"type": edge["type"], "depends_on_id": target})
+        return list(nodes.values())
 
 
 def main(argv: list[str]) -> int:
@@ -337,7 +396,7 @@ def main(argv: list[str]) -> int:
         parser.error("name at least one --sprint, --phase or --findings")
     result = {"schema": SCHEMA, "mode": "validate" if args.validate else "apply", "targets": []}
     try:
-        run = Run(repo_config.repo_root(), args.option, args.validate)
+        run = Run(repo_config.repo_root(), args.option)
         sprint_ids = split_ids(args.sprint)
         for phase in args.phase:
             sprint_ids += [row[0] for row in run.plan(phase).values()]
@@ -348,33 +407,70 @@ def main(argv: list[str]) -> int:
 
     entries, targets = [], []
     for kind, item in [("sprint", b) for b in dict.fromkeys(sprint_ids)] + [("finding", t) for t in finding_targets]:
-        bead = item if kind == "sprint" else getattr(item, "target_id", None) or item["id"]
+        if isinstance(item, TargetError):
+            bead = item.target_id or "unknown finding"
+        elif isinstance(item, dict):
+            bead = item["id"]
+        else:
+            bead = item
         entry = {"id": bead, "kind": kind, "problems": []}
         entries.append(entry)
         try:
             if isinstance(item, TargetError):
                 raise item
-            target = run.sprint_target(bead) if kind == "sprint" else item
+            if kind == "sprint":
+                target = run.sprint_target(bead)
+            else:
+                assert isinstance(item, dict)
+                target = item
             entry.update({"formula": target["formula"], "option": target["option"]})
             targets.append((entry, target))
         except (TargetError, BdError) as exc:
             entry["error"] = {"code": getattr(exc, "code", "BEAD_GROUPS_BD_FAILED"), "message": str(exc)}
-    for entry, target in dependency_order(targets):
+    ordered = dependency_order(targets)
+    previews = []
+    preview_failed = False
+    for entry, target in ordered:
         try:
-            attachment = run.pour(target)
+            if target.get("qa_closed") and not args.validate:
+                parent, ref = target["compose"]["parent"], target["compose"]["ref"]
+                if any(run.bd.show(attach_id(parent, ref, step)) is None for step in run.steps(target)):
+                    raise TargetError("BEAD_GROUPS_QA_CLOSED", f"{target['compose']['filed_by']} is closed; pour before closing QA")
+            attachment = run.pour(target, preview=True)
+            previews.append((entry, target, attachment))
             entry.update({"ids": attachment["ids"], "nodes": attachment["nodes"], "edges": attachment["edges"]})
             created = {n["id"] for n in attachment["nodes"] if n["action"] == "create"}
             entry["problems"] += [f"missing bead {i}" for i in created] + attachment["missing"]
             edges = [e for e in attachment["edges"] if e["action"] == "add" and e["from"] not in created]
             entry["problems"] += [f"missing edge {e['from']} -{e['type']}-> {e['to']}" for e in edges]
-            if args.validate:
-                entry["problems"] += run.schema_problems(attachment)
-        except (TargetError, BdError) as exc:
+        except (TargetError, BdError, OSError, ValueError, KeyError) as exc:
+            preview_failed = True
             entry["error"] = {"code": getattr(exc, "code", "BEAD_GROUPS_BD_FAILED"), "message": str(exc)}
+    if previews:
+        try:
+            import bead_schema
+            for phase in sorted({target["compose"]["phase"] for _, target, _ in previews}):
+                current = bead_schema.load_phase(phase)
+                prospective = [node for _, target, attachment in previews if target["compose"]["phase"] == phase
+                               for node in run.prospective(attachment)]
+                issues = bead_schema.validate_phase([*current, *prospective])
+                if issues:
+                    next(entry for entry, target, _ in previews if target["compose"]["phase"] == phase)["problems"] += issues
+                    result["schema_problems"] = True
+        except (OSError, ValueError, KeyError) as exc:
+            result.update({"targets": entries, "outcome": "failed", "error": {"code": "BEAD_GROUPS_CANNOT_RUN", "message": str(exc)}})
+            return report(result, args.json, FAILED)
+    if not args.validate and not preview_failed and not result.get("schema_problems"):
+        for entry, target, _ in previews:
+            try:
+                attachment = run.pour(target, preview=False)
+                entry.update({"ids": attachment["ids"], "nodes": attachment["nodes"], "edges": attachment["edges"], "problems": []})
+            except (TargetError, BdError) as exc:
+                entry["error"] = {"code": getattr(exc, "code", "BEAD_GROUPS_BD_FAILED"), "message": str(exc)}
     result["targets"] = entries
     if any("error" in e for e in entries):
         result["outcome"], code = "failed", FAILED
-    elif args.validate and any(e["problems"] for e in entries):
+    elif result.get("schema_problems") or (args.validate and any(e["problems"] for e in entries)):
         result["outcome"], code = "problems", PROBLEMS
     else:
         result["outcome"], code = "succeeded", SUCCESS

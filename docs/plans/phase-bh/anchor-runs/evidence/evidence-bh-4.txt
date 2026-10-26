@@ -1,0 +1,35 @@
+Evidence for sprint atm-bh-4 assembled by team-lead from the landed phase tree. Commands and their verbatim output follow; owned_paths come from the sprint bead metadata.
+
+$ git diff --stat ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/beads_source.py apps/atm-bd-console/src/atm_bd_console/atm_bd.py apps/atm-bd-console/tests/test_beads_source.py apps/atm-bd-console/tests/test_atm_bd.py apps/atm-bd-console/tests/fixtures/beads/
+ apps/atm-bd-console/src/atm_bd_console/atm_bd.py   |  378 ++++
+ .../src/atm_bd_console/beads_source.py             |   52 +
+ .../tests/fixtures/beads/list-open.json            | 2062 ++++++++++++++++++++
+ .../tests/fixtures/beads/planted.json              |  126 ++
+ .../atm-bd-console/tests/fixtures/beads/ready.json | 1100 +++++++++++
+ .../fixtures/beads/repo/.atm-bd/phase-bh.toml      |    3 +
+ .../repo/.claude/project/atm-bd-orchestration.yaml |   16 +
+ .../fixtures/beads/repo/docs/plans/phase-bh.jsonl  |   10 +
+ .../tests/fixtures/beads/show-closed.json          | 1641 ++++++++++++++++
+ .../tests/fixtures/beads/show-findings.json        |  738 +++++++
+ apps/atm-bd-console/tests/test_atm_bd.py           |  708 +++++++
+ apps/atm-bd-console/tests/test_beads_source.py     |  102 +
+ 12 files changed, 6936 insertions(+)
+
+$ git log --oneline ae620a8c86296831568566cc0fcf811ee663c94d..fceff2388249431ba0726c91c00173afb9d8b317 -- apps/atm-bd-console/src/atm_bd_console/beads_source.py apps/atm-bd-console/src/atm_bd_console/atm_bd.py apps/atm-bd-console/tests/test_beads_source.py apps/atm-bd-console/tests/test_atm_bd.py apps/atm-bd-console/tests/fixtures/beads/ | head -40
+3898e71 Use named kinds throughout QA step parsing
+691208a fix(bh-4): table dispatch kinds and template keys
+2ddc212 refactor(bh-5): one subprocess runner with a timeout for the git, gh and bd sources
+2058e39 refactor: one short_id helper for bead-prefix strips (bh-8 qa f8)
+15fcd23 test(bh-4): bh-4 tests live in the owned tests/test_atm_bd.py
+7845c13 test(bh-4): fixture repo config uses a test-only lead name
+eb984af refactor(bh-4): step and dispatch_spec read names only from atm_bd tables
+3139ec8 test(bh-4): D4 acceptance over recorded finding-group beads and planted fixtures
+5933fd1 test(bh-4): beads_source ancestors chain and Err paths against a fake bd
+05e5ed5 fix(bh-4): D5 dispatch_spec tests render strict; fix-verification round = fix round + 1
+54bc5f4 fix(bh-4): top_epic is None on a chain broken anywhere; direct step() tests
+a2110f3 fix(bh-4): primary_checkout from repo_root (plan-owner ruling)
+87c4f86 fix(bh-4): complete phase_file and phase mapping (sanity round 3)
+9b95c40 fix(bh-1): atm-bh-1.qf-tick-context-qa-f1 one owner for the stack
+2613423 fix: complete phase and group mappings
+37f8c5e fix: carry sprint stack metadata
+0120c31 feat: add beads source and phase mapping

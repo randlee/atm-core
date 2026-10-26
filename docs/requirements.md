@@ -115,6 +115,10 @@ Approved additive CLI feature for the Phase `AX` line:
 Approved additive CLI feature for the Phase `BA` line:
 - `atm task assign|close|move|list|events`
 
+Approved additive CLI feature for the Phase `BK` line (section 23, 24):
+- `atm hook register|disable|list`
+- `atm cron start|end|list`
+
 The system must preserve the retained command behavior unless these
 requirements explicitly retire or change it.
 
@@ -635,15 +639,33 @@ Product requirement ID:
 
 - `REQ-P-HTTP-COMPAT-001` The daemon HTTP API has a strict, independently
   declared SemVer version. Product release versions identify builds only; they
-  are never the CLI-to-daemon compatibility gate.
+  are never a compatibility gate on any link that speaks the HTTP API.
+
+The HTTP API links this requirement governs (ADR-061 D1, HTTP/peer API row):
+
+- CLI → daemon: the `atm` CLI and the local daemon on the same host
+- daemon ↔ daemon: peer daemons on different hosts (cross-host delivery,
+  acknowledgement and peer doctor)
+- graft → daemon: an in-process `atm-graft` session (including Hermes
+  profiles through `hermes-atm`) and the local daemon
 
 Required behavior:
 
 - `/v{major}/atm` and the HTTP API's declared SemVer have the same major;
   different major versions fail before a write with a typed compatibility
   error
-- the compatibility preflight compares the explicit CLI/daemon schema version
-  and HTTP API major, not `atm` or `atm-daemon` product release strings
+- on every governed link, compatibility is decided by the HTTP API major
+  (`HTTP_API_VERSION`); the local links (CLI → daemon, graft → daemon) also
+  compare the explicit `CLI_SCHEMA_VERSION`; peer links also require the same
+  `peer_wire_security` mode
+- `atm`, `atm-daemon` and `atm-graft` product release strings are never
+  compared to decide compatibility on any governed link, including two hosts
+  running different releases; they are reported only as diagnostic evidence
+  (doctor output, smoke and benchmark reports)
+- each host still reports a coherent, ready local CLI/daemon pair; that local
+  readiness check is separate from cross-host compatibility
+- smoke, integration and release harnesses apply the same rule: a cross-host
+  or graft lane never fails on a release-string difference alone
 - an additive endpoint, optional JSON field, response field, or error detail
   increments the HTTP API minor version and must preserve successful
   communication for clients and servers sharing the same major; patch versions
@@ -1243,7 +1265,7 @@ Global caller-context rules:
 
 | Command | Caller identity required | Caller identity may come from | Caller team required | Caller team may come from | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `atm send` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select caller context; target recipient/team are not caller context |
+| `atm send` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select caller context; target recipient/team are not caller context; the shipped CLI has no `--from` caller override |
 | `atm peek` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | inspection-only; `--from` remains a sender filter |
 | `atm read` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
 | `atm ack` | Yes | `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target preserves the received full source address |
@@ -1280,7 +1302,14 @@ Global caller-context rules:
   and fails before daemon dispatch
 - a chat-qualified recipient is expressed only in canonical `<to>` syntax:
   `<agent>:<chat-id>@<team>[.<host>]`
-- `--from` on `send` is not an accepted caller-identity override
+- the shipped `atm send` CLI declares no `--from` option: both unqualified
+  `--from <name>` and full-address `--from <agent>@<team>` are rejected before
+  dispatch and cannot select a sender or caller context. A later compatible
+  addition may admit only the full-address form, never the unqualified alias;
+  it must be mutually exclusive with `--as` and `--chat-id`, match the
+  invoking shell's authenticated agent and resolved caller team, and require
+  any supplied `--team` to match. It therefore remains a spelling of the
+  authenticated caller, not an impersonation mechanism.
 - `--from` on `read` / `list` is a sender filter only
 - `--as` is accepted on `send` and `read` for the caller agent/chat override,
   and on inspection-only surfaces such as `peek` and `list`
@@ -1486,7 +1515,6 @@ Write one message into one target inbox.
 - `--summary <text>`
 - `--json`
 - `--dry-run`
-- `--from <name>`
 - `--requires-ack`
 - `--task-id <id>`
 - `--task-complete` (requires `--task-id`)
@@ -1497,9 +1525,10 @@ Retired from the current implementation:
 
 ### 6.3 Required Behavior
 
-- resolve sender identity using the defined precedence
-- if sender identity cannot be resolved from `--from` or invoking-shell
-  `ATM_IDENTITY`, fail before daemon dispatch
+- resolve sender identity using the caller-context matrix and its chat-id
+  precedence; the shipped CLI has no send-time `--from` source
+- if sender identity cannot be resolved from `--as`, `--chat-id`, or the
+  invoking-shell caller-context sources, fail before daemon dispatch
 - resolve recipient address using the defined precedence
 - resolve aliases before mailbox lookup
 - when a cross-team alias-oriented sender is projected into `from`, also
@@ -2515,6 +2544,43 @@ Phase AX.6 doctor findings must use these warning codes and actionable guidance:
 
 Critical findings must cause a non-zero exit status.
 
+### 11.5 Hooks Section (Phase BK)
+
+Product requirement ID:
+- `REQ-P-HOOK-004` `atm doctor`, run from a team with one or more active hook
+  registrations (section 23), must call each registered module's `doctor()`
+  through the daemon hook runner and report the reply.
+
+Required behavior:
+- the daemon runs `python3 <module_path> doctor` with stdin
+  `{"schema_version", "hook": "doctor", "team", "phase", "custom"}` (the
+  row's stored `custom`); the module replies `{"success": <bool>,
+  "message": "<text>", "findings": [...]}`, where `findings` is optional
+  and each finding has the fields of atm's doctor finding (`severity`
+  `info|warning|error`, `code`, `message`, optional `remediation`); any
+  other shape is `ATM_HOOK_MALFORMED` (Rand, 2026-10-18: "doctor would need
+  to know team, phase and it would return a dict/array (whatever is
+  consistent w/ what doctor expects)")
+- the report carries a `hooks` section with one entry per distinct
+  `(module_path, cwd, team, phase)` among the caller team's active
+  `hook_registration` and `cron_schedule` rows, naming its `hooks`,
+  `schedules`, `team`, `phase` and `timeout_ms`, with the reply's
+  `success`, `message` and `findings`, or the typed error (`ATM_HOOK_EXIT`,
+  `ATM_HOOK_TIMEOUT`, `ATM_HOOK_MALFORMED`) when the call fails; the calls
+  run concurrently under the doctor request's budget
+- the section is empty, not absent, when the team has no active
+  registration; it must never make `atm doctor` fail or raise the overall
+  status by itself
+- the `--json` output always carries the section, as `"hooks": []` when
+  empty; a consumer built before Phase BK must decode a report that lacks
+  it (serde default)
+- atm must store and compare no module sha (Rand, #1873 round 3): integrity
+  of the installed module is what the module's own `doctor()` reports
+
+Satisfied by:
+- `REQ-CORE-HOOK-001` for the runner boundary the section calls through
+- `REQ-ATM-OUT-001` for rendering
+
 ## 12. `atm teams`
 
 Product requirement ID:
@@ -3015,21 +3081,28 @@ Required rules:
 Task lifecycle (Phase BA):
 1. A task MUST exist as exactly one row per `(team, task_id)`.
 2. Task state MUST be `assigned` (queued), `active` (working), or closed.
-3. An agent MUST hold at most one `active` task; the database MUST enforce
-   this with a unique index on `(team, assignee)` restricted to
-   `state = 'active'`. The index fires when a task **starts** (the implicit
-   `assigned → active` move; rejected as `ActiveElsewhere`), never at
-   `atm task assign` admission — any number of `assigned` rows may queue
-   behind the active one.
+3. An agent MUST hold at most `max_tasks` `active` tasks. `max_tasks` is the
+   roster `metadata_json` key `max_tasks` for that member, defaulting to 1 when
+   unset; a stored value that is not an integer of at least 1 refuses the start.
+   Set it with `atm teams update-member <team> <member> --max-tasks <N>` (minimum
+   1). The limit is checked when a task **starts** (the implicit
+   `assigned → active` move; rejected as `TaskMaxActiveReached`
+   (`ATM_TASK_MAX_ACTIVE_REACHED`)). Recovery is to complete or cancel an
+   active task, or raise the limit with `atm teams update-member <team>
+   <member> --max-tasks <N>`. The limit is never checked at `atm task assign`
+   admission — any number of `assigned` rows may queue behind the active ones.
 4. Starting a task MUST be `atm task start <id>` by the assignee; it MUST move
-   the task from `assigned` to `active`, MUST move it to the head of the queue,
-   and MUST send the assigner a start message. The daemon MUST NOT start a task.
+   the task from `assigned` to `active`, MUST place it at the end of the started
+   group at the head of the queue (behind the agent's other active tasks), and
+   MUST send the assigner a start message. The daemon MUST NOT start a task.
 5. An agent's queue MUST be ordered by `(position, assigned_at, task_id)`;
    `assigned_at` MUST be the time of the current assignment; it is reset only by reassignment or reopen and never by a queue move; a new task's default position MUST be the
    end of the queue.
 6. `atm task move <id> --before <other> | --head | --end` MUST reposition an
-   `assigned` task only; `--head` MUST place it next up behind the active
-   task, and the active task MUST never be repositioned or preempted.
+   `assigned` task only; `--head` MUST place it next up behind the agent's
+   active tasks, and an active task MUST never be repositioned or preempted.
+   Started (`active`) tasks always sort ahead of `assigned` tasks; each group
+   keeps its order.
 7. Closing a task MUST record one typed outcome from
    `completed | refused | cancelled` with optional reason text,
    MUST remove the task from the queue, and MUST append a timestamped event.
@@ -3060,22 +3133,25 @@ Nudge invariant (Phase BA):
     from the ephemeral roster record; it MUST NOT consume
     `PickerMemberStatus`, a `RuntimeHealth` projection, raw Herdr output, or
     heartbeat DTOs.
-15. `Idle` with an open task MUST be nudged, no more than once per 60 seconds
-    per task. The first prompt is `task_ready`; later prompts are
-    `task_reminder` with a rising attempt. Every assignment produces one
-    `task_queued` line at write time.
+15. `Idle` with one or more open tasks MUST be nudged, no more than once per
+    60 seconds per member. Each nudge MUST list every open task of that
+    member. Reminder and stall/escalation state MUST be tracked once per
+    member on the head task row only. The first prompt is `task_ready`; later
+    prompts are `task_reminder` with a rising attempt. Every assignment
+    produces one `task_queued` line at write time.
 16. `Active` MUST never be nudged or diverted to another task.
 17. `Blocked` or `Offline` MUST escalate once per episode and MUST receive
     zero nudges.
 18. Escalation MUST be one ordinary message to the roster lead (when exactly
     one) and to every configured escalation recipient, resolved
-    independently; a task's reminder count MUST escalate again every time it
-    reaches a `TASK_STALLED_REMINDER_THRESHOLD` (10) budget boundary (10, 20,
-    30, ...), and nudging to the assignee MUST continue in between
-    escalations, with no cap and no terminal hold. Only sustained assignee
-    activity — `Active` observed continuously for at least one
-    `TASK_REMINDER_INTERVAL_MS` — resets the reminder and lead-notification
-    counters; a shorter burst of activity does not.
+    independently; the head task row's reminder count (the member's single
+    reminder count) MUST escalate again every time it reaches a
+    `TASK_STALLED_REMINDER_THRESHOLD` (10) budget boundary (10, 20, 30, ...),
+    and nudging to the assignee MUST continue in between escalations, with no
+    cap and no terminal hold. Only sustained assignee activity — `Active`
+    observed continuously for at least one `TASK_REMINDER_INTERVAL_MS` —
+    resets the member's reminder and lead-notification counters on the head
+    task row; a shorter burst of activity does not.
 
 Task-history amendment (2026-09-26, issue #1599): rule 9's closed subcommand
 set additionally admits `history`, a read-only view over the past N tasks for
@@ -5235,3 +5311,323 @@ Task ledger shape (Phase BA):
     state fields in the same record
   - any scoped exclusions for the semantic-literal gate must stay narrow and
     explicit; they must not exempt ordinary production code wholesale
+
+## 23. Task Hooks And `atm hook` (Phase BK)
+
+Product requirement IDs:
+- `REQ-P-HOOK-001` Every `atm task` subcommand must be replaceable by one
+  optional, registered hook that receives one JSON request and answers with
+  one of four JSON reply shapes.
+- `REQ-P-HOOK-002` Hooks must run in the daemon, in a fixed environment,
+  under the module's own deadline, with typed failures that fail the
+  subcommand closed.
+- `REQ-P-HOOK-003` `atm hook register|disable|list` must manage hook
+  registrations per team and phase.
+- `REQ-P-HOOK-004` is the doctor section (section 11.5).
+
+Governing decisions: ADR-068 (contract and runner), ADR-061 (two additive
+tables, six additive protocol variants), ADR-066 (team from caller context),
+ADR-067 (one structured log). Design: `docs/plans/phase-bk/design.md`.
+Rulings: atm-core #1873 (Rand, 2026-10-18).
+
+### 23.1 Hook Set And Registration (`REQ-P-HOOK-001`, `REQ-P-HOOK-003`)
+
+- the hook names are the closed set `task.assign`, `task.start`,
+  `task.close`, `task.move`, `task.list`, `task.events`, plus `cron.tick`
+  and `cron.stop` (section 24); `atm task history` is not hooked; every
+  hook is optional and a subcommand with no active registration for the
+  caller's team runs unchanged, with no process spawned
+- a registration is one `hook_registration` row keyed `(team, phase, hook)`
+  with `module_path`, `cwd`, `timeout_ms`, `custom` (a JSON object),
+  `active`, `registered_by`, `registered_at`, `disabled_at`
+- `atm hook register <hook> --module <path> --phase <x> [--cwd <dir>]
+  [--custom <json>]` must store `--custom` (a JSON object, `{}` when
+  absent; a non-object or more than 65 536 serialized bytes is
+  `ATM_HOOK_MODULE_INVALID`), must
+  read the module's `TIMEOUT_MS` constant (a module without it, with zero,
+  or with a value above 2500 ms is refused with `ATM_HOOK_MODULE_INVALID`),
+  and must accept a registration of a hook another phase of the team
+  already has active: phases are independent and tasks carry no phase
+  (Rand, 2026-10-18)
+- `atm hook disable --phase <x> [<hook>]` must set the phase's rows (or the
+  one hook) inactive with `disabled_at` and keep them for `atm hook list`
+- `atm hook list [--phase <x>] [--json]` must print the team's rows, active
+  first
+- the team is the caller's team (ADR-066); registrations persist across a
+  daemon restart
+- any roster member of the team may register, disable and list hooks; the
+  daemon's routes check team membership and nothing else (ADR-068 D5)
+- the daemon's register route is the only validator of the hook name
+  (the six task names; `cron.tick` and `cron.stop` are refused with
+  `ATM_HOOK_MODULE_INVALID`); the CLI validates only `TIMEOUT_MS`
+
+### 23.2 Request And Reply Contract (`REQ-P-HOOK-001`)
+
+- the daemon must invoke the module as `python3 <module_path> <hook name>`
+  with one JSON object on stdin: `schema_version` (`"1.0.0"`), `hook`,
+  `team`, `phase`, `caller { identity, team, host }`, `request` (the bare
+  HTTP body of the command the CLI sent) and `custom` (the registration's
+  stored `--custom` object, passed unchanged and never read by atm); the
+  key set is identical for every hook
+- the module must print exactly one JSON object (Rand, 2026-10-18: "we should add a 3-rd return type. instead of success=true/false which signals pass-through, we could return enum with { handled => run my actions, not-applicable, pass-through }"): `{"result": "refused",
+  "message": "<text>"}` refuses the subcommand with `ATM_HOOK_REFUSED`
+  carrying `<text>`;
+  `{"result": "pass-through"}` runs the normal subcommand with the original
+  request; `{"result": "not-applicable"}` hands the call to the next hook,
+  and all not-applicable runs the normal subcommand;
+  `{"result": "handled", "atm-action": [{"command": "<hook name>", "as":
+  "<identity>", "request": {...}}, ...]}` runs those commands in order
+  instead, with `as` (optional) replacing `caller_identity`
+- a hooked command must run the active registrations of its hook for the
+  caller's team, one per phase, sequentially and oldest `registered_at`
+  first, within the one request deadline (each gets `min(TIMEOUT_MS,
+  remaining - 500 ms)`; a hook left without budget is `ATM_HOOK_TIMEOUT`
+  naming its phase); the chain stops at the first reply that is not
+  not-applicable, which decides, later hooks are not run, and all
+  not-applicable runs the normal command
+- task hooks are an input filter (`HookedTaskCommands`) over the sealed
+  `atm_core::boundary::TaskCommands` trait that the normal task path
+  (`NormalTaskCommands`) also implements; actions enter the normal path
+  below the filter, so a hook-returned command never consults a hook and
+  no nesting variable or header exists (ADR-068 D4)
+- any reply that is not exactly one of the four shapes must return
+  `ATM_HOOK_MALFORMED` to the caller and never run the normal command
+- the hook must be consulted before any storage write of the request; a
+  refusal writes nothing
+- the module must expose `TIMEOUT_MS`, a `__main__` block that answers
+  `{"result": "not-applicable"}` for a `task.*` name it does not implement,
+  `cron(args)`, `stop(args)` and `doctor(request)` (section 11.5); atm stores no module sha
+- an action's `command` may be any routed atm command except
+  `hook.register|disable|list` and `cron.start|end|list`, with `request`
+  that route's body; an empty list, an action for another team, or an `as`
+  not on the roster is `ATM_HOOK_MALFORMED` and no action runs; a failing
+  action stops the list without rollback and names how many committed
+- `HOOK_SCHEMA_VERSION` versions the request and reply shapes independently
+  of `HTTP_API_VERSION`; the module must tolerate additive fields inside
+  `request` (ADR-068 D8)
+
+### 23.3 Runner (`REQ-P-HOOK-002`)
+
+- one runner in `atm-daemon-bootstrap` implements the sealed
+  `atm_core::boundary::HookRunner` trait that the HTTP router consults;
+  the CLI never runs a hook
+- the child's environment must be exactly `ATM_TEAM`, `ATM_PHASE`,
+  `PATH`, `HOME` (plus `SystemRoot` and `USERPROFILE` on Windows) after
+  clearing the daemon's environment, with the registered cwd; the daemon
+  reads no configuration from its own environment (ADR-066)
+- the child must be killed when `timeout_ms` elapses (`ATM_HOOK_TIMEOUT`);
+  a non-zero exit is `ATM_HOOK_EXIT` with the exit code and a stderr tail;
+  stdout that is not exactly one object of the four shapes is
+  `ATM_HOOK_MALFORMED`; a Python exception is `ATM_HOOK_EXIT` with the
+  traceback tail; a panic in the daemon-side hook task is caught and
+  returned as `ATM_HOOK_EXIT` while the daemon keeps serving; each fails
+  the subcommand closed
+- every run and every dispatched action must write one structured log entry
+  (`subsystem = "atm_hook"`, hook, team, phase, caller, outcome,
+  elapsed milliseconds) and no second file (ADR-067)
+
+### 23.4 Crate Requirements
+
+- `REQ-CORE-HOOK-001` `atm-core` must own the typed hook contract: the
+  request, reply and action types, the sealed `HookRunner` boundary trait
+  with its single test double, the sealed `TaskCommands`,
+  `CronScheduler` and `HookActionDispatcher` traits, the six request and
+  seven response envelope
+  variants, and `atm-storage` must own the `HookRegistrationStore` and
+  `CronScheduleStore` traits with in-memory doubles behind `test-utils`
+- `REQ-CORE-HOOK-002` `atm-storage-rusqlite` must create `hook_registration`
+  and `cron_schedule` idempotently from `ensure_schema` as additive MINOR
+  objects (ADR-061 D6 record 2026-10-18) and prove the pre-bk statements
+  still read and write afterwards
+- hook execution must be tested with a fixture module on the real clock
+  (the timeout case a child that never finishes) and scheduling with a
+  manual test clock, never a live daemon (section 19)
+
+## 24. `atm cron` (Phase BK)
+
+Product requirement IDs:
+- `REQ-P-CRON-001` `atm cron start|end|list` must manage persistent cron
+  schedules per team and phase that run a hook module on a cron expression.
+- `REQ-P-CRON-002` The daemon must tick every active schedule from one
+  worker, in UTC, without replaying missed ticks and with at most one run
+  per schedule in flight.
+
+Governing decisions: ADR-069, ADR-068 (the tick is a hook run), ADR-061,
+ADR-065, ADR-067.
+
+### 24.1 Commands And Storage (`REQ-P-CRON-001`)
+
+- `atm cron start <name> --cron "<expr>" --module <path> --phase <x>
+  (--until <rfc3339> | --until-hook) [--arg <v>]... [--cwd <dir>]
+  [--custom <json>]` must
+  require exactly one stop condition, parse `<expr>` before writing (6 or 7
+  fields seconds first, or `@yearly|@monthly|@weekly|@daily|@hourly`; five
+  fields, no future occurrence, or an `--until` not in the future is
+  `ATM_CRON_EXPR_INVALID`), read the module's
+  `CRON_TIMEOUT_MS`, else `TIMEOUT_MS` (above 30 000 ms is
+  `ATM_HOOK_MODULE_INVALID`), store `--custom` as for hooks, assign a
+  fixed `jitter_s` (section 24.2), and insert one `cron_schedule` row (`UNIQUE (team, phase,
+  name)`; an active duplicate is refused) with `until_at` or `stop_hook`
+  set (exactly one, enforced by a CHECK); restarting an ended name updates
+  its row in place and keeps the id
+- any roster member of the team may start, end and list schedules; the
+  daemon's routes check team membership and nothing else (ADR-069 D1)
+- `atm cron end --phase <x> [<name>]` must set the phase's rows (or the one
+  name) inactive with `ended_at` and keep them
+- `atm cron list [--phase <x>] [--json]` must print the team's rows with
+  `jitter_s`, `last_run_at` and `last_outcome`
+- rows persist across a daemon restart; every active row of every team runs
+
+### 24.2 Scheduler (`REQ-P-CRON-002`)
+
+- the `atm-cron` crate is the only implementation of the sealed
+  `atm_core::boundary::CronScheduler` trait (`start`, `end`, `list`); it
+  depends on `atm-core`, `tokio`, `chrono`, `cron`, `async-trait`,
+  `serde_json`, `getrandom` and `tracing`, never on `atm-storage`, `atm-http-runtime`,
+  `atm-daemon-bootstrap` or `atm`; it dispatches actions through the sealed
+  `atm_core::boundary::HookActionDispatcher` trait the router implements
+  (ADR-069 D2)
+- the daemon bootstrap composes the crate's scheduler once, hands it to the
+  router for the three cron routes, and keeps its worker in the daemon's
+  worker set: the worker loads the active rows at start, reloads them when
+  a start or end commits, and drains under the replacement-daemon deadline
+- each schedule's next time is computed from the injected clock after startup and
+  after each run, plus its `jitter_s`; a missed occurrence is never
+  replayed
+- `jitter_s` is drawn once at start from an injected random source,
+  uniform over the offsets in `[0, min(period_s / 2, 1800))` (at least 1)
+  not held by another active schedule with the same expression, or over
+  all of them when every offset is held; it is stored, so a daemon
+  restart keeps it; the stop-hook check runs at each jittered run time,
+  and an `--until` schedule ends at `until_at` exactly (ADR-069 D2, D4)
+- a tick that arrives while the schedule's previous run is still executing
+  is skipped and logged
+- every tick checks the stop condition first (ADR-069 D4): a schedule
+  whose `until_at` has been reached ends with `last_outcome = "stopped:
+  until reached"`; a `stop_hook` schedule runs `python3 <module_path>
+  cron.stop` with the section 23.2 request shape and ends with
+  `last_outcome = "stopped: <reason>"` on `{"stop": true, "reason":
+  "<reason>"}`, runs on `{"stop": false}`, and on a malformed reply, exit or
+  timeout skips the tick, logs the error and stays active
+- a tick invokes the module as `python3 <module_path> cron.tick` with the
+  section 23.2 request (`hook = "cron.tick"`, `request = {"args": [...],
+  "created_by": "<agent>"}`, `custom` the schedule's; the args travel only
+  in the stdin request), under the schedule's `timeout_ms` (at most
+  30 000 ms, never the 2 500 ms task-hook cap); the reply follows section 23.2 with actions run un-hooked
+  as `created_by` unless `as` is given, with local ingress; each run
+  writes `last_run_at`, `last_outcome` and one structured log entry
+  (`subsystem = "atm_cron"`)
+
+## 25. Virtual tool senders and cron lifecycle contracts (BK-9)
+
+Product requirement IDs:
+
+- `REQ-P-TOOL-IDENTITY-001` reserves `tool` as a virtual core namespace.
+  Ordinary team/member administration, agent launch, CLI caller context, hook
+  JSON, and peer request bodies cannot create or impersonate `<agent>@tool`.
+  `cron@tool` is daemon-owned. A plug-in sender is available only after an
+  authenticated, fixed registration; historical rows remain readable after
+  retirement.
+- `REQ-P-CRON-003` defines cron-only output and lifecycle replies.
+- `REQ-P-CRON-004` persists one logical delivery intent per cron transition.
+- `REQ-P-CRON-005` defines the cron lifecycle nudge template family.
+
+### 25.1 Tool sender admission (`REQ-P-TOOL-IDENTITY-001`)
+
+- A virtual plug-in sender is registered only by a local-only signed
+  `ToolInstallerRequest`. Its canonical signing input is the UTF-8,
+  length-prefixed field order in ADR-066, domain separated as
+  `ATM-TOOL-INSTALL-v1`; `signature` is excluded. The trust root is an
+  administrator-owned, daemon-read-only allowlist. A roster member, process
+  environment, repository configuration, `--as`, `--from`, or peer-authenticated
+  hostname is never proof of a virtual sender.
+- A message from a registered plug-in carries a signed `ToolRuntimeProof`
+  (`ATM-TOOL-MESSAGE-v1`) binding sender, active registration generation,
+  origin host, message id, message digest, runtime key and nonce. The registry
+  atomically checks key, host, generation, expiry and nonce before the daemon
+  creates its non-serializable emission capability. Exact replay returns the
+  prior result; nonce reuse with different bytes is refused.
+- Cross-host forwarding additionally requires an origin-host signed
+  `ToolSenderAttestation` bound to the same sender, generation, message digest
+  and nonce. mTLS identifies the peer host but does not by itself authorize a
+  virtual sender. Receiving hosts verify the attestation and their sender-host
+  allowlist and refuse bare `@tool` strings.
+- The shipped `atm send` CLI has no `--from` option. Consequently neither
+  `--from <name>` nor `--from <agent>@<team>` is a current caller-context
+  source; both are rejected before dispatch. If a compatible send-time form
+  is introduced, it must be only the full-address
+  `--from <agent>@<team>` spelling and must follow §4.2's authenticated-caller
+  equality, mutual-exclusion, and `--team`-matching rules. Read/list `--from`
+  remains a filter. Cron reply `from` is an authenticated action field and is
+  not CLI authority.
+- A cron `send` action uses, in order: its explicit full-address ordinary
+  `from`; its legacy same-team `as`; then daemon-owned `cron@tool`. `from`
+  plus `as`, a foreign team, a different roster member, or explicit `@tool`
+  is refused before dispatch. An explicit ordinary sender must equal the
+  persisted schedule creator and be eligible on the schedule's real team.
+  The child environment for cron alone is a cleared approved environment plus
+  `ATM_IDENTITY=cron`, `ATM_TEAM=tool`, and `ATM_PHASE=<schedule.phase>`;
+  these variables are not credentials. Task-hook behavior is unchanged.
+
+### 25.2 Hook machine-readable mutation results (`REQ-P-HOOK-003`)
+
+`atm hook register ... --json` writes one JSON object and newline exactly:
+`{"action":"hook.register","registration":<HookRegistration>}`.
+`atm hook disable ... --json` writes exactly
+`{"action":"hook.disable","disabled":<HookRegistration[]>,"count":<integer>}`
+and a newline. Each persisted registration object has exactly these eleven
+fields: `team`, `phase`, `hook`, `module_path`, `cwd`, `timeout_ms`, `custom`,
+`active`, `registered_by`, `registered_at`, and `disabled_at`; there is no
+synthetic id. `count` equals `disabled.len()`. Disabling no rows succeeds with
+an empty array and `count:0`. Register/disable without `--json` retain their
+human output, typed failures remain failures, and `atm hook list --json`
+remains a bare array.
+
+### 25.3 Cron reply, transition, and delivery (`REQ-P-CRON-003`, `REQ-P-CRON-004`)
+
+- Cron replies use `CRON_REPLY_SCHEMA_VERSION=1.1.0`; task-hook `HookReply`
+  remains unchanged. Tick accepts only `pass-through` or `handled` with an
+  optional `cron-output` array, `not-applicable` with no output, and `refused`
+  with a bounded diagnostic. Stop accepts only `stop`, a reason required iff
+  true, and optional `cron-output`. Unknown/duplicate keys, extra stdout,
+  empty bodies, or oversized arrays/bodies are malformed.
+- `cron-output` items are `{"kind":"message"|"error","body":"..."}`.
+  They become ordinary, creator-addressed mail with a stable stored message id;
+  an `error` output does not change successful run status. The body is
+  persisted verbatim after UTF-8/non-empty/size validation. Diagnostics use a
+  separate bounded redacted type and never silently rewrite module mail.
+- The `(schedule_id,generation,active)` transition transaction persists run
+  state, a monotonic sequence, suppression fingerprint and all intents. First
+  or changed failure creates one error intent; identical failures do not;
+  success resets suppression; stopped creates one stopped intent; stale and
+  skipped transitions create none. Name reuse increments generation. A manual
+  end is the same atomic stopped transition; repeat end adds none.
+- Lifecycle intents use a stable `CronNoticeKey`; module mail intents use a
+  stable stored `AtmMessageId`. Delivery is `accepted`, `suppressed`,
+  `recipient_unavailable`, or `unknown` with a bounded typed retry cause.
+  Unknown handoffs persist as reconciliation-required pending records, never
+  resendable work: a caller must resolve the prior handoff rather than blindly
+  send the same intent again. The contract guarantees one durable logical
+  intent, never an unproven exactly-once external nudge. Missing creators are
+  terminal, operator-visible outcomes and never redirect notification.
+- A generation-scoped, non-serializable `CronRunPermit` is checked at each
+  canonical action admission. Ending or restarting fences the next action but
+  cannot roll back an already committed action. The scheduler alone mints it;
+  it is never serialized, forwarded to a module, or represented in a child
+  environment.
+- `CronLifecycleNudger` accepts only a committed `CronNoticeIntent` and
+  returns a `DeliveryReceipt`. This preserves the creator-selected recipient,
+  lets suppression and unavailable recipients remain explicit, and prevents a
+  nudge adapter from synthesizing lifecycle notices.
+
+### 25.4 Cron lifecycle templates (`REQ-P-CRON-005`)
+
+`cron` is a twelfth stored template override kind, separate from the eleven
+post-send kinds and keyed in the existing `(team_name, template_kind)` store.
+It selects a lifecycle nudge, never a mail, task, ack, or post-send hook. Its
+trusted default is `<atm cron name="{{name}}" event="{{event}}"
+{{detail_attribute}}>` and only `name`, `event`, and `detail_attribute` are
+available to an override. `event` is `stopped` or `error`; trusted code creates
+`detail_attribute` as exactly `message="..."` or `error="..."`, escaping XML
+attributes and normalizing controls. Disabled suppresses both lifecycle
+variants but not module mail.

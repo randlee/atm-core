@@ -17,9 +17,18 @@ use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, authenticated_source_host};
 use crate::send::NudgeMode;
-use crate::send::hook::build_built_in_dispatch;
+use crate::send::hook::{build_built_in_dispatch, build_built_in_dispatch_with_open_tasks};
 use crate::service_runtime::LocalServiceRuntime;
+use crate::types::TaskId;
 use atm_storage::TaskRow;
+
+/// Returns whether this was admitted by the daemon escalation path, whose
+/// successful queue handoff is terminal even while the recipient keeps it
+/// unread. Sender and summary text are intentionally not provenance.
+#[must_use]
+pub fn is_terminal_escalation_message(message: &Message) -> bool {
+    crate::schema::has_daemon_escalation_provenance(&message.envelope)
+}
 
 const fn task_pass_transition(reminder_count: u32) -> TaskTransition {
     if reminder_count == 0 {
@@ -81,6 +90,52 @@ pub fn rearm_queue_marker_after_handoff(
                 "pending marker clear retry failed after successful queue delivery"
             );
         }
+    }
+}
+
+/// Reserves the exact claimed queue item before a one-shot handoff.
+///
+/// The durable transition happens before external acceptance, so a storage
+/// failure prevents the notification from being sent. The claim identity
+/// prevents a stale reservation from changing a later attempt. If the external
+/// handoff is explicitly rejected, call
+/// [`restore_queue_marker_after_failed_terminal_handoff`].
+pub fn reserve_queue_marker_for_terminal_handoff(
+    service_runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    claim: &atm_storage::NudgeClaim,
+) -> Result<(), AtmError> {
+    let reserved = service_runtime
+        .pending_nudge_store()?
+        .complete_pending_before_terminal_handoff(member, claim)?;
+    if reserved {
+        Ok(())
+    } else {
+        Err(AtmError::new(
+            crate::error::AtmErrorCode::InternalError,
+            "terminal queue claim no longer owns its pending marker",
+        ))
+    }
+}
+
+/// Restores a reserved terminal marker only when the external handoff rejects
+/// the prompt, allowing a later controlled retry without reopening a
+/// successfully accepted terminal notification.
+pub fn restore_queue_marker_after_failed_terminal_handoff(
+    service_runtime: &LocalServiceRuntime,
+    member: &MemberKey,
+    claim: &atm_storage::NudgeClaim,
+) -> Result<(), AtmError> {
+    let restored = service_runtime
+        .pending_nudge_store()?
+        .restore_pending_after_failed_terminal_handoff(member, claim)?;
+    if restored {
+        Ok(())
+    } else {
+        Err(AtmError::new(
+            crate::error::AtmErrorCode::InternalError,
+            "terminal queue claim could not restore its pending marker",
+        ))
     }
 }
 
@@ -163,14 +218,16 @@ pub fn rebuild_received_hook_dispatch(
     build_built_in_dispatch(runtime, &delivery_snapshot, &event, nudge_mode)
 }
 
-/// Builds a deferred Task reminder without requiring the assignment message
-/// to remain in the mailbox. A missing assignment record only removes the
-/// optional source-host attribution; the durable task row remains sufficient
-/// to render the reminder body.
+/// Builds a deferred Task reminder for a member's `head` row, listing every
+/// open task of the member in `open_tasks` (queue order) in one nudge.
+///
+/// A missing assignment record only removes the optional source-host
+/// attribution; the durable head row remains sufficient to render the body.
 pub fn build_task_reminder_dispatch(
     runtime: &LocalServiceRuntime,
     member: &MemberKey,
-    row: &TaskRow,
+    head: &TaskRow,
+    open_tasks: &[TaskId],
 ) -> Result<Option<BuiltInPostSendDispatch>, AtmError> {
     let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
         runtime,
@@ -179,24 +236,30 @@ pub fn build_task_reminder_dispatch(
     )?;
     let sender_host = runtime
         .message_store
-        .load_message(&MessageKey::from(row.assignment_message_id))?
+        .load_message(&MessageKey::from(head.assignment_message_id))?
         .map(|message| authenticated_source_host(&message.envelope))
         .transpose()?
         .flatten();
     let event = PostSendHookEvent {
-        sender: row.assigner.clone(),
+        sender: head.assigner.clone(),
         sender_chat_id: None,
-        sender_team: row.team.clone(),
+        sender_team: head.team.clone(),
         sender_host,
-        recipient: row.assignee.clone(),
-        recipient_team: row.team.clone(),
-        message_id: row.assignment_message_id,
-        description: row.description.clone(),
+        recipient: head.assignee.clone(),
+        recipient_team: head.team.clone(),
+        message_id: head.assignment_message_id,
+        description: head.description.clone(),
         requires_ack: false,
         is_ack: false,
-        task_id: Some(row.task_id.clone()),
-        task_transition: Some(task_pass_transition(row.reminder_count)),
+        task_id: Some(head.task_id.clone()),
+        task_transition: Some(task_pass_transition(head.reminder_count)),
         recipient_pane_id: delivery_snapshot.recipient_pane_id.clone(),
     };
-    build_built_in_dispatch(runtime, &delivery_snapshot, &event, NudgeMode::Deferred)
+    build_built_in_dispatch_with_open_tasks(
+        runtime,
+        &delivery_snapshot,
+        &event,
+        NudgeMode::Deferred,
+        open_tasks,
+    )
 }

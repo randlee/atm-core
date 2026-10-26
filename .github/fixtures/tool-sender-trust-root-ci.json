@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "host_id": "ci-daemon.example",
+  "installers": [
+    {
+      "installer_id": "ci-installer",
+      "key_id": "ci-key",
+      "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "allowed_senders": ["ci-tool"]
+    }
+  ],
+  "trusted_origins": [
+    {
+      "host_id": "ci-peer.example",
+      "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "allowed_senders": ["ci-tool"]
+    }
+  ]
+}

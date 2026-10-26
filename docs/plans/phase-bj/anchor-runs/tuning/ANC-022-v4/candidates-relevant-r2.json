@@ -1,0 +1,38 @@
+{
+ "r5-incumbent-no-conjunct": {
+  "type": "choice",
+  "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. Do not judge whether the item obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "The item touches a command or entry-point name, an install script, installer or install path, or a script, document, test or workflow that starts, runs or describes the console.",
+   "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule.",
+   "unclear": "The item text is too vague to tell whether it touches any of the three."
+  }
+ },
+ "r6-incumbent-any-step": {
+  "type": "choice",
+  "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. One deliverable or step anywhere in the item is enough, even when the rest of the item is about other work; an item whose only such step edits an install script, such as install.py, touches (2) even if it never mentions the console. Do not judge whether the item obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "The item touches a command or entry-point name, an install script, installer or install path, or a script, document, test or workflow that starts, runs or describes the console.",
+   "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule.",
+   "unclear": "The item text is too vague to tell whether it touches any of the three."
+  }
+ },
+ "r7-incumbent-any-step-end-state": {
+  "type": "choice",
+  "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. An item touches a thing when it changes, removes, renames or runs it, or states what it must be after the work. One deliverable or step anywhere in the item is enough, even when the rest of the item is about other work; an item whose only such step edits an install script, such as install.py, touches (2) even if it never mentions the console. Do not judge whether the item obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "The item touches a command or entry-point name, an install script, installer or install path, or a script, document, test or workflow that starts, runs or describes the console.",
+   "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule.",
+   "unclear": "The item text is too vague to tell whether it touches any of the three."
+  }
+ },
+ "r8-incumbent-install-detail": {
+  "type": "choice",
+  "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path, including what install.py renders, copies or verifies; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. Do not judge whether the item obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "The item touches a command or entry-point name, an install script, installer or install path (including what an install script renders, copies or verifies), or a script, document, test or workflow that starts, runs or describes the console.",
+   "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule.",
+   "unclear": "The item text is too vague to tell whether it touches any of the three."
+  }
+ }
+}

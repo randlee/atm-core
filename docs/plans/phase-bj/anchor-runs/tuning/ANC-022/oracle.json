@@ -1,0 +1,199 @@
+{
+ "schema": "plan-anchor/tuning-oracle/1",
+ "anchor_id": "ANC-022",
+ "anchor_version": 3,
+ "anchor_statement": "After installation no atm-bd-console command must exist, and no script, document, test or workflow in the atm-bd-orchestration repository may invoke the atm-bd-console command; the directory apps/atm-bd-console and the module atm_bd_console are not that command.",
+ "anchor_scope": "edits the command name, install scripts or any caller of the console",
+ "anchor_kind": "prohibition",
+ "gate": "planning",
+ "roles": {
+  "relevance": "relevant",
+  "compliance": "addressed",
+  "conflict": "contradicted"
+ },
+ "graded_roles": [
+  "relevant",
+  "contradicted"
+ ],
+ "ungraded_roles_note": "ANC-022 is a prohibition: jev_judge.decide ignores the compliance role (verdict-gating.md, 'Anchor kinds'), so `addressed` is recorded but not graded.",
+ "semantic_mapping": "jev_judge.decide(answers, roles, 0.0, 'prohibition')",
+ "repeat_count": 2,
+ "frozen_before_first_jev_call": true,
+ "authority": [
+  "ANC-022 v3 (statement, scope, quote 'jes drop atm-bd-console', context 'answer to whether to drop the alias', fixtures)",
+  "ANC-073 (scope 'atm-bd console pages')",
+  "ANC-009 ('the console's --headless option')",
+  "ANC-001 ('The atm-bd command must have a skill subcommand')",
+  "intent.md phase-bj v1"
+ ],
+ "cases": [
+  {
+   "id": "fixture_pass",
+   "item_id": "item-01",
+   "category": "approved_fixture_pass",
+   "text": "After the sprint, atm-bd-console is not installed and no script, document, test or workflow in the repository invokes it.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "no"
+   },
+   "verdict": "satisfied",
+   "why": "ANC-022 v3 fixtures.pass[0], verbatim: the forbidden command is absent and nothing invokes it."
+  },
+  {
+   "id": "fixture_fail",
+   "item_id": "item-02",
+   "category": "approved_fixture_fail",
+   "text": "After the sprint, atm-bd-console remains as an alias that bead-queues still calls.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "yes"
+   },
+   "verdict": "contradicted",
+   "why": "ANC-022 v3 fixtures.fail[0], verbatim: an atm-bd-console alias that bead-queues still calls is exactly what the statement forbids."
+  },
+  {
+   "id": "compliant_removal",
+   "item_id": "item-03",
+   "category": "minimal_compliant",
+   "text": "Remove the atm-bd-console entry from [project.scripts] in pyproject.toml and change every README and cron example that ran atm-bd-console to run `atm-bd console` instead.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "no"
+   },
+   "verdict": "satisfied",
+   "why": "Edits the command name and its callers and does what ANC-022 requires; the context of ANC-022 ('whether to drop the alias') and ANC-073's scope ('atm-bd console pages') establish `atm-bd console` as the surviving console subcommand."
+  },
+  {
+   "id": "subcommand_doc",
+   "item_id": "item-04",
+   "category": "boundary_subcommand",
+   "text": "The README's operator section tells the lead to open the dashboard with `atm-bd console --phase bj`.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "no"
+   },
+   "verdict": "satisfied",
+   "why": "A document that invokes the console is 'any caller of the console' (scope), so relevant; it invokes the `atm-bd` command's `console` subcommand, a different command from atm-bd-console (ANC-022 statement; ANC-009/ANC-073 name `atm-bd console` and the console's options), so no conflict."
+  },
+  {
+   "id": "subcommand_script",
+   "item_id": "item-05",
+   "category": "boundary_subcommand",
+   "text": "bead_queues.py starts the dashboard by running `atm-bd console` as a subprocess.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "no"
+   },
+   "verdict": "satisfied",
+   "why": "A script calling the console is in scope; it calls `atm-bd console`, not atm-bd-console, so it is not an invocation ANC-022 forbids."
+  },
+  {
+   "id": "subcommand_feature",
+   "item_id": "item-06",
+   "category": "boundary_subcommand",
+   "text": "`atm-bd console` gains a sanity runs tab and a quality runs tab, newest run on top.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "no"
+   },
+   "verdict": "satisfied",
+   "why": "ANC-073 (locked) requires exactly this on the `atm-bd console` pages; it changes the console command a caller runs, so relevant, and names no atm-bd-console command, so no conflict. Locked anchors cannot require what ANC-022 forbids."
+  },
+  {
+   "id": "exception_directory_module",
+   "item_id": "item-07",
+   "category": "exception",
+   "text": "Keep the Textual app in the directory apps/atm-bd-console and import it as the atm_bd_console module from the `atm-bd console` subcommand.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "no"
+   },
+   "verdict": "satisfied",
+   "why": "ANC-022 states verbatim that the directory apps/atm-bd-console and the module atm_bd_console are not that command; using them is not a conflict."
+  },
+  {
+   "id": "conflict_entry_point",
+   "item_id": "item-08",
+   "category": "direct_conflict",
+   "text": "Keep atm-bd-console as a [project.scripts] entry point so existing cron jobs can keep running atm-bd-console --phase bj.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "yes"
+   },
+   "verdict": "contradicted",
+   "why": "An installed atm-bd-console command plus cron callers violates both clauses of ANC-022."
+  },
+  {
+   "id": "conflict_forwarding_alias",
+   "item_id": "item-09",
+   "category": "boundary_conflict",
+   "text": "Add an atm-bd-console console script that forwards to `atm-bd console`, as a compatibility alias.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "yes"
+   },
+   "verdict": "contradicted",
+   "why": "The quote 'jes drop atm-bd-console' answers whether to drop the alias; any installed atm-bd-console command, even a forwarder, is forbidden after install."
+  },
+  {
+   "id": "conflict_test",
+   "item_id": "item-10",
+   "category": "direct_conflict",
+   "text": "Add a test that runs atm-bd-console --help and checks that the sanity tab is listed.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "yes"
+   },
+   "verdict": "contradicted",
+   "why": "A test invoking atm-bd-console is forbidden by the second clause of ANC-022."
+  },
+  {
+   "id": "conflict_doc",
+   "item_id": "item-11",
+   "category": "direct_conflict",
+   "text": "The README quick start keeps the line `atm-bd-console --phase bj` for users who have not switched yet.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "yes"
+   },
+   "verdict": "contradicted",
+   "why": "A document invoking atm-bd-console is forbidden by the second clause of ANC-022."
+  },
+  {
+   "id": "silent_install",
+   "item_id": "item-12",
+   "category": "silent",
+   "text": "Rename scripts/install.py to scripts/install_skill.py and update the README install instructions to the new name.",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "no"
+   },
+   "verdict": "satisfied",
+   "why": "Edits an install script (scope), so relevant; says nothing about the console command, and silence is not a conflict for a prohibition."
+  },
+  {
+   "id": "irrelevant",
+   "item_id": "item-13",
+   "category": "irrelevant",
+   "text": "Change the sanity-fail message template so it names the failing deliverable number.",
+   "expected": {
+    "relevant": "no",
+    "contradicted": "no"
+   },
+   "verdict": "not_applicable",
+   "why": "A message-template wording change touches no command name, install script or console caller (ANC-022 scope)."
+  },
+  {
+   "id": "known_root_item",
+   "item_id": "item-14",
+   "category": "known_example",
+   "text": "# phase-bj: mechanical close flow: close hook, stack bead, sanity-stack, runs tabs\n\n## Description\n\nRepository: randlee/atm-bd-orchestration. Code, worktrees, sprint branches and PRs live there, on its `integrate/phase-bj`; atm-core's `integrate/phase-bj` holds only this plan. The rulings are Rand's of 2026-10-18, anchored as ANC-051..088 in `docs/plans/phase-bj/anchors.md` (ANC-062 retired by ANC-065); the requirement docs are `docs/requirements/task-close-hook.md` and `docs/requirements/sanity-stack.md` of atm-bd-orchestration PR #342 with the dev, dev-sanity, team-lead and quality-mgr requirement items they amend.\n\n### Goal\nDev work is not complete until sanity verifies it, and the lead does not need to intervene between a dev push and the QA assignment:\n- one script, `atm-task-close.py --role <dev|fix|sanity|qa> --vars <file>`, is the only way a dev, fix, sanity or qa task completes; it checks the minimum, closes the bead, reports to the lead and assigns the next bead as the phase lead (ANC-051..059, ANC-070);\n- the dev's ATM task stays open until the sanity close hook closes it on PASS; a sanity FAIL is one `sanity-fail.xml.j2` message to the dev on that open task, no finding children, counted in `metadata.sanity_round` up to `max_sanity_rounds` (default 5) (ANC-055..057, ANC-072);\n- the stack bead `<prefix>-phase-<x>.stack` is the ledger and the lock of the phase stack; the sanity side links the layer on PASS under its claim, first PASS wins the top and the other dev gets `rebase-required` without a round counted; a sanity-stack subagent handles one next-top layer per spawn, sequentially, with a lean mode and a lock timeout that never blocks the team and never escalates to a person (ANC-065..069, ANC-071);\n- the pour writes branch, worktree, pr_target and difficulty onto every generated dev, fix, sanity and QA bead and validates the projected phase graph before writes (ANC-083, atm-bd-orchestration #340);\n- `atm-bd console` shows a sanity runs tab and a quality runs tab, newest first, QA run-level verdict and elapsed, the dev's name and icon, and an API_FAILURE kind distinct from a FAIL verdict (ANC-073, atm-bd-orchestration #347).\n\nDev and fix assignment stay the lead's (ANC-060); atm-bd assigns only a sanity or qa bead that `bd ready` lists with no ATM task (ANC-061).\n\nNo per-reviewer quality metadata is promised: the producer is outside phase-bj, so the quality tab displays only fields and findings already written by in-scope producers.\n\n### Sprints\n| Sprint | Title | Relation | Depends on |\n|---|---|---|---|\n| bj-1 | close hook: atm-task-close.py roles dev, fix, sanity, qa; task-close-vars.j2, sanity-fail.xml.j2, rebase-required.xml.j2; max_sanity_rounds | root | - |\n| bj-2 | stack bead and sprint-family pour: stack-bead.json.j2, pour metadata, pydantic model per bead kind, validate-plan | root | - |\n| bj-3 | sanity-stack subagent and dev-sanity PASS wiring: sequential spawns, lock timeout, lean mode | must_follow | bj-1, bj-2 |\n| bj-4 | console sanity and quality runs tabs; measured elapsed and dev identity in the sanity ledger | parallel_safe | - |\n| bj-5 | out-of-band full-skill integrity manifest; install verification and hand-runnable plugin doctor | parallel_safe | - |\n\n`requirements` and `adrs` are `NONE` on every sprint: the atm-core requirement and ADR documents do not govern atm-bd-orchestration code; the governing text is the package's `docs/requirements/*.md` named per sprint.\n\n### BJ5 integrity addition (atm-bd-orchestration #349)\n`bj-5` publishes an out-of-band sc-sha manifest for all shipped skill files, verifies files against the selected release manifest during `atm-bd skill` install, and ships a hand-runnable plugin doctor reporting per-file status and aggregate PASS/FAIL. It uses sc-compose's Python sc-sha implementation, stores no SHA inside any file, leaves sc-publish unchanged, and has no dependency on atm-core. Anchors: ANC-087, ANC-088. requirements/adrs: NONE.\n\n## Acceptance criteria\n\n### Success Criteria\n- A dev bead closed through `atm-task-close.py --role dev` in a scratch repository leaves the dev's ATM task open, closes the bead, and assigns the sanity task as the phase lead with no lead action (ANC-052, ANC-055).\n- A sanity PASS through the hook closes the dev's task as the lead and assigns QA as the lead; a sanity FAIL sends one `sanity-fail` message on the dev's open task and creates no bead (ANC-053, ANC-056, ANC-072).\n- Two branches cut from the same top that both pass sanity: the first advances the stack bead from empty to singleton against trunk, the second is linked as the hosted top in `layers`; a conflicting second branch gets `rebase-required` and `sanity_round` does not move (ANC-065, ANC-067, ANC-071).\n- `validate-plan --phase bj` requires the stack bead and every generated dev, fix, sanity and QA bead carries branch, worktree, pr_target and difficulty (ANC-083).\n- `atm-bd console` shows the sanity and quality tabs with run-level QA verdict and elapsed, the dev's icon and name, and an API_FAILURE icon distinct from FAIL (ANC-073).\n- Every sprint's QA PASS at its head; the stack lands on `integrate/phase-bj` of atm-bd-orchestration; `just lint` and `just test` green there.\n- `atm-bd skill` verifies every installed file against the selected release manifest and refuses mismatches with the path list; `atm-hook-doctor.py` reports per-file integrity and aggregate PASS/FAIL from the install-recorded manifest, using sc-compose's Python sc-sha implementation only (ANC-087, ANC-088).\n- Phase BJ5 uses no atm-core dependency, embeds no SHA in shipped files, and leaves sc-publish unchanged.\n",
+   "expected": {
+    "relevant": "yes",
+    "contradicted": "no"
+   },
+   "verdict": "satisfied",
+   "why": "The current phase-bj root text names only the `atm-bd console` subcommand (tabs, ANC-073) and `atm-bd skill` install verification; it names no atm-bd-console command, alias or invocation. It is in scope (console caller, install path) and, under the statement's own text and ANC-073, does not conflict."
+  }
+ ]
+}

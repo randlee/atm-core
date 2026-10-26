@@ -1,7 +1,7 @@
 ---
 title: Nudge Templates
 audience: end-user
-reviewed_for_release: 1.6.0
+reviewed_for_release: 1.6.2
 ---
 
 # Nudge Templates
@@ -27,7 +27,7 @@ not authorize direct database edits or unsupported template engines.
 
 ## Eleven Built-In Template Kinds
 
-ATM ships exactly eleven built-in template kinds:
+ATM ships exactly eleven built-in mailbox and task template kinds:
 
 - `delivery`
 - `delivery_ack`
@@ -40,6 +40,8 @@ ATM ships exactly eleven built-in template kinds:
 - `task_started`
 - `task_complete`
 - `task_closed`
+
+Cron lifecycle notices use the separate twelfth stored override kind, `cron`. It is not part of the eleven mailbox/task kinds and it never creates unread mail or a task.
 
 `NudgeKind` selects the delivery (`delivery`, `delivery_ack`) or queue
 (`queue`, `queue_ack`) family. Task transitions select one of the six task
@@ -96,6 +98,40 @@ atm teams set-nudge-template --team atm-dev --kind delivery_ack --template-body 
 atm teams disable-nudge-template --team atm-dev --kind delivery_ack
 atm teams clear-nudge-template --team atm-dev --kind delivery_ack
 ```
+
+
+## Cron lifecycle notices
+
+The `cron` kind controls the daemon lifecycle nudge for a schedule transition.
+It is separate from module output mail: cron-output becomes ordinary unread
+mail, while a cron template renders a lifecycle nudge. The trusted default is
+equivalent to:
+
+<!-- fixture: nudge.lifecycle-error -->
+```xml
+<atm cron name="nightly" event="error" error="timeout: ATM_HOOK_TIMEOUT">
+```
+
+Only these placeholders are available to a cron override:
+
+- `{{name}}`
+- `{{event}}`
+- `{{detail_attribute}}`
+
+The event is `stopped` or `error`. ATM builds the detail attribute as
+`message="..."` or `error="..."`, escaping XML attributes and normalizing
+control characters. An override can use the same trusted body shape:
+
+<!-- fixture: nudge.cron-template-commands -->
+```bash
+atm teams set-nudge-template --team atm-dev --kind cron --template-body '<atm cron name="{{name}}" event="{{event}}" {{detail_attribute}}>'
+atm teams disable-nudge-template --team atm-dev --kind cron
+atm teams clear-nudge-template --team atm-dev --kind cron
+```
+
+Disabling the cron template suppresses both lifecycle notice variants. It does
+not disable cron-output module mail. See [Cron Schedules](./cron.md) for the
+reply contract, output classification, and recovery guidance.
 
 ## Default ATM Wire Bodies
 

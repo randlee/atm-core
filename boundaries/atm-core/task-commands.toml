@@ -1,0 +1,52 @@
+boundary_id = "BOUNDARY-TaskCommands"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "TaskCommands"
+
+[public]
+trait = "TaskCommands"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = []
+io_forbidden = ["sqlite", "process_spawn", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon-bootstrap","atm-http-runtime","atm-runtime-test-support"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TaskAssign","TaskStart","TaskClose","TaskMoveRequest","TaskList","TaskEvents","TaskCallCtx"]
+response_types = ["ApiResponse"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["crate::boundary::task_commands::RecordingTaskCommands"]
+forbidden_test_bypasses = ["std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TASK-COMMANDS-REFERENCES"]
+review_gates = ["sealed_trait", "typed_contract", "deterministic_test_doubles"]
+
+[status]
+state = "concrete_landed"
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters.", "BK.7 concrete_landed in atm-http-runtime: NormalTaskCommands is the un-hooked TaskCommands implementation; HookedTaskCommands filters task commands over it. Production composition installs the filter over NormalTaskCommands, while the router's no-filter task path remains un-hooked."]
+
+[extensions.atm.io_forbidden_source_modules]
+sqlite = ["atm_core::boundary::task_commands"]
+process_spawn = ["atm_core::boundary::task_commands"]
+socket_io = ["atm_core::boundary::task_commands"]
+
+[extensions.atm]
+concrete_landed = ["atm_http_runtime::task_commands::NormalTaskCommands", "atm_http_runtime::hook_filter::HookedTaskCommands"]

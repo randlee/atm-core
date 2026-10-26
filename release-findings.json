@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-13T07:58:36.787501Z",
-  "branch": "integrate/phase-bb",
-  "version": "1.5.17",
+  "generatedAt": "2026-10-16T19:44:49.869767Z",
+  "branch": "smoke/v1.6.2-prerelease",
+  "version": "1.6.2",
   "status": "pass",
   "findings": []
 }

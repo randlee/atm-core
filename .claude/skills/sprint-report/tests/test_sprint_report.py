@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -13,6 +14,7 @@ from unittest import mock
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/sprint-report'
 loader = importlib.machinery.SourceFileLoader('sprint_report', str(SCRIPT))
 spec = importlib.util.spec_from_loader(loader.name, loader)
+assert spec is not None
 report = importlib.util.module_from_spec(spec)
 loader.exec_module(report)
 
@@ -80,9 +82,9 @@ class SprintReportTests(unittest.TestCase):
             config = repo / '.claude/project/atm-bd-orchestration.yaml'
             config.parent.mkdir(parents=True)
             config.write_text('plans_dir: docs/plans\n')
-            (repo / '.atm-bd').mkdir()
-            (repo / '.atm-bd/phase-x.toml').write_text(
-                'plan = "docs/plans/phase-x.jsonl"\nroot = "atm-phase-x"\nintegration_branch = "integrate/phase-x"\n')
+            sys.path.insert(0, str(skills / 'atm-beads/tests'))
+            from phase_fixtures import write_phase
+            write_phase(repo, 'x', 'atm', 'docs/plans')
             path = repo / 'docs/plans/phase-x.jsonl'
             path.parent.mkdir(parents=True)
             path.write_text('{"sprint": "x-1"}\n')

@@ -10,18 +10,20 @@ use std::sync::mpsc::TrySendError;
 
 use atm_core::GraftConfig;
 use atm_core::boundary::{
-    BuiltInPostSendDispatch, GraftNudgeTarget, MessageReceivedHookEmitter, PostSendBuiltInTarget,
+    BuiltInPostSendDispatch, DeliveryReceipt, GraftNudgeTarget, MessageReceivedHookEmitter,
+    PostSendBuiltInTarget,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendResponse, GraftReceiverListener,
+    GraftReceiverRequest,
 };
 use atm_core::protocol::LocalCapability;
 use atm_core::types::{AgentName, ChatId, TeamName};
 
 use crate::nudge_sink::GraftReceiveHook;
 use crate::{
-    GraftObservability, GraftSessionState, HostNudge, HostNudgeInjector,
+    GraftObservability, GraftSessionState, HostCronNudge, HostNudge, HostNudgeInjector,
     RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot,
 };
 
@@ -259,6 +261,24 @@ impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
         )?;
         receive_host_nudge_result(result_rx, &self.helper_budget)
     }
+
+    fn inject_cron_nudge(&self, nudge: &HostCronNudge) -> DeliveryReceipt {
+        let Ok(helper_permit) = acquire_host_nudge_helper_permit(&self.helper_budget) else {
+            return unknown_cron_receipt("graft host cron nudge helper budget is exhausted");
+        };
+        let (result_tx, result_rx) = mpsc::sync_channel(1);
+        if spawn_host_cron_nudge_helper(
+            Arc::clone(&self.injector),
+            nudge.clone(),
+            helper_permit,
+            result_tx,
+        )
+        .is_err()
+        {
+            return unknown_cron_receipt("graft host cron nudge helper could not start");
+        }
+        receive_host_cron_nudge_result(result_rx, &self.helper_budget)
+    }
 }
 
 impl BoundedHostNudgeInjector {
@@ -344,6 +364,71 @@ fn receive_host_nudge_result(
             Err(error)
         }
     }
+}
+
+fn spawn_host_cron_nudge_helper(
+    injector: Arc<dyn HostNudgeInjector>,
+    nudge: HostCronNudge,
+    helper_permit: HelperThreadPermit,
+    result_tx: SyncSender<Result<DeliveryReceipt, AtmError>>,
+) -> Result<(), AtmError> {
+    thread::Builder::new()
+        .name("atm-graft-host-cron-nudge".to_string())
+        .spawn(move || {
+            let _helper_permit = helper_permit;
+            let result = Ok(injector.inject_cron_nudge(&nudge));
+            if result_tx.send(result).is_err() {
+                tracing::debug!(
+                    timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis(),
+                    "graft host cron nudge helper dropped its result because the bounded caller already timed out"
+                );
+            }
+        })
+        .map(|_| ())
+        .map_err(|_source| {
+            AtmError::new(
+                AtmErrorCode::InternalError,
+                "failed to spawn graft host cron nudge helper",
+            )
+        })
+}
+
+fn receive_host_cron_nudge_result(
+    result_rx: Receiver<Result<DeliveryReceipt, AtmError>>,
+    helper_budget: &Arc<HelperThreadBudget>,
+) -> DeliveryReceipt {
+    match result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE) {
+        Ok(Ok(receipt)) => receipt,
+        Ok(Err(_)) => unknown_cron_receipt("graft host cron nudge result is unknown"),
+        Err(RecvTimeoutError::Timeout) => {
+            warn_host_nudge_result(
+                "cron_timeout",
+                &AtmError::new(
+                    AtmErrorCode::WaitTimeout,
+                    "graft host cron nudge injection exceeded its delivery deadline",
+                ),
+                helper_budget,
+                Some(HOST_NUDGE_INJECTION_DEADLINE.as_millis()),
+            );
+            unknown_cron_receipt("graft host cron nudge handoff result is unknown after timeout")
+        }
+        Err(RecvTimeoutError::Disconnected) => {
+            warn_host_nudge_result(
+                "cron_disconnected",
+                &AtmError::new(
+                    AtmErrorCode::InternalError,
+                    "graft host cron nudge helper disconnected before returning a receipt",
+                ),
+                helper_budget,
+                None,
+            );
+            unknown_cron_receipt("graft host cron nudge helper disconnected before receipt")
+        }
+    }
+}
+
+fn unknown_cron_receipt(reason: &'static str) -> DeliveryReceipt {
+    atm_core::graft::unknown_cron_lifecycle_receipt(reason)
 }
 
 fn warn_host_nudge_result(
@@ -764,32 +849,42 @@ fn handle_graft_receiver_connection(
     listener: &GraftReceiverListener,
     stream: &mut TcpStream,
 ) -> Result<(), AtmError> {
-    let request = listener.read_request(stream, GRAFT_RECEIVER_IO_DEADLINE)?;
-    let event = request.event;
-    let kind = request.kind;
-    let rendered_nudge = request.rendered_nudge;
-    let dispatch = BuiltInPostSendDispatch {
-        target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
-            recipient: event.recipient.clone(),
-            recipient_team: event.recipient_team.clone(),
-            rendered_nudge,
-        }),
-        event,
-        kind,
-    };
-    let response = match (GraftReceiveHook {
-        injector,
-        snapshot: &ctx.snapshot,
-        observability: ctx.observability.as_ref(),
-    })
-    .emit_received_message(
-        &dispatch,
-        atm_core::RequestDeadline::after(GRAFT_RECEIVER_IO_DEADLINE),
-    ) {
-        Ok(_) => GraftPostSendResponse::Delivered,
-        Err(error) => GraftPostSendResponse::Error(error),
-    };
-    listener.write_response(stream, &response)
+    match listener.read_receiver_request(stream, GRAFT_RECEIVER_IO_DEADLINE)? {
+        GraftReceiverRequest::PostSend(request) => {
+            let event = request.event;
+            let dispatch = BuiltInPostSendDispatch {
+                target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
+                    recipient: event.recipient.clone(),
+                    recipient_team: event.recipient_team.clone(),
+                    rendered_nudge: request.rendered_nudge,
+                }),
+                event,
+                kind: request.kind,
+            };
+            let response = match (GraftReceiveHook {
+                injector,
+                snapshot: &ctx.snapshot,
+                observability: ctx.observability.as_ref(),
+            })
+            .emit_received_message(
+                &dispatch,
+                atm_core::RequestDeadline::after(GRAFT_RECEIVER_IO_DEADLINE),
+            ) {
+                Ok(_) => GraftPostSendResponse::Delivered,
+                Err(error) => GraftPostSendResponse::Error(error),
+            };
+            listener.write_response(stream, &response)
+        }
+        GraftReceiverRequest::CronLifecycle(request) => {
+            let receipt = (GraftReceiveHook {
+                injector,
+                snapshot: &ctx.snapshot,
+                observability: ctx.observability.as_ref(),
+            })
+            .deliver_cron_lifecycle(request);
+            listener.write_cron_lifecycle_receipt(stream, &receipt)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -800,7 +895,10 @@ mod tests {
         GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
         GraftReceiverListener, deliver_graft_post_send,
     };
-    use atm_core::protocol::{LocalCapability, OwnerGeneration, RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{
+        CLI_SCHEMA_VERSION, CompatibilityVerdict, HttpApiVersion, LocalCapability, OwnerGeneration,
+        ReleaseVersion, RequestEnvelope, ResponseEnvelope,
+    };
     use atm_core::schema::AtmMessageId;
     use atm_core::test_support::{TEST_LEAD, TEST_QA, TEST_TEAM};
     use atm_core::transport::testing::FakeClientTransport;
@@ -826,10 +924,18 @@ mod tests {
         load_graft_config, read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
         run_graft_receiver_loop, wait_for_stop_or_delay,
     };
-    use crate::{GraftSessionState, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};
+    use crate::{GraftSessionState, SessionSnapshot};
 
     const DELIVER_CONNECT_DEADLINE: Duration = Duration::from_secs(2);
     const DELIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
+
+    fn compatible_response() -> ResponseEnvelope {
+        ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::current(),
+            daemon_schema_version: CLI_SCHEMA_VERSION,
+            daemon_http_api_version: HttpApiVersion::current(),
+        })
+    }
 
     #[derive(Debug, Default)]
     struct RecordingInjector {
@@ -1534,7 +1640,11 @@ mod tests {
 
         fn handle(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
             if !self.online.load(Ordering::SeqCst) {
-                if matches!(request, RequestEnvelope::GraftReceiverRefresh(_)) {
+                if matches!(
+                    request,
+                    RequestEnvelope::GraftReceiverRefresh(_)
+                        | RequestEnvelope::CompatibilityPreflight(_)
+                ) {
                     self.refresh_failures.fetch_add(1, Ordering::SeqCst);
                 }
                 return Err(AtmError::daemon_unavailable(
@@ -1542,6 +1652,7 @@ mod tests {
                 ));
             }
             match request {
+                RequestEnvelope::CompatibilityPreflight(_) => Ok(compatible_response()),
                 RequestEnvelope::GraftReceiverRegister(registration) => {
                     self.registrations.fetch_add(1, Ordering::SeqCst);
                     self.leases.lock().expect("leases").insert(
@@ -1723,6 +1834,7 @@ mod tests {
         let handler_store = Arc::clone(&store);
         let client = GraftClient::from_fake_transport_for_test(Arc::new(FakeClientTransport::new(
             move |request| match request {
+                RequestEnvelope::CompatibilityPreflight(_) => Ok(compatible_response()),
                 RequestEnvelope::GraftReceiverRegister(registration) => handler_store
                     .lock()
                     .expect("store")
@@ -2068,27 +2180,40 @@ mod tests {
     #[test]
     fn rsh001_stalled_daemon_calls_never_delay_stop_past_the_join_deadline() {
         let paths = test_paths();
-        let released = Arc::new(AtomicBool::new(false));
+        let (refresh_started_tx, refresh_started_rx) = mpsc::sync_channel(1);
+        let (refresh_release_tx, refresh_release_rx) = mpsc::channel();
+        let refresh_release_rx = Arc::new(Mutex::new(refresh_release_rx));
+        let (unregister_started_tx, unregister_started_rx) = mpsc::sync_channel(1);
+        let (unregister_release_tx, unregister_release_rx) = mpsc::channel();
+        let unregister_release_rx = Arc::new(Mutex::new(unregister_release_rx));
         let stalled_calls = Arc::new(AtomicUsize::new(0));
-        let handler_released = Arc::clone(&released);
         let handler_calls = Arc::clone(&stalled_calls);
         let client = GraftClient::from_fake_transport_for_test(Arc::new(FakeClientTransport::new(
             move |request| match request {
+                RequestEnvelope::CompatibilityPreflight(_) => Ok(compatible_response()),
                 RequestEnvelope::GraftReceiverRegister(_) => {
                     Ok(ResponseEnvelope::GraftReceiverRegister)
                 }
                 RequestEnvelope::GraftReceiverRefresh(_) => {
                     handler_calls.fetch_add(1, Ordering::SeqCst);
-                    while !handler_released.load(Ordering::SeqCst) {
-                        std::thread::yield_now();
-                    }
+                    refresh_started_tx.send(()).expect("signal stalled refresh");
+                    refresh_release_rx
+                        .lock()
+                        .expect("refresh release lock")
+                        .recv()
+                        .expect("release stalled refresh");
                     Ok(ResponseEnvelope::GraftReceiverRefresh)
                 }
                 RequestEnvelope::GraftReceiverUnregister(_) => {
                     handler_calls.fetch_add(1, Ordering::SeqCst);
-                    while !handler_released.load(Ordering::SeqCst) {
-                        std::thread::yield_now();
-                    }
+                    unregister_started_tx
+                        .send(())
+                        .expect("signal stalled unregister");
+                    unregister_release_rx
+                        .lock()
+                        .expect("unregister release lock")
+                        .recv()
+                        .expect("release stalled unregister");
                     Ok(ResponseEnvelope::GraftReceiverUnregister)
                 }
                 other => panic!("unexpected request in RSH-001 harness: {other:?}"),
@@ -2100,26 +2225,29 @@ mod tests {
             Arc::new(RecordingInjector::default()),
             Some(client),
         );
-        assert!(
-            wait_until(Duration::from_secs(3), || stalled_calls
-                .load(Ordering::SeqCst)
-                >= 1),
-            "the periodic refresh tick must reach the stalled daemon call"
-        );
+        refresh_started_rx
+            .recv()
+            .expect("the periodic refresh reaches the controlled stalled call");
 
-        let stop_started = Instant::now();
         stop_tx.send(()).expect("stop");
         join_receive_loop_with_deadline(join).expect("join receiver despite stalled lease calls");
-        let elapsed = stop_started.elapsed();
-        assert!(
-            elapsed < RECEIVE_LOOP_JOIN_DEADLINE,
-            "stop must be observed within the outer join deadline even with a stalled \
-             daemon on both the refresh and unregister calls: {elapsed:?}"
+        unregister_started_rx
+            .recv()
+            .expect("shutdown reaches the controlled stalled unregister call");
+        assert_eq!(
+            stalled_calls.load(Ordering::SeqCst),
+            2,
+            "stop completes while both detached lease calls remain stalled"
         );
 
-        // Release the (now detached) stalled helper thread(s) so the process
-        // does not accumulate a permanently blocked thread across tests.
-        released.store(true, Ordering::SeqCst);
+        // Release the detached helpers after observing both controlled stalls,
+        // so this test neither relies on scheduler progress nor leaks workers.
+        refresh_release_tx
+            .send(())
+            .expect("release stalled refresh");
+        unregister_release_tx
+            .send(())
+            .expect("release stalled unregister");
     }
 
     // ATM-QA-006: dropping an already-superseded `RegisteredGraftReceiver`

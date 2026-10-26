@@ -1,0 +1,151 @@
+{
+ "dedupe_score": {
+  "confident_cells": 4,
+  "exact_cells": 4,
+  "stable_cells": 4,
+  "total_cells": 4
+ },
+ "input_fields": [
+  "a.id",
+  "a.statement",
+  "b.id",
+  "b.statement"
+ ],
+ "pairs": [
+  {
+   "at_reference": true,
+   "calls": [
+    {
+     "choice": "no",
+     "confidence": 1.0
+    },
+    {
+     "choice": "no",
+     "confidence": 1.0
+    }
+   ],
+   "choice": "no",
+   "confident": true,
+   "exact": true,
+   "expected": "no",
+   "identical": true,
+   "matching_calls": [
+    1,
+    2
+   ],
+   "min_confidence": 1.0,
+   "pair_id": "dup-01-shared-quote-distinct",
+   "request_sha256": "88880825112ec177192a50f2c368cd72dd27cd5972241ded4e678a782da300ad",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ],
+   "stable": true,
+   "status": "match",
+   "third_call": false
+  },
+  {
+   "at_reference": true,
+   "calls": [
+    {
+     "choice": "yes",
+     "confidence": 1.0
+    },
+    {
+     "choice": "yes",
+     "confidence": 1.0
+    }
+   ],
+   "choice": "yes",
+   "confident": true,
+   "exact": true,
+   "expected": "yes",
+   "identical": true,
+   "matching_calls": [
+    1,
+    2
+   ],
+   "min_confidence": 1.0,
+   "pair_id": "dup-02-same-statement-different-quotes",
+   "request_sha256": "63dfd22e72f12abeb65769c787ce83ea3adf2a9f4ff233e8146d66457ab2c360",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ],
+   "stable": true,
+   "status": "match",
+   "third_call": false
+  },
+  {
+   "at_reference": true,
+   "calls": [
+    {
+     "choice": "yes",
+     "confidence": 0.83
+    },
+    {
+     "choice": "yes",
+     "confidence": 0.88
+    }
+   ],
+   "choice": "yes",
+   "confident": true,
+   "exact": true,
+   "expected": "yes",
+   "identical": true,
+   "matching_calls": [
+    1,
+    2
+   ],
+   "min_confidence": 0.83,
+   "pair_id": "dup-03-paraphrased-duplicate",
+   "request_sha256": "ac642e8e80b6eb5d197f7875b3abac2aecdc26f96f62d031729c1456e6f7b929",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ],
+   "stable": true,
+   "status": "match",
+   "third_call": false
+  },
+  {
+   "at_reference": true,
+   "calls": [
+    {
+     "choice": "no",
+     "confidence": 1.0
+    },
+    {
+     "choice": "no",
+     "confidence": 1.0
+    }
+   ],
+   "choice": "no",
+   "confident": true,
+   "exact": true,
+   "expected": "no",
+   "identical": true,
+   "matching_calls": [
+    1,
+    2
+   ],
+   "min_confidence": 1.0,
+   "pair_id": "dup-04-related-distinct",
+   "request_sha256": "787e126360d197955f5dd255ddf8c1414634193da111d271aa514fe1d56a62e6",
+   "retries": 0,
+   "run_ids": [
+    null,
+    null
+   ],
+   "stable": true,
+   "status": "match",
+   "third_call": false
+  }
+ ],
+ "question_set_sha256": "0c95cad2d571c581cc573fc97d6e5ecd167b12cf1eaff3771468dad6a1528399",
+ "quotes_sent": false,
+ "repeat_requests_byte_identical": true
+}

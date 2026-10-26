@@ -1,0 +1,127 @@
+{
+  "schema": "plan-anchor/tuning-candidates/1",
+  "anchor_id": "ANC-088",
+  "roles": {
+    "relevance": "relevant",
+    "compliance": "addressed",
+    "conflict": "contradicted"
+  },
+  "candidates": {
+    "candidate-1-default": {
+      "addressed": {
+        "criteria": {
+          "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+          "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included.",
+          "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point."
+        },
+        "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+        "type": "choice"
+      },
+      "contradicted": {
+        "criteria": {
+          "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+          "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+          "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+        },
+        "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+        "type": "choice"
+      },
+      "relevant": {
+        "criteria": {
+          "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+          "unclear": "The item text is too vague to tell what part of the system it touches.",
+          "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+        },
+        "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+        "type": "choice"
+      }
+    },
+    "candidate-2": {
+      "relevant": {
+        "type": "choice",
+        "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work in `item.text` touch the subject of `anchor.statement`: how the atm-bd installer handles or installs the skill's files, or the published per-file manifest that the installer checks them against? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+        "criteria": {
+          "yes": "The item plans, changes, or depends on the atm-bd installer's handling of the skill's files (agents, skills, Python files) or on the published file manifest, directly or as a clear prerequisite.",
+          "no": "The item is about a different component or activity and touches neither the installer's handling of skill files nor the published manifest.",
+          "unclear": "The item text is too vague to tell which component or activity it changes."
+        }
+      },
+      "addressed": {
+        "type": "choice",
+        "instructions": "`anchor.statement` requires the atm-bd installer to verify the skill's files against the published manifest. Does `item.text` plan that verification? Count it only when the item has the installer compare the files it installs (the skill's agent, skill and Python files) against the published manifest, for example by checking each file's digest against that file's manifest entry. Publishing a manifest with no installer check, an installer change that never mentions the check, or checking only some of the skill's files while others go unchecked does not count. Judge whether the verification is planned; do not judge whether the item also plans something that conflicts with it.",
+        "criteria": {
+          "yes": "The item has the installer check the skill's files against the published manifest.",
+          "no": "The item does not plan that check: it is silent about it, only publishes or mentions a manifest, or checks only part of the skill's files.",
+          "unclear": "The item mentions checking installed files, but the text does not show whether the check is against the published manifest or covers the skill's files."
+        }
+      },
+      "contradicted": {
+        "type": "choice",
+        "instructions": "`anchor.statement` requires the atm-bd installer to verify the skill's files against the published manifest. Does `item.text` plan something that rule forbids? A conflict is an item that has the installer install or accept skill files without that check: skipping or disabling the comparison, leaving some of the skill's files out of it, or installing unverified files in some situation, such as when the manifest cannot be fetched. Silence about verification is not a conflict. Judge conflict only.",
+        "criteria": {
+          "yes": "The item plans to install or accept some or all of the skill's files, in some or all situations, without checking them against the published manifest.",
+          "no": "Nothing in the item would install or accept a skill file without the manifest check; this includes items that never mention the check.",
+          "unclear": "The item might let some files or situations skip the check, but the text is ambiguous."
+        }
+      }
+    },
+    "candidate-3": {
+      "relevant": {
+        "type": "choice",
+        "instructions": "Read `anchor.statement` and `anchor.scope`, then `item.text`. Is the item's work about the same thing as the anchor: the atm-bd skill installer putting skill files in place, or the published manifest of those files? Answer about subject matter only, not about compliance.",
+        "criteria": {
+          "yes": "The item plans or changes the atm-bd installer's handling of skill files, or the published manifest the installer relies on.",
+          "no": "The item concerns another part of the system; carrying it out would neither follow nor break the anchor.",
+          "unclear": "The item is too vague to tell what part of the system it touches."
+        }
+      },
+      "addressed": {
+        "type": "choice",
+        "instructions": "Does `item.text` include a step in which the atm-bd installer verifies the skill's files against the published manifest, as `anchor.statement` directs? The step must name both sides of the check: the files being installed (all of the skill's agent, skill and Python files) and the published manifest they are compared to. A manifest that is only published, a check that covers just part of the skill's files, or a change that does not mention the check is not the directive. Answer only whether the step is present.",
+        "criteria": {
+          "yes": "The item includes the installer comparing the skill's files to the published manifest.",
+          "no": "No such step is present, or the step leaves part of the skill's files out.",
+          "unclear": "A check is mentioned but it is impossible to tell what it compares the files to or which files it covers."
+        }
+      },
+      "contradicted": {
+        "type": "choice",
+        "instructions": "Does `item.text` plan for any skill file to be installed or accepted without being checked against the published manifest? That includes no check at all, a check limited to some file types, an option or fallback that skips the check, or installing despite a mismatch. An item that does not mention verification and installs nothing is not a conflict. Judge conflict with `anchor.statement` only.",
+        "criteria": {
+          "yes": "The item plans that some skill files, or files in some situation, are installed or accepted without the manifest check.",
+          "no": "The item plans nothing that would install or accept an unverified skill file.",
+          "unclear": "The text could be read either way on whether some file or situation skips the check."
+        }
+      }
+    },
+    "candidate-4": {
+      "relevant": {
+        "type": "choice",
+        "instructions": "Does `item.text` concern the subject of `anchor.statement` within `anchor.scope`: the atm-bd installer installing skill files, or the published manifest of those files? Subject overlap only.",
+        "criteria": {
+          "yes": "The item plans, changes, or depends on the installer's handling of skill files or on the published manifest.",
+          "no": "The item is about something else.",
+          "unclear": "Too vague to tell what it touches."
+        }
+      },
+      "addressed": {
+        "type": "choice",
+        "instructions": "Does `item.text` plan the atm-bd installer checking all of the skill's files against the published manifest? Presence of that check only.",
+        "criteria": {
+          "yes": "The installer checks the skill's files against the published manifest.",
+          "no": "No installer check against the published manifest, or only some of the skill's files are checked.",
+          "unclear": "A check is mentioned but its basis or coverage cannot be told."
+        }
+      },
+      "contradicted": {
+        "type": "choice",
+        "instructions": "Does `item.text` plan that some skill file is installed or accepted without a check against the published manifest (no check, a partial check, or a skip path)? Silence is not a conflict.",
+        "criteria": {
+          "yes": "Some skill file, or some situation, is planned to bypass the manifest check.",
+          "no": "Nothing planned bypasses the manifest check.",
+          "unclear": "Ambiguous whether something bypasses the check."
+        }
+      }
+    }
+  }
+}

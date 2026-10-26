@@ -1,0 +1,47 @@
+{
+ "r0-incumbent": {
+  "type": "choice",
+  "instructions": "Does `item.text` touch any of the three things listed in `anchor.scope`: (1) the name of a command or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes the console? Judge whether the item touches at least one of them. Do not judge whether the item obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "The item touches a command or entry-point name, an install script, installer or install path, or a script, document, test or workflow that starts, runs or describes the console.",
+   "no": "The item touches none of the three: it changes something else, such as a message template, a data model or a review rule, and does not run or describe the console.",
+   "unclear": "The item text is too vague to tell whether it touches any of the three."
+  }
+ },
+ "r1-any-one-suffices": {
+  "type": "choice",
+  "instructions": "`anchor.scope` lists three separate kinds of work: (1) the console command's name or installed entry point; (2) an install script, installer or install path; (3) a script, document, test or workflow that starts, runs or describes running the console. Does `item.text` do at least one of them? Each kind counts on its own: an item that edits an install script is in scope even if it never mentions the console, and one matching step is enough even when the rest of the item is about other work. Do not judge whether the item obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "At least one step of the item does one of the three kinds of work, for example edits install.py or another installer, changes the console command or entry point, or adds or changes something that runs the console.",
+   "no": "No step of the item does any of the three kinds of work.",
+   "unclear": "The item text is too vague to tell whether any step does one of the three kinds of work."
+  }
+ },
+ "r2-deliverable-scan": {
+  "type": "choice",
+  "instructions": "Read every goal, deliverable and step in `item.text`. For each one ask whether it (a) renames, adds, removes or aliases the console command or its installed entry point, (b) creates or edits an install script, an installer, install verification or what gets installed, or (c) creates or edits a script, document, test or workflow that starts or runs the console. Answer about the item as a whole: yes if any single step matches. A step need not mention the console to match (b). Judge only whether the item touches this area, not whether it obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "One or more steps match (a), (b) or (c).",
+   "no": "No step matches (a), (b) or (c).",
+   "unclear": "The steps are too vague to tell whether any of them matches (a), (b) or (c)."
+  }
+ },
+ "r3-scope-literal": {
+  "type": "choice",
+  "instructions": "`anchor.scope` says which work this anchor governs: work that edits the console's command name, work that edits install scripts, and work that edits any caller of the console. Is any work in `item.text` of one of those kinds? Install scripts include install.py, installers and the install step itself, whatever they install. A caller of the console is a script, document, test or workflow that starts or runs the console. Decide only whether the item does such work, not whether it obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "The item edits the console's command name, edits an install script or installer, or edits a caller of the console.",
+   "no": "The item edits none of these; its work is elsewhere, for example a message template, a data model or a plan note.",
+   "unclear": "The item text is too vague to tell whether its work is of one of these kinds."
+  }
+ },
+ "r4-checklist-examples": {
+  "type": "choice",
+  "instructions": "Decide whether `item.text` falls in the area named by `anchor.scope`. The item is in the area if it does any one of these: changes what the console command is called or how it is installed as an entry point; changes an install script or installer such as install.py, including what it renders, copies or verifies; adds or changes a script, document, test or workflow that runs the console. One such change anywhere in the item is enough, and an install-script change counts without any mention of the console. Do not judge whether the item obeys `anchor.statement`.",
+  "criteria": {
+   "yes": "The item makes at least one change of these kinds anywhere in its text.",
+   "no": "The item makes no change of these kinds: no console command or entry-point change, no install script or installer change, and nothing added or changed that runs the console.",
+   "unclear": "The item text is too vague to tell whether it makes a change of these kinds."
+  }
+ }
+}

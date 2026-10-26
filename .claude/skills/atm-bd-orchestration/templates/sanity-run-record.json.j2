@@ -23,6 +23,10 @@ required_variables:
   - error
   - errors
   - jev_receipts
+  - dev
+  - jev_elapsed_s
+  - llm_elapsed_s
+  - kind
 ---
 {
   "run_id": {{ run_id | tojson }},
@@ -43,5 +47,9 @@ required_variables:
   "findings": {{ findings | tojson }},
   "error": {{ error | tojson }},
   "errors": {{ errors | tojson }},
-  "jev_receipts": {{ jev_receipts | tojson }}
+  "jev_receipts": {{ jev_receipts | tojson }},
+  "dev": {{ dev | tojson }},
+  "jev_elapsed_s": {{ jev_elapsed_s | tojson }},
+  "llm_elapsed_s": {{ llm_elapsed_s | tojson }},
+  "kind": {{ kind | tojson }}
 }

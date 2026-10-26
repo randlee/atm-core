@@ -6,6 +6,10 @@ run only when the operator explicitly requested `--publish` (or its
 compatibility alias `--create`) in writing and the working branch is clean,
 non-protected, and attached.
 
+The GitHub prerelease contains the manifest-declared CLI/daemon archives and
+all declared wheel assets for every platform. It never publishes to crates.io,
+PyPI, Homebrew, Winget, Scoop, npm, or another consumer-facing channel.
+
 Always invoke the consumer's manifest-declared tag script. That script owns
 the repository's version-selection and tag policy: it may use the current
 workspace version only when that version has never been published; otherwise
@@ -18,6 +22,6 @@ python3 .claude/skills/prerelease/scripts/prerelease.py --publish --dry-run
 python3 .claude/skills/prerelease/scripts/prerelease.py --publish --authorized
 ```
 
-The helper waits up to 20 minutes for the archive workflow for the newly tagged
+The helper waits up to 60 minutes for the archive workflow for the newly tagged
 commit, polling once per minute, and verifies every manifest-declared asset and
 checksum before reporting success.

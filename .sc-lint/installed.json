@@ -7,9 +7,9 @@
     ".claude/skills/sc-lint-adoption/evals/established-workspace.md": "00a9f17da0d4d33adbb410e7f4cef447a8404d289ffdfcbeb2cf1f515917acf5",
     ".sc-lint/bootstrap": "f4702f7425932a1a540ae9030899c6792e47c2ce5437f0099f414a7e9ce081ad",
     ".sc-lint/bootstrap.ps1": "3c463be467f2b91ac8031caffca3a1382231b51b7d078309e511851e7c0362e9",
-    ".sc-lint/install.json": "1ea7b7f0ead259d777330b035fbe2c1853086fb6c02e5a445bc16d0732516171",
+    ".sc-lint/install.json": "06e3b1dceae0cdc4f7f47e5ebfc1679de44f5662f0e83e9227103a74f52a04e6",
     ".sc-lint/justfile": "89ed2c03ce4e125ea35330bf4595be681225fc39b45314a0b27bd2e647aebba8",
-    "Justfile": "8b428c566ad25242ea3b6cd092d65454d6e9d58eb49ea1822a7e6b4485000a50",
+    "Justfile": "8df9733c79ce11300f6c2b23a1511f1be521092851937333bf66dea76d786cae",
     "README.sc-lint.md": "c2df414597671cc47cb278fb6160d2800545f270e34e68fd043d8565f2124524",
     "plugins/sc-lint/.claude-plugin/plugin.json": "ff1d7b245f505d7aad4f55850082176f7879b77cc20e98d27b775759fb958769",
     "plugins/sc-lint/.claude/agents/sc-lint-adopter.md": "1245a654e6bb85683fee318db1a2f411fca955bf6b7f68c94a2e390738d03ee0",
@@ -28,6 +28,6 @@
     "plugins/sc-lint/templates/sc-lint-workflow.yml.j2": "236ce976adee116bf9a7c14b19b98d3c3dd8d80d4d40b944e185573c562927bd",
     "plugins/sc-lint/templates/sc-lint.toml.j2": "0175d6b1d3d642bdb5c7b57a6d5e8d3edbf4092bcc1d94a959ea4851bd3575aa",
     "plugins/sc-lint/templates/test.just": "ceb0a26c8eafccc73249cd962c69efffb577e5e9c62f12a21edf53c2153e0563",
-    "sc-lint.toml": "fe0cb634527cc636513d8d9bd9c515a9ec4fe429bc8f899974d4cd88d17d4ce3"
+    "sc-lint.toml": "49cd7f42e9b4128af65d314a7912c22c4a566fdc9530822ee9a5ee2fc42fe5f1"
   }
 }

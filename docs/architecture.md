@@ -2929,15 +2929,15 @@ not a cross-host record. The AC.6 deletion stands: ADR-062 is a fresh design,
 not a revival of deleted scaffolding.
 
 Phase-BA amendment (2026-09-11): the task ledger keys one row per
-`(team, task_id)`, enforces at most one `active` task per agent with a
-database unique index, and orders each agent's queue by
+`(team, task_id)`, enforces at most max_tasks active tasks per agent (roster
+metadata_json, default 1), and orders each agent's queue by
 `(position, assigned_at, task_id)` with `assigned_at` reset only by reassign/reopen and never by move; see
 requirements Sections 15.4 and 22.1.
 
 | state | `Assigned` | `Started` | `Completed(outcome)` |
 | --- | --- | --- | --- |
 | none | → `assigned` | reject: no open task | reject: no open task |
-| `assigned` | same agent: resend with no event; other agent: reassign in place → `assigned` | → `active`; reject when the assignee already has an active task | → `complete(outcome)` |
+| `assigned` | same agent: resend with no event; other agent: reassign in place → `assigned` | → `active`; reject when the assignee already has max_tasks active tasks (roster metadata_json, default 1) | → `complete(outcome)` |
 | `active` | same agent: resend with no event; other agent: reassign in place → `assigned` and free the old active slot | reject `ATM_TASK_ALREADY_ACTIVE`: the write fails, nothing is delivered, one state-neutral `rejected` event is appended (Phase BB amendment, ADR-062) | → `complete(outcome)` |
 | `complete` | reopen the same id → `assigned` | ordinary mail write reports `already_closed` | ordinary mail write reports `already_closed` |
 

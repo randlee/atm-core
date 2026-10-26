@@ -1,0 +1,121 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261018T233921Z-fixture_ANC-005_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-18T23:39:21+00:00",
+  "anchors_path": "docs/plans/phase-bk/anchors.json",
+  "plan": "phase-bk",
+  "item": {
+    "id": "fixture:ANC-005:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 93,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.13.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a hook replies success true with no atm-action list, atm runs the subcommand's normal logic with the original request, giving the same result as when no hook is registered.",
+      "quote": "or if 'bd ready' the hook either retruns { success = \"true\" } and atm proceeds w/ normal atm task assign logic",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-18",
+      "context": "atm-core #1873 comment 2026-10-18T22:54Z (Rand, round 1, reply to the seven-point hook proposal)",
+      "anchor_version": 2,
+      "deterministic_check": "a test with a hook replying {\"success\": true} asserts the resulting task row equals the row produced with no hook registered",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.95,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.03,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.41,
+          "probabilities": {
+            "yes": 0.14,
+            "no": 0.61,
+            "unclear": 0.25
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.59,
+          "probabilities": {
+            "yes": 0.73,
+            "no": 0.24,
+            "unclear": 0.03
+          }
+        }
+      },
+      "min_confidence": 0.41,
+      "explanation": "Jev was not confident (min confidence 0.41); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1027,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.41
+        },
+        {
+          "ask": "first",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "yes",
+          "confidence": 0.59
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 93,
+      "item_shortened": false,
+      "request_bytes": 3130
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-005"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

@@ -1,6 +1,6 @@
 # ATM CLI Reference
 
-Version: `1.6.1`
+Version: `1.6.5`
 
 This document is generated from the live `clap` command tree. Do not hand-edit it — regenerate with `cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs` (see `crates/atm/src/cli_surface.rs`).
 
@@ -106,6 +106,75 @@ Usage: atm compose [OPTIONS] --template <PATH>
 
 Composition is local and never reads or writes the mailbox. Use `atm send <agent> --template <path> --vars <file>` to deliver the same template after previewing it.
 
+### `atm cron`
+
+Manage recurring hook schedules
+
+**Usage:**
+
+```text
+Usage: atm cron [OPTIONS] <COMMAND>
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm cron end`
+
+End active schedules in a phase
+
+**Usage:**
+
+```text
+Usage: atm cron end [OPTIONS] --phase <PHASE> [NAME]
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--phase` | `` | `PHASE` | yes | `` |  | Select the phase whose active schedules are ended. The selected caller must belong to the schedule's team. |
+| `<name>` | `` | `NAME` | no | `` |  | Optional schedule name. When supplied, only that active schedule is ended; when omitted, every active schedule in the phase is ended. |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm cron list`
+
+List active and ended schedules
+
+**Usage:**
+
+```text
+Usage: atm cron list [OPTIONS]
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--phase` | `` | `PHASE` | no | `` |  | Show only schedules associated with this phase. Without this option, all schedules for the caller's team are listed. |
+| `--json` | `` | `JSON` | no | `false` |  | Write the stored schedule rows as one JSON array. Each row includes the creator, generation, active state, stop condition, custom object, fixed jitter_s, last_run_at, last_outcome, and ended_at fields. An empty result is []. |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm cron start`
+
+Start a recurring hook schedule
+
+**Usage:**
+
+```text
+Usage: atm cron start [OPTIONS] --cron <CRON_EXPR> --module <MODULE> --phase <PHASE> <--until <UNTIL>|--until-hook> <NAME>
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `<name>` | `` | `NAME` | yes | `` |  | Unique schedule name within the selected team and phase. An active schedule with the same name is refused; restarting an ended name reuses its stored row. |
+| `--cron` | `` | `CRON_EXPR` | yes | `` |  | Cron 0.17 expression in UTC: six fields with seconds first, or seven fields with an optional year. The supported aliases are @yearly, @monthly, @weekly, @daily, and @hourly. Five fields, expressions with no future occurrence, and a stop time that is not in the future are rejected before a schedule is stored. |
+| `--module` | `` | `MODULE` | yes | `` |  | Path to the Python hook module. The CLI resolves the module and working directory before sending the start request. The module declares CRON_TIMEOUT_MS, or TIMEOUT_MS when the cron-specific value is absent; the daemon enforces the 30,000 ms maximum. |
+| `--phase` | `` | `PHASE` | yes | `` |  | Phase associated with this schedule. Any roster member of the caller's team may start, end, or list schedules. |
+| `--until` | `` | `UNTIL` | no | `` |  | End the schedule at this future RFC 3339 instant. The stored timestamp is normalized to UTC. This option conflicts with --until-hook; provide exactly one stop condition. |
+| `--until-hook` | `` | `UNTIL_HOOK` | no | `false` |  | Use the module's cron.stop reply as the stop condition before each scheduled tick. Reply {"stop":false} to continue or {"stop":true,"reason":"..."} to end. This option conflicts with --until; provide exactly one stop condition. |
+| `--arg` | `` | `ARGS` | no | `` |  | One argument passed in the cron.tick request's args array. Repeat this option for additional values. Values beginning with a hyphen, such as --json, are accepted and are not interpreted as ATM options. |
+| `--cwd` | `` | `CWD` | no | `` |  | Working directory used to resolve and run the module. Relative paths are resolved from the current invocation directory. If omitted, the canonical module directory is used. |
+| `--custom` | `` | `CUSTOM` | no | `` |  | JSON object passed unchanged to the module in the cron.tick and cron.stop request envelopes. Arrays, scalars, and malformed JSON are rejected. The serialized object is limited by the daemon's hook custom-data limit. |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
 ### `atm doctor`
 
 Run ATM health and configuration diagnostics
@@ -122,6 +191,10 @@ Usage: atm doctor [OPTIONS]
 | `--all-teams` | `` | `ALL_TEAMS` | no | `false` |  | Inspect every team in the canonical roster. |
 | `--json` | `` | `JSON` | no | `false` |  | Emit the result as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+**Notes:**
+
+Hooks: calls each registered module's doctor once per module/cwd/team/phase for the caller's team, reports findings without changing the overall summary; JSON includes hooks even when empty.
 
 ### `atm escalation`
 
@@ -196,6 +269,73 @@ Usage: atm help [OPTIONS] [TARGET]
 | `<target>` | `` | `TARGET` | no | `` |  | Conceptual-help topic or clap subcommand path to show |
 | `--list` | `` | `LIST` | no | `false` |  | List available conceptual-help topics |
 | `--json` | `` | `JSON` | no | `false` |  | Emit the result as JSON |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+### `atm hook`
+
+Register, disable, or list task hooks
+
+**Usage:**
+
+```text
+Usage: atm hook [OPTIONS] <COMMAND>
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm hook disable`
+
+Disable active registrations in a phase
+
+**Usage:**
+
+```text
+Usage: atm hook disable [OPTIONS] --phase <PHASE> [HOOK]
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--phase` | `` | `PHASE` | yes | `` |  | Phase whose active registrations will be disabled |
+| `<hook>` | `` | `HOOK` | no | `` |  | Disable only this hook; otherwise disable every hook in the phase |
+| `--json` | `` | `JSON` | no | `false` |  | Emit the disabled registrations as JSON |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm hook list`
+
+List active and inactive hook registrations
+
+**Usage:**
+
+```text
+Usage: atm hook list [OPTIONS]
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `--phase` | `` | `PHASE` | no | `` |  | Limit registrations to this phase |
+| `--json` | `` | `JSON` | no | `false` |  | Emit the full registrations as a bare JSON array |
+| `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
+
+#### `atm hook register`
+
+Register a module for one task hook and phase
+
+**Usage:**
+
+```text
+Usage: atm hook register [OPTIONS] --module <MODULE> --phase <PHASE> <HOOK>
+```
+
+| Flag | Short | Value | Required | Default | Allowed values | Description |
+|------|-------|-------|----------|---------|----------------|-------------|
+| `<hook>` | `` | `HOOK` | yes | `` |  | Task hook name, validated by the daemon |
+| `--module` | `` | `MODULE` | yes | `` |  | Python module declaring TIMEOUT_MS |
+| `--phase` | `` | `PHASE` | yes | `` |  | Phase owning the registration |
+| `--cwd` | `` | `CWD` | no | `` |  | Working directory; defaults to the module directory |
+| `--custom` | `` | `CUSTOM` | no | `` |  | Custom JSON object passed to the module |
+| `--json` | `` | `JSON` | no | `false` |  | Emit the persisted registration as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
 ### `atm list`
@@ -477,14 +617,14 @@ Usage: atm peer trust [OPTIONS] <COMMAND>
 **Usage:**
 
 ```text
-Usage: atm peer trust add [OPTIONS] --host <HOST> --fingerprint <FINGERPRINT>
+Usage: atm peer trust add [OPTIONS] --host <HOST> --fingerprint <FINGERPRINT> --https-port <HTTPS_PORT>
 ```
 
 | Flag | Short | Value | Required | Default | Allowed values | Description |
 |------|-------|-------|----------|---------|----------------|-------------|
 | `--host` | `` | `HOST` | yes | `` |  | Durable hostname of the trusted peer |
 | `--fingerprint` | `` | `FINGERPRINT` | yes | `` |  | TLS certificate fingerprint expected from the peer |
-| `--https-port` | `` | `HTTPS_PORT` | no | `43101` |  | HTTPS port exposed by the trusted peer |
+| `--https-port` | `` | `HTTPS_PORT` | yes | `` |  | HTTPS port exposed by the trusted peer |
 | `--yes` | `` | `YES` | no | `false` |  | Confirm adding the trusted peer |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
@@ -522,14 +662,14 @@ Usage: atm peer trust migrate [OPTIONS]
 **Usage:**
 
 ```text
-Usage: atm peer trust replace [OPTIONS] --host <HOST> --fingerprint <FINGERPRINT>
+Usage: atm peer trust replace [OPTIONS] --host <HOST> --fingerprint <FINGERPRINT> --https-port <HTTPS_PORT>
 ```
 
 | Flag | Short | Value | Required | Default | Allowed values | Description |
 |------|-------|-------|----------|---------|----------------|-------------|
 | `--host` | `` | `HOST` | yes | `` |  | Durable hostname of the trusted peer |
 | `--fingerprint` | `` | `FINGERPRINT` | yes | `` |  | Replacement TLS certificate fingerprint |
-| `--https-port` | `` | `HTTPS_PORT` | no | `43101` |  | HTTPS port exposed by the trusted peer |
+| `--https-port` | `` | `HTTPS_PORT` | yes | `` |  | HTTPS port exposed by the trusted peer |
 | `--yes` | `` | `YES` | no | `false` |  | Confirm replacing the trusted-peer configuration |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 
@@ -565,6 +705,7 @@ Usage: atm queue [OPTIONS] [TO] [MESSAGE]
 | `--host` | `` | `HOST` | no | `` |  | Route this send through the explicitly named host.  Supplying this flag allows a same-identity send to be an intentional physical delivery test (for example, `--host localhost` or a same-host IP). This is wire-equivalent to a host-qualified recipient address. When both forms are supplied, they must name the same host. |
 | `--chat-id` | `` | `CHAT_ID` | no | `` |  | Restrict the send to this caller chat ID |
 | `--as` | `` | `ACTOR` | no | `` |  | Act as this member instead of the environment identity |
+| `--from` | `` | `AGENT@TEAM` | no | `` |  | Assert the authenticated caller as a full ordinary agent@team address. This does not select or grant sender identity |
 | `--file` | `` | `FILE` | no | `` |  | Read the message body from this file |
 | `--stdin` | `` | `STDIN` | no | `false` |  | Read the message body from standard input |
 | `--template` | `` | `PATH` | no | `` |  | Render and send a locally loaded template through the daemon-owned template admission path |
@@ -693,6 +834,7 @@ Usage: atm send [OPTIONS] [TO] [MESSAGE]
 | `--host` | `` | `HOST` | no | `` |  | Route this send through the explicitly named host.  Supplying this flag allows a same-identity send to be an intentional physical delivery test (for example, `--host localhost` or a same-host IP). This is wire-equivalent to a host-qualified recipient address. When both forms are supplied, they must name the same host. |
 | `--chat-id` | `` | `CHAT_ID` | no | `` |  | Restrict the send to this caller chat ID |
 | `--as` | `` | `ACTOR` | no | `` |  | Act as this member instead of the environment identity |
+| `--from` | `` | `AGENT@TEAM` | no | `` |  | Assert the authenticated caller as a full ordinary agent@team address. This does not select or grant sender identity |
 | `--file` | `` | `FILE` | no | `` |  | Read the message body from this file |
 | `--stdin` | `` | `STDIN` | no | `false` |  | Read the message body from standard input |
 | `--template` | `` | `PATH` | no | `` |  | Render and send a locally loaded template through the daemon-owned template admission path |
@@ -1037,6 +1179,7 @@ Usage: atm teams update-member [OPTIONS] <TEAM> <MEMBER>
 | `--clear-alias` | `` | `CLEAR_ALIAS` | no | `false` |  | remove the member's durable roster alias |
 | `--pane-id` | `` | `PANE_ID` | no | `` |  | deprecated compatibility spelling for --backend tmux --target |
 | `--host` | `` | `HOST` | no | `` |  | this member's registered host (ADR-055 decision (e)); used for Send-To same-host/remote routing, never inferred |
+| `--max-tasks` | `` | `MAX_TASKS` | no | `` |  | Most tasks this member may hold active at once (minimum 1; default 1 when never set) |
 | `--json` | `` | `JSON` | no | `false` |  | Emit the result as JSON |
 | `--stderr-logs` | `` | `STDERR_LOGS` | no | `false` |  | Route retained observability console logs to stderr.  ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout. |
 

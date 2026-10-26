@@ -9,11 +9,14 @@ use atm_core::LocalServiceRuntime;
 use atm_core::boundary::TaskStore;
 use atm_core::boundary::{
     AsyncMailboxReader, MAX_ESCALATION_RECIPIENTS, MailboxScope, MemberKey, MessageQuery,
-    ReadDeadline, ReadLaneError,
+    ReadDeadline, ReadLaneError, TaskRow,
 };
 use atm_core::error::AtmError;
 use atm_core::observability::NullObservability;
-use atm_core::send::{NudgeMode, SendMessageSource, WriteRequest, write_mail_with_runtime};
+use atm_core::send::{
+    NudgeMode, SendMessageSource, WriteRequest,
+    write_current_herdr_terminal_escalation_with_runtime, write_mail_with_runtime,
+};
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 use crate::herdr_queue_wake::herdr_request_deadline;
@@ -58,36 +61,71 @@ impl From<EpisodeKind> for EscalationKind {
 
 /// Pump-owned blocked episode state. Keeping this state with the escalation
 /// policy prevents the queue-wake file from becoming the owner of D6 data.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Episode {
+    kind: EpisodeKind,
+    since: Option<IsoTimestamp>,
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct EscalationState {
     /// The process-local view of currently-open Blocked/Offline episodes.
     /// Durable duplicate suppression lives in each escalation target's mailbox.
-    episodes: Arc<Mutex<HashMap<MemberKey, EpisodeKind>>>,
+    episodes: Arc<Mutex<HashMap<MemberKey, Episode>>>,
+}
+
+pub(crate) enum EpisodeObservation {
+    Transition,
+    Verify {
+        kind: EpisodeKind,
+        since: IsoTimestamp,
+    },
 }
 
 impl EscalationState {
-    /// Records an episode transition. Recovery clears the local episode entry.
+    /// Records an episode transition or verifies a fresh observation. Recovery
+    /// clears the local episode entry only on the transition path.
     pub(crate) fn observe(
         &self,
         member: &MemberKey,
         state: atm_core::protocol::RuntimeMemberState,
+        state_changed_at: Option<IsoTimestamp>,
+        observation: EpisodeObservation,
     ) -> bool {
         let episode = match state {
             atm_core::protocol::RuntimeMemberState::Blocked => EpisodeKind::Blocked,
             atm_core::protocol::RuntimeMemberState::Offline => EpisodeKind::Offline,
             _ => {
-                self.episodes
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .remove(member);
+                if matches!(observation, EpisodeObservation::Transition) {
+                    self.episodes
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .remove(member);
+                }
                 return false;
             }
         };
-        let mut episodes = self
-            .episodes
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        episodes.insert(member.clone(), episode) != Some(episode)
+        match observation {
+            EpisodeObservation::Transition => {
+                self.episodes
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .insert(
+                        member.clone(),
+                        Episode {
+                            kind: episode,
+                            since: state_changed_at,
+                        },
+                    )
+                    != Some(Episode {
+                        kind: episode,
+                        since: state_changed_at,
+                    })
+            }
+            EpisodeObservation::Verify { kind, since } => {
+                episode == kind && state_changed_at == Some(since)
+            }
+        }
     }
 
     pub(crate) fn hold_targets_unavailable(&self, member: &MemberKey) {
@@ -143,6 +181,8 @@ pub(crate) async fn escalate_mail(
     blocking_bridge: &BoundedBlockingBridge,
     runtime: &LocalServiceRuntime,
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
+    source_task: &TaskRow,
+    episode: Option<(atm_core::protocol::RuntimeMemberState, IsoTimestamp)>,
     daemon_home: &Path,
     team: &TeamName,
     summary: &str,
@@ -150,31 +190,50 @@ pub(crate) async fn escalate_mail(
     kind: EscalationKind,
     suppress_since: Option<IsoTimestamp>,
 ) -> Result<EscalationOutcome, AtmError> {
-    let targets = match load_escalation_targets(blocking_bridge, runtime, task_store, team).await {
-        Ok(targets) => targets,
-        Err(error) => {
-            log_target_load_error(team, &error);
-            return Err(error);
+    if episode.is_some() {
+        if terminal_recipients_are_suppressed(
+            blocking_bridge,
+            runtime,
+            task_store,
+            team,
+            summary,
+            suppress_since,
+        )
+        .await?
+        {
+            return Ok(EscalationOutcome::default());
         }
+        return write_terminal_episode(blocking_bridge, runtime, source_task, daemon_home).await;
+    }
+    let targets = load_escalation_targets(blocking_bridge, runtime, task_store, team)
+        .await
+        .inspect_err(|error| log_target_load_error(team, error))?;
+    let context = EscalationWriteContext {
+        daemon_home,
+        team,
+        summary,
+        mail_body,
+        kind,
+        suppress_since,
     };
-    let mut outcome = EscalationOutcome::default();
-    let reader = suppress_since.and_then(|_| match runtime.async_mailbox_reader() {
-        Ok(reader) => Some(reader),
-        Err(error) => {
-            tracing::warn!(
-                subsystem = "herdr_queue_wake",
-                action = "escalation_mail_reader",
-                outcome = "unavailable",
-                error = %error,
-                "Escalation mailbox suppression is unavailable"
-            );
-            None
-        }
-    });
-    let leads = match kind {
-        EscalationKind::TaskStalled => targets.leads,
-        _ if targets.leads.len() == 1 => targets.leads,
-        _ => Vec::new(),
+    write_to_escalation_recipients(blocking_bridge, runtime, &context, targets).await
+}
+
+async fn terminal_recipients_are_suppressed(
+    blocking_bridge: &BoundedBlockingBridge,
+    runtime: &LocalServiceRuntime,
+    task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
+    team: &TeamName,
+    summary: &str,
+    suppress_since: Option<IsoTimestamp>,
+) -> Result<bool, AtmError> {
+    let targets = load_escalation_targets(blocking_bridge, runtime, task_store, team)
+        .await
+        .inspect_err(|error| log_target_load_error(team, error))?;
+    let leads = if targets.leads.len() == 1 {
+        targets.leads
+    } else {
+        Vec::new()
     };
     let recipients = leads
         .into_iter()
@@ -184,34 +243,125 @@ pub(crate) async fn escalate_mail(
                 .expect("validated lead and team form a valid local address")
         })
         .chain(targets.recipients);
+    let reader = escalation_reader(runtime, suppress_since);
+    let mut found_recipient = false;
     for recipient in recipients {
-        if should_suppress(reader.as_deref(), &recipient, team, summary, suppress_since).await {
+        found_recipient = true;
+        if !should_suppress(reader.as_deref(), &recipient, team, summary, suppress_since).await {
+            return Ok(false);
+        }
+    }
+    Ok(found_recipient)
+}
+
+async fn write_terminal_episode(
+    blocking_bridge: &BoundedBlockingBridge,
+    runtime: &LocalServiceRuntime,
+    source_task: &TaskRow,
+    daemon_home: &Path,
+) -> Result<EscalationOutcome, AtmError> {
+    let runtime = runtime.clone();
+    let daemon_home = daemon_home.to_path_buf();
+    let source_member = MemberKey::new(source_task.team.clone(), source_task.assignee.clone());
+    let admitted = blocking_bridge
+        .run(herdr_request_deadline(), move || {
+            write_current_herdr_terminal_escalation_with_runtime(
+                daemon_home,
+                &source_member,
+                &NullObservability,
+                &runtime,
+            )
+        })
+        .await?;
+    let recipients_written = admitted.recipients_written();
+    Ok(EscalationOutcome {
+        audit_delivery: admitted.deliveries.into_iter().next(),
+        recipients_written,
+        recipients_failed: admitted.recipients_failed,
+    })
+}
+
+struct EscalationWriteContext<'a> {
+    daemon_home: &'a Path,
+    team: &'a TeamName,
+    summary: &'a str,
+    mail_body: &'a str,
+    kind: EscalationKind,
+    suppress_since: Option<IsoTimestamp>,
+}
+
+async fn write_to_escalation_recipients(
+    blocking_bridge: &BoundedBlockingBridge,
+    runtime: &LocalServiceRuntime,
+    context: &EscalationWriteContext<'_>,
+    targets: EscalationTargets,
+) -> Result<EscalationOutcome, AtmError> {
+    let reader = escalation_reader(runtime, context.suppress_since);
+    let leads = match context.kind {
+        EscalationKind::TaskStalled => targets.leads,
+        _ if targets.leads.len() == 1 => targets.leads,
+        _ => Vec::new(),
+    };
+    let recipients = leads
+        .into_iter()
+        .map(|lead| {
+            format!("{lead}@{}", context.team)
+                .parse()
+                .expect("validated lead and team form a valid local address")
+        })
+        .chain(targets.recipients);
+    let mut outcome = EscalationOutcome::default();
+    for recipient in recipients {
+        if should_suppress(
+            reader.as_deref(),
+            &recipient,
+            context.team,
+            context.summary,
+            context.suppress_since,
+        )
+        .await
+        {
             continue;
         }
         match write_escalation_mail_with_summary(
             blocking_bridge,
             runtime,
-            daemon_home,
-            team,
+            context.daemon_home,
+            context.team,
             &recipient,
-            mail_body,
-            summary,
+            context.mail_body,
+            context.summary,
         )
         .await
         {
             Ok(message_id) => {
-                if outcome.audit_delivery.is_none() {
-                    outcome.audit_delivery = Some((recipient.agent().clone(), message_id));
-                }
-                outcome.recipients_written = outcome.recipients_written.saturating_add(1);
+                record_escalation_write(&mut outcome, recipient.agent().clone(), message_id)
             }
             Err(error) => {
                 outcome.recipients_failed = outcome.recipients_failed.saturating_add(1);
-                tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_write", outcome = "failed", kind = kind.as_str(), recipient = %recipient, error = %error, "Escalation mail write failed");
+                tracing::warn!(subsystem = "herdr_queue_wake", action = "escalation_mail_write", outcome = "failed", kind = context.kind.as_str(), recipient = %recipient, error = %error, "Escalation mail write failed");
             }
         }
     }
     Ok(outcome)
+}
+
+fn escalation_reader(
+    runtime: &LocalServiceRuntime,
+    suppress_since: Option<IsoTimestamp>,
+) -> Option<Arc<dyn AsyncMailboxReader + Send + Sync>> {
+    suppress_since.and_then(|_| runtime.async_mailbox_reader().ok())
+}
+
+fn record_escalation_write(
+    outcome: &mut EscalationOutcome,
+    recipient: AgentName,
+    message_id: atm_core::schema::AtmMessageId,
+) {
+    if outcome.audit_delivery.is_none() {
+        outcome.audit_delivery = Some((recipient, message_id));
+    }
+    outcome.recipients_written = outcome.recipients_written.saturating_add(1);
 }
 
 fn log_target_load_error(team: &TeamName, error: &AtmError) {
@@ -350,7 +500,7 @@ async fn write_escalation_mail_with_summary(
             let request = WriteRequest::new(
                 daemon_home.clone(),
                 daemon_home,
-                DAEMON_ACTOR.clone(),
+                AgentName::from_validated(atm_core::boundary::DAEMON_ACTOR_NAME),
                 &recipient,
                 team,
                 SendMessageSource::Inline(body),
@@ -359,12 +509,6 @@ async fn write_escalation_mail_with_summary(
                 None,
                 false,
             )?
-            // Immediate delivery only runs the Inline plan, which never
-            // emits the herdr received hook (that hook is emitted only by
-            // `StorageAndNudgeRouter::emit_received_hook` and by the
-            // queue-wake pump). Deferred sets the durable pending-queue
-            // marker instead, so the pump nudges the recipient's pane on its
-            // next idle pass.
             .with_nudge_mode(NudgeMode::Deferred);
             write_mail_with_runtime(request, &NullObservability, &runtime)
                 .map(|outcome| outcome.persisted_message_id())
@@ -374,9 +518,10 @@ async fn write_escalation_mail_with_summary(
 
 #[cfg(test)]
 mod tests {
-    use super::{EscalationKind, EscalationState, escalation_summary};
+    use super::{EpisodeObservation, EscalationKind, EscalationState, escalation_summary};
     use atm_core::boundary::MemberKey;
     use atm_core::protocol::RuntimeMemberState;
+    use atm_core::types::IsoTimestamp;
 
     fn member() -> MemberKey {
         MemberKey::new(
@@ -389,11 +534,114 @@ mod tests {
     fn episode_map_replaces_kind_on_flip_and_clears_on_recovery() {
         let state = EscalationState::default();
         let member = member();
-        assert!(state.observe(&member, RuntimeMemberState::Blocked));
-        assert!(!state.observe(&member, RuntimeMemberState::Blocked));
-        assert!(state.observe(&member, RuntimeMemberState::Offline));
-        assert!(!state.observe(&member, RuntimeMemberState::Idle));
-        assert!(state.observe(&member, RuntimeMemberState::Blocked));
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            None,
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            None,
+            EpisodeObservation::Transition,
+        ));
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Offline,
+            None,
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Idle,
+            None,
+            EpisodeObservation::Transition,
+        ));
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            None,
+            EpisodeObservation::Transition,
+        ));
+    }
+
+    #[test]
+    fn episode_verification_requires_matching_kind_and_epoch() {
+        let state = EscalationState::default();
+        let member = member();
+        let since: IsoTimestamp = "2030-01-01T00:00:00Z".parse().expect("timestamp");
+        let later: IsoTimestamp = "2030-01-01T00:00:01Z".parse().expect("timestamp");
+
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(since),
+            EpisodeObservation::Verify {
+                kind: crate::herdr_task_disposition::EpisodeKind::Blocked,
+                since,
+            },
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Offline,
+            Some(since),
+            EpisodeObservation::Verify {
+                kind: crate::herdr_task_disposition::EpisodeKind::Blocked,
+                since,
+            },
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(later),
+            EpisodeObservation::Verify {
+                kind: crate::herdr_task_disposition::EpisodeKind::Blocked,
+                since,
+            },
+        ));
+    }
+
+    #[test]
+    fn same_kind_episode_with_new_epoch_is_a_new_transition() {
+        let state = EscalationState::default();
+        let member = member();
+        let first: IsoTimestamp = "2030-01-01T00:00:00Z".parse().expect("timestamp");
+        let later: IsoTimestamp = "2030-01-01T00:00:01Z".parse().expect("timestamp");
+
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(first),
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(first),
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(later),
+            EpisodeObservation::Verify {
+                kind: crate::herdr_task_disposition::EpisodeKind::Blocked,
+                since: first,
+            },
+        ));
+        assert!(state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(later),
+            EpisodeObservation::Transition,
+        ));
+        assert!(!state.observe(
+            &member,
+            RuntimeMemberState::Blocked,
+            Some(later),
+            EpisodeObservation::Transition,
+        ));
     }
 
     #[test]

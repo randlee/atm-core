@@ -79,6 +79,8 @@ fn peer_mutations_reject_missing_yes_before_touching_durable_configuration() {
             "peer.example",
             "--fingerprint",
             "sha256:test",
+            "--https-port",
+            "43201",
         ])
         .env("ATM_HOME", fixture.path())
         .env("ATM_CONFIG_HOME", fixture.path().join("config"))

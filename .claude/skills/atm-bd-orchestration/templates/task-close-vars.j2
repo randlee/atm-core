@@ -1,0 +1,350 @@
+---
+name: task-close-vars
+version: 2.1.0
+format: text
+required_variables:
+  - base # owner: dev-sanity-template.xml.j2
+  - branch # owner: sanity-fail.xml.j2
+  - checked_bead # owner: dev-sanity-template.xml.j2
+  - checked_title # owner: sanity-fail.xml.j2
+  - commit # owner: sanity-fail.xml.j2
+  - deliverables_complete # owner: dev-complete.md.j2
+  - deliverables_md # owner: dev-complete.md.j2
+  - deliverables_total # owner: dev-complete.md.j2
+  - dev_task_id # owner: task-close-vars.j2 (hook contract)
+  - evidence # owner: task-close-vars.j2 (hook contract)
+  - findings_blocking # owner: qa-complete.md.j2
+  - findings_ceremony # owner: qa-complete.md.j2
+  - findings_count # owner: dev-sanity-complete.md.j2
+  - findings_important # owner: qa-complete.md.j2
+  - findings_md # owner: dev-sanity-complete.md.j2
+  - findings_minor # owner: qa-complete.md.j2
+  - generated_at # owner: dev-complete.md.j2
+  - layer # owner: qa-template.xml.j2
+  - lint_command # owner: dev-sanity-template.xml.j2
+  - lint_md # owner: dev-sanity-complete.md.j2
+  - max_sanity_rounds # owner: sanity-fail.xml.j2
+  - outcome # owner: fix-complete.md.j2
+  - phase # owner: qa-template.xml.j2
+  - phase_feature # owner: qa-template.xml.j2
+  - policy_path # owner: qa-template.xml.j2
+  - pr_number # owner: sanity-fail.xml.j2
+  - pr_target # owner: task-close-vars.j2 (hook contract)
+  - pr_url # owner: dev-sanity-template.xml.j2
+  - primary_checkout # owner: dev-sanity-template.xml.j2
+  - qa_bead # owner: task-close-vars.j2 (hook contract)
+  - qa_task_id # owner: task-close-vars.j2 (hook contract)
+  - rebased_onto # owner: dev-complete.md.j2
+  - resolution_md # owner: fix-complete.md.j2
+  - reviewers_md # owner: qa-complete.md.j2
+  - reviewers_round1 # owner: qa-template.xml.j2
+  - round # owner: sanity-fail.xml.j2
+  - sanity_bead # owner: task-close-vars.j2 (hook contract)
+  - sanity_task_id # owner: task-close-vars.j2 (hook contract)
+  - sprint # owner: dev-complete.md.j2
+  - stack # owner: qa-template.xml.j2
+  - stack_bead # owner: task-close-vars.j2 (hook contract)
+  - stack_view # owner: dev-complete.md.j2
+  - stacked # owner: rebase-required.xml.j2
+  - task_id # owner: dev-complete.md.j2
+  - undone # owner: sanity-fail.xml.j2
+  - validation_md # owner: dev-complete.md.j2
+  - verdict # owner: qa-complete.md.j2
+  - worktree_path # owner: dev-sanity-template.xml.j2
+required_variables_by_role:
+  dev:
+    - base
+    - branch
+    - checked_bead
+    - checked_title
+    - dev_task_id
+    - lint_command
+    - max_sanity_rounds
+    - phase
+    - pr_target
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - stack_bead
+    - task_id
+    - worktree_path
+  fix:
+    - base
+    - branch
+    - checked_bead
+    - checked_title
+    - dev_task_id
+    - lint_command
+    - max_sanity_rounds
+    - phase
+    - pr_target
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - stack_bead
+    - task_id
+    - worktree_path
+  sanity:
+    - base
+    - branch
+    - checked_bead
+    - checked_title
+    - commit
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - dev_task_id
+    - evidence
+    - findings_blocking
+    - findings_ceremony
+    - findings_count
+    - findings_important
+    - findings_md
+    - findings_minor
+    - generated_at
+    - layer
+    - lint_md
+    - max_sanity_rounds
+    - outcome
+    - phase
+    - phase_feature
+    - policy_path
+    - pr_number
+    - pr_url
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - reviewers_md
+    - reviewers_round1
+    - round
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - stack
+    - stack_bead
+    - stacked
+    - task_id
+    - undone
+    - verdict
+    - worktree_path
+  qa:
+    - branch
+    - checked_bead
+    - commit
+    - deliverables_complete
+    - deliverables_total
+    - dev_task_id
+    - evidence
+    - findings_blocking
+    - findings_ceremony
+    - findings_important
+    - findings_md
+    - findings_minor
+    - generated_at
+    - outcome
+    - phase
+    - pr_number
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - reviewers_md
+    - round
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - task_id
+    - undone
+    - verdict
+    - worktree_path
+# The hook derives these for dev and fix at close; the lead's dispatch file never carries them.
+derived_variables:
+  - commit
+  - generated_at
+  - pr_number
+  - pr_url
+  - rebased_onto
+result_variables_by_role:
+  dev:
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - evidence
+    - outcome
+    - stack_view
+    - validation_md
+  fix:
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - evidence
+    - outcome
+    - resolution_md
+    - stack_view
+    - validation_md
+render_variables_by_role:
+  dev:
+    - base
+    - branch
+    - checked_bead
+    - checked_title
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - dev_task_id
+    - evidence
+    - lint_command
+    - max_sanity_rounds
+    - outcome
+    - phase
+    - pr_target
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - stack_bead
+    - stack_view
+    - task_id
+    - validation_md
+    - worktree_path
+  fix:
+    - base
+    - branch
+    - checked_bead
+    - checked_title
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - dev_task_id
+    - evidence
+    - lint_command
+    - max_sanity_rounds
+    - outcome
+    - phase
+    - pr_target
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - resolution_md
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - stack_bead
+    - stack_view
+    - task_id
+    - validation_md
+    - worktree_path
+  sanity:
+    - base
+    - branch
+    - checked_bead
+    - checked_title
+    - commit
+    - deliverables_complete
+    - deliverables_md
+    - deliverables_total
+    - dev_task_id
+    - evidence
+    - findings_blocking
+    - findings_ceremony
+    - findings_count
+    - findings_important
+    - findings_md
+    - findings_minor
+    - generated_at
+    - layer
+    - lint_md
+    - max_sanity_rounds
+    - outcome
+    - phase
+    - phase_feature
+    - policy_path
+    - pr_number
+    - pr_url
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - reviewers_md
+    - reviewers_round1
+    - round
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - stack
+    - stack_bead
+    - stacked
+    - task_id
+    - undone
+    - verdict
+    - worktree_path
+  qa:
+    - branch
+    - checked_bead
+    - commit
+    - deliverables_complete
+    - deliverables_total
+    - dev_task_id
+    - evidence
+    - findings_blocking
+    - findings_ceremony
+    - findings_important
+    - findings_md
+    - findings_minor
+    - generated_at
+    - outcome
+    - phase
+    - pr_number
+    - primary_checkout
+    - qa_bead
+    - qa_task_id
+    - reviewers_md
+    - round
+    - sanity_bead
+    - sanity_task_id
+    - sprint
+    - task_id
+    - undone
+    - verdict
+    - worktree_path
+defaults:
+  base: ""
+  checked_title: ""
+  deliverables_md: ""
+  findings_count: ""
+  layer: ""
+  lint_command: ""
+  lint_md: ""
+  max_sanity_rounds: ""
+  phase_feature: ""
+  policy_path: ""
+  pr_target: ""
+  pr_url: ""
+  rebased_onto: ""
+  resolution_md: ""
+  reviewers_round1: ""
+  stack: ""
+  stack_view: ""
+  stacked: ""
+  validation_md: ""
+  branch: ""
+  commit: ""
+  pr_number: ""
+  stack_bead: ""
+  carried_md: ""
+  carry_forward: ""
+  inventory_md: ""
+  layer_prs: []
+  notes_md: ""
+  reviewer: ""
+  run_id: ""
+  selection: []
+  sprint_bead: ""
+---
+{{ '' }}

@@ -1,0 +1,142 @@
+{
+  "candidate_set_frozen_before_first_jev_call": true,
+  "candidates": {
+    "coverage_lean": {
+      "complexity": 1664,
+      "question_sha256": "f1b1e84a62d9a3907349b6186cdcd0c6966b84fa6074b52619b50e41b12eb69a",
+      "questions": {
+        "addressed": {
+          "criteria": {
+            "no": "No single method is stated to check every bead in the phase, including when validation is not discussed, is discussed only generally, is split across methods, or skips some beads.",
+            "unclear": "A phase validation method is mentioned but its coverage of every bead is not determinable.",
+            "yes": "One method, function, command or entry point is stated to check every bead, all beads, or the whole phase."
+          },
+          "instructions": "Does `item.text` say that one validation method checks every bead in the phase? A single method that uses a different model per bead kind counts as one method. Judge presence only.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item conflicts with one method validating every bead in the phase.",
+            "unclear": "It cannot be determined whether the item splits validation or skips beads of the phase.",
+            "yes": "The item splits validation across separate methods with none covering every bead of the phase, or skips some bead or bead kind of the phase."
+          },
+          "instructions": "Does `item.text` rule out one validation method validating every bead in the phase? Silence is not a conflict, and excluding beads of other phases is not a conflict. Judge conflict only.",
+          "type": "choice"
+        },
+        "relevant": {
+          "criteria": {
+            "no": "No, the item is about another part of the system.",
+            "unclear": "The item is too vague to tell.",
+            "yes": "Yes, the item works on bead validation or bead schemas."
+          },
+          "instructions": "Is `item.text` about validating atm-bd-orchestration beads (bead schemas, bead models, a validator or validation command, or which beads get checked)? Judge subject only.",
+          "type": "choice"
+        }
+      }
+    },
+    "default": {
+      "complexity": 2589,
+      "question_sha256": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+      "questions": {
+        "addressed": {
+          "criteria": {
+            "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+            "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included.",
+            "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point."
+          },
+          "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+            "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+            "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+          },
+          "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+          "type": "choice"
+        },
+        "relevant": {
+          "criteria": {
+            "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+            "unclear": "The item text is too vague to tell what part of the system it touches.",
+            "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+          },
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+          "type": "choice"
+        }
+      }
+    },
+    "phase_wide_validator": {
+      "complexity": 2203,
+      "question_sha256": "37e0a0ac6559f16385ad9cf12d8e4c4a82dad37837a09c7757eb8df0375af604",
+      "questions": {
+        "addressed": {
+          "criteria": {
+            "no": "The item does not describe one phase-wide validator covering every bead: validation is not mentioned, is mentioned only in general, is split across several methods, or leaves some beads of the phase unchecked.",
+            "unclear": "The item mentions a phase validator but does not make clear whether it covers every bead of the phase.",
+            "yes": "The item describes one phase-wide validator (a single method, function, command or entry point such as `validate_phase`) that checks every bead, all beads, or each bead of the phase or phase epic; it may check each bead against the model for its kind."
+          },
+          "instructions": "Does `item.text` carry out the directive in `anchor.statement`: one validation method that validates every bead in the phase? Judge presence only, not conflict.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item conflicts with one method validating every bead in the phase: the item is silent, only mentions validation generally, uses one method with a model per bead kind, or excludes only beads of other phases.",
+            "unclear": "The item might describe split validation or skipped beads of the phase, but the text does not settle it.",
+            "yes": "The item validates the phase's beads through several separate methods or commands with no single one covering every bead, or its validation skips a bead or bead kind that belongs to the phase."
+          },
+          "instructions": "Does `item.text` plan something that `anchor.statement` rules out? Silence about the directive is not a contradiction. Judge conflict only.",
+          "type": "choice"
+        },
+        "relevant": {
+          "criteria": {
+            "no": "The item concerns something other than bead validation, for example console icons, message delivery or release packaging.",
+            "unclear": "The item text is too vague to tell whether bead validation is involved.",
+            "yes": "The item adds, changes or relies on a bead validator, a bead schema or pydantic model, a validation command, or the set of beads that are checked."
+          },
+          "instructions": "Does the work in `item.text` touch the subject of `anchor.statement` within `anchor.scope`: validation of atm-bd-orchestration beads? Judge subject overlap only, not obedience.",
+          "type": "choice"
+        }
+      }
+    },
+    "single_method_every_bead": {
+      "complexity": 3061,
+      "question_sha256": "dc9080a6ad836469c64b709d519c647e578f6d71e3f3a7f38d7e26abdc93c2dd",
+      "questions": {
+        "addressed": {
+          "criteria": {
+            "no": "The item does not describe one method covering every bead in the phase: it is silent about validation coverage, mentions validation only in general, uses several separate methods, or says some beads of the phase are skipped or not validated.",
+            "unclear": "The item mentions a phase validation method but it is not possible to tell whether that one method covers every bead of the phase.",
+            "yes": "The item names one validation method, function, command or entry point and says it checks every bead, all beads, or the whole phase."
+          },
+          "instructions": "`anchor.statement` requires one validation method that validates every bead in the phase. Does `item.text` state such a method: a single method, function, command or entry point that checks all beads of the phase (for example every bead under the phase epic)? One method that checks each bead against a model or schema for its kind still counts as one method. Leaving out beads of other phases does not matter. Judge presence of this directive only, not whether the item conflicts with it.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item conflicts with one method validating every bead in the phase, including when the item is silent about it.",
+            "unclear": "The item is ambiguous enough that it might describe split validation or skipped beads, but it cannot be determined.",
+            "yes": "The item splits validation across separate methods with no single one covering every bead of the phase, or says a bead or bead kind of the phase is skipped or not validated."
+          },
+          "instructions": "Does `item.text` plan bead validation in a way that `anchor.statement` rules out? The anchor rules out two things: (1) splitting validation across several separate methods or commands with no single method that validates every bead in the phase; (2) a phase validation method that skips some beads of the phase or some bead kinds. These are not a conflict: silence about validation coverage; a general mention of validation; one method that uses a different model per bead kind; leaving out beads that belong to other phases. Judge conflict only.",
+          "type": "choice"
+        },
+        "relevant": {
+          "criteria": {
+            "no": "The item is about a different part of the system, such as console display, messaging or release work, and does not touch bead validation or bead schemas.",
+            "unclear": "The item text is too vague to tell whether it touches bead validation.",
+            "yes": "The item plans or changes bead validation, a bead schema or model, a validation command or method, or which beads are validated."
+          },
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor about validating the beads of an atm-bd-orchestration phase (`anchor.statement`, `anchor.scope`). Does the work described in `item.text` plan, change, or depend on how beads are validated: bead schemas or models, a validator, validation commands, or which beads of a phase get checked? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+          "type": "choice"
+        }
+      }
+    }
+  },
+  "roles": {
+    "compliance": "addressed",
+    "conflict": "contradicted",
+    "relevance": "relevant"
+  }
+}

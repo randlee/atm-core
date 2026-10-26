@@ -81,6 +81,20 @@ render, the write fails closed with a typed error and performs no durable
 admission. Include-graph pinning and portable reproduction remain owned by
 sc-compose/dolt, not ATM.
 
+### Amendment (Phase BK, ADR-069 D5) — `HookRegistrationStore` and `CronScheduleStore`
+
+ADR-069 D5 (Phase BK, sprint bk-1) adds two sealed, backend-neutral optional
+storage capabilities to the `atm-storage` shared contract:
+`HookRegistrationStore`, which holds the hook registration rows (ADR-068 D1),
+and `CronScheduleStore`, which holds the cron schedule rows (ADR-069 D4). Both
+are recorded machine-readably in
+`boundaries/atm-storage/hook-registration-store.toml` and
+`boundaries/atm-storage/cron-schedule-store.toml`, and their in-memory doubles
+live under `crate::testing`. Neither capability reads a clock, spawns a
+process, or touches SQLite from `atm-storage`; the rusqlite implementations
+land in bk-6 under the storage-backend crate. This amendment authorizes no
+further optional storage capability.
+
 ### Amendment (Phase AQ) — `PendingNudgeStore`
 
 ADR-054 (Sprint AQ1) is the follow-up ADR required by ADR-018 §3 before the

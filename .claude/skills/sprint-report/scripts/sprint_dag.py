@@ -246,40 +246,61 @@ def qa_badge(parent, x, y, qa):
         group = parent[-1]
         group.set('class', 'qa-badge')
         if icon == '📥':
-            group.remove(group.find(tag('text')))
+            text_element = group.find(tag('text'))
+            if text_element is None:
+                raise ValueError('QA badge has no text element')
+            group.remove(text_element)
             ET.SubElement(group, tag('path'), {'d': 'M4 10V14H16V10 M10 3V10 M7 7L10 10L13 7',
                 'fill': 'none', 'stroke': colors['waiting'], 'stroke-width': '1.5'})
     title = ET.SubElement(group, tag('title'))
-    title.text = 'QA ' + (qa['verdict'] or icon)
+    title_text = 'QA ' + (qa['verdict'] or icon)
     if counts is not None:
-        title.text += ': ' + counts + ' open blocking:important:minor'
+        title_text += ': ' + counts + ' open blocking:important:minor'
     if qa['qa_beads']:
-        title.text += '; ' + ', '.join(qa['qa_beads'])
+        title_text += '; ' + ', '.join(qa['qa_beads'])
+    title.text = title_text
 
 
 def overlay(layout, icons, captured_at, qa=None):
     root = ET.fromstring(layout)
     graph = root.find(tag('g'))
+    if graph is None:
+        raise ValueError('SVG layout has no graph element')
     # Put badges over edges, preserving every original node/edge coordinate.
     badges = ET.Element(tag('g'), {'class': 'state-badges'})
     for node in graph.findall(tag('g')):
         if node.get('class') != 'node':
             continue
         title = node.find(tag('title'))
+        if title is None or title.text is None:
+            raise ValueError('SVG node has no title')
         key = title.text
         icon = icons[key]
         path = node.find(tag('path'))
-        numbers = [float(n) for n in re.findall(r'-?\d+(?:\.\d+)?', path.get('d'))]
+        if path is None or path.get('d') is None:
+            raise ValueError(f'SVG node {key} has no path')
+        path_data = path.get('d')
+        assert path_data is not None
+        numbers = [float(n) for n in re.findall(r'-?\d+(?:\.\d+)?', path_data)]
         y = min(numbers[1::2])
-        x = float(node.find(tag('text')).get('x'))
-        title.text = key + ' — ' + icon['evidence']
+        label = node.find(tag('text'))
+        if label is None or label.get('x') is None:
+            raise ValueError(f'SVG node {key} has no label position')
+        x_position = label.get('x')
+        assert x_position is not None
+        x = float(x_position)
+        title_text = key + ' — ' + icon['evidence']
         if icon['sanity_iterations'] is not None:
-            title.text += f"; completed sanity iterations: {icon['sanity_iterations']}"
+            title_text += f"; completed sanity iterations: {icon['sanity_iterations']}"
+        title.text = title_text
         badge(badges, x, y, icon['state'], icon['sanity_iterations'])
         if qa and key in qa:
             qa_badge(badges, x, max(numbers[1::2]), qa[key])
     graph.append(badges)
-    view = list(map(float, root.get('viewBox').split()))
+    view_box = root.get('viewBox')
+    if view_box is None:
+        raise ValueError('SVG layout has no viewBox')
+    view = list(map(float, view_box.split()))
     root.set('viewBox', ' '.join(map(str, [*view[:3], view[3] + 88])))
     root.set('height', str(view[3] + 88) + 'pt')
     footer = ET.SubElement(root, tag('g'), {'class': 'state-legend', 'font-family': 'Arial', 'font-size': '14', 'fill': '#334155'})

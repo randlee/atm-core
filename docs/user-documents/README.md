@@ -1,7 +1,7 @@
 ---
 title: ATM User Guide
 audience: end-user
-reviewed_for_release: 1.6.0
+reviewed_for_release: 1.6.2
 ---
 
 # ATM User Guide
@@ -24,9 +24,13 @@ They are not developer architecture notes.
   - [OpenTelemetry Export](./doctor-and-log.md#opentelemetry-export)
 - [Herdr Integration](./herdr.md)
 - [Hooks](./hooks.md)
+- [Cron Schedules](./cron.md)
+- [Tool Sender Trust Root](./tool-sender-trust-root.md)
 - [Hermes Gateway Integration](./hermes-atm.md)
 - [Nudge Templates](./nudge-templates.md)
+  - [Cron lifecycle notices](./nudge-templates.md#cron-lifecycle-notices)
 - [Troubleshooting](./troubleshooting.md)
+  - [Cron recovery](./cron.md#recovery)
 
 ## Scope
 
@@ -60,4 +64,5 @@ Repo-owned example files live under:
 - [`examples/mailbox/`](./examples/mailbox/)
 - [`examples/diagnostics/`](./examples/diagnostics/)
 - [`examples/nudge-templates/`](./examples/nudge-templates/)
+- [`examples/cron/`](./examples/cron/)
 - [`examples/troubleshooting/`](./examples/troubleshooting/)

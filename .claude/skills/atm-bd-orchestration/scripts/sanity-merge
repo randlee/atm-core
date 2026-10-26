@@ -53,6 +53,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads" / "scripts"))
+from sanity_shared import valid_elapsed_s  # noqa: E402
+
 # Tool lock and log files a clean worktree may hold; the same as `IGNORED_STATUS_PATHS` in assignment-gates.py.
 IGNORED_STATUS_PATHS = (".beads.gate.lock", ".sc-compose/")
 # The Jev transport, the sibling jev_client.py; it alone writes and verifies receipts.
@@ -164,9 +167,11 @@ def validate(result, index, manifest, sanity_bead, dev_bead):
 
 def reply_status(result, index, manifest, sanity_bead, dev_bead):
     """Validate one unchanged reply and return its deliverable and coarse status."""
-    if (not isinstance(result, dict) or set(result) != {"success", "data", "error"}
+    if (not isinstance(result, dict) or set(result) not in ({"success", "data", "error"}, {"success", "data", "error", "elapsed_s"})
             or not isinstance(result.get("success"), bool)):
         raise Reject(f"result {index}: not a success or failure envelope")
+    if "elapsed_s" in result and not valid_elapsed_s(result["elapsed_s"]):
+        raise Reject(f"result {index}: elapsed_s must be a finite nonnegative number")
     if result["success"] is False:
         error = failure_envelope(result, index, manifest["deliverables_total"])
         return error["deliverable"], "cannot_run"
@@ -202,6 +207,8 @@ def load_client(path):
     """The Jev client module, or the reason it cannot be loaded."""
     try:
         spec = importlib.util.spec_from_file_location("jev_client", path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"no loader for {path}")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module, None
@@ -221,18 +228,20 @@ def jev_reply_problem(result, client, seen):
     client, load_error = client
     if result["success"] is False:
         error = result.get("error")
-        code = error.get("code") if isinstance(error, dict) else None
+        if not isinstance(error, dict):
+            return None
+        code = error.get("code")
         if not isinstance(code, str) or not code.startswith("SANITY.JEV_"):
             return None
-        if load_error:
-            return load_error
+        if load_error or client is None:
+            return load_error or "Jev client is unavailable"
         return None if client.is_client_message(error.get("message")) else \
             f"Jev failure message is not the client's own text: {error.get('message')!r}"
     data = result.get("data")
     if not isinstance(data, dict):
         return None
-    if load_error:
-        return load_error
+    if load_error or client is None:
+        return load_error or "Jev client is unavailable"
     key = os.environ.get("TYPESAFE_API_KEY", "").strip()
     if not key:
         return "TYPESAFE_API_KEY is not set, so the Jev receipt cannot be verified"
@@ -244,7 +253,7 @@ def jev_reply_problem(result, client, seen):
             if not isinstance(part, dict) or part.get("part") != label:
                 return f"Jev part {label} is missing or mislabelled: a split reply returns every part in order"
             receipt = part.get("receipt")
-            if not client.verify_receipt(receipt, key):
+            if not isinstance(receipt, dict) or not client.verify_receipt(receipt, key):
                 return f"no valid Jev receipt on part {label}: the reply was not written from a jev_client.py call"
             response = part.get("response")
             answer = response.get("answers", {}).get("written") if isinstance(response, dict) else None
@@ -255,7 +264,7 @@ def jev_reply_problem(result, client, seen):
         if not receipts:
             return "no valid Jev receipt in data.jev: the part list is empty"
     else:
-        if not client.verify_receipt(jev, key):
+        if not isinstance(jev, dict) or not client.verify_receipt(jev, key):
             return "no valid Jev receipt in data.jev: the reply was not written from a jev_client.py call"
         receipts = [jev]
     for receipt in receipts:
@@ -269,7 +278,8 @@ def jev_reply_problem(result, client, seen):
     else:
         if not (isinstance(final, dict) and final.get("choice") in ("yes", "no")
                 and isinstance(final.get("reason"), str) and final["reason"].strip()
-                and final.get("parts") == [part["part"] for part in jev]):
+                and isinstance(jev, list)
+                and final.get("parts") == [part["part"] for part in jev if isinstance(part, dict)]):
             return ("Jev parts disagree and data.jev_final does not record dev-sanity's triaged result "
                     "({choice, reason, parts} citing every part)")
         choice = final["choice"]
@@ -319,6 +329,8 @@ def selected_results(args, manifest, sanity_bead, dev_bead):
     """Choose whole validated replies; selection metadata is never a reply edit."""
     llm, llm_sha256 = load_reviewer_vars(args.llm_vars, "sanity-llm", manifest)
     jev, jev_sha256 = load_reviewer_vars(args.jev_vars, "sanity-jev", manifest)
+    args.fallback_errors = [reply["error"] for reply in (*llm, *jev)
+                            if isinstance(reply, dict) and reply.get("success") is False and isinstance(reply.get("error"), dict)]
     try:
         selection = json.loads(Path(args.selection).read_text())
     except (OSError, ValueError) as exc:
@@ -345,7 +357,7 @@ def selected_results(args, manifest, sanity_bead, dev_bead):
             raise Reject(f"sanity-jev reply: {reason}")
     llm_by, jev_by = index_replies(llm, "llm"), index_replies(jev, "jev")
     selected, seen, sources = [], set(), {}
-    required = {"deliverable", "llm", "jev", "selected", "reason", "rerun", "checker_defect", "llm_sha256", "jev_sha256"}
+    required = {"deliverable", "llm", "jev", "selected", "reason", "rerun", "llm_sha256", "jev_sha256"}
     for entry in selection:
         if not isinstance(entry, dict) or set(entry) != required:
             raise Reject("selection entry has incorrect fields")
@@ -388,12 +400,6 @@ def selected_results(args, manifest, sanity_bead, dev_bead):
         if rerun is not None and status == "cannot_run" and "cannot_run" != entry["llm"] or \
                 rerun is not None and status == "cannot_run" and "cannot_run" != entry["jev"]:
             raise Reject(f"deliverable {number}: a failed rerun cannot replace a valid original reply")
-        if not isinstance(entry["checker_defect"], bool):
-            raise Reject(f"deliverable {number}: checker_defect must be boolean")
-        if entry["checker_defect"] and status != "undone":
-            raise Reject(f"deliverable {number}: checker_defect requires selected undone reply")
-        if entry["checker_defect"] and not entry["reason"]:
-            raise Reject(f"deliverable {number}: checker_defect requires a reason")
         sources[number] = source
         selected.append(reply)
     missing = [number for number in range(1, manifest["deliverables_total"] + 1) if number not in seen]
@@ -402,16 +408,16 @@ def selected_results(args, manifest, sanity_bead, dev_bead):
     return selected, selection, sources
 
 
-def effective_findings(by_number, selection):
-    """Checker defects retain their raw selected reply but create no finding."""
-    checker_defects = {
-        entry["deliverable"] for entry in selection or []
-        if entry.get("checker_defect") is True
-    }
-    return {
-        number: [] if number in checker_defects else findings
-        for number, findings in by_number.items()
-    }
+def unique_errors(items):
+    """Keep first-seen error envelopes once when selected and original replies overlap."""
+    seen = set()
+    unique = []
+    for item in items:
+        key = json.dumps(item, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return unique
 
 
 class TaskFailure(Exception):
@@ -505,7 +511,7 @@ def main(argv):
     results, selection, selection_sources, rejected = [], None, {}, []
 
     def metadata():
-        if not args.reviewer:
+        if not args.reviewer or manifest is None:
             return {}
         completed = datetime.fromtimestamp(args.completed_at, timezone.utc)
         return {"run_id": manifest["run_id"], "reviewer": args.reviewer,
@@ -513,6 +519,11 @@ def main(argv):
                 "started_at": datetime.fromtimestamp(args.started_at, timezone.utc).isoformat().replace("+00:00", "Z"),
                 "completed_at": completed.isoformat().replace("+00:00", "Z"),
                 "duration_seconds": round(args.completed_at - args.started_at),
+                "llm_elapsed_s": args.completed_at - args.started_at if args.reviewer == "sanity-llm" else None,
+                "fallbacks": unique_errors([result["error"] for result in results
+                              if isinstance(result, dict) and result.get("success") is False and isinstance(result.get("error"), dict)]
+                + getattr(args, "fallback_errors", [])),
+                "checked_bead_data": manifest.get("checked_bead_data"),
                 "reviewer_results": results,
                 "reviewer_results_sha256": canonical_sha256(results),
                 "rejected_results": rejected,
@@ -568,6 +579,8 @@ def main(argv):
                     or any(key not in result for key in ("success", "data", "error"))):
                 raise Reject(f"result {index}: not a success or failure envelope "
                              "(success must be true or false; success, data and error must all be present)")
+            if "elapsed_s" in result and not valid_elapsed_s(result["elapsed_s"]):
+                raise Reject(f"result {index}: elapsed_s must be a finite nonnegative number")
             if result["success"] is False:
                 envelope = failure_envelope(result, index, manifest["deliverables_total"])
                 unavailable(envelope["code"], envelope["message"],
@@ -593,17 +606,13 @@ def main(argv):
         print(exc.args[1], file=sys.stderr)
         return 3
 
-    report_findings = effective_findings(by_number, selection)
+    report_findings = by_number
     blocks = []
     finding_records = []
     for number in sorted(report_findings):
         findings = report_findings[number]
-        checker_defect = selection is not None and next(
-            item for item in selection if item["deliverable"] == number
-        )["checker_defect"]
         blocks.append(
-            f"D{number}: done (checker defect)" if checker_defect
-            else f"D{number}: done" if not findings
+            f"D{number}: done" if not findings
             else f"D{number}:\n" + "\n".join(fmt(f) for f in findings)
         )
         for index, finding in enumerate(findings, 1):

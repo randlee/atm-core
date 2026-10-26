@@ -1,0 +1,18 @@
+{
+  "feature": "graft-hermes",
+  "host": "rand-m5.local",
+  "platform": "macos",
+  "run_id": "20261016T194457144488Z",
+  "status": "FAIL",
+  "source_revision": "9be243b0f13797b7c642e7e2077e0c342b6423e4",
+  "procedure": "graft-hermes",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "FAIL",
+      "detail": "expected=1.6.2; doctor did not report the selected pair ready",
+      "origin": "rand-m5.local",
+      "destination": "rand-m5.local"
+    }
+  ]
+}

@@ -11,7 +11,9 @@ import unittest
 
 SCRIPT = Path(__file__).parents[1] / "fix-round-scope"
 LOADER = importlib.machinery.SourceFileLoader("fix_round_scope", str(Path(__file__).parents[1] / "fix-round-scope"))
-scope = importlib.util.module_from_spec(importlib.util.spec_from_loader("fix_round_scope", LOADER))
+SPEC = importlib.util.spec_from_loader("fix_round_scope", LOADER)
+assert SPEC is not None
+scope = importlib.util.module_from_spec(SPEC)
 LOADER.exec_module(scope)
 
 CARRIED = [

@@ -1,0 +1,114 @@
+{
+  "schema_version": "2.0.0",
+  "operation": "tune",
+  "template": {
+    "id": "anchor-tuning-tune-request",
+    "version": "0.4.1",
+    "sha256": "d8d6796121bb8155af53277053b25fe9cf99ead86ba55f51b19df8962b441ed3"
+  },
+  "correlation_id": "ANC-054",
+  "runtime": {
+    "agent": "anchor-tuning",
+    "contract_script": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/.claude/skills/plan-anchoring/scripts/anchor_tuning_contract.py",
+    "contract_sha256": "8f464aa751aa4ef3e17a04cbe5d5be6aa29e9c86f134819f29610584532aa7eb",
+    "harness": "codex",
+    "model": "sol",
+    "script": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj/.claude/skills/plan-anchoring/scripts/jev_judge.py",
+    "sha256": "575229a11ef03dcbf3f26f657639c086dc1915f584f555e78ed940c2c0df9254",
+    "version": "0.6.1",
+    "workspace": "/Users/randlee/github/atm-core-worktrees/plan/phase-bj"
+  },
+  "authority": {
+    "intent": {
+      "content": "# Intent - phase-bj: mechanical close flow\n\nWritten 2026-10-18 by fenix from Rand's rulings of 2026-10-18 (atm-core #1873 comment 1, atm-bd-orchestration #340, docs PR atm-bd-orchestration #342). One page at most. Jev questions are judged against the anchors, not this document.\n\n## What this plan is for\n\nDev work is not complete until sanity verifies it, and nothing between a dev\npush and the QA assignment should need the lead. Today the dev closes its own\ntask on push, the lead hand-assigns every sanity and QA task, and atm-bd has\nnever issued an assignment because its dispatch reads branch and worktree\nfrom beads the pour never wrote them to. This phase makes the dev, fix,\nsanity and qa closes one script, `atm-task-close.py`, that verifies the\nminimum (PR open on `pr_target`, pushed head, rebased), closes the bead,\nreports to the lead and assigns the next bead as the phase lead; the dev's\ntask stays open until sanity passes.\n\n## What success looks like\n\n- A dev or fix bead closes only through the hook; the dev's ATM task is closed by the sanity hook on PASS and the dev waits meanwhile.\n- Sanity and QA assignment never need the lead: the hook assigns, atm-bd assigns a ready bead with no task, both as the phase lead.\n- A sanity FAIL reopens the bead and sends the dev `sanity-rejected` on the same task and branch; `max_sanity_rounds` (default 5) escalates to the lead.\n- The pour writes branch, worktree, pr_target and difficulty to every bead of a sprint family and a pydantic model per bead kind validates the whole phase.\n- atm-core issue #1873 (task transition hooks, 1.6.2) is the long-term home; the skill script stands in until it ships.\n- Sanity links the layer on PASS under the stack bead's claim: the stack bead holds the whole stack as ledger and lock, first PASS wins the top and the loser gets `rebase-required` (no round counted); a sanity-stack subagent handles one next-top layer per spawn, sequentially, with a lean mode and a lock timeout that never blocks the team.\n\n## What is deliberately out of scope\n\n- Mechanical dev or fix assignment: the lead picks the dev (ANC-060).\n- Whole-stack verification in the hook: the lead owns stack hygiene (ANC-054, ANC-062).\n- The small phase-bi console fixes (self-addressed send, icons, agent rows): they close in phase-bi.\n\n## Anchors\n\nThe phase-bi anchors (ANC-001..050, REQ-BI6-AC6) are carried unchanged in\n`anchors.json` so Jev judges phase-bj items against the same console\nrulings; ANC-051..086 are this phase's; ANC-063 and ANC-074 are retired and replaced by ANC-078..083 and ANC-084..086, respectively (ANC-062 retired to ANC-065). Rendered to `anchors.md`.\n",
+      "id": "phase-bj",
+      "sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+      "version": 1
+    },
+    "anchors": {
+      "records": [
+        {
+          "check": "The hook reads StackMetadata and checks HEAD ancestry against layers[-1].branch, falling back to pr_target only for empty layers; a nonempty-stack test has a misaligned lower layer and valid top.",
+          "context": "phase-bj planning 2026-10-18: Rand's close-hook and mechanical-assignment rulings (atm-core #1873 comment 1, atm-bd-orchestration #340, PR #342)",
+          "deterministic_check": "The hook reads StackMetadata and checks HEAD ancestry against layers[-1].branch, falling back to pr_target only for empty layers; a nonempty-stack test has a misaligned lower layer and valid top.",
+          "fixtures": {
+            "fail": [
+              "The dev role uses static pr_target despite a nonempty stack ledger, or checks a lower stack layer instead of the current top."
+            ],
+            "pass": [
+              "The dev role checks an open PR for the branch, pushed head equals the PR head, and HEAD descends from the current stack top layers[-1].branch; only an empty ledger falls back to pr_target."
+            ]
+          },
+          "id": "ANC-054",
+          "kind": "directive",
+          "quote": "there should be a switch on role, then depending on role, this will verify that the pr is created, that it is stacked on the layer below (I think this can be determined locally by verifying the base is the previous top of stack).  The checks should be minimal to insure rebase occurred, maintaining the entire stack is NOT dev agents responsibility.  We can not create conditions that it is impossible for the dev agent to complete due to unnecessary python complexity.",
+          "scope": "atm-task-close.py dev/fix admission; StackMetadata read supplied by bj-2",
+          "source_ref": "",
+          "source_type": "ANC",
+          "state": "locked",
+          "statement": "For dev and fix roles, atm-task-close.py must require --role, verify that an open PR exists for the branch, that the pushed head equals the PR head, and that HEAD descends from the current stack top: the last entry of the stack bead layers, or pr_target when layers is empty; it must not run lint or tests.",
+          "summary": "lead ruling 2026-10-18: current stack top with empty-ledger fallback",
+          "version": 4
+        }
+      ],
+      "sha256": "75bad8b0b16272ca4ead7d02e190e3373b1919f196ce205ebe81d888d2d9f217"
+    }
+  },
+  "gate": "planning",
+  "current_questions": {
+    "gate": "plan",
+    "notes": "Planning-gate question set. One judgment per question; Jev answers them independently against the same state, and jev_judge.py combines them using the roles map. Edit wording here, not in the reference docs; the docs explain this file.",
+    "questions": {
+      "addressed": {
+        "criteria": {
+          "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+          "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included.",
+          "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point."
+        },
+        "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+        "type": "choice"
+      },
+      "contradicted": {
+        "criteria": {
+          "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+          "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive.",
+          "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement."
+        },
+        "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+        "type": "choice"
+      },
+      "relevant": {
+        "criteria": {
+          "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+          "unclear": "The item text is too vague to tell what part of the system it touches.",
+          "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite."
+        },
+        "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+        "type": "choice"
+      }
+    },
+    "roles": {
+      "compliance": "addressed",
+      "conflict": "contradicted",
+      "relevance": "relevant"
+    },
+    "schema": "plan-anchoring/questions/1",
+    "version": 1
+  },
+  "candidate_minimum": 3,
+  "repeat_count": 2,
+  "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+  "production_confidence_threshold": 0.6,
+  "confidence_reference_threshold": 0.8,
+  "tuning_history": {
+    "events": [],
+    "history_id": "ANC-054-plan",
+    "schema": "plan-anchor/tuning-history/2"
+  },
+  "diagnostic_plan": {
+    "read_only": true,
+    "sha256": "c7602b6de6eeb2c3b2b07f8832a1bc9bda71d69f6d0b19f3ac472ab8b1788c07",
+    "source_kind": "tracker_copy",
+    "source_ref": "docs/plans/phase-bj/beads/atm-bj-2.vars.json"
+  }
+}

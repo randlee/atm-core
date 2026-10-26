@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Build close and stack-handoff inputs from the pinned split and selected result."""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+import yaml
+
+
+def build(manifest, selected, stacked=None):
+    for key, expected in (("run_id", manifest["run_id"]), ("commit", manifest["sha"]),
+                          ("task_id", manifest["sanity_bead"]), ("checked_bead", manifest["dev_bead"])):
+        if selected.get(key) != expected:
+            raise ValueError(f"selected {key} does not match manifest")
+    if selected.get("reviewer") != "sanity-selected" or selected.get("verdict") not in ("PASS", "FAIL", "CANNOT_RUN"):
+        raise ValueError("a selected PASS, FAIL or CANNOT_RUN result is required")
+    template = Path(__file__).resolve().parents[1] / "templates/task-close-vars.j2"
+    contract = yaml.safe_load(template.read_text().split("---", 2)[1])
+    context = manifest.get("close_context")
+    if not isinstance(context, dict) or not context:
+        raise ValueError("manifest lacks assignment close_context; rerun split with --close-context")
+    values = {**contract.get("defaults", {}), **context}
+    total = manifest["deliverables_total"]
+    findings = selected.get("findings") or []
+    undone = [{"number": item["deliverable"], "reason": item["issue"]}
+              for item in findings if item.get("deliverable", 0) > 0]
+    if selected["verdict"] == "FAIL" and not undone:
+        undone = [{"number": item["number"], "reason": selected.get("lint_md") or selected.get("findings_md") or "Lint failed"}
+                  for item in manifest["assignments"]]
+    values.update(task_id=manifest["sanity_bead"], sanity_bead=manifest["sanity_bead"],
+                  sanity_task_id=manifest["sanity_bead"], checked_bead=manifest["dev_bead"],
+                  dev_task_id=manifest["dev_bead"], branch=manifest["branch"], commit=manifest["sha"],
+                  worktree_path=manifest["worktree_path"], sprint=selected["sprint"],
+                  checked_title=manifest.get("checked_bead_data", {}).get("title", context.get("checked_title", "")),
+                  generated_at=selected.get("generated_at") or selected["completed_at"],
+                  verdict=selected["verdict"], findings_count=selected.get("findings_count"),
+                  findings_md=selected.get("findings_md") or str(selected.get("error") or ""),
+                  lint_md=selected.get("lint_md", ""), undone=undone, deliverables_total=total,
+                  deliverables_complete=total - len({item["number"] for item in undone}),
+                  deliverables_md=selected.get("findings_md", ""), stacked=stacked,
+                  reviewer=selected["reviewer"], run_id=selected["run_id"], selection=selected.get("selection") or [],
+                  round=context.get("round", 1), reviewers_md="Selected independent sanity checks.",
+                  evidence=context.get("evidence", ""), outcome=context.get("outcome", "fixed"),
+                  findings_blocking=0, findings_important=0, findings_minor=0, findings_ceremony=0,
+                  notes_md=json.dumps({"selection": selected.get("selection"), "fallbacks": selected.get("fallbacks", [])}))
+    if "stage:fix" in manifest.get("checked_bead_data", {}).get("labels", []):
+        values["carry_forward"] = manifest["dev_bead"]
+    allowed = set(contract["required_variables"]) | set(contract.get("defaults", {}))
+    values = {key: value for key, value in values.items() if key in allowed}
+    missing = set(contract["required_variables_by_role"]["sanity"]) - values.keys()
+    if values.get("outcome") == "not_reproducible":
+        missing -= {"stack_bead"}
+    if missing:
+        raise ValueError("assignment close_context lacks " + ", ".join(sorted(missing)))
+    if values.get("outcome") != "not_reproducible":
+        required_dispatch = ("stack_bead",)
+        empty = [name for name in required_dispatch if not str(values.get(name) or "").strip()]
+        if empty:
+            raise ValueError("assignment close_context lacks non-empty " + ", ".join(empty))
+    return values
+
+
+def write_stack_input(path, values, manifest):
+    """Write a handoff only when this close has a PR-backed stack layer."""
+    if values.get("verdict") != "PASS" or values.get("outcome") == "not_reproducible" or not values.get("stack_bead") or not values.get("pr_number"):
+        path.unlink(missing_ok=True)
+        return False
+    context = manifest.get("close_context") or {}
+    budget = context.get("budget")
+    if budget not in ("full", "lean"):
+        raise ValueError("assignment close_context.budget must be full or lean")
+    payload = {key: values[key] for key in ("checked_bead", "branch", "commit", "stack_bead")}
+    payload.update(pr_number=int(values["pr_number"]), budget=budget,
+                   worktree_path=values["worktree_path"], lead=context.get("phase_lead", ""))
+    path.write_text(json.dumps(payload))
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--selected", type=Path, required=True)
+    parser.add_argument("--stack-result", type=Path)
+    parser.add_argument("--stack-input", type=Path)
+    args = parser.parse_args()
+    try:
+        manifest = json.loads(args.manifest.read_text())
+        selected = json.loads(args.selected.read_text())
+        stacked = json.loads(args.stack_result.read_text()) if args.stack_result else None
+        values = build(manifest, selected, stacked)
+        if args.stack_input:
+            write_stack_input(args.stack_input, values, manifest)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        parser.exit(2, f"sanity-close-vars: {error}\n")
+    print(json.dumps(values, indent=2))
+
+
+if __name__ == "__main__":
+    main()

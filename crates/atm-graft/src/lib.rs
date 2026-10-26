@@ -10,14 +10,15 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::api::{ApiRequest, DaemonApiClient};
-use atm_core::boundary::{NudgeKind, PostSendHookEvent};
+use atm_core::boundary::{CronNoticeKey, DeliveryReceipt, NudgeKind, PostSendHookEvent};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::local_http::LocalCapability;
 use atm_core::protocol::{
-    GraftReceiverRefreshRequest, GraftReceiverRegistration, GraftReceiverUnregistration,
-    OwnerGeneration, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CLI_SCHEMA_VERSION, CompatibilityPreflight, CompatibilityVerdict, GraftReceiverRefreshRequest,
+    GraftReceiverRegistration, GraftReceiverUnregistration, HttpApiVersion, OwnerGeneration,
+    ReleaseVersion, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest, WriteOutcome};
@@ -67,7 +68,7 @@ pub struct SessionSnapshot {
 pub mod prelude {
     pub use super::{
         GraftClient, GraftObservability, GraftSession, GraftSessionOptions, GraftSessionState,
-        HostNudgeInjector, NoopGraftObservability, SessionSnapshot,
+        HostCronNudge, HostNudgeInjector, NoopGraftObservability, SessionSnapshot,
     };
 }
 
@@ -84,6 +85,18 @@ pub struct HostNudge {
     pub notice_text: String,
 }
 
+/// A cron lifecycle notice delivered using its committed transition key.
+///
+/// Hosts should use `key` to deduplicate replays. The Graft receiver reports
+/// acceptance only when the host returns an explicit receipt identifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostCronNudge {
+    pub key: CronNoticeKey,
+    pub team: TeamName,
+    pub recipient: AgentName,
+    pub body: String,
+}
+
 /// Host-owned bridge for automatic between-tool-call nudge injection.
 pub trait HostNudgeInjector: Send + Sync {
     /// # Errors
@@ -91,6 +104,16 @@ pub trait HostNudgeInjector: Send + Sync {
     /// Returns [`AtmError`] when the host cannot safely inject the nudge into
     /// its between-tool-call context flow.
     fn inject_nudge(&self, nudge: &HostNudge) -> Result<(), AtmError>;
+
+    /// Inject a committed cron lifecycle notice and return a durable receipt.
+    ///
+    /// The default is intentionally unknown: legacy void callbacks cannot
+    /// prove keyed acceptance and must not be reported as delivered.
+    fn inject_cron_nudge(&self, _nudge: &HostCronNudge) -> DeliveryReceipt {
+        atm_core::graft::unknown_cron_lifecycle_receipt(
+            "host does not support keyed cron lifecycle receipts",
+        )
+    }
 }
 
 /// ATM-owned graft observability boundary supplied by the embedding host.
@@ -170,6 +193,10 @@ impl GraftSessionOptions {
 }
 
 /// Thin daemon-backed same-host client for embedded graft consumers.
+///
+/// Every operation performs the REQ-P-HTTP-COMPAT-001 compatibility preflight:
+/// matching HTTP API major and exact CLI schema are required, while release
+/// versions are diagnostic only.
 #[derive(Clone)]
 pub struct GraftClient {
     /// The one Tokio/Axum client boundary for every graft daemon operation.
@@ -253,22 +280,134 @@ impl GraftClient {
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        match self
-            .async_transport
-            .execute(ApiRequest::new(request))
-            .await?
-            .into_inner()
-        {
-            ResponseEnvelope::Error(error) => Err(error),
-            response => Ok(response),
-        }
+        Self::execute_transport_request(&self.async_transport, request).await
     }
 
     pub(crate) fn execute_request_sync(
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        atm_daemon_client::execute_api_request(self.async_transport.clone(), request)
+        Self::verify_transport_compatibility_sync(&self.async_transport)?;
+        Self::response_or_error(atm_daemon_client::execute_api_request(
+            self.async_transport.clone(),
+            request,
+        )?)
+    }
+
+    /// Verifies the documented graft-to-daemon HTTP contract before each
+    /// operation. Release versions are diagnostic only: exact CLI schema and
+    /// HTTP API major are the compatibility contract.
+    async fn execute_transport_request(
+        transport: &Arc<dyn DaemonApiClient + Send + Sync>,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        Self::verify_transport_compatibility(transport).await?;
+        Self::response_or_error(
+            transport
+                .execute(ApiRequest::new(request))
+                .await?
+                .into_inner(),
+        )
+    }
+
+    async fn verify_transport_compatibility(
+        transport: &Arc<dyn DaemonApiClient + Send + Sync>,
+    ) -> Result<(), AtmError> {
+        let response = transport
+            .execute(ApiRequest::new(RequestEnvelope::CompatibilityPreflight(
+                Self::compatibility_preflight(),
+            )))
+            .await?
+            .into_inner();
+        Self::validate_compatibility_response(response)
+    }
+
+    fn verify_transport_compatibility_sync(
+        transport: &Arc<dyn DaemonApiClient + Send + Sync>,
+    ) -> Result<(), AtmError> {
+        let transport: Arc<dyn DaemonApiClient> = transport.clone();
+        let response = atm_daemon_client::execute_api_request(
+            transport,
+            RequestEnvelope::CompatibilityPreflight(Self::compatibility_preflight()),
+        )?;
+        Self::validate_compatibility_response(response)
+    }
+
+    fn compatibility_preflight() -> CompatibilityPreflight {
+        CompatibilityPreflight {
+            client_release: ReleaseVersion::current(),
+            cli_schema_version: CLI_SCHEMA_VERSION,
+            http_api_version: HttpApiVersion::current(),
+        }
+    }
+
+    fn validate_compatibility_response(response: ResponseEnvelope) -> Result<(), AtmError> {
+        match response {
+            ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+                daemon_release,
+                daemon_schema_version,
+                daemon_http_api_version,
+            }) => {
+                let preflight = Self::compatibility_preflight();
+                if daemon_schema_version == preflight.cli_schema_version
+                    && daemon_http_api_version.major() == preflight.http_api_version.major()
+                {
+                    Ok(())
+                } else {
+                    Err(Self::compatibility_mismatch(
+                        preflight.client_release,
+                        daemon_release,
+                        preflight.cli_schema_version,
+                        daemon_schema_version,
+                        preflight.http_api_version,
+                        daemon_http_api_version,
+                        AtmErrorCode::ClientDaemonVersionIncompatible,
+                    ))
+                }
+            }
+            ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Incompatible {
+                client_release,
+                daemon_release,
+                client_schema_version,
+                daemon_schema_version,
+                client_http_api_version,
+                daemon_http_api_version,
+                code,
+            }) => Err(Self::compatibility_mismatch(
+                client_release,
+                daemon_release,
+                client_schema_version,
+                daemon_schema_version,
+                client_http_api_version,
+                daemon_http_api_version,
+                code,
+            )),
+            other => Err(unexpected_response("graft compatibility preflight", other)),
+        }
+    }
+
+    fn compatibility_mismatch(
+        client_release: ReleaseVersion,
+        daemon_release: ReleaseVersion,
+        client_schema_version: u16,
+        daemon_schema_version: u16,
+        client_http_api_version: HttpApiVersion,
+        daemon_http_api_version: HttpApiVersion,
+        code: AtmErrorCode,
+    ) -> AtmError {
+        AtmError::new(
+            code,
+            format!(
+                "graft compatibility mismatch: client release {client_release}, daemon release {daemon_release}; schema {client_schema_version}/{daemon_schema_version}; HTTP API {client_http_api_version}/{daemon_http_api_version}"
+            ),
+        )
+    }
+
+    fn response_or_error(response: ResponseEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        match response {
+            ResponseEnvelope::Error(error) => Err(error),
+            response => Ok(response),
+        }
     }
 
     pub(crate) fn register_receiver_sync(
@@ -345,10 +484,8 @@ impl GraftClient {
     pub async fn write_message(&self, request: SendRequest) -> Result<WriteOutcome, AtmError> {
         let transport =
             atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
-        match transport
-            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+        match Self::execute_transport_request(&transport, RequestEnvelope::Write(Box::new(request)))
             .await?
-            .into_inner()
         {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
                 Ok(WriteOutcome::Sent(outcome))
@@ -429,10 +566,8 @@ impl AtmGraftClient for GraftClient {
     async fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
         let transport =
             atm_http_runtime::selected_write_transport(&request, &self.async_transport)?;
-        match transport
-            .execute(ApiRequest::new(RequestEnvelope::Write(Box::new(request))))
+        match Self::execute_transport_request(&transport, RequestEnvelope::Write(Box::new(request)))
             .await?
-            .into_inner()
         {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
             other => Err(unexpected_response("send", other)),
@@ -713,6 +848,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use atm_core::protocol::{
+        CLI_SCHEMA_VERSION, CompatibilityVerdict, HttpApiVersion, ReleaseVersion,
         RequestEnvelope as CoreRequestEnvelope, ResponseEnvelope as CoreResponseEnvelope,
     };
     use atm_core::read::{BucketCounts, ReadOutcome};
@@ -760,11 +896,42 @@ mod tests {
         )
     }
 
+    fn compatible_verdict(http_api_version: HttpApiVersion) -> CoreResponseEnvelope {
+        CoreResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+            daemon_release: ReleaseVersion::current(),
+            daemon_schema_version: CLI_SCHEMA_VERSION,
+            daemon_http_api_version: http_api_version,
+        })
+    }
+
+    fn read_query(paths: &TestPaths) -> ReadQuery {
+        ReadQuery::new(
+            paths.home_dir.clone(),
+            paths.workspace_root.clone(),
+            AgentName::from_validated(TEST_LEAD),
+            None,
+            TeamName::from_validated(TEST_TEAM),
+            ReadSelection::Unread,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query")
+    }
+
     #[tokio::test]
     async fn client_routes_send_and_read_over_transport() {
         let paths = test_paths();
         let transport = Arc::new(FakeClientTransport::new(Box::new(
             |request| match request {
+                CoreRequestEnvelope::CompatibilityPreflight(_) => {
+                    Ok(compatible_verdict(HttpApiVersion::current()))
+                }
                 CoreRequestEnvelope::Write(request) if request.to.is_some() => Ok(
                     CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
                         action: CommandAction::Send,
@@ -841,24 +1008,108 @@ mod tests {
         .expect("send request");
         client.send_message(send_request).await.expect("send");
 
-        let read_query = ReadQuery::new(
-            paths.home_dir.clone(),
-            paths.workspace_root.clone(),
-            AgentName::from_validated(TEST_LEAD),
-            None,
-            TeamName::from_validated(TEST_TEAM),
-            ReadSelection::Unread,
-            false,
-            false,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("read query");
-        client.read_message(read_query).await.expect("read");
+        client.read_message(read_query(&paths)).await.expect("read");
+    }
+
+    #[tokio::test]
+    async fn client_accepts_same_http_major_with_minor_skew_before_reading() {
+        let paths = test_paths();
+        let transport = Arc::new(FakeClientTransport::new(Box::new(
+            |request| match request {
+                CoreRequestEnvelope::CompatibilityPreflight(preflight) => {
+                    assert_eq!(preflight.cli_schema_version, CLI_SCHEMA_VERSION);
+                    assert_eq!(
+                        preflight.http_api_version.major(),
+                        HttpApiVersion::current().major()
+                    );
+                    Ok(compatible_verdict(
+                        HttpApiVersion::parse(format!(
+                            "{}.99.0",
+                            preflight.http_api_version.major()
+                        ))
+                        .expect("minor-skew version"),
+                    ))
+                }
+                CoreRequestEnvelope::Receive(_) => {
+                    Ok(CoreResponseEnvelope::Receive(Box::new(ReadOutcome {
+                        action: CommandAction::Read,
+                        team: TeamName::from_validated(TEST_TEAM),
+                        agent: AgentName::from_validated(TEST_LEAD),
+                        selection_mode: ReadSelection::Unread,
+                        mutation_applied: false,
+                        count: 0,
+                        message: None,
+                        selected_message_id: None,
+                        match_count: 0,
+                        additional_match_count: 0,
+                        bucket_counts: BucketCounts {
+                            unread: 0,
+                            pending_ack: 0,
+                            history: 0,
+                        },
+                    })))
+                }
+                other => panic!("operation bypassed compatibility preflight: {other:?}"),
+            },
+        )));
+
+        GraftClient::from_fake_transport_for_test(transport)
+            .read_message(read_query(&paths))
+            .await
+            .expect("same-major minor skew must be accepted");
+    }
+
+    #[tokio::test]
+    async fn client_rejects_http_major_mismatch_before_reading() {
+        let paths = test_paths();
+        let transport = Arc::new(FakeClientTransport::new(Box::new(
+            |request| match request {
+                CoreRequestEnvelope::CompatibilityPreflight(preflight) => {
+                    let daemon_http_api_version = HttpApiVersion::parse(format!(
+                        "{}.0.0",
+                        preflight.http_api_version.major() + 1
+                    ))
+                    .expect("major-mismatch version");
+                    Ok(CoreResponseEnvelope::CompatibilityVerdict(
+                        CompatibilityVerdict::Compatible {
+                            daemon_release: ReleaseVersion::current(),
+                            daemon_schema_version: CLI_SCHEMA_VERSION,
+                            daemon_http_api_version,
+                        },
+                    ))
+                }
+                other => panic!("major mismatch must block operation: {other:?}"),
+            },
+        )));
+
+        let error = GraftClient::from_fake_transport_for_test(transport)
+            .read_message(read_query(&paths))
+            .await
+            .expect_err("major mismatch must be rejected");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
+    }
+
+    #[tokio::test]
+    async fn client_rejects_cli_schema_mismatch_before_reading() {
+        let paths = test_paths();
+        let transport = Arc::new(FakeClientTransport::new(Box::new(
+            |request| match request {
+                CoreRequestEnvelope::CompatibilityPreflight(_) => Ok(
+                    CoreResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
+                        daemon_release: ReleaseVersion::current(),
+                        daemon_schema_version: CLI_SCHEMA_VERSION + 1,
+                        daemon_http_api_version: HttpApiVersion::current(),
+                    }),
+                ),
+                other => panic!("schema mismatch must block operation: {other:?}"),
+            },
+        )));
+
+        let error = GraftClient::from_fake_transport_for_test(transport)
+            .read_message(read_query(&paths))
+            .await
+            .expect_err("schema mismatch must be rejected");
+        assert_eq!(error.code(), AtmErrorCode::ClientDaemonVersionIncompatible);
     }
 
     #[test]
@@ -867,6 +1118,9 @@ mod tests {
         let requests = Arc::new(Mutex::new(Vec::new()));
         let captured = Arc::clone(&requests);
         let transport = Arc::new(FakeClientTransport::new(Box::new(move |request| {
+            if matches!(request, CoreRequestEnvelope::CompatibilityPreflight(_)) {
+                return Ok(compatible_verdict(HttpApiVersion::current()));
+            }
             let response = match &request {
                 CoreRequestEnvelope::GraftReceiverRegister(_) => {
                     CoreResponseEnvelope::GraftReceiverRegister
@@ -913,6 +1167,9 @@ mod tests {
             let paths = test_paths();
             let transport = Arc::new(FakeClientTransport::new(Box::new(
                 move |request| match request {
+                    CoreRequestEnvelope::CompatibilityPreflight(_) => {
+                        Ok(compatible_verdict(HttpApiVersion::current()))
+                    }
                     CoreRequestEnvelope::Receive(query) => {
                         assert!(
                             !query.seen_state_update(),

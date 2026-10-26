@@ -1,0 +1,1109 @@
+{
+ "aborted_by": null,
+ "canceled": false,
+ "data": {
+  "acceptance_table": [
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.98
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.98
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "fixture_pass",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "approved_fixture_pass",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.94
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.92
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "fixture_fail",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "approved_fixture_fail",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "yes",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "paraphrase",
+    "expected": {
+     "compliance": "yes",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "satisfied",
+    "probe": "compliant_paraphrase",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "satisfied",
+     "satisfied"
+    ],
+    "verdict_threshold_0": [
+     "satisfied",
+     "satisfied"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.95
+      ],
+      "relevance": [
+       "yes",
+       0.89
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.92
+      ],
+      "relevance": [
+       "yes",
+       0.91
+      ]
+     }
+    },
+    "case_id": "silent",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "not_addressed",
+    "probe": "silence",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_addressed",
+     "not_addressed"
+    ],
+    "verdict_threshold_0": [
+     "not_addressed",
+     "not_addressed"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.92
+      ],
+      "relevance": [
+       "yes",
+       0.92
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       0.92
+      ],
+      "relevance": [
+       "yes",
+       0.92
+      ]
+     }
+    },
+    "case_id": "topical",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "yes"
+    },
+    "expected_verdict": "not_addressed",
+    "probe": "topical_only",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_addressed",
+     "not_addressed"
+    ],
+    "verdict_threshold_0": [
+     "not_addressed",
+     "not_addressed"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.98
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.98
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "conflict_stop",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.94
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "yes",
+       0.94
+      ],
+      "relevance": [
+       "yes",
+       1.0
+      ]
+     }
+    },
+    "case_id": "conflict_prompt",
+    "expected": {
+     "compliance": "no",
+     "conflict": "yes",
+     "relevance": "yes"
+    },
+    "expected_verdict": "contradicted",
+    "probe": "conflict",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "contradicted",
+     "contradicted"
+    ],
+    "verdict_threshold_0": [
+     "contradicted",
+     "contradicted"
+    ]
+   },
+   {
+    "answers": {
+     "r1": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       1.0
+      ]
+     },
+     "r2": {
+      "compliance": [
+       "no",
+       1.0
+      ],
+      "conflict": [
+       "no",
+       1.0
+      ],
+      "relevance": [
+       "no",
+       1.0
+      ]
+     }
+    },
+    "case_id": "irrelevant",
+    "expected": {
+     "compliance": "no",
+     "conflict": "no",
+     "relevance": "no"
+    },
+    "expected_verdict": "not_applicable",
+    "probe": "irrelevant",
+    "scored_roles": [
+     "relevance",
+     "compliance",
+     "conflict"
+    ],
+    "stable": true,
+    "verdict_production_0_6": [
+     "not_applicable",
+     "not_applicable"
+    ],
+    "verdict_threshold_0": [
+     "not_applicable",
+     "not_applicable"
+    ]
+   }
+  ],
+  "accepted": true,
+  "authority_citations": [
+   "ANC-059 v2 locked statement, scope and quote (anchors.json at 6d0c4455b)",
+   "ANC-059 v2 approved pass/fail fixtures",
+   "INTENT phase-bj v1 sha256 e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382 (context only)"
+  ],
+  "authority_recommendations": [],
+  "candidate_rankings": [
+   {
+    "accepted": true,
+    "candidate_id": "B_all",
+    "complexity": 2970,
+    "confidence": {
+     "cells_at_or_above_threshold": 48,
+     "mean": 0.98,
+     "median": 1.0,
+     "minimum": 0.89,
+     "p10": 0.92,
+     "threshold": 0.8,
+     "total_cells": 48
+    },
+    "production_threshold_0_6_verdict_mismatches": [],
+    "question_sha256": "59cc6f22c27aea466423a298efef77cdfa8f10b97d10e767f21d99cf18e79966",
+    "score": {
+     "exact_role_cells": 48,
+     "exact_semantic_verdicts": 16,
+     "regressions": 0,
+     "stable_cases": 8,
+     "total_cases": 8,
+     "total_role_cells": 48,
+     "total_semantic_verdicts": 16
+    },
+    "selection_reason": "selected: first in the lexicographic ranking (accepted, exact cells, exact verdicts, stability, regressions, confidence, complexity, id)",
+    "semantic_mismatches": []
+   },
+   {
+    "accepted": true,
+    "candidate_id": "D_fail_roles_B",
+    "complexity": 2892,
+    "confidence": {
+     "cells_at_or_above_threshold": 48,
+     "mean": 0.98,
+     "median": 1.0,
+     "minimum": 0.88,
+     "p10": 0.92,
+     "threshold": 0.8,
+     "total_cells": 48
+    },
+    "production_threshold_0_6_verdict_mismatches": [],
+    "question_sha256": "2be04fd00c62aa7abee001b6e3148d7a8211a7f408f0e78b7b1a0ca42078d94d",
+    "score": {
+     "exact_role_cells": 48,
+     "exact_semantic_verdicts": 16,
+     "regressions": 0,
+     "stable_cases": 8,
+     "total_cases": 8,
+     "total_role_cells": 48,
+     "total_semantic_verdicts": 16
+    },
+    "selection_reason": "rejected: ranked below the selected candidate",
+    "semantic_mismatches": []
+   },
+   {
+    "accepted": true,
+    "candidate_id": "A_all",
+    "complexity": 2957,
+    "confidence": {
+     "cells_at_or_above_threshold": 46,
+     "mean": 0.96,
+     "median": 1.0,
+     "minimum": 0.56,
+     "p10": 0.86,
+     "threshold": 0.8,
+     "total_cells": 48
+    },
+    "production_threshold_0_6_verdict_mismatches": [],
+    "question_sha256": "c9b011b982ee349ce7759023ad3a2a681f79035fd677cc996b090581d5e54d2a",
+    "score": {
+     "exact_role_cells": 48,
+     "exact_semantic_verdicts": 16,
+     "regressions": 0,
+     "stable_cases": 8,
+     "total_cases": 8,
+     "total_role_cells": 48,
+     "total_semantic_verdicts": 16
+    },
+    "selection_reason": "rejected: ranked below the selected candidate",
+    "semantic_mismatches": []
+   },
+   {
+    "accepted": true,
+    "candidate_id": "C_fail_roles_A",
+    "complexity": 2748,
+    "confidence": {
+     "cells_at_or_above_threshold": 46,
+     "mean": 0.97,
+     "median": 1.0,
+     "minimum": 0.49,
+     "p10": 0.92,
+     "threshold": 0.8,
+     "total_cells": 48
+    },
+    "production_threshold_0_6_verdict_mismatches": [],
+    "question_sha256": "50039fa83317e286ecf6051c50fc2be780506d420dd8a0cc515a7872aae60541",
+    "score": {
+     "exact_role_cells": 48,
+     "exact_semantic_verdicts": 16,
+     "regressions": 0,
+     "stable_cases": 8,
+     "total_cases": 8,
+     "total_role_cells": 48,
+     "total_semantic_verdicts": 16
+    },
+    "selection_reason": "rejected: ranked below the selected candidate",
+    "semantic_mismatches": []
+   },
+   {
+    "accepted": false,
+    "candidate_id": "default",
+    "complexity": 2554,
+    "confidence": {
+     "cells_at_or_above_threshold": 37,
+     "mean": 0.88,
+     "median": 0.98,
+     "minimum": 0.2,
+     "p10": 0.53,
+     "threshold": 0.8,
+     "total_cells": 48
+    },
+    "production_threshold_0_6_verdict_mismatches": [
+     "topical-r1:contradicted",
+     "topical-r2:contradicted"
+    ],
+    "question_sha256": "8e9e29b043185ff7a76912e1d28726222bcd3fc867dcabb78a9bef523029ec05",
+    "score": {
+     "exact_role_cells": 44,
+     "exact_semantic_verdicts": 14,
+     "regressions": 0,
+     "stable_cases": 8,
+     "total_cases": 8,
+     "total_role_cells": 48,
+     "total_semantic_verdicts": 16
+    },
+    "selection_reason": "rejected: not semantically exact and stable",
+    "semantic_mismatches": [
+     [
+      "topical",
+      1,
+      "conflict",
+      "yes",
+      "no",
+      0.8
+     ],
+     [
+      "topical",
+      1,
+      "VERDICT",
+      "contradicted",
+      "not_addressed",
+      null
+     ],
+     [
+      "topical",
+      2,
+      "conflict",
+      "yes",
+      "no",
+      0.76
+     ],
+     [
+      "topical",
+      2,
+      "VERDICT",
+      "contradicted",
+      "not_addressed",
+      null
+     ],
+     [
+      "conflict_prompt",
+      1,
+      "compliance",
+      "yes",
+      "no",
+      0.25
+     ],
+     [
+      "conflict_prompt",
+      2,
+      "compliance",
+      "yes",
+      "no",
+      0.2
+     ]
+    ]
+   }
+  ],
+  "confidence_diagnostics": {
+   "cells_at_or_above_threshold": 48,
+   "mean": 0.98,
+   "median": 1.0,
+   "minimum": 0.89,
+   "p10": 0.92,
+   "threshold": 0.8,
+   "total_cells": 48
+  },
+  "confidence_reference_threshold": 0.8,
+  "evidence": {
+   "authoritative_sources_sha256": {
+    "docs/plans/phase-bj/anchors.json": "29cba9e93578617a95706f04fafb2c133ff1665b369f034b9a5fcc6754afbfdc",
+    "docs/plans/phase-bj/anchors.md": "95056af0a544ae410f2042744012c29bf4cefa33ab24aaa3c4a2586e0badc63c",
+    "docs/plans/phase-bj/intent.md": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382"
+   },
+   "baseline_candidate": "default",
+   "evidence_dir": "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b",
+   "files_sha256": {
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/candidates/A_all.json": "bb1b150be985707485b97d77080e9c29320da3533999a81bc4086a50ecbb91bf",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/candidates/B_all.json": "a98581ee00387f09e84fb7476db80ccbc325af1d6c584f2b31341ffa920a8519",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/candidates/C_fail_roles_A.json": "ce24d9eef163ebc501c18b3b24be6ae9e41d9996979eb1f2f3549687d39f2267",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/candidates/D_fail_roles_B.json": "7e50260d488d7aa5667527ff0e78a4923a4f2ca5fbde9bb28b04463ad9d6ce31",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/candidates/default.json": "4efa5c07be9bd1c47710c54afd225d0b9123f7be287981e28b5603d16ba48eca",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/oracle.json": "4c2f4fdca545afeeff60cd294146f9e58a1b6bcc8b9149f31fb4fe0dcc4ac85a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/oracle.sha256": "0b1b26745ca2fab737ba58349437f9e9952668f4dbff21ddd5c959e7ad22d5d5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/request-vars.json": "d3e8fde17234f08dbb383a0f3c2106dd438a5aafc8fe8533acc656072318a912",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/request.json": "c01f43f85990a62becd8716ef61b3ca7a2bb8bbfbad0b361d3b6c8146ac146b7",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/request.md": "c3bb57b8f95f38b4ca95bac3e56743f9f958e8480086d6d180f2ba1098d51aa1",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-conflict_prompt-r1.request.json": "d499fc79dc92b5a14a5294774ad47440bd653aba2e0a36f52fb14309319acdbb",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-conflict_prompt-r1.response.json": "c899b7316b858b8881335a29bb4582f09633bc7d4ac1e31bdb0d4f7cc4a48dae",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-conflict_prompt-r2.request.json": "d499fc79dc92b5a14a5294774ad47440bd653aba2e0a36f52fb14309319acdbb",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-conflict_prompt-r2.response.json": "de4753b3a89ce548d86ac701f6726fcdff667f64e73862467538e7df8eb4ff44",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-conflict_stop-r1.request.json": "f306c6fd6bec52c6937bdc9df173318b407281783588a4640d355070a3f2c923",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-conflict_stop-r1.response.json": "21abbf6bed5e7b40433857d98be547f37f671f380da6e2a88e52d18779b6e8ca",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-conflict_stop-r2.request.json": "f306c6fd6bec52c6937bdc9df173318b407281783588a4640d355070a3f2c923",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-conflict_stop-r2.response.json": "21abbf6bed5e7b40433857d98be547f37f671f380da6e2a88e52d18779b6e8ca",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-fixture_fail-r1.request.json": "c4ae94201143a0f5306c90594e8e4d3faa0a210df5da6148d91b2ecaada3b059",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-fixture_fail-r1.response.json": "cc1ff550485010578ae6ed67fd35295309a8ec24a3e449f2d46a939fb25a685e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-fixture_fail-r2.request.json": "c4ae94201143a0f5306c90594e8e4d3faa0a210df5da6148d91b2ecaada3b059",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-fixture_fail-r2.response.json": "cc1ff550485010578ae6ed67fd35295309a8ec24a3e449f2d46a939fb25a685e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-fixture_pass-r1.request.json": "a4b9664228b57843cb384a3a8723e2dfd221c1534a70a927d8ea0095798b4dae",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-fixture_pass-r1.response.json": "a74b22bddfaede8ca84339e5a6804bae0ecc2f3b97b755dfb68191aee58c56db",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-fixture_pass-r2.request.json": "a4b9664228b57843cb384a3a8723e2dfd221c1534a70a927d8ea0095798b4dae",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-fixture_pass-r2.response.json": "3f4ff0417f9a9ebaf4fa1a692b84acac38f0be324fa444586eeb5211bb382ea1",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-irrelevant-r1.request.json": "a7140b343f94099e51a12458a98274d1ab6515dacc3f28f756cc81730baed490",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-irrelevant-r1.response.json": "383b0ef7368a594400cad64f75b3b9aad97cabbad2e58915486ecba9ff2081e0",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-irrelevant-r2.request.json": "a7140b343f94099e51a12458a98274d1ab6515dacc3f28f756cc81730baed490",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-irrelevant-r2.response.json": "383b0ef7368a594400cad64f75b3b9aad97cabbad2e58915486ecba9ff2081e0",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-paraphrase-r1.request.json": "74a7bb45cbfced22f13a4ae8aac9f77c36ee0cf215273bda4d2341bb43767670",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-paraphrase-r1.response.json": "381b308ccb3c3f1b1385bb3f007c60aab63e4daa44e33eba6ccc5d26bf1a26e8",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-paraphrase-r2.request.json": "74a7bb45cbfced22f13a4ae8aac9f77c36ee0cf215273bda4d2341bb43767670",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-paraphrase-r2.response.json": "381b308ccb3c3f1b1385bb3f007c60aab63e4daa44e33eba6ccc5d26bf1a26e8",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-silent-r1.request.json": "b1b5606703a3006c5ee8b4d92c488aa421c04b256aea96ecd8c8ae1d8a53f248",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-silent-r1.response.json": "b273b30fe3996ff49c457895d743969dd3d89604b17b7daf27d047130e817752",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-silent-r2.request.json": "b1b5606703a3006c5ee8b4d92c488aa421c04b256aea96ecd8c8ae1d8a53f248",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-silent-r2.response.json": "00c321f6d58d4606baead140ab264d1bafefa45d2ceca8141c2910eda7d97bf5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-topical-r1.request.json": "cdedf81302d6b9b89b41dbe35ba994d921654f53b8089c3ddc0f937417b30131",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-topical-r1.response.json": "2e0a979947731002be0f77b6aba472928146314e7064a6718183960b01496fec",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-topical-r2.request.json": "cdedf81302d6b9b89b41dbe35ba994d921654f53b8089c3ddc0f937417b30131",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-A_all-topical-r2.response.json": "60894713a355db516d1ad7437a6a160e94e792c71c49bb29385996a8e378bfac",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-conflict_prompt-r1.request.json": "53c2d3551905c30edea22b56dd3eed38959f361237c41368e4483681a55751e4",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-conflict_prompt-r1.response.json": "052b541b9ae1266803cfb3c53247b749905d0e9d625c64f1342cc7b329897eaa",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-conflict_prompt-r2.request.json": "53c2d3551905c30edea22b56dd3eed38959f361237c41368e4483681a55751e4",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-conflict_prompt-r2.response.json": "052b541b9ae1266803cfb3c53247b749905d0e9d625c64f1342cc7b329897eaa",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-conflict_stop-r1.request.json": "6d6933b028fcc7897757a25a096f3607eccf770c6abd64f6b682d9bb4cfc235b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-conflict_stop-r1.response.json": "282eb8ee41990da5caaa7d83d352d63aedb618ec9b9f11d2a4dda1df6629bffe",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-conflict_stop-r2.request.json": "6d6933b028fcc7897757a25a096f3607eccf770c6abd64f6b682d9bb4cfc235b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-conflict_stop-r2.response.json": "282eb8ee41990da5caaa7d83d352d63aedb618ec9b9f11d2a4dda1df6629bffe",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-fixture_fail-r1.request.json": "e436bbbe3b986ce8cdf3313f7f2a456a5ca88a21f8a43e7980390af4381eec7a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-fixture_fail-r1.response.json": "eba96213d5a1eaaf63de9ae765b658dcf4868fc8a2f4a857739ca1ed458ae452",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-fixture_fail-r2.request.json": "e436bbbe3b986ce8cdf3313f7f2a456a5ca88a21f8a43e7980390af4381eec7a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-fixture_fail-r2.response.json": "a3cfc4b6493971e95437dd9c84f25edf0852793465882101370597770b467d7e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-fixture_pass-r1.request.json": "a2caf5ca86a890c9bb124f0f9e7a966efd59a70d50a64f05b887840c751aad01",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-fixture_pass-r1.response.json": "7052fc2cc30e9965c29f42a540ec753c32dbe0aa36b5534eaa1405228ce7719c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-fixture_pass-r2.request.json": "a2caf5ca86a890c9bb124f0f9e7a966efd59a70d50a64f05b887840c751aad01",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-fixture_pass-r2.response.json": "7052fc2cc30e9965c29f42a540ec753c32dbe0aa36b5534eaa1405228ce7719c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-irrelevant-r1.request.json": "b8985027d9a55eba3caa2a0f21d7ed954ab4fa2ae39636a032816733482670bf",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-irrelevant-r1.response.json": "e5389200aaa42f394887f3040dd4256b7cac744fdf1311e87ac5f821c1fa2955",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-irrelevant-r2.request.json": "b8985027d9a55eba3caa2a0f21d7ed954ab4fa2ae39636a032816733482670bf",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-irrelevant-r2.response.json": "e5389200aaa42f394887f3040dd4256b7cac744fdf1311e87ac5f821c1fa2955",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-paraphrase-r1.request.json": "88fa732340127aeb7193ae8fae250f5faff502da1202b2a37f83846e44302d66",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-paraphrase-r1.response.json": "d6ff6494412dcba0dbc3a84b884235390d5ee1dd337544b0a28b643223e274cb",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-paraphrase-r2.request.json": "88fa732340127aeb7193ae8fae250f5faff502da1202b2a37f83846e44302d66",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-paraphrase-r2.response.json": "d6ff6494412dcba0dbc3a84b884235390d5ee1dd337544b0a28b643223e274cb",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-silent-r1.request.json": "6472da422503aa39e5009062c736ca0f6f9eb8af340bad6af16ed844736380a8",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-silent-r1.response.json": "77f19ae4875890b6ab9f52480e0f20063380aca3b96536d6a96ec3899b1d0a93",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-silent-r2.request.json": "6472da422503aa39e5009062c736ca0f6f9eb8af340bad6af16ed844736380a8",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-silent-r2.response.json": "3112c998ac6cc67a4f8a56d1b9f22d03c8c78a46890ca36329b732aab4108f52",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-topical-r1.request.json": "9938bc06137d06ee292b627ebd55992436dc944c2dc35416c803850244f81cdc",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-topical-r1.response.json": "296c668f01115fad3a22ab40225fd0e6ac13bca9915ea52590440c8cd0a39ba1",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-topical-r2.request.json": "9938bc06137d06ee292b627ebd55992436dc944c2dc35416c803850244f81cdc",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-B_all-topical-r2.response.json": "296c668f01115fad3a22ab40225fd0e6ac13bca9915ea52590440c8cd0a39ba1",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-conflict_prompt-r1.request.json": "dfd96169c11c03c2486b5127c1722fe05bad5b0a5374db9ec1df60e1bc9ee04b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-conflict_prompt-r1.response.json": "f3944d656460849d91904a47230863c803055cff86bfaa9cbbb672d5f19abd40",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-conflict_prompt-r2.request.json": "dfd96169c11c03c2486b5127c1722fe05bad5b0a5374db9ec1df60e1bc9ee04b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-conflict_prompt-r2.response.json": "de127c5fbba10d843b19e5d7cb3ba5e4cb2daaf731e2c3d2a25e9fa0cd36f362",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-conflict_stop-r1.request.json": "7b96d2658660a15c871dcd4effbe149683c4edb7a8f71194ebb68aa42b583575",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-conflict_stop-r1.response.json": "69fc33a36bbe8552f0d4d0afeb250286f56d50410f0e9646e5111106e2f705b4",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-conflict_stop-r2.request.json": "7b96d2658660a15c871dcd4effbe149683c4edb7a8f71194ebb68aa42b583575",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-conflict_stop-r2.response.json": "b7fcdefc383411d203c5a7370c52e69be590a44ca63425be13d8a65df5eae427",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-fixture_fail-r1.request.json": "0fed6ece99a8cc9555c6acb4d7abbcdf8e629f4538edbd56ee816cca72f8f274",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-fixture_fail-r1.response.json": "039b502b74f30f6a0304a6b729140f4ff19da28b315d2b9eb31ff285e4ba4270",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-fixture_fail-r2.request.json": "0fed6ece99a8cc9555c6acb4d7abbcdf8e629f4538edbd56ee816cca72f8f274",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-fixture_fail-r2.response.json": "cd8bb996eb167710a667363af3772292cad9eccd5e31dc9edf44b95406307364",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-fixture_pass-r1.request.json": "04ccfe7aafe7d8f001485a8a7cbc7da1f672ad4f3aeb4c220170db448d3938d2",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-fixture_pass-r1.response.json": "d6f0ed2ec9e7f0fd1d778e51b0fd6a7d4e2775ec60fa74fb9fedfcbb9ce793d7",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-fixture_pass-r2.request.json": "04ccfe7aafe7d8f001485a8a7cbc7da1f672ad4f3aeb4c220170db448d3938d2",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-fixture_pass-r2.response.json": "d6f0ed2ec9e7f0fd1d778e51b0fd6a7d4e2775ec60fa74fb9fedfcbb9ce793d7",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-irrelevant-r1.request.json": "2d8bf4220b11fde7f4c5c100b92ad6d559a069f8072cd8a24a182dfafcf5cd4d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-irrelevant-r1.response.json": "44d2d7d8ce1f7e088aee1d44a794f6b81944c39856d161cabdad2ce3410ad4d5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-irrelevant-r2.request.json": "2d8bf4220b11fde7f4c5c100b92ad6d559a069f8072cd8a24a182dfafcf5cd4d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-irrelevant-r2.response.json": "44d2d7d8ce1f7e088aee1d44a794f6b81944c39856d161cabdad2ce3410ad4d5",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-paraphrase-r1.request.json": "3b538ed0a1bf2397f52cd67ee5b5ac771af5df5320e2cfec34956ae84aae9aa9",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-paraphrase-r1.response.json": "0e4f32d65fce833bd8d0a11139660d6c7402eac93f2a2fb4e52f6a4b388fca4e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-paraphrase-r2.request.json": "3b538ed0a1bf2397f52cd67ee5b5ac771af5df5320e2cfec34956ae84aae9aa9",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-paraphrase-r2.response.json": "0e4f32d65fce833bd8d0a11139660d6c7402eac93f2a2fb4e52f6a4b388fca4e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-silent-r1.request.json": "45f20bf7c8cdc52c7824e06bd2d682981e46746fbade4bed410ec533d038bb60",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-silent-r1.response.json": "2a7e64ae9e879239121ba741d0b567d947d38c3db8e353caff7fe8102b5499b8",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-silent-r2.request.json": "45f20bf7c8cdc52c7824e06bd2d682981e46746fbade4bed410ec533d038bb60",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-silent-r2.response.json": "7ffc6ac373d25a620fc6f3d6216ad952dca7255b995b9e7fe07ba45edb1ed509",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-topical-r1.request.json": "60f588091e8448b09ac87349b1c27f780a551530036dbbafcfc28f9f16df026c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-topical-r1.response.json": "c7dfffe4a1c1a27660fa2777ded35b875659fd9d941c61ed34e69d5b4347d7d6",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-topical-r2.request.json": "60f588091e8448b09ac87349b1c27f780a551530036dbbafcfc28f9f16df026c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-C_fail_roles_A-topical-r2.response.json": "1f1797f7f353151eefb4268c623c73c40f1eccb6e3642a68f8bca51210813f05",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-conflict_prompt-r1.request.json": "87da7b5b271d7150ecb0c208813cacb72e34c6cf4291afc0b926a6a7d9eb18ab",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-conflict_prompt-r1.response.json": "a406f7fd7c1e2faef4304f0679b93238cd2d3ba4eddb0760e2eb674d3df67129",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-conflict_prompt-r2.request.json": "87da7b5b271d7150ecb0c208813cacb72e34c6cf4291afc0b926a6a7d9eb18ab",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-conflict_prompt-r2.response.json": "9d805b71d1808d91c0500694e2a1af912886f667bab164537f818af0066a9546",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-conflict_stop-r1.request.json": "8c3e4ae2b472b2e0aa227bd7f03c82f5c973ef4b726448897d0589550495ae43",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-conflict_stop-r1.response.json": "e042c2fa279ca66851875613a916f4dfbf1a4b1e9427bce9e53f0ef576a5539e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-conflict_stop-r2.request.json": "8c3e4ae2b472b2e0aa227bd7f03c82f5c973ef4b726448897d0589550495ae43",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-conflict_stop-r2.response.json": "e042c2fa279ca66851875613a916f4dfbf1a4b1e9427bce9e53f0ef576a5539e",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-fixture_fail-r1.request.json": "b2bf5e5c245c82d0a74d818e599fbd7d0559492b3434f8e7c94da7cbc10ff094",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-fixture_fail-r1.response.json": "ef75b6ab01a696363dc717c930cc126dc317534f5b73ce81a778e87abb444fd8",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-fixture_fail-r2.request.json": "b2bf5e5c245c82d0a74d818e599fbd7d0559492b3434f8e7c94da7cbc10ff094",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-fixture_fail-r2.response.json": "dfc6081d46e970b5473019ec83d4c508bd56b9ef083816550c14c56bf074ca92",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-fixture_pass-r1.request.json": "bdcd6a4562f4a193c6265e9694ef9c0393f707d9433561f10f51507a7f51e207",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-fixture_pass-r1.response.json": "7a787008840c4a7977ffc8254831159b348b7adcc2fbdb92801f505bd520f6c2",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-fixture_pass-r2.request.json": "bdcd6a4562f4a193c6265e9694ef9c0393f707d9433561f10f51507a7f51e207",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-fixture_pass-r2.response.json": "0c5381fac21c78ee8d822b0422bf310a843a0bfd99cdcc78a138b5bf9532460b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-irrelevant-r1.request.json": "a31ec74693747a93cd9b3cf242b6af93b6bafa16f5a42b42ba680bae799212ba",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-irrelevant-r1.response.json": "4bc951dad9f7352084cf632d40a0f23ad03d2151b43e472f64702c6e4d813d1b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-irrelevant-r2.request.json": "a31ec74693747a93cd9b3cf242b6af93b6bafa16f5a42b42ba680bae799212ba",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-irrelevant-r2.response.json": "4bc951dad9f7352084cf632d40a0f23ad03d2151b43e472f64702c6e4d813d1b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-paraphrase-r1.request.json": "c2f2b36d982cedca2bd43a6a02d5a1dd4c51ce31f72c7bbbad21a209d62ad9c3",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-paraphrase-r1.response.json": "7f84c9ae75ae131d46acd5ffe633b5376376b3026507219c21bf9256ae0c6425",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-paraphrase-r2.request.json": "c2f2b36d982cedca2bd43a6a02d5a1dd4c51ce31f72c7bbbad21a209d62ad9c3",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-paraphrase-r2.response.json": "7f84c9ae75ae131d46acd5ffe633b5376376b3026507219c21bf9256ae0c6425",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-silent-r1.request.json": "ba46bfbfcb29372a46840294d281c35ba61aceb5ed84df517c84aac2e9331999",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-silent-r1.response.json": "4d3dbb24e9ae22b5c2b0ce3c15151faf9d4e06fe99a5a3fa9c43086dc7065d55",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-silent-r2.request.json": "ba46bfbfcb29372a46840294d281c35ba61aceb5ed84df517c84aac2e9331999",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-silent-r2.response.json": "e4b5ce583708d3e9110f5877aceb3ba2cb7ca37511aff2f5bb0ce79b1f5e6b06",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-topical-r1.request.json": "4468a42f15f483872098de5ddcf9039f3eaaff8b6088c8d0af18902efe8c1acd",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-topical-r1.response.json": "a9d53a7a1f85ef082ddcb19453f5e500a273a90dee92908314cfc799dd09c529",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-topical-r2.request.json": "4468a42f15f483872098de5ddcf9039f3eaaff8b6088c8d0af18902efe8c1acd",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-D_fail_roles_B-topical-r2.response.json": "18f3157571acaee8140c9730894b974d0a24e32ba5c75b27e65c9cbdbedcc58a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-conflict_prompt-r1.request.json": "3327cdbc598059e1d17cefbf93d17425d124b1ab8136c7880368db8a7a7bee3a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-conflict_prompt-r1.response.json": "19f300177d23f9dc8cb4a943f6a65a1a32cac0521e607bb8c6dc317def9c6e67",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-conflict_prompt-r2.request.json": "3327cdbc598059e1d17cefbf93d17425d124b1ab8136c7880368db8a7a7bee3a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-conflict_prompt-r2.response.json": "88c733e509fedd0b0e433dc26dc1d9752ca2ada8d6150d3d6cdbb89e181e8035",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-conflict_stop-r1.request.json": "07287f16aef88708c59d8cb2ffabc5e8f76e0c7206e0693e6615f1e325190a9b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-conflict_stop-r1.response.json": "3f8edef599e8b12fc1cdac0527bc348c76f56ad886c8ac9dcbe7287ca77a1d5b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-conflict_stop-r2.request.json": "07287f16aef88708c59d8cb2ffabc5e8f76e0c7206e0693e6615f1e325190a9b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-conflict_stop-r2.response.json": "1bd10ae370094e245ec3e80cc62086c1b096f690b6a39760ae4557ab1b9d3401",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-fixture_fail-r1.request.json": "f14a8deb0ad5b9f3773dd5b9212d1916169fcf14ea234b00596330c97f60e5c4",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-fixture_fail-r1.response.json": "53b699974cf2c1d9a6a3dedf3c1f491a6e482a3ea176a6420f301974ddaf582c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-fixture_fail-r2.request.json": "f14a8deb0ad5b9f3773dd5b9212d1916169fcf14ea234b00596330c97f60e5c4",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-fixture_fail-r2.response.json": "878243e0b7846e9cf3ceaead09dbfd2e2a4bac69341ee7f2eb37795306cbd17b",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-fixture_pass-r1.request.json": "05db8b71a3b4911f96adea4e66dc4b01f3f751bbbefe9661ccc29e51ed18f616",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-fixture_pass-r1.response.json": "a8746070f3e63bb4215e754e9ba7d040c2fbac4ee51acfca3ee1cb9a0d111313",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-fixture_pass-r2.request.json": "05db8b71a3b4911f96adea4e66dc4b01f3f751bbbefe9661ccc29e51ed18f616",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-fixture_pass-r2.response.json": "a8746070f3e63bb4215e754e9ba7d040c2fbac4ee51acfca3ee1cb9a0d111313",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-irrelevant-r1.request.json": "f53324d4e81efdf8c4f17baedf717114f28c006935f8e5c166d05295b7ce0f72",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-irrelevant-r1.response.json": "8bcc6d81f2bd180b846c7b2e270b44625b71cb5a5922631329c0cd4b1a058998",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-irrelevant-r2.request.json": "f53324d4e81efdf8c4f17baedf717114f28c006935f8e5c166d05295b7ce0f72",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-irrelevant-r2.response.json": "8bcc6d81f2bd180b846c7b2e270b44625b71cb5a5922631329c0cd4b1a058998",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-paraphrase-r1.request.json": "ba25daf71da654c67e5fc5b8a24054167e99edcd3559573f0db72a939cd3e52f",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-paraphrase-r1.response.json": "9cf06f5b8d142753e919fca897df2c05e692c14513f21cf2e4d97953f4516f41",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-paraphrase-r2.request.json": "ba25daf71da654c67e5fc5b8a24054167e99edcd3559573f0db72a939cd3e52f",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-paraphrase-r2.response.json": "9cf06f5b8d142753e919fca897df2c05e692c14513f21cf2e4d97953f4516f41",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-silent-r1.request.json": "e9bb02c101b4da5ec8f04af8e88728fa9d703d020f975b4becbe627479b9cd2d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-silent-r1.response.json": "36414b9ee0afc5b0360feea99e3d575b09c3a9c4cc0da075429b214378c8efa6",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-silent-r2.request.json": "e9bb02c101b4da5ec8f04af8e88728fa9d703d020f975b4becbe627479b9cd2d",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-silent-r2.response.json": "b9dd5311c61ae5aff4a91f77f155ed00de2cca1d301c008e234f97dde246ad2f",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-topical-r1.request.json": "8c6cef7c4833831d508f2330600337d912f11ba3a3122588da32d537982bb062",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-topical-r1.response.json": "f28ebe308a350f61af454ffb4f106f714217b4a357212da03cf75c06e8c51711",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-topical-r2.request.json": "8c6cef7c4833831d508f2330600337d912f11ba3a3122588da32d537982bb062",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/runs/ANC-059-default-topical-r2.response.json": "fa38937f08e71b47a4c9ce1bce344cbb7cb466e5f51919932a63d64ac159447c",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/score-A_all.json": "b8c7f37daa2218ee96b9bd01247bf7ec9605c330525695a0f2c7e93e36f5a40a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/score-B_all.json": "396c279a1f41379e49891a59317ce1e743de87f39ad9480cf558c8a9dd27b59a",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/score-C_fail_roles_A.json": "71d4c0f1452233071a1cd061e16593bb10e76b9667e52cc20b762669d7708317",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/score-D_fail_roles_B.json": "dc51a8d96813e4c0ef0f9c8f47b1d70d68372c343b688c1a2f2d4d779743d9c2",
+    "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/score-default.json": "c581a154b8f8f3a0ab555e4d2ddf16db1a6d1840a7a1938d5c9607a0a025206c"
+   },
+   "max_parallel_calls": 3,
+   "model_requested": "jev-latest",
+   "models_answered": [
+    "jev-1.13.0"
+   ],
+   "oracle_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/oracle.json",
+   "oracle_frozen_before_first_jev_call": true,
+   "raw_response_hash_note": "raw_response_sha256 is the canonical-JSON digest of the validated Jev response object; canonical_request_sha256 is the digest of the exact request bytes sent",
+   "request_file": "docs/plans/phase-bj/anchor-runs/tuning/ANC-059/tune-6d0c4455b/request.json",
+   "request_sha256": "3f093d080abcd825a726b6c7b0a169edc5dd38115b2952b9876dddfa7f837ba9",
+   "unselected_candidates_excluded_from_production": true
+  },
+  "explanation": "Tuned. Baseline 'default' was not semantically exact on the frozen oracle (8 cases x 2 repeats): mismatches [[\"topical\", 1, \"conflict\", \"yes\", \"no\", 0.8], [\"topical\", 1, \"VERDICT\", \"contradicted\", \"not_addressed\", null], [\"topical\", 2, \"conflict\", \"yes\", \"no\", 0.76], [\"topical\", 2, \"VERDICT\", \"contradicted\", \"not_addressed\", null], [\"conflict_prompt\", 1, \"compliance\", \"yes\", \"no\", 0.25], [\"conflict_prompt\", 2, \"compliance\", \"yes\", \"no\", 0.2]]. Selected 'B_all': 48/48 cells, 16/16 verdicts, 8/8 stable, 0 regressions; confidence diagnostics {\"cells_at_or_above_threshold\": 48, \"mean\": 0.98, \"median\": 1.0, \"minimum\": 0.89, \"p10\": 0.92, \"threshold\": 0.8, \"total_cells\": 48}; production 0.6 verdict mismatches [].",
+  "gate": "planning",
+  "operation": "tune",
+  "oracle_sha256": "950d018d23426939f19ee500cac3d0e79eca9a394bd25801f977343e129821a1",
+  "planner_action": "Review the frozen oracle and acceptance table, then write the sealed question set verbatim to the ANC-059 plan-questions record (question_overrides.plan). Production review keeps the 0.6 threshold.",
+  "production_confidence_threshold": 0.6,
+  "production_semantics_unchanged": true,
+  "question_action": null,
+  "sealed_question_set": {
+   "digest": "59cc6f22c27aea466423a298efef77cdfa8f10b97d10e767f21d99cf18e79966",
+   "questions": {
+    "addressed": {
+     "criteria": {
+      "no": "The item is silent about the directive, names the subject only, or plans a different approach.",
+      "unclear": "The item refers to the directive's content in words too vague to tell whether it is planned.",
+      "yes": "The item states it. The item says the hook continues with local git checks when GitHub fails or is rate limited, recording it, and that --skip-checks is described only in --help with the lead-permission note."
+     },
+     "instructions": "Read `item.text` for this directive from `anchor.statement`: atm-task-close.py proceeds with local git checks when GitHub is unreachable or rate limited and records that in its result, and offers --skip-checks, described only in its --help as needing the phase lead's permission and named in no template or prompt. Answer yes only when the item itself states that content. Answer no when the item is silent, mentions the subject without that content, or plans a different approach (for example it stops on a GitHub failure or describes --skip-checks in a template or prompt). Do not judge conflict.",
+     "type": "choice"
+    },
+    "contradicted": {
+     "criteria": {
+      "no": "The item plans none of the numbered cases; it may be silent about the directive.",
+      "unclear": "The item may describe one of the numbered cases but its wording does not settle it.",
+      "yes": "The item plans one of the numbered cases."
+     },
+     "instructions": "`anchor.statement` says atm-task-close.py proceeds with local git checks when GitHub is unreachable or rate limited and records that in its result, and offers --skip-checks, described only in its --help as needing the phase lead's permission and named in no template or prompt. Does `item.text` plan any of these: (1) exiting with an error, blocking the close, or waiting because GitHub is unreachable or rate limited; (2) naming or explaining --skip-checks in a template, agent prompt or other instruction text the dev reads? Silence is never a conflict. Also not a conflict: silence about GitHub failures or the flag; leaving GitHub failure handling to a later sprint; ordinary PR and stack checks when GitHub works. Judge conflict only.",
+     "type": "choice"
+    },
+    "relevant": {
+     "criteria": {
+      "no": "No when the item works on something else, such as console display, logging or release packaging, and does not touch how atm-task-close.py behaves when GitHub is unreachable or rate limited, its PR and stack checks, and the --skip-checks flag and where it is described.",
+      "unclear": "The item text is too vague to tell whether it touches the anchor's subject.",
+      "yes": "Yes when the item plans or changes the hook's GitHub failure handling, its PR or stack checks, or the --skip-checks flag or its documentation."
+     },
+     "instructions": "Does `item.text` touch how atm-task-close.py behaves when GitHub is unreachable or rate limited, its PR and stack checks, and the --skip-checks flag and where it is described? Answer about subject matter only; whether the item follows `anchor.statement` is judged elsewhere.",
+     "type": "choice"
+    }
+   }
+  },
+  "sealed_question_set_digest_after": "59cc6f22c27aea466423a298efef77cdfa8f10b97d10e767f21d99cf18e79966",
+  "sealed_question_set_digest_before": null,
+  "semantic_score": {
+   "exact_role_cells": 48,
+   "exact_semantic_verdicts": 16,
+   "regressions": 0,
+   "stable_cases": 8,
+   "total_cases": 8,
+   "total_role_cells": 48,
+   "total_semantic_verdicts": 16
+  },
+  "tournament_protocol_version": "plan-anchor/question-tournament/2.0.0",
+  "tuning_history_after": {
+   "events": [
+    {
+     "authority": {
+      "anchor_id": "ANC-059",
+      "anchor_record_sha256": "8e570e97706d60cd069bdef332dbcfcdfb3871602f1fc0f74455c9bc2d477670",
+      "anchor_version": 2,
+      "intent_id": "phase-bj",
+      "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+      "intent_version": 1
+     },
+     "candidate": {
+      "candidate_id": "B_all",
+      "question_sha256": "59cc6f22c27aea466423a298efef77cdfa8f10b97d10e767f21d99cf18e79966"
+     },
+     "decision": {
+      "question_set_sha256": "59cc6f22c27aea466423a298efef77cdfa8f10b97d10e767f21d99cf18e79966",
+      "reason_code": "TOURNAMENT.SEMANTIC_EXACT",
+      "status": "sealed"
+     },
+     "event": "question_set_sealed",
+     "event_index": 1,
+     "evidence": {
+      "canonical_request_sha256": [
+       "a2caf5ca86a890c9bb124f0f9e7a966efd59a70d50a64f05b887840c751aad01",
+       "a2caf5ca86a890c9bb124f0f9e7a966efd59a70d50a64f05b887840c751aad01",
+       "e436bbbe3b986ce8cdf3313f7f2a456a5ca88a21f8a43e7980390af4381eec7a",
+       "e436bbbe3b986ce8cdf3313f7f2a456a5ca88a21f8a43e7980390af4381eec7a",
+       "88fa732340127aeb7193ae8fae250f5faff502da1202b2a37f83846e44302d66",
+       "88fa732340127aeb7193ae8fae250f5faff502da1202b2a37f83846e44302d66",
+       "6472da422503aa39e5009062c736ca0f6f9eb8af340bad6af16ed844736380a8",
+       "6472da422503aa39e5009062c736ca0f6f9eb8af340bad6af16ed844736380a8",
+       "9938bc06137d06ee292b627ebd55992436dc944c2dc35416c803850244f81cdc",
+       "9938bc06137d06ee292b627ebd55992436dc944c2dc35416c803850244f81cdc",
+       "6d6933b028fcc7897757a25a096f3607eccf770c6abd64f6b682d9bb4cfc235b",
+       "6d6933b028fcc7897757a25a096f3607eccf770c6abd64f6b682d9bb4cfc235b",
+       "53c2d3551905c30edea22b56dd3eed38959f361237c41368e4483681a55751e4",
+       "53c2d3551905c30edea22b56dd3eed38959f361237c41368e4483681a55751e4",
+       "b8985027d9a55eba3caa2a0f21d7ed954ab4fa2ae39636a032816733482670bf",
+       "b8985027d9a55eba3caa2a0f21d7ed954ab4fa2ae39636a032816733482670bf"
+      ],
+      "raw_response_sha256": [
+       "4d8fa8bccc3bb352ba1f545a8c17cf700f55884d7624adf74188865196698de9",
+       "4d8fa8bccc3bb352ba1f545a8c17cf700f55884d7624adf74188865196698de9",
+       "b5d121a92d7a18efb47e80ceb1ee9fe3334ee31fe9adc7fd8ce59a80673632ee",
+       "7191d822b87acbb80e9c072a1d3c22f06f2fbccdf90db631d1f7b39278f21211",
+       "701f24006e8d14f93348024cf8dcfd03fbfb02c03a43a54b2c98b1651b8eccf3",
+       "701f24006e8d14f93348024cf8dcfd03fbfb02c03a43a54b2c98b1651b8eccf3",
+       "ad19336391c324778706c285736855a8a75d3f3d695777f6afd63f7f3a32d074",
+       "4caf219ad304009e43344f95c57192112b04d4b79f8293df5299fa450954dbe2",
+       "0661f9ba45434205106f5de307654dd4c101d6fa3273c5c6303c6312f46e2de3",
+       "0661f9ba45434205106f5de307654dd4c101d6fa3273c5c6303c6312f46e2de3",
+       "606ebc8453d6aee99f95dc7b5693253655230e0c72b42513cdd5d68492ba246e",
+       "606ebc8453d6aee99f95dc7b5693253655230e0c72b42513cdd5d68492ba246e",
+       "e97c20537ac4eab2511b50ddb9cceeb89472ef7547877460b9f49109121f9f4c",
+       "e97c20537ac4eab2511b50ddb9cceeb89472ef7547877460b9f49109121f9f4c",
+       "14155994a068877d3a55ad15f78f6093a28c982d07919c8cbd88001f4cdb1fac",
+       "14155994a068877d3a55ad15f78f6093a28c982d07919c8cbd88001f4cdb1fac"
+      ],
+      "run_ids": [
+       "ANC-059-B_all-fixture_pass-r1",
+       "ANC-059-B_all-fixture_pass-r2",
+       "ANC-059-B_all-fixture_fail-r1",
+       "ANC-059-B_all-fixture_fail-r2",
+       "ANC-059-B_all-paraphrase-r1",
+       "ANC-059-B_all-paraphrase-r2",
+       "ANC-059-B_all-silent-r1",
+       "ANC-059-B_all-silent-r2",
+       "ANC-059-B_all-topical-r1",
+       "ANC-059-B_all-topical-r2",
+       "ANC-059-B_all-conflict_stop-r1",
+       "ANC-059-B_all-conflict_stop-r2",
+       "ANC-059-B_all-conflict_prompt-r1",
+       "ANC-059-B_all-conflict_prompt-r2",
+       "ANC-059-B_all-irrelevant-r1",
+       "ANC-059-B_all-irrelevant-r2"
+      ]
+     },
+     "oracle": {
+      "case_count": 8,
+      "case_ids": [
+       "fixture_pass",
+       "fixture_fail",
+       "paraphrase",
+       "silent",
+       "topical",
+       "conflict_stop",
+       "conflict_prompt",
+       "irrelevant"
+      ],
+      "repeat_count": 2,
+      "sha256": "950d018d23426939f19ee500cac3d0e79eca9a394bd25801f977343e129821a1"
+     },
+     "previous_event_sha256": null,
+     "protocol_version": "plan-anchor/question-tournament/2.0.0",
+     "score": {
+      "confidence": {
+       "cells_at_or_above_threshold": 48,
+       "mean": 0.98,
+       "median": 1.0,
+       "minimum": 0.89,
+       "p10": 0.92,
+       "threshold": 0.8,
+       "total_cells": 48
+      },
+      "exact_role_cells": 48,
+      "exact_semantic_verdicts": 16,
+      "regressions": 0,
+      "stable_cases": 8,
+      "total_cases": 8,
+      "total_role_cells": 48,
+      "total_semantic_verdicts": 16
+     },
+     "supersedes": null
+    }
+   ],
+   "history_id": "ANC-059-plan",
+   "schema": "plan-anchor/tuning-history/2"
+  },
+  "tuning_history_after_sha256": "6959edf7d47f8b81ef9339d93bda98128cad80e49f7670b1ae71f26f65ce0548",
+  "tuning_history_before_sha256": "2dae37e27d9f59e630ac0e2aece8dd7a9e8235844b067ed772f4c0d283dd5a72"
+ },
+ "error": null,
+ "metadata": {
+  "authoritative_sources_unchanged": true,
+  "correlation_id": "ANC-059-6d0c4455b",
+  "duration_ms": 3199,
+  "jev_run_ids": [
+   "ANC-059-A_all-fixture_pass-r1",
+   "ANC-059-A_all-fixture_pass-r2",
+   "ANC-059-A_all-fixture_fail-r1",
+   "ANC-059-A_all-fixture_fail-r2",
+   "ANC-059-A_all-paraphrase-r1",
+   "ANC-059-A_all-paraphrase-r2",
+   "ANC-059-A_all-silent-r1",
+   "ANC-059-A_all-silent-r2",
+   "ANC-059-A_all-topical-r1",
+   "ANC-059-A_all-topical-r2",
+   "ANC-059-A_all-conflict_stop-r1",
+   "ANC-059-A_all-conflict_stop-r2",
+   "ANC-059-A_all-conflict_prompt-r1",
+   "ANC-059-A_all-conflict_prompt-r2",
+   "ANC-059-A_all-irrelevant-r1",
+   "ANC-059-A_all-irrelevant-r2",
+   "ANC-059-B_all-fixture_pass-r1",
+   "ANC-059-B_all-fixture_pass-r2",
+   "ANC-059-B_all-fixture_fail-r1",
+   "ANC-059-B_all-fixture_fail-r2",
+   "ANC-059-B_all-paraphrase-r1",
+   "ANC-059-B_all-paraphrase-r2",
+   "ANC-059-B_all-silent-r1",
+   "ANC-059-B_all-silent-r2",
+   "ANC-059-B_all-topical-r1",
+   "ANC-059-B_all-topical-r2",
+   "ANC-059-B_all-conflict_stop-r1",
+   "ANC-059-B_all-conflict_stop-r2",
+   "ANC-059-B_all-conflict_prompt-r1",
+   "ANC-059-B_all-conflict_prompt-r2",
+   "ANC-059-B_all-irrelevant-r1",
+   "ANC-059-B_all-irrelevant-r2",
+   "ANC-059-C_fail_roles_A-fixture_pass-r1",
+   "ANC-059-C_fail_roles_A-fixture_pass-r2",
+   "ANC-059-C_fail_roles_A-fixture_fail-r1",
+   "ANC-059-C_fail_roles_A-fixture_fail-r2",
+   "ANC-059-C_fail_roles_A-paraphrase-r1",
+   "ANC-059-C_fail_roles_A-paraphrase-r2",
+   "ANC-059-C_fail_roles_A-silent-r1",
+   "ANC-059-C_fail_roles_A-silent-r2",
+   "ANC-059-C_fail_roles_A-topical-r1",
+   "ANC-059-C_fail_roles_A-topical-r2",
+   "ANC-059-C_fail_roles_A-conflict_stop-r1",
+   "ANC-059-C_fail_roles_A-conflict_stop-r2",
+   "ANC-059-C_fail_roles_A-conflict_prompt-r1",
+   "ANC-059-C_fail_roles_A-conflict_prompt-r2",
+   "ANC-059-C_fail_roles_A-irrelevant-r1",
+   "ANC-059-C_fail_roles_A-irrelevant-r2",
+   "ANC-059-D_fail_roles_B-fixture_pass-r1",
+   "ANC-059-D_fail_roles_B-fixture_pass-r2",
+   "ANC-059-D_fail_roles_B-fixture_fail-r1",
+   "ANC-059-D_fail_roles_B-fixture_fail-r2",
+   "ANC-059-D_fail_roles_B-paraphrase-r1",
+   "ANC-059-D_fail_roles_B-paraphrase-r2",
+   "ANC-059-D_fail_roles_B-silent-r1",
+   "ANC-059-D_fail_roles_B-silent-r2",
+   "ANC-059-D_fail_roles_B-topical-r1",
+   "ANC-059-D_fail_roles_B-topical-r2",
+   "ANC-059-D_fail_roles_B-conflict_stop-r1",
+   "ANC-059-D_fail_roles_B-conflict_stop-r2",
+   "ANC-059-D_fail_roles_B-conflict_prompt-r1",
+   "ANC-059-D_fail_roles_B-conflict_prompt-r2",
+   "ANC-059-D_fail_roles_B-irrelevant-r1",
+   "ANC-059-D_fail_roles_B-irrelevant-r2",
+   "ANC-059-default-fixture_pass-r1",
+   "ANC-059-default-fixture_pass-r2",
+   "ANC-059-default-fixture_fail-r1",
+   "ANC-059-default-fixture_fail-r2",
+   "ANC-059-default-paraphrase-r1",
+   "ANC-059-default-paraphrase-r2",
+   "ANC-059-default-silent-r1",
+   "ANC-059-default-silent-r2",
+   "ANC-059-default-topical-r1",
+   "ANC-059-default-topical-r2",
+   "ANC-059-default-conflict_stop-r1",
+   "ANC-059-default-conflict_stop-r2",
+   "ANC-059-default-conflict_prompt-r1",
+   "ANC-059-default-conflict_prompt-r2",
+   "ANC-059-default-irrelevant-r1",
+   "ANC-059-default-irrelevant-r2"
+  ],
+  "planner_observation_trust": null,
+  "retry_count": 0,
+  "tool_calls": 80
+ },
+ "schema_version": "1.0.0",
+ "success": true
+}

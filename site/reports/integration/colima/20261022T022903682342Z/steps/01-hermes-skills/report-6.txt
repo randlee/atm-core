@@ -1,0 +1,11 @@
+ATM TEST REPORT
+skill: atm-nudge-roundtrip
+fixture: hermes-testbed
+agent: tester@testbed  tools: cli
+atm: client 1.6.5 daemon 1.6.5
+result: PASS   (3/3 steps)
+steps:
+  0 PASS Start line — 01M5GQ9MZNKS860RFMSFQ506DN
+  1 PASS Send (role tester) — message_id 01M5GQ9N012FNERXYX2SF58346 to hermes, requires_ack true; exit 0
+  2 PASS Ack arrives — hermes reply 01M5GQA5TN851C310SWBZTM8X9, text "roundtrip 1792636408", read by id count 1, mutation_applied true; ~20s after send
+elapsed: 25s

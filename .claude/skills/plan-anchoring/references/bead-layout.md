@@ -1,6 +1,6 @@
 ---
 name: bead-layout
-version: 0.4.0
+version: 0.6.1
 description: The anchor bead tree in beads (bd), the commands to create it, labels, how question overrides live in the child beads, how agents read beads, and how reports are posted back.
 ---
 
@@ -14,7 +14,7 @@ ANC-012 anchor bead            (type decision, labels: anchor, anchor:ANC-012)
 └── dev-questions bead         (type decision, labels: anchor, anchor-questions, anchor:ANC-012, gate:dev)
 ```
 
-REQ and ADR anchors get the same tree under their own ID. Bead IDs carry the repository prefix set at `bd init` (`proj-a3f8`, children `proj-a3f8.1`); `bd-42` in these documents is illustrative.
+REQ and ADR anchors get the same tree under their own ID. Bead IDs carry the repository prefix chosen when the tracker workspace was created (`proj-a3f8`, children `proj-a3f8.1`); `bd-42` in these documents is illustrative.
 
 ## Creating the tree
 

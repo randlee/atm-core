@@ -1,0 +1,55 @@
+boundary_id = "BOUNDARY-CronRunPermit"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "CronRunPermit"
+
+[public]
+trait = "CronRunPermitIssuer"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = ["atm_cron::tick::SchedulePermitIssuer"]
+
+[ownership]
+io_owns = []
+io_forbidden = ["sqlite", "process_spawn", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-cron", "atm-http-runtime"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-storage-rusqlite", "atm-core -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["child_environment"]
+
+[contracts]
+request_types = ["CronRunPermitIssuer"]
+response_types = ["CronRunPermit"]
+error_types = []
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["serde", "unrestricted_constructor"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CRON-RUN-PERMIT-ISSUER"]
+review_gates = ["sealed_trait", "opaque_capability", "deterministic_test_doubles"]
+
+[status]
+state = "concrete_landed"
+notes = ["The permit is opaque, non-serializable, and scoped to one schedule generation. Only the private scheduler issuer in atm-cron may implement the ADR-001 issuer seam."]
+
+[extensions.atm.io_forbidden_source_modules]
+sqlite = ["atm_core::boundary::cron_run_permit"]
+process_spawn = ["atm_core::boundary::cron_run_permit"]
+socket_io = ["atm_core::boundary::cron_run_permit"]
+
+[extensions.atm]
+concrete_landed = ["atm_cron::tick::SchedulePermitIssuer"]
+
+[extensions.atm.issuer]
+allowed_impl_paths = ["crates/atm-cron/src/tick.rs"]

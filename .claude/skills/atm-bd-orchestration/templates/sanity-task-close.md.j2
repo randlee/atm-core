@@ -1,0 +1,26 @@
+---
+name: sanity-task-close
+version: 1.0.0
+format: markdown
+required_variables:
+  - task_id
+defaults:
+  checked_bead: ""
+  verdict: ""
+  commit: ""
+  run_id: ""
+  findings: []
+  findings_md: ""
+  lint_md: ""
+metadata:
+  type: dev-sanity-complete
+  tags: [stage:dev-sanity, orchestration:beads]
+---
+# Sanity {{ verdict }}
+Task: {{ task_id }}
+Checked bead: {{ checked_bead }} at {{ commit }}
+Run: {{ run_id }}
+
+{{ findings_md }}
+
+{{ lint_md }}

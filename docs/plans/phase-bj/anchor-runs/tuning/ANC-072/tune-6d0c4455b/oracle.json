@@ -1,0 +1,162 @@
+{
+ "anchor_id": "ANC-072",
+ "anchor_kind": "directive",
+ "anchor_record_sha256": "6bc47d8cd84f8a54b5a75b27c9063cbd22470e0966ba49cae255d13592c94605",
+ "anchor_scope": "templates/sanity-fail.xml.j2 and the sanity role's FAIL branch; retirement of sanity-create-findings",
+ "anchor_statement": "A sanity FAIL must be delivered only as the sanity-fail.xml.j2 message to the dev on the open task, listing exactly the deliverables that were NOT complete with the reviewer's reason and referencing the sprint; no finding bead, child bead or lead action may be created for it.",
+ "anchor_version": 2,
+ "authority_head": "6d0c4455b",
+ "cases": [
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "fixture_pass",
+   "item_id": "ANC-072-probe-fixture_pass",
+   "probe": "approved_fixture_pass",
+   "rationale": "Approved pass fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The dev receives sanity-fail: sprint bj-2, deliverables 2 and 5 NOT complete with reasons; no beads are created.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "fixture_fail",
+   "item_id": "ANC-072-probe-fixture_fail",
+   "probe": "approved_fixture_fail",
+   "rationale": "Approved fail fixture.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "The hook files a finding bead per undone deliverable under the checked bead, or the lead is asked to dispatch a fix.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "yes",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "paraphrase",
+   "item_id": "ANC-072-probe-paraphrase",
+   "probe": "compliant_paraphrase",
+   "rationale": "Paraphrase.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "A sanity FAIL produces one sanity-fail.xml.j2 message to the dev on its open task that names the sprint and each incomplete deliverable with the reviewer's reason; no bead is created and the lead does nothing.",
+   "verdict": "satisfied"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "yes"
+   },
+   "id": "silent",
+   "item_id": "ANC-072-probe-silent",
+   "probe": "silence",
+   "rationale": "In-scope template, silent about delivery and content.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "templates/sanity-fail.xml.j2 declares its required_variables in its front matter.",
+   "verdict": "not_addressed"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_lead",
+   "item_id": "ANC-072-probe-conflict_lead",
+   "probe": "conflict",
+   "rationale": "No lead action may be created for a FAIL.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "On a sanity FAIL the hook also messages the lead asking for a fix to be dispatched.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_child",
+   "item_id": "ANC-072-probe-conflict_child",
+   "probe": "conflict",
+   "rationale": "No child bead may be created.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "On a sanity FAIL the hook creates a child bug bead under the sprint for each failed deliverable.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "yes",
+    "relevance": "yes"
+   },
+   "id": "conflict_channel",
+   "item_id": "ANC-072-probe-conflict_channel",
+   "probe": "conflict",
+   "rationale": "It must be delivered only as the sanity-fail.xml.j2 message.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Sanity FAIL details are posted as a GitHub PR comment instead of an ATM message.",
+   "verdict": "contradicted"
+  },
+  {
+   "expected": {
+    "compliance": "no",
+    "conflict": "no",
+    "relevance": "no"
+   },
+   "id": "irrelevant",
+   "item_id": "ANC-072-probe-irrelevant",
+   "probe": "irrelevant",
+   "rationale": "Unrelated.",
+   "scored_roles": [
+    "relevance",
+    "compliance",
+    "conflict"
+   ],
+   "text": "Every time atm-bd prints for a person is rendered in 24-hour local time.",
+   "verdict": "not_applicable"
+  }
+ ],
+ "frozen_at": "2026-10-19T00:58:50+00:00",
+ "frozen_before_first_jev_call": true,
+ "intent_id": "phase-bj",
+ "intent_sha256": "e5d9e1e48df29bf874f8310256ea851ce17795770523139fbe56b4ea255c9382",
+ "intent_version": 1,
+ "schema": "phase-bj/anchor-tuning-oracle/1",
+ "verdict_rule": "jev_judge.decide(roles, threshold=0.0, kind=anchor_kind)"
+}

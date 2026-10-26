@@ -155,6 +155,7 @@ fn is_type_method_self_loop(
     let source_edges: Vec<_> = non_delegating_self_loop_edges(source_edges, node_map, owner_graph)
         .into_iter()
         .filter(|edge| !is_enum_variant_expression(edge))
+        .filter(|edge| !is_non_call_self_reference(edge))
         .collect();
     let is_type_method_self_loop = !source_edges.is_empty()
         && source_edges.iter().all(|edge| {
@@ -196,6 +197,8 @@ fn classify_trait_impl_self_loop(
         .iter()
         .copied()
         .filter(|edge| !is_enum_variant_expression(edge))
+        .filter(|edge| !is_non_call_self_reference(edge))
+        .filter(|edge| !is_conventional_clone_result_type(edge, source_edges, node_map))
         .filter(|edge| !is_trait_impl_delegating_call(edge, node_map, owner_graph))
         .collect();
     let is_trait_impl_self_loop = !source_edges.is_empty()
@@ -223,7 +226,13 @@ fn is_trait_impl_delegating_call(
     let Some(callee) = &edge.call_callee else {
         return false;
     };
-    if edge.reference_kind != ReferenceKind::Expr || edge.source_owner_id != edge.target_owner_id {
+    if edge.reference_kind != ReferenceKind::Expr
+        || !owner_ids_resolve_to_same_type(
+            &edge.source_owner_id,
+            &edge.target_owner_id,
+            &owner_graph.owner_aliases,
+        )
+    {
         return false;
     }
     let Some(source_method) = node_map
@@ -234,15 +243,24 @@ fn is_trait_impl_delegating_call(
     };
     let same_name_inherent_forwarder = callee.kind == CallCalleeKind::Associated
         && source_method == callee.ident
-        && has_inherent_method(edge, callee, node_map);
+        && has_inherent_method(edge, callee, node_map, &owner_graph.owner_aliases);
     if source_method == callee.ident && !same_name_inherent_forwarder {
         return false;
     }
     let is_delegating_shape = match callee.kind {
         CallCalleeKind::Receiver => true,
         CallCalleeKind::Associated => {
-            same_name_inherent_forwarder || is_non_public_associated_helper(edge, callee, node_map)
+            same_name_inherent_forwarder
+                || is_non_public_associated_helper(
+                    edge,
+                    callee,
+                    node_map,
+                    &owner_graph.owner_aliases,
+                )
         }
+        CallCalleeKind::AssociatedValue
+        | CallCalleeKind::Constructor
+        | CallCalleeKind::TraitQualified => false,
     };
     is_delegating_shape && !call_edge_participates_in_cycle(edge, node_map, owner_graph)
 }
@@ -251,12 +269,15 @@ fn has_inherent_method(
     edge: &OwnerRefEdge,
     callee: &CallCallee,
     node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_aliases: &BTreeMap<OwnerId, OwnerId>,
 ) -> bool {
     node_map.values().any(|node| {
         node.kind == "method"
             && node.label == callee.ident
             && node.impl_kind == Some(ImplKind::Inherent)
-            && owner_id_for_node_id(&node.id, node.kind).as_ref() == Some(&edge.target_owner_id)
+            && owner_id_for_node_id(&node.id, node.kind).is_some_and(|owner| {
+                owner_ids_resolve_to_same_type(&owner, &edge.target_owner_id, owner_aliases)
+            })
     })
 }
 
@@ -264,12 +285,15 @@ fn is_non_public_associated_helper(
     edge: &OwnerRefEdge,
     callee: &CallCallee,
     node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_aliases: &BTreeMap<OwnerId, OwnerId>,
 ) -> bool {
     node_map.values().any(|node| {
         node.kind == "method"
             && node.label == callee.ident
             && node.visibility != Some("public")
-            && owner_id_for_node_id(&node.id, node.kind).as_ref() == Some(&edge.target_owner_id)
+            && owner_id_for_node_id(&node.id, node.kind).is_some_and(|owner| {
+                owner_ids_resolve_to_same_type(&owner, &edge.target_owner_id, owner_aliases)
+            })
     })
 }
 
@@ -293,7 +317,13 @@ fn is_delegating_call(
     let Some(callee) = &edge.call_callee else {
         return false;
     };
-    if edge.reference_kind != ReferenceKind::Expr || edge.source_owner_id != edge.target_owner_id {
+    if edge.reference_kind != ReferenceKind::Expr
+        || !owner_ids_resolve_to_same_type(
+            &edge.source_owner_id,
+            &edge.target_owner_id,
+            &owner_graph.owner_aliases,
+        )
+    {
         return false;
     }
     let Some(source_method) = node_map
@@ -309,6 +339,39 @@ fn is_enum_variant_expression(edge: &OwnerRefEdge) -> bool {
     edge.reference_kind == ReferenceKind::Expr && edge.target_kind == "variant"
 }
 
+fn is_non_call_self_reference(edge: &OwnerRefEdge) -> bool {
+    matches!(
+        edge.call_callee.as_ref().map(|callee| callee.kind),
+        Some(CallCalleeKind::AssociatedValue | CallCalleeKind::Constructor)
+    )
+}
+
+fn is_conventional_clone_result_type(
+    edge: &OwnerRefEdge,
+    source_edges: &[&OwnerRefEdge],
+    node_map: &BTreeMap<NodeId, &GraphNode>,
+) -> bool {
+    if edge.reference_kind != ReferenceKind::Type {
+        return false;
+    }
+    let Some(source) = node_map.get(&edge.source_node_id) else {
+        return false;
+    };
+    source.label == "clone"
+        && source.impl_kind == Some(ImplKind::Trait)
+        && source
+            .impl_trait
+            .as_deref()
+            .is_some_and(|trait_path| graph::trait_terminal_name(trait_path) == "Clone")
+        && source_edges.iter().any(|candidate| {
+            candidate.source_node_id == edge.source_node_id
+                && candidate
+                    .call_callee
+                    .as_ref()
+                    .is_some_and(|callee| callee.kind == CallCalleeKind::Constructor)
+        })
+}
+
 /// A same-owner helper call is safe to suppress only when it cannot take part
 /// in a method-call cycle. This prevents the convenience-delegation classifier
 /// from hiding indirect recursion such as `first -> second -> first`.
@@ -317,7 +380,7 @@ fn call_edge_participates_in_cycle(
     node_map: &BTreeMap<NodeId, &GraphNode>,
     owner_graph: &OwnerGraph,
 ) -> bool {
-    let targets = call_target_methods(edge, node_map);
+    let targets = call_target_methods(edge, node_map, owner_graph);
     if targets.is_empty() {
         return false;
     }
@@ -333,8 +396,10 @@ fn owner_method_call_adjacency(
     owner_graph: &OwnerGraph,
 ) -> BTreeMap<NodeId, BTreeSet<NodeId>> {
     let mut adjacency = BTreeMap::new();
-    for edge in owner_graph.self_refs.get(owner_id).into_iter().flatten() {
-        for target in call_target_methods(edge, node_map) {
+    for edge in owner_graph.self_refs.values().flatten().filter(|edge| {
+        owner_ids_resolve_to_same_type(&edge.source_owner_id, owner_id, &owner_graph.owner_aliases)
+    }) {
+        for target in call_target_methods(edge, node_map, owner_graph) {
             adjacency
                 .entry(edge.source_node_id.clone())
                 .or_insert_with(BTreeSet::new)
@@ -347,6 +412,7 @@ fn owner_method_call_adjacency(
 fn call_target_methods(
     edge: &OwnerRefEdge,
     node_map: &BTreeMap<NodeId, &GraphNode>,
+    owner_graph: &OwnerGraph,
 ) -> BTreeSet<NodeId> {
     let Some(callee) = &edge.call_callee else {
         return BTreeSet::new();
@@ -354,23 +420,52 @@ fn call_target_methods(
     let Some(source) = node_map.get(&edge.source_node_id) else {
         return BTreeSet::new();
     };
-    if source.kind != "method" || edge.source_owner_id != edge.target_owner_id {
+    if source.kind != "method"
+        || !owner_ids_resolve_to_same_type(
+            &edge.source_owner_id,
+            &edge.target_owner_id,
+            &owner_graph.owner_aliases,
+        )
+    {
         return BTreeSet::new();
     }
-    let same_name_inherent_forwarder = callee.kind == CallCalleeKind::Associated
+    let same_name_inherent_forwarder = callee.kind != CallCalleeKind::TraitQualified
         && source.label == callee.ident
-        && has_inherent_method(edge, callee, node_map);
+        && has_inherent_method(edge, callee, node_map, &owner_graph.owner_aliases);
 
     node_map
         .values()
         .filter(|node| {
             node.kind == "method"
                 && node.label == callee.ident
-                && owner_id_for_node_id(&node.id, node.kind).as_ref() == Some(&edge.target_owner_id)
-                && (!same_name_inherent_forwarder || node.impl_kind == Some(ImplKind::Inherent))
+                && owner_id_for_node_id(&node.id, node.kind).is_some_and(|owner| {
+                    owner_ids_resolve_to_same_type(
+                        &owner,
+                        &edge.target_owner_id,
+                        &owner_graph.owner_aliases,
+                    )
+                })
+                && if same_name_inherent_forwarder {
+                    node.impl_kind == Some(ImplKind::Inherent)
+                } else if callee.kind == CallCalleeKind::TraitQualified {
+                    node.impl_kind == Some(ImplKind::Trait)
+                } else {
+                    true
+                }
         })
         .map(|node| node.id.clone())
         .collect()
+}
+
+/// `impl Type` blocks in child modules may refer to an imported parent type by
+/// its short name. Resolve that syntactic owner to the unique same-package
+/// type node before classifying forwarding calls.
+fn owner_ids_resolve_to_same_type(
+    left: &OwnerId,
+    right: &OwnerId,
+    owner_aliases: &BTreeMap<OwnerId, OwnerId>,
+) -> bool {
+    owner_aliases.get(left).unwrap_or(left) == owner_aliases.get(right).unwrap_or(right)
 }
 
 fn method_path_exists(
@@ -580,6 +675,7 @@ struct OwnerGraph {
     adjacency: BTreeMap<OwnerId, BTreeSet<OwnerId>>,
     self_refs: BTreeMap<OwnerId, Vec<OwnerRefEdge>>,
     ref_edges: Vec<OwnerRefEdge>,
+    owner_aliases: BTreeMap<OwnerId, OwnerId>,
 }
 
 fn build_owner_graph<'a>(
@@ -645,7 +741,46 @@ fn build_owner_graph<'a>(
         owner_graph.ref_edges.push(owner_edge);
     }
 
+    owner_graph.owner_aliases = build_owner_aliases(node_map);
     owner_graph
+}
+
+fn build_owner_aliases(node_map: &BTreeMap<NodeId, &GraphNode>) -> BTreeMap<OwnerId, OwnerId> {
+    let mut types_by_package_and_name: BTreeMap<(String, String), Vec<OwnerId>> = BTreeMap::new();
+    for node in node_map
+        .values()
+        .filter(|node| node.kind == "type" && node.visibility.is_some())
+    {
+        types_by_package_and_name
+            .entry((node.package.clone(), node.label.clone()))
+            .or_default()
+            .push(OwnerId::new(node.id.as_str()));
+    }
+
+    let mut aliases = BTreeMap::new();
+    for node in node_map.values().filter(|node| node.kind == "method") {
+        let Some(owner) = owner_id_for_node_id(&node.id, node.kind) else {
+            continue;
+        };
+        if node_map
+            .get(&NodeId::new(owner.as_str()))
+            .is_some_and(|owner_node| owner_node.kind == "type" && owner_node.visibility.is_some())
+        {
+            continue;
+        }
+        let Some(short_name) = owner.as_str().rsplit("::").next() else {
+            continue;
+        };
+        let Some(candidates) =
+            types_by_package_and_name.get(&(node.package.clone(), short_name.to_string()))
+        else {
+            continue;
+        };
+        if let [canonical_owner] = candidates.as_slice() {
+            aliases.insert(owner, canonical_owner.clone());
+        }
+    }
+    aliases
 }
 
 fn owner_contributors(owners: &[OwnerId], owner_graph: &OwnerGraph) -> Vec<NodeId> {

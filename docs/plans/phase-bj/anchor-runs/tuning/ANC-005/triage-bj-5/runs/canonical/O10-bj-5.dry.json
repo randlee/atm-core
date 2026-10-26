@@ -1,0 +1,118 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261019T014410Z-atm-bj-5",
+  "gate": "plan",
+  "created_at": "2026-10-19T01:44:10+00:00",
+  "anchors_path": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/oracle/anchors.ANC-005.json",
+  "plan": "phase-bj",
+  "item": {
+    "id": "atm-bj-5",
+    "title": "",
+    "source": "docs/plans/phase-bj/anchor-runs/tuning/ANC-005/triage-bj-5/oracle/O10-bj-5.txt",
+    "chars": 6409,
+    "truncated": false,
+    "chars_before_reduction": 6409,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": null,
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": true,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "No sprint in this phase must change what ships in v0.16.1.",
+      "quote": "agreed 0.16.1 first, but we can plan this as part of next phase.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-16",
+      "context": "planning session 2026-10-17",
+      "anchor_version": 3,
+      "deterministic_check": "git diff v0.16.1..<phase base> shows no change from this phase's PRs; tag v0.16.1 predates the first sprint's first commit",
+      "kind": "prohibition",
+      "leaning": null,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": null,
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "dry run",
+      "attempts": 0,
+      "item_chars_sent": 6409,
+      "item_shortened": false,
+      "request_bytes": 9316
+    }
+  ],
+  "summary": {
+    "counts": {},
+    "failing": [],
+    "leaning_counts": {},
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  },
+  "requests": [
+    {
+      "model": "jev-latest",
+      "state": {
+        "anchor": {
+          "id": "ANC-005",
+          "statement": "No sprint in this phase must change what ships in v0.16.1.",
+          "scope": "any sprint dispatch, any change to the v0.16.1 release branch"
+        },
+        "item": {
+          "id": "atm-bj-5",
+          "title": "",
+          "text": "# bj-5: out-of-band skill integrity manifest; install verification and hand-runnable doctor\n\n## Description\n\n### Goal\nFor atm-bd-orchestration issue #349: atm-bd's built wheel and sdist carry a manifest of every shipped skill file's sc-sha; `atm-bd skill` verifies the files it installs against that published manifest; a hand-runnable plugin doctor checks an installed copy without atm-core. This is phase-bj work in atm-bd-orchestration, independent of bj-1 through bj-4. Anchors: ANC-087, ANC-088, ANC-003, ANC-010, ANC-011, ANC-012. No SHA is written into any source file; hashing is the `sc-sha` package's `sc_sha` module; the sc-publish kit (`.github/scripts`, `.github/actions`) is unchanged.\n\n### Deliverables\n1. `apps/atm-bd-console/hatch_build.py`: in `_include_skills`, after choosing the bundled skill tree, write `skill-manifest.json` (schema version, atm-bd version, one `{path, sc_sha}` per shipped file of the plugin tree in sorted path order, and `sc_sha.calculate_composition_hash` over them) into the build output and force-include it beside the bundled skills in both the wheel and the sdist. This is the published manifest: it exists only in the built artifacts that sc-publish uploads, never in git.\n2. `apps/atm-bd-console/pyproject.toml` and `uv.lock`: add `sc-sha>=1.7.0,<2` to the runtime dependencies and to the build-system requires, so `import sc_sha` works in the build and in an installed atm-bd. `sc_sha.calculate_hash` is the per-file hash; no other hasher is written.\n3. `apps/atm-bd-console/src/atm_bd_console/skill_integrity.py` (new): `load_manifest(source)`, `verify_tree(pkg_dir, manifest) -> list[PathResult]` with `ok|modified|missing|extra`, and `write_install_record(dest, version, commit, manifest, installed)`. Sources of the published manifest: bare `atm-bd skill` reads the one packaged in the installed wheel (no network, ANC-010); `atm-bd skill x.y.z` reads the manifest from the published atm-bd x.y.z sdist on PyPI (`https://pypi.org/pypi/atm-bd/<x.y.z>/json`), and `--latest` does the same for the newest published version on PyPI, whose tag `v<version>` it installs (ANC-012 v3).\n4. `apps/atm-bd-console/src/atm_bd_console/skill_source.py`: `--latest` resolves the newest published version on PyPI and clones its `v<version>` tag instead of `main`; bare keeps the packaged files (ANC-010) and `x.y.z` keeps cloning the `vX.Y.Z` tag of atm-bd-orchestration (ANC-011).\n5. `apps/atm-bd-console/src/atm_bd_console/skill.py`: inside the existing `with skill_source.resolve_source(...)` block, call `verify_tree(source.pkg_dir, manifest)` before `installer.plan_install`; any `modified` or `missing` path stops the install before any write, prints one `<status> <path>` line per path and returns exit 1. After `installer.apply_plan`, call `write_install_record` with the version, commit and the sc-sha of each file as installed (rendered team, prefix and member values make installed bytes differ from published bytes by design). The `installed ... from <ref> @ <commit> (atm-bd <version>)` line is unchanged (ANC-003). The plugin `install.py` (bj-1's fence) is called as today and not edited.\n6. `plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/atm-hook-doctor.py` (new): reads the install record in the target `.claude` (or `.codex`) directory, hashes each recorded installed file with `sc_sha.calculate_hash`, prints one `ok|modified|missing|extra` line per path and `PASS` or `FAIL`; exposes the same check as `doctor(dest) -> Result` for phase-bk's `hook.doctor()`. It imports nothing from atm-core or atm_bd_console; when `sc_sha` is missing it exits 2 with the fix `uv pip install 'sc-sha>=1.7.0,<2'`.\n7. `manifest.yaml`: regenerate its generated block with `tests/gen_manifest.py` so the doctor script ships; this sprint never hand-edits the block (Ownership below).\n8. Tests (deterministic fixture trees, controlled file contents, injected PyPI/git responses, no sleeps): manifest coverage and aggregate, verification pass and refusal for bare, `x.y.z` and `--latest`, install-record contents, doctor outcomes, and the built wheel and sdist each containing `skill-manifest.json`.\n\n### Ownership\n`manifest.yaml`'s artifact block is generated by `tests/gen_manifest.py` from the files present. bj-3 and bj-5 both add shipped files, so each regenerates the block in its own layer and never hand-edits it; at the later layer's rebase the block is regenerated again, which is the conflict resolution. No sprint writes the block by hand.\n\n### Does Not Close\n- Phase-bk's atm-core registration of `hook.doctor()`; this sprint exposes the plugin callable only.\n- Any SHA inside a shipped or source file, a second hasher, or a change to the sc-publish kit.\n- Edits to bj-1's `install.py`.\n\n## Acceptance criteria\n\n### Acceptance Criteria\n- [ ] (ANC-087) `uv build` in `apps/atm-bd-console` produces a wheel and an sdist that each contain `skill-manifest.json` with exactly one entry per shipped plugin file and the composition aggregate; changing one plugin file changes its entry and the aggregate (test over the built artifacts).\n- [ ] (ANC-088) `atm-bd skill`, `atm-bd skill x.y.z` and `atm-bd skill --latest`, run through `atm_bd_console.cli` with injected PyPI and git responses, install when every file matches and exit 1 before any write when a file is modified or missing, printing each affected path.\n- [ ] (ANC-012) `atm-bd skill --latest` clones `v<newest PyPI version>`, not `main`; (ANC-010) bare `atm-bd skill` verifies with the network disabled; (ANC-003) every install prints the ref, commit and app version line unchanged.\n- [ ] The install record lists the version, commit and each installed file's sc-sha; the doctor reads it and reports `ok` for an untouched install, `modified`, `missing` and `extra` for the three planted changes, and both `PASS` and `FAIL` aggregates.\n- [ ] `atm-hook-doctor.py` runs with `python3` and no atm-core or atm_bd_console import (test imports it in an isolated environment with only `sc_sha`); with `sc_sha` absent it exits 2 naming the install command.\n- [ ] `rg -n \"hashlib|sha256\\(\" apps/atm-bd-console/src/atm_bd_console/skill_integrity.py plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/atm-hook-doctor.py` finds nothing; `git diff integrate/phase-bj -- .github plugins/atm-bd-orchestration/install.py` is empty.\n- [ ] `tests/gen_manifest.py --check` passes on the layer.\n"
+        }
+      },
+      "questions": {
+        "relevant": {
+          "type": "choice",
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor: a directive the user stated verbatim in `anchor.statement`, with the area it governs in `anchor.scope`. Does the work described in `item.text` touch the subject that `anchor.statement` talks about? Judge overlap of subject matter only. Do not judge whether the item obeys the anchor.",
+          "criteria": {
+            "yes": "The item plans, changes, or depends on the thing the anchor statement is about, directly or as a clear prerequisite.",
+            "no": "The item is about a different part of the system or a different activity, and completing it would neither follow nor break the anchor.",
+            "unclear": "The item text is too vague to tell what part of the system it touches."
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "instructions": "Does `item.text` explicitly carry out, preserve, or plan for the directive given in `anchor.statement`? Look for the directive's specific content being present in the item: the same starting point, the same method, the same constraint, or an explicit step that does what the statement asks. A generic mention of the topic without the directive's specific content does not count. Judge presence of the directive only, not whether the item conflicts with it.",
+          "criteria": {
+            "yes": "The item text contains the directive's specific content, in its own words or the user's, as a step, constraint, or stated starting point.",
+            "no": "The item text is silent about the directive: it neither includes the directive's specific content nor references it.",
+            "unclear": "The item text alludes to the directive's topic but it is not possible to tell whether the directive itself is included."
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "instructions": "Does `item.text` propose doing something that `anchor.statement` rules out, or propose a different approach than the one `anchor.statement` requires? Examples of contradiction: the anchor says to start from an existing implementation and the item plans a fresh implementation; the anchor forbids a dependency and the item adds it; the anchor fixes an order of work and the item reverses it. Silence about the directive is not a contradiction. Judge conflict only.",
+          "criteria": {
+            "yes": "The item text states a plan, approach, or decision that cannot be reconciled with the directive in the anchor statement.",
+            "no": "Nothing in the item text conflicts with the directive, whether or not the directive is mentioned.",
+            "unclear": "The item text is ambiguous enough that it might or might not conflict with the directive."
+          }
+        }
+      }
+    }
+  ],
+  "totals": {
+    "requests": 1,
+    "bytes": 9316,
+    "max_request_bytes": 24000
+  }
+}

@@ -6,6 +6,10 @@ plan file, the phase root and the integration branch:
     plan = "<plans_dir>/phase-<x>.jsonl"
     root = "<prefix>-phase-<x>"
     integration_branch = "integrate/phase-<x>"
+    lead = "appointed-phase-lead"
+
+The required `templates` table names the installed assignment template for
+each of dev, fix, sanity, qa, plan_review and review.
 
 The plan file holds one JSON object per sprint, `{"sprint": "<name>"}` with an
 optional `"depends_on": ["<sprint name>", ...]` (hard dependencies only). It
@@ -14,6 +18,7 @@ from the root id); its poured group is `<container>.group-{dev,sanity,qa}`.
 """
 from __future__ import annotations
 import json
+import os
 import re
 import subprocess
 import tomllib
@@ -28,6 +33,15 @@ SPRINT_NAME = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 GROUP_REF = "group"
 PHASE_DIR = Path(".atm-bd")
 PHASE_KEYS = ("plan", "root", "integration_branch")
+TEMPLATE_DIR = Path(".claude/skills/atm-bd-orchestration/templates")
+DEFAULT_TEMPLATES = {
+    "dev": str(TEMPLATE_DIR / "dev-template.xml.j2"),
+    "fix": str(TEMPLATE_DIR / "fix-assignment.xml.j2"),
+    "sanity": str(TEMPLATE_DIR / "dev-sanity-template.xml.j2"),
+    "qa": str(TEMPLATE_DIR / "qa-template.xml.j2"),
+    "plan_review": str(TEMPLATE_DIR / "plan-review-template.xml.j2"),
+    "review": str(TEMPLATE_DIR / "review-template.xml.j2"),
+}
 PLAN_KEYS = frozenset({"sprint", "depends_on"})
 
 
@@ -64,8 +78,57 @@ def phase_config_path(repo: Path, phase: str) -> Path:
     return Path(repo) / PHASE_DIR / f"phase-{phase}.toml"
 
 
-def load_phase_config(repo: Path, phase: str) -> dict[str, str]:
-    """The tracked `.atm-bd/phase-<phase>.toml`: exactly plan, root and integration_branch, all nonempty strings."""
+def validate_phase_config(repo: Path, phase: str, data: dict[str, Any]) -> dict[str, Any]:
+    """Validate the complete tracked phase settings."""
+    path = phase_config_path(repo, phase)
+    problems = []
+    for key in PHASE_KEYS:
+        if not isinstance(data.get(key), str) or not data[key].strip():
+            problems.append(f"{key}: required nonempty string")
+    unknown = set(data) - set(PHASE_KEYS) - {"lead", "templates", "code_checkout"}
+    if unknown:
+        problems.append(f"unknown key(s): {', '.join(sorted(unknown))}")
+    if "code_checkout" in data and (not isinstance(data["code_checkout"], str) or not data["code_checkout"].strip()
+                                     or Path(data["code_checkout"]).is_absolute()):
+        problems.append("code_checkout: optional repository-relative path to the code repository")
+    if not isinstance(data.get("lead"), str) or not data["lead"].strip():
+        problems.append("lead: required nonempty string")
+    templates = data.get("templates")
+    if templates is None:
+        problems.append("templates: required table with keys " + ", ".join(DEFAULT_TEMPLATES))
+    if templates is not None:
+        if not isinstance(templates, dict):
+            problems.append("templates: expected a table with keys " + ", ".join(DEFAULT_TEMPLATES))
+            templates = None
+    if isinstance(templates, dict):
+        extra = set(templates) - set(DEFAULT_TEMPLATES) - {"dev_fix"}
+        if extra:
+            problems.append(f"templates: unknown key(s): {', '.join(sorted(extra))}")
+        for key in DEFAULT_TEMPLATES:
+            value = templates.get(key)
+            if not isinstance(value, str) or not value.strip():
+                problems.append(f"templates.{key}: required nonempty repository-relative path")
+                continue
+            try:
+                relative = Path(value)
+                target = Path(repo) / relative
+                if (value.endswith("/") or relative.is_absolute() or ".." in relative.parts
+                        or not relative.is_relative_to(TEMPLATE_DIR)
+                        or not target.resolve().is_relative_to((Path(repo) / TEMPLATE_DIR).resolve())):
+                    problems.append(f"templates.{key}: {value!r} must be a repository-relative path inside {TEMPLATE_DIR}")
+                elif not os.path.isfile(os.path.join(repo, value)):
+                    problems.append(f"templates.{key}: {value!r} does not name an existing template file")
+            except (OSError, ValueError, RuntimeError) as exc:
+                problems.append(f"templates.{key}: {value!r} cannot be read: {exc}")
+    if problems:
+        raise RuntimeError(f"{path}: " + "; ".join(problems))
+    if not re.fullmatch(rf".+-phase-{re.escape(phase)}", data["root"]):
+        raise RuntimeError(f"{path}: root {data['root']} is not a root of phase {phase}")
+    return dict(data)
+
+
+def load_phase_config(repo: Path, phase: str) -> dict[str, Any]:
+    """Read and validate the complete phase settings."""
     path = phase_config_path(repo, phase)
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -73,11 +136,7 @@ def load_phase_config(repo: Path, phase: str) -> dict[str, str]:
         raise RuntimeError(f"{path} does not exist; the planner commits it with the plan") from exc
     except (OSError, tomllib.TOMLDecodeError) as exc:
         raise RuntimeError(f"{path}: {exc}") from exc
-    if set(data) != set(PHASE_KEYS) or not all(isinstance(data[k], str) and data[k] for k in PHASE_KEYS):
-        raise RuntimeError(f"{path} must hold exactly {', '.join(PHASE_KEYS)}, each a nonempty string")
-    if phase_of_root(data["root"]) != phase:
-        raise RuntimeError(f"{path}: root {data['root']} is not a root of phase {phase}")
-    return dict(data)
+    return validate_phase_config(repo, phase, data)
 
 
 def phase_path(repo: Path, phase: str) -> Path:

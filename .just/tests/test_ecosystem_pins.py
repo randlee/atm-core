@@ -50,7 +50,7 @@ class EcosystemPinTests(unittest.TestCase):
         self.assertEqual(dependencies["sc-observability-log"], "=1.5.0")
         self.assertEqual(dependencies["sc-observability-types"], "=1.5.0")
         for package in ("opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp"):
-            self.assertEqual(dependencies[package], "=0.33.0")
+            self.assertEqual(dependencies[package], "=0.33.1")
         self.assertNotIn("sc-observability-otlp", dependencies)
 
     @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0")
@@ -180,7 +180,7 @@ class EcosystemPinTests(unittest.TestCase):
             self.assertEqual(dependencies["sc-observability"]["version"], "=1.1.0")
             self.assertEqual(dependencies["sc-observability-types"]["version"], "=1.1.0")
             self.assertFalse(dependencies["sc-observability"]["default-features"])
-            self.assertEqual(dependencies["opentelemetry_sdk"]["version"], "=0.33.0")
+            self.assertEqual(dependencies["opentelemetry_sdk"]["version"], "=0.33.1")
             compose_text = (root / "crates/atm-template-sc-compose/Cargo.toml").read_text()
             self.assertIn('sc-composer = "1.4.1"', compose_text)
             self.assertIn('sc-sha = "1.4.1"', compose_text)

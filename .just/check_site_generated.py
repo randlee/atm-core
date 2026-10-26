@@ -2,7 +2,7 @@
 """Fail when committed generated site pages differ from what Pages would publish.
 
 This is the single definition of the Pages build gate: `.github/workflows/pages.yml`,
-`just lint site-generated`, and the pre-push hook all run this script, so a
+and `just lint site-generated` both run this script, so a
 stale procedure page or report index is refused before merge, not after.
 """
 from __future__ import annotations

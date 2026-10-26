@@ -157,7 +157,11 @@ def resolve_managed_service(
     task_status: Callable[[str], dict[str, object]],
 ) -> None:
     """Resolve an explicitly requested, uniquely owned managed-service selector."""
-    if not getattr(args, "discover_managed_service", False):
+    allow_missing = getattr(args, "allow_missing_managed_service", False) is True
+    discover = getattr(args, "discover_managed_service", False) is True
+    if allow_missing and not discover:
+        raise SwitchError("--allow-missing-managed-service requires --discover-managed-service")
+    if not discover:
         return
     if args.service or args.launch_agent_plist:
         raise SwitchError(
@@ -173,6 +177,11 @@ def resolve_managed_service(
         candidates = _windows_candidates(daemon, task_status)
     else:
         raise SwitchError(f"managed-service discovery is unsupported on {system}")
+    if not candidates and allow_missing:
+        args.service = None
+        args.launch_agent_plist = None
+        args.no_managed_service = True
+        return
     args.service, plist = _unique_service(candidates, daemon)
     args.launch_agent_plist = str(plist) if plist is not None else None
 
