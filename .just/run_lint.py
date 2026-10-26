@@ -61,6 +61,9 @@ PYTHON_LINT_ORDER = (
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability", "sc-runtime")
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear", "arch-gates")
+# Cross-target cargo steps that `ci all` adds on a non-Windows host. A
+# Windows host's native clippy already targets x86_64-pc-windows-msvc.
+CROSS_TARGET_LINTS = ("clippy-windows",)
 FAST_LINT_ORDER = (
     "fmt",
     "version",
@@ -116,6 +119,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
     _, portability_command = lint_argv(repo_root, "sc-portability", ["--config", str(repo_root / "sc-lint.toml")])
     _, runtime_command = lint_argv(repo_root, "sc-runtime", ["--config", str(repo_root / "sc-lint.toml")])
     _, line_count_command = lint_argv(repo_root, "line-counts", [])
+    _, function_length_command = lint_argv(repo_root, "function-length", [])
+    # Wheel-only sc-lint helpers run from the kit venv; delete when
+    # randlee/sc-lint#198 ships a consumer step runner for them.
     venv_python = repo_root / ".sc-lint" / "venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     return {
         "fmt": LintTask("fmt", ["just", "_lint-fmt"]),
@@ -172,9 +178,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "runtime-stderr": LintTask(
             "runtime-stderr", [*python_command, str(repo_root / "scripts/check-runtime-stderr.py")]
         ),
-        "function-length": LintTask(
-            "function-length", [*python_command, str(repo_root / "scripts/check-function-length.py")]
-        ),
+        "function-length": LintTask("function-length", function_length_command),
         "legacy-mailbox-paths": LintTask(
             "legacy-mailbox-paths",
             [*python_command, str(repo_root / "scripts/check-legacy-mailbox-paths.py")],
@@ -231,17 +235,17 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
     }
 
 
-def resolve_task_names(target: str, platform_scope: str = "host") -> list[str]:
+def resolve_task_names(target: str, platform_scope: str = "host", host_platform: str = sys.platform) -> list[str]:
     if target == "ci":
         names = [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS]
-        if platform_scope == "all":
-            names.insert(2, "clippy-windows")
+        if platform_scope == "all" and host_platform != "win32":
+            names[2:2] = CROSS_TARGET_LINTS
         return names
     if target == "all":
         return [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS]
     if target == "fast":
         return list(FAST_LINT_ORDER)
-    valid = {"all", "ci", "fast", *CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS}
+    valid = {"all", "ci", "fast", *CARGO_LINT_ORDER, *CROSS_TARGET_LINTS, *PYTHON_LINT_ORDER, *EXTRA_LINTS}
     if target not in valid:
         valid_display = ", ".join(sorted(valid))
         raise ValueError(f"unknown lint target: {target}; expected one of: {valid_display}")
@@ -517,7 +521,7 @@ def main(argv: list[str]) -> int:
     tasks = build_tasks(repo_root)
     selected_tasks = [tasks[name] for name in task_names]
 
-    cargo_tasks = [task for task in selected_tasks if task.name in CARGO_LINT_ORDER]
+    cargo_tasks = [task for task in selected_tasks if task.name in (*CARGO_LINT_ORDER, *CROSS_TARGET_LINTS)]
     python_tasks = [task for task in selected_tasks if task.name in PYTHON_LINT_ORDER or task.name in EXTRA_LINTS]
     results: list[LintResult] = []
 

@@ -158,8 +158,9 @@ jobs:
           wyvern --version
 
       - name: Run just lint
-        # The ATM runner remains parallel and keep-going; `all` includes the
-        # Windows-target Clippy profile on every host.
+        # The ATM runner remains parallel and keep-going; `ci all` adds the
+        # Windows-target Clippy step on non-Windows hosts (a Windows host's
+        # native Clippy already targets x86_64-pc-windows-msvc).
         run: just lint ci all
 
       - name: Show clippy diagnostics on lint failure

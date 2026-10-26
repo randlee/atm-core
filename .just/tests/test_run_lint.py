@@ -20,6 +20,7 @@ from run_lint import extract_error_fail_preview
 from run_lint import failure_preview
 from run_lint import LintResult
 from run_lint import LintTask
+from run_lint import main
 from run_lint import partition_python_tasks
 from run_lint import preview_lines_for_task
 from run_lint import prioritize_error_lines
@@ -58,6 +59,50 @@ resolver = "2"
         self.assertIn("sc-boundary", names)
         self.assertIn("sc-portability", names)
         self.assertIn("read-concurrency-gates", names)
+
+    def test_resolve_task_names_ci_host_scope_has_no_cross_target_step(self) -> None:
+        for host_platform in ("linux", "darwin", "win32"):
+            with self.subTest(host_platform=host_platform):
+                names = resolve_task_names("ci", "host", host_platform)
+                self.assertNotIn("clippy-windows", names)
+                self.assertEqual(names, resolve_task_names("all", host_platform=host_platform))
+
+    def test_resolve_task_names_ci_all_adds_clippy_windows_off_windows(self) -> None:
+        for host_platform in ("linux", "darwin"):
+            with self.subTest(host_platform=host_platform):
+                names = resolve_task_names("ci", "all", host_platform)
+                self.assertEqual(names[:3], ["fmt", "clippy", "clippy-windows"])
+                self.assertEqual(names.count("clippy-windows"), 1)
+
+    def test_resolve_task_names_accepts_clippy_windows_manual_target(self) -> None:
+        self.assertEqual(resolve_task_names("clippy-windows"), ["clippy-windows"])
+
+    def test_resolve_task_names_ci_all_on_windows_uses_native_clippy(self) -> None:
+        names = resolve_task_names("ci", "all", "win32")
+        self.assertIn("clippy", names)
+        self.assertNotIn("clippy-windows", names)
+
+    def test_main_runs_selected_clippy_windows_in_cargo_phase(self) -> None:
+        names = resolve_task_names("ci", "all", "linux")
+        tasks = {name: LintTask(name, ["true"]) for name in names}
+        ran: list[str] = []
+
+        def fake_run_task(task: LintTask, _repo_root: Path) -> LintResult:
+            ran.append(task.name)
+            return LintResult(task, 0, "", "", 0.0, Path("log"))
+
+        with tempfile.TemporaryDirectory() as tempdir, \
+            mock.patch("run_lint.resolve_task_names", lambda target, scope: resolve_task_names(target, scope, "linux")), \
+            mock.patch("run_lint.build_tasks", return_value=tasks), \
+            mock.patch("run_lint.run_task", side_effect=fake_run_task), \
+            mock.patch("run_lint.run_parallel", side_effect=lambda selected, root: [fake_run_task(task, root) for task in selected]), \
+            mock.patch("run_lint.print_result"), \
+            mock.patch("sys.stdout", new_callable=io.StringIO):
+            exit_code = main(["run_lint.py", "ci", "all", "--root", tempdir])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(sorted(ran), sorted(names))
+        self.assertEqual(ran[:3], ["fmt", "clippy", "clippy-windows"])
 
     def test_resolve_task_names_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError):
@@ -250,7 +295,7 @@ resolver = "2"
             )
             self.assertEqual(
                 tasks["function-length"].command[-1],
-                str(repo_root / "scripts/check-function-length.py"),
+                "function-length",
             )
             self.assertEqual(
                 tasks["legacy-mailbox-paths"].command[-1],
