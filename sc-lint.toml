@@ -3,8 +3,8 @@ minimum_version = "0.8.0"
 
 [tool.sc-lint.analyzers.boundary]
 enabled = true
-fail_rules = ["SCB-CYCLE-001", "SCB-CYCLE-002", "SCB-CYCLE-003", "SCB-BOUNDARY-001", "SCB-BOUNDARY-002", "SCB-BOUNDARY-003", "SCB-CALLER-001", "SCB-DEPENDENCY-001", "SCB-DEPENDENCY-002", "SCB-DEPENDENCY-003", "SCB-MANIFEST-001", "SCB-MANIFEST-002"]
-reason = "Boundary inventory, crate cycles and forbidden crate edges for the atm-core workspace."
+fail_rules = ["SCB-CYCLE-001", "SCB-CYCLE-002", "SCB-CYCLE-003", "SCB-BOUNDARY-001", "SCB-BOUNDARY-002", "SCB-BOUNDARY-003", "SCB-CALLER-001", "SCB-DEPENDENCY-001", "SCB-DEPENDENCY-002", "SCB-DEPENDENCY-003", "SCB-DEPENDENCY-004", "SCB-FEATURE-001", "SCB-MANIFEST-001", "SCB-MANIFEST-002", "SCB-MANIFEST-003", "SCB-MANIFEST-004", "SCB-MANIFEST-005", "SCB-MANIFEST-006"]
+reason = "Boundary inventory, crate cycles and forbidden crate edges for the atm-core workspace. SCB-BOUNDARY-004 remains non-failing until randlee/sc-lint#642 fixes the published composition-root direction false positives."
 
 [tool.sc-lint.analyzers.portability]
 config_home_env = "ATM_CONFIG_HOME"
@@ -159,6 +159,22 @@ name = "version"
 command = ["just", "_py", ".just/run_lint.py", "version"]
 
 [[tool.sc-lint.test]]
+name = "build"
+command = ["cargo", "build", "--workspace"]
+
+[[tool.sc-lint.test]]
+name = "cli-surface"
+command = ["cargo", "test", "-p", "agent-team-mail", "--features", "cli-surface-dump", "--test", "cli_surface"]
+
+[[tool.sc-lint.test]]
+name = "coverage"
+command = ["just", "_py", "scripts/coverage/run.py", "--write-artifacts"]
+
+[[tool.sc-lint.test]]
+name = "daemon-signing"
+command = ["just", "_py", ".just/sign_daemon_dev.py"]
+
+[[tool.sc-lint.test]]
 name = "default"
 command = ["just", "test"]
 
@@ -167,21 +183,5 @@ name = "python"
 command = ["just", "_py", ".just/run_pytests.py"]
 
 [[tool.sc-lint.test]]
-name = "build"
-command = ["cargo", "build", "--workspace"]
-
-[[tool.sc-lint.test]]
 name = "workspace"
 command = ["cargo", "test", "--workspace", "--exclude", "atm-daemon"]
-
-[[tool.sc-lint.test]]
-name = "cli-surface"
-command = ["cargo", "test", "-p", "agent-team-mail", "--features", "cli-surface-dump", "--test", "cli_surface"]
-
-[[tool.sc-lint.test]]
-name = "daemon-signing"
-command = ["just", "_py", ".just/sign_daemon_dev.py"]
-
-[[tool.sc-lint.test]]
-name = "coverage"
-command = ["just", "_py", "scripts/coverage/run.py", "--write-artifacts"]

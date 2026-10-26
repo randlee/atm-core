@@ -13,10 +13,16 @@
         "SCB-DEPENDENCY-001",
         "SCB-DEPENDENCY-002",
         "SCB-DEPENDENCY-003",
+        "SCB-DEPENDENCY-004",
+        "SCB-FEATURE-001",
         "SCB-MANIFEST-001",
-        "SCB-MANIFEST-002"
+        "SCB-MANIFEST-002",
+        "SCB-MANIFEST-003",
+        "SCB-MANIFEST-004",
+        "SCB-MANIFEST-005",
+        "SCB-MANIFEST-006"
       ],
-      "reason": "Boundary inventory, crate cycles and forbidden crate edges for the atm-core workspace."
+      "reason": "Boundary inventory, crate cycles and forbidden crate edges for the atm-core workspace. SCB-BOUNDARY-004 remains non-failing until randlee/sc-lint#642 fixes the published composition-root direction false positives."
     },
     "portability": {
       "config_home_env": "ATM_CONFIG_HOME",
