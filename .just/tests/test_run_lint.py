@@ -474,6 +474,19 @@ resolver = "2"
         self.assertEqual(call_order, ["version", "spell", "clippy", "arch-gates", "pytests"])
         self.assertEqual(run_task_mock.call_count, len(tasks))
 
+    def test_parallel_scheduler_runs_pytests_without_parallel_lanes(self) -> None:
+        task = LintTask("pytests", ["pytests"])
+        result = LintResult(task, 0, "", "", 0.0, Path("log"))
+
+        with tempfile.TemporaryDirectory() as tempdir, mock.patch(
+            "run_lint.ThreadPoolExecutor"
+        ) as executor, mock.patch("run_lint.run_task", return_value=result) as run_task_mock:
+            results = run_parallel([task], Path(tempdir))
+
+        executor.assert_not_called()
+        run_task_mock.assert_called_once_with(task, Path(tempdir))
+        self.assertEqual(results, [result])
+
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

@@ -64,7 +64,7 @@ CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear", "arch-gates")
 # These steps invoke Cargo compilation and must not overlap one another. Other
 # repository checks can run while this single serialized lane is active.
 # The Python suite includes integration tests that invoke Cargo themselves, so
-# it shares the build-lock lane with direct Cargo checks.
+# it starts only after every concurrent lint lane has completed.
 CARGO_LOCK_LINTS = {"clippy", "clippy-windows", "arch-gates"}
 # Cross-target cargo steps that `ci all` adds on a non-Windows host. A
 # Windows host's native clippy already targets x86_64-pc-windows-msvc.
@@ -503,11 +503,12 @@ def run_parallel(tasks: list[LintTask], repo_root: Path) -> list[LintResult]:
     results: dict[str, LintResult] = {}
     pytest_tasks = [task for task in tasks if task.name == "pytests"]
     lanes = plan_lanes([task for task in tasks if task.name != "pytests"])
-    with ThreadPoolExecutor(max_workers=len(lanes)) as executor:
-        futures = [executor.submit(run_lane, lane, repo_root) for lane in lanes]
-        for future in as_completed(futures):
-            for result in future.result():
-                results[result.task.name] = result
+    if lanes:
+        with ThreadPoolExecutor(max_workers=len(lanes)) as executor:
+            futures = [executor.submit(run_lane, lane, repo_root) for lane in lanes]
+            for future in as_completed(futures):
+                for result in future.result():
+                    results[result.task.name] = result
     for task in pytest_tasks:
         results[task.name] = run_task(task, repo_root)
     return [results[task.name] for task in tasks]
