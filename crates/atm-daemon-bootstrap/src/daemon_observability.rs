@@ -171,6 +171,7 @@ impl Export {
 /// The daemon process's observability owner: the retained logger and the
 /// standard SDK providers. The entrypoint bootstraps it once and passes it
 /// into daemon composition, which drains and shuts it down.
+#[derive(Clone)]
 pub struct DaemonObservability {
     // Keep one shared logger lifecycle behind a mutex so emit/health paths and
     // shutdown can coordinate a single transition into the stopped state.
@@ -184,16 +185,6 @@ impl std::fmt::Debug for DaemonObservability {
         f.debug_struct("DaemonObservability")
             .field("active_log_path", &self.active_log_path)
             .finish_non_exhaustive()
-    }
-}
-
-impl Clone for DaemonObservability {
-    fn clone(&self) -> Self {
-        Self {
-            logger: Arc::clone(&self.logger),
-            active_log_path: self.active_log_path.clone(),
-            export: Arc::clone(&self.export),
-        }
     }
 }
 
