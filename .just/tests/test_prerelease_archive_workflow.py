@@ -540,10 +540,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             package for package in lock["package"] if package["name"] == "sc-lint-directives"
         ]
         # Retained logging 1.5 uses registry 0.4; the independent lint family
-        # still uses registry 0.5. Neither may be bumped with the workspace.
+        # uses registry 0.5. The removed workspace lint directives package must
+        # not be reintroduced by a prerelease version bump.
         self.assertEqual(
             [(package["version"], "source" in package) for package in directives],
-            [("0.4.0", True), ("0.5.0", True), (new_version, False)],
+            [("0.4.0", True), ("0.5.0", True)],
         )
         self.assertEqual(
             tomllib.loads(changes[root / "crates" / "atm-query-python" / "pyproject.toml"])[
