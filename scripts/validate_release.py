@@ -313,11 +313,11 @@ def validate_send_to_test_seams(root: Path, findings: list[Finding]) -> None:
 
 def validate_lint(root: Path, findings: list[Finding]) -> None:
     if shutil.which("just") is not None:
-        lint_cmd = ["just", "lint"]
-        failure_summary = "just lint failed"
+        lint_cmd = ["just", "lint", "ci", "all"]
+        failure_summary = "just lint ci all failed"
     else:
         # CI images or minimal local environments may not have `just` installed.
-        lint_cmd = ["python3", ".just/run_lint.py", "all"]
+        lint_cmd = ["python3", ".just/run_lint.py", "ci", "all"]
         failure_summary = "lint runner failed"
     completed = run_capture(lint_cmd, cwd=root)
     append_completed_findings(

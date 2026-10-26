@@ -1,6 +1,6 @@
 # Lint And Architecture Visualization PRD
 
-Status: draft, authoritative for current lint/tooling inventory in `plan/pR-lint-survey`
+Status: draft, with the current command contract below authoritative over older future-UX proposals later in this document.
 
 ## Purpose
 
@@ -84,8 +84,16 @@ The current `Justfile` exposes:
 
 Current behavior:
 
-- `just lint` runs the full repo lint suite.
-- `just lint <tool>` runs one lint target.
+- `just lint` runs all host lint steps concurrently, except Cargo build-lock users
+  (`clippy`, `clippy-windows`, and `arch-gates`) share a serialized lane. Every
+  selected step completes and the final summary names all failures.
+- `just lint <tool>` runs one lint target; `just lint ci [host|all]` selects the CI
+  lint set, with `all` adding Windows-target Clippy off Windows.
+- `run_lint.py` has no `all` or `fast` mode; `default` is the full host suite.
+- `just test` reads named commands from `.sc-lint/install.json`, runs the ordinary
+  test steps, and excludes coverage. `just test <selector>` runs selected steps;
+  `just test coverage` writes the host's tracked coverage report on macOS/Windows
+  and exits with a clear error on Linux.
 - `just version` reports the current workspace version state.
 - `just version latest` reports recommended direct dependency upgrades per workspace member.
 - `just view` runs the implemented architecture-view targets.
@@ -93,18 +101,27 @@ Current behavior:
 - `just fmt` is non-mutating and behaves like `just fmt check`.
 - `just ci` runs `just lint` followed by `just test`.
 
-### Current lint orchestrator
+### Current lint and test orchestrators
 
-The primary lint entrypoint is:
+The lint entrypoint is:
 
 - `.just/run_lint.py`
 
-Current execution model:
+The test entrypoint is `.just/run_tests.py`; its command manifest is the `test`
+object in `.sc-lint/install.json`. The `default` entry preserves the consumer-facing
+`just test` command, named entries define each test step, and `coverage` remains an
+explicit opt-in selector.
 
-- Cargo-based lints run sequentially.
-- Python/read-only lints run in parallel.
+Lint execution model:
+
+- Independent lint steps run concurrently, including the Python lint tests.
+- Only steps that take Cargo's build lock run sequentially with each other.
 - Each lint writes its own log file under `.just/logs/`.
-- The umbrella runner prints short pass/fail summaries.
+- The umbrella runner keeps going after failures and prints all failed step names.
+- `just lint` is the repository-owned parallel, keep-going runner;
+  `just lint ci` selects host CI checks and `just lint ci all` also includes
+  the Windows-target Clippy profile on non-Windows hosts. CI and
+  `scripts/validate_release.py` run `just lint ci all`.
 
 ### Current custom Python lint tools
 
@@ -114,6 +131,10 @@ Current execution model:
   - distinguishes `total`, `prod`, `test`, and `prod+test`
 - `sc-lint lint identity-literals`
   - enforces `RULE-008` and `RULE-009`
+- `sc-lint lint sc-boundary`, `sc-lint lint sc-portability`, and
+  `sc-lint lint sc-runtime`
+  - are the published reusable analyzers enabled from `.sc-lint/install.json`
+  - use per-rule, documented exceptions where an upstream analyzer gap remains
 - `.just/check_version_sync.py`
   - verifies workspace/crate/release-version alignment
 - `.just/lint_boundaries.py`
@@ -240,9 +261,9 @@ Current CI workflow:
 
 The current command surface does not yet match the intended long-term UX.
 
-Current gaps:
-
-- no `just lint fast`
+The former draft proposal for `just lint fast` is superseded by the implemented
+full-suite/default and named-target contract above. No `all` or `fast` mode is
+exposed by `.just/run_lint.py`.
 
 ### Architecture visualization gaps
 
@@ -275,11 +296,13 @@ Before this document, there was no single authoritative product description for:
 
 ## Required Command Model
 
-The intended long-term command surface is:
+The implemented command surface is:
 
 - `just lint`
-- `just lint fast`
 - `just lint <tool>`
+- `just lint ci [host|all]`
+- `just test [selector...]`
+- `just test coverage`
 - `just view`
 - `just view <tool>`
 
@@ -287,8 +310,6 @@ Definitions:
 
 - `just lint`
   - full local enforcement suite
-- `just lint fast`
-  - low-latency subset for local development and agent loops
 - `just lint <tool>`
   - one enforcement tool only
 - `just view`
@@ -299,7 +320,7 @@ Definitions:
 ## Lint Product Requirements
 
 - The lint suite must remain cross-platform on macOS, Linux, and Windows.
-- The lint suite must support both full and fast modes.
+- The lint runner supports the full suite, named checks, and CI target sets.
 - All repo-owned Python lint tools must have unit tests.
 - Lint tools must use compact console output and full transcript logs.
 - Repo-specific policy must be configurable rather than buried in code where practical.
@@ -389,7 +410,6 @@ Authoritative for repo-local lint implementation details until replaced:
 The intended command surface is:
 
 - `just lint`
-- `just lint fast`
 - `just lint <tool>`
 - `just view`
 - `just view <tool>`
@@ -409,7 +429,7 @@ Rules:
 - `view` commands must not mutate source.
 - `view` commands may generate artifacts, static pages, graphs, and reports.
 
-### Final lint mode definitions
+### Lint command definitions
 
 #### `just lint`
 
@@ -427,33 +447,7 @@ Includes:
 - spelling/content checks
 - Python lint-tool unit tests
 - external dependency-policy tools that are acceptable in local full runs
-
-#### `just lint fast`
-
-Low-latency developer/agent lint subset.
-
-Design goals:
-
-- target local turnaround in roughly 10–30 seconds on a warm workspace
-- catch syntax/configuration/policy regressions early
-- avoid slow advisory/network-heavy or compile-heavy checks where possible
-
-Recommended initial `lint fast` contents:
-
-- `just fmt check`
-- `just lint boundaries`
-- `just lint manifests`
-- `just lint version`
-- `just lint identities`
-- `just lint lines`
-- `just lint pytests`
-
-Recommended initial exclusions from `lint fast`:
-
-- `clippy`
-- `cargo-deny`
-- `cargo-shear`
-- any future heavy visualization generators
+- published `sc-lint` boundary, portability, runtime, and line-count analyzers
 
 #### `just lint <tool>`
 
@@ -601,15 +595,11 @@ Reason:
 - avoids unnecessary rewrite
 - gives a strong architectural view of what is and is not yet constrained
 
-#### `just lint fast`
+#### Fast lint subset
 
-Adopt now as a product-surface addition.
-
-Reason:
-
-- strong local/agent UX improvement
-- aligns with the reference document
-- can be implemented without rewriting the current suite
+Not part of the implemented command surface. BG7 keeps one full default suite
+and supports named individual checks so automation does not confuse an incomplete
+subset with the full gate.
 
 ### Adopt, but only as full/CI lint
 
@@ -620,7 +610,7 @@ Already adopted.
 Decision:
 
 - keep it in full lint / CI
-- do not move it into `lint fast`
+- keep it in the full suite and CI
 
 #### `cargo-shear`
 
@@ -725,7 +715,6 @@ Decision:
 
 Required:
 
-- add `just lint fast`
 - add `just view`
 - add `just view <tool>` targets
 - update help output to document both surfaces
@@ -768,7 +757,7 @@ Required:
 
 Best candidates for `R.2A` parallel lint hardening:
 
-- `just lint fast`
+- parallel execution and aggregate failure reporting for `just lint`
 - `just view boundaries`
 - `just view lines`
 - command/help surface refactor
@@ -795,7 +784,6 @@ Worth a dedicated new sprint if `R.2A` is already full:
 This design is ready for implementation with the following immediate priorities:
 
 1. Add the missing command surface:
-   - `just lint fast`
    - `just view`
    - `just view <tool>`
 2. Implement first-party architecture views:

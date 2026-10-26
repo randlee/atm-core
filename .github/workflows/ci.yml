@@ -157,9 +157,22 @@ jobs:
           sc-compose --version
           wyvern --version
 
+      - name: Install Windows cross-lint tools
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes llvm nasm
+          llvm_lib="$(command -v llvm-lib || find /usr/bin -maxdepth 1 -name 'llvm-lib-*' -executable -print -quit)"
+          test -n "${llvm_lib}"
+          sudo ln -sf "${llvm_lib}" /usr/local/bin/llvm-lib
+
       - name: Run just lint
-        # Phase BG-6 switches this lane to the sc-lint profile runner.
-        run: just _py .just/run_lint.py all
+        # The ATM runner remains parallel and keep-going; `ci all` adds the
+        # Windows-target Clippy step on non-Windows hosts (a Windows host's
+        # native Clippy already targets x86_64-pc-windows-msvc).
+        run: just lint ci all
 
       - name: Show clippy diagnostics on lint failure
         if: failure()

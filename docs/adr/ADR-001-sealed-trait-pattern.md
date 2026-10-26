@@ -143,17 +143,16 @@ approach (tokio, axum). **This does not enforce the boundary** — it only reduc
 accidental discovery. A crate that explicitly depends on `atm-core` can still reference
 `atm_core::boundary::sealed::Sealed` regardless of `#[doc(hidden)]`.
 
-### Enforcement Layer 1 — Boundary lint (`sc-lint lint sc-boundary` + `lint_boundaries.py` + manifest checks)
+### Enforcement Layer 1 — Published boundary lint and manifest checks
 
 The published `sc-lint lint sc-boundary` analyzer (enabled by `analyzers.boundary` in
 `.sc-lint/install.json`) loads the boundary records in `boundaries/**/*.toml` and
 enforces their inventory schema and the workspace dependency edges they declare.
-`lint_boundaries.py` keeps the atm-only rules: it checks that trait impl sites match the
-permitted records, runs the `SCB-CONFIG`/`RETAINED`/`WORKSPACE`/`SINGLETON`/`OBSERVABILITY`
-rules, and keeps the gap checks the published analyzer does not cover yet, each marked
-with the sc-lint issue that retires it. `lint_manifests.py` verifies workspace
-`Cargo.toml` dependency declarations against allowed edges. All three gate CI on every
-push.
+`lint_boundaries.py` retains ATM-specific trait-implementation and record checks that
+are not reusable analyzer policy. The published manifest profile verifies workspace
+`Cargo.toml` dependency declarations against allowed edges. Any remaining analyzer
+exception is configured per rule with its affected path and upstream retirement issue.
+These checks gate CI on every push through `just lint ci all`.
 
 Boundary records in `docs/atm-core/boundaries.md`, `docs/atm-daemon/boundaries.md`, and
 `docs/atm-rusqlite/boundaries.md` document the permitted impl sites. Any impl in a crate
@@ -163,8 +162,9 @@ not listed in the corresponding record surfaces as a lint finding and fails CI.
 
 `atm` must never depend on `atm-daemon` or `atm-rusqlite`. `atm-core` must never depend
 on any adapter crate. These rules are enforced by `sc-lint lint sc-boundary` (forbidden edges
-declared in the boundary records), with `lint_boundaries.py` gap checks and
-`lint_manifests.py` — not by code review as a primary layer.
+declared in the boundary records), with the published manifest profile — not by code
+review as a primary layer. `lint_boundaries.py` provides the remaining ATM-specific
+record checks.
 
 ```
 atm-core        ← atm-daemon      (atm-daemon depends on atm-core, not vice versa)

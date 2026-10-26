@@ -62,3 +62,6 @@ tmp/
 .atm-bd/sanity-close/
 .atm-bd/*.bd-cache.sqlite3*
 .atm-bd/*.bd-cache.drain.*
+
+# sc-lint 0.8 analyzer finding artifacts written by `just lint`
+/artifacts/findings/

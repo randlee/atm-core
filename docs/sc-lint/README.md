@@ -1,33 +1,32 @@
 # `sc-lint` Docs
 
-This folder is the home for `sc-lint` design and planning material.
+This folder preserves the design and planning history for `sc-lint`.
 
-> **Status note (2026-08-27):** this material is historical design/planning
-> for what is now the published `sc-lint` crate family on crates.io (`0.5.x`).
-> References below to in-tree scaffold crates predate that release. The
-> vendored `crates/sc-lint-attributes` copy was removed by PR #1068 — ATM now
-> consumes the published `sc-lint-attributes = "0.5"` — while
-> `crates/sc-lint-directives` and `crates/sc-lint-boundary` remain vendored
-> pending the migration plan in
-> [`docs/plans/sc-lint-migration/`](../plans/sc-lint-migration/plan.md).
+> **Current status (2026-10-26):** ATM uses the published `sc-lint` v0.8.0
+> tools. The former in-tree `sc-lint-boundary` and `sc-lint-directives`
+> implementations were removed during the v0.8.0 adoption; they are not
+> vendored in this workspace. Current ATM integration and rule policy are
+> configured in [`sc-lint.toml`](../../sc-lint.toml), with the required tool
+> version recorded in [`.sc-lint/install.json`](../../.sc-lint/install.json).
+> The scaffold and CLI details below are historical snapshots, not current
+> implementation or configuration guidance.
 
-Current contents:
+Historical and supporting documents:
 
 - [`requirements.md`](./requirements.md) — consumer-neutral requirements for
   boundary-source migration and inventory-parity behavior
 - [`mvp.md`](./mvp.md) — MVP design for the initial `sc-lint-boundary`
   analyzer and the paired `sc-lint-attributes` plan
-- [`roadmap.md`](./roadmap.md) — decisions, rollout sequence, and what stays in
-  Python vs what moves to Rust
-- [`graph-schema.md`](./graph-schema.md) — current graph/export contract and
-  rule-id inventory
+- [`roadmap.md`](./roadmap.md) — historical decisions and rollout sequence
+- [`graph-schema.md`](./graph-schema.md) — historical graph/export contract
+  and rule-id inventory for the former in-tree analyzer
 - [`boundary-enforcement-model.md`](./boundary-enforcement-model.md) — planned
   warn/error escalation model for inventory-parity boundary enforcement
 - [`boundary-toml-migration.md`](./boundary-toml-migration.md) — migration plan
   for moving canonical boundary data from Markdown-embedded records to
   standalone TOML
 
-Current intended crate split:
+Historical in-tree crate split (before published `sc-lint`):
 
 - `sc-lint-boundary`
   - analyzer CLI + library
@@ -38,19 +37,17 @@ Current intended crate split:
   - exists early so source-level declarations can be added without late
     packaging churn
 
-Current scaffold status:
+Historical scaffold status (before published `sc-lint`):
 
 - `sc-lint-attributes`
-  - exists now
-  - versioned independently at `0.1.0`
-  - currently provides compile-valid, no-op `#[sc_lint(...)]` support for:
+  - existed as an independently versioned `0.1.0` scaffold
+  - provided compile-valid, no-op `#[sc_lint(...)]` support for:
     - `boundary.allow("cycle.type_method_self_loop")`
     - `boundary.allow("cycle.recursive_value_container")`
     - `boundary.internal_only`
 - `sc-lint-boundary`
-  - exists now
-  - versioned independently at `0.1.0`
-  - currently provides:
+  - existed as an independently versioned `0.1.0` scaffold
+  - provided:
     - workspace discovery through `cargo_metadata`
     - module-driven source traversal through `syn`
     - graph nodes for:
@@ -85,20 +82,19 @@ Current scaffold status:
       - JSON
       - Turtle
 
-Current repo integration status:
+Current repository integration (published `sc-lint` v0.8.0):
 
-- `just lint sc-boundary`
-  - exists now as a separate preliminary/manual target
-  - is intentionally not part of default `just lint` yet
-  - default `just lint` integration remains deferred until the manual/preliminary
-    gate criteria are explicitly approved
-- `just lint sc-portability`
-  - exists now as a separate preliminary/manual target
-  - is intentionally not part of default `just lint` yet
-  - default `just lint` integration remains deferred until the manual/preliminary
-    gate criteria are explicitly approved
+- `just lint` uses the repository's parallel lint runner and the published
+  analyzers configured in `sc-lint.toml`.
+- CI and release validation use `just lint ci all` for the cross-platform lint
+  steps.
+- Current boundary and portability rules, including failure policy, are
+  declared under `[tool.sc-lint.analyzers.*]` in `sc-lint.toml`. The required
+  published tool version is `0.8.0` in `.sc-lint/install.json`.
+- No current workspace default-policy file exists at the former in-tree
+  `config/defaults.toml` path; use the published tool configuration above.
 
-Planned rule families not implemented yet:
+Rule families planned for that initial scaffold:
 
 - `SCB-INVENTORY-001`
 - `SCB-INVENTORY-002`

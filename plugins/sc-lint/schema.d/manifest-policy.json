@@ -1,0 +1,68 @@
+{
+  "properties": {
+    "analyzers": {
+      "properties": {
+        "boundary": {
+          "properties": {
+            "manifest_dependency_allowlists": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["owner_manifest_path", "allowed_dependencies"],
+                "properties": {
+                  "owner_manifest_path": {"type": "string", "pattern": ".*\\S.*"},
+                  "allowed_dependencies": {
+                    "type": "array",
+                    "items": {"type": "string", "pattern": ".*\\S.*"}
+                  },
+                  "boundary_record_path": {
+                    "oneOf": [
+                      {"type": "string", "pattern": ".*\\S.*"},
+                      {"type": "array", "items": {"type": "string", "pattern": ".*\\S.*"}}
+                    ]
+                  }
+                }
+              }
+            },
+            "global_dependency_ownership": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["dependency", "manifest_message", "source_message"],
+                "properties": {
+                  "dependency": {"type": "string", "pattern": ".*\\S.*"},
+                  "allowed_manifest_paths": {
+                    "type": "array",
+                    "items": {"type": "string", "pattern": ".*\\S.*"}
+                  },
+                  "allowed_source_roots": {
+                    "type": "array",
+                    "items": {"type": "string", "pattern": ".*\\S.*"}
+                  },
+                  "manifest_message": {"type": "string", "pattern": ".*\\S.*"},
+                  "source_message": {"type": "string", "pattern": ".*\\S.*"}
+                }
+              }
+            },
+            "manifest_section_rules": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["owner_manifest_path", "dependency_package", "message"],
+                "properties": {
+                  "owner_manifest_path": {"type": "string", "pattern": ".*\\S.*"},
+                  "dependency_package": {"type": "string", "pattern": ".*\\S.*"},
+                  "allowed_sections": {
+                    "type": "array",
+                    "items": {"type": "string", "pattern": ".*\\S.*"}
+                  },
+                  "message": {"type": "string", "pattern": ".*\\S.*"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

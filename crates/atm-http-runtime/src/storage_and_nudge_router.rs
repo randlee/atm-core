@@ -90,6 +90,9 @@ pub struct StorageAndNudgeRouter {
 }
 
 impl StorageAndNudgeRouter {
+    /// Inherent entry point for this module's tests; production callers go
+    /// through `CanonicalWriteHandler::dispatch`.
+    #[cfg(test)]
     pub(crate) fn dispatch(
         &self,
         request: ApiRequest,
@@ -850,7 +853,12 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        StorageAndNudgeRouter::dispatch(self, request, ingress, deadline)
+        self.dispatch_with_request_id(
+            request,
+            ingress,
+            deadline,
+            atm_core::protocol::next_request_id(),
+        )
     }
 
     fn dispatch_with_request_id(

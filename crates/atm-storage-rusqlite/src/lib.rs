@@ -771,6 +771,7 @@ impl std::fmt::Debug for SqliteStorageBackend {
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
 /// an executable composition root through [`StorageFactory`].
+#[derive(Clone)]
 pub struct SqliteStorageFactory {
     database_path: Option<PathBuf>,
     read_pool_config: reader_pool::SharedReadPoolConfig,
@@ -789,19 +790,6 @@ impl Default for SqliteStorageFactory {
             tool_sender_peer_admission_config: None,
             observability: Arc::new(observability::PassiveSqliteObservability),
             timeline_observer: None,
-        }
-    }
-}
-
-impl Clone for SqliteStorageFactory {
-    fn clone(&self) -> Self {
-        Self {
-            database_path: self.database_path.clone(),
-            read_pool_config: self.read_pool_config,
-            tool_sender_registry_config: self.tool_sender_registry_config.clone(),
-            tool_sender_peer_admission_config: self.tool_sender_peer_admission_config.clone(),
-            observability: Arc::clone(&self.observability),
-            timeline_observer: self.timeline_observer.as_ref().map(Arc::clone),
         }
     }
 }

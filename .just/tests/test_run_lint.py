@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from concurrent.futures import Future
 import io
+import importlib.util
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -20,12 +24,16 @@ from run_lint import extract_error_fail_preview
 from run_lint import failure_preview
 from run_lint import LintResult
 from run_lint import LintTask
-from run_lint import partition_python_tasks
+from run_lint import main
 from run_lint import preview_lines_for_task
+from run_lint import plan_lanes
 from run_lint import prioritize_error_lines
 from run_lint import print_result
 from run_lint import resolve_task_names
+from run_lint import run_parallel
 from run_lint import strip_ansi
+from run_tests import load_test_manifest
+from run_tests import selected_test_commands
 
 
 class RunLintTests(unittest.TestCase):
@@ -35,10 +43,10 @@ members = ["crates/atm-core"]
 resolver = "2"
 """
 
-    def test_resolve_task_names_all_includes_new_targets(self) -> None:
-        names = resolve_task_names("all")
+    def test_resolve_task_names_default_includes_new_targets(self) -> None:
+        names = resolve_task_names("default")
         self.assertIn("boundaries", names)
-        self.assertIn("runtime-waits", names)
+        self.assertIn("sc-runtime", names)
         self.assertIn("manifests", names)
         self.assertIn("daemon-signing-coupling", names)
         self.assertIn("silent-emit", names)
@@ -58,6 +66,44 @@ resolver = "2"
         self.assertIn("sc-boundary", names)
         self.assertIn("sc-portability", names)
         self.assertIn("read-concurrency-gates", names)
+
+    def test_resolve_task_names_ci_host_scope_has_no_cross_target_step(self) -> None:
+        for host_platform in ("linux", "darwin", "win32"):
+            with self.subTest(host_platform=host_platform):
+                names = resolve_task_names("ci", "host", host_platform)
+                self.assertNotIn("clippy-windows", names)
+                self.assertEqual(names, resolve_task_names("default", host_platform=host_platform))
+
+    def test_resolve_task_names_ci_all_adds_clippy_windows_off_windows(self) -> None:
+        for host_platform in ("linux", "darwin"):
+            with self.subTest(host_platform=host_platform):
+                names = resolve_task_names("ci", "all", host_platform)
+                self.assertEqual(names[:3], ["fmt", "clippy", "clippy-windows"])
+                self.assertEqual(names.count("clippy-windows"), 1)
+
+    def test_resolve_task_names_accepts_clippy_windows_manual_target(self) -> None:
+        self.assertEqual(resolve_task_names("clippy-windows"), ["clippy-windows"])
+
+    def test_resolve_task_names_ci_all_on_windows_uses_native_clippy(self) -> None:
+        names = resolve_task_names("ci", "all", "win32")
+        self.assertIn("clippy", names)
+        self.assertNotIn("clippy-windows", names)
+
+    def test_main_runs_all_selected_lints_through_one_scheduler(self) -> None:
+        names = resolve_task_names("ci", "all", "linux")
+        tasks = {name: LintTask(name, ["true"]) for name in names}
+        results = [LintResult(tasks[name], 0, "", "", 0.0, Path("log")) for name in names]
+
+        with tempfile.TemporaryDirectory() as tempdir, \
+            mock.patch("run_lint.resolve_task_names", lambda target, scope: resolve_task_names(target, scope, "linux")), \
+            mock.patch("run_lint.build_tasks", return_value=tasks), \
+            mock.patch("run_lint.run_parallel", return_value=results) as run_parallel, \
+            mock.patch("run_lint.print_result"), \
+            mock.patch("sys.stdout", new_callable=io.StringIO):
+            exit_code = main(["run_lint.py", "ci", "all", "--root", tempdir])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual([task.name for task in run_parallel.call_args.args[0]], names)
 
     def test_resolve_task_names_rejects_unknown_target(self) -> None:
         with self.assertRaises(ValueError):
@@ -225,16 +271,25 @@ resolver = "2"
             ],
         )
 
-    def test_build_tasks_contains_expected_commands(self) -> None:
+    @mock.patch("run_lint.lint_argv")
+    def test_build_tasks_contains_expected_commands(self, lint_argv: mock.Mock) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            lint_argv.side_effect = lambda _root, analyzer, _args: (
+                repo_root / "sc-lint",
+                [str(repo_root / "sc-lint"), "lint", analyzer],
+            )
             tasks = build_tasks(repo_root)
-            self.assertEqual(tasks["modules"].command[-1], str(repo_root / ".just/lint_cargo_modules.py"))
+            self.assertEqual(
+                tasks["clippy-windows"].command,
+                ["just", "_sc-lint-clippy", "xwin", str(repo_root / "sc-lint")],
+            )
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
-            self.assertEqual(tasks["runtime-waits"].command[-1], str(repo_root / ".just/lint_runtime_waits.py"))
-            self.assertEqual(tasks["sc-boundary"].command[-1], str(repo_root / ".just/lint_sc_boundary.py"))
-            self.assertEqual(tasks["sc-portability"].command[-1], str(repo_root / ".just/lint_sc_portability.py"))
-            self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
+            self.assertEqual(tasks["sc-boundary"].command[-1], "sc-boundary")
+            self.assertEqual(tasks["sc-portability"].command[-1], "sc-portability")
+            self.assertEqual(tasks["sc-runtime"].command[-1], "sc-runtime")
+            self.assertEqual(tasks["identities"].command[-1], "identity-literals")
+            self.assertEqual(tasks["manifests"].command[1:3], ["-m", "sc_lint.lint_manifests"])
             self.assertEqual(
                 tasks["daemon-signing-coupling"].command[-1],
                 str(repo_root / ".just/lint_daemon_signing_coupling.py"),
@@ -245,7 +300,7 @@ resolver = "2"
             )
             self.assertEqual(
                 tasks["function-length"].command[-1],
-                str(repo_root / "scripts/check-function-length.py"),
+                "function-length",
             )
             self.assertEqual(
                 tasks["legacy-mailbox-paths"].command[-1],
@@ -260,7 +315,7 @@ resolver = "2"
                 str(repo_root / "scripts/check-capability-degradation.py"),
             )
             self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
-            self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
+            self.assertEqual(tasks["shear"].command[1:3], ["-m", "sc_lint.lint_cargo_shear"])
             self.assertEqual(tasks["arch-gates"].command, ["cargo", "test", "-p", "atm-architecture", "--quiet"])
             self.assertEqual(
                 tasks["fixed-sleep"].command[-1],
@@ -270,7 +325,7 @@ resolver = "2"
                 tasks["ttl-triage"].command[-1],
                 str(repo_root / ".just/lint_ttl_triage_consistency.py"),
             )
-            self.assertEqual(tasks["spell"].command[-1], str(repo_root / ".just/lint_codespell.py"))
+            self.assertEqual(tasks["spell"].command[1:3], ["-m", "sc_lint.lint_codespell"])
             self.assertEqual(
                 tasks["hermes-adapter"].command[-1],
                 str(repo_root / ".just/lint_hermes_adapter.py"),
@@ -281,37 +336,143 @@ resolver = "2"
             )
             self.assertEqual(tasks["pytests"].command[-1], str(repo_root / ".just/run_pytests.py"))
 
-    def test_resolve_task_names_fast_is_low_latency_subset(self) -> None:
-        self.assertEqual(
-            resolve_task_names("fast"),
-            [
-                "fmt",
-                "version",
-                "boundaries",
-                "manifests",
-                "daemon-signing-coupling",
-                "shear",
-                "silent-emit",
-                "runtime-stderr",
-                "function-length",
-                "legacy-mailbox-paths",
-                "nudge-taxonomy",
-                "capability-degradation",
-                "spell",
-                "hermes-adapter",
-                "pytests",
-            ],
-        )
+    def test_resolve_task_names_rejects_removed_all_and_fast_modes(self) -> None:
+        for removed in ("all", "fast"):
+            with self.subTest(removed=removed), self.assertRaises(ValueError):
+                resolve_task_names(removed)
 
-    def test_partition_python_tasks_runs_pytests_after_independent_lints(self) -> None:
-        version = LintTask("version", ["python3", "version.py"])
-        pytests = LintTask("pytests", ["python3", "run_pytests.py"])
-        boundaries = LintTask("boundaries", ["python3", "boundaries.py"])
+    def test_test_manifest_default_excludes_coverage_and_selectors_are_named(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            manifest_dir = root / ".sc-lint"
+            manifest_dir.mkdir()
+            manifest = {
+                "test": {
+                    "default": ["just", "test"],
+                    "python": ["python", "tests.py"],
+                    "coverage": ["python", "coverage.py"],
+                }
+            }
+            (manifest_dir / "install.json").write_text(json.dumps(manifest), encoding="utf-8")
 
-        parallel, serial = partition_python_tasks([version, pytests, boundaries])
+            loaded = load_test_manifest(root)
 
-        self.assertEqual(parallel, [version, boundaries])
-        self.assertEqual(serial, [pytests])
+        self.assertEqual(selected_test_commands(loaded, []), [("python", ["python", "tests.py"])])
+        self.assertEqual(selected_test_commands(loaded, ["coverage"]), [("coverage", ["python", "coverage.py"])])
+        with self.assertRaisesRegex(ValueError, "unknown test selector"):
+            selected_test_commands(loaded, ["missing"])
+
+    def test_coverage_reports_clear_linux_error_before_running_tools(self) -> None:
+        coverage_path = Path(__file__).resolve().parents[2] / "scripts/coverage/run.py"
+        spec = importlib.util.spec_from_file_location("atm_coverage_run", coverage_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        coverage_run = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = coverage_run
+        spec.loader.exec_module(coverage_run)
+        error_output = io.StringIO()
+        with mock.patch.object(coverage_run.host_platform_module, "system", return_value="Linux"), \
+            mock.patch.object(coverage_run.sys, "argv", [str(coverage_path), "--write-artifacts"]), \
+            mock.patch.object(coverage_run.sys, "stderr", error_output), \
+            mock.patch.object(coverage_run, "run_coverage_export") as run_export:
+            status = coverage_run.main()
+
+        self.assertEqual(status, 2)
+        self.assertIn("coverage reporting currently supports only macOS and Windows", error_output.getvalue())
+        run_export.assert_not_called()
+
+    def test_failure_summary_names_every_failed_lint(self) -> None:
+        selected = [LintTask(name, [name]) for name in ("version", "spell", "pytests")]
+        results = [
+            LintResult(selected[0], 1, "error: version", "", 0.1, Path("version.log")),
+            LintResult(selected[1], 0, "", "", 0.1, Path("spell.log")),
+            LintResult(selected[2], 1, "FAIL: test_sample", "", 0.1, Path("pytests.log")),
+        ]
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as tempdir, \
+            mock.patch("run_lint.resolve_task_names", return_value=[task.name for task in selected]), \
+            mock.patch("run_lint.build_tasks", return_value={task.name: task for task in selected}), \
+            mock.patch("run_lint.run_parallel", return_value=results), \
+            mock.patch("sys.stdout", output):
+            status = main(["run_lint.py", "default", "--root", tempdir])
+
+        self.assertEqual(status, 1)
+        self.assertIn("lint failed: 2 check(s) failed: version, pytests", output.getvalue())
+
+    def test_parallel_scheduler_plans_serial_cargo_and_independent_lanes(self) -> None:
+        tasks = [LintTask(name, [name]) for name in ("clippy", "version", "pytests", "spell", "arch-gates")]
+        expected_cargo = [tasks[0], tasks[2], tasks[4]]
+        expected_independent = [[tasks[1]], [tasks[3]]]
+
+        lanes = plan_lanes(tasks)
+
+        self.assertEqual(lanes, [expected_cargo, *expected_independent])
+        flattened = [task for lane in lanes for task in lane]
+        self.assertCountEqual(flattened, tasks)
+        self.assertEqual(len(lanes), 3)
+
+        worker_counts: list[int] = []
+        submitted: list[
+            tuple[Callable[..., list[LintResult]], tuple[object, ...], Future[list[LintResult]]]
+        ] = []
+
+        class DeferredExecutor:
+            def __init__(self, max_workers: int) -> None:
+                worker_counts.append(max_workers)
+
+            def __enter__(self) -> DeferredExecutor:
+                return self
+
+            def __exit__(self, *_exc_info: object) -> None:
+                return None
+
+            def submit(
+                self, function: Callable[..., list[LintResult]], *args: object
+            ) -> Future[list[LintResult]]:
+                future: Future[list[LintResult]] = Future()
+                submitted.append((function, args, future))
+                return future
+
+        call_order: list[str] = []
+
+        def fake_run_task(task: LintTask, _root: Path) -> LintResult:
+            call_order.append(task.name)
+            return LintResult(task, 0, "", "", 0.0, Path("log"))
+
+        def fake_as_completed(
+            futures: list[Future[list[LintResult]]],
+        ) -> list[Future[list[LintResult]]]:
+            self.assertEqual(len(submitted), len(lanes))
+            self.assertEqual(futures, [future for _function, _args, future in submitted])
+            self.assertEqual(worker_counts, [len(lanes)])
+
+            cargo_function, cargo_args, cargo_future = submitted[0]
+            independent_futures = []
+            for function, args, future in submitted[1:]:
+                future.set_result(function(*args))
+                independent_futures.append(future)
+
+            cargo_names = [task.name for task in expected_cargo]
+            self.assertFalse(cargo_future.done())
+            self.assertFalse(any(name in cargo_names for name in call_order))
+
+            cargo_future.set_result(cargo_function(*cargo_args))
+            cargo_positions = [index for index, name in enumerate(call_order) if name in cargo_names]
+            self.assertEqual(cargo_positions, list(range(cargo_positions[0], cargo_positions[0] + len(cargo_names))))
+            self.assertEqual(call_order[cargo_positions[0] : cargo_positions[-1] + 1], cargo_names)
+            return [*independent_futures, cargo_future]
+
+        run_task_mock = mock.Mock(side_effect=fake_run_task)
+        with tempfile.TemporaryDirectory() as tempdir, \
+            mock.patch("run_lint.ThreadPoolExecutor", DeferredExecutor), \
+            mock.patch("run_lint.as_completed", side_effect=fake_as_completed), \
+            mock.patch("run_lint.run_task", run_task_mock):
+            results = run_parallel(tasks, Path(tempdir))
+
+        self.assertEqual(worker_counts, [len(lanes)])
+        self.assertEqual([result.task for result in results], tasks)
+        self.assertEqual(call_order, ["version", "spell", "clippy", "pytests", "arch-gates"])
+        self.assertEqual(run_task_mock.call_count, len(tasks))
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

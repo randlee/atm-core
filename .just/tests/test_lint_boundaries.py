@@ -1276,6 +1276,31 @@ allowed_dependencies = ["atm-core", "rusqlite"]
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any("stale allowed dependent" in item for item in rendered), rendered)
 
+    def test_collect_boundary_violations_counts_dev_edge_as_live_allowed_dependent(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            # atm-daemon reaches the owner through [dependencies]; atm-core only
+            # through its fixture [dev-dependencies] edge.
+            self.write_manifests(
+                repo_root,
+                atm_daemon_dependencies=(
+                    'atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.1.2" }\n'
+                    'atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }\n'
+                ),
+            )
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"').replace(
+                    'allowed_dependents = ["atm-daemon"]', 'allowed_dependents = ["agent-team-mail-core", "atm-daemon"]'
+                ),
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertFalse(any("stale allowed dependent" in item for item in rendered), rendered)
+            self.assertFalse(any("found unexpected dependent" in item for item in rendered), rendered)
+
     def test_collect_boundary_violations_flags_forbidden_edge_even_when_planned(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

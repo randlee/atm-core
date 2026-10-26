@@ -1,0 +1,9 @@
+{
+  "analyzer": "runtime",
+  "families": {},
+  "own_keys": [],
+  "rules": [
+    "SCB-RUNTIME-001",
+    "SCB-RUNTIME-002"
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "properties": {
+    "profiles": {
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "description": "Existing shape: a command argv array, rendered verbatim.",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          {
+            "description": "Object step: a command plus an optional platform tag and cargo target. Shape only; the sc-lint binary owns platform, target, and command-shape semantics.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["command"],
+            "properties": {
+              "command": { "type": "array", "items": { "type": "string" } },
+              "platform": { "type": "string" },
+              "target": { "type": "string" }
+            }
+          }
+        ]
+      }
+    },
+    "lint_profiles": {
+      "description": "Optional named lint profiles: profile name to ordered list of step names from `profiles`. Shape only; the sc-lint binary rejects unknown, duplicate, empty, and colliding members.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    }
+  }
+}

@@ -2386,24 +2386,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-lint-boundary"
-version = "1.6.5"
-dependencies = [
- "anyhow",
- "cargo_metadata",
- "clap",
- "proc-macro2",
- "quote",
- "sc-lint-attributes 0.5.0",
- "sc-lint-directives 1.6.5",
- "serde",
- "serde_json",
- "syn 2.0.119",
- "tempfile",
- "toml 0.8.23",
-]
-
-[[package]]
 name = "sc-lint-directives"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2418,14 +2400,6 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad3306ff8f041d4c122cfac038aa1be7893c7b399f5e8f28b95d74362538c615"
 dependencies = [
- "syn 2.0.119",
-]
-
-[[package]]
-name = "sc-lint-directives"
-version = "1.6.5"
-dependencies = [
- "quote",
  "syn 2.0.119",
 ]
 

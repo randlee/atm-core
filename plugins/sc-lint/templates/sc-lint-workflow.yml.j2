@@ -23,5 +23,5 @@ jobs:
         with:
           config: sc-lint.toml
       - run: just setup
-      - run: just lint
+      {{ lint_steps }}
       - run: just test

@@ -1685,8 +1685,8 @@ def collect_manifest_consistency_violations(repo_root: Path, records: list[Bound
 
 
 def collect_allowed_dependent_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
-    # Package-level dependents (union over a package's records, runtime edges
-    # only, stale entries reported). The published SCB-DEPENDENCY-002 checks
+    # Package-level dependents (union over a package's records, stale entries
+    # reported). Only runtime edges can be unexpected; dev edges count as live. The published SCB-DEPENDENCY-002 checks
     # each record separately and counts dev edges, so it is reported but not
     # failing in .sc-lint/install.json: delete when randlee/sc-lint#376 ships.
     violations: list[BoundaryViolation] = []
@@ -1708,15 +1708,18 @@ def collect_allowed_dependent_violations(repo_root: Path, records: list[Boundary
                 continue
             manifest = tomllib_load(depender_info.path)
             for section_name, dependencies in dependency_sections(manifest):
-                if "dev-dependencies" in section_name:
-                    continue
+                is_dev_section = "dev-dependencies" in section_name
                 for dependency_name, dependency in dependencies.items():
                     package_name = dependency_package_name(dependency_name, dependency)
                     dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
                     if dependency_info is None or dependency_info.path != owner_info.path:
                         continue
                     depender_aliases = set(depender_info.aliases)
+                    # A dev edge keeps an allowed dependent live but is never
+                    # an unexpected dependent.
                     live_allowed_aliases.update(depender_aliases)
+                    if is_dev_section:
+                        continue
                     if depender_aliases.isdisjoint(allowed):
                         rel_manifest = depender_info.path.relative_to(repo_root).as_posix()
                         violations.append(
