@@ -3,10 +3,18 @@
     "boundary": {
       "enabled": true,
       "fail_rules": [
+        "SCB-CYCLE-001",
+        "SCB-CYCLE-002",
+        "SCB-CYCLE-003",
+        "SCB-BOUNDARY-001",
+        "SCB-BOUNDARY-002",
+        "SCB-BOUNDARY-003",
+        "SCB-CALLER-001",
         "SCB-DEPENDENCY-001",
         "SCB-DEPENDENCY-002",
-        "SCB-CYCLE-002",
-        "SCB-CYCLE-003"
+        "SCB-DEPENDENCY-003",
+        "SCB-MANIFEST-001",
+        "SCB-MANIFEST-002"
       ],
       "reason": "Boundary inventory, crate cycles and forbidden crate edges for the atm-core workspace."
     },
@@ -32,7 +40,9 @@
           "crates/atm-core/src/persistence.rs",
           "crates/atm-core/src/transfer_script.rs",
           "crates/atm-daemon-bootstrap/src/lib.rs",
+          "crates/atm-daemon-bootstrap/src/protected_trust_root.rs",
           "crates/atm-daemon-client/src/lib.rs",
+          "crates/atm-herdr/src/transport_socket.rs",
           "crates/atm-http-runtime/src/client.rs",
           "crates/atm-http-runtime/src/client_tail.rs",
           "crates/atm-http-runtime/src/http1_server.rs",
@@ -41,13 +51,10 @@
           "crates/atm-http-runtime/src/runtime_listener.rs",
           "crates/atm-http-runtime/src/runtime_setup.rs",
           "crates/atm-http-runtime/src/unix_socket.rs",
-          "crates/atm/src/main.rs",
-          "crates/atm-daemon-bootstrap/src/peer_launch_config.rs",
-          "crates/atm-daemon-bootstrap/src/protected_trust_root.rs",
-          "crates/atm-herdr/src/transport_socket.rs"
+          "crates/atm/src/main.rs"
         ]
       },
-      "reason": "Every remaining exception is rule-scoped: crates/atm-herdr/src/transport_socket.rs remains under PORT-007 for its \\?\\ paths until randlee/sc-lint#192 and under PORT-010 for its paired Unix helper until randlee/sc-lint#372; crates/atm-http-runtime/src/unix_socket.rs remains under PORT-010 until randlee/sc-lint#372 because loopback_tcp.rs is not an out-of-line Windows adapter. peer_launch_config.rs PORT-006/PORT-008 has the platform-neutral path/identity remediation tracked by randlee/sc-lint#372. No analyzer-wide portability exclusion remains.",
+      "reason": "No analyzer-wide portability exclusion remains; each exception below is rule-scoped. PORT-007 (Windows named-pipe/verbatim path literals in Windows-only transport code): crates/atm-core/src/doctor/herdr_state.rs, crates/atm-herdr/src/transport.rs and crates/atm-herdr/src/transport_socket.rs, until randlee/sc-lint#192 adds reviewed-literal suppression. PORT-010 (production #[cfg(unix)] helpers with no same-scope #[cfg(windows)] sibling; their Windows behavior lives in a different module or is intentionally absent, and sc-lint 0.8.0 platform_adapters can pair only out-of-line #[cfg(unix)]/#[cfg(windows)] modules, of which atm-core has one unpaired cfg(unix) module, atm-http-runtime unix_socket, whose Windows counterpart loopback_tcp.rs is not a cfg(windows) module): every PORT-010 path listed, including crates/atm-http-runtime/src/loopback_tcp.rs and crates/atm-herdr/src/transport_socket.rs connect_unix, until randlee/sc-lint#372 ships. PORT-006 (/var/tmp/atm-ports under cfg(target_os = \"linux\")) and PORT-008 (USER with USERNAME fallback for the claim-owner label) in crates/atm-daemon-bootstrap/src/peer_launch_config.rs: develop-sync baseline atm-phase-bg.sync-port-f1; the analyzer does not recognize target_os gating or the fallback, and no sc-lint issue covers either yet (team-lead to file).",
       "targets": [
         "linux",
         "macos",
