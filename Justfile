@@ -303,5 +303,6 @@ view target='all':
 ci: lint test
 
 # >>> sc-lint managed integration >>>
+python := if os_family() == "windows" { "python" } else { "python3" }
 import '.sc-lint/justfile'
 # <<< sc-lint managed integration <<<

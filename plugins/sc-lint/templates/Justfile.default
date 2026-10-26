@@ -1,3 +1,5 @@
-set windows-shell := ["pwsh", "-NoLogo", "-Command"]
+set windows-shell := ["cmd.exe", "/c"]
+
+python := if os_family() == "windows" { "python" } else { "python3" }
 
 default: lint
