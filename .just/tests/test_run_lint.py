@@ -51,6 +51,7 @@ resolver = "2"
         self.assertIn("daemon-signing-coupling", names)
         self.assertIn("silent-emit", names)
         self.assertIn("function-length", names)
+        self.assertIn("kit-drift", names)
         self.assertIn("legacy-mailbox-paths", names)
         self.assertIn("nudge-taxonomy", names)
         self.assertIn("capability-degradation", names)
@@ -301,6 +302,16 @@ resolver = "2"
             self.assertEqual(
                 tasks["function-length"].command[-1],
                 "function-length",
+            )
+            self.assertEqual(
+                tasks["kit-drift"].command,
+                [
+                    sys.executable,
+                    "-B",
+                    str(repo_root / "plugins/sc-lint/install.py"),
+                    str(repo_root),
+                    "--dry-run",
+                ],
             )
             self.assertEqual(
                 tasks["legacy-mailbox-paths"].command[-1],

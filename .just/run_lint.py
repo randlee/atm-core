@@ -40,6 +40,7 @@ PYTHON_LINT_ORDER = (
     "silent-emit",
     "runtime-stderr",
     "function-length",
+    "kit-drift",
     "legacy-mailbox-paths",
     "nudge-taxonomy",
     "capability-degradation",
@@ -170,6 +171,15 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             "runtime-stderr", [*python_command, str(repo_root / "scripts/check-runtime-stderr.py")]
         ),
         "function-length": LintTask("function-length", function_length_command),
+        "kit-drift": LintTask(
+            "kit-drift",
+            [
+                *python_command,
+                str(repo_root / "plugins/sc-lint/install.py"),
+                str(repo_root),
+                "--dry-run",
+            ],
+        ),
         "legacy-mailbox-paths": LintTask(
             "legacy-mailbox-paths",
             [*python_command, str(repo_root / "scripts/check-legacy-mailbox-paths.py")],
