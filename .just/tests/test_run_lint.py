@@ -485,6 +485,47 @@ resolver = "2"
         self.assertEqual(call_order, ["version", "spell", "clippy", "pytests", "arch-gates"])
         self.assertEqual(run_task_mock.call_count, len(tasks))
 
+    def test_parallel_scheduler_keeps_going_after_cargo_failure(self) -> None:
+        selected = [LintTask(name, [name]) for name in ("clippy", "arch-gates", "version", "spell")]
+
+        class ImmediateExecutor:
+            """Run each submitted lane inline so the scheduler test has no timing dependency."""
+
+            def __init__(self, max_workers: int) -> None:
+                self.max_workers = max_workers
+
+            def __enter__(self) -> ImmediateExecutor:
+                return self
+
+            def __exit__(self, *_exc_info: object) -> None:
+                return None
+
+            def submit(self, function: Callable[..., list[LintResult]], *args: object) -> Future[list[LintResult]]:
+                future: Future[list[LintResult]] = Future()
+                future.set_result(function(*args))
+                return future
+
+        call_order: list[str] = []
+
+        def fake_run_task(task: LintTask, _root: Path) -> LintResult:
+            call_order.append(task.name)
+            status = 1 if task.name in {"clippy", "spell"} else 0
+            output = f"error: {task.name}" if status else ""
+            return LintResult(task, status, output, "", 0.0, Path(f"{task.name}.log"))
+
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as tempdir, \
+            mock.patch("run_lint.resolve_task_names", return_value=[task.name for task in selected]), \
+            mock.patch("run_lint.build_tasks", return_value={task.name: task for task in selected}), \
+            mock.patch("run_lint.ThreadPoolExecutor", ImmediateExecutor), \
+            mock.patch("run_lint.run_task", side_effect=fake_run_task), \
+            mock.patch("sys.stdout", output):
+            status = main(["run_lint.py", "ci", "all", "--root", tempdir])
+
+        self.assertEqual(call_order, ["clippy", "arch-gates", "version", "spell"])
+        self.assertEqual(status, 1)
+        self.assertIn("lint failed: 2 check(s) failed: clippy, spell", output.getvalue())
+
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
