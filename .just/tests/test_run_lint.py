@@ -412,12 +412,15 @@ resolver = "2"
         self.assertEqual(len(lanes), 3)
 
         worker_counts: list[int] = []
+        submitted: list[
+            tuple[Callable[..., list[LintResult]], tuple[object, ...], Future[list[LintResult]]]
+        ] = []
 
-        class SynchronousExecutor:
+        class DeferredExecutor:
             def __init__(self, max_workers: int) -> None:
                 worker_counts.append(max_workers)
 
-            def __enter__(self) -> SynchronousExecutor:
+            def __enter__(self) -> DeferredExecutor:
                 return self
 
             def __exit__(self, *_exc_info: object) -> None:
@@ -427,22 +430,49 @@ resolver = "2"
                 self, function: Callable[..., list[LintResult]], *args: object
             ) -> Future[list[LintResult]]:
                 future: Future[list[LintResult]] = Future()
-                try:
-                    future.set_result(function(*args))
-                except BaseException as error:
-                    future.set_exception(error)
+                submitted.append((function, args, future))
                 return future
 
+        call_order: list[str] = []
+
         def fake_run_task(task: LintTask, _root: Path) -> LintResult:
+            call_order.append(task.name)
             return LintResult(task, 0, "", "", 0.0, Path("log"))
 
+        def fake_as_completed(
+            futures: list[Future[list[LintResult]]],
+        ) -> list[Future[list[LintResult]]]:
+            self.assertEqual(len(submitted), len(lanes))
+            self.assertEqual(futures, [future for _function, _args, future in submitted])
+            self.assertEqual(worker_counts, [len(lanes)])
+
+            cargo_function, cargo_args, cargo_future = submitted[0]
+            independent_futures = []
+            for function, args, future in submitted[1:]:
+                future.set_result(function(*args))
+                independent_futures.append(future)
+
+            cargo_names = [task.name for task in expected_cargo]
+            self.assertFalse(cargo_future.done())
+            self.assertFalse(any(name in cargo_names for name in call_order))
+
+            cargo_future.set_result(cargo_function(*cargo_args))
+            cargo_positions = [index for index, name in enumerate(call_order) if name in cargo_names]
+            self.assertEqual(cargo_positions, list(range(cargo_positions[0], cargo_positions[0] + len(cargo_names))))
+            self.assertEqual(call_order[cargo_positions[0] : cargo_positions[-1] + 1], cargo_names)
+            return [*independent_futures, cargo_future]
+
+        run_task_mock = mock.Mock(side_effect=fake_run_task)
         with tempfile.TemporaryDirectory() as tempdir, \
-            mock.patch("run_lint.ThreadPoolExecutor", SynchronousExecutor), \
-            mock.patch("run_lint.run_task", side_effect=fake_run_task):
+            mock.patch("run_lint.ThreadPoolExecutor", DeferredExecutor), \
+            mock.patch("run_lint.as_completed", side_effect=fake_as_completed), \
+            mock.patch("run_lint.run_task", run_task_mock):
             results = run_parallel(tasks, Path(tempdir))
 
         self.assertEqual(worker_counts, [len(lanes)])
         self.assertEqual([result.task for result in results], tasks)
+        self.assertEqual(call_order, ["version", "spell", "clippy", "pytests", "arch-gates"])
+        self.assertEqual(run_task_mock.call_count, len(tasks))
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
