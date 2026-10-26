@@ -157,6 +157,17 @@ jobs:
           sc-compose --version
           wyvern --version
 
+      - name: Install Windows cross-lint tools
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes llvm nasm
+          llvm_lib="$(command -v llvm-lib || find /usr/bin -maxdepth 1 -name 'llvm-lib-*' -executable -print -quit)"
+          test -n "${llvm_lib}"
+          sudo ln -sf "${llvm_lib}" /usr/local/bin/llvm-lib
+
       - name: Run just lint
         # The ATM runner remains parallel and keep-going; `ci all` adds the
         # Windows-target Clippy step on non-Windows hosts (a Windows host's

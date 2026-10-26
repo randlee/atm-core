@@ -50,7 +50,8 @@ _lint-clippy:
     {{clippy_cmd}}
 
 # Preserve PyO3's pinned interpreter while the adoption kit runs its published
-# clippy profiles. Delete when randlee/sc-lint#198 ships.
+# `sc-lint clippy` profiles through the resolved binary. Delete when
+# randlee/sc-lint#198 ships.
 [private]
 _sc-lint-clippy target binary=env_var_or_default("SC_LINT_BIN", ""):
     {{sc_lint_clippy_prefix}} "{{binary}}" clippy {{target}}
