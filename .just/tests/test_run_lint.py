@@ -401,14 +401,14 @@ resolver = "2"
 
     def test_parallel_scheduler_plans_serial_cargo_and_independent_lanes(self) -> None:
         tasks = [LintTask(name, [name]) for name in ("clippy", "version", "pytests", "spell", "arch-gates")]
-        expected_cargo = [tasks[0], tasks[2], tasks[4]]
+        expected_cargo = [tasks[0], tasks[4]]
         expected_independent = [[tasks[1]], [tasks[3]]]
 
         lanes = plan_lanes(tasks)
 
         self.assertEqual(lanes, [expected_cargo, *expected_independent])
         flattened = [task for lane in lanes for task in lane]
-        self.assertCountEqual(flattened, tasks)
+        self.assertCountEqual(flattened, [task for task in tasks if task.name != "pytests"])
         self.assertEqual(len(lanes), 3)
 
         worker_counts: list[int] = []
@@ -471,8 +471,21 @@ resolver = "2"
 
         self.assertEqual(worker_counts, [len(lanes)])
         self.assertEqual([result.task for result in results], tasks)
-        self.assertEqual(call_order, ["version", "spell", "clippy", "pytests", "arch-gates"])
+        self.assertEqual(call_order, ["version", "spell", "clippy", "arch-gates", "pytests"])
         self.assertEqual(run_task_mock.call_count, len(tasks))
+
+    def test_parallel_scheduler_runs_pytests_without_parallel_lanes(self) -> None:
+        task = LintTask("pytests", ["pytests"])
+        result = LintResult(task, 0, "", "", 0.0, Path("log"))
+
+        with tempfile.TemporaryDirectory() as tempdir, mock.patch(
+            "run_lint.ThreadPoolExecutor"
+        ) as executor, mock.patch("run_lint.run_task", return_value=result) as run_task_mock:
+            results = run_parallel([task], Path(tempdir))
+
+        executor.assert_not_called()
+        run_task_mock.assert_called_once_with(task, Path(tempdir))
+        self.assertEqual(results, [result])
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

@@ -85,8 +85,10 @@ The current `Justfile` exposes:
 Current behavior:
 
 - `just lint` runs all host lint steps concurrently, except Cargo build-lock users
-  (`clippy`, `clippy-windows`, and `arch-gates`) share a serialized lane. Every
-  selected step completes and the final summary names all failures.
+  (`clippy`, `clippy-windows`, and `arch-gates`) share a serialized lane. `pytests`
+  starts only after every other lane completes, preventing fixture writes from racing
+  repository-inspection lints. Every selected step completes and the final summary
+  names all failures.
 - `just lint <tool>` runs one lint target; `just lint ci [host|all]` selects the CI
   lint set, with `all` adding Windows-target Clippy off Windows.
 - `run_lint.py` has no `all` or `fast` mode; `default` is the full host suite.
