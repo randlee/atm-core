@@ -152,7 +152,7 @@ enforces their inventory schema and the workspace dependency edges they declare.
 are not reusable analyzer policy. The published manifest profile verifies workspace
 `Cargo.toml` dependency declarations against allowed edges. Any remaining analyzer
 exception is configured per rule with its affected path and upstream retirement issue.
-These profiles gate CI on every push.
+These checks gate CI on every push through `just lint ci all`.
 
 Boundary records in `docs/atm-core/boundaries.md`, `docs/atm-daemon/boundaries.md`, and
 `docs/atm-rusqlite/boundaries.md` document the permitted impl sites. Any impl in a crate

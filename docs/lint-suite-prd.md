@@ -107,7 +107,8 @@ Current execution model:
 - The umbrella runner prints short pass/fail summaries.
 - `just lint` is the repository-owned parallel, keep-going runner;
   `just lint ci` selects host CI checks and `just lint ci all` also includes
-  the Windows-target Clippy profile.
+  the Windows-target Clippy profile on non-Windows hosts. CI and
+  `scripts/validate_release.py` run `just lint ci all`.
 
 ### Current custom Python lint tools
 

@@ -5266,7 +5266,9 @@ Task ledger shape (Phase BA):
     process state
   - the default `just lint` path remains the required development gate for
     any new postmortem rule that is cheap and deterministic enough for normal
-    local use
+    local use; CI and release validation run `just lint ci all`, which runs
+    the published `sc-lint lint sc-boundary`, `sc-portability` and
+    `sc-runtime` analyzers
 
   Family-specific obligations:
   - ungated `std::os::unix` imports in production paths must fail the

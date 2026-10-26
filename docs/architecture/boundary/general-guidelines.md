@@ -76,7 +76,7 @@ Treat these as mandatory evidence:
   its upstream retirement issue
 - `.just/lint_boundaries.py` for ATM-specific boundary records and checks that
   are not reusable analyzer policy
-- `.just/run_lint.py`
+- `.just/run_lint.py`, run by `just lint`; CI runs `just lint ci all`
 - `crates/atm-architecture/tests/boundary_enforcement.rs`
 - `docs/sc-lint/README.md`
 - `docs/sc-lint/boundary-enforcement-model.md`
