@@ -295,9 +295,47 @@
     ]
   },
   "test": {
+    "build": [
+      "cargo",
+      "build",
+      "--workspace"
+    ],
+    "cli-surface": [
+      "cargo",
+      "test",
+      "-p",
+      "agent-team-mail",
+      "--features",
+      "cli-surface-dump",
+      "--test",
+      "cli_surface"
+    ],
+    "coverage": [
+      "just",
+      "_py",
+      "scripts/coverage/run.py",
+      "--write-artifacts"
+    ],
+    "daemon-signing": [
+      "just",
+      "_py",
+      ".just/sign_daemon_dev.py"
+    ],
     "default": [
       "just",
       "test"
+    ],
+    "python": [
+      "just",
+      "_py",
+      ".just/run_pytests.py"
+    ],
+    "workspace": [
+      "cargo",
+      "test",
+      "--workspace",
+      "--exclude",
+      "atm-daemon"
     ]
   }
 }

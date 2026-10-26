@@ -161,3 +161,27 @@ command = ["just", "_py", ".just/run_lint.py", "version"]
 [[tool.sc-lint.test]]
 name = "default"
 command = ["just", "test"]
+
+[[tool.sc-lint.test]]
+name = "python"
+command = ["just", "_py", ".just/run_pytests.py"]
+
+[[tool.sc-lint.test]]
+name = "build"
+command = ["cargo", "build", "--workspace"]
+
+[[tool.sc-lint.test]]
+name = "workspace"
+command = ["cargo", "test", "--workspace", "--exclude", "atm-daemon"]
+
+[[tool.sc-lint.test]]
+name = "cli-surface"
+command = ["cargo", "test", "-p", "agent-team-mail", "--features", "cli-surface-dump", "--test", "cli_surface"]
+
+[[tool.sc-lint.test]]
+name = "daemon-signing"
+command = ["just", "_py", ".just/sign_daemon_dev.py"]
+
+[[tool.sc-lint.test]]
+name = "coverage"
+command = ["just", "_py", "scripts/coverage/run.py", "--write-artifacts"]

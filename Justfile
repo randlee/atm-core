@@ -69,10 +69,9 @@ build:
     cargo build --workspace
     {{python_cmd}} .just/sign_daemon_dev.py
 
-# Run the full workspace test suite or explicit coverage reporting.
-test mode='default':
-    {{python_cmd}} .just/run_tests.py {{mode}}
-    {{python_cmd}} .just/sign_daemon_dev.py
+# Run the manifest-defined test suite, a named test selector, or explicit coverage.
+test *selectors:
+    {{python_cmd}} .just/run_tests.py {{selectors}}
 
 # Validate and plan a bounded adversarial-fuzz campaign (no real execution).
 fuzz *args:

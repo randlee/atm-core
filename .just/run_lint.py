@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -61,28 +61,16 @@ PYTHON_LINT_ORDER = (
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability", "sc-runtime")
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear", "arch-gates")
+# These steps invoke Cargo compilation and must not overlap one another. Other
+# repository checks can run while this single serialized lane is active.
+# The Python suite includes integration tests that invoke Cargo themselves, so
+# it shares the build-lock lane with direct Cargo checks.
+CARGO_LOCK_LINTS = {"clippy", "clippy-windows", "arch-gates", "pytests"}
 # Cross-target cargo steps that `ci all` adds on a non-Windows host. A
 # Windows host's native clippy already targets x86_64-pc-windows-msvc.
 CROSS_TARGET_LINTS = ("clippy-windows",)
-FAST_LINT_ORDER = (
-    "fmt",
-    "version",
-    "boundaries",
-    "manifests",
-    "daemon-signing-coupling",
-    "shear",
-    "silent-emit",
-    "runtime-stderr",
-    "function-length",
-    "legacy-mailbox-paths",
-    "nudge-taxonomy",
-    "capability-degradation",
-    "spell",
-    "hermes-adapter",
-    "pytests",
-)
 HIGH_VOLUME_LINTS = {"identities", "lines"}
-CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "sc-runtime", "manifests", "arch-gates"}
+CRATE_INVENTORY_LINTS = {"fmt", "clippy", "boundaries", "sc-boundary", "sc-portability", "sc-runtime", "manifests", "arch-gates"}
 COUNT_PATTERNS = (
     ("total violations:", "violations"),
     ("errors:", "errors"),
@@ -120,6 +108,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
     _, runtime_command = lint_argv(repo_root, "sc-runtime", ["--config", str(repo_root / "sc-lint.toml")])
     _, line_count_command = lint_argv(repo_root, "line-counts", [])
     _, function_length_command = lint_argv(repo_root, "function-length", [])
+    _, identity_command = lint_argv(repo_root, "identity-literals", [])
     # Wheel-only sc-lint helpers run from the kit venv; delete when
     # randlee/sc-lint#198 ships a consumer step runner for them.
     venv_python = repo_root / ".sc-lint" / "venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
@@ -127,14 +116,13 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         "fmt": LintTask("fmt", ["just", "_lint-fmt"]),
         "clippy": LintTask("clippy", ["just", "_lint-clippy"]),
         "clippy-windows": LintTask("clippy-windows", ["just", "_sc-lint-clippy", "xwin"]),
-        "modules": LintTask("modules", [*python_command, str(repo_root / ".just/lint_cargo_modules.py")]),
         "deny": LintTask("deny", [*python_command, str(repo_root / ".just/lint_cargo_deny.py")]),
-        "shear": LintTask("shear", [*python_command, str(repo_root / ".just/lint_cargo_shear.py")]),
+        "shear": LintTask(
+            "shear", [str(venv_python), "-m", "sc_lint.lint_cargo_shear", "--root", str(repo_root)]
+        ),
         "arch-gates": LintTask("arch-gates", ["cargo", "test", "-p", "atm-architecture", "--quiet"]),
         "version": LintTask("version", [*python_command, str(repo_root / ".just/check_version_sync.py")]),
-        "identities": LintTask(
-            "identities", [*python_command, str(repo_root / ".just/check_test_identity_literals.py")]
-        ),
+        "identities": LintTask("identities", identity_command),
         "env-var-boundary": LintTask(
             "env-var-boundary", [*python_command, str(repo_root / ".just/check_env_var_boundary.py")]
         ),
@@ -191,7 +179,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             "capability-degradation",
             [*python_command, str(repo_root / "scripts/check-capability-degradation.py")],
         ),
-        "spell": LintTask("spell", [*python_command, str(repo_root / ".just/lint_codespell.py")]),
+        "spell": LintTask(
+            "spell", [str(venv_python), "-m", "sc_lint.lint_codespell", "--root", str(repo_root)]
+        ),
         "hermes-adapter": LintTask(
             "hermes-adapter", [*python_command, str(repo_root / ".just/lint_hermes_adapter.py")]
         ),
@@ -241,11 +231,9 @@ def resolve_task_names(target: str, platform_scope: str = "host", host_platform:
         if platform_scope == "all" and host_platform != "win32":
             names[2:2] = CROSS_TARGET_LINTS
         return names
-    if target == "all":
+    if target in ("default", "host"):
         return [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS]
-    if target == "fast":
-        return list(FAST_LINT_ORDER)
-    valid = {"all", "ci", "fast", *CARGO_LINT_ORDER, *CROSS_TARGET_LINTS, *PYTHON_LINT_ORDER, *EXTRA_LINTS}
+    valid = {"default", "host", "ci", *CARGO_LINT_ORDER, *CROSS_TARGET_LINTS, *PYTHON_LINT_ORDER, *EXTRA_LINTS}
     if target not in valid:
         valid_display = ", ".join(sorted(valid))
         raise ValueError(f"unknown lint target: {target}; expected one of: {valid_display}")
@@ -423,21 +411,25 @@ def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> lis
 def run_task(task: LintTask, repo_root: Path) -> LintResult:
     started_at = datetime.now(timezone.utc)
     start_time = time.perf_counter()
-    completed = subprocess.run(
-        task.command,
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        completed = subprocess.run(
+            task.command,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        returncode, stdout, stderr = completed.returncode, completed.stdout, completed.stderr
+    except OSError as error:
+        returncode, stdout, stderr = 127, "", f"could not start command: {error}"
     duration_seconds = time.perf_counter() - start_time
     log_path = make_log_path(repo_root, task.name, started_at)
     result = LintResult(
         task=task,
-        returncode=completed.returncode,
-        stdout=completed.stdout,
-        stderr=completed.stderr,
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
         duration_seconds=duration_seconds,
         log_path=log_path,
     )
@@ -491,22 +483,30 @@ def print_result(result: LintResult, repo_root: Path) -> None:
 
 
 def run_parallel(tasks: list[LintTask], repo_root: Path) -> list[LintResult]:
-    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-        futures = [executor.submit(run_task, task, repo_root) for task in tasks]
-        return [future.result() for future in futures]
+    if not tasks:
+        return []
+    results: dict[str, LintResult] = {}
+    cargo_tasks = [task for task in tasks if task.name in CARGO_LOCK_LINTS]
+    independent_tasks = [task for task in tasks if task.name not in CARGO_LOCK_LINTS]
 
+    def run_cargo_lane() -> list[LintResult]:
+        return [run_task(task, repo_root) for task in cargo_tasks]
 
-def partition_python_tasks(tasks: list[LintTask]) -> tuple[list[LintTask], list[LintTask]]:
-    """Keep repository-tool tests out of the concurrent lint batch."""
-    return (
-        [task for task in tasks if task.name != "pytests"],
-        [task for task in tasks if task.name == "pytests"],
-    )
+    with ThreadPoolExecutor(max_workers=max(1, len(independent_tasks) + bool(cargo_tasks))) as executor:
+        futures = {executor.submit(run_task, task, repo_root): task.name for task in independent_tasks}
+        cargo_future = executor.submit(run_cargo_lane) if cargo_tasks else None
+        for future in as_completed(futures):
+            result = future.result()
+            results[result.task.name] = result
+        if cargo_future is not None:
+            for result in cargo_future.result():
+                results[result.task.name] = result
+    return [results[task.name] for task in tasks]
 
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Run repo lint targets.")
-    parser.add_argument("target", nargs="?", default="all")
+    parser.add_argument("target", nargs="?", default="default")
     parser.add_argument("platform_scope", nargs="?", default="host", choices=("host", "all"))
     parser.add_argument("--root", help="Repo root to inspect.")
     args = parser.parse_args(argv[1:])
@@ -521,32 +521,14 @@ def main(argv: list[str]) -> int:
     tasks = build_tasks(repo_root)
     selected_tasks = [tasks[name] for name in task_names]
 
-    cargo_tasks = [task for task in selected_tasks if task.name in (*CARGO_LINT_ORDER, *CROSS_TARGET_LINTS)]
-    python_tasks = [task for task in selected_tasks if task.name in PYTHON_LINT_ORDER or task.name in EXTRA_LINTS]
-    results: list[LintResult] = []
-
-    for task in cargo_tasks:
-        result = run_task(task, repo_root)
+    results = run_parallel(selected_tasks, repo_root)
+    for result in results:
         print_result(result, repo_root)
-        results.append(result)
-
-    if python_tasks:
-        # The Python suite invokes repository tools and may create their normal
-        # output paths.  Running it beside the lint tasks that inspect those
-        # paths makes the overall lint gate race-dependent on CI.
-        parallel_python_tasks, serial_python_tasks = partition_python_tasks(python_tasks)
-        if parallel_python_tasks:
-            for result in run_parallel(parallel_python_tasks, repo_root):
-                print_result(result, repo_root)
-                results.append(result)
-        for task in serial_python_tasks:
-            result = run_task(task, repo_root)
-            print_result(result, repo_root)
-            results.append(result)
 
     failures = [result for result in results if result.returncode != 0]
     if failures:
-        print_console_line(f"lint failed: {len(failures)} check(s) failed")
+        failed_names = ", ".join(result.task.name for result in failures)
+        print_console_line(f"lint failed: {len(failures)} check(s) failed: {failed_names}")
         return 1
 
     print_console_line(f"lint passed: {len(results)} check(s) succeeded")

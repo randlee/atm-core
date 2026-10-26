@@ -17,6 +17,8 @@ class PrintHelpTests(unittest.TestCase):
         output = render_help("atm-core")
         self.assertIn("version latest", output)
         self.assertIn("setup", output)
+        self.assertIn("test coverage", output)
+        self.assertIn("test python|build|workspace|cli-surface|daemon-signing", output)
         self.assertIn("upgrade", output)
         self.assertIn("lint clippy-windows", output)
         self.assertIn("lint daemon-singleton", output)

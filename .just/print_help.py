@@ -13,7 +13,9 @@ SECTIONS = (
             ("setup", "Install the pinned sc-lint adoption tools."),
             ("upgrade", "Upgrade the managed sc-lint installation."),
             ("build", "Build the full workspace."),
-            ("test", "Run the full workspace test suite."),
+            ("test", "Run manifest-defined tests or a named selector."),
+            ("test coverage", "Write tracked coverage reports on macOS/Windows; unsupported on Linux."),
+            ("test python|build|workspace|cli-surface|daemon-signing", "Run one manifest-defined test step."),
             ("clean", "Remove workspace build artifacts."),
             ("version", "Show current workspace version state."),
             ("version latest", "Show recommended direct dependency upgrades."),
@@ -33,7 +35,7 @@ SECTIONS = (
     (
         "Lint",
         (
-            ("lint", "Run the full repo lint suite."),
+            ("lint", "Run all repo lint steps in parallel, serializing Cargo builds."),
             ("lint fmt", "Run only the format check."),
             ("lint clippy", "Run only Clippy with warnings denied."),
             ("lint clippy-windows", "Run the Windows-target Clippy profile."),
