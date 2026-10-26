@@ -104,8 +104,8 @@ jobs:
         run: >-
           python -c "import os; from pathlib import Path; cache_root = Path(os.environ['RUNNER_TEMP']); sc_lint = cache_root / 'sc-lint' / 'bin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(sc_lint) + os.linesep)"
 
-      - name: Expose Cargo and sc-lint binaries on PATH
-        run: python -c "import os; path = open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8'); path.write(os.path.expanduser('~/.cargo/bin') + os.linesep); path.write(os.environ['SC_LINT_INSTALL_DIR'] + os.linesep)"
+      - name: Expose Cargo binaries on PATH
+        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
 
       - name: Cache bootstrap outputs
         uses: actions/cache@v4
@@ -302,9 +302,9 @@ jobs:
         with:
           tool: just@1.58.0
 
-      - name: Expose Cargo and sc-lint binaries on PATH
+      - name: Expose Cargo binaries on PATH
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: python -c "import os; path = open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8'); path.write(os.path.expanduser('~/.cargo/bin') + os.linesep); path.write(os.environ['SC_LINT_INSTALL_DIR'] + os.linesep)"
+        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
 
       # Only develop/main save; PRs restore the default branch (develop) cache.
       # Per-PR saves filled the 10 GB repo limit with identical 3 GB targets.

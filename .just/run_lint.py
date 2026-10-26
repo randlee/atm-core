@@ -109,13 +109,16 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
     _, line_count_command = lint_argv(repo_root, "line-counts", [])
     _, function_length_command = lint_argv(repo_root, "function-length", [])
     _, identity_command = lint_argv(repo_root, "identity-literals", [])
+    clippy_binary, _ = lint_argv(repo_root, "clippy", [])
     # Wheel-only sc-lint helpers run from the kit venv; delete when
     # randlee/sc-lint#198 ships a consumer step runner for them.
     venv_python = repo_root / ".sc-lint" / "venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     return {
         "fmt": LintTask("fmt", ["just", "_lint-fmt"]),
         "clippy": LintTask("clippy", ["just", "_lint-clippy"]),
-        "clippy-windows": LintTask("clippy-windows", ["just", "_sc-lint-clippy", "xwin"]),
+        "clippy-windows": LintTask(
+            "clippy-windows", ["just", "_sc-lint-clippy", "xwin", str(clippy_binary)]
+        ),
         "deny": LintTask("deny", [*python_command, str(repo_root / ".just/lint_cargo_deny.py")]),
         "shear": LintTask(
             "shear", [str(venv_python), "-m", "sc_lint.lint_cargo_shear", "--root", str(repo_root)]

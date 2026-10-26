@@ -277,6 +277,10 @@ resolver = "2"
                 [str(repo_root / "sc-lint"), "lint", analyzer],
             )
             tasks = build_tasks(repo_root)
+            self.assertEqual(
+                tasks["clippy-windows"].command,
+                ["just", "_sc-lint-clippy", "xwin", str(repo_root / "sc-lint")],
+            )
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
             self.assertEqual(tasks["sc-boundary"].command[-1], "sc-boundary")
             self.assertEqual(tasks["sc-portability"].command[-1], "sc-portability")

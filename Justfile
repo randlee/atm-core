@@ -15,7 +15,7 @@ python_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv
 clippy_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" cargo clippy --workspace --all-targets -- -D warnings" }
 # sc-lint delegates clippy to cargo, so its process must receive the same
 # interpreter PyO3 uses in the legacy lint recipe. Delete when randlee/sc-lint#198 ships.
-sc_lint_clippy_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; sc-lint clippy" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" sc-lint clippy" }
+sc_lint_clippy_prefix := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; &" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\"" }
 
 # Show the curated repo task help.
 default: help
@@ -52,8 +52,8 @@ _lint-clippy:
 # Preserve PyO3's pinned interpreter while the adoption kit runs its published
 # clippy profiles. Delete when randlee/sc-lint#198 ships.
 [private]
-_sc-lint-clippy target:
-    {{sc_lint_clippy_cmd}} {{target}}
+_sc-lint-clippy target binary=env_var_or_default("SC_LINT_BIN", ""):
+    {{sc_lint_clippy_prefix}} "{{binary}}" clippy {{target}}
 
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
