@@ -38,7 +38,7 @@ resolver = "2"
     def test_resolve_task_names_all_includes_new_targets(self) -> None:
         names = resolve_task_names("all")
         self.assertIn("boundaries", names)
-        self.assertIn("runtime-waits", names)
+        self.assertIn("sc-runtime", names)
         self.assertIn("manifests", names)
         self.assertIn("daemon-signing-coupling", names)
         self.assertIn("silent-emit", names)
@@ -225,16 +225,21 @@ resolver = "2"
             ],
         )
 
-    def test_build_tasks_contains_expected_commands(self) -> None:
+    @mock.patch("run_lint.lint_argv")
+    def test_build_tasks_contains_expected_commands(self, lint_argv: mock.Mock) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
+            lint_argv.side_effect = lambda _root, analyzer, _args: (
+                repo_root / "sc-lint",
+                [str(repo_root / "sc-lint"), "lint", analyzer],
+            )
             tasks = build_tasks(repo_root)
             self.assertEqual(tasks["modules"].command[-1], str(repo_root / ".just/lint_cargo_modules.py"))
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/lint_boundaries.py"))
-            self.assertEqual(tasks["runtime-waits"].command[-1], str(repo_root / ".just/lint_runtime_waits.py"))
-            self.assertEqual(tasks["sc-boundary"].command[-1], str(repo_root / ".just/lint_sc_boundary.py"))
-            self.assertEqual(tasks["sc-portability"].command[-1], str(repo_root / ".just/lint_sc_portability.py"))
-            self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
+            self.assertEqual(tasks["sc-boundary"].command[-1], "sc-boundary")
+            self.assertEqual(tasks["sc-portability"].command[-1], "sc-portability")
+            self.assertEqual(tasks["sc-runtime"].command[-1], "sc-runtime")
+            self.assertEqual(tasks["manifests"].command[1:3], ["-m", "sc_lint.lint_manifests"])
             self.assertEqual(
                 tasks["daemon-signing-coupling"].command[-1],
                 str(repo_root / ".just/lint_daemon_signing_coupling.py"),

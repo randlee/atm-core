@@ -1,4 +1,5 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
+set allow-duplicate-recipes := true
 
 # Homebrew is absent from non-interactive macOS account PATHs. Append its
 # standard location as a developer-account fallback, never ahead of the
@@ -46,7 +47,7 @@ _fmt-check:
 
 # Format the Rust workspace or run the formatting gate.
 fmt mode='check':
-    {{python_cmd}} .just/run_fmt.py {{mode}}
+    cargo fmt --all {{if mode == "check" { "-- --check" } else { "" }}}
 
 [private]
 _lint-fmt:
@@ -63,10 +64,6 @@ _sc-lint-clippy target:
     {{sc_lint_clippy_cmd}} {{target}}
 
 [private]
-_lint-modules:
-    {{python_cmd}} .just/lint_cargo_modules.py
-
-[private]
 _lint-deny:
     {{python_cmd}} .just/lint_cargo_deny.py
 
@@ -77,22 +74,6 @@ _lint-shear:
 [private]
 _lint-boundaries:
     {{python_cmd}} .just/lint_boundaries.py
-
-[private]
-_lint-sc-boundary:
-    {{python_cmd}} .just/lint_sc_boundary.py
-
-[private]
-_lint-sc-portability:
-    {{python_cmd}} .just/lint_sc_portability.py
-
-[private]
-_lint-runtime-waits:
-    {{python_cmd}} .just/lint_runtime_waits.py
-
-[private]
-_lint-manifests:
-    {{python_cmd}} .just/lint_manifests.py
 
 [private]
 _lint-silent-emit:
@@ -150,10 +131,6 @@ _lint-ttl-triage:
     {{python_cmd}} .just/lint_ttl_triage_consistency.py
 
 # Enforce RULE-003 source file size limits.
-[private]
-_lint-lines:
-    {{python_cmd}} .just/check_line_counts.py
-
 [private]
 _lint-spell:
     {{python_cmd}} .just/lint_codespell.py
@@ -298,6 +275,11 @@ benchmark-read-under-write-load:
 # Generate architecture visualization artifacts.
 view target='all':
     {{python_cmd}} .just/run_view.py {{target}}
+
+# ATM keeps its repository-specific checks parallel and keep-going; the
+# imported kit recipe is deliberately sequential for ordinary consumers.
+lint *args:
+    {{python_cmd}} .just/run_lint.py {{args}}
 
 # Run the local CI-equivalent command set.
 ci: lint test

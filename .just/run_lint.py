@@ -17,6 +17,7 @@ from lint_common import make_log_path
 from lint_common import relative_log_path
 from lint_common import workspace_crate_section_lines
 from lint_common import write_log
+from sc_lint_binary import lint_argv
 
 
 if sys.platform == "win32":
@@ -34,7 +35,6 @@ PYTHON_LINT_ORDER = (
     "site-links",
     "site-generated",
     "same-host-portability",
-    "runtime-waits",
     "manifests",
     "daemon-signing-coupling",
     "silent-emit",
@@ -59,7 +59,7 @@ PYTHON_LINT_ORDER = (
     "peer-dial-seam",
     "pytests",
 )
-EXTRA_LINTS = ("sc-boundary", "sc-portability")
+EXTRA_LINTS = ("sc-boundary", "sc-portability", "sc-runtime")
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear", "arch-gates")
 FAST_LINT_ORDER = (
     "fmt",
@@ -79,7 +79,7 @@ FAST_LINT_ORDER = (
     "pytests",
 )
 HIGH_VOLUME_LINTS = {"identities", "lines"}
-CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "manifests", "arch-gates"}
+CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "sc-runtime", "manifests", "arch-gates"}
 COUNT_PATTERNS = (
     ("total violations:", "violations"),
     ("errors:", "errors"),
@@ -112,9 +112,15 @@ class LintResult:
 
 def build_tasks(repo_root: Path) -> dict[str, LintTask]:
     python_command = [sys.executable, "-B"]
+    _, boundary_command = lint_argv(repo_root, "sc-boundary", ["--config", str(repo_root / "sc-lint.toml")])
+    _, portability_command = lint_argv(repo_root, "sc-portability", ["--config", str(repo_root / "sc-lint.toml")])
+    _, runtime_command = lint_argv(repo_root, "sc-runtime", ["--config", str(repo_root / "sc-lint.toml")])
+    _, line_count_command = lint_argv(repo_root, "line-counts", [])
+    venv_python = repo_root / ".sc-lint" / "venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     return {
         "fmt": LintTask("fmt", ["just", "_lint-fmt"]),
         "clippy": LintTask("clippy", ["just", "_lint-clippy"]),
+        "clippy-windows": LintTask("clippy-windows", ["just", "_sc-lint-clippy", "xwin"]),
         "modules": LintTask("modules", [*python_command, str(repo_root / ".just/lint_cargo_modules.py")]),
         "deny": LintTask("deny", [*python_command, str(repo_root / ".just/lint_cargo_deny.py")]),
         "shear": LintTask("shear", [*python_command, str(repo_root / ".just/lint_cargo_shear.py")]),
@@ -134,7 +140,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             "read-concurrency-gates",
             [*python_command, str(repo_root / ".just/check_read_concurrency_gates.py")],
         ),
-        "lines": LintTask("lines", [*python_command, str(repo_root / ".just/check_line_counts.py")]),
+        "lines": LintTask("lines", line_count_command),
         "boundaries": LintTask("boundaries", [*python_command, str(repo_root / ".just/lint_boundaries.py")]),
         "adr-index": LintTask("adr-index", [*python_command, str(repo_root / ".just/check_adr_index.py")]),
         "template-frontmatter": LintTask(
@@ -150,16 +156,12 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             "same-host-portability",
             [*python_command, str(repo_root / ".just/lint_same_host_portability.py")],
         ),
-        "runtime-waits": LintTask(
-            "runtime-waits", [*python_command, str(repo_root / ".just/lint_runtime_waits.py")]
+        "sc-boundary": LintTask("sc-boundary", boundary_command),
+        "sc-portability": LintTask("sc-portability", portability_command),
+        "sc-runtime": LintTask("sc-runtime", runtime_command),
+        "manifests": LintTask(
+            "manifests", [str(venv_python), "-m", "sc_lint.lint_manifests", "--root", str(repo_root)]
         ),
-        "sc-boundary": LintTask(
-            "sc-boundary", [*python_command, str(repo_root / ".just/lint_sc_boundary.py")]
-        ),
-        "sc-portability": LintTask(
-            "sc-portability", [*python_command, str(repo_root / ".just/lint_sc_portability.py")]
-        ),
-        "manifests": LintTask("manifests", [*python_command, str(repo_root / ".just/lint_manifests.py")]),
         "daemon-signing-coupling": LintTask(
             "daemon-signing-coupling",
             [*python_command, str(repo_root / ".just/lint_daemon_signing_coupling.py")],
@@ -229,12 +231,17 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
     }
 
 
-def resolve_task_names(target: str) -> list[str]:
+def resolve_task_names(target: str, platform_scope: str = "host") -> list[str]:
+    if target == "ci":
+        names = [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS]
+        if platform_scope == "all":
+            names.insert(2, "clippy-windows")
+        return names
     if target == "all":
         return [*CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS]
     if target == "fast":
         return list(FAST_LINT_ORDER)
-    valid = {"all", "fast", *CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS}
+    valid = {"all", "ci", "fast", *CARGO_LINT_ORDER, *PYTHON_LINT_ORDER, *EXTRA_LINTS}
     if target not in valid:
         valid_display = ", ".join(sorted(valid))
         raise ValueError(f"unknown lint target: {target}; expected one of: {valid_display}")
@@ -496,12 +503,13 @@ def partition_python_tasks(tasks: list[LintTask]) -> tuple[list[LintTask], list[
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Run repo lint targets.")
     parser.add_argument("target", nargs="?", default="all")
+    parser.add_argument("platform_scope", nargs="?", default="host", choices=("host", "all"))
     parser.add_argument("--root", help="Repo root to inspect.")
     args = parser.parse_args(argv[1:])
     repo_root = discover_repo_root(args.root)
     target = args.target
     try:
-        task_names = resolve_task_names(target)
+        task_names = resolve_task_names(target, args.platform_scope)
     except ValueError as error:
         print_console_line(str(error), sys.stderr)
         return 2
