@@ -80,14 +80,9 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         return env
 
     def run_fixture(self, command: list[str], *, cwd: Path, env: dict[str, str], **kwargs):
+        kwargs.setdefault("timeout", self.SUBPROCESS_TIMEOUT_SECONDS)
         try:
-            return subprocess.run(
-                command,
-                cwd=cwd,
-                env=env,
-                timeout=self.SUBPROCESS_TIMEOUT_SECONDS,
-                **kwargs,
-            )
+            return subprocess.run(command, cwd=cwd, env=env, **kwargs)
         except subprocess.TimeoutExpired as error:
             output = (error.stdout or "") + (error.stderr or "")
             self.fail(f"fixture command timed out: {command!r}\n{output}")
@@ -676,6 +671,9 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         root = discover_repo_root()
         old_version = workspace_version(root)
         new_version = patch_bump(old_version)
+        # This fixture copies, commits and cargo-plans the whole tracked tree, so its
+        # duration follows host load; a wall-clock bound would fail a correct run.
+        unbounded = {"timeout": None}
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory) / "atm-core"
             home = Path(directory) / ".home"
@@ -700,7 +698,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ["git", "add", "."],
                 ["git", "commit", "-qm", "fixture"],
             ):
-                self.run_fixture(command, cwd=repo, env=env, check=True)
+                self.run_fixture(command, cwd=repo, env=env, check=True, **unbounded)
             python_command = "python" if os.name == "nt" else "python3"
             result = self.run_fixture(
                 ["just", "--set", "python_cmd", python_command, "prerelease-tag", "--dry-run"],
@@ -709,6 +707,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                **unbounded,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn(f"workspace version: {old_version} -> {new_version}", result.stdout)
@@ -721,6 +720,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     text=True,
                     capture_output=True,
                     check=True,
+                    **unbounded,
                 ).stdout,
                 "",
             )
