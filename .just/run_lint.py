@@ -527,6 +527,11 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     repo_root = discover_repo_root(args.root)
     target = args.target
+    if target == "clippy-windows" and sys.platform == "win32":
+        print_console_line(
+            "clippy-windows skipped: native clippy already covers x86_64-pc-windows-msvc"
+        )
+        return 0
     try:
         task_names = resolve_task_names(target, args.platform_scope)
     except ValueError as error:

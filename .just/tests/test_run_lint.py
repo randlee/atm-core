@@ -90,6 +90,22 @@ resolver = "2"
         self.assertIn("clippy", names)
         self.assertNotIn("clippy-windows", names)
 
+    def test_main_skips_explicit_clippy_windows_target_on_windows_host(self) -> None:
+        output = io.StringIO()
+        with (
+            mock.patch("run_lint.sys.platform", "win32"),
+            mock.patch("run_lint.subprocess.run") as subprocess_run,
+            mock.patch("sys.stdout", output),
+        ):
+            exit_code = main(["run_lint.py", "clippy-windows"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn(
+            "native clippy already covers x86_64-pc-windows-msvc",
+            output.getvalue(),
+        )
+        subprocess_run.assert_not_called()
+
     def test_main_runs_all_selected_lints_through_one_scheduler(self) -> None:
         names = resolve_task_names("ci", "all", "linux")
         tasks = {name: LintTask(name, ["true"]) for name in names}
