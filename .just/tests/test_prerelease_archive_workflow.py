@@ -87,6 +87,15 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             output = (error.stdout or "") + (error.stderr or "")
             self.fail(f"fixture command timed out: {command!r}\n{output}")
 
+    def configure_fixture_git(self, repo: Path, env: dict[str, str]) -> None:
+        for command in (
+            ["git", "config", "gc.auto", "0"],
+            ["git", "config", "gc.autoDetach", "false"],
+            ["git", "config", "maintenance.auto", "false"],
+            ["git", "config", "maintenance.autoDetach", "false"],
+        ):
+            self.run_fixture(command, cwd=repo, env=env, check=True)
+
     @contextmanager
     def fixture_repo(self, *, branch: str | None = None):
         """Create an isolated Git fixture whose setup commands are all bounded."""
@@ -106,6 +115,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ["git", "config", "user.name", "AS1.1 test"],
             ):
                 self.run_fixture(command, cwd=repo, env=env, check=True)
+            self.configure_fixture_git(repo, env)
             yield repo, env
 
     def fixture_public_release_assets(
@@ -695,9 +705,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ["git", "config", "core.hooksPath", os.devnull],
                 ["git", "config", "user.email", "test@example.invalid"],
                 ["git", "config", "user.name", "AS1.1 test"],
-                ["git", "add", "."],
-                ["git", "commit", "-qm", "fixture"],
             ):
+                self.run_fixture(command, cwd=repo, env=env, check=True)
+            self.configure_fixture_git(repo, env)
+            for command in (["git", "add", "."], ["git", "commit", "-qm", "fixture"]):
                 self.run_fixture(command, cwd=repo, env=env, check=True, **unbounded)
             python_command = "python" if os.name == "nt" else "python3"
             result = self.run_fixture(
