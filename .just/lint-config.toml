@@ -107,10 +107,10 @@ max_scoped_code_lines = 0
 "src/schema/settings.rs" = "deferred settings schema models; placeholder module reserved for future phase"
 
 [cargo_shear.allowed_unlinked_files]
-"tests/ui/macro_rejected.rs" = "randlee/sc-lint#346: trybuild fixture consumed by the macro UI harness, which cargo-shear does not model."
-"tests/ui/macro_supported.rs" = "randlee/sc-lint#346: trybuild fixture consumed by the macro UI harness, which cargo-shear does not model."
-"tests/ui/registered_sender_issuer_authorized.rs" = "randlee/sc-lint#346: trybuild fixture consumed by atm-storage tests/registered_sender_issuer.rs, which cargo-shear does not model."
-"tests/ui/registered_sender_issuer_cannot_admit.rs" = "randlee/sc-lint#346: trybuild fixture consumed by atm-storage tests/registered_sender_issuer.rs, which cargo-shear does not model."
+"tests/ui/macro_rejected.rs" = "randlee/sc-lint#647: trybuild UI fixture consumed by the macro UI harness; cargo-shear does not model trybuild inputs."
+"tests/ui/macro_supported.rs" = "randlee/sc-lint#647: trybuild UI fixture consumed by the macro UI harness; cargo-shear does not model trybuild inputs."
+"tests/ui/registered_sender_issuer_authorized.rs" = "randlee/sc-lint#647: trybuild UI fixture consumed by atm-storage tests/registered_sender_issuer.rs; cargo-shear does not model trybuild inputs."
+"tests/ui/registered_sender_issuer_cannot_admit.rs" = "randlee/sc-lint#647: trybuild UI fixture consumed by atm-storage tests/registered_sender_issuer.rs; cargo-shear does not model trybuild inputs."
 
 [boundaries]
 doc_glob = "docs/*/boundaries.md"
