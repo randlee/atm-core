@@ -5,7 +5,16 @@ build-backend = "maturin"
 [project]
 name = "atm-query"
 version = "1.6.5"
+description = "Read-only local SQL access to the ATM message store's decomposed_messages view"
+readme = "README.md"
 requires-python = ">=3.9"
+authors = [{ name = "atm-core contributors" }]
+license = { text = "MIT OR Apache-2.0" }
+
+[project.urls]
+Homepage = "https://github.com/randlee/atm-core"
+Repository = "https://github.com/randlee/atm-core"
+Issues = "https://github.com/randlee/atm-core/issues"
 
 [tool.maturin]
 module-name = "atm_query"
