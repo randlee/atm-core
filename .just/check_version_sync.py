@@ -266,11 +266,8 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     venv_python = repo_root / ".sc-lint/venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     if not venv_python.is_file():
-        bootstrap = repo_root / ".sc-lint" / ("bootstrap.ps1" if sys.platform == "win32" else "bootstrap")
-        if sys.platform == "win32":
-            setup_command = ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(bootstrap), "setup", "--config", "sc-lint.toml"]
-        else:
-            setup_command = [str(bootstrap), "setup", "--config", "sc-lint.toml"]
+        bootstrap = repo_root / ".sc-lint" / "bootstrap.py"
+        setup_command = [sys.executable, str(bootstrap), "setup", "--config", "sc-lint.toml"]
         setup = subprocess.run(setup_command, cwd=repo_root, check=False)
         if setup.returncode != 0:
             return setup.returncode

@@ -401,6 +401,7 @@ impl<'de> Deserialize<'de> for AtmJsonNumber {
 }
 
 /// ATM-owned recursive JSON-value wrapper used by the observability boundary.
+// delete when randlee/sc-lint#385 ships: move this exclusion to sc-lint.toml then.
 #[sc_lint(boundary.allow("cycle.recursive_value_container"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LogFieldValue {
@@ -501,6 +502,7 @@ impl<'de> Deserialize<'de> for LogFieldValue {
 }
 
 /// ATM-owned map wrapper used by public observability record projections.
+// delete when randlee/sc-lint#385 ships: move this exclusion to sc-lint.toml then.
 #[sc_lint(boundary.allow("cycle.recursive_value_container"))]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LogFieldMap {

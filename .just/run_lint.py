@@ -40,6 +40,7 @@ PYTHON_LINT_ORDER = (
     "silent-emit",
     "runtime-stderr",
     "function-length",
+    "kit-drift",
     "legacy-mailbox-paths",
     "nudge-taxonomy",
     "capability-degradation",
@@ -101,24 +102,30 @@ class LintResult:
     log_path: Path
 
 
-def build_tasks(repo_root: Path) -> dict[str, LintTask]:
+def build_tasks(repo_root: Path, task_names: list[str] | None = None) -> dict[str, LintTask]:
     python_command = [sys.executable, "-B"]
-    _, boundary_command = lint_argv(repo_root, "sc-boundary", ["--config", str(repo_root / "sc-lint.toml")])
-    _, portability_command = lint_argv(repo_root, "sc-portability", ["--config", str(repo_root / "sc-lint.toml")])
-    _, runtime_command = lint_argv(repo_root, "sc-runtime", ["--config", str(repo_root / "sc-lint.toml")])
-    _, line_count_command = lint_argv(repo_root, "line-counts", [])
-    _, function_length_command = lint_argv(repo_root, "function-length", [])
-    _, identity_command = lint_argv(repo_root, "identity-literals", [])
-    clippy_binary, _ = lint_argv(repo_root, "clippy", [])
+
+    def lint_command(task_name: str, analyzer: str, args: list[str]) -> list[str]:
+        if task_names is not None and task_name not in task_names:
+            return []
+        return lint_argv(repo_root, analyzer, args)[1]
+
+    sc_lint_config = ["--config", str(repo_root / "sc-lint.toml")]
+    boundary_command = lint_command("sc-boundary", "sc-boundary", sc_lint_config)
+    portability_command = lint_command("sc-portability", "sc-portability", sc_lint_config)
+    runtime_command = lint_command("sc-runtime", "sc-runtime", sc_lint_config)
+    line_count_command = lint_command("lines", "line-counts", [])
+    function_length_command = lint_command("function-length", "function-length", [])
+    identity_command = lint_command("identities", "identity-literals", [])
+    clippy_command = lint_command("clippy", "clippy", [])
+    clippy_windows_command = lint_command("clippy-windows", "clippy", [])
     # Wheel-only sc-lint helpers run from the kit venv; delete when
     # randlee/sc-lint#198 ships a consumer step runner for them.
     venv_python = repo_root / ".sc-lint" / "venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     return {
         "fmt": LintTask("fmt", ["just", "_lint-fmt"]),
-        "clippy": LintTask("clippy", ["just", "_lint-clippy"]),
-        "clippy-windows": LintTask(
-            "clippy-windows", ["just", "_sc-lint-clippy", "xwin", str(clippy_binary)]
-        ),
+        "clippy": LintTask("clippy", ["just", "_sc-lint-clippy", "native", *clippy_command[:1]]),
+        "clippy-windows": LintTask("clippy-windows", ["just", "_sc-lint-clippy", "xwin", *clippy_windows_command[:1]]),
         "deny": LintTask("deny", [*python_command, str(repo_root / ".just/lint_cargo_deny.py")]),
         "shear": LintTask(
             "shear", [str(venv_python), "-m", "sc_lint.lint_cargo_shear", "--root", str(repo_root)]
@@ -170,6 +177,15 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             "runtime-stderr", [*python_command, str(repo_root / "scripts/check-runtime-stderr.py")]
         ),
         "function-length": LintTask("function-length", function_length_command),
+        "kit-drift": LintTask(
+            "kit-drift",
+            [
+                *python_command,
+                str(repo_root / "plugins/sc-lint/install.py"),
+                str(repo_root),
+                "--dry-run",
+            ],
+        ),
         "legacy-mailbox-paths": LintTask(
             "legacy-mailbox-paths",
             [*python_command, str(repo_root / "scripts/check-legacy-mailbox-paths.py")],
@@ -517,13 +533,18 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     repo_root = discover_repo_root(args.root)
     target = args.target
+    if target == "clippy-windows" and sys.platform == "win32":
+        print_console_line(
+            "clippy-windows skipped: native clippy already covers x86_64-pc-windows-msvc"
+        )
+        return 0
     try:
         task_names = resolve_task_names(target, args.platform_scope)
     except ValueError as error:
         print_console_line(str(error), sys.stderr)
         return 2
 
-    tasks = build_tasks(repo_root)
+    tasks = build_tasks(repo_root, task_names)
     selected_tasks = [tasks[name] for name in task_names]
 
     results = run_parallel(selected_tasks, repo_root)

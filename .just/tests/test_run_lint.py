@@ -51,6 +51,7 @@ resolver = "2"
         self.assertIn("daemon-signing-coupling", names)
         self.assertIn("silent-emit", names)
         self.assertIn("function-length", names)
+        self.assertIn("kit-drift", names)
         self.assertIn("legacy-mailbox-paths", names)
         self.assertIn("nudge-taxonomy", names)
         self.assertIn("capability-degradation", names)
@@ -88,6 +89,22 @@ resolver = "2"
         names = resolve_task_names("ci", "all", "win32")
         self.assertIn("clippy", names)
         self.assertNotIn("clippy-windows", names)
+
+    def test_main_skips_explicit_clippy_windows_target_on_windows_host(self) -> None:
+        output = io.StringIO()
+        with (
+            mock.patch("run_lint.sys.platform", "win32"),
+            mock.patch("run_lint.subprocess.run") as subprocess_run,
+            mock.patch("sys.stdout", output),
+        ):
+            exit_code = main(["run_lint.py", "clippy-windows"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn(
+            "native clippy already covers x86_64-pc-windows-msvc",
+            output.getvalue(),
+        )
+        subprocess_run.assert_not_called()
 
     def test_main_runs_all_selected_lints_through_one_scheduler(self) -> None:
         names = resolve_task_names("ci", "all", "linux")
@@ -281,6 +298,10 @@ resolver = "2"
             )
             tasks = build_tasks(repo_root)
             self.assertEqual(
+                tasks["clippy"].command,
+                ["just", "_sc-lint-clippy", "native", str(repo_root / "sc-lint")],
+            )
+            self.assertEqual(
                 tasks["clippy-windows"].command,
                 ["just", "_sc-lint-clippy", "xwin", str(repo_root / "sc-lint")],
             )
@@ -301,6 +322,16 @@ resolver = "2"
             self.assertEqual(
                 tasks["function-length"].command[-1],
                 "function-length",
+            )
+            self.assertEqual(
+                tasks["kit-drift"].command,
+                [
+                    sys.executable,
+                    "-B",
+                    str(repo_root / "plugins/sc-lint/install.py"),
+                    str(repo_root),
+                    "--dry-run",
+                ],
             )
             self.assertEqual(
                 tasks["legacy-mailbox-paths"].command[-1],
@@ -335,6 +366,24 @@ resolver = "2"
                 str(repo_root / "scripts/lint_daemon_singleton.py"),
             )
             self.assertEqual(tasks["pytests"].command[-1], str(repo_root / ".just/run_pytests.py"))
+
+    def test_non_sc_lint_target_does_not_resolve_missing_sc_lint_binary(self) -> None:
+        output = io.StringIO()
+
+        def successful_run(tasks: list[LintTask], _repo_root: Path) -> list[LintResult]:
+            self.assertEqual([task.name for task in tasks], ["version"])
+            return [LintResult(tasks[0], 0, "", "", 0.0, Path("version.log"))]
+
+        with tempfile.TemporaryDirectory() as tempdir, \
+            mock.patch.dict("os.environ", {"SC_LINT_BIN": "/nonexistent/sc-lint"}), \
+            mock.patch("run_lint.lint_argv", side_effect=AssertionError("unexpected sc-lint resolution")) as lint_argv, \
+            mock.patch("run_lint.run_parallel", side_effect=successful_run), \
+            mock.patch("sys.stdout", output):
+            exit_code = main(["run_lint.py", "version", "--root", tempdir])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("lint passed: 1 check(s) succeeded", output.getvalue())
+        lint_argv.assert_not_called()
 
     def test_resolve_task_names_rejects_removed_all_and_fast_modes(self) -> None:
         for removed in ("all", "fast"):
@@ -473,6 +522,47 @@ resolver = "2"
         self.assertEqual([result.task for result in results], tasks)
         self.assertEqual(call_order, ["version", "spell", "clippy", "pytests", "arch-gates"])
         self.assertEqual(run_task_mock.call_count, len(tasks))
+
+    def test_parallel_scheduler_keeps_going_after_cargo_failure(self) -> None:
+        selected = [LintTask(name, [name]) for name in ("clippy", "arch-gates", "version", "spell")]
+
+        class ImmediateExecutor:
+            """Run each submitted lane inline so the scheduler test has no timing dependency."""
+
+            def __init__(self, max_workers: int) -> None:
+                self.max_workers = max_workers
+
+            def __enter__(self) -> ImmediateExecutor:
+                return self
+
+            def __exit__(self, *_exc_info: object) -> None:
+                return None
+
+            def submit(self, function: Callable[..., list[LintResult]], *args: object) -> Future[list[LintResult]]:
+                future: Future[list[LintResult]] = Future()
+                future.set_result(function(*args))
+                return future
+
+        call_order: list[str] = []
+
+        def fake_run_task(task: LintTask, _root: Path) -> LintResult:
+            call_order.append(task.name)
+            status = 1 if task.name in {"clippy", "spell"} else 0
+            output = f"error: {task.name}" if status else ""
+            return LintResult(task, status, output, "", 0.0, Path(f"{task.name}.log"))
+
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as tempdir, \
+            mock.patch("run_lint.resolve_task_names", return_value=[task.name for task in selected]), \
+            mock.patch("run_lint.build_tasks", return_value={task.name: task for task in selected}), \
+            mock.patch("run_lint.ThreadPoolExecutor", ImmediateExecutor), \
+            mock.patch("run_lint.run_task", side_effect=fake_run_task), \
+            mock.patch("sys.stdout", output):
+            status = main(["run_lint.py", "ci", "all", "--root", tempdir])
+
+        self.assertEqual(call_order, ["clippy", "arch-gates", "version", "spell"])
+        self.assertEqual(status, 1)
+        self.assertIn("lint failed: 2 check(s) failed: clippy, spell", output.getvalue())
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

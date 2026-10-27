@@ -1685,10 +1685,9 @@ def collect_manifest_consistency_violations(repo_root: Path, records: list[Bound
 
 
 def collect_allowed_dependent_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
-    # Package-level dependents (union over a package's records, stale entries
-    # reported). Only runtime edges can be unexpected; dev edges count as live. The published SCB-DEPENDENCY-002 checks
-    # each record separately and counts dev edges, so it is reported but not
-    # failing in .sc-lint/install.json: delete when randlee/sc-lint#376 ships.
+    # Retained because published SCB-DEPENDENCY-002 (0.8.0) misses package-union
+    # allowed dependents, dev-edge separation and stale entries; delete when
+    # randlee/sc-lint#643 ships and a two-fault probe shows parity.
     violations: list[BoundaryViolation] = []
     infos = manifest_info(repo_root)
     alias_map = manifest_by_alias(repo_root)

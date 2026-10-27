@@ -59,8 +59,6 @@ def packaging_script(workflow: str, step_name: str) -> str:
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
-    SUBPROCESS_TIMEOUT_SECONDS = 30
-
     def fixture_env(self, home: Path) -> dict[str, str]:
         env = os.environ.copy()
         env.update({
@@ -68,25 +66,32 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_SYSTEM": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1",
+            # A fixture commit of the tracked tree exceeds gc.auto's loose-object
+            # threshold; a detached `gc --auto` would keep writing .git while
+            # TemporaryDirectory removes it.
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_0": "gc.auto",
+            "GIT_CONFIG_VALUE_0": "0",
+            "GIT_CONFIG_KEY_1": "maintenance.auto",
+            "GIT_CONFIG_VALUE_1": "false",
         })
         return env
 
     def run_fixture(self, command: list[str], *, cwd: Path, env: dict[str, str], **kwargs):
-        try:
-            return subprocess.run(
-                command,
-                cwd=cwd,
-                env=env,
-                timeout=self.SUBPROCESS_TIMEOUT_SECONDS,
-                **kwargs,
-            )
-        except subprocess.TimeoutExpired as error:
-            output = (error.stdout or "") + (error.stderr or "")
-            self.fail(f"fixture command timed out: {command!r}\n{output}")
+        return subprocess.run(command, cwd=cwd, env=env, **kwargs)
+
+    def configure_fixture_git(self, repo: Path, env: dict[str, str]) -> None:
+        for command in (
+            ["git", "config", "gc.auto", "0"],
+            ["git", "config", "gc.autoDetach", "false"],
+            ["git", "config", "maintenance.auto", "false"],
+            ["git", "config", "maintenance.autoDetach", "false"],
+        ):
+            self.run_fixture(command, cwd=repo, env=env, check=True)
 
     @contextmanager
     def fixture_repo(self, *, branch: str | None = None):
-        """Create an isolated Git fixture whose setup commands are all bounded."""
+        """Create an isolated Git fixture without background maintenance."""
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
             home = repo / ".home"
@@ -103,6 +108,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ["git", "config", "user.name", "AS1.1 test"],
             ):
                 self.run_fixture(command, cwd=repo, env=env, check=True)
+            self.configure_fixture_git(repo, env)
             yield repo, env
 
     def fixture_public_release_assets(
@@ -315,7 +321,6 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                         check=True,
                         text=True,
                         capture_output=True,
-                        timeout=self.SUBPROCESS_TIMEOUT_SECONDS,
                     )
                 self.assertEqual(
                     command_text,
@@ -540,11 +545,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             package for package in lock["package"] if package["name"] == "sc-lint-directives"
         ]
         # Retained logging 1.5 uses registry 0.4; the independent lint family
-        # uses registry 0.5. The removed workspace lint directives package must
+        # uses registry 0.8. The removed workspace lint directives package must
         # not be reintroduced by a prerelease version bump.
         self.assertEqual(
             [(package["version"], "source" in package) for package in directives],
-            [("0.4.0", True), ("0.5.0", True)],
+            [("0.4.0", True), ("0.8.0", True)],
         )
         self.assertEqual(
             tomllib.loads(changes[root / "crates" / "atm-query-python" / "pyproject.toml"])[
@@ -651,6 +656,28 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 "",
             )
 
+    def test_fixture_env_disables_background_git_gc(self) -> None:
+        with self.fixture_repo() as (repo, env):
+            for key, expected in (("gc.auto", "0"), ("maintenance.auto", "false")):
+                value = self.run_fixture(
+                    ["git", "config", "--get", key],
+                    cwd=repo,
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip()
+                self.assertEqual(value, expected, key)
+
+    def test_fixture_command_has_no_host_load_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            env = self.fixture_env(repo)
+            with mock.patch.object(subprocess, "run") as run:
+                self.run_fixture(["git", "init"], cwd=repo, env=env, check=True)
+            self.assertNotIn("timeout", run.call_args.kwargs)
+            self.assertTrue(run.call_args.kwargs["check"])
+
     def test_just_prerelease_tag_dry_run_is_end_to_end_and_clean(self) -> None:
         root = discover_repo_root()
         old_version = workspace_version(root)
@@ -676,9 +703,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ["git", "config", "core.hooksPath", os.devnull],
                 ["git", "config", "user.email", "test@example.invalid"],
                 ["git", "config", "user.name", "AS1.1 test"],
-                ["git", "add", "."],
-                ["git", "commit", "-qm", "fixture"],
             ):
+                self.run_fixture(command, cwd=repo, env=env, check=True)
+            self.configure_fixture_git(repo, env)
+            for command in (["git", "add", "."], ["git", "commit", "-qm", "fixture"]):
                 self.run_fixture(command, cwd=repo, env=env, check=True)
             python_command = "python" if os.name == "nt" else "python3"
             result = self.run_fixture(

@@ -9,7 +9,7 @@ trait = "NudgeTemplateOverrideStore"
 [implementation]
 type = "SqliteNudgeTemplateOverrideStore"
 module = "atm_storage_rusqlite::nudge_template_override_store"
-visibility = "private"
+visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]
