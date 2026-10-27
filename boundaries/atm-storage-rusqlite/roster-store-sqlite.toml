@@ -8,9 +8,9 @@ trait = "RosterStore"
 
 [implementation]
 type = "SqliteRosterStore"
-module = "atm_storage_rusqlite"
-visibility = "private"
-constructor = "private"
+module = "atm_storage_rusqlite::roster_store"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]

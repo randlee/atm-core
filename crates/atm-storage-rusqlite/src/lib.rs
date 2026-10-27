@@ -266,8 +266,9 @@ pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 mod message_store;
 use message_store::{
     SqliteMessageStore, SqliteNudgeTemplateOverrideStore, SqlitePeerConfigStore,
-    SqlitePendingNudgeStore, SqliteRosterStore, SqliteTaskStore,
+    SqlitePendingNudgeStore, SqliteTaskStore,
 };
+use roster_store::SqliteRosterStore;
 
 #[derive(Clone)]
 pub struct SqliteStorageBackend {

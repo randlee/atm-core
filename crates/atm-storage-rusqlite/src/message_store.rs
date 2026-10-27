@@ -15,11 +15,6 @@ pub(crate) struct SqliteMessageStore {
 }
 
 #[derive(Debug)]
-pub(crate) struct SqliteRosterStore {
-    pub(crate) db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
 pub(crate) struct SqliteNudgeTemplateOverrideStore {
     pub(crate) db: Arc<SharedDb>,
 }
@@ -120,14 +115,7 @@ impl SqliteMessageStore {
     }
 }
 
-impl SqliteRosterStore {
-    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
-        Self { db }
-    }
-}
-
 impl atm_storage::contract::sealed::Sealed for SqliteMessageStore {}
-impl atm_storage::contract::sealed::Sealed for SqliteRosterStore {}
 
 impl MessageStore for SqliteMessageStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError> {
