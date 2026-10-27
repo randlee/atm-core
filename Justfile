@@ -32,9 +32,19 @@ bootstrap *args:
 # Execute a repository Python command through the pinned bootstrap environment.
 # The sc-lint adoption profiles use this private bridge until sc-lint provides
 # a repository-runner setting (randlee/sc-lint#198).
+# Arguments reach Python as given, never re-split by the shell.
 [private]
+[unix]
+[positional-arguments]
 _py *args:
-    {{python_cmd}} {{args}}
+    {{python_cmd}} "$@"
+
+[private]
+[windows]
+[positional-arguments]
+[script('pwsh', '-NoLogo', '-NonInteractive', '-File')]
+_py *args:
+    {{python_cmd}} @args
 
 # Format the Rust workspace or run the formatting gate.
 fmt mode='check':
