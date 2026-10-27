@@ -311,11 +311,6 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Configure platform cache directories
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: >-
-          python -c "import os; from pathlib import Path; cache_root = Path(os.environ['RUNNER_TEMP']); sc_lint = cache_root / 'sc-lint' / 'bin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(sc_lint) + os.linesep)"
-
       - name: Install just
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         uses: taiki-e/install-action@v2
@@ -346,7 +341,6 @@ jobs:
             ~/.cargo/.crates2.json
             ~/.cargo/binstall
             .bootstrap-venv
-            ${{ env.SC_LINT_INSTALL_DIR }}
           key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-bootstrap-
