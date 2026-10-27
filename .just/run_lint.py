@@ -116,7 +116,9 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
     venv_python = repo_root / ".sc-lint" / "venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     return {
         "fmt": LintTask("fmt", ["just", "_lint-fmt"]),
-        "clippy": LintTask("clippy", ["just", "_lint-clippy"]),
+        "clippy": LintTask(
+            "clippy", ["just", "_sc-lint-clippy", "native", str(clippy_binary)]
+        ),
         "clippy-windows": LintTask(
             "clippy-windows", ["just", "_sc-lint-clippy", "xwin", str(clippy_binary)]
         ),

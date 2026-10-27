@@ -298,6 +298,10 @@ resolver = "2"
             )
             tasks = build_tasks(repo_root)
             self.assertEqual(
+                tasks["clippy"].command,
+                ["just", "_sc-lint-clippy", "native", str(repo_root / "sc-lint")],
+            )
+            self.assertEqual(
                 tasks["clippy-windows"].command,
                 ["just", "_sc-lint-clippy", "xwin", str(repo_root / "sc-lint")],
             )
