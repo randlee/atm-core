@@ -367,6 +367,24 @@ resolver = "2"
             )
             self.assertEqual(tasks["pytests"].command[-1], str(repo_root / ".just/run_pytests.py"))
 
+    def test_non_sc_lint_target_does_not_resolve_missing_sc_lint_binary(self) -> None:
+        output = io.StringIO()
+
+        def successful_run(tasks: list[LintTask], _repo_root: Path) -> list[LintResult]:
+            self.assertEqual([task.name for task in tasks], ["version"])
+            return [LintResult(tasks[0], 0, "", "", 0.0, Path("version.log"))]
+
+        with tempfile.TemporaryDirectory() as tempdir, \
+            mock.patch.dict("os.environ", {"SC_LINT_BIN": "/nonexistent/sc-lint"}), \
+            mock.patch("run_lint.lint_argv", side_effect=AssertionError("unexpected sc-lint resolution")) as lint_argv, \
+            mock.patch("run_lint.run_parallel", side_effect=successful_run), \
+            mock.patch("sys.stdout", output):
+            exit_code = main(["run_lint.py", "version", "--root", tempdir])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("lint passed: 1 check(s) succeeded", output.getvalue())
+        lint_argv.assert_not_called()
+
     def test_resolve_task_names_rejects_removed_all_and_fast_modes(self) -> None:
         for removed in ("all", "fast"):
             with self.subTest(removed=removed), self.assertRaises(ValueError):
