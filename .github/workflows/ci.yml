@@ -102,7 +102,7 @@ jobs:
 
       - name: Configure platform cache directories
         run: >-
-          python -c "import os; from pathlib import Path; cache_root = Path(os.environ['RUNNER_TEMP']); sc_lint = cache_root / 'sc-lint' / 'bin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(sc_lint) + os.linesep)"
+          python -c "import os; from pathlib import Path; cache_root = Path(os.environ['RUNNER_TEMP']); sc_lint = cache_root / 'sc-lint' / 'bin'; xwin = cache_root / 'xwin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(sc_lint) + os.linesep + 'XWIN_CACHE_DIR=' + str(xwin) + os.linesep)"
 
       - name: Expose Cargo binaries on PATH
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
@@ -131,6 +131,15 @@ jobs:
           key: ${{ runner.os }}-just-lint-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-just-lint-cargo-registry-
+
+      - name: Cache xwin SDK
+        if: runner.os != 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.XWIN_CACHE_DIR }}
+          key: ${{ runner.os }}-xwin-${{ hashFiles('tools/bootstrap.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-xwin-
 
       - name: Install just
         uses: taiki-e/install-action@v2

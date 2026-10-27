@@ -533,15 +533,21 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertLess(just_lint.index(sc_lint_setup), just_lint.index("- name: Run just lint"))
         self.assertLess(just_lint.index("run: just bootstrap"), just_lint.index("sc-compose --version"))
 
-    def test_ci_configures_portable_cache_directories_in_steps(self) -> None:
+    def test_ci_caches_xwin_sdk_for_non_windows_lint_before_clippy(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         self.assertNotIn("SC_LINT_INSTALL_DIR: ${{ runner.temp }}", workflow)
         self.assertEqual(workflow.count("- name: Configure platform cache directories"), 2)
         self.assertEqual(workflow.count("os.environ['RUNNER_TEMP']"), 2)
         self.assertEqual(workflow.count("os.environ['GITHUB_ENV']"), 2)
         self.assertEqual(workflow.count("${{ env.SC_LINT_INSTALL_DIR }}"), 2)
-        self.assertNotIn("XWIN_CACHE_DIR", workflow)
-        self.assertNotIn("Cache xwin SDK", workflow)
+        just_lint = workflow.split("\n  fmt:", 1)[0]
+        self.assertIn("xwin = cache_root / 'xwin'", just_lint)
+        self.assertIn("'XWIN_CACHE_DIR=' + str(xwin)", just_lint)
+        cache_step = "- name: Cache xwin SDK\n        if: runner.os != 'Windows'\n        uses: actions/cache@v4"
+        self.assertIn(cache_step, just_lint)
+        self.assertIn("path: ${{ env.XWIN_CACHE_DIR }}", just_lint)
+        self.assertLess(just_lint.index("XWIN_CACHE_DIR=' + str(xwin)"), just_lint.index(cache_step))
+        self.assertLess(just_lint.index(cache_step), just_lint.index("run: just lint ci all"))
 
     def test_just_recipes_propagate_the_bootstrap_python_to_children(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
