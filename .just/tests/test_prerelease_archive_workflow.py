@@ -669,6 +669,15 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 ).stdout.strip()
                 self.assertEqual(value, expected, key)
 
+    def test_fixture_command_has_no_host_load_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            env = self.fixture_env(repo)
+            with mock.patch.object(subprocess, "run") as run:
+                self.run_fixture(["git", "init"], cwd=repo, env=env, check=True)
+            self.assertNotIn("timeout", run.call_args.kwargs)
+            self.assertTrue(run.call_args.kwargs["check"])
+
     def test_just_prerelease_tag_dry_run_is_end_to_end_and_clean(self) -> None:
         root = discover_repo_root()
         old_version = workspace_version(root)
