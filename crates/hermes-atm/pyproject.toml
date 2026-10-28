@@ -24,5 +24,10 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 
+[project.urls]
+Homepage = "https://github.com/randlee/atm-core"
+Repository = "https://github.com/randlee/atm-core"
+Issues = "https://github.com/randlee/atm-core/issues"
+
 [tool.setuptools.packages.find]
 where = ["src"]

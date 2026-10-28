@@ -96,8 +96,8 @@ Administrative and advanced CLI operations remain `atm` CLI operations.
 List rows expose `row.from`. The older `row.from_agent` alias remains
 available for compatibility and emits one `DeprecationWarning` per process.
 
-For the reproducible native-tool proof, see [NATIVE_TOOLS_PROOF.md](NATIVE_TOOLS_PROOF.md).
-The implementation checklist and validation record are in [TASKLIST.md](TASKLIST.md).
+For the reproducible native-tool proof, see [NATIVE_TOOLS_PROOF.md](https://github.com/randlee/atm-core/blob/develop/crates/hermes-atm/NATIVE_TOOLS_PROOF.md).
+The implementation checklist and validation record are in [TASKLIST.md](https://github.com/randlee/atm-core/blob/develop/crates/hermes-atm/TASKLIST.md).
 
 Do not edit `hooks/hermes-atm/handler.py`, `HOOK.yaml`, or `config.json` after
 installation. To change package behavior, publish a new wheel, reinstall it,
