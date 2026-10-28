@@ -1,0 +1,75 @@
+{
+  "schema": "plan-anchoring/anchors/1",
+  "plan": "phase-current",
+  "intent_ref": "doc/plan/phase-current/intent.md",
+  "anchors": [
+    {
+      "id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd-orchestration business logic must be in a single Python file.",
+      "quote": "The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-27",
+      "context": "planning session 2026-10-27 (fenix)",
+      "summary": "Business logic in one Python file",
+      "scope": "adds or changes atm-bd-orchestration close hooks, sanity-stack-link, assignment-gates.py, close-vars.py, close_fields.py or console dispatch code",
+      "deterministic_check": "grep for bead/task/stack transition conditions outside the business-logic file finds none",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-27T19:19:50+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd-orchestration transition business-logic file is organized into one section per transition type.",
+      "quote": "The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-27",
+      "context": "planning session 2026-10-27 (fenix)",
+      "summary": "Business-logic file organized by transition type",
+      "scope": "adds or changes atm-bd-orchestration close hooks, sanity-stack-link, assignment-gates.py, close-vars.py, close_fields.py or console dispatch code",
+      "deterministic_check": "the business-logic file has one top-level section per transition-type enum member",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-27T19:19:50+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    }
+  ]
+}
