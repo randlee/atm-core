@@ -29,7 +29,8 @@ io_forbidden = [
 
 [dependencies]
 allowed_dependents = ["atm", "atm-daemon-bootstrap", "atm-herdr", "atm-runtime"]
-allowed_dependencies = []
+allowed_dependencies = ["atm-error", "atm-storage"]
+allowed_dev_dependencies = ["atm-runtime-test-support"]
 forbidden_edges = [
   "atm-core -> atm-daemon",
   "atm-core -> atm-herdr",
