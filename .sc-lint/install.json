@@ -453,7 +453,7 @@
           "crates/atm/src/main.rs"
         ]
       },
-      "reason": "PORT-010: production #[cfg(unix)] helpers lack same-scope #[cfg(windows)] siblings; Windows behavior lives in a different module or is intentionally absent. The listed paths still report findings on sc-lint 0.8.2 when individually unsuppressed; follow randlee/sc-lint#372.",
+      "reason": "PORT-010: these 18 paths still report Unix helper or platform adapter findings when unsuppressed on sc-lint 0.8.2; see open randlee/sc-lint#786 (and #720 for the crate-root companion). Remove each exclusion when a released sc-lint fix covers its findings and the unsuppressed check passes.",
       "targets": [
         "linux",
         "macos",
