@@ -27,7 +27,15 @@ class DependencyRecord(TypedDict, total=False):
 
 
 class BeadMetadata(TypedDict, total=False):
-    branch: str
+    """Bead metadata as `bd list` returns it, closed beads included.
+
+    `branch`, `pr_target` and `stack` admit the shapes earlier pours left on
+    closed beads (`null` placeholders before the link step filled them, an
+    integer stack number): `bd list` returns every bead, and the guard must
+    read the historical record, not only what today's templates pour.
+    """
+
+    branch: str | None
     checked_bead: str
     difficulty: str
     integration_branch: str
@@ -35,11 +43,11 @@ class BeadMetadata(TypedDict, total=False):
     phase: str
     round: str | int | float | bool | None
     severity: str
-    stack: str
+    stack: str | int | None
     sprint: str
     verdict: str
     worktree: str
-    pr_target: str
+    pr_target: str | None
 
 
 class BeadRecord(TypedDict):

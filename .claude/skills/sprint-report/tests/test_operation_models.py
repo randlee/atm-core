@@ -103,6 +103,29 @@ class OperationModelTests(unittest.TestCase):
         }]))
         self.assertFalse(models.is_bead_records([{'id': 'atm-x-1', 'metadata': {'branch': 8}}]))
 
+    def test_bead_records_accept_the_historical_closed_qa_shape(self):
+        # Closed QA beads poured before the link step filled branch/pr_target
+        # keep null placeholders forever (atm-bd-orchestration#631); older
+        # stack beads carry an integer stack number. `bd list` returns them
+        # all, so the guard must read them without rewriting closed beads.
+        historical = {
+            'id': 'atm-bg-1.group-qa-f1-qa', 'status': 'closed',
+            'labels': ['phase-bg', 'stack:phase-bg', 'stage:qa'],
+            'metadata': {'branch': None, 'checked_bead': 'atm-bg-1.group-qa-f1', 'commit': None,
+                         'difficulty': 'normal', 'layer': None, 'phase': 'bg', 'pr_target': None,
+                         'quick_fix': False, 'round': 1, 'sprint': 'bg-1', 'stack': 'phase-bg'},
+        }
+        numbered_stack = {'id': 'atm-phase-bg.stack', 'status': 'closed', 'metadata': {'stack': 611}}
+        current = {'id': 'atm-x-2-qa', 'status': 'open',
+                   'metadata': {'branch': 'sprint/x-2', 'pr_target': 'integrate/phase-x', 'stack': 'phase-x'}}
+        self.assertTrue(models.is_bead_record(historical))
+        self.assertTrue(models.is_bead_record(numbered_stack))
+        self.assertTrue(models.is_bead_records([historical, numbered_stack, current]))
+        # Wrong types are still rejected: only null and the integer stack are historical.
+        self.assertFalse(models.is_bead_metadata({'branch': 8}))
+        self.assertFalse(models.is_bead_metadata({'pr_target': ['integrate/phase-x']}))
+        self.assertFalse(models.is_bead_metadata({'stack': 1.5}))
+
     def test_bd_show_returns_a_validated_record(self):
         process = subprocess.CompletedProcess([], 0, stdout='[{"id":"atm-x-1","status":"open"}]', stderr='')
         with mock.patch.object(bead_formulas.Bd, 'run', return_value=process):
