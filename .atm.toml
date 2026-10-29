@@ -126,7 +126,7 @@ env = { ATM_IDENTITY = "publisher", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_
 
 [[rmux.windows.panes]]
 name = "solar"
-command = "codex --no-daemon -c features.hooks=true --model gpt-6-astra --yolo"
+command = "codex --no-daemon -c features.hooks=true --model gpt-6.1-sol --yolo"
 env = { ATM_IDENTITY = "solar", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 # Window 4: Dev (codex terra + codex luna)
