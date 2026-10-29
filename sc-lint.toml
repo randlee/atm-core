@@ -22,7 +22,7 @@ exclude_paths_by_rule = { "SCB-RUNTIME-003" = ["crates/atm/src/commands/internal
 reason = "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. See randlee/sc-lint#82."
 
 [tool.sc-lint.lint_profiles]
-ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "capability-degradation", "clippy", "clippy-windows", "daemon-signing-coupling", "daemon-singleton", "deny", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests", "nudge-taxonomy", "peer-dial-seam", "pytests", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear", "silent-emit", "site-generated", "site-links", "spell", "template-frontmatter", "ttl-triage", "version"]
+ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "capability-degradation", "clippy", "clippy-windows", "daemon-signing-coupling", "daemon-singleton", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy", "peer-dial-seam", "pytests", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit", "site-generated", "site-links", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter", "ttl-triage", "version"]
 
 [[tool.sc-lint.lint]]
 name = "adr-index"
@@ -62,8 +62,19 @@ name = "daemon-singleton"
 command = ["just", "_py", "scripts/lint_daemon_singleton.py"]
 
 [[tool.sc-lint.lint]]
-name = "deny"
-command = ["just", "_sc-lint-py", "-m", "sc_lint.lint_cargo_deny"]
+name = "deny-linux"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.lint_cargo_deny"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "deny-macos"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.lint_cargo_deny"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "deny-windows"
+command = [".sc-lint\\venv\\Scripts\\python.exe", "-m", "sc_lint.lint_cargo_deny"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "env-var-boundary"
@@ -110,8 +121,19 @@ name = "lines"
 command = ["sc-lint", "lint", "line-counts"]
 
 [[tool.sc-lint.lint]]
-name = "manifests"
-command = ["just", "_sc-lint-py", "-m", "sc_lint.lint_manifests"]
+name = "manifests-linux"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.lint_manifests"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "manifests-macos"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.lint_manifests"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "manifests-windows"
+command = [".sc-lint\\venv\\Scripts\\python.exe", "-m", "sc_lint.lint_manifests"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "nudge-taxonomy"
@@ -154,8 +176,19 @@ name = "sc-runtime"
 command = ["sc-lint", "lint", "sc-runtime", "--config", "sc-lint.toml"]
 
 [[tool.sc-lint.lint]]
-name = "shear"
-command = ["just", "_sc-lint-py", "-m", "sc_lint.lint_cargo_shear"]
+name = "shear-linux"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.lint_cargo_shear"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "shear-macos"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.lint_cargo_shear"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "shear-windows"
+command = [".sc-lint\\venv\\Scripts\\python.exe", "-m", "sc_lint.lint_cargo_shear"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "silent-emit"
@@ -170,8 +203,19 @@ name = "site-links"
 command = ["just", "_py", ".just/check_site_links.py"]
 
 [[tool.sc-lint.lint]]
-name = "spell"
-command = ["just", "_sc-lint-py", "-m", "sc_lint.lint_codespell"]
+name = "spell-linux"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.lint_codespell"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "spell-macos"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.lint_codespell"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "spell-windows"
+command = [".sc-lint\\venv\\Scripts\\python.exe", "-m", "sc_lint.lint_codespell"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "template-frontmatter"

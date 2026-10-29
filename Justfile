@@ -60,25 +60,6 @@ _lint-fmt:
 _sc-lint-clippy target binary=env_var_or_default("SC_LINT_BIN", ""):
     {{sc_lint_clippy_prefix}} "{{binary}}" clippy {{target}}
 
-# Wheel-only sc-lint helpers (cargo-deny, cargo-shear, manifests, codespell)
-# run from the kit's managed Python environment, the invocation sc-lint
-# documents for them. Delete when randlee/sc-lint#198 ships a consumer step
-# runner for them.
-sc_lint_venv_python := if os_family() == "windows" { "& \"$PWD\\.sc-lint\\venv\\Scripts\\python.exe\"" } else { "\"$PWD/.sc-lint/venv/bin/python\"" }
-
-[private]
-[unix]
-[positional-arguments]
-_sc-lint-py *args:
-    {{sc_lint_venv_python}} "$@"
-
-[private]
-[windows]
-[positional-arguments]
-[script('pwsh', '-NoLogo', '-NonInteractive', '-File')]
-_sc-lint-py *args:
-    {{sc_lint_venv_python}} @args
-
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
     {{python_cmd}} .just/run_version.py {{mode}}

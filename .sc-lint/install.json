@@ -499,7 +499,9 @@
       "clippy-windows",
       "daemon-signing-coupling",
       "daemon-singleton",
-      "deny",
+      "deny-linux",
+      "deny-macos",
+      "deny-windows",
       "env-var-boundary",
       "fixed-sleep",
       "fmt",
@@ -511,7 +513,9 @@
       "legacy-mailbox-paths",
       "legacy-transport-removal",
       "lines",
-      "manifests",
+      "manifests-linux",
+      "manifests-macos",
+      "manifests-windows",
       "nudge-taxonomy",
       "peer-dial-seam",
       "pytests",
@@ -522,11 +526,15 @@
       "sc-boundary",
       "sc-portability",
       "sc-runtime",
-      "shear",
+      "shear-linux",
+      "shear-macos",
+      "shear-windows",
       "silent-emit",
       "site-generated",
       "site-links",
-      "spell",
+      "spell-linux",
+      "spell-macos",
+      "spell-windows",
       "template-frontmatter",
       "ttl-triage",
       "version"
@@ -584,12 +592,30 @@
       "_py",
       "scripts/lint_daemon_singleton.py"
     ],
-    "deny": [
-      "just",
-      "_sc-lint-py",
-      "-m",
-      "sc_lint.lint_cargo_deny"
-    ],
+    "deny-linux": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_cargo_deny"
+      ],
+      "platform": "linux"
+    },
+    "deny-macos": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_cargo_deny"
+      ],
+      "platform": "macos"
+    },
+    "deny-windows": {
+      "command": [
+        ".sc-lint\\venv\\Scripts\\python.exe",
+        "-m",
+        "sc_lint.lint_cargo_deny"
+      ],
+      "platform": "windows"
+    },
     "env-var-boundary": [
       "just",
       "_py",
@@ -657,12 +683,30 @@
       "lint",
       "line-counts"
     ],
-    "manifests": [
-      "just",
-      "_sc-lint-py",
-      "-m",
-      "sc_lint.lint_manifests"
-    ],
+    "manifests-linux": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_manifests"
+      ],
+      "platform": "linux"
+    },
+    "manifests-macos": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_manifests"
+      ],
+      "platform": "macos"
+    },
+    "manifests-windows": {
+      "command": [
+        ".sc-lint\\venv\\Scripts\\python.exe",
+        "-m",
+        "sc_lint.lint_manifests"
+      ],
+      "platform": "windows"
+    },
     "nudge-taxonomy": [
       "just",
       "_py",
@@ -719,12 +763,30 @@
       "--config",
       "sc-lint.toml"
     ],
-    "shear": [
-      "just",
-      "_sc-lint-py",
-      "-m",
-      "sc_lint.lint_cargo_shear"
-    ],
+    "shear-linux": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_cargo_shear"
+      ],
+      "platform": "linux"
+    },
+    "shear-macos": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_cargo_shear"
+      ],
+      "platform": "macos"
+    },
+    "shear-windows": {
+      "command": [
+        ".sc-lint\\venv\\Scripts\\python.exe",
+        "-m",
+        "sc_lint.lint_cargo_shear"
+      ],
+      "platform": "windows"
+    },
     "silent-emit": [
       "just",
       "_py",
@@ -740,12 +802,30 @@
       "_py",
       ".just/check_site_links.py"
     ],
-    "spell": [
-      "just",
-      "_sc-lint-py",
-      "-m",
-      "sc_lint.lint_codespell"
-    ],
+    "spell-linux": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_codespell"
+      ],
+      "platform": "linux"
+    },
+    "spell-macos": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_codespell"
+      ],
+      "platform": "macos"
+    },
+    "spell-windows": {
+      "command": [
+        ".sc-lint\\venv\\Scripts\\python.exe",
+        "-m",
+        "sc_lint.lint_codespell"
+      ],
+      "platform": "windows"
+    },
     "template-frontmatter": [
       "just",
       "_py",
