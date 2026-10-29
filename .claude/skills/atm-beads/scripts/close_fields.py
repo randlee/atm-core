@@ -13,7 +13,8 @@ from pathlib import Path
 import yaml
 
 CONTRACT = Path(__file__).resolve().parents[2] / "atm-bd-orchestration" / "templates" / "task-close-vars.j2"
-ROLE_BY_STAGE = {"stage:dev": "dev", "stage:fix": "fix", "stage:dev-sanity": "sanity", "stage:qa": "qa"}
+# An important or minor finding is fixed under the fix template; the lead stamps its close fields at dispatch.
+ROLE_BY_STAGE = {"stage:dev": "dev", "stage:fix": "fix", "stage:finding": "fix", "stage:dev-sanity": "sanity", "stage:qa": "qa"}
 # Stamped at pour on every open stage bead; bead_schema.CloseMetadata enforces them.
 POURED = ("role", "phase", "sprint", "sprint_bead", "stack", "stack_bead", "branch", "worktree", "pr_target", "base",
           "checked_bead", "checked_title", "sanity_bead", "qa_bead", "phase_feature", "lint_command", "policy_path",
@@ -51,7 +52,8 @@ def role_of(row: dict) -> str:
     stages = [label for label in row.get("labels") or [] if label in ROLE_BY_STAGE]
     if len(stages) != 1:
         raise CloseFieldsError("CLOSE_VARS.NOT_A_TASK_BEAD", f"{row.get('id')}: labels {row.get('labels')} name no single "
-                               "stage:dev, stage:fix, stage:dev-sanity or stage:qa", "Pass the id of a poured dev, fix, sanity or QA bead.")
+                               "stage:dev, stage:fix, stage:finding, stage:dev-sanity or stage:qa",
+                               "Pass the id of a poured dev, fix, finding, sanity or QA bead.")
     return ROLE_BY_STAGE[stages[0]]
 
 
@@ -81,12 +83,14 @@ def close_vars(row: dict, repo: Path) -> tuple[str, dict, list[str]]:
 
 # The checked bead records these at its dev or fix close (atm-task-close.py); a QA assignment takes them from it.
 RECORDED = ("commit", "branch", "pr_number")
+# Also recorded there: the PR's actual base; a bead closed before it was recorded falls back to the poured base.
+RECORDED_BASE = "pr_base"
 
 
 def qa_assignment_vars(qa_row: dict, checked_row: dict, repo: Path) -> dict:
     """The `templates.qa` vars of one QA bead: its poured fields plus the PR its checked bead recorded.
 
-    The PR, commit and branch come from the checked bead, never from hand-assembled vars, so a QA assignment
+    The PR, its base, commit and branch come from the checked bead, never from hand-assembled vars, so a QA assignment
     cannot render without its PR (#2214). A value the QA bead also holds must agree with the checked bead.
     """
     role, values, _ = close_vars(qa_row, repo)
@@ -114,7 +118,7 @@ def qa_assignment_vars(qa_row: dict, checked_row: dict, repo: Path) -> dict:
             "dev_task_id": values["checked_bead"], "sanity_task_id": metadata.get("sanity_bead") or "",
             "phase": metadata["phase"], "phase_feature": metadata["phase_feature"], "sprint": metadata["sprint"],
             "sprint_bead": metadata["sprint_bead"], "stack": metadata["stack"], "layer": metadata["layer"],
-            "round": metadata["round"], "base": metadata["base"], "worktree_path": values["worktree_path"],
+            "round": metadata["round"], "base": str(checked.get(RECORDED_BASE) or metadata["base"]), "worktree_path": values["worktree_path"],
             "policy_path": metadata["policy_path"], "reviewers_round1": metadata["reviewers_round1"],
             "commit": str(checked["commit"]), "branch": str(checked["branch"]), "pr_number": str(checked["pr_number"]),
             "carry_forward": checked_row["id"] if is_fix else ""}

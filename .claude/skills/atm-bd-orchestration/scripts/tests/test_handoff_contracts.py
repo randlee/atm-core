@@ -6,7 +6,6 @@ by this package (arch-qa, req-qa, ...) is checked against its agent file only wh
 """
 from __future__ import annotations
 
-import ast
 import importlib.machinery
 import importlib.util
 import json
@@ -200,11 +199,10 @@ class DevSanityHandoffTests(unittest.TestCase):
         paragraph = text[anchor.start():]
         paragraph = paragraph[:paragraph.index("\n\n")]
         documented = set(re.findall(r"`(\w+)`", paragraph[anchor.end() - anchor.start():].split(". ", 1)[0]))
-        merge = (ROOT / "scripts/sanity-merge").read_text()
-        required = ast.literal_eval(required_match(re.search(r"required = (\{[^}]*\})", merge)).group(1))
-        self.assertEqual(documented, required)
-        self.assertIn("`{reviewer, context, reply}`", paragraph)
-        self.assertIn("set(rerun) != {'reviewer', 'context', 'reply'}".replace("'", '"'), merge)
+        merge = load_merge()
+        self.assertEqual(documented, set(merge.SelectionEntry.__required_keys__))
+        rerun_keys = required_match(re.search(r"`\{([^}]*)\}`", paragraph)).group(1)
+        self.assertEqual({key.strip() for key in rerun_keys.split(",")}, set(merge.RerunSelection.__required_keys__))
 
 
     def test_the_jev_client_takes_the_assignment_exactly_as_received_in_its_fence(self):

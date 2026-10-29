@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Fix-verification scope: who may verify a fix, and what the verifier may report.
 
 A review of an assigned fix dispatches only the agent that filed each carried
@@ -23,6 +24,11 @@ import argparse
 import json
 import re
 import sys
+from pathlib import Path
+from typing import TypedDict
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads" / "scripts"))
+
+from operation_models import matches_typeddict
 
 PLAN_LINE = re.compile(r"^\s*(?:[-*]\s+)?(?P<bead>\S+)\s+(?P<severity>blocking|important|minor)\s+"
                        r"(?P<reviewer>\S+)\s+(?P<field>[^:\s][^:]*):")
@@ -34,21 +40,71 @@ class ScopeError(ValueError):
     """A carried finding cannot be locked to its filing reviewer."""
 
 
-def owned(carried: list[dict]) -> dict[str, list[str]]:
+class FindingMetadata(TypedDict, total=False):
+    reviewer: str
+    finding_ref: str
+
+
+class CarriedFinding(TypedDict, total=False):
+    id: str
+    metadata: FindingMetadata
+
+
+class CarriedFindings(TypedDict):
+    findings: list[CarriedFinding]
+
+
+class ReviewFinding(TypedDict, total=False):
+    id: str
+    disposition: str
+    evidence: str
+
+
+class ReviewData(TypedDict, total=False):
+    findings: list[ReviewFinding]
+
+
+class ReviewResult(TypedDict, total=False):
+    data: ReviewData
+    findings: list[ReviewFinding]
+
+
+class Disposition(TypedDict):
+    bead: str
+    finding_ref: str
+    disposition: str
+    evidence: str
+
+
+class FilteredResult(TypedDict):
+    reviewer: str
+    dispositions: list[Disposition]
+    new_findings: list[ReviewFinding]
+    dropped_out_of_scope: list[ReviewFinding]
+
+
+def carried_findings(value: object) -> list[CarriedFinding]:
+    document = {"findings": value}
+    if not matches_typeddict(document, CarriedFindings):
+        raise ScopeError("carried findings must be an array of bead records with string id and metadata fields")
+    return document["findings"]
+
+
+def owned(carried: list[CarriedFinding]) -> dict[str, list[str]]:
     """Carried finding beads -> {filing reviewer: [its own finding_refs]}; the keys are the whole dispatch set."""
     out: dict[str, list[str]] = {}
     for bead in carried:
         meta = bead.get("metadata") or {}
         reviewer, ref = meta.get("reviewer"), meta.get("finding_ref")
-        if not (isinstance(reviewer, str) and reviewer and isinstance(ref, str) and ref):
+        if not (reviewer and ref):
             raise ScopeError(f"{bead.get('id', '?')}: carried finding has no metadata.reviewer/finding_ref to lock to")
         out.setdefault(reviewer, []).append(ref)
     return out
 
 
-def plan_carried(text: str) -> list[dict]:
+def plan_carried(text: str) -> list[CarriedFinding]:
     """Carried plan finding lines -> the bead-shaped records owned/check/filter take."""
-    out = []
+    out: list[CarriedFinding] = []
     for line in text.splitlines():
         if not line.strip():
             continue
@@ -60,29 +116,39 @@ def plan_carried(text: str) -> list[dict]:
     return out
 
 
-def check(carried: list[dict], dispatch: list[str]) -> tuple[list[str], list[str]]:
+def check(carried: list[CarriedFinding], dispatch: list[str]) -> tuple[list[str], list[str]]:
     """(extra, missing): reviewers dispatched that filed no carried finding, and filing reviewers not dispatched."""
     want = set(owned(carried)) - {PLAN_SCRIPT}
     have = set(dispatch)
     return sorted(have - want), sorted(want - have)
 
 
-def filter_result(reviewer: str, carried: list[dict], result: dict) -> dict:
+def filter_result(reviewer: str, carried: list[CarriedFinding], result: ReviewResult) -> FilteredResult:
     """Reduce a verifier result to dispositions on its own carried beads; nothing else survives."""
-    scope = {(b.get("metadata") or {}).get("finding_ref"): b["id"] for b in carried
-             if (b.get("metadata") or {}).get("reviewer") == reviewer}
-    data = result.get("data", result)
-    reported, dropped = {}, []
-    for finding in data.get("findings") or []:
+    scope: dict[str, str] = {}
+    for bead in carried:
+        metadata = bead.get("metadata", {})
+        if metadata.get("reviewer") == reviewer:
+            finding_ref, bead_id = metadata.get("finding_ref"), bead.get("id")
+            if not finding_ref or not bead_id:
+                raise ScopeError("carried finding has no string id/finding_ref")
+            scope[finding_ref] = bead_id
+    data = result.get("data")
+    findings = data.get("findings", []) if data is not None else result.get("findings", [])
+    reported: dict[str, ReviewFinding] = {}
+    dropped: list[ReviewFinding] = []
+    for finding in findings or []:
         ref = finding.get("id")
         if ref in scope and ref not in reported:
             reported[ref] = finding
         else:
             dropped.append(finding)
-    dispositions = [{"bead": bead, "finding_ref": ref,
-                     "disposition": (reported[ref].get("disposition") or "open") if ref in reported else "open",
-                     "evidence": reported.get(ref, {}).get("evidence", "")}
-                    for ref, bead in scope.items()]
+    dispositions: list[Disposition] = []
+    for ref, bead in scope.items():
+        finding = reported.get(ref)
+        disposition = finding.get("disposition", "open") if finding else "open"
+        evidence = finding.get("evidence", "") if finding else ""
+        dispositions.append({"bead": bead, "finding_ref": ref, "disposition": disposition, "evidence": evidence})
     return {"reviewer": reviewer, "dispositions": dispositions, "new_findings": [], "dropped_out_of_scope": dropped}
 
 
@@ -96,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--result", default="", help="the reviewer's fenced-JSON result")
     args = parser.parse_args(argv)
     try:
-        carried = plan_carried(open(args.carried).read()) if args.plan else json.load(open(args.carried))
+        carried = plan_carried(open(args.carried).read()) if args.plan else carried_findings(json.load(open(args.carried)))
         filing = owned(carried)
     except ScopeError as exc:
         print(f"fix-round-scope: {exc}", file=sys.stderr)
@@ -125,7 +191,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     fenced = FENCED.fullmatch(text)
     try:
-        result = json.loads(fenced.group(1) if fenced else text)
+        parsed_result = json.loads(fenced.group(1) if fenced else text)
+        if not matches_typeddict(parsed_result, ReviewResult):
+            raise ValueError("expected a review result object with typed fields")
+        result: ReviewResult = parsed_result
     except ValueError as exc:
         print(f"fix-round-scope: --result is not the reviewer's fenced or raw JSON result: {exc}", file=sys.stderr)
         return 2

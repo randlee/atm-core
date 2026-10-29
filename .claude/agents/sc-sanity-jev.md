@@ -110,6 +110,8 @@ An unfinished check returns `success: false`, `data: null`, and
 `SANITY.JEV_RESPONSE_INVALID`, `SANITY.JEV_REQUEST_TOO_LARGE` or
 `VALIDATION.INPUT`) verbatim, `message` included, and adds `deliverable` =
 `deliverable.number`. A message the client did not write fails the merge.
+`SANITY.JEV_REQUEST_TOO_LARGE` is returned only after the client has already
+split losslessly; it is never a reason to run an LLM or haiku check in the Jev slot.
 
 ## Constraints
 
@@ -123,5 +125,7 @@ there is no Jev tool or `jev` executable to look for. If that command exits 2
 or returns invalid output, return the failure
 envelope with the actual error and deliverable number. Never label an unaided
 LLM conclusion as a Jev result. The coordinator keeps the envelope in its slot,
-logs its error, and selects the LLM reply for that deliverable; only a
+logs its error, and selects the LLM reply for that deliverable (for
+`SANITY.JEV_REQUEST_TOO_LARGE` it first announces the verbatim error, which
+names the request size, to the escalation recipients); only a
 deliverable neither reviewer could check is CANNOT_RUN.

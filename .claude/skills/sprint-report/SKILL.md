@@ -37,7 +37,8 @@ a log, so the agent remains available. Missing or failing Wyvern does not
 prevent writing the HTML; no alternative viewer is launched automatically.
 
 By default, DAG generation writes `<plans_dir>/phase-<p>/phase-<p>-dag.html`
-locally; it never commits or pushes. It reads the committed plan file and
+locally; the script never commits or pushes. The planner commits it with the
+plan file and the phase file (`atm-beads` "planning"). It reads the committed plan file and
 never rewrites it from Beads state. The HTML embeds the SVG directly, including
 state tooltips and zoom controls, without external dependencies.
 
@@ -84,6 +85,12 @@ The plan file is the source of graph truth. Each line is
 `{"sprint": "<name>", "depends_on"?: [...]}`; the sprint container is
 `atm-<sprint>` and its poured dev and sanity beads
 `<container>.group-dev` and `<container>.group-sanity`. Beads supply only live state and content.
+The phase's beads are read through the bd-cache (`atm-bd-orchestration/scripts/bd_cache.py`):
+one incremental sync of the `phase-<p>` label, then local reads with pending journal writes
+replayed. A failed sync renders from the cached rows, and an unavailable cache reads
+`bd list -l phase-<p>` directly; both say so on stderr. The report never runs `bd list --all`.
+`bd ready` and `bd blocked` stay direct `bd` calls, scoped to the phase label and the stages
+that need them.
 The report never derives or persists plan edges from a Beads snapshot.
 
 The report reads phase identity and integration branch from the root bead,
@@ -121,7 +128,7 @@ log has no record for a sanity task, count its completed events from
 `?` means the history is unavailable, not that the task never ran.
 DEV uses 🚩 for sanity findings and 🔨 while those findings are being fixed;
 a missing sanity bead also uses 🚩. DEV uses 🚧 for explicit blocked status
-or unfinished dependencies reported by `bd blocked --json`.
+or unfinished dependencies reported by `bd blocked -l phase-<p> -l stage:dev --json`.
 DEV is ✅ only when dev and sanity beads are both closed, sanity explicitly
 records PASS (verdict metadata or a PASS close-reason prefix), and no open
 sanity findings remain. Closed beads alone do not establish a sanity pass;

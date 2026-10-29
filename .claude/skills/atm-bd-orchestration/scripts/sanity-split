@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Split one dev sanity check into one assignment per numbered deliverable.
 
 Usage:
@@ -16,7 +17,8 @@ numbered list under `## Deliverables` (a poured bead without one, or without
 changed since the base (with `--layer-pr`, the union of those PRs' own ranges,
 one `gh api repos/{owner}/{repo}/pulls --paginate` listing joined locally, the checked PR last), renders `dev-sanity-assignment.json.j2` once per
 deliverable with the sc-compose wheel (`external_evidence`: the checked bead's notes when it has any,
-and the checked PR's body with `--layer-pr`), starts the lint command detached in the
+and the checked PR's body with `--layer-pr`, then each `--external-evidence <json-or-file>`, repeatable: one
+well-formed reference such as a `pr_comment`), starts the lint command detached in the
 worktree, and prints one JSON manifest to stdout:
 
   {run_id, reviewers, operational_reviewer, sha, base_sha, sanity_bead, dev_bead, branch, worktree_path,
@@ -54,6 +56,7 @@ Exit codes (the code and message are printed on stderr):
   5  RENDER_FAILED            sc-compose could not render an assignment
 """
 import argparse
+from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
@@ -62,6 +65,8 @@ import signal
 import subprocess
 import sys
 import time
+from types import FrameType
+from typing import NoReturn, TypedDict
 import uuid
 
 # Tool lock and log files a clean worktree may hold; the same as `IGNORED_STATUS_PATHS` in assignment-gates.py.
@@ -69,24 +74,124 @@ IGNORED_STATUS_PATHS = (".beads.gate.lock", ".sc-compose/")
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "atm-beads" / "scripts"))
+sys.path.insert(0, str(HERE))
 import sc_render  # noqa: E402
+from jev_client import evidence_ref  # noqa: E402
+from operation_models import matches_typeddict  # noqa: E402
+from sprint_index_common import JsonObject, JsonValue, is_json_object, is_json_value  # noqa: E402
 
 TEMPLATE = HERE.parent / "templates" / "dev-sanity-assignment.json.j2"
 CODES = {2: "SANITY.PLAN_INVALID", 3: "SANITY.TARGET_UNREADABLE", 4: "SANITY.COMMIT_MISMATCH", 5: "RENDER_FAILED"}
 
 
 class Fail(Exception):
-    def __init__(self, code, message):
+    def __init__(self, code: int, message: str) -> None:
         super().__init__(message)
         self.code = code
 
 
-def die(code, message):
+class SplitArguments(argparse.Namespace):
+    task: str
+    bead: str
+    worktree: str
+    branch: str
+    commit: str
+    base: str
+    lint_command: str
+    scratch: str
+    bead_json: str | None
+    close_context: Path | None
+    layer_pr: list[str]
+    external_evidence: list[str]
+    split_only: bool
+    template: Path
+    lint_timeout_seconds: int
+
+
+class SupervisorArguments(argparse.Namespace):
+    worktree: str
+    command: str
+    log: str
+    exit_file: str
+    timeout_seconds: float
+
+
+class LintRun(TypedDict):
+    command: str
+    log: str
+    exit_file: str
+    pid: int
+    timeout_seconds: int
+
+
+def die(code: int, message: str) -> int:
     print(f"{CODES.get(code, 'USAGE')}: {message}", file=sys.stderr)
     return code
 
 
-def load_bead(args, bead_id=None):
+def extra_evidence(values: list[str]) -> list[JsonObject]:
+    """The `--external-evidence` entries: each value is one JSON evidence reference, or a path to a file holding one."""
+    entries: list[JsonObject] = []
+    for value in values:
+        text = value
+        if not value.lstrip().startswith("{"):
+            try:
+                text = Path(value).read_text()
+            except OSError as error:
+                raise Fail(1, f"--external-evidence {value!r} is not JSON and cannot be read as a file: {error}") from error
+        try:
+            entry = json.loads(text)
+        except ValueError as error:
+            raise Fail(1, f"--external-evidence {value!r} is not valid JSON: {error}") from error
+        if not is_json_object(entry) or not evidence_ref(entry):
+            raise Fail(1, f"--external-evidence {value!r} is not a bead_notes, pr_body or pr_comment reference")
+        entries.append(entry)
+    return entries
+
+
+@dataclass(frozen=True)
+class ParsedBead:
+    raw: JsonObject
+    id: str
+    title: str
+    description: str
+    notes: str
+    sprint: str | None
+    owned_paths: list[str]
+
+
+class BeadText(TypedDict):
+    description: str
+    title: str
+    notes: str
+
+
+class BeadOwnedPaths(TypedDict):
+    owned_paths: list[str]
+
+
+class BeadSprint(TypedDict):
+    sprint_bead: str | None
+
+
+def parse_bead(data: JsonObject, bead_id: str) -> ParsedBead:
+    metadata = data.get("metadata") or {}
+    if not is_json_object(metadata):
+        raise Fail(3, f"bead {bead_id} metadata must be an object")
+    owned = {"owned_paths": metadata.get("owned_paths") or []}
+    if not matches_typeddict(owned, BeadOwnedPaths):
+        raise Fail(3, f"bead {bead_id} metadata.owned_paths must be a list of strings")
+    sprint = {"sprint_bead": metadata.get("sprint_bead")}
+    if not matches_typeddict(sprint, BeadSprint):
+        raise Fail(3, f"bead {bead_id} metadata.sprint_bead must be a string")
+    fields = {key: data.get(key) or "" for key in BeadText.__required_keys__}
+    if not matches_typeddict(fields, BeadText):
+        raise Fail(3, f"bead {bead_id} title, description, and notes must be strings")
+    return ParsedBead(data, bead_id, fields["title"], fields["description"], fields["notes"],
+                      sprint["sprint_bead"], owned["owned_paths"])
+
+
+def load_bead(args: SplitArguments, bead_id: str | None = None) -> ParsedBead:
     """One bead by id: `bd show <id> --json`, or the entry with that id in `--bead-json` (a bead or a list)."""
     bead_id = bead_id or args.bead
     if args.bead_json:
@@ -102,19 +207,20 @@ def load_bead(args, bead_id=None):
             data = json.loads(run.stdout)
         except ValueError:
             raise Fail(3, f"bd show {bead_id} did not print JSON")
+    if not is_json_value(data):
+        raise Fail(3, f"bead {bead_id} JSON contains an invalid value")
     if isinstance(data, list):
         data = next((item for item in data if isinstance(item, dict) and item.get("id") == bead_id), None)
-    if not isinstance(data, dict) or data.get("id") != bead_id:
+    if not is_json_object(data) or data.get("id") != bead_id:
         raise Fail(3, f"bead {bead_id} not found in bead JSON")
-    return data
+    return parse_bead(data, bead_id)
 
 
-def plan_source(args, bead):
+def plan_source(args: SplitArguments, bead: ParsedBead) -> ParsedBead:
     """The bead holding the plan: the checked bead, or for a poured dev bead without `## Deliverables`
     (or without owned_paths) its sprint container `metadata.sprint_bead`."""
-    sprint = (bead.get("metadata") or {}).get("sprint_bead")
-    if sprint and not (DELIVERABLES.search(bead.get("description") or "") and (bead.get("metadata") or {}).get("owned_paths")):
-        return load_bead(args, sprint)
+    if bead.sprint and not (DELIVERABLES.search(bead.description) and bead.owned_paths):
+        return load_bead(args, bead.sprint)
     return bead
 
 
@@ -127,15 +233,22 @@ HEADING = re.compile(r"^(#{1,6}) ")
 DELIVERABLES = re.compile(r"^## Deliverables[ \t]*$", re.M)
 
 
-def parse_deliverables(description):
+class Deliverable(TypedDict):
+    number: int
+    text: str
+
+
+def parse_deliverables(description: str) -> list[Deliverable]:
     match = DELIVERABLES.search(description or "")
     if not match:
         raise Fail(2, "bead has no `## Deliverables` section")
-    items, fence, prev_blank = [], None, True
+    items: list[Deliverable] = []
+    fence: str | None = None
+    prev_blank = True
     for line in description[match.end():].splitlines():
         stripped = line.strip()
         if fence:                                   # fenced text belongs to the current item
-            items[-1][1] += " " + stripped
+            items[-1]["text"] += " " + stripped
             if re.fullmatch(re.escape(fence[0]) + "{%d,}" % len(fence), stripped):
                 fence = None                        # same character, at least the opening length
             continue
@@ -149,7 +262,7 @@ def parse_deliverables(description):
             continue
         item = ITEM.match(line)
         if item:
-            items.append([int(item.group(1)), item.group(2).strip()])
+            items.append({"number": int(item.group(1)), "text": item.group(2).strip()})
         elif not items:
             raise Fail(2, f"`## Deliverables` has content before the first numbered item: {stripped!r}")
         elif TOP_BULLET.match(line):
@@ -158,9 +271,9 @@ def parse_deliverables(description):
             fence_match = FENCE.match(line)
             assert fence_match is not None
             fence = fence_match.group(1)       # closes on the same character, at least this long
-            items[-1][1] += " " + stripped
+            items[-1]["text"] += " " + stripped
         elif line[0] in " \t" or not prev_blank:    # indented sub-item, or wrapped item text
-            items[-1][1] += " " + stripped
+            items[-1]["text"] += " " + stripped
         else:
             raise Fail(2, f"`## Deliverables` has an unnumbered paragraph: {stripped!r}")
         prev_blank = False
@@ -168,13 +281,13 @@ def parse_deliverables(description):
         raise Fail(2, "`## Deliverables` has an unclosed fenced block")
     if not items:
         raise Fail(2, "`## Deliverables` has no numbered items (`1. ...`)")
-    numbers = [n for n, _ in items]
+    numbers = [item["number"] for item in items]
     if numbers != list(range(1, len(items) + 1)):
         raise Fail(2, f"`## Deliverables` numbering is not 1..{len(items)}: {numbers}")
-    return [{"number": n, "text": t} for n, t in items]
+    return items
 
 
-def git(worktree, *argv, code=3, what=None):
+def git(worktree: str, *argv: str, code: int = 3, what: str | None = None) -> str:
     try:
         run = subprocess.run(["git", "-C", worktree, *argv], capture_output=True, text=True)
     except OSError as exc:
@@ -184,7 +297,7 @@ def git(worktree, *argv, code=3, what=None):
     return run.stdout
 
 
-def pin(args):
+def pin(args: SplitArguments) -> tuple[str, str]:
     if not Path(args.worktree).is_dir():
         raise Fail(3, f"worktree {args.worktree} is not a directory")
     sha = git(args.worktree, "rev-parse", "--verify", "--quiet", f"{args.commit}^{{commit}}",
@@ -212,7 +325,19 @@ PULLS = ("gh", "api", "repos/{owner}/{repo}/pulls?state=all&per_page=100", "--pa
          "--jq", ".[] | {number: .number, base: .base.sha, head: .head.sha}")
 
 
-def layer_ranges(worktree, prs):
+class PullRequestRange(TypedDict):
+    number: str
+    base: str
+    head: str
+
+
+def parse_pull_request_range(value: JsonValue) -> PullRequestRange:
+    if not is_json_object(value):
+        raise TypeError("pull request row must be a JSON object")
+    return {"number": str(value["number"]), "base": str(value["base"]), "head": str(value["head"])}
+
+
+def layer_ranges(worktree: str, prs: list[str]) -> list[tuple[str, str]]:
     """Each stack layer's own range, (base.sha, head.sha), from one paginated pulls listing joined locally."""
     try:
         run = subprocess.run(PULLS, capture_output=True, text=True, cwd=worktree)
@@ -220,13 +345,13 @@ def layer_ranges(worktree, prs):
         raise Fail(3, f"gh unavailable: {exc}")
     if run.returncode != 0:
         raise Fail(3, f"gh api pulls failed: {run.stderr.strip()}")
-    listed = {}
+    listed: dict[str, tuple[str, str]] = {}
     line = ""
     try:
         for line in run.stdout.splitlines():
             if line.strip():
-                row = json.loads(line)
-                listed[str(row["number"])] = (str(row["base"]), str(row["head"]))
+                row = parse_pull_request_range(json.loads(line))
+                listed[row["number"]] = (row["base"], row["head"])
     except (ValueError, KeyError, TypeError):
         raise Fail(3, f"gh api pulls returned a row without number/base.sha/head.sha: {line[:200]}")
     missing = [pr for pr in prs if pr not in listed]
@@ -235,18 +360,19 @@ def layer_ranges(worktree, prs):
     return [listed[pr] for pr in prs]
 
 
-def layer_files(worktree, prs, sha):
+def layer_files(worktree: str, prs: list[str], sha: str) -> list[str]:
     """The union of the changed files of each layer PR's own range; the last (checked) PR's head must be the pinned sha."""
     ranges = layer_ranges(worktree, prs)
     if ranges[-1][1] != sha:
         raise Fail(4, f"PR {prs[-1]} head is {ranges[-1][1]}, not {sha}")
-    return sorted(set().union(*(changed_files(worktree, base, head) for base, head in ranges)))
+    return sorted({path for base, head in ranges for path in changed_files(worktree, base, head)})
 
 
-def changed_files(worktree, base_sha, sha):
+def changed_files(worktree: str, base_sha: str, sha: str) -> list[str]:
     out = git(worktree, "diff", "--name-status", "-z", "--find-renames", f"{base_sha}...{sha}")
     fields = out.split("\0")
-    files, i = [], 0
+    files: list[str] = []
+    i = 0
     while i < len(fields) and fields[i]:
         status = fields[i]
         if status[0] in "RC":                       # rename/copy: source, then destination
@@ -258,7 +384,7 @@ def changed_files(worktree, base_sha, sha):
     return sorted(set(files))
 
 
-def glob_regex(pattern):
+def glob_regex(pattern: str) -> re.Pattern[str]:
     out, i = "", 0
     while i < len(pattern):
         c = pattern[i]
@@ -275,26 +401,29 @@ def glob_regex(pattern):
     return re.compile(f"^{out}$")
 
 
-def outside_fence(files, owned_paths):
+def outside_fence(files: list[str], owned_paths: list[str]) -> list[str]:
     if not owned_paths:
         return []
     fences = [glob_regex(p) for p in owned_paths]
     return [f for f in files if not any(r.match(f) for r in fences)]
 
 
-def render(template, variables):
+def render(template: Path, variables: JsonObject) -> JsonObject:
     try:
         text = sc_render.render(template, variables)
     except sc_render.RenderError as exc:
         raise Fail(5, f"sc-compose render failed for deliverable {variables['deliverable_number']}: "
                       f"{sc_render.error_text(exc).splitlines()[0]}")
     try:
-        return json.loads(text)
+        result = json.loads(text)
+        if not is_json_object(result):
+            raise ValueError("rendered assignment must be an object")
+        return result
     except ValueError:
         raise Fail(5, f"rendered assignment {variables['deliverable_number']} is not JSON")
 
 
-def start_lint(args):
+def start_lint(args: SplitArguments) -> LintRun:
     scratch = Path(args.scratch)
     scratch.mkdir(parents=True, exist_ok=True)
     log = scratch / f"{args.task}-lint.log"
@@ -319,9 +448,9 @@ class Cancelled(Exception):
     pass
 
 
-def stop_group(pgid, child):
+def stop_group(pgid: int, child: subprocess.Popen[bytes]) -> bool:
     """TERM the lint process group, wait the grace period, KILL the survivors; True once the group is empty."""
-    def empty():
+    def empty() -> bool:
         child.poll()                                # reap the direct child so it does not linger as a zombie
         try:
             os.killpg(pgid, 0)
@@ -331,13 +460,13 @@ def stop_group(pgid, child):
             pass
         return False
 
-    def signal_group(sig):
+    def signal_group(sig: signal.Signals) -> None:
         try:
             os.killpg(pgid, sig)
         except ProcessLookupError:
             pass
 
-    def wait_empty(seconds):
+    def wait_empty(seconds: float) -> bool:
         deadline = time.monotonic() + seconds
         while not empty():
             if time.monotonic() > deadline:
@@ -352,17 +481,17 @@ def stop_group(pgid, child):
     return wait_empty(KILL_WAIT_SECONDS)
 
 
-def supervise(argv):
+def supervise(argv: list[str]) -> int:
     """Run the lint command in its own process group; always write the exit file."""
     parser = argparse.ArgumentParser(prog="sanity-split lint-supervisor")
     for flag in ("--worktree", "--command", "--log", "--exit-file"):
         parser.add_argument(flag, required=True)
     parser.add_argument("--timeout-seconds", type=float, default=1800)
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv, namespace=SupervisorArguments())
     exit_file = Path(args.exit_file)
     outcome, child = "error", None
 
-    def cancel(signum, frame):
+    def cancel(signum: int, frame: FrameType | None) -> NoReturn:
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         raise Cancelled()
@@ -390,26 +519,27 @@ def supervise(argv):
     return 0 if outcome not in ("cancelled", "error") else 1
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(add_help=True)
     for flag in ("--task", "--bead", "--worktree", "--branch", "--commit", "--base", "--lint-command", "--scratch"):
         parser.add_argument(flag, required=True)
     parser.add_argument("--bead-json")
     parser.add_argument("--close-context", type=Path)
     parser.add_argument("--layer-pr", action="append", default=[])
+    parser.add_argument("--external-evidence", action="append", default=[])
     parser.add_argument("--split-only", action="store_true")
     parser.add_argument("--template", type=Path, default=TEMPLATE)
     parser.add_argument("--lint-timeout-seconds", type=int, default=1800)
     try:
-        args = parser.parse_args()
+        args = parser.parse_args(namespace=SplitArguments())
     except SystemExit:
         return 1
     try:
         bead = load_bead(args)
         source = plan_source(args, bead)
-        own = bead.get("description") or ""
-        deliverables = parse_deliverables(own if DELIVERABLES.search(own) else source.get("description") or "")
-        owned = (bead.get("metadata") or {}).get("owned_paths") or (source.get("metadata") or {}).get("owned_paths") or []
+        own = bead.description
+        deliverables = parse_deliverables(own if DELIVERABLES.search(own) else source.description)
+        owned = bead.owned_paths or source.owned_paths
         if args.split_only:
             sha, base_sha, files, lint = args.commit, args.base, [], None
         else:
@@ -418,23 +548,28 @@ def main():
             lint = None
         outside = outside_fence(files, owned)
         try:
-            close_context = json.loads(args.close_context.read_text()) if args.close_context else {}
+            close_context: JsonValue = json.loads(args.close_context.read_text()) if args.close_context else {}
         except (OSError, ValueError) as error:
             raise Fail(1, f"cannot read --close-context: {error}") from error
-        if not isinstance(close_context, dict):
+        if not is_json_object(close_context):
             raise Fail(1, "close context must be a JSON object")
-        external = ([{"kind": "bead_notes", "bead": bead["id"], "text": bead["notes"]}] if bead.get("notes") else []) + (
-            [{"kind": "pr_body", "repo": "{owner}/{repo}", "pr": int(args.layer_pr[-1])}] if args.layer_pr and args.layer_pr[-1].isdigit() else [])
-        assignments = []
+        external: list[JsonObject] = []
+        if bead.notes:
+            external.append({"kind": "bead_notes", "bead": bead.id, "text": bead.notes})
+        if args.layer_pr and args.layer_pr[-1].isdigit():
+            external.append({"kind": "pr_body", "repo": "{owner}/{repo}", "pr": int(args.layer_pr[-1])})
+        external += extra_evidence(args.external_evidence)
+        assignments: list[JsonObject] = []
         for item in deliverables:
-            assignments.append({"number": item["number"], "assignment": render(args.template, {
-                "sanity_bead": args.task, "dev_bead_id": bead["id"], "dev_bead_title": bead.get("title") or "",
+            variables: JsonObject = {
+                "sanity_bead": args.task, "dev_bead_id": bead.id, "dev_bead_title": bead.title,
                 "deliverable_number": item["number"], "deliverable_text": item["text"],
                 "deliverables_total": len(deliverables),
-                "owned_paths": owned, "changed_files": files, "files_outside_owned_paths": outside,
-                "context": [], "external_evidence": external,
+                "owned_paths": [*owned], "changed_files": [*files], "files_outside_owned_paths": [*outside],
+                "context": [], "external_evidence": [*external],
                 "worktree_path": args.worktree, "branch": args.branch, "commit": sha, "base_sha": base_sha,
-            })})
+            }
+            assignments.append({"number": item["number"], "assignment": render(args.template, variables)})
         if not args.split_only:
             lint = start_lint(args)
     except Fail as exc:
@@ -442,11 +577,11 @@ def main():
     json.dump({"run_id": str(uuid.uuid4()),
                "reviewers": ["sanity-llm", "sanity-jev", "sanity-selected"],
                "operational_reviewer": "sanity-selected",
-               "sha": sha, "base_sha": base_sha, "sanity_bead": args.task, "dev_bead": bead["id"],
+               "sha": sha, "base_sha": base_sha, "sanity_bead": args.task, "dev_bead": bead.id,
                "branch": args.branch, "worktree_path": args.worktree, "deliverables_total": len(deliverables),
                "changed_files": files, "files_outside_owned_paths": outside, "lint": lint,
-               "close_context": close_context, "bead_notes": bead.get("notes") or "",
-               "checked_bead_data": bead,
+               "close_context": close_context, "bead_notes": bead.notes,
+               "checked_bead_data": bead.raw,
                "assignments": assignments}, sys.stdout, indent=2)
     print()
     return 0

@@ -248,18 +248,23 @@ class Linker:
         if actual != recorded_head:
             raise StackError('fetched stack top differs from its recorded head')
         if ancestor.returncode == 1:
+            contained = self.command(['git', 'merge-base', '--is-ancestor', self.values['commit'], 'origin/' + base],
+                                     check=False).returncode == 0
             return {'result': 'rebase_required', 'top': {'branch': base, 'head': actual},
-                    'evidence': f"origin/{base} is not an ancestor of {self.values['commit']}"}
+                    'evidence': f"origin/{base} is not an ancestor of {self.values['commit']}",
+                    'next_steps': rebase_steps(self.values, base, metadata, contained)}
         if ancestor.returncode:
             raise StackError(f"git merge-base --is-ancestor [{ancestor.returncode}] {(ancestor.stderr or '').strip()}")
         if (lean or not layers) and candidate['base'] != base:
             raise StackError(f"pull request base {candidate['base']} differs from stack top {base}")
         new = recorded or {'branch': self.values['branch'], 'pr': self.values['pr_number'], 'head': self.values['commit'], 'base': base, 'linked': False}
+        pending, stack_number = [], metadata.get('stack_number')
         if not lean and layers:
             pending = [entry for entry in layers if not entry['linked']]
             if new not in pending and not new['linked']:
                 pending.append(new)
-            stack_number = metadata.get('stack_number')
+        # Layer 0 alone cannot form a stack (gh stack link needs two PRs): it waits unlinked until layer 1 links with it.
+        if not lean and layers and (stack_number is not None or len(pending) > 1):
             if stack_number is None:
                 self.command(['gh', 'stack', 'link', '--base', metadata['trunk']] + [str(entry['pr']) for entry in pending])
             else:
@@ -280,6 +285,33 @@ class Linker:
             layers.append(new)
         self.write(metadata)
         return {'result': 'stacked', 'top': new, 'stack_number': metadata.get('stack_number')}
+
+
+def rebase_steps(values, top, metadata, contained):
+    """The lead's options for a rebase_required layer, named so the notice carries the repair."""
+    layer, pr, stack = values['branch'], values['pr_number'], metadata.get('stack_number')
+    recheck = (f"pour the re-check sanity bead <sanity bead>-r<N> from dev-sanity-bead.json.j2 at the new head of "
+               f"{layer}, close the old sanity bead 'superseded by <new>', add the QA bead's blocker on it and dispatch "
+               f"templates.sanity with the new commit, base, branch, pr_number and worktree_path (SKILL.md Stack Discipline); "
+               f"never reopen a sanity or dev bead or edit bead metadata")
+    if contained:
+        return [{'option': 'relink_in_git_order',
+                 'when': f"{layer} is already in the history of the top {top}: the top was linked before this layer",
+                 'steps': [f"do not rebase {layer}",
+                           f"gh stack unstack {stack}, then gh stack link --base {metadata['trunk']} <every PR in git order, "
+                           f"bottom to top, {pr} included>",
+                           f"insert {layer} (PR {pr}, head {values['commit']}) into the stack bead layers at its git position, "
+                           f"with the base of the layer above it set to {layer}",
+                           "rerun sanity-stack-link with the same input; it returns stacked"]}]
+    return [{'option': 'rebase',
+             'when': f"{layer} is unlinked, has no children and rebases cleanly onto {top}",
+             'steps': [f"in the lead's own worktree: git rebase origin/{top}, push --force-with-lease, "
+                       f"gh pr edit {pr} --base {top}", recheck]},
+            {'option': 'dev_rebase',
+             'when': f"the rebase onto {top} conflicts",
+             'steps': ["git rebase --abort",
+                       f"re-assign the checked bead's dev to rebase {layer} onto {top} (dev template step f)",
+                       "on its close, " + recheck]}]
 
 
 def main(argv=None, runner=subprocess.run, clock=time.time):

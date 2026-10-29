@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Wrap the raw stdout of one `jev_client.py --assignment` call into an sc-sanity-jev reply. Transport only.
 
 Usage:
@@ -28,10 +29,13 @@ import os
 from pathlib import Path
 import re
 import sys
+from typing import Protocol, TypedDict, runtime_checkable
 
 CLIENT = Path(__file__).resolve().parent / "jev_client.py"
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads" / "scripts"))
 from sanity_shared import valid_elapsed_s  # noqa: E402
+from operation_models import matches_typeddict  # noqa: E402
+from sprint_index_common import JsonObject, JsonValue, is_json_value  # noqa: E402
 
 FENCED = re.compile(r"\s*```(?:json)?[ \t]*\n(.*?)\n```\s*", re.S)
 CHECKER_KIND = "skipped"
@@ -40,55 +44,107 @@ RERUN = ("Rerun `python3 .claude/skills/atm-bd-orchestration/scripts/jev_client.
 
 
 class Refused(Exception):
-    def __init__(self, check, message, fix):
+    def __init__(self, check: str, message: str, fix: str) -> None:
         super().__init__(f"{check}: {message}. Fix: {fix}")
 
 
-def load_client():
+@runtime_checkable
+class JevClient(Protocol):
+    def verify_receipt(self, value: JsonValue, key: str) -> bool: ...
+
+    def is_client_message(self, message: JsonValue) -> bool: ...
+
+
+def load_client() -> JevClient:
     spec = importlib.util.spec_from_file_location("jev_client", CLIENT)
     if spec is None or spec.loader is None:
         raise Refused("client_load", f"cannot load Jev client {CLIENT}", RERUN)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    if not isinstance(module, JevClient):
+        raise Refused("client_load", f"invalid Jev client {CLIENT}", RERUN)
     return module
 
 
-def read_json(path, what, fix):
+def read_json(path: str, what: str, fix: str) -> JsonValue:
     try:
         text = Path(path).read_text()
         fenced = FENCED.fullmatch(text)
-        return json.loads(fenced.group(1) if fenced else text)
+        value = json.loads(fenced.group(1) if fenced else text)
+        if not is_json_value(value):
+            raise ValueError("not a JSON value")
+        return value
     except (OSError, ValueError) as exc:
         raise Refused(f"{what}_unreadable", f"cannot read {what} {path}: {exc}", fix)
 
 
-def assignment_fields(assignment):
+class AssignmentIdentity(TypedDict):
+    sanity_bead: str
+    dev_bead: str
+    commit_checked: str
+
+
+class AssignmentFields(AssignmentIdentity):
+    deliverable: int
+
+
+class AssignmentCount(TypedDict):
+    number: int
+    total: int
+
+
+class ReceiptFields(TypedDict):
+    question: str
+    choice: str
+
+
+class FinalSelection(TypedDict):
+    choice: str
+    reason: JsonValue
+    parts: JsonValue
+
+
+class ParsedReceipts(TypedDict):
+    receipts: list[ReceiptFields]
+    labels: list[str]
+    split: bool
+
+
+def assignment_fields(assignment: JsonValue) -> tuple[AssignmentFields, int]:
     fix = "Pass the assignment you received, unchanged, as --assignment."
-    try:
-        fields = {"sanity_bead": assignment["sanity_bead"], "dev_bead": assignment["dev_bead"]["id"],
-                  "deliverable": assignment["deliverable"]["number"], "commit_checked": assignment["commit"]}
-        total = assignment["deliverables_total"]
-    except (KeyError, TypeError) as exc:
-        raise Refused("assignment_fields", f"assignment lacks {exc}", fix)
-    number = fields["deliverable"]
-    if not isinstance(number, int) or isinstance(number, bool) or not isinstance(total, int) or not 1 <= number <= total:
+    if not isinstance(assignment, dict):
+        raise Refused("assignment_fields", "assignment must be an object", fix)
+    dev = assignment.get("dev_bead")
+    deliverable = assignment.get("deliverable")
+    if not isinstance(dev, dict) or not isinstance(deliverable, dict):
+        raise Refused("assignment_fields", "assignment lacks dev_bead or deliverable", fix)
+    number, total = deliverable.get("number"), assignment.get("deliverables_total")
+    identity = {"sanity_bead": assignment.get("sanity_bead"), "dev_bead": dev.get("id"),
+                "commit_checked": assignment.get("commit")}
+    if not matches_typeddict(identity, AssignmentIdentity):
+        raise Refused("assignment_fields", "assignment bead IDs and commit must be strings", fix)
+    counts = {"number": number, "total": total}
+    if not matches_typeddict(counts, AssignmentCount) or not 1 <= counts["number"] <= counts["total"]:
         raise Refused("assignment_fields", f"deliverable.number {number!r} is not in 1..{total!r}", fix)
-    return fields, total
+    return {**identity, "deliverable": counts["number"]}, counts["total"]
 
 
-def client_receipts(jev, client, key):
+def client_receipts(jev: JsonValue, client: JevClient, key: str) -> ParsedReceipts:
     """The receipts carried by `jev` (one receipt, or a split request's part list), each verified."""
+    labels: list[str] = []
     if isinstance(jev, list):
-        receipts = []
+        receipts: list[JsonObject] = []
         for i, part in enumerate(jev, 1):
             label = f"{i} of {len(jev)}"
             if not isinstance(part, dict) or part.get("part") != label:
                 raise Refused("part_order", f"Jev part {label} is missing or mislabelled", RERUN)
+            labels.append(label)
             receipt = part.get("receipt")
             if not isinstance(receipt, dict) or not client.verify_receipt(receipt, key):
                 raise Refused("receipt_mac", f"no valid Jev receipt on part {label}", RERUN)
             response = part.get("response")
-            answer = response.get("answers", {}).get("written") if isinstance(response, dict) else None
+            answers = response.get("answers") if isinstance(response, dict) else None
+            answer = answers.get("written") if isinstance(answers, dict) else None
             if not isinstance(answer, dict) or (answer.get("choice"), answer.get("probabilities")) != (
                     receipt["choice"], receipt["probabilities"]):
                 raise Refused("part_response", f"Jev part {label}'s response does not match its receipt", RERUN)
@@ -96,42 +152,73 @@ def client_receipts(jev, client, key):
         if not receipts:
             raise Refused("part_order", "the client's part list is empty", RERUN)
     else:
-        if not client.verify_receipt(jev, key):
+        if not isinstance(jev, dict) or not client.verify_receipt(jev, key):
             raise Refused("receipt_mac", "no valid Jev receipt: it was not written by a jev_client.py call", RERUN)
         receipts = [jev]
+    parsed: list[ReceiptFields] = []
     for receipt in receipts:
         if receipt["question"] != "written" or receipt["choice"] not in ("yes", "no"):
             raise Refused("receipt_question", f"Jev receipt answers {receipt['question']!r} with "
                           f"{receipt['choice']!r}, not written: yes or no", RERUN)
-    return receipts
+        question, choice = receipt["question"], receipt["choice"]
+        assert isinstance(question, str) and isinstance(choice, str)
+        parsed.append({"question": question, "choice": choice})
+    return {"receipts": parsed, "labels": labels, "split": isinstance(jev, list)}
 
 
-def result_choice(jev, receipts, final, for_triage=False):
+def result_choice(parsed: ParsedReceipts, final: JsonValue,
+                  for_triage: bool = False) -> str:
     """The result: the receipts' common choice, or dev-sanity's triaged `final` when they disagree; `no` (its one
     skipped finding) for a reply sent to triage."""
-    choices = {receipt["choice"] for receipt in receipts}
+    choices = {receipt["choice"] for receipt in parsed["receipts"]}
     if final is not None and (not isinstance(final, dict) or final.get("choice") not in choices):
         raise Refused("choice_in_receipts", f"final selection {final!r} names no choice any receipt holds "
                       f"({sorted(choices)})", "Write --final as {choice, reason, parts} with a choice a part answered.")
+    selection: FinalSelection | None = None
+    if isinstance(final, dict):
+        choice = final.get("choice")
+        assert isinstance(choice, str)
+        selection = {"choice": choice, "reason": final.get("reason"), "parts": final.get("parts")}
     if len(choices) == 1:
         return next(iter(choices))
-    labels = [part["part"] for part in jev]
-    if final is None and for_triage:
+    if not parsed["split"]:
+        raise Refused("part_order", "the client's part list is missing", RERUN)
+    labels = parsed["labels"]
+    if selection is None and for_triage:
         return "no"
-    if final is None:
+    if selection is None:
         raise Refused("final_selection", f"Jev parts disagree ({sorted(choices)}) and no final selection was given",
                       "sc-sanity-jev: rerun with --for-triage and the one skipped finding. dev-sanity: triage the "
                       "parts, then rerun with --reply <reply> --final <file> holding {choice, reason, parts}.")
-    if not isinstance(final.get("reason"), str) or not final["reason"].strip():
+    reason = selection["reason"]
+    if not isinstance(reason, str) or not reason.strip():
         raise Refused("final_reason", "the final selection has no reason",
                       "Add a nonempty `reason` citing every part's result to the --final file.")
-    if final.get("parts") != labels:
-        raise Refused("final_parts", f"final selection parts {final.get('parts')!r} are not {labels!r}",
+    if selection["parts"] != labels:
+        raise Refused("final_parts", f"final selection parts {selection['parts']!r} are not {labels!r}",
                       f"Set `parts` in the --final file to {json.dumps(labels)}.")
-    return final["choice"]
+    return selection["choice"]
 
 
-def check_findings(findings, choice, total):
+class FindingDependency(TypedDict):
+    deliverable: int
+    file: str
+    line: int
+
+
+class FindingFields(TypedDict):
+    kind: str
+    file: str
+    line: int
+    issue: str
+
+
+class Finding(FindingFields):
+    dependencies: list[FindingDependency]
+    raw: JsonObject
+
+
+def check_findings(findings: JsonValue, choice: str, total: int) -> list[Finding]:
     fix = ("Write --findings as [] when the result is yes, or as exactly one "
            "{\"kind\": \"skipped\", \"file\": <committed path>, \"line\": <n >= 1>, \"issue\": <one sentence>} when no.")
     if not isinstance(findings, list):
@@ -139,23 +226,31 @@ def check_findings(findings, choice, total):
     expected = 1 if choice == "no" else 0
     if len(findings) != expected:
         raise Refused("findings_shape", f"result {choice!r} needs {expected} finding(s), got {len(findings)}", fix)
+    parsed_findings: list[Finding] = []
     for finding in findings:
-        if (not isinstance(finding, dict) or finding.get("kind") != CHECKER_KIND
-                or not isinstance(finding.get("file"), str) or not finding["file"]
-                or not isinstance(finding.get("line"), int) or isinstance(finding.get("line"), bool)
-                or finding["line"] < 1 or not isinstance(finding.get("issue"), str) or not finding["issue"]):
+        if not isinstance(finding, dict):
             raise Refused("findings_shape", f"finding must be {{kind: skipped, file, line >= 1, issue}}: {finding!r}", fix)
-        dependencies = finding.get("depends_on", [])
-        if not isinstance(dependencies, list) or any(
-                not isinstance(d, dict) or not isinstance(d.get("deliverable"), int) or isinstance(d["deliverable"], bool)
-                or not 1 <= d["deliverable"] <= total or not isinstance(d.get("file"), str) or not d["file"]
-                or not isinstance(d.get("line"), int) or isinstance(d["line"], bool) or d["line"] < 1
-                for d in dependencies):
+        raw_finding = finding
+        if (not matches_typeddict(finding, FindingFields) or finding["kind"] != CHECKER_KIND
+                or not finding["file"] or finding["line"] < 1 or not finding["issue"]):
+            raise Refused("findings_shape", f"finding must be {{kind: skipped, file, line >= 1, issue}}: {finding!r}", fix)
+        dependencies = raw_finding.get("depends_on", [])
+        def parse_dependency(d: JsonValue) -> FindingDependency | None:
+            if (not matches_typeddict(d, FindingDependency) or not 1 <= d["deliverable"] <= total
+                    or not d["file"] or d["line"] < 1):
+                return None
+            return d
+
+        parsed_dependencies = [parse_dependency(d) for d in dependencies] if isinstance(dependencies, list) else []
+        if not isinstance(dependencies, list) or any(d is None for d in parsed_dependencies):
             raise Refused("findings_shape", f"depends_on must list {{deliverable: 1..{total}, file, line >= 1}}: "
                           f"{dependencies!r}", fix)
+        parsed_findings.append({**finding, "dependencies": [d for d in parsed_dependencies if d is not None],
+                                "raw": raw_finding})
+    return parsed_findings
 
 
-def outer_elapsed(envelope, what, fix):
+def outer_elapsed(envelope: JsonObject, what: str, fix: str) -> JsonObject:
     """The envelope's outer `elapsed_s` as {"elapsed_s": value}, or {} when it carries none."""
     if "elapsed_s" not in envelope:
         return {}
@@ -164,28 +259,68 @@ def outer_elapsed(envelope, what, fix):
     return {"elapsed_s": envelope["elapsed_s"]}
 
 
-def wrap(args, client):
+class WrapArguments(argparse.Namespace):
+    assignment: str
+    client_output: str | None
+    reply: str | None
+    findings: str | None
+    final: str | None
+    for_triage: bool
+
+
+class WrappedReply(TypedDict):
+    jev: JsonValue
+    findings: JsonValue
+    elapsed: JsonObject
+
+
+class ClientOutput(TypedDict):
+    success: bool
+    data: JsonValue
+    error: JsonValue
+    elapsed: JsonObject
+
+
+class ClientEnvelope(TypedDict):
+    success: bool
+    data: JsonValue
+    error: JsonValue
+
+
+def parse_client_output(output: JsonValue) -> ClientOutput:
+    raw = output
+    if not isinstance(raw, dict) or not matches_typeddict(output, ClientEnvelope) \
+            or set(raw) - {"elapsed_s"} != set(ClientEnvelope.__required_keys__):
+        raise Refused("client_envelope", "--client-output is not a jev_client.py envelope", RERUN)
+    return {"success": output["success"], "data": output["data"], "error": output["error"],
+            "elapsed": outer_elapsed(raw, "client", RERUN)}
+
+
+def parse_wrapped_reply(reply: JsonValue) -> WrappedReply:
+    data = reply.get("data") if isinstance(reply, dict) and reply.get("success") is True else None
+    if not isinstance(data, dict) or "jev" not in data:
+        raise Refused("reply_shape", "--reply is not a success reply holding data.jev",
+                      "Pass the reply this script printed, unchanged, as --reply.")
+    assert isinstance(reply, dict)
+    return {"jev": data["jev"], "findings": data.get("findings"),
+            "elapsed": outer_elapsed(reply, "reply", "Pass the reply this script printed, unchanged, as --reply.")}
+
+
+def wrap(args: WrapArguments, client: JevClient) -> JsonObject:
     fields, total = assignment_fields(read_json(args.assignment, "assignment",
                                                 "Pass the assignment you received, unchanged, as --assignment."))
     findings = read_json(args.findings, "findings", "Write --findings as a JSON array.") if args.findings else None
     final = read_json(args.final, "final", "Write --final as a JSON object {choice, reason, parts}.") \
         if args.final else None
     if args.reply:
-        reply = read_json(args.reply, "reply", "Pass the reply this script printed, unchanged, as --reply.")
-        data = reply.get("data") if isinstance(reply, dict) and reply.get("success") is True else None
-        if not isinstance(data, dict) or "jev" not in data:
-            raise Refused("reply_shape", "--reply is not a success reply holding data.jev",
-                          "Pass the reply this script printed, unchanged, as --reply.")
-        jev = data["jev"]
-        elapsed = outer_elapsed(reply, "reply", "Pass the reply this script printed, unchanged, as --reply.")
+        reply = parse_wrapped_reply(read_json(args.reply, "reply", "Pass the reply this script printed, unchanged, as --reply."))
+        jev, elapsed = reply["jev"], reply["elapsed"]
         if findings is None:
-            findings = data.get("findings")
+            findings = reply["findings"]
     else:
-        output = read_json(args.client_output, "client_output", RERUN)
-        if not isinstance(output, dict) or set(output) - {"elapsed_s"} != {"success", "data", "error"} \
-                or not isinstance(output["success"], bool):
-            raise Refused("client_envelope", "--client-output is not a jev_client.py envelope", RERUN)
-        elapsed = outer_elapsed(output, "client", RERUN)
+        assert args.client_output is not None
+        output = parse_client_output(read_json(args.client_output, "client_output", RERUN))
+        elapsed = output["elapsed"]
         if output["success"] is False:
             error = output["error"]
             if not isinstance(error, dict) or not client.is_client_message(error.get("message")):
@@ -202,20 +337,22 @@ def wrap(args, client):
     if not key:
         raise Refused("receipt_key", "TYPESAFE_API_KEY is not set, so the Jev receipt cannot be verified",
                       "Run with the same TYPESAFE_API_KEY the jev_client.py call used.")
-    receipts = client_receipts(jev, client, key)
-    if args.for_triage and len({receipt["choice"] for receipt in receipts}) == 1:
+    parsed_receipts = client_receipts(jev, client, key)
+    if args.for_triage and len({receipt["choice"] for receipt in parsed_receipts["receipts"]}) == 1:
         raise Refused("for_triage", "every Jev part answers the same, so there is nothing to triage",
                       "Drop --for-triage; the common answer sets the findings.")
-    choice = result_choice(jev, receipts, final, args.for_triage)
+    choice = result_choice(parsed_receipts, final, args.for_triage)
     findings = [] if findings is None else findings
-    check_findings(findings, choice, total)
-    out = {**fields, "findings": findings, "jev": jev}
+    parsed_findings = check_findings(findings, choice, total)
+    out: JsonObject = {"sanity_bead": fields["sanity_bead"], "dev_bead": fields["dev_bead"],
+                       "deliverable": fields["deliverable"], "commit_checked": fields["commit_checked"],
+                       "findings": [finding["raw"] for finding in parsed_findings], "jev": jev}
     if final is not None:
         out["jev_final"] = final
     return {"success": True, "data": out, "error": None, **elapsed}
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--assignment", required=True)
     source = parser.add_mutually_exclusive_group(required=True)
@@ -224,7 +361,7 @@ def main(argv=None):
     parser.add_argument("--findings")
     parser.add_argument("--final")
     parser.add_argument("--for-triage", action="store_true", help="split parts disagree: emit the reply for dev-sanity")
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv, namespace=WrapArguments())
     if args.reply and not args.final:
         parser.error("--reply requires --final")
     if args.for_triage and (args.final or args.reply):

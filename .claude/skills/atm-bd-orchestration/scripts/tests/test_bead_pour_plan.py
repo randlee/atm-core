@@ -35,7 +35,8 @@ class PlanFixture:
         self.runner.repo = root
         self.runner.option = None
         self.runner.config = {"worktree_base": str(root / "worktrees"), "lint_command": "just lint",
-                              "policy_path": "policy.md", "max_sanity_rounds": 5}
+                              "policy_path": "policy.md", "max_sanity_rounds": 5,
+                              "reviewers_round1": ["req-qa", "arch-qa"]}
         self.runner.plans = {}
         self.runner.sidecars = {}
         self.rows = {}

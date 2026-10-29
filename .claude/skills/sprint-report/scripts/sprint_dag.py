@@ -1,9 +1,13 @@
+# pyright: strict
 """Plan-scoped, live-bead execution DAG for sprint-report --dag."""
+from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from graphlib import TopologicalSorter, CycleError
 from html import escape
 import json
+from collections.abc import Sequence
 from pathlib import Path
 import re
 import shutil
@@ -12,26 +16,164 @@ from string import Template
 import sys
 import xml.etree.ElementTree as ET
 
-from sprint_index_common import run_json, index_bead_pairs, validate_index
+from sprint_index_common import IndexSprint, JsonValue, NormalizedIndex, is_json_object, is_object_list, run_json as _run_json, index_bead_pairs, validate_index
 from sprint_qa import choose_round, qa_icon, qa_verdict, findings_summary
+from phase_beads import phase_beads
+from operation_models import (
+    AtmTask, AtmTaskEvent, BeadRecord, is_atm_tasks, is_atm_task_events,
+    is_bead_records, is_object, matches_typeddict,
+)
+from typing import NotRequired, TypedDict
 
 RENDERER = Path(__file__).resolve().parents[1] / 'renderer'
 NS = 'http://www.w3.org/2000/svg'
 ET.register_namespace('', NS)
 
 
-def tag(name):
+def run_json(repo: Path, *args: str) -> JsonValue:
+    return _run_json(repo, *args)
+
+
+def record_payload(repo: Path, key: str, *args: str) -> object:
+    value = run_json(repo, *args)
+    if is_json_object(value):
+        value = value.get(key)
+    return value
+
+
+def run_bead_records(repo: Path, key: str, *args: str) -> list[BeadRecord]:
+    value = record_payload(repo, key, *args)
+    if not is_bead_records(value):
+        raise RuntimeError(f"{' '.join(args)} did not return validated bd bead records")
+    return value
+
+
+def run_atm_tasks(repo: Path, *args: str) -> list[AtmTask]:
+    value = record_payload(repo, "tasks", *args)
+    if not is_atm_tasks(value):
+        raise RuntimeError(f"{' '.join(args)} did not return validated ATM task records")
+    return value
+
+
+def run_atm_task_events(repo: Path, *args: str) -> list[AtmTaskEvent]:
+    value = record_payload(repo, "events", *args)
+    if not is_atm_task_events(value):
+        raise RuntimeError(f"{' '.join(args)} did not return validated ATM task-event records")
+    return value
+
+
+class Graph(TypedDict):
+    nodes: list[str]
+    edges: list[list[str]]
+    gate_pairs: dict[str, str]
+    edge_meaning: str
+    render_direction: str
+
+
+class Snapshot(TypedDict):
+    beads: dict[str, BeadRecord]
+    tasks: dict[str, AtmTask]
+    blocked: dict[str, list[str]]
+    events: dict[str, list[AtmTaskEvent] | None]
+    iterations: dict[str, int | None]
+    errors: dict[str, str]
+    captured_at: str
+
+
+class NodeState(TypedDict):
+    state: str
+    sanity_iterations: int | str | None
+    evidence: str
+    qa: NotRequired["QaState"]
+
+
+class QaState(TypedDict):
+    icon: str
+    findings: str | None
+    verdict: str | None
+    qa_beads: list[str]
+    open_findings: NotRequired[list[str]]
+
+
+def normalized_index(value: object) -> NormalizedIndex:
+    validate_index(value)
+    if not is_object(value):
+        raise RuntimeError('phase index does not match the normalized index schema')
+    root_bead_id = value.get('root_bead_id')
+    if not isinstance(root_bead_id, str):
+        raise RuntimeError('phase index does not match the normalized index schema')
+    source_rows = value.get('sprints')
+    if not is_object_list(source_rows):
+        raise RuntimeError('phase index sprints must be a list')
+    rows: list[IndexSprint] = []
+    for source_row in source_rows:
+        if not is_object(source_row):
+            raise RuntimeError('phase index sprint must be an object')
+        dev = source_row.get('dev_bead_id')
+        sanity = source_row.get('sanity_bead_id')
+        dependencies = source_row.get('depends_on_sanity_bead_ids', [])
+        sprint = source_row.get('sprint_bead_id', dev)
+        if (not isinstance(dev, str) or not isinstance(sanity, str) or not isinstance(sprint, str)
+                or not is_object_list(dependencies) or not all(isinstance(item, str) for item in dependencies)):
+            raise RuntimeError('phase index sprint does not match the normalized index schema')
+        dependency_ids: list[str] = [item for item in dependencies if isinstance(item, str)]
+        rows.append({'sprint_bead_id': sprint, 'dev_bead_id': dev, 'sanity_bead_id': sanity,
+                     'depends_on_sanity_bead_ids': dependency_ids})
+    return {'root_bead_id': root_bead_id, 'sprints': rows}
+
+
+def bead_map(value: object) -> dict[str, BeadRecord]:
+    if not is_object(value):
+        raise RuntimeError('bead map must be a mapping')
+    result: dict[str, BeadRecord] = {}
+    for key, bead in value.items():
+        if not matches_typeddict(bead, BeadRecord):
+            raise RuntimeError('bead map contains an invalid record')
+        result[key] = bead
+    return result
+
+
+def node_state_map(value: object) -> dict[str, NodeState]:
+    if not is_object(value):
+        raise ValueError('node state map must be a mapping')
+    result: dict[str, NodeState] = {}
+    for key, state in value.items():
+        if not matches_typeddict(state, NodeState):
+            raise ValueError('node state map contains an invalid record')
+        result[key] = state
+    return result
+
+
+def qa_state_map(value: object) -> dict[str, QaState]:
+    if not is_object(value):
+        raise ValueError('QA state map must be a mapping')
+    result: dict[str, QaState] = {}
+    for key, state in value.items():
+        if not matches_typeddict(state, QaState):
+            raise ValueError('QA state map contains an invalid record')
+        result[key] = state
+    return result
+
+
+def tag(name: str) -> str:
     return '{' + NS + '}' + name
 
 
-def prerequisites(bead):
-    return [edge['depends_on_id'] for edge in bead.get('dependencies', [])
-            if edge.get('type') == 'blocks']
+def prerequisites(bead: BeadRecord) -> list[str]:
+    targets: list[str] = []
+    for edge in bead.get('dependencies', []):
+        if edge.get('type', edge.get('dependency_type')) != 'blocks':
+            continue
+        target = edge.get('depends_on_id') or edge.get('id')
+        if target:
+            targets.append(target)
+    return targets
 
 
-def build_graph(index, beads):
+def build_graph(index: object, beads: object) -> Graph:
     """Render only the declared phase graph; Beads contribute live state."""
-    validate_index(index)
+    index = normalized_index(index)
+    beads = bead_map(beads)
     devs = set(index_bead_pairs(index))
     missing = devs - beads.keys()
     if missing:
@@ -46,7 +188,7 @@ def build_graph(index, beads):
         if pairs[dev] != gates[0]:
             raise RuntimeError(f'{dev}: indexed sanity bead {pairs[dev]} does not match live gate {gates[0]}')
     nodes = devs | set(pairs.values())
-    edges = []
+    edges: list[tuple[str, str]] = []
     for row in index['sprints']:
         dev, sanity = row['dev_bead_id'], row['sanity_bead_id']
         # The sanity gate waits on its dev bead.  Each listed prerequisite
@@ -64,41 +206,46 @@ def build_graph(index, beads):
             'render_direction': 'prerequisite to dependent'}
 
 
-def collect_state(repo, graph, beads, counts):
-    errors = {}
-    def history(key):
+def collect_state(repo: Path, graph: Graph, beads: dict[str, BeadRecord],
+                  counts: dict[str, int | None], phase: str) -> Snapshot:
+    errors: dict[str, str] = {}
+    def history(key: str) -> tuple[str, list[AtmTaskEvent] | str]:
         try:
-            return key, run_json(repo, 'atm', 'task', 'events', key, '--all', '--json')['events']
+            return key, run_atm_task_events(repo, 'atm', 'task', 'events', key, '--all', '--json')
         except (OSError, RuntimeError, KeyError, subprocess.CalledProcessError) as exc:
             return key, str(exc)
     with ThreadPoolExecutor(max_workers=4) as pool:
-        histories = dict(pool.map(history, graph['nodes']))
-    for key, value in list(histories.items()):
-        if not isinstance(value, list):
-            errors[key] = value
-            histories[key] = None
+        histories: dict[str, list[AtmTaskEvent] | str | None] = dict(pool.map(history, graph['nodes']))
+    typed_histories: dict[str, list[AtmTaskEvent] | None] = {}
+    for key, value in histories.items():
+        if isinstance(value, list):
+            typed_histories[key] = value
+        else:
+            errors[key] = value if isinstance(value, str) else "event history was not available"
+            typed_histories[key] = None
     try:
-        tasks = {t['task_id']: t for t in run_json(repo, 'atm', 'task', 'list', '--all', '--json')
+        tasks = {t['task_id']: t for t in run_atm_tasks(repo, 'atm', 'task', 'list', '--all', '--json')
                  if t['task_id'] in graph['nodes']}
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         tasks = {}
         errors['task_list'] = str(exc)
     blocked = {b['id']: b.get('blocked_by', [])
-               for b in run_json(repo, 'bd', 'blocked', '--json')}
-    return {'beads': beads, 'tasks': tasks, 'blocked': blocked, 'events': histories,
+               for b in run_bead_records(repo, 'beads', 'bd', 'blocked', '-l', f'phase-{phase}',
+                                 '--label-any', 'stage:dev,stage:dev-sanity', '--json')}
+    return {'beads': dict(beads), 'tasks': tasks, 'blocked': blocked, 'events': typed_histories,
             'iterations': counts, 'errors': errors,
             'captured_at': datetime.now(timezone.utc).isoformat()}
 
 
-def states(graph, snapshot, index):
+def states(graph: Graph, snapshot: Snapshot, index: object) -> dict[str, NodeState]:
     beads, events = snapshot['beads'], snapshot['events']
     pairs = graph['gate_pairs']
-    gates = {gate: dev for dev, gate in pairs.items()}
-    def completed(key):
+    gates: dict[str, str] = {gate: dev for dev, gate in pairs.items()}
+    def completed(key: str) -> list[AtmTaskEvent]:
         return [e for e in (events.get(key) or []) if e.get('event') == 'completed']
-    def latest(key):
-        return max((e['at'] for e in completed(key)), default='')
-    def open_findings(key):
+    def latest(key: str) -> str:
+        return max((e.get('at', '') for e in completed(key)), default='')
+    def open_findings(key: str) -> list[str]:
         dev = gates.get(key)
         return [b['id'] for b in beads.values() if b.get('status') != 'closed' and any(
             edge.get('type') in ('discovered-from', 'parent-child')
@@ -106,16 +253,18 @@ def states(graph, snapshot, index):
                 edge.get('depends_on_id') == dev
                 and any('sanity' in label for label in b.get('labels', []))))
             for edge in b.get('dependencies', []))]
-    def verdict(key):
+    def verdict(key: str) -> tuple[str, str]:
         bead = beads[key]
         reason = bead.get('close_reason') or ''
         if 'overridden' in reason.lower():
             return 'override', reason
-        task_state = snapshot.get('tasks', {}).get(key, {}).get('state')
-        history_state = (events.get(key) or [{}])[-1].get('to_state')
-        if task_state == 'active' or history_state == 'active' or bead['status'] == 'in_progress':
+        task = snapshot['tasks'].get(key)
+        task_state = task.get('state') if task else None
+        history = events.get(key) or []
+        history_state = history[-1].get('to_state') if history else None
+        if task_state == 'active' or history_state == 'active' or bead.get('status') == 'in_progress':
             return 'active', 'Work in progress'
-        if key in snapshot['blocked'] or bead['status'] == 'blocked':
+        if key in snapshot['blocked'] or bead.get('status') == 'blocked':
             return 'blocked', 'Blocked by unfinished prerequisites'
         if task_state in ('assigned', 'queued') or history_state == 'assigned':
             return 'waiting', 'Assigned; completion not recorded'
@@ -125,7 +274,7 @@ def states(graph, snapshot, index):
                 return 'findings', 'Open sanity findings: ' + ', '.join(findings)
             meta = bead.get('metadata') or {}
             passed = str(meta.get('verdict', '')).upper() == 'PASS' or re.match(r'^PASS\b', reason, re.I)
-            if bead['status'] == 'closed' and passed:
+            if bead.get('status') == 'closed' and passed:
                 dev = gates[key]
                 if events.get(key) is None or events.get(dev) is None or 'task_list' in snapshot.get('errors', {}):
                     return 'uncertain', reason + '; ATM history unavailable'
@@ -134,9 +283,9 @@ def states(graph, snapshot, index):
                 if latest(dev) > latest(key):
                     return 'uncertain', reason + '; PASS predates latest dev completion'
                 return 'done', reason
-            if bead['status'] == 'closed' or re.match(r'^FAIL\b', reason, re.I):
+            if bead.get('status') == 'closed' or re.match(r'^FAIL\b', reason, re.I):
                 return 'findings', reason or 'No explicit sanity PASS'
-        elif key in pairs and bead['status'] == 'closed':
+        elif key in pairs and bead.get('status') == 'closed':
             if not completed(key) or 'task_list' in snapshot.get('errors', {}):
                 return 'uncertain', reason + '; dev completion history unavailable'
             gate_state, detail = verdict(pairs[key])
@@ -146,7 +295,7 @@ def states(graph, snapshot, index):
                 return gate_state, reason + '; ' + detail
             return 'waiting', reason + '; awaiting sanity completion'
         return 'waiting', 'Not started / awaiting completion'
-    result = {}
+    result: dict[str, NodeState] = {}
     for key in graph['nodes']:
         state, detail = verdict(key)
         count = None
@@ -157,7 +306,7 @@ def states(graph, snapshot, index):
     return result
 
 
-def is_qa_of(bead, dev_id):
+def is_qa_of(bead: BeadRecord, dev_id: str) -> bool:
     """A QA round of dev_id: a stage:qa child of it (phase contract; bd keeps one edge type per pair) or a
     pre-contract round that `validates` it."""
     edges = bead.get('dependencies') or []
@@ -165,14 +314,15 @@ def is_qa_of(bead, dev_id):
         return True
     if 'stage:qa' not in (bead.get('labels') or []):
         return False
-    metadata = bead.get('metadata') if isinstance(bead.get('metadata'), dict) else {}
+    metadata = bead.get('metadata') or {}
     return bead.get('parent') == dev_id or metadata.get('checked_bead') == dev_id or any(
         edge.get('type') == 'parent-child' and edge.get('depends_on_id') == dev_id for edge in edges)
 
 
-def qa_states(graph, beads, index):
+def qa_states(graph: Graph, beads: object, index: object) -> dict[str, QaState]:
     """Share table QA semantics, counting open findings across every round."""
-    result = {}
+    beads = bead_map(beads)
+    result: dict[str, QaState] = {}
     for key in graph['nodes']:
         rounds = [bead for bead in beads.values() if is_qa_of(bead, key)]
         selected = choose_round(rounds)
@@ -190,15 +340,16 @@ def qa_states(graph, beads, index):
     return result
 
 
-def dot_source(graph, phase):
-    quote = lambda text: json.dumps(text, ensure_ascii=False)
+def dot_source(graph: Graph, phase: str) -> str:
+    def quote(text: str) -> str:
+        return json.dumps(text, ensure_ascii=False)
     phase = str(phase).removeprefix('phase-').upper()
     lines = ['digraph execution {',
              'graph [rankdir=LR, compound=true, bgcolor="white", pad="0.4", nodesep="0.22", ranksep="0.5", splines=spline, fontname="Arial", fontsize=20, labelloc=t, label=' + quote(f'Phase {phase} — execution order\nSprint completes → its gate passes → downstream sprint starts') + '];',
              'node [shape=box, style="rounded,filled", fontname="Arial", fontsize=13, margin="0.12,0.10", color="#9caec2", fillcolor="#edf3fb", fontcolor="#172b43"];',
              'edge [color="#647a94", penwidth=1.15, arrowsize=0.75];']
     pairs = graph['gate_pairs']
-    def order(key):
+    def order(key: str) -> list[int | str]:
         return [int(part) if part.isdigit() else part for part in re.split(r'(\d+)', key)]
     for dev in sorted(pairs, key=order):
         gate = pairs[dev]
@@ -215,7 +366,8 @@ def dot_source(graph, phase):
 
 colors={'done':'#15803d','blocked':'#b91c1c','waiting':'#64748b','active':'#2563eb','uncertain':'#b45309','findings':'#b91c1c','override':'#7e22ce'}
 symbols={'blocked':'!','waiting':'○','active':'↻','uncertain':'?','findings':'!','override':'↷'}
-def badge(parent,x,y,state,count=None):
+def badge(parent: ET.Element[str], x: float, y: float, state: str,
+          count: int | str | None = None) -> None:
  w=38 if count is not None else 20
  g=ET.SubElement(parent,tag('g'),{'class':'state-badge','transform':f'translate({x-w/2:g} {y-9:g})'})
  ET.SubElement(g,tag('rect'),{'width':str(w),'height':'18','rx':'6','fill':'white','stroke':colors[state],'stroke-width':'1.2'})
@@ -226,7 +378,7 @@ def badge(parent,x,y,state,count=None):
   t=ET.SubElement(g,tag('text'),{'x':'27','y':'13','text-anchor':'middle','font-family':'Arial','font-size':'12','font-weight':'bold','fill':colors[state]});t.text=str(count)
 
 
-def qa_badge(parent, x, y, qa):
+def qa_badge(parent: ET.Element[str], x: float, y: float, qa: QaState) -> None:
     icon, counts = qa['icon'], qa['findings']
     if not icon:
         return
@@ -261,7 +413,10 @@ def qa_badge(parent, x, y, qa):
     title.text = title_text
 
 
-def overlay(layout, icons, captured_at, qa=None):
+def overlay(layout: str, icons: object, captured_at: str,
+            qa: object | None = None) -> str:
+    icons = node_state_map(icons)
+    qa = qa_state_map(qa) if qa is not None else None
     root = ET.fromstring(layout)
     graph = root.find(tag('g'))
     if graph is None:
@@ -325,18 +480,18 @@ def overlay(layout, icons, captured_at, qa=None):
     return ET.tostring(root, encoding='unicode')
 
 
-def render(mode, source, target):
+def render(mode: str, source: Path, target: Path) -> None:
     subprocess.run(['node', str(RENDERER / 'render.cjs'), mode, str(source), str(target)], check=True)
 
 
-def html_view(svg, phase, root_bead_id):
+def html_view(svg: str, phase: str, root_bead_id: str) -> str:
     template = (RENDERER.parent / 'dag-view.html').read_text()
     return Template(template).substitute(
         title=escape(f'Sprint review · Phase {phase.upper()}'), svg=svg,
         root_bead_id=escape(root_bead_id, quote=True))
 
 
-def open_wyvern(artifact):
+def open_wyvern(artifact: Path) -> bool:
     """Leave the viewer running until the user closes it, without holding the CLI."""
     log_path = artifact.with_suffix('.wyvern.log')
     executable = shutil.which('wyvern')
@@ -364,21 +519,23 @@ def open_wyvern(artifact):
     return True
 
 
-def generate(repo, index, counts, phase, output=None, open_image=False, open_view=False,
-             plan_html=None):
+def generate(repo: Path, index: object, counts: dict[str, int | None], phase: str,
+             output: Path | None = None, open_image: bool = False, open_view: bool = False,
+             plan_html: Path | None = None, beads: Sequence[BeadRecord] | None = None) -> int:
+    index = normalized_index(index)
     if not (RENDERER / 'node_modules/@viz-js/viz').exists():
         raise RuntimeError(f'DAG renderer dependencies missing; run npm ci --prefix {RENDERER}')
     phase = str(phase).removeprefix('phase-')
     output = output or repo / 'scratchpad' / f'phase-{phase}-dag' / f'phase-{phase}-dag'
     output = output if output.is_absolute() else repo / output
     output.parent.mkdir(parents=True, exist_ok=True)
-    def path(suffix):
+    def path(suffix: str) -> Path:
         return output.parent / (output.name + suffix)
-    beads = {b['id']: b for b in run_json(repo, 'bd', 'list', '--all', '-n', '0', '--json')}
-    graph = build_graph(index, beads)
-    snapshot = collect_state(repo, graph, beads, counts)
+    bead_map = {b['id']: b for b in (beads if beads is not None else phase_beads(repo, phase))}
+    graph = build_graph(index, bead_map)
+    snapshot = collect_state(repo, graph, bead_map, counts, phase)
     icons = states(graph, snapshot, index)
-    qa = qa_states(graph, beads, index)
+    qa = qa_states(graph, bead_map, index)
     for key in icons:
         icons[key]['qa'] = qa[key]
     source = dot_source(graph, phase)
@@ -398,7 +555,7 @@ def generate(repo, index, counts, phase, output=None, open_image=False, open_vie
     for suffix in ('.svg', '.html', '.png', '-state.json'):
         print(path(suffix))
     if plan_html is not None:
-        # Written next to the plan; never committed or pushed.
+        # Written next to the plan; the planner commits it with the plan, never this script.
         plan_html.parent.mkdir(parents=True, exist_ok=True)
         plan_html.write_text(path('.html').read_text())
         print(plan_html)

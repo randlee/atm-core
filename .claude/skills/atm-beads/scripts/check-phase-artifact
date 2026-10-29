@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Check that the plan file the phase file `.atm-bd/phase-<p>.toml` names was pushed to its integration
 branch, parses, and equals the local copy. The DAG HTML is local only.
 
@@ -11,12 +12,12 @@ import sys
 from sprint_index_common import load_phase_config, load_phase_plan, parse_plan, phase_of_root
 
 
-def check_artifact(repo, root, expected_plan_path):
+def check_artifact(repo: Path, root: str, expected_plan_path: Path) -> None:
     config = load_phase_config(repo, phase_of_root(root))
     if config['root'] != root:
         raise RuntimeError(f"--root {root}; the phase file names {config['root']}")
     branch = config['integration_branch']
-    def git(*args):
+    def git(*args: str) -> str:
         result = subprocess.run(['git', *args], cwd=repo, text=True, capture_output=True)
         if result.returncode:
             raise RuntimeError(result.stderr.strip() or f'git {args[0]} failed')
@@ -28,14 +29,14 @@ def check_artifact(repo, root, expected_plan_path):
         published_plan = git('show', f"{ref}:{config['plan']}")
     except RuntimeError as exc:
         raise RuntimeError(f"{branch}: plan file {config['plan']} missing or unreadable: {exc}") from exc
-    rows, problems = parse_plan(published_plan, f"{branch}:{config['plan']}")
+    _rows, problems = parse_plan(published_plan, f"{branch}:{config['plan']}")
     if problems:
         raise RuntimeError('; '.join(problems))
     if published_plan != expected_plan_path.read_text():
         raise RuntimeError(f'{branch}: published plan file differs from current plan')
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', required=True)
     parser.add_argument('--index', required=True, type=Path)

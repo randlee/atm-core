@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Print the path of a phase's plan file, as `.atm-bd/phase-<p>.toml` names it."""
 import argparse
 import subprocess

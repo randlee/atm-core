@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Create a new phase's explicit settings before validating or pouring its plan."""
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+from typing import TypedDict
 
 import repo_config
 from sprint_index_common import DEFAULT_TEMPLATES, phase_config_path, validate_phase_config
+
+
+class InitConfig(TypedDict):
+    plan: str
+    root: str
+    integration_branch: str
+    lead: str
+    templates: dict[str, str]
 
 
 def main(argv: list[str]) -> int:
@@ -22,7 +32,7 @@ def main(argv: list[str]) -> int:
     if path.exists():
         raise RuntimeError(f"{path} already exists; edit the tracked phase settings explicitly")
     config = repo_config.load(repo)
-    data = {
+    data: InitConfig = {
         "plan": f"{config['plans_dir']}/phase-{args.phase}.jsonl",
         "root": f"{config['bead_prefix']}-phase-{args.phase}",
         "integration_branch": config["integration_branch_pattern"].format(phase=args.phase),

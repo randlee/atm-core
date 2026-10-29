@@ -154,3 +154,65 @@ class PhaseEndFindingTests(unittest.TestCase):
     def test_found_on_layer_guard_still_applies_to_phase_end(self):
         groups, result = self.targets(difficulty="hard", found_on_layer="main (abc)")
         self.assertEqual(result[0].code, "BEAD_GROUPS_FOUND_ON_LAYER_NOT_INTEGER")
+
+
+def load_groups(name: str):
+    loader = importlib.machinery.SourceFileLoader(name, str(SCRIPTS / "bead-groups"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    groups = importlib.util.module_from_spec(spec)
+    loader.exec_module(groups)
+    return groups
+
+
+class SchemaIssuesTests(unittest.TestCase):
+    def test_closed_beads_are_not_schema_checked(self):
+        """#578: a closed history bead that predates the models does not refuse the pour; open beads still are checked."""
+        groups = load_groups("bead_groups_schema_issues")
+        schema = Mock()
+        closed = {"id": "t-d-1.group-qa", "status": "closed", "metadata": {}}
+        live = {"id": "t-d-2.group-qa", "status": "open", "metadata": {}}
+        prospective = {"id": "t-d-3.group-qa", "metadata": {}}
+        schema.load_phase.return_value = [closed, live]
+        schema.validate_phase.return_value = ["t-d-2.group-qa: reviewers_round1: Field required"]
+        issues = groups.schema_issues(schema, "d", [prospective])
+        schema.load_phase.assert_called_once_with("d")
+        schema.validate_phase.assert_called_once_with([live, prospective])
+        self.assertEqual(issues, ["t-d-2.group-qa: reviewers_round1: Field required"])
+
+
+class SprintGroupReviewersTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("sc-compose"), "sc-compose is required to render bead formulas")
+    def test_sprint_group_qa_step_carries_configured_reviewers(self):
+        """#573: the poured sprint QA bead carries reviewers_round1 from the repository configuration."""
+        groups = load_groups("bead_groups_sprint_reviewers")
+        reviewers = ["req-qa", "arch-qa", "ruthless-boundary-qa"]
+        runner = object.__new__(groups.Run)
+        runner.option = None
+        runner.config = {"worktree_base": "/worktrees", "lint_command": "just lint", "policy_path": "policy.md",
+                         "max_sanity_rounds": 5, "reviewers_round1": reviewers}
+        container = {"status": "open", "title": "d-1: the work", "priority": 2,
+                     "metadata": {"phase": "d", "sprint": "d-1", "stack": "stack", "layer": 1, "difficulty": "normal",
+                                  "branch": "sprint/d-1-work", "worktree": "/worktrees/sprint/d-1-work", "pr_target": "integrate/phase-d"}}
+        root = {"id": "t-phase-d", "title": "phase d"}
+        runner.show = lambda bead: root if bead == "t-phase-d" else container
+        runner.plan = lambda _: {"d-1": ("t-d-1", "t-d-1.group-sanity", [])}
+        runner.sidecar = lambda _: {"default_option": "C", "options": {"C": {}}, "ref": "group"}
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            runner.repo = work
+            shutil.copyfile(SCRIPTS.parent / "formulas/sprint-group.formula.toml.j2", work / "formula.toml.j2")
+            with patch.object(groups.sprint_index_common, "load_phase_config", return_value={"root": "t-phase-d"}):
+                target = runner.sprint_target("t-d-1")
+            self.assertEqual(target["compose"]["reviewers_round1"], reviewers)
+            request = {"schema": "sc-compose/beads/v1", "operation": "render", "working_directory": directory,
+                       "template": "formula.toml.j2", "rendered_formula": "rendered.formula.toml",
+                       "bead_variables": {}, "compose_variables": target["compose"]}
+            (work / "request.json").write_text(json.dumps(request))
+            output = subprocess.run(["sc-compose", "bead", "render", "--request", "request.json", "--json"],
+                                    cwd=work, capture_output=True, text=True, timeout=30)
+            self.assertEqual(output.returncode, 0, output.stdout + output.stderr)
+            steps = tomllib.loads((work / "rendered.formula.toml").read_text())["steps"]
+            qa = [step["metadata"] for step in steps if step["metadata"].get("role") == "qa"]
+            self.assertEqual([m["reviewers_round1"] for m in qa], [reviewers])
+            self.assertTrue(all("reviewers_round1" not in step["metadata"] for step in steps if step["metadata"].get("role") != "qa"))

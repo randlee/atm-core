@@ -1,3 +1,4 @@
+# pyright: strict
 """Render one template file with the sc-compose Python wheel.
 
 Scripts and tests render through `render()` instead of running the

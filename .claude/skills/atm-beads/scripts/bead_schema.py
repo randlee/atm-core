@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 # DO NOT EDIT WITHOUT EXPLICIT USER APPROVAL.
 # A bead that fails these models is fixed in the bead, never by changing the models. Report the problem instead.
 """Pydantic models of the schema-type beads. The published JSON Schemas (atm-beads/schemas/) are exported from them.
@@ -16,7 +17,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Annotated, ClassVar, Literal
+from typing import Annotated, ClassVar, Literal, TypeAlias, TypeGuard
 
 from pydantic import AfterValidator, AliasChoices, BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
@@ -34,6 +35,46 @@ def ids_or_none(v: list[str]) -> list[str]:
 
 
 IdList = Annotated[list[NonEmpty], AfterValidator(ids_or_none)]
+JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+JsonObject: TypeAlias = dict[str, JsonValue]
+
+
+def is_object_list(value: object) -> TypeGuard[list[object]]:
+    return isinstance(value, list)
+
+
+def is_object_mapping(value: object) -> TypeGuard[dict[object, object]]:
+    return isinstance(value, dict)
+
+
+def is_json_value(value: object) -> TypeGuard[JsonValue]:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return True
+    if is_object_list(value):
+        return all(is_json_value(item) for item in value)
+    if is_object_mapping(value):
+        for key, item in value.items():
+            if not isinstance(key, str) or not is_json_value(item):
+                return False
+        return True
+    return False
+
+
+def is_json_object(value: object) -> TypeGuard[JsonObject]:
+    return is_object_mapping(value) and all(
+        isinstance(key, str) and is_json_value(item) for key, item in value.items()
+    )
+
+
+def json_objects(value: object, *, context: str) -> list[JsonObject]:
+    if not is_object_list(value):
+        raise ValueError(f"{context} must be a JSON array")
+    rows: list[JsonObject] = []
+    for row in value:
+        if not is_json_object(row):
+            raise ValueError(f"{context} must contain only JSON objects")
+        rows.append(row)
+    return rows
 
 
 class Dependency(BaseModel):
@@ -237,11 +278,11 @@ MODELS: dict[str, type[Bead]] = {
 }
 
 
-def problems(bead: dict, model: type[Bead]) -> list[str]:
+def problems(bead: JsonObject, model: type[Bead]) -> list[str]:
     try:
         model.model_validate(bead)
     except ValidationError as exc:
-        out = []
+        out: list[str] = []
         for e in exc.errors():
             where = ".".join(str(p) for p in e["loc"])
             msg = e["msg"].removeprefix("Value error, ")
@@ -250,10 +291,12 @@ def problems(bead: dict, model: type[Bead]) -> list[str]:
     return []
 
 
-def validate_phase(beads: list[dict]) -> list[str]:
-    found = []
+def validate_phase(beads: list[JsonObject]) -> list[str]:
+    found: list[str] = []
     for bead in beads:
-        if "anchor" in (bead.get("labels") or []):
+        raw_labels = bead.get("labels")
+        labels = raw_labels if is_object_list(raw_labels) else []
+        if "anchor" in labels:
             continue
         bead_id = str(bead.get("id", "?"))
         if re.fullmatch(r".+-phase-[a-z0-9]+", bead_id):
@@ -261,7 +304,9 @@ def validate_phase(beads: list[dict]) -> list[str]:
         elif bead.get("issue_type") == "gate":
             model = GateBead
         else:
-            stages = [label for label in bead.get("labels") or [] if label.startswith("stage:")]
+            labels_value = bead.get("labels")
+            labels = labels_value if is_object_list(labels_value) else []
+            stages = [label for label in labels if isinstance(label, str) and label.startswith("stage:")]
             model = MODELS_BY_STAGE.get(stages[0]) if len(stages) == 1 else None
         if model is None:
             found.append(f"{bead_id}: no model")
@@ -271,7 +316,7 @@ def validate_phase(beads: list[dict]) -> list[str]:
     return found
 
 
-def load_phase(phase: str) -> list[dict]:
+def load_phase(phase: str) -> list[JsonObject]:
     if not re.fullmatch(r"[a-z0-9]+", phase):
         raise ValueError(f"invalid phase {phase!r}")
     proc = subprocess.run(["bd", "list", "-l", f"phase-{phase}", "--status",
@@ -279,10 +324,7 @@ def load_phase(phase: str) -> list[dict]:
                           capture_output=True, text=True)
     if proc.returncode:
         raise ValueError(f"bd list failed: {proc.stderr.strip()}")
-    rows = json.loads(proc.stdout)
-    if not isinstance(rows, list):
-        raise ValueError("bd list did not return a list")
-    return rows
+    return json_objects(json.loads(proc.stdout), context="bd list output")
 
 
 def main(argv: list[str]) -> int:
@@ -292,11 +334,25 @@ def main(argv: list[str]) -> int:
             print("\n".join(found))
         return 5 if found else 0
     if len(argv) == 4 and argv[0] == "validate":
-        beads = {b.get("id"): b for b in json.loads(Path(argv[1]).read_text())}
-        plan = [json.loads(line) for line in Path(argv[2]).read_text().splitlines() if line.strip()]
-        found = []
-        for row in plan:
-            container = f"{argv[3]}{row['sprint']}"
+        beads: dict[str, JsonObject] = {}
+        for bead in json_objects(json.loads(Path(argv[1]).read_text()), context="bead input"):
+            bead_id = bead.get("id")
+            if not isinstance(bead_id, str):
+                raise ValueError("bead input rows must have a string id")
+            beads[bead_id] = bead
+        plan_rows: list[JsonObject] = []
+        for line in Path(argv[2]).read_text().splitlines():
+            if line.strip():
+                row = json.loads(line)
+                if not is_json_object(row):
+                    raise ValueError("plan rows must be JSON objects")
+                plan_rows.append(row)
+        found: list[str] = []
+        for row in plan_rows:
+            sprint = row.get("sprint")
+            if not isinstance(sprint, str):
+                raise ValueError("plan row sprint must be a string")
+            container = f"{argv[3]}{sprint}"
             for bid, model in ((container, SprintBead), (f"{container}.group-sanity", SanityBead)):
                 if bid in beads:
                     found += problems(beads[bid], model)

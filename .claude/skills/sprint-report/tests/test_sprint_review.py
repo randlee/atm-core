@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
+from operation_models import BeadRecord
 
 SKILLS = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(SKILLS / 'sprint-report/scripts'), str(SKILLS / 'atm-beads/scripts')]
@@ -34,13 +35,13 @@ class ViewTests(unittest.TestCase):
             {'dev_bead_id': 'dev-b', 'sanity_bead_id': 'gate-b',
              'depends_on_sanity_bead_ids': ['gate-a']},
         ]}
-        beads = {
-            'dev-a': {'id': 'dev-a', 'dependencies': []},
-            'gate-a': {'id': 'gate-a', 'labels': ['stage:dev-sanity'],
+        beads: dict[str, BeadRecord] = {
+            'dev-a': {'id': 'dev-a', 'status': 'closed', 'dependencies': []},
+            'gate-a': {'id': 'gate-a', 'status': 'closed', 'labels': ['stage:dev-sanity'],
                        'dependencies': [{'type': 'blocks', 'depends_on_id': 'dev-a'}]},
             # This execution-only blocker must not become a plan/DAG edge.
-            'dev-b': {'id': 'dev-b', 'dependencies': [{'type': 'blocks', 'depends_on_id': 'runtime-gate'}]},
-            'gate-b': {'id': 'gate-b', 'labels': ['stage:dev-sanity'],
+            'dev-b': {'id': 'dev-b', 'status': 'closed', 'dependencies': [{'type': 'blocks', 'depends_on_id': 'runtime-gate'}]},
+            'gate-b': {'id': 'gate-b', 'status': 'closed', 'labels': ['stage:dev-sanity'],
                        'dependencies': [{'type': 'blocks', 'depends_on_id': 'dev-b'}]},
         }
         graph = dag.build_graph(index, beads)
@@ -50,22 +51,22 @@ class ViewTests(unittest.TestCase):
 
     def generate(self, repo, scratch, view=False, calls=None):
         index = {'root_bead_id': 'root', 'sprints': [{'dev_bead_id': 'dev', 'sanity_bead_id': 'gate'}]}
-        beads = [
-            {'id': 'dev', 'dependencies': []},
-            {'id': 'gate', 'labels': ['stage:dev-sanity'],
+        beads: list[BeadRecord] = [
+            {'id': 'dev', 'status': 'closed', 'dependencies': []},
+            {'id': 'gate', 'status': 'closed', 'labels': ['stage:dev-sanity'],
              'dependencies': [{'type': 'blocks', 'depends_on_id': 'dev'}]},
         ]
         svg = '<svg xmlns="http://www.w3.org/2000/svg"/>'
         snapshot = {'captured_at': 'now', 'errors': {}}
         calls = [] if calls is None else calls
         plan_html = repo / 'plans/phase-d/phase-d-dag.html'
-        with patch.object(dag, 'run_json', return_value=beads), patch.object(dag, 'collect_state', return_value=snapshot), patch.object(dag, 'states', return_value={'dev': {}, 'gate': {}}), patch.object(dag, 'qa_states', return_value={'dev': {}, 'gate': {}}), patch.object(dag, 'overlay', return_value=svg), patch.object(dag, 'render', side_effect=lambda mode, source, target: target.write_text(svg)), patch.object(dag, 'open_wyvern', side_effect=lambda path: calls.append('view')):
+        with patch.object(dag, 'phase_beads', side_effect=AssertionError('the caller passes the phase beads in')), patch.object(dag, 'collect_state', return_value=snapshot), patch.object(dag, 'states', return_value={'dev': {}, 'gate': {}}), patch.object(dag, 'qa_states', return_value={'dev': {}, 'gate': {}}), patch.object(dag, 'overlay', return_value=svg), patch.object(dag, 'render', side_effect=lambda mode, source, target: target.write_text(svg)), patch.object(dag, 'open_wyvern', side_effect=lambda path: calls.append('view')):
             # Dependency availability is a CLI prerequisite, not part of this boundary test.
             with patch.object(dag, 'RENDERER', scratch):
                 (scratch / 'node_modules/@viz-js/viz').mkdir(parents=True, exist_ok=True)
                 with patch.object(dag, 'html_view', return_value='<html>' + svg + '</html>'):
                     dag.generate(repo, index, {}, 'd', output=scratch / 'out/phase-d-dag', open_view=view,
-                                 plan_html=plan_html)
+                                 plan_html=plan_html, beads=beads)
         return plan_html
 
     def test_generation_writes_plan_html_and_never_views_by_default(self):

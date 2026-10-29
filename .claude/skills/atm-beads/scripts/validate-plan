@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Validate a phase plan in beads against its plan file and its `.atm-bd/phase-<x>.toml`.
 
 Problems (exit 5), and nothing else:
@@ -40,6 +41,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import NotRequired, TypedDict
+from operation_models import JsonValue, matches_typeddict
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -47,6 +50,61 @@ import sprint_index_common as plan_io  # noqa: E402
 from plan_contract import SPRINT_LABEL  # noqa: E402
 
 VALID, CANNOT_RUN, PROBLEMS = 0, 2, 5
+
+
+class Dependency(TypedDict, total=False):
+    type: str
+    dependency_type: str
+    id: str
+    depends_on_id: str
+
+
+class BeadMetadata(TypedDict, total=False):
+    integration_branch: str
+    trunk: str
+    dev_bead: str
+    reviewers_round1: JsonValue
+
+
+class Bead(TypedDict):
+    id: str
+    dependencies: NotRequired[list[Dependency]]
+    labels: NotRequired[list[str]]
+    status: NotRequired[str]
+    metadata: NotRequired[BeadMetadata]
+    parent: NotRequired[str]
+    issue_type: NotRequired[str]
+    created_at: NotRequired[str]
+    assignee: NotRequired[str]
+
+
+class BeadRows(TypedDict):
+    beads: list[Bead]
+
+
+class DoctorCheck(TypedDict, total=False):
+    status: str
+    name: str
+    message: str
+
+
+class DoctorReport(TypedDict):
+    checks: list[DoctorCheck]
+
+
+class AgentDefinition(TypedDict, total=False):
+    path: str
+
+
+class AgentRegistry(TypedDict):
+    agents: dict[str, AgentDefinition]
+
+
+def bead_rows(value: object) -> list[Bead]:
+    document = {"beads": value}
+    if not matches_typeddict(document, BeadRows):
+        raise CannotRun("bd returned malformed bead JSON")
+    return document["beads"]
 
 
 class CannotRun(Exception):
@@ -57,14 +115,23 @@ def warn(message: str) -> None:
     print(f"validate-plan: warning: {message}", file=sys.stderr)
 
 
-def blocks(bead: dict) -> set[str]:
-    return {str(d.get("depends_on_id") or d.get("id")) for d in bead.get("dependencies") or []
-            if (d.get("type") or d.get("dependency_type")) == "blocks"}
+def blocks(bead: Bead) -> set[str]:
+    result: set[str] = set()
+    dependencies = bead.get("dependencies")
+    if dependencies is None:
+        return result
+    for dependency in dependencies:
+        relation_type = dependency.get("type") or dependency.get("dependency_type")
+        dependency_id = dependency.get("depends_on_id") or dependency.get("id")
+        if relation_type == "blocks" and isinstance(dependency_id, str):
+            result.add(dependency_id)
+    return result
 
 
-def parent_of(bead: dict) -> str:
-    if bead.get("parent"):
-        return str(bead["parent"])
+def parent_of(bead: Bead) -> str:
+    parent = bead.get("parent")
+    if parent:
+        return parent
     return next((str(d.get("depends_on_id") or d.get("id")) for d in bead.get("dependencies") or []
                  if (d.get("type") or d.get("dependency_type")) == "parent-child"), "")
 
@@ -72,12 +139,12 @@ def parent_of(bead: dict) -> str:
 class Beads:
     """Bead lookup: a fixed list (--beads), rendered beads plus live (--file), or live bd."""
 
-    def __init__(self, fixed: list[dict] | None, file_beads: list[dict] | None, phase: str):
+    def __init__(self, fixed: list[Bead] | None, file_beads: list[Bead] | None, phase: str):
         self.fixed = {b["id"]: b for b in fixed} if fixed is not None else None
         self.file = {b["id"]: b for b in file_beads} if file_beads is not None else {}
         self.phase = phase
-        self.cache: dict[str, dict | None] = {}
-        self._everything: list[dict] | None = None
+        self.cache: dict[str, Bead | None] = {}
+        self._everything: list[Bead] | None = None
 
     def bd(self, *args: str) -> str:
         proc = subprocess.run(["bd", *args], capture_output=True, text=True)
@@ -88,13 +155,13 @@ class Beads:
             raise CannotRun(f"bd {' '.join(args[:2])} failed: {(proc.stderr or proc.stdout).strip()}")
         return proc.stdout
 
-    def get(self, bead: str) -> dict | None:
+    def get(self, bead: str) -> Bead | None:
         if self.fixed is not None:
             return self.fixed.get(bead)
         if bead in self.file:
             return self.file[bead]
         if bead not in self.cache:
-            rows = json.loads(self.bd("show", bead, "--json") or "[]")
+            rows = bead_rows(json.loads(self.bd("show", bead, "--json") or "[]"))
             self.cache[bead] = rows[0] if rows else None
         return self.cache[bead]
 
@@ -104,12 +171,12 @@ class Beads:
         return {b["id"] for b in rows if {label, SPRINT_LABEL} <= set(b.get("labels") or [])
                 and b.get("status") != "tombstone"}
 
-    def everything(self) -> list[dict]:
+    def everything(self) -> list[Bead]:
         if self._everything is None:
             if self.fixed is not None:
                 self._everything = list(self.fixed.values())
             else:
-                rows = json.loads(self.bd("list", "-l", f"phase-{self.phase}", "--include-gates", "-n", "0", "--json") or "[]")
+                rows = bead_rows(json.loads(self.bd("list", "-l", f"phase-{self.phase}", "--include-gates", "-n", "0", "--json") or "[]"))
                 merged = {b["id"]: b for b in rows}
                 merged.update({bead_id: bead for bead_id, bead in self.cache.items() if bead is not None})
                 merged.update(self.file)
@@ -124,7 +191,7 @@ def git(*args: str) -> str:
     return proc.stdout
 
 
-def plan_text(repo: Path, config: dict, index: Path | None) -> tuple[str, str]:
+def plan_text(repo: Path, config: plan_io.PhaseConfig, index: Path | None) -> tuple[str, str]:
     if index is not None:
         try:
             return index.read_text(encoding="utf-8"), str(index)
@@ -138,12 +205,13 @@ def plan_text(repo: Path, config: dict, index: Path | None) -> tuple[str, str]:
     return proc.stdout, f"origin/{branch}:{config['plan']}"
 
 
-def check_qa_reviewers(beads: list[dict], repo: Path, problems: list[str]) -> None:
+def check_qa_reviewers(beads: list[Bead], repo: Path, problems: list[str]) -> None:
     """Resolve planned reviewer identities against this repository's agent registry."""
     import bead_schema
 
-    qa = [bead for bead in beads if "stage:qa" in (bead.get("labels") or [])
-          and not bead_schema.problems(bead, bead_schema.QaBead)]
+    qa = [bead_schema.QaBead.model_validate(bead) for bead in beads
+          if "stage:qa" in (bead.get("labels") or [])
+          and not bead_schema.problems(bead_schema.json_objects([bead], context="QA bead")[0], bead_schema.QaBead)]
     if not qa:
         return
     try:
@@ -152,20 +220,23 @@ def check_qa_reviewers(beads: list[dict], repo: Path, problems: list[str]) -> No
         raise CannotRun("PyYAML is required to validate reviewer identities (pip install pyyaml)") from error
     registry = repo / ".claude/agents/registry.yaml"
     try:
-        document = yaml.safe_load(registry.read_text())
-        agents = document.get("agents") if isinstance(document, dict) else None
-        if not isinstance(agents, dict) or not agents:
+        document: object = yaml.safe_load(registry.read_text())
+        if not matches_typeddict(document, AgentRegistry):
+            raise ValueError("agent registry does not match its schema")
+        registry_data = document
+        agents = registry_data["agents"]
+        if not agents:
             raise ValueError("expected a non-empty agents mapping")
     except (OSError, ValueError, yaml.YAMLError) as error:
         problems.append(f"{registry}: cannot validate reviewers_round1: {error}")
         return
     for bead in qa:
-        unknown = sorted(set(bead["metadata"]["reviewers_round1"]) - agents.keys())
+        unknown = sorted(set(bead.metadata.reviewers_round1) - agents.keys())
         if unknown:
-            problems.append(f"{bead['id']}: reviewers_round1: unregistered reviewer(s): {', '.join(unknown)}")
+            problems.append(f"{bead.id}: reviewers_round1: unregistered reviewer(s): {', '.join(unknown)}")
 
 
-def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], before_import: bool, repo: Path) -> None:
+def check(beads: Beads, config: plan_io.PhaseConfig, rows: list[plan_io.PlanRow], problems: list[str], before_import: bool, repo: Path) -> None:
     import bead_schema  # pydantic; --ci never loads it
     root_id = config["root"]
     prefix = plan_io.bead_prefix(root_id, Path("."))
@@ -202,7 +273,9 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
             if dev is None and before_import:
                 warn(f"{container}: not poured yet; run bead-groups after import to add its edge to {pred}")
                 continue
-            held = (blocks(dev) if dev else set()) | blocks(bead)
+            held: set[str] = set(blocks(bead))
+            if dev is not None:
+                held.update(blocks(dev))
             if not held & wanted:
                 problems.append(f"{dev_id}: missing blocks edge to {plan_io.group_id(pred_container, 'sanity')} "
                                 f"or {pred_container} (plan file: {row['sprint']} depends on {pred})")
@@ -211,11 +284,11 @@ def check(beads: Beads, config: dict, rows: list[dict], problems: list[str], bef
     phase_label = f"phase-{beads.phase}"
     active = [bead for bead in beads.everything() if bead.get("status") != "closed"
               and (bead.get("id") == root_id or phase_label in (bead.get("labels") or []))]
-    problems += bead_schema.validate_phase(active)
+    problems += bead_schema.validate_phase(bead_schema.json_objects(active, context="phase beads"))
     check_qa_reviewers(active, repo, problems)
 
 
-def warnings(beads: Beads, root_id: str, file_beads: list[dict] | None) -> None:
+def warnings(beads: Beads, root_id: str, file_beads: list[Bead] | None) -> None:
     everything = file_beads if file_beads is not None else beads.everything()
     since = next((b.get("created_at") or "" for b in everything if b.get("id") == root_id), "")
     root_bead = beads.get(root_id)
@@ -233,7 +306,10 @@ def warnings(beads: Beads, root_id: str, file_beads: list[dict] | None) -> None:
 def doctor() -> None:
     proc = subprocess.run(["bd", "doctor", "--json"], capture_output=True, text=True)
     try:
-        report = json.loads(proc.stdout)["checks"]
+        doctor_report: object = json.loads(proc.stdout)
+        if not matches_typeddict(doctor_report, DoctorReport):
+            raise CannotRun("bd doctor returned malformed JSON")
+        report = doctor_report
     except (ValueError, KeyError, TypeError):
         warn("bd doctor produced no JSON; its stderr follows")
         sys.stderr.write(proc.stderr)
@@ -241,7 +317,7 @@ def doctor() -> None:
     if proc.stderr.strip():
         for line in proc.stderr.splitlines():
             print(f"bd doctor (stderr): {line}", file=sys.stderr)
-    for c in report:
+    for c in report["checks"]:
         if c.get("status") == "error":
             warn(f"bd doctor: {c.get('name')}: {c.get('message') or ''}")
 
@@ -305,10 +381,10 @@ def main(argv: list[str]) -> int:
             raise CannotRun(f"--root {args.root}; .atm-bd/phase-{phase}.toml names {config['root']}")
         text, where = plan_text(repo, config, args.index)
         rows, problems = plan_io.parse_plan(text, where)
-        fixed = json.loads(args.beads.read_text()) if args.beads else None
+        fixed = bead_rows(json.loads(args.beads.read_text())) if args.beads else None
         file_beads = None
         if args.file:
-            file_beads = [json.loads(line) for line in args.file.read_text().splitlines() if line.strip()]
+            file_beads = bead_rows([json.loads(line) for line in args.file.read_text().splitlines() if line.strip()])
         beads = Beads(fixed, file_beads, phase)
         check(beads, config, rows, problems, before_import=args.file is not None, repo=repo)
         warnings(beads, config["root"], file_beads)

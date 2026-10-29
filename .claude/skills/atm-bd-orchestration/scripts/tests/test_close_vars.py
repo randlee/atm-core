@@ -53,6 +53,20 @@ class CloseVarsTests(unittest.TestCase):
         self.assertEqual(values["worktree_path"], str((REPO / "wt/fix/d-1-f1").resolve()))
         self.assertNotIn("sanity_bead", remaining)
 
+    def test_a_stamped_finding_closes_as_a_fix_and_an_unstamped_one_names_the_backfill(self):
+        # fix-assignment step f needs lead close vars for an important or minor finding (stage:finding), phase bg.
+        role, values, remaining = close_fields.close_vars(row("t-d-1.qa1-f1", "stage:finding", "fix"), REPO)
+        self.assertEqual(role, "fix")
+        self.assertEqual((values["task_id"], values["sanity_task_id"], values["qa_task_id"]),
+                         ("t-d-1.qa1-f1", "t-d-1.f1-sanity", "t-d-1.f1-qa"))
+        self.assertEqual(values["worktree_path"], str((REPO / "wt/fix/d-1-f1").resolve()))
+        self.assertNotIn("sanity_bead", remaining)
+        unstamped = {"id": "t-d-1.qa1-f2", "labels": ["phase-d", "stage:finding"], "metadata": {"severity": "minor"}}
+        with self.assertRaises(close_fields.CloseFieldsError) as caught:
+            close_fields.close_vars(unstamped, REPO)
+        self.assertEqual(caught.exception.code, "CLOSE_VARS.NOT_POURED")
+        self.assertIn("close_fields_backfill.py", caught.exception.fix)
+
     def test_unpoured_and_mismatched_beads_are_refused_with_the_backfill_fix(self):
         bare = {"id": "t-x", "labels": ["stage:dev"], "metadata": {"role": "dev"}}
         with self.assertRaises(close_fields.CloseFieldsError) as caught:
@@ -102,6 +116,15 @@ class QaAssignmentTests(unittest.TestCase):
         with self.assertRaises(close_fields.CloseFieldsError) as caught:
             close_fields.qa_assignment_vars(unlinked, FIX, REPO)
         self.assertEqual(caught.exception.code, "ASSIGN_VARS.NOT_PLANNED")
+
+
+    def test_base_is_the_pr_base_the_checked_bead_recorded_not_the_poured_target(self):
+        # The poured base is pr_target; the PR's actual base is the layer below, recorded at the dev or fix close.
+        recorded = {**FIX, "metadata": {**FIX["metadata"], "pr_base": "fix/d-1-f0"}}
+        self.assertEqual(close_fields.qa_assignment_vars(QA, recorded, REPO)["base"], "fix/d-1-f0")
+
+    def test_base_falls_back_to_the_poured_base_when_the_checked_bead_recorded_none(self):
+        self.assertEqual(close_fields.qa_assignment_vars(QA, FIX, REPO)["base"], "sprint/d-1")
 
 
 class BackfillTests(unittest.TestCase):

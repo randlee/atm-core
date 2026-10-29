@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Check an installed atm-bd-orchestration copy against its install record, with no host-repository tooling.
 
     python3 atm-hook-doctor.py [--dest <.claude or .codex dir>]   one ok|modified|missing|extra line per path, PASS|FAIL
@@ -7,20 +8,81 @@
 `atm-bd skill` writes the record (atm-bd-install.json) with the sc-sha of every file as installed; an install.py install
 writes none, which fails closed. Only the standard library and sc_sha are imported.
 """
-from __future__ import annotations
-
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeAlias, TypedDict
 
 RECORD_NAME = "atm-bd-install.json"
 SC_SHA_FIX = "uv pip install 'sc-sha>=1.7.0,<2'"
 CODES = {"modified": "skill_file_modified", "missing": "skill_file_missing", "extra": "skill_file_extra"}
+JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 
 
 class RecordError(ValueError):
     """The install record exists but is not a record atm-bd skill writes."""
+
+
+@dataclass(frozen=True)
+class InstallFile:
+    path: str
+    sc_sha: str
+
+
+@dataclass(frozen=True)
+class InstallRecord:
+    files: tuple[InstallFile, ...]
+    version: str | None = None
+
+
+@dataclass(frozen=True)
+class DoctorRequest:
+    hook: str
+
+
+class Finding(TypedDict):
+    severity: str
+    code: str
+    message: str
+    remediation: str
+
+
+class DoctorReply(TypedDict):
+    success: bool
+    message: str
+    findings: list[Finding]
+
+
+def parse_record(value: JsonValue, record_path: Path) -> InstallRecord:
+    if not isinstance(value, dict):
+        raise RecordError(f"{record_path} is not an atm-bd install record: expected an object")
+    raw_files = value.get("files")
+    if not isinstance(raw_files, list):
+        raise RecordError(f"{record_path} is not an atm-bd install record: files must be an array")
+    files: list[InstallFile] = []
+    for entry in raw_files:
+        if not isinstance(entry, dict):
+            raise RecordError(f"{record_path} is not an atm-bd install record: each file must be an object")
+        path, digest = entry.get("path"), entry.get("sc_sha")
+        if not isinstance(path, str) or not isinstance(digest, str):
+            raise RecordError(f"{record_path} is not an atm-bd install record: paths and sc_sha values must be strings")
+        files.append(InstallFile(path, digest))
+    version = value.get("version")
+    if version is not None and not isinstance(version, str):
+        raise RecordError(f"{record_path} is not an atm-bd install record: version must be a string")
+    return InstallRecord(tuple(files), version)
+
+
+def parse_doctor_request(value: JsonValue) -> DoctorRequest | None:
+    """Parse the only supported hook request shape before using its operation."""
+    if not isinstance(value, dict):
+        return None
+    hook = value.get("hook")
+    if not isinstance(hook, str) or hook != "doctor":
+        return None
+    return DoctorRequest(hook)
 
 try:
     import sc_sha
@@ -44,25 +106,24 @@ def _shipped(directory: Path) -> set[Path]:
             if path.is_file() and "__pycache__" not in path.relative_to(directory).parts and path.suffix != ".pyc"}
 
 
-def check(dest: Path) -> tuple[list[tuple[str, str]], dict | None]:
+def check(dest: Path) -> tuple[list[tuple[str, str]], InstallRecord | None]:
     """(status, repository-relative path) per recorded path and per extra file in a recorded skill directory, sorted
     by path; the record, or None when there is none."""
     record_path = dest / RECORD_NAME
     if not record_path.is_file():
         return [("missing", RECORD_NAME)], None
     try:
-        record = json.loads(record_path.read_text(encoding="utf-8"))
-        recorded = {entry["path"]: entry["sc_sha"] for entry in record["files"]}
+        raw_record: JsonValue = json.loads(record_path.read_text(encoding="utf-8"))
+        record = parse_record(raw_record, record_path)
+        recorded = {entry.path: entry.sc_sha for entry in record.files}
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
         raise RecordError(f"{record_path} is not an atm-bd install record: {error!r}") from error
-    if not all(isinstance(path, str) and isinstance(sha, str) for path, sha in recorded.items()):
-        raise RecordError(f"{record_path} is not an atm-bd install record: paths and sc_sha values must be strings")
     repo = dest.parent
     prefix = dest.name + "/skills/"
     skill_dirs = {path[len(prefix):].split("/", 1)[0] for path in recorded if path.startswith(prefix) and path.count("/") >= 3}
     present = {path.relative_to(repo).as_posix() for name in skill_dirs if (dest / "skills" / name).is_dir()
                for path in _shipped(dest / "skills" / name)}
-    results = []
+    results: list[tuple[str, str]] = []
     for path in sorted(recorded.keys() | present):
         file = repo / path
         if path not in recorded:
@@ -74,13 +135,14 @@ def check(dest: Path) -> tuple[list[tuple[str, str]], dict | None]:
     return results, record
 
 
-def remediation(dest: Path, record: dict | None) -> str:
-    version = f" {record['version']}" if record and isinstance(record.get("version"), str) else ""
+def remediation(dest: Path, record: InstallRecord | None) -> str:
+    version_value = record.version if record is not None else None
+    version = f" {version_value}" if isinstance(version_value, str) else ""
     codex = " --codex" if dest.name == ".codex" else ""
     return f"atm-bd skill{version} --dest {dest.parent}{codex} --overwrite"
 
 
-def doctor(request: dict) -> dict:
+def doctor() -> DoctorReply:
     """The doctor hook contract reply: success, message, findings."""
     dest = install_folder()
     if sc_sha is None:
@@ -98,7 +160,7 @@ def doctor(request: dict) -> dict:
         return {"success": False, "message": f"{dest / RECORD_NAME} is missing; the install cannot be checked",
                 "findings": [{"severity": "error", "code": "install_record_missing",
                               "message": f"missing {RECORD_NAME} in {dest}", "remediation": fix}]}
-    findings = [{"severity": "error", "code": CODES[status], "message": f"{status} {path}", "remediation": fix}
+    findings: list[Finding] = [{"severity": "error", "code": CODES[status], "message": f"{status} {path}", "remediation": fix}
                 for status, path in results if status != "ok"]
     if findings:
         return {"success": False, "message": f"{len(findings)} skill file(s) differ from {RECORD_NAME}", "findings": findings}
@@ -107,7 +169,7 @@ def doctor(request: dict) -> dict:
 
 def _doctor_mode() -> int:
     try:
-        request = json.loads(sys.stdin.read())
+        request: JsonValue = json.loads(sys.stdin.read())
     except json.JSONDecodeError:
         print(json.dumps({
             "success": False,
@@ -117,7 +179,8 @@ def _doctor_mode() -> int:
                           "remediation": 'send a JSON object with "hook": "doctor"'}],
         }))
         return 2
-    if not isinstance(request, dict) or request.get("hook") != "doctor":
+    typed_request = parse_doctor_request(request)
+    if typed_request is None or typed_request.hook != "doctor":
         message = 'doctor request must be an object with "hook": "doctor"'
         print(json.dumps({
             "success": False,
@@ -126,7 +189,7 @@ def _doctor_mode() -> int:
                           "remediation": 'send a JSON object with "hook": "doctor"'}],
         }))
         return 2
-    print(json.dumps(doctor(request)))
+    print(json.dumps(doctor()))
     return 2 if sc_sha is None else 0
 
 

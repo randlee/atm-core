@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Export live bead records, then analyze only that snapshot with BV robot commands.
 
 Usage (from the repository root):
@@ -18,14 +19,20 @@ import os
 import re
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+from collections.abc import Sequence
+from typing import NotRequired, TypedDict
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
+from operation_models import DependencyRecord, matches_typeddict  # noqa: E402
 
 
-def now():
+def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def run(argv, repo):
+def run(argv: Sequence[str], repo: Path) -> str:
     return subprocess.run(
         argv, cwd=repo, env={**os.environ, "BV_ROBOT": "1"},
         check=True, capture_output=True, text=True, timeout=120,
@@ -35,17 +42,131 @@ def run(argv, repo):
 MODES = ("triage", "alerts", "plan", "insights", "priority")
 
 
-def epic_scope(rows, epic):
+class ExportRow(TypedDict):
+    id: str
+    status: NotRequired[str]
+    _type: NotRequired[str]
+    labels: NotRequired[list[str]]
+    dependencies: NotRequired[list[DependencyRecord]]
+
+
+class ExportEnvelope(TypedDict, total=False):
+    _type: str
+
+
+class ScopedRow(ExportRow, total=False):
+    dependency_count: int
+    dependent_count: int
+
+
+class ExcludedDependency(TypedDict):
+    issue_id: str
+    depends_on_id: str
+    type: str
+
+
+class BdInfo(TypedDict, total=False):
+    database_path: str
+    mode: str
+
+
+class BvSource(TypedDict, total=False):
+    warnings: list[str]
+    stale: bool
+
+
+class BvAuthority(TypedDict, total=False):
+    state: str
+    valid: int
+    sources: list[BvSource]
+    failed: int
+    errors: int
+    skipped: int
+    read_errors: int
+
+
+class BvPayload(TypedDict):
+    source_path: str
+    source_authority: BvAuthority
+
+
+class Receipt(TypedDict, total=False):
+    complete: bool
+    repo: str
+    versions: dict[str, str]
+    database_path: str | None
+    database_mode: str | None
+    export_started_at: str
+    export_finished_at: str
+    snapshot: str
+    plan_file: str
+    database: str | None
+    backend: str | None
+    records: int
+    sha256: str
+    label: str | None
+    target: str | None
+    receipt: str
+    outputs: dict[str, str]
+    epic: str
+    members: list[str]
+    excluded_dependencies: list[ExcludedDependency]
+    analysis_snapshot: str
+    analysis_records: int
+    analysis_sha256: str
+    prerequisites: list[str]
+    commands: list[list[str]]
+    error: str
+
+
+def export_rows(raw: bytes) -> list[ExportRow]:
+    rows: list[ExportRow] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        value: object = json.loads(line)
+        if not matches_typeddict(value, ExportEnvelope):
+            raise ValueError("bd export contains a malformed record")
+        if value.get("_type", "issue") == "issue":
+            if not matches_typeddict(value, ExportRow):
+                raise ValueError("bd export issue record is missing an id")
+            rows.append(value)
+    return rows
+
+
+def bv_payload(raw: str) -> BvPayload:
+    value: object = json.loads(raw)
+    if not matches_typeddict(value, BvPayload):
+        raise ValueError("bv returned an invalid robot response")
+    return value
+
+
+def dependency_target(dep: DependencyRecord) -> str:
+    target = dep.get("depends_on_id")
+    if not isinstance(target, str):
+        raise ValueError("bd export dependency is missing depends_on_id")
+    return target
+
+
+def dependency_type(dep: DependencyRecord) -> str:
+    kind = dep.get("type")
+    if not isinstance(kind, str):
+        raise ValueError("bd export dependency is missing type")
+    return kind
+
+
+def epic_scope(rows: list[ExportRow], epic: str) -> tuple[list[ScopedRow], list[ExcludedDependency]]:
     """Select the hierarchy, recording edges omitted from its induced graph."""
     by_id = {row["id"]: row for row in rows}
     if epic not in by_id:
         raise ValueError(f"epic is absent from export: {epic}")
-    children = {}
+    children: dict[str, list[str]] = {}
     for row in rows:
         for dep in row.get("dependencies", []):
-            if dep.get("type") == "parent-child":
-                children.setdefault(dep["depends_on_id"], []).append(row["id"])
-    members, pending = set(), [epic]
+            if dependency_type(dep) == "parent-child":
+                children.setdefault(dependency_target(dep), []).append(row["id"])
+    members: set[str] = set()
+    pending: list[str] = [epic]
     while pending:
         bead = pending.pop()
         if bead not in members:
@@ -54,50 +175,55 @@ def epic_scope(rows, epic):
     return induced(rows, members)
 
 
-def prerequisite_scope(rows, target):
+def prerequisite_scope(rows: list[ExportRow], target: str) -> tuple[list[ScopedRow], list[ExcludedDependency]]:
     """Select the target and every bead it transitively waits on (any edge but parent-child)."""
     by_id = {row["id"]: row for row in rows}
-    members, pending = set(), [target]
+    members: set[str] = set()
+    pending: list[str] = [target]
     while pending:
         bead = pending.pop()
         if bead not in members and bead in by_id:
             members.add(bead)
-            pending.extend(dep["depends_on_id"] for dep in by_id[bead].get("dependencies", [])
-                           if dep.get("type") != "parent-child")
+            pending.extend(dependency_target(dep) for dep in by_id[bead].get("dependencies", [])
+                           if dependency_type(dep) != "parent-child")
     return induced(rows, members)
 
 
-def induced(rows, members):
+def induced(rows: list[ExportRow], members: set[str]) -> tuple[list[ScopedRow], list[ExcludedDependency]]:
     """Keep member rows and the edges between them, recording the edges that cross."""
-    selected, excluded = [], []
+    selected: list[ScopedRow] = []
+    excluded: list[ExcludedDependency] = []
     for row in rows:
         inside = row["id"] in members
-        deps = []
+        deps: list[DependencyRecord] = []
         for dep in row.get("dependencies", []):
-            target_inside = dep["depends_on_id"] in members
+            target = dependency_target(dep)
+            target_inside = target in members
             if inside != target_inside:
                 excluded.append({"issue_id": row["id"],
-                                 "depends_on_id": dep["depends_on_id"],
-                                 "type": dep["type"]})
+                                 "depends_on_id": target,
+                                 "type": dependency_type(dep)})
             if target_inside:
                 deps.append(dep)
         if inside:
             selected.append({**row, "dependencies": deps})
     dependent_counts = {row["id"]: 0 for row in selected}
     for row in selected:
-        for dep in row["dependencies"]:
-            dependent_counts[dep["depends_on_id"]] += 1
+        for dep in row.get("dependencies", []):
+            dependent_counts[dependency_target(dep)] += 1
     for row in selected:
-        row["dependency_count"] = len(row["dependencies"])
+        row["dependency_count"] = len(row.get("dependencies", []))
         row["dependent_count"] = dependent_counts[row["id"]]
     return selected, excluded
 
 
-def write_rows(path, rows):
+def write_rows(path: Path, rows: Sequence[ExportRow]) -> None:
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
 
 
-def analyze(repo, label=None, target=None, modes=None, epic=None, plan_file=None):
+def analyze(repo: str | Path, label: str | None = None, target: str | None = None,
+            modes: Sequence[str] | None = None, epic: str | None = None,
+            plan_file: str | Path | None = None) -> Receipt:
     """Analyze a fresh live export, or (plan_file) a rendered plan JSONL before import."""
     if epic and label:
         raise ValueError("choose epic membership or label scope, not both")
@@ -107,16 +233,19 @@ def analyze(repo, label=None, target=None, modes=None, epic=None, plan_file=None
     repo = Path(repo).resolve(strict=True)
     if plan_file:
         plan_file = Path(plan_file).resolve(strict=True)
-        info = {}
+        info: BdInfo = {}
         versions = {"bv": run(["bv", "--version"], repo).strip()}
     else:
-        info = json.loads(run(["bd", "info", "--json"], repo))
+        decoded_info: object = json.loads(run(["bd", "info", "--json"], repo))
+        if not matches_typeddict(decoded_info, BdInfo):
+            raise ValueError("bd info returned an invalid response")
+        info = decoded_info
         versions = {"bd": run(["bd", "version"], repo).strip(),
                     "bv": run(["bv", "--version"], repo).strip()}
     directory = Path(tempfile.mkdtemp(prefix="bv-analyze-"))
     raw_export = directory / "export.jsonl"
     snapshot = directory / "issues.jsonl"
-    receipt = {
+    receipt: Receipt = {
         "complete": False, "repo": str(repo), "versions": versions,
         "database_path": info.get("database_path"), "database_mode": info.get("mode"),
         "export_started_at": now(), "snapshot": str(snapshot),
@@ -137,9 +266,7 @@ def analyze(repo, label=None, target=None, modes=None, epic=None, plan_file=None
         else:
             run(["bd", "--readonly", "export", "--all", "--output", str(raw_export)], repo)
         receipt["export_finished_at"] = now()
-        rows = [json.loads(line) for line in raw_export.read_bytes().splitlines() if line.strip()]
-        # bd 1.3 exports tag rows with _type and include memories; BV reads issues only.
-        rows = [row for row in rows if row.get("_type", "issue") == "issue"]
+        rows = export_rows(raw_export.read_bytes())
         write_rows(snapshot, rows)
         content = snapshot.read_bytes()
         ids = [row["id"] for row in rows]
@@ -193,13 +320,22 @@ def analyze(repo, label=None, target=None, modes=None, epic=None, plan_file=None
                 raise ValueError(f"{name}: bv reported a stale source")
             if any(authority.get(key, 0) for key in ("failed", "errors", "skipped", "read_errors")):
                 raise ValueError(f"{name}: bv reported source loading errors")
-            if hashlib.sha256(snapshot.read_bytes()).hexdigest() != receipt["sha256"]:
+            snapshot_hash = receipt.get("sha256")
+            if not isinstance(snapshot_hash, str):
+                raise ValueError("analysis receipt lacks the input hash")
+            if hashlib.sha256(snapshot.read_bytes()).hexdigest() != snapshot_hash:
                 raise ValueError(f"{name}: input snapshot changed during analysis")
-            if hashlib.sha256(analysis_snapshot.read_bytes()).hexdigest() != receipt["analysis_sha256"]:
+            analysis_hash = receipt.get("analysis_sha256")
+            if not isinstance(analysis_hash, str):
+                raise ValueError("analysis receipt lacks the scoped input hash")
+            if hashlib.sha256(analysis_snapshot.read_bytes()).hexdigest() != analysis_hash:
                 raise ValueError(f"{name}: scoped snapshot changed during analysis")
             output = directory / f"{name}.json"
             output.write_text(raw)
-            receipt["outputs"][name] = str(output)
+            outputs = receipt.get("outputs")
+            if outputs is None:
+                raise ValueError("analysis receipt lacks its output map")
+            outputs[name] = str(output)
         receipt["complete"] = True
         return receipt
     except Exception as error:
