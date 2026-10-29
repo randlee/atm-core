@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# ///
 # pyright: strict
 # DO NOT EDIT WITHOUT EXPLICIT USER APPROVAL.
 # A bead that fails these models is fixed in the bead, never by changing the models. Report the problem instead.

@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# ///
 """Print the close vars of one poured dev, fix, sanity or QA bead (#557).
 
     close-vars.py <bead-id> --out <vars.json> [--repo <beads repository root>]

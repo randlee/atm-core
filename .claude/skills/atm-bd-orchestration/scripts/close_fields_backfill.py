@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# ///
 """Stamp the close fields (close_fields.POURED) on a phase's open task beads (#557).
 
     close_fields_backfill.py --phase <x> [--apply] [--actor <identity>]
