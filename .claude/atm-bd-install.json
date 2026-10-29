@@ -1,9 +1,9 @@
 {
-  "version": "0.19.9",
-  "commit": "e019b436632c539248a251cb90f5001ea8dfc6ee",
+  "version": "0.19.10",
+  "commit": "facc93341ca0b0317e36572f91d0b7b19253c300",
   "source": {
     "ref": "bundled",
-    "manifest_aggregate": "14c9d2fbe51662a704a86b5f8b7a765bcb562c6ecee4094a75b6a99276ee51e2"
+    "manifest_aggregate": "30264a8372ccd927a9056b26782934c4a55b06128b665286456f61616ffa4076"
   },
   "files": [
     {
@@ -36,7 +36,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/SKILL.md",
-      "sc_sha": "947bdb9c072ea16e5ad228703baf327667b12c2e2b8d1e0a94d1c9bf1c493e9c"
+      "sc_sha": "30fc631602fb859f3e25dcdb54aded645853904bb9511ca5d7bf252143702b1b"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/blocking-findings-guidelines.md",
@@ -744,7 +744,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/SKILL.md",
-      "sc_sha": "2819c54705ef05a14e52efcfc30fc1d672b4edfb5f19209e7e3d1727484300b4"
+      "sc_sha": "a4c1638a123e0778f9b1db211128c0c6f7542c77ad225c365ca1ec7311516b76"
     },
     {
       "path": ".claude/skills/atm-beads/examples/dev-sanity-bead-vars-d-4.json",
@@ -844,7 +844,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/scripts/operation_models.py",
-      "sc_sha": "4839befb3626ca5ca72ef0e58aed11981bedbfb49157c0af9eb2b3750f7e0e9d"
+      "sc_sha": "38981a13c760ba8ec2884e574aa251473c0fef85104181b0b26a1eab9c3b82be"
     },
     {
       "path": ".claude/skills/atm-beads/scripts/phase-config",
@@ -996,7 +996,7 @@
     },
     {
       "path": ".claude/skills/sprint-report/tests/test_operation_models.py",
-      "sc_sha": "9e95105f9aa28a3deeea2becfdb6bd2a9393b0dd330abc92d609be3e63574b07"
+      "sc_sha": "fad20b0215b453d3bd91cd418b915faee8e6f5b6106285aa549524855ab5aae2"
     },
     {
       "path": ".claude/skills/sprint-report/tests/test_phase_beads.py",
