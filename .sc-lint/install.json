@@ -95,7 +95,7 @@
   "justfile": {
     "windows_shell": false
   },
-  "minimum_version": "0.8.1",
+  "minimum_version": "0.8.2",
   "profiles": {
     "adr-index": [
       "just",
