@@ -690,6 +690,10 @@ class Hook:
     def sanity_dispatch(self, context):
         """The sanity assignment vars, rendered and size-checked; built before anything is closed (#557)."""
         template = "dev-sanity-template.xml.j2"
+        pr_number = str(context.get("pr_number") or self.values.get("pr_number") or "")
+        if not context.get("layer_prs") and pr_number:
+            # The checked PR is the one layer sanity-split must read (`--layer-pr`): its body is the dev's evidence (#636).
+            context = {**context, "layer_prs": [pr_number]}
         close_context = {name: context[name] for name in SANITY_CLOSE_CONTEXT if name in context}
         close_context.update(phase_lead=self.lead, budget=context.get("budget", "full"))
         dispatch = {**context, "close_context": close_context, "beads_dir": self.beads_directory()}

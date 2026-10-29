@@ -364,6 +364,15 @@ def layer_ranges(worktree: str, prs: list[str]) -> list[tuple[str, str]]:
     return [listed[pr] for pr in prs]
 
 
+def repository_slug(worktree: str) -> str:
+    """The checkout's `owner/repo`, read from origin, so a pr_body reference names the repository instead of gh's placeholder."""
+    url = git(worktree, "remote", "get-url", "origin", what="cannot read the origin remote URL")
+    match = re.search(r"[:/]([^/:]+)/([^/]+?)(?:\.git)?/?$", url.strip())
+    if not match:
+        raise Fail(1, f"origin does not name owner/repository: {url.strip()!r}")
+    return f"{match.group(1)}/{match.group(2)}"
+
+
 def layer_files(worktree: str, prs: list[str], sha: str) -> list[str]:
     """The union of the changed files of each layer PR's own range; the last (checked) PR's head must be the pinned sha."""
     ranges = layer_ranges(worktree, prs)
@@ -561,7 +570,7 @@ def main() -> int:
         if bead.notes:
             external.append({"kind": "bead_notes", "bead": bead.id, "text": bead.notes})
         if args.layer_pr and args.layer_pr[-1].isdigit():
-            external.append({"kind": "pr_body", "repo": "{owner}/{repo}", "pr": int(args.layer_pr[-1])})
+            external.append({"kind": "pr_body", "repo": repository_slug(args.worktree), "pr": int(args.layer_pr[-1])})
         external += extra_evidence(args.external_evidence)
         assignments: list[JsonObject] = []
         for item in deliverables:

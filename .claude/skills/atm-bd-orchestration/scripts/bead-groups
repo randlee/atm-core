@@ -405,12 +405,14 @@ def schema_issues(bead_schema: Schema, phase: str, prospective: list[JsonObject]
     validate-plan skips them too, so a phase whose closed beads predate the models still pours (#578)."""
     current: list[JsonObject] = []
     for raw_bead in bead_schema.load_phase(phase):
+        if raw_bead.get("status") == "closed":
+            # Skipped before the BeadRow check: closed QA beads carry `null`/integer metadata that today's
+            # models reject, and reading them as live rows refused every pour in the phase (#639).
+            continue
         payload = raw_bead
         if not matches_typeddict(raw_bead, BeadRow):
             raise ValueError("phase beads contain a malformed bead record")
-        bead = raw_bead
-        if bead.get("status") != "closed":
-            current.append(payload)
+        current.append(payload)
     return bead_schema.validate_phase([*current, *prospective])
 
 
