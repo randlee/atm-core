@@ -671,10 +671,10 @@ def parse_evidence_ref(ref: JsonValue) -> EvidenceReference | None:
             and ref["bead"] and not ref["bead"].startswith("-")):
         return ref
     if (matches_typeddict(ref, PullRequestReference) and set(ref) == set(PullRequestReference.__required_keys__)
-            and ref["repo"] and not ref["repo"].startswith("-") and ref["pr"] > 0):
+            and ref["repo"] and not ref["repo"].startswith("-") and "{" not in ref["repo"] and ref["pr"] > 0):
         return ref
     if (matches_typeddict(ref, CommentReference) and set(ref) == set(CommentReference.__required_keys__)
-            and ref["repo"] and not ref["repo"].startswith("-") and ref["comment_id"] > 0):
+            and ref["repo"] and not ref["repo"].startswith("-") and "{" not in ref["repo"] and ref["comment_id"] > 0):
         return ref
     return None
 

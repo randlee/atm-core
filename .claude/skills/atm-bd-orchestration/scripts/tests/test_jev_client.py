@@ -751,7 +751,7 @@ class JevClientTests(unittest.TestCase):
         self.assertEqual((error["code"], error["message"]), ("VALIDATION.INPUT", "External evidence unreadable: pr_body o/r#460"))
         self.assertTrue(client.is_client_message(error["message"]))
         self.assertIn("gh auth status", error["suggested_action"])
-        for bad in ([{"kind": "pr_body", "repo": "o/r"}], [{"kind": "pr_body", "repo": "o/r", "pr": "460"}],
+        for bad in ([{"kind": "pr_body", "repo": "o/r"}], [{"kind": "pr_body", "repo": "{owner}/{repo}", "pr": 460}], [{"kind": "pr_body", "repo": "o/r", "pr": "460"}],
                     [{"kind": "issue", "repo": "o/r", "pr": 1}], [{"kind": "bead_notes", "bead": "--all"}],
                     [{"kind": "bead_notes", "bead": "x", "text": 3}], {"kind": "bead_notes", "bead": "x"}):
             with self.subTest(bad=bad), self.fetched() as run, self.assertRaises(client.JevError) as raised:

@@ -1043,7 +1043,8 @@ def test_close_from_documented_dispatch_and_result_files_derives_handoff(world, 
                "pr_url": f"https://github.com/example/repo/pull/{world.pr_number}",
                "rebased_onto": "b" * 40}
     assert set(assignment["values"]) == set(dispatch) | set(result) | set(DERIVED) | {"close_context", "beads_dir",
-                                                                                         "sanity_close_mode"}
+                                                                                         "sanity_close_mode", "layer_prs"}
+    assert assignment["values"]["layer_prs"] == [str(world.pr_number)]  # the checked PR, derived (#636)
     assert {name: assignment["values"][name] for name in derived} == derived
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", assignment["values"]["generated_at"])
     update = next(argv for argv, _ in world.writes if argv[:3] == ["bd", "update", dispatch["checked_bead"]])
@@ -1244,6 +1245,23 @@ def test_sanity_close_context_carries_only_the_fields_the_sanity_close_reads(wor
     assert "close_context" not in context
     for name in ("stack_view", "validation_md", "deliverables_md", "lint_command", "pr_target", "rebased_onto"):
         assert name not in context
+
+
+@pytest.mark.parametrize("role", ["dev", "fix"])
+def test_sanity_dispatch_defaults_layer_prs_to_the_checked_pr(world, role):
+    """Without lead-supplied layer_prs the sanity member reads the checked PR's body (`--layer-pr <pr_number>`, #636)."""
+    assert "ok" in world.run(role)
+    assignment = next(message for message in world.messages if message["type"] == "dev-sanity-task")["values"]
+    assert assignment["pr_number"]
+    assert assignment["layer_prs"] == [assignment["pr_number"]]
+    assert assignment["close_context"]["layer_prs"] == [assignment["pr_number"]]
+
+
+def test_sanity_dispatch_keeps_lead_supplied_layer_prs(world):
+    assert "ok" in world.run(layer_prs=["7", "9"])
+    assignment = next(message for message in world.messages if message["type"] == "dev-sanity-task")["values"]
+    assert assignment["layer_prs"] == ["7", "9"]
+    assert assignment["close_context"]["layer_prs"] == ["7", "9"]
 
 
 def test_sanity_close_context_subset_builds_the_same_sanity_close(world):

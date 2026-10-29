@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.19.11
+version: 0.19.12
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:
@@ -359,7 +359,7 @@ Then, on each task close:
 | --- | --- |
 | plan-review PASS | nothing when the bead closed: the root sprints are now ready. With minor findings the bead is assigned to you still open: fix each listed bead with `bd update`, then `bd close <root>-plan-qa --reason "minor fixes applied"` |
 | plan-review FAIL | have the author fix the listed beads, run `validate-plan` again, then dispatch the next round |
-| dev-complete | verify the dev's PR, record it on the checked bead (`bd update <bead> --append-notes "layer PR #<n> <url>"`, from which a later `layer_prs` is read), then assign the sanity check without linking; sanity closes first and sanity-stack links afterward. After a reopened dev bead (a sanity FAIL reopens it in place), `layer_prs` is the sprint's own layer PRs with the checked PR last |
+| dev-complete | verify the dev's PR, record it on the checked bead (`bd update <bead> --append-notes "layer PR #<n> <url>"`, the close hook passes the checked PR as `layer_prs` unless the close vars name the stack's layers), then assign the sanity check without linking; sanity closes first and sanity-stack links afterward. After a reopened dev bead (a sanity FAIL reopens it in place), `layer_prs` is the sprint's own layer PRs with the checked PR last |
 | sanity check PASS | verify the PR base is its `pr_target` or a descendant of it; the group's poured QA bead is now ready: dispatch it with `checked_bead` = its `metadata.checked_bead` and `sprint_bead` = its `metadata.sprint_bead`, and `base` = the PR base; for a sprint whose dev bead was reopened also `layer_prs` = the sprint's layer PRs, its first layer's (`gh pr view <metadata.pr_target> --json number`) first and the checked PR last, so the QA diff is the sprint's own layer ranges and never another sprint's layer between them. For a fix bead's QA, also `carry_forward` = the fix bead (it carries its own requirements and ADRs) and `round` = the fix bead's `metadata.round` + 1. For an important or minor finding bead, the group's QA bead is now ready: dispatch it with `checked_bead` and `carry_forward` = the finding |
 | sanity check FAIL | The close hook reopens the checked bead and sends the undone deliverables to its dev on the existing task; no child finding or new dev assignment is created. At the configured round cap the lead receives `SANITY.ROUND_CAP` and rules on the next action. |
 | qa-complete | nothing: quality-mgr poured a fix group under the sprint per blocking finding (round n+1 for a failed fix verification) and filed the rest as finding beads before it closed the QA bead; the fix beads are now ready. A failed quick-fix QA (`metadata.quick_fix`) poured none: file and dispatch its blocking findings (Parallel Quick Fix step 4). When no step is open under the sprint, close it (below) |

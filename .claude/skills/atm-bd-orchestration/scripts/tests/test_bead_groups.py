@@ -180,6 +180,22 @@ class SchemaIssuesTests(unittest.TestCase):
         schema.validate_phase.assert_called_once_with([live, prospective])
         self.assertEqual(issues, ["t-d-2.group-qa: reviewers_round1: Field required"])
 
+    def test_closed_bead_with_historical_metadata_is_not_read_as_a_bead_row(self):
+        """#639: a closed QA bead whose metadata has a `null` branch and an integer stack (the shape earlier
+        pours left) is skipped before the BeadRow check instead of refusing the pour; a malformed open bead
+        still refuses it."""
+        groups = load_groups("bead_groups_schema_issues")
+        schema = Mock()
+        closed = {"id": "t-d-1.group-qa", "status": "closed", "metadata": {"branch": None, "stack": 3, "layer": None}}
+        live = {"id": "t-d-2.group-qa", "status": "open", "metadata": {}}
+        schema.load_phase.return_value = [closed, live]
+        schema.validate_phase.return_value = []
+        self.assertEqual(groups.schema_issues(schema, "d", []), [])
+        schema.validate_phase.assert_called_once_with([live])
+        schema.load_phase.return_value = [closed, {"id": "t-d-2.group-qa", "status": "open", "metadata": {"branch": None}}]
+        with self.assertRaisesRegex(ValueError, "malformed bead record"):
+            groups.schema_issues(schema, "d", [])
+
 
 class SprintGroupReviewersTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("sc-compose"), "sc-compose is required to render bead formulas")

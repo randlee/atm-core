@@ -544,8 +544,9 @@ class SanitySplit(unittest.TestCase):
         manifest = json.loads(own.stdout)
         self.assertEqual(manifest["changed_files"], ["crates/types/src/retry.rs", "crates/types/src/retry_tests.rs"])
         self.assertEqual(manifest["files_outside_owned_paths"], [])
+        slug = f"{self.repo.origin.parent.name}/{self.repo.origin.stem}"  # origin's owner/repo, never gh's {owner}/{repo} placeholder
         for item in manifest["assignments"]:  # the checked PR's body
-            self.assertEqual(item["assignment"]["external_evidence"], [{"kind": "pr_body", "repo": "{owner}/{repo}", "pr": 3}])
+            self.assertEqual(item["assignment"]["external_evidence"], [{"kind": "pr_body", "repo": slug, "pr": 3}])
         self.assertEqual(stale.returncode, 4, stale.stderr)  # the checked PR goes last and must be at the pinned sha
         self.assertEqual(missing.returncode, 3, missing.stderr)
         self.assertIn("layer PR(s) 9 not in", missing.stderr)
