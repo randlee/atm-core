@@ -440,14 +440,6 @@ class ManifestInfo:
         return tuple(sorted(aliases))
 
 
-@dataclass(frozen=True)
-class DependencyOwnershipRule:
-    dependency: str
-    allowed_manifest_paths: tuple[Path, ...]
-    allowed_source_roots: tuple[Path, ...]
-    manifest_message: str
-    source_message: str
-
 
 @dataclass(frozen=True)
 class ScbConfigAllowlistEntry:
@@ -493,45 +485,6 @@ class ScbObservabilityAllowlistEntry:
     why: str
     sunset_sprint: str
 
-
-def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
-    sections: list[tuple[str, dict]] = []
-    for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
-        dependencies = manifest.get(section_name)
-        if isinstance(dependencies, dict):
-            sections.append((section_name, dependencies))
-
-    targets = manifest.get("target", {})
-    if isinstance(targets, dict):
-        for target_name, target in targets.items():
-            if not isinstance(target, dict):
-                continue
-            for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
-                dependencies = target.get(section_name)
-                if isinstance(dependencies, dict):
-                    sections.append((f"target.{target_name}.{section_name}", dependencies))
-
-    return sections
-
-
-def dependency_package_name(dependency_name: str, dependency: object) -> str:
-    if isinstance(dependency, str):
-        return dependency_name
-    if isinstance(dependency, dict):
-        package_name = dependency.get("package")
-        if isinstance(package_name, str):
-            return package_name
-    return dependency_name
-
-
-def dependency_import_patterns(dependency: str) -> tuple[re.Pattern[str], ...]:
-    crate_path = dependency.replace("-", "_")
-    escaped = re.escape(crate_path)
-    return (
-        re.compile(rf"(?<!\w)(?<!\bself::)(?<!\bsuper::)(?<!\bcrate::){escaped}::"),
-        re.compile(rf"\buse\s+{escaped}\b"),
-        re.compile(rf"\bextern\s+crate\s+{escaped}\b"),
-    )
 
 
 def boundary_config(repo_root: Path) -> dict:
@@ -579,55 +532,6 @@ def boundary_toml_files(repo_root: Path) -> list[Path]:
         raise SystemExit("[boundaries].toml_glob must be a non-empty string when provided")
     return sorted(repo_root.glob(toml_glob))
 
-
-def dependency_ownership_rules(repo_root: Path) -> list[DependencyOwnershipRule]:
-    # sc-lint#136 lacks the local src-only scope; delete when sc-lint ships it.
-    config = boundary_config(repo_root)
-    raw_rules = config.get("global_dependency_ownership", [])
-    if not isinstance(raw_rules, list):
-        raise SystemExit("[[boundaries.global_dependency_ownership]] entries must be an array of tables")
-
-    rules: list[DependencyOwnershipRule] = []
-    for index, raw_rule in enumerate(raw_rules):
-        if not isinstance(raw_rule, dict):
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}] must be a TOML table"
-            )
-        dependency = raw_rule.get("dependency")
-        allowed_manifest_paths = raw_rule.get("allowed_manifest_paths", [])
-        allowed_source_roots = raw_rule.get("allowed_source_roots", [])
-        manifest_message = raw_rule.get("manifest_message")
-        source_message = raw_rule.get("source_message")
-        if not isinstance(dependency, str) or not dependency:
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].dependency must be a non-empty string"
-            )
-        if not isinstance(allowed_manifest_paths, list) or not all(isinstance(item, str) for item in allowed_manifest_paths):
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].allowed_manifest_paths must be an array of strings"
-            )
-        if not isinstance(allowed_source_roots, list) or not all(isinstance(item, str) for item in allowed_source_roots):
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].allowed_source_roots must be an array of strings"
-            )
-        if not isinstance(manifest_message, str) or not manifest_message:
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].manifest_message must be a non-empty string"
-            )
-        if not isinstance(source_message, str) or not source_message:
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].source_message must be a non-empty string"
-            )
-        rules.append(
-            DependencyOwnershipRule(
-                dependency=dependency,
-                allowed_manifest_paths=tuple(Path(item) for item in allowed_manifest_paths),
-                allowed_source_roots=tuple(Path(item) for item in allowed_source_roots),
-                manifest_message=manifest_message,
-                source_message=source_message,
-            )
-        )
-    return rules
 
 
 def tomllib_load(path: Path) -> dict:
@@ -2374,50 +2278,6 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
     return violations
 
 
-def collect_special_case_violations(repo_root: Path) -> list[BoundaryViolation]:
-    violations: list[BoundaryViolation] = []
-    ownership_rules = dependency_ownership_rules(repo_root)
-
-    for manifest_path in workspace_manifests(repo_root):
-        manifest = tomllib_load(manifest_path)
-        rel_manifest_path = manifest_path.relative_to(repo_root)
-        rel_manifest = rel_manifest_path.as_posix()
-        for section_name, dependencies in dependency_sections(manifest):
-            for dependency_name, dependency in dependencies.items():
-                package_name = dependency_package_name(dependency_name, dependency)
-                for rule in ownership_rules:
-                    if package_name == rule.dependency and rel_manifest_path not in rule.allowed_manifest_paths:
-                        violations.append(
-                            BoundaryViolation(
-                                f"{rel_manifest} [{section_name}]",
-                                rule.manifest_message,
-                            )
-                        )
-
-
-    for source_path in rust_sources(repo_root):
-        rel_source = source_path.relative_to(repo_root).as_posix()
-        text = source_path.read_text(encoding="utf-8")
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            if is_comment_line(line):
-                continue
-            for rule in ownership_rules:
-                if not any(pattern.search(line) for pattern in dependency_import_patterns(rule.dependency)):
-                    continue
-                if any(
-                    (repo_root / allowed_root).resolve() == source_path.resolve()
-                    or (repo_root / allowed_root).resolve() in source_path.resolve().parents
-                    for allowed_root in rule.allowed_source_roots
-                ):
-                    continue
-                violations.append(
-                    BoundaryViolation(
-                        f"{rel_source}:{line_number}",
-                        rule.source_message,
-                    )
-                )
-    return violations
-
 
 def collect_scb_config_rule_violations(
     repo_root: Path,
@@ -2734,7 +2594,6 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_active_implementation_violations(repo_root, records))
     violations.extend(collect_telemetry_sink_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
-    violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))
@@ -2928,7 +2787,6 @@ def run(repo_root: Path) -> int:
     violations.extend(collect_active_implementation_violations(repo_root, records))
     violations.extend(collect_telemetry_sink_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
-    violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))

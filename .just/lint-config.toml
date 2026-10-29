@@ -112,33 +112,6 @@ max_scoped_code_lines = 0
 doc_glob = "docs/*/boundaries.md"
 toml_glob = "boundaries/*/*.toml"
 
-# Crate-manifest policy is intentionally separate from the per-seam
-# `allowed_dependencies` declarations in boundary records.  It covers every
-# direct dependency section (including dev and target-specific dependencies),
-# so a new package cannot bypass boundary review merely because it is not used
-# by one named implementation seam.
-# sc-lint#136 lacks the local src-only scope; delete when sc-lint ships it.
-[[boundaries.global_dependency_ownership]]
-dependency = "rusqlite"
-allowed_manifest_paths = ["crates/atm-storage-rusqlite/Cargo.toml"]
-allowed_source_roots = ["crates/atm-storage-rusqlite/src"]
-manifest_message = "only crates/atm-storage-rusqlite may depend on rusqlite"
-source_message = "only crates/atm-storage-rusqlite source may import rusqlite directly"
-
-[[boundaries.global_dependency_ownership]]
-dependency = "rustix"
-allowed_manifest_paths = ["crates/atm-daemon-bootstrap/Cargo.toml"]
-allowed_source_roots = ["crates/atm-daemon-bootstrap/src/process_deadline.rs"]
-manifest_message = "only atm-daemon-bootstrap may depend on rustix"
-source_message = "only atm-daemon-bootstrap process_deadline may import rustix"
-
-[[boundaries.global_dependency_ownership]]
-dependency = "cron"
-allowed_manifest_paths = ["crates/atm-cron/Cargo.toml"]
-allowed_source_roots = ["crates/atm-cron/src"]
-manifest_message = "only atm-cron may depend on cron"
-source_message = "only atm-cron source may import cron"
-
 [version_sync.winget]
 enabled = true
 manifest_glob = ".winget/*.yaml"

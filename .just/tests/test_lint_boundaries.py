@@ -15,7 +15,6 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_boundaries import collect_boundary_violations
-from lint_boundaries import dependency_import_patterns
 from lint_boundaries import collect_io_forbidden_source_violations
 from lint_boundaries import collect_scb_observability_otel_violations
 from lint_boundaries import collect_scb_observability_rule_violations
@@ -26,41 +25,6 @@ from lint_boundaries import parse_simple_yaml_document
 from lint_boundaries import run
 from run_lint import build_tasks
 
-
-class DependencyImportPatternsTests(unittest.TestCase):
-    def test_local_qualified_cron_paths_are_not_external_imports(self) -> None:
-        patterns = dependency_import_patterns("cron")
-        for source in (
-            "Cron(self::cron::CronCommand),",
-            "use self::cron::CronCommand;",
-            "use super::cron::CronCommand;",
-            "use crate::cron::CronCommand;",
-        ):
-            with self.subTest(source=source):
-                self.assertFalse(any(pattern.search(source) for pattern in patterns))
-
-    def test_real_cron_imports_remain_forbidden(self) -> None:
-        patterns = dependency_import_patterns("cron")
-        for source in (
-            "use cron::Schedule;",
-            "use ::cron::Schedule;",
-            "cron::Schedule::from_str(value)",
-            "let schedule: ::cron::Schedule;",
-            "use cron as external_cron;",
-            "extern crate cron;",
-        ):
-            with self.subTest(source=source):
-                self.assertTrue(any(pattern.search(source) for pattern in patterns))
-
-    def test_qualified_forbidden_crate_paths_remain_flagged(self) -> None:
-        cases = (
-            ("rusqlite", "some_crate::rusqlite::Connection"),
-            ("sc-observability", "x::sc_observability::Y"),
-        )
-        for dependency, source in cases:
-            with self.subTest(dependency=dependency, source=source):
-                patterns = dependency_import_patterns(dependency)
-                self.assertTrue(any(pattern.search(source) for pattern in patterns))
 
 
 ROOT_MANIFEST = """\
@@ -82,13 +46,6 @@ LINT_CONFIG = """\
 [boundaries]
 doc_glob = "docs/*/boundaries.md"
 toml_glob = "boundaries/*/*.toml"
-
-[[boundaries.global_dependency_ownership]]
-dependency = "rusqlite"
-allowed_manifest_paths = ["crates/atm-storage-rusqlite/Cargo.toml"]
-allowed_source_roots = ["crates/atm-storage-rusqlite/src"]
-manifest_message = "only crates/atm-storage-rusqlite may depend on rusqlite"
-source_message = "only crates/atm-storage-rusqlite source may import rusqlite directly"
 
 """
 
@@ -904,88 +861,6 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
 
 
 
-
-
-
-    def test_collect_boundary_violations_flags_direct_rusqlite_dependency(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            self.write_repo(repo_root)
-            self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-storage-rusqlite")
-            (repo_root / "crates/atm-core/Cargo.toml").write_text(
-                """\
-[package]
-name = "agent-team-mail-core"
-
-[dependencies]
-rusqlite = "0.37"
-""",
-                encoding="utf-8",
-            )
-
-            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
-            self.assertIn(
-                "crates/atm-core/Cargo.toml [dependencies]: only crates/atm-storage-rusqlite may depend on rusqlite",
-                rendered,
-            )
-
-    def test_collect_boundary_violations_flags_rusqlite_source_import_outside_store(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            self.write_repo(repo_root)
-            self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-storage-rusqlite")
-            (repo_root / "crates/atm/src/lib.rs").write_text("use rusqlite::Connection;\n", encoding="utf-8")
-
-            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
-            self.assertIn(
-                "crates/atm/src/lib.rs:1: only crates/atm-storage-rusqlite source may import rusqlite directly",
-                rendered,
-            )
-
-    def test_exact_file_dependency_owner_allows_only_that_file(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            self.write_repo(repo_root)
-            self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-storage-rusqlite")
-            owned = "crates/atm-storage-rusqlite/src/only_owned.rs"
-            sibling = "crates/atm-storage-rusqlite/src/sibling.rs"
-            outside = "crates/atm-core/src/lib.rs"
-            (repo_root / ".just/lint-config.toml").write_text(
-                LINT_CONFIG.replace(
-                    'allowed_source_roots = ["crates/atm-storage-rusqlite/src"]',
-                    f'allowed_source_roots = ["{owned}"]',
-                ),
-                encoding="utf-8",
-            )
-            for path in [owned, sibling, outside]:
-                (repo_root / path).write_text("use rusqlite::Connection;\n", encoding="utf-8")
-            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
-            message = "only crates/atm-storage-rusqlite source may import rusqlite directly"
-            self.assertNotIn(f"{owned}:1: {message}", rendered)
-            self.assertIn(f"{sibling}:1: {message}", rendered)
-            self.assertIn(f"{outside}:1: {message}", rendered)
-
-    def test_cron_local_module_path_does_not_hide_planted_external_import(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            self.write_repo(repo_root)
-            self.write_manifests(repo_root)
-            self.write_doc(repo_root, "atm-storage-rusqlite")
-            (repo_root / ".just/lint-config.toml").write_text(
-                LINT_CONFIG.replace("rusqlite", "cron"), encoding="utf-8"
-            )
-            source = repo_root / "crates/atm/src/lib.rs"
-            source.write_text(
-                "mod cron;\nuse self::cron::CronCommand;\nuse cron::Schedule;\n",
-                encoding="utf-8",
-            )
-            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
-            message = "only crates/atm-storage-cron source may import cron directly"
-            self.assertNotIn(f"crates/atm/src/lib.rs:2: {message}", rendered)
-            self.assertIn(f"crates/atm/src/lib.rs:3: {message}", rendered)
 
 
 
