@@ -179,7 +179,7 @@ def workspace_tracked_python_packages(repo_root: Path, workspace_version: str) -
 
 
 def validate_python_dependency_pins(repo_root: Path, workspace_version: str) -> bool:
-    """Keep the ATM-specific Python pin gap until randlee/sc-lint#137 ships.
+    """Keep the ATM-specific Python pin gap until randlee/sc-lint#783 ships.
 
     Fail if any in-workspace pyproject.toml pins a workspace-tracked Python
     package (e.g. hermes-atm's ``atm-graft`` dependency) with a specifier the
@@ -279,7 +279,7 @@ def main() -> int:
     if published.returncode != 0:
         return published.returncode
 
-    # delete when randlee/sc-lint#137 ships: the published version check does
+    # delete when randlee/sc-lint#783 ships: the published version check does
     # not yet verify workspace-tracked Python dependency specifiers.
     workspace_version = validate_workspace_version(repo_root)
     validate_python_dependency_pins(repo_root, workspace_version)
