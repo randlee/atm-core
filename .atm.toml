@@ -80,13 +80,13 @@ env = { ATM_IDENTITY = "team-lead", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_
 
 [[rmux.windows.panes]]
 name = "arch-ctm"
-command = "codex --no-daemon -c features.hooks=true --yolo"
+command = "codex --no-daemon -c features.hooks=true --model gpt-6.1-terra --yolo"
 env = { ATM_IDENTITY = "arch-ctm", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
 name = "quality-mgr"
 alias = "atm-quality"
-model = "sonnet"
+command = "codex --no-daemon -c features.hooks=true --model gpt-6.1-terra --yolo"
 color = "blue"
 env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
@@ -97,7 +97,7 @@ layout = "even-horizontal"
 
 [[rmux.windows.panes]]
 name = "cipher"
-command = "codex --no-daemon -c features.hooks=true -c model_reasoning_effort=\"high\" --yolo"
+command = "codex --no-daemon -c features.hooks=true -c model_reasoning_effort=\"high\" --model gpt-6-luna --yolo"
 env = { ATM_IDENTITY = "cipher", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
@@ -108,7 +108,7 @@ env = { ATM_IDENTITY = "fenix", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID =
 [[rmux.windows.panes]]
 name = "atm-sanity"
 alias = "atm-sanity"
-model = "sonnet"
+command = "codex --no-daemon -c features.hooks=true --model gpt-6.1-terra --yolo"
 color = "green"
 env = { ATM_IDENTITY = "atm-sanity", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
@@ -126,7 +126,7 @@ env = { ATM_IDENTITY = "publisher", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_
 
 [[rmux.windows.panes]]
 name = "solar"
-command = "codex --no-daemon -c features.hooks=true --yolo"
+command = "codex --no-daemon -c features.hooks=true --model gpt-6-astra --yolo"
 env = { ATM_IDENTITY = "solar", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 # Window 4: Dev (codex terra + codex luna)
@@ -136,7 +136,7 @@ layout = "even-horizontal"
 
 [[rmux.windows.panes]]
 name = "trinity"
-command = "codex --no-daemon -c features.hooks=true --model gpt-5.6-terra --yolo"
+command = "codex --no-daemon -c features.hooks=true --model gpt-6.1-terra --yolo"
 env = { ATM_IDENTITY = "trinity", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows.panes]]
