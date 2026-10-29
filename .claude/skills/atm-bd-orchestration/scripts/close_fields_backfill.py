@@ -34,7 +34,7 @@ import sprint_index_common  # noqa: E402
 from stack_top import stack_bead_id  # noqa: E402
 
 CARRIED = ("phase", "sprint", "sprint_bead", "stack", "branch", "worktree", "pr_target")
-STAGE = {**close_fields.ROLE_BY_STAGE, "stage:finding": "fix"}
+STAGE = close_fields.ROLE_BY_STAGE
 
 
 def stage_role(row: dict) -> str | None:

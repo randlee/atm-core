@@ -7,7 +7,7 @@ before an install writes anything:
 | --- | --- | --- | --- |
 | `python3` | 3.11, with PyYAML and pydantic | your system Python package manager, then `python3 -m pip install pyyaml pydantic` | installer and package scripts |
 | `bd` | 1.3.0 | `brew install beads` | the plan, the work graph, `bd sync` |
-| `atm` | 1.6.1 | `brew install randlee/tap/atm` | tasks, messages, `atm compose` |
+| `atm` | 1.6.3 | `brew install randlee/tap/atm` | tasks, messages, `atm compose`, `atm hook`, `atm cron` |
 | `sc-compose` | 1.7.0 (below 2), CLI and `python3` wheel the same version | `brew install randlee/tap/sc-compose` and `python3 -m pip install 'sc-compose==<the CLI version>'` | strict renders of bead and reviewer templates (CLI), the scripts' renders (wheel) |
 | `jq` | 1.6 | `brew install jq` | every bead query |
 | `git` | 2.27 | `brew install git` | repository and stack commands |

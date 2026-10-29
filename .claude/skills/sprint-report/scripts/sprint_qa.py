@@ -1,14 +1,15 @@
+# pyright: strict
 """QA state and finding counts shared by table and DAG reports."""
 
 import sys
-from typing import Any
+
+from operation_models import BeadMetadata, BeadRecord
 
 
-def metadata(bead: dict[str, Any]) -> dict[str, Any]:
-    value = bead.get("metadata")
-    return value if isinstance(value, dict) else {}
+def metadata(bead: BeadRecord) -> BeadMetadata:
+    return bead.get("metadata", {})
 
-def choose_round(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+def choose_round(candidates: list[BeadRecord]) -> BeadRecord | None:
     if not candidates:
         return None
     return max(
@@ -20,7 +21,7 @@ def choose_round(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
         ),
     )
 
-def qa_verdict(qa: dict[str, Any]) -> str:
+def qa_verdict(qa: BeadRecord) -> str:
     qa_meta = metadata(qa)
     verdict = str(qa_meta.get("verdict") or "").upper()
     if not verdict:
@@ -30,7 +31,7 @@ def qa_verdict(qa: dict[str, Any]) -> str:
         verdict = "IN PROGRESS" if qa.get("status") != "closed" else "UNKNOWN"
     return verdict
 
-def qa_icon(qa: dict[str, Any] | None, findings: list[dict[str, Any]]) -> str:
+def qa_icon(qa: BeadRecord | None, findings: list[BeadRecord]) -> str:
     if not qa:
         return ""
     verdict = qa_verdict(qa)
@@ -44,13 +45,14 @@ def qa_icon(qa: dict[str, Any] | None, findings: list[dict[str, Any]]) -> str:
         return "📥"
     return ""
 
-def findings_summary(findings: list[dict[str, Any]]) -> str:
+def findings_summary(findings: list[BeadRecord]) -> str:
     counts = dict.fromkeys(("blocking", "important", "minor"), 0)
     for finding in findings:
         if finding.get("status") == "closed":
             continue
+        labels = finding.get("labels", [])
         severity = str(metadata(finding).get("severity") or next(
-            (label.removeprefix("severity:") for label in finding.get("labels") or []
+            (label.removeprefix("severity:") for label in labels
              if label.startswith("severity:")), ""
         )).lower()
         severity = {"critical": "blocking", "low": "minor"}.get(severity, severity)

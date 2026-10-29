@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Append a completed sanity run to the repository-local ignored JSONL ledger and print its path."""
 
 from __future__ import annotations
@@ -13,23 +14,51 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import NoReturn
+from collections.abc import Callable
+from typing import NoReturn, TypeGuard, TypedDict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads" / "scripts"))
 import sc_render  # noqa: E402
+from operation_models import matches_typeddict  # noqa: E402
 from sanity_shared import ledger_path, primary_root, valid_elapsed_s  # noqa: E402
+from sprint_index_common import JsonObject, JsonValue, is_json_object  # noqa: E402
 
 
 def fail(message: str) -> NoReturn:
     raise SystemExit(f"sanity-run-history: {message}")
 
 
-def read_vars(path: Path) -> dict[str, object]:
+class SlotError(TypedDict):
+    code: str
+    message: str
+    recoverable: bool
+    deliverable: int | None
+
+
+class CompletionVars(TypedDict):
+    sprint: str
+    run_id: str
+    reviewer: str
+    commit: str
+    started_at: str
+    completed_at: str
+    verdict: str
+    findings_count: int | None
+    error: JsonValue
+    dev: str | None
+    phase: str
+    jev_elapsed_s: int | float | None
+    kind: str
+    errors: list[SlotError]
+    jev_receipts: list[JsonValue]
+
+
+def read_vars(path: Path) -> CompletionVars:
     try:
         value = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         fail(f"cannot read completion vars {path}: {exc}")
-    if not isinstance(value, dict):
+    if not is_json_object(value):
         fail("completion vars must be a JSON object")
     for field in ("sprint", "run_id", "reviewer", "commit", "started_at", "completed_at"):
         if not isinstance(value.get(field), str) or not value[field]:
@@ -46,64 +75,92 @@ def read_vars(path: Path) -> dict[str, object]:
         fail("findings_count must be a nonnegative integer")
     for field in ("started_at", "completed_at"):
         utc_timestamp(value[field])
-    return value
+    # The original consumer indexes this field even for CANNOT_RUN.
+    value["findings_count"]
+    sprint, run_id, reviewer, commit, started_at, completed_at = (
+        value[field] for field in ("sprint", "run_id", "reviewer", "commit", "started_at", "completed_at")
+    )
+    verdict = value["verdict"]
+    assert isinstance(sprint, str) and isinstance(run_id, str) and isinstance(reviewer, str)
+    assert isinstance(commit, str) and isinstance(started_at, str) and isinstance(completed_at, str)
+    assert isinstance(verdict, str)
+    assert count is None or (isinstance(count, int) and not isinstance(count, bool))
+    checked = value.get("checked_bead_data")
+    if not isinstance(checked, dict):
+        checked = {}
+    return CompletionVars(sprint=sprint, run_id=run_id, reviewer=reviewer, commit=commit,
+                          started_at=started_at, completed_at=completed_at, verdict=verdict,
+                          findings_count=count, error=value.get("error"), dev=checked_dev(checked),
+                          phase=phase_from_bead(checked, sprint), jev_elapsed_s=reviewer_elapsed(value),
+                          kind=result_kind(value), errors=slot_errors(value), jev_receipts=jev_receipts(value))
 
 
-SLOT_ERROR_KEYS = ("code", "message", "recoverable", "deliverable")
+SLOT_ERROR_KEYS = tuple(SlotError.__annotations__)
 LATER_FIELDS = ("errors", "jev_receipts", "dev", "jev_elapsed_s", "llm_elapsed_s", "kind")
-API_FAILURE_MATCHERS = {
+API_FAILURE_MATCHERS: dict[str, tuple[Callable[[str], bool], ...]] = {
     "sanity-llm": (lambda code: code == "SANITY.LLM_API_FAILURE",),
     "sanity-jev": (lambda code: code.startswith("SANITY.JEV_"),),
 }
 
 
-def reviewer_elapsed(value):
+def reviewer_elapsed(value: JsonObject) -> int | float | None:
     """Concurrent Jev calls contribute their maximum wall time, not their sum."""
     if value.get("reviewer") != "sanity-jev":
         return None
     times: list[int | float] = []
-    for result in value.get("reviewer_results") or []:
+    results = value.get("reviewer_results") or []
+    if not isinstance(results, list):
+        return None
+    for result in results:
         if isinstance(result, dict):
             elapsed = result.get("elapsed_s")
-            if valid_elapsed_s(elapsed):
+            if isinstance(elapsed, (int, float)) and valid_elapsed_s(elapsed):
                 times.append(elapsed)
     return max(times) if times else None
 
 
-def checked_dev(bead):
-    assignee = bead.get("assignee") if isinstance(bead, dict) else None
+def checked_dev(bead: JsonObject) -> str | None:
+    assignee = bead.get("assignee")
     return assignee if isinstance(assignee, str) and assignee else None
 
 
-def result_kind(value):
+def result_kind(value: JsonObject) -> str:
     error = value.get("error")
     code = error.get("code") if isinstance(error, dict) else None
-    matchers = API_FAILURE_MATCHERS.get(value.get("reviewer"), ())
+    reviewer = value.get("reviewer")
+    matchers = API_FAILURE_MATCHERS.get(reviewer, ()) if isinstance(reviewer, str) else ()
     return "API_FAILURE" if isinstance(code, str) and any(matcher(code) for matcher in matchers) else "verdict"
 
 
-def valid_slot_error(error: object) -> bool:
+def valid_slot_error(error: JsonValue) -> TypeGuard[SlotError]:
     """`code`, `message`, `recoverable` well typed; `deliverable` a number >= 1, or None when the envelope lacks it."""
-    return (isinstance(error, dict) and set(error) == set(SLOT_ERROR_KEYS)
-            and type(error["code"]) is str and bool(error["code"]) and type(error["message"]) is str
-            and type(error["recoverable"]) is bool
-            and (error["deliverable"] is None or (type(error["deliverable"]) is int and error["deliverable"] >= 1)))
+    return (matches_typeddict(error, SlotError) and set(error) == set(SLOT_ERROR_KEYS)
+            and bool(error["code"]) and (error["deliverable"] is None
+            or (not isinstance(error["deliverable"], bool) and error["deliverable"] >= 1)))
 
 
-def slot_errors(value: dict[str, object]) -> list[dict[str, object]]:
+def slot_errors(value: JsonObject) -> list[SlotError]:
     """Each failed slot's error, copied verbatim from its failure envelope; vars without reviewer_results have none.
     A malformed envelope (one whose error is not a well-typed code/message/recoverable) is not a slot error: its
     reviewer merge is CANNOT_RUN, whose `error` the row carries, so it never keeps the row from being logged."""
     results = value.get("reviewer_results")
     if not isinstance(results, list):
         return []
-    errors = [{key: result["error"].get(key) for key in SLOT_ERROR_KEYS}
-              for result in results
-              if isinstance(result, dict) and result.get("success") is False and isinstance(result.get("error"), dict)]
-    return [error for error in errors if valid_slot_error(error)]
+    errors: list[JsonObject] = []
+    for result in results:
+        if not isinstance(result, dict) or result.get("success") is not False:
+            continue
+        error = result.get("error")
+        if isinstance(error, dict):
+            errors.append({key: error.get(key) for key in SLOT_ERROR_KEYS})
+    parsed: list[SlotError] = []
+    for error in errors:
+        if valid_slot_error(error):
+            parsed.append(error)
+    return parsed
 
 
-def jev_receipts(value: dict[str, object]) -> list[object]:
+def jev_receipts(value: JsonObject) -> list[JsonValue]:
     """The receipt (`data.jev`) of every sanity-jev success reply, or each part's receipt of a split reply, copied
     verbatim; sanity-llm rows carry none."""
     if value.get("reviewer") != "sanity-jev":
@@ -111,8 +168,13 @@ def jev_receipts(value: dict[str, object]) -> list[object]:
     results = value.get("reviewer_results")
     if not isinstance(results, list):
         return []
-    found = [result["data"].get("jev") for result in results
-             if isinstance(result, dict) and result.get("success") is True and isinstance(result.get("data"), dict)]
+    found: list[JsonValue] = []
+    for result in results:
+        if not isinstance(result, dict) or result.get("success") is not True:
+            continue
+        data = result.get("data")
+        if isinstance(data, dict):
+            found.append(data.get("jev"))
     return [receipt for jev in found for receipt in (
         [part.get("receipt") if isinstance(part, dict) else part for part in jev] if isinstance(jev, list) else [jev])]
 
@@ -124,8 +186,8 @@ def phase_from_sprint(sprint: str) -> str:
     return match.group(1)
 
 
-def phase_from_bead(bead: dict, sprint: str) -> str:
-    metadata = bead.get("metadata") if isinstance(bead, dict) else None
+def phase_from_bead(bead: JsonObject, sprint: str) -> str:
+    metadata = bead.get("metadata")
     value = metadata.get("phase") if isinstance(metadata, dict) else None
     match = re.fullmatch(r"(?:phase-)?([a-z][a-z0-9_-]*)", value.lower()) if isinstance(value, str) else None
     if match:
@@ -133,10 +195,25 @@ def phase_from_bead(bead: dict, sprint: str) -> str:
     return phase_from_sprint(sprint)
 
 
-def load_log(path: Path) -> list[dict[str, object]]:
+class HistoryRow(TypedDict):
+    run_id: JsonValue
+    reviewer: JsonValue
+    identity: tuple[JsonValue, JsonValue, JsonValue, JsonValue, JsonValue, JsonValue]
+    missing_later_fields: list[str]
+    raw: JsonObject
+
+
+def history_row(value: JsonObject) -> HistoryRow:
+    return {"run_id": value.get("run_id"), "reviewer": value.get("reviewer"),
+            "identity": (value.get("commit"), value.get("task"), value.get("sprint"),
+                         value.get("pr_number"), value.get("iteration"), value.get("final_verdict")),
+            "missing_later_fields": [key for key in LATER_FIELDS if key not in value], "raw": value}
+
+
+def load_log(path: Path) -> list[HistoryRow]:
     if not path.exists():
         return []
-    records: list[dict[str, object]] = []
+    records: list[HistoryRow] = []
     try:
         lines = path.read_text().splitlines()
         for number, line in enumerate(lines, start=1):
@@ -144,19 +221,21 @@ def load_log(path: Path) -> list[dict[str, object]]:
                 continue
             try:
                 record = json.loads(line)
-            except json.JSONDecodeError as exc:
+            except json.JSONDecodeError:
                 # Never append behind malformed/truncated bytes or rewrite history.
                 raise
-            if not isinstance(record, dict):
+            if not is_json_object(record):
                 fail(f"log {path}:{number} is not a JSON object")
-            records.append(record)
+            records.append(history_row(record))
     except (OSError, json.JSONDecodeError) as exc:
         fail(f"cannot read log {path}: {exc}")
     return records
 
 
-def utc_timestamp(value):
+def utc_timestamp(value: JsonValue) -> datetime:
     try:
+        if not isinstance(value, str):
+            raise AttributeError(f"'{type(value).__name__}' object has no attribute 'replace'")
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         if parsed.utcoffset() != timezone.utc.utcoffset(parsed):
             raise ValueError("timestamp must be UTC")
@@ -180,22 +259,18 @@ def main() -> None:
     vars = read_vars(args.vars)
     completed = utc_timestamp(vars["completed_at"])
     elapsed = max(0, round(completed.timestamp() - utc_timestamp(vars["started_at"]).timestamp()))
-    checked = vars.get("checked_bead_data")
-    if not isinstance(checked, dict):
-        checked = {}
-    sprint = vars["sprint"]
-    assert isinstance(sprint, str)
-    phase = phase_from_bead(checked, sprint)
-    record = {
+    phase = vars["phase"]
+    record: JsonObject = {
         "run_id": vars["run_id"], "reviewer": vars["reviewer"], "commit": vars["commit"],
         "started_at": vars["started_at"], "duration_seconds": elapsed,
-        "error": vars.get("error"),
-        "dev": checked_dev(checked),
-        "jev_elapsed_s": reviewer_elapsed(vars),
+        "error": vars["error"],
+        "dev": vars["dev"],
+        "jev_elapsed_s": vars["jev_elapsed_s"],
         "llm_elapsed_s": elapsed if vars["reviewer"] == "sanity-llm" else None,
-        "kind": result_kind(vars),
-        "errors": slot_errors(vars),
-        "jev_receipts": jev_receipts(vars),
+        "kind": vars["kind"],
+        "errors": [{"code": error["code"], "message": error["message"], "recoverable": error["recoverable"],
+                    "deliverable": error["deliverable"]} for error in vars["errors"]],
+        "jev_receipts": vars["jev_receipts"],
         "task": args.task, "sprint": vars["sprint"], "phase": phase,
         "pr_number": args.pr_number, "findings": vars["findings_count"],
         "verdict": vars["verdict"], "final_verdict": args.final_verdict,
@@ -223,8 +298,8 @@ RECORD_TYPES = {
 }
 
 
-def validate_record(record):
-    if not isinstance(record, dict) or set(record) != set(RECORD_TYPES) | {"findings", "error", "errors", "jev_receipts", "dev", "jev_elapsed_s", "llm_elapsed_s", "kind"}:
+def validate_record(record: JsonValue) -> HistoryRow:
+    if not is_json_object(record) or set(record) != set(RECORD_TYPES) | {"findings", "error", "errors", "jev_receipts", "dev", "jev_elapsed_s", "llm_elapsed_s", "kind"}:
         fail("rendered record has incorrect fields")
     if record["dev"] is not None and (not isinstance(record["dev"], str) or not record["dev"]):
         fail("rendered record.dev must be a nonempty string or null")
@@ -234,9 +309,8 @@ def validate_record(record):
     if record["kind"] not in {"verdict", "API_FAILURE"}:
         fail("rendered record.kind must be verdict or API_FAILURE")
     for field, expected in RECORD_TYPES.items():
-        exact_types = expected if isinstance(expected, tuple) else (expected,)
-        if type(record[field]) not in exact_types or (expected is str and not record[field]):
-            fail(f"rendered record.{field} must be " + " or ".join(item.__name__ for item in exact_types))
+        if type(record[field]) is not expected or (expected is str and not record[field]):
+            fail(f"rendered record.{field} must be {expected.__name__}")
     if record["reviewer"] not in {"sanity-llm", "sanity-jev"}:
         fail("rendered record has invalid reviewer")
     if not isinstance(record["errors"], list) or not all(valid_slot_error(error) for error in record["errors"]):
@@ -250,9 +324,12 @@ def validate_record(record):
         fail("a sanity-jev PASS/FAIL row requires the Jev receipt of every deliverable")
     if record["final_verdict"] not in {"PASS", "FAIL", "CANNOT_RUN"}:
         fail("rendered record has invalid final_verdict")
-    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", record["commit"]):
+    commit = record["commit"]
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit):
         fail("rendered record.commit must be a full commit SHA")
-    if record["pr_number"] < 1 or record["iteration"] < 1 or record["duration_seconds"] < 0:
+    pr_number, iteration, duration = record["pr_number"], record["iteration"], record["duration_seconds"]
+    if (not isinstance(pr_number, int) or not isinstance(iteration, int) or not isinstance(duration, int)
+            or pr_number < 1 or iteration < 1 or duration < 0):
         fail("rendered record has invalid numeric range")
     started, completed = (utc_timestamp(record[key]) for key in ("started_at", "completed_at"))
     if completed < started:
@@ -267,10 +344,10 @@ def validate_record(record):
             fail("completed verdict requires integer findings and null error")
     else:
         fail("rendered record has invalid verdict")
-    return record
+    return history_row(record)
 
 
-def render_record(variables):
+def render_record(variables: JsonObject) -> JsonObject:
     """Strict render, validate typed JSON, then hand to the locked append.
 
     No shell pipeline: failed render/validation cannot append any output.
@@ -281,33 +358,34 @@ def render_record(variables):
         fail(f"record render failed: {sc_render.error_text(exc)}")
     except json.JSONDecodeError as exc:
         fail(f"record render failed: {exc}")
-    return validate_record(record)
+    return validate_record(record)["raw"]
 
 
-def append_record(log_path, record):
+def append_record(log_path: Path, record: JsonObject) -> None:
     """Serialize the whole read/check/append transaction, including duplicate detection.
 
     This lock is separate from sc-compose's append lock: taking that lock here
     would deadlock the child. All history writers must use this sidecar lock.
     """
-    validate_record(record)
+    current = validate_record(record)
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.with_suffix(log_path.suffix + ".lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        _append_locked(log_path, record)
+        _append_locked(log_path, current)
 
 
-def _append_locked(log_path, record):
+def _append_locked(log_path: Path, current: HistoryRow) -> None:
     records = load_log(log_path)
-    same_run = [r for r in records if r.get("run_id") == record["run_id"]]
-    if any(any(r.get(k) != record[k] for k in ("commit", "task", "sprint", "pr_number", "iteration", "final_verdict")) for r in same_run):
+    record = current["raw"]
+    same_run = [r for r in records if r["run_id"] == current["run_id"]]
+    if any(r["identity"] != current["identity"] for r in same_run):
         fail("shared run identity disagrees with existing record")
-    prior = [r for r in same_run if r.get("reviewer") == record["reviewer"]]
+    prior = [r for r in same_run if r["reviewer"] == current["reviewer"]]
     if prior:
         # completed_local follows the process TZ; a retry under another TZ is the same row.
         # A row logged before a field existed (`errors`, `jev_receipts`) is compared without it.
-        later = [key for key in LATER_FIELDS if key not in prior[-1]]
-        if {**prior[-1], "completed_local": None} != {**{k: v for k, v in record.items() if k not in later}, "completed_local": None}:
+        later = prior[-1]["missing_later_fields"]
+        if {**prior[-1]["raw"], "completed_local": None} != {**{k: v for k, v in record.items() if k not in later}, "completed_local": None}:
             fail("run/reviewer already logged with different results")
         return
     original_size = log_path.stat().st_size if log_path.exists() else 0

@@ -1,6 +1,6 @@
 ---
 name: atm-beads
-version: 0.19.0
+version: 0.19.9
 description: Plans written as beads. Use when writing, validating or importing a phase plan into beads, or when pairing an ATM task with its bead (claim, start, close).
 requires:
   cli:
@@ -64,9 +64,10 @@ Read only the one the current job needs.
 
 Every phase plan must include the plan file `<plans_dir>/phase-<x>.jsonl` and the
 tracked phase file `.atm-bd/phase-<x>.toml` (format: `resources/planning.md`
-"Phase definition"), committed and pushed on the phase root's `integration_branch`
-before plan review. `.claude/skills/sprint-review/scripts/sprint-review --root <root>` writes
-`<plans_dir>/phase-<x>/phase-<x>-dag.html` locally (never commits or pushes) without a
+"Phase definition") and the phase DAG `<plans_dir>/phase-<x>/phase-<x>-dag.html`,
+committed together and pushed on the phase root's `integration_branch` before
+plan review. `.claude/skills/sprint-review/scripts/sprint-review --root <root>` writes
+the DAG (the script never commits or pushes; the planner commits it) without a
 viewer; `--view` optionally opens Wyvern in the background. `plans_dir` and
 the other repository values come from the repository configuration
 (`atm-bd-orchestration` SKILL.md, "Repository configuration").

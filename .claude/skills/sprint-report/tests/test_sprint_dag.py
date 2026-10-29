@@ -1,4 +1,5 @@
 import copy
+from collections.abc import Sequence
 import sys
 from pathlib import Path
 import unittest
@@ -7,9 +8,11 @@ import xml.etree.ElementTree as ET
 SKILL = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(SKILL / 'scripts'), str(SKILL.parent / 'atm-beads/scripts')]
 import sprint_dag as dag
+from operation_models import AtmTask, BeadRecord
+from sprint_dag import Graph, Snapshot
 
 
-def bead(key, labels=(), deps=(), status='closed', reason=''):
+def bead(key: str, labels: Sequence[str] = (), deps: Sequence[str] = (), status: str = 'closed', reason: str = '') -> BeadRecord:
     return {'id': key, 'labels': list(labels), 'status': status, 'close_reason': reason,
             'dependencies': [{'type': 'blocks', 'depends_on_id': dep} for dep in deps]}
 
@@ -20,7 +23,7 @@ class DagTests(unittest.TestCase):
             {'dev_bead_id': 'work-1', 'sanity_bead_id': 'gate-1'},
             {'dev_bead_id': 'work-2', 'sanity_bead_id': 'gate-2', 'depends_on_sanity_bead_ids': ['gate-1']},
         ]}
-        self.beads = {b['id']: b for b in [
+        self.beads: dict[str, BeadRecord] = {b['id']: b for b in [
             bead('plan', ['stage:plan-review']),
             bead('work-1', ['stage:dev'], ['plan']),
             bead('gate-1', ['stage:dev-sanity'], ['work-1'], reason='PASS at abc'),
@@ -30,9 +33,10 @@ class DagTests(unittest.TestCase):
             bead('hidden-ancestor'),
             bead('unrelated-gate', ['stage:plan-review']),
         ]}
-        self.graph = dag.build_graph(self.index, self.beads)
-        self.snapshot = {'beads': self.beads, 'blocked': {}, 'tasks': {}, 'errors': {},
-                         'iterations': {}, 'events': {key: [] for key in self.graph['nodes']}}
+        self.graph: Graph = dag.build_graph(self.index, self.beads)
+        self.snapshot: Snapshot = {'beads': self.beads, 'blocked': {}, 'tasks': {}, 'errors': {},
+                                   'iterations': {}, 'events': {key: [] for key in self.graph['nodes']},
+                                   'captured_at': 'now'}
         for key in ('work-1', 'work-2'):
             self.snapshot['events'][key] = [{'event': 'completed', 'at': '2026-09-26T10:00:00Z'}]
         for key in ('gate-1', 'gate-2'):
@@ -75,7 +79,9 @@ class DagTests(unittest.TestCase):
         self.assertEqual(result['gate-1']['sanity_iterations'], 14)
         self.assertEqual(result['gate-1']['state'], 'done')
         self.assertEqual(result['work-1']['state'], 'done')
-        self.snapshot['events']['work-1'].append({'event': 'completed', 'at': '2026-09-26T12:00:00Z'})
+        work_events = self.snapshot['events']['work-1']
+        assert work_events is not None
+        work_events.append({'event': 'completed', 'at': '2026-09-26T12:00:00Z'})
         result = dag.states(self.graph, self.snapshot, self.index)
         self.assertEqual(result['work-1']['state'], 'uncertain')
         self.assertEqual(result['gate-1']['state'], 'uncertain')
@@ -88,7 +94,7 @@ class DagTests(unittest.TestCase):
         self.assertEqual(result['work-1']['state'], 'uncertain')
 
     def test_reopened_active_task_overrides_closed_bead(self):
-        self.snapshot['tasks']['work-1'] = {'state': 'active'}
+        self.snapshot['tasks']['work-1'] = AtmTask(task_id='work-1', state='active')
         self.assertEqual(dag.states(self.graph, self.snapshot, self.index)['work-1']['state'], 'active')
 
     def test_open_sanity_finding_blocks_green_but_is_not_a_node(self):

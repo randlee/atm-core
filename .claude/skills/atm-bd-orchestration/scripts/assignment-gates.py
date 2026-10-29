@@ -2,7 +2,8 @@
 """Read-only, injectable pre-claim gates for dev, sanity, and QA work, and the read-only stack-top lookup.
 
 Every command the gates run (bd, git, gh, validate-plan) is bounded by `ATM_BD_GATE_TIMEOUT_S` seconds
-(default 180; validate-plan gets at least 300). A command that exceeds it is `GATE_CANNOT_RUN` (exit 2) with
+(default 180, or `gate_timeout_s` of the repository configuration;
+the env var wins; validate-plan gets at least 300). A command that exceeds it is `GATE_CANNOT_RUN` (exit 2) with
 the command and the fix on stderr: retry once, or raise `ATM_BD_GATE_TIMEOUT_S` when the host is loaded.
 """
 from __future__ import annotations
@@ -19,7 +20,7 @@ from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from command_timeout import DEFAULT_COMMAND_TIMEOUT, RAISE_FIX, TIMEOUT_ENV, command_timeout, import_timeout
+from command_timeout import DEFAULT_COMMAND_TIMEOUT, RAISE_FIX, TIMEOUT_ENV, command_timeout, import_timeout, repo_timeout
 from stack_top import select_stack_top, stack_bead_id
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
@@ -70,6 +71,11 @@ def claimable(bead: dict[str, Any], identity: str) -> bool:
     return bead.get("status") == "open" and (not bead.get("assignee") or bead.get("assignee") == identity)
 
 
+def own_claim(bead: dict[str, Any], identity: str) -> bool:
+    """A replay finds its own claimed bead in progress, which `bd ready` no longer lists."""
+    return bead.get("status") == "in_progress" and bead.get("assignee") == identity
+
+
 def has_prior_pass(output: str) -> bool:
     """A `bd history --json` snapshot of the bead closed with reason `PASS at <sha>`; a note or reason that merely
     mentions PASS is not one. Output that is not a JSON list of snapshots, each with an `Issue` object, raises."""
@@ -108,8 +114,9 @@ def descends(runner: Runner, lower: str, base: str, git: list[str] | None = None
     result = invoke(runner, ["git", *(git or []), "merge-base", "--is-ancestor", f"origin/{lower}", f"origin/{base}"], capture_output=True, text=True)
     if result.returncode > 1:
         if invoke(runner, ["git", *(git or []), "rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{lower}"], capture_output=True, text=True).returncode:
-            for pr in run_json(runner, "gh", "pr", "list", "--head", lower, "--state", "merged", "--json", "mergeCommit"):
-                if invoke(runner, ["git", *(git or []), "merge-base", "--is-ancestor", str((pr.get("mergeCommit") or {}).get("oid")), f"origin/{base}"],
+            closed = run_json(runner, "gh", "api", f"repos/{{owner}}/{{repo}}/pulls?state=closed&head={{owner}}:{lower}&per_page=100")
+            for pr in (row for row in closed if row.get("merged_at")):
+                if invoke(runner, ["git", *(git or []), "merge-base", "--is-ancestor", str(pr.get("merge_commit_sha")), f"origin/{base}"],
                           capture_output=True, text=True).returncode == 0:
                     return True
         raise RuntimeError(result.stderr.strip() or "git merge-base failed")
@@ -139,10 +146,12 @@ def dev_gate(args: argparse.Namespace, runner: Runner, identity: str) -> str:
     if plan.returncode:
         raise RuntimeError(f"validate-plan exit {plan.returncode}: {(plan.stderr or plan.stdout).strip()}")
     ready = run_json(runner, "bd", "ready", "-n", "0", "--json")
-    if not any(row.get("id") == args.bead for row in ready):
-        return "NOT_READY"
     bead = run_json(runner, "bd", "show", args.bead, "--json")[0]
-    if not claimable(bead, identity):
+    if not any(row.get("id") == args.bead for row in ready):
+        if not own_claim(bead, identity) or any(dep.get("dependency_type") == "blocks" and dep.get("status") != "closed"
+                                                for dep in bead.get("dependencies") or []):
+            return "NOT_READY"
+    elif not claimable(bead, identity):
         return "UNCLAIMABLE"
     declared = declared_pr_target(runner, bead)
     if declared is not None and not descends(runner, str(declared), args.pr_target, git_dir(args)):
@@ -157,9 +166,8 @@ def sanity_gate(args: argparse.Namespace, runner: Runner, identity: str) -> str:
         return "COMMIT_REQUIRED"
     ready = run_json(runner, "bd", "ready", "-n", "0", "--json")
     if not any(row.get("id") == args.bead for row in ready):
-        # A replay finds its own claimed bead in progress, which `bd ready` no longer lists.
         bead = run_json(runner, "bd", "show", args.bead, "--json")[0]
-        if not (bead.get("status") == "in_progress" and bead.get("assignee") == identity):
+        if not own_claim(bead, identity):
             return "NOT_READY"
     if has_prior_pass(run(runner, "bd", "history", args.bead, "--json")):
         return "SANITY_FROZEN"
@@ -225,8 +233,10 @@ def main(argv: list[str] | None = None, runner: Runner = subprocess.run) -> int:
     parser.add_argument("--worktree", default="")
     parser.add_argument("--base", default="", help="accepted for compatibility; sanity does not check PR bases")
     args = parser.parse_args(argv)
+    global COMMAND_TIMEOUT, VALIDATE_PLAN_TIMEOUT
     try:
-        command_timeout()
+        COMMAND_TIMEOUT = repo_timeout()  # resolved per run, so a configuration change applies without a reload
+        VALIDATE_PLAN_TIMEOUT = max(MIN_VALIDATE_PLAN_TIMEOUT, COMMAND_TIMEOUT)
     except ValueError as exc:
         print(f"assignment-gates: {exc}", file=sys.stderr)
         print("GATE_CANNOT_RUN")

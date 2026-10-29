@@ -15,3 +15,4 @@ adr_globs: ["docs/architecture.md","docs/adr/ADR-*.md"]
 policy_path: ".claude/project/quality-policy.md"
 reviewers_round1: ["req-qa","arch-qa","ruthless-boundary-qa","rust-qa-agent","rust-best-practices-agent","rust-service-hardening-agent"]
 max_sanity_rounds: 5
+gate_timeout_s: 180

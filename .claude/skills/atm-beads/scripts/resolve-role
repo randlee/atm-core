@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Print the ATM member that fills a role in this repository.
 
 The map is `roles:` in .claude/agents/registry.yaml (role -> member name).
@@ -9,8 +10,15 @@ registry is unreadable or the role is not mapped.
 import pathlib
 import subprocess
 import sys
+from typing import TypedDict
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import yaml
+from operation_models import matches_typeddict
+
+
+class RoleRegistry(TypedDict, total=False):
+    roles: dict[str, str]
 
 if len(sys.argv) != 2:
     sys.exit("usage: resolve-role <role>")
@@ -19,12 +27,16 @@ try:
     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True,
                          capture_output=True, text=True).stdout.strip()
     registry = pathlib.Path(top, ".claude/agents/registry.yaml")
-    roles = (yaml.safe_load(registry.read_text()) or {}).get("roles") or {}
-except (OSError, subprocess.CalledProcessError, yaml.YAMLError) as exc:
+    document: object = yaml.safe_load(registry.read_text())
+    if not matches_typeddict(document, RoleRegistry):
+        raise ValueError("registry does not match its schema")
+    loaded = document
+    roles = loaded.get("roles", {})
+except (OSError, subprocess.CalledProcessError, yaml.YAMLError, ValueError) as exc:
     print(f"resolve-role: cannot read the role map: {exc}", file=sys.stderr)
     sys.exit(2)
 member = roles.get(role)
-if not isinstance(member, str) or not member:
+if not member:
     print(f"resolve-role: role '{role}' is not mapped in {registry} (roles:)",
           file=sys.stderr)
     sys.exit(2)

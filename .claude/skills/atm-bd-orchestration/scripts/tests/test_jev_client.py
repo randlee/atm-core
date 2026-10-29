@@ -96,6 +96,19 @@ class JevClientTests(unittest.TestCase):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             client.main(["--startup", "--announce"], sleep=no_sleep)
 
+    def test_an_oversized_request_error_is_announced_without_an_llm_fallback(self):
+        error = "SANITY.JEV_REQUEST_TOO_LARGE: Jev request oversized (123456 bytes > 96000); no further split fits the remaining attempt budget"
+        with patch.object(client.http.client, "HTTPSConnection") as http:
+            rc, result, sends = self.startup(["--announce", "--error", error, "--phase", "x"], ["oversight@team"], ["daemon@host"],
+                                             environ={"ATM_TEAM": "t", "TYPESAFE_API_KEY": "test-only-key"})
+            http.assert_not_called()
+        self.assertEqual((rc, result), (0, {"success": True, "data": {"announced": error}, "error": None}))
+        text = sends[0][1]
+        self.assertIn(error, text)
+        self.assertIn("123456 bytes > 96000", text)
+        self.assertIn("no LLM or haiku check replaces Jev", text)
+        self.assertNotIn("Selection takes the LLM reply", text)
+
     def test_error_announces_a_child_failure_verbatim_without_probing(self):
         error = "SANITY.JEV_UNAVAILABLE: Jev HTTP 503; response body withheld"
         with patch.object(client.http.client, "HTTPSConnection") as http:
@@ -417,6 +430,7 @@ class JevClientTests(unittest.TestCase):
         self.assertEqual(result["elapsed_s"], 0.0)
         self.assertEqual(result["error"]["code"], "SANITY.JEV_REQUEST_TOO_LARGE")
         self.assertIn("oversized", result["error"]["message"])
+        self.assertRegex(result["error"]["message"], rf"\b\d+ bytes > {client.MAX_REQUEST_BYTES}\b")
 
     def test_non_text_oversize_state_is_terminal_without_network(self):
         for state in ("x" * client.MAX_REQUEST_BYTES,
@@ -686,14 +700,16 @@ class JevClientTests(unittest.TestCase):
             {"kind": "pr_body", "repo": "o/r", "pr": 460},
             {"kind": "pr_comment", "repo": "o/r", "comment_id": 77}]
 
-    def fetched(self, failing=()):
-        """`subprocess.run` answering bd/gh for REFS (git passes through); a command naming a `failing` id exits 1."""
+    def fetched(self, failing=(), answering=None):
+        """`subprocess.run` answering bd/gh for REFS (git passes through); a command naming a `failing` id exits 1;
+        `answering` maps an id to the response replacing its default."""
         real = client.subprocess.run
         answers = {"lint-k7": [{"id": "lint-k7", "notes": "Ran `just test`: 412 passed at abc123.", "updated_at": "2026-10-13T01:00:00Z"}],
                    "repos/o/r/pulls/460": {"body": "Evidence: smoke log attached.", "html_url": "https://github.com/o/r/pull/460",
                                            "updated_at": "2026-10-13T02:00:00Z", "user": {"login": "dev"}},
                    "repos/o/r/issues/comments/77": {"body": "Re-ran on Windows: green.", "html_url": "https://github.com/o/r/pull/460#c77",
                                                     "updated_at": "2026-10-13T03:00:00Z", "user": {"login": "qa"}}}
+        answers.update(answering or {})
 
         def run(argv, **kwargs):
             if argv[0] == "git":
@@ -744,6 +760,16 @@ class JevClientTests(unittest.TestCase):
             self.assertEqual(raised.exception.message,
                              "Assignment external_evidence entry is not a bead_notes, pr_body or pr_comment reference")
             self.assertIn("pr_comment", client.failure(raised.exception)["error"]["suggested_action"])
+
+    def test_null_pr_body_is_empty_evidence_but_any_other_non_string_body_still_fails(self):
+        ref, key = {"kind": "pr_body", "repo": "o/r", "pr": 460}, "repos/o/r/pulls/460"
+        with self.fetched(answering={key: {"body": None}}):
+            (evidence,) = [client.external_evidence(ref, "/nonexistent")]
+        self.assertEqual((evidence["kind"], evidence["ref"], evidence["text"]), ("pr_body", "o/r#460", ""))
+        for bad in ({"body": 5}, {"html_url": "https://github.com/o/r/pull/460"}, ["body"]):
+            with self.subTest(bad=bad), self.fetched(answering={key: bad}), self.assertRaises(client.JevError) as raised:
+                client.external_evidence(ref, "/nonexistent")
+            self.assertEqual(raised.exception.message, "External evidence unreadable: pr_body o/r#460")
 
     def test_layered_source_reads_lower_layer_context_at_the_pinned_top(self):
         import subprocess, tempfile
@@ -805,7 +831,8 @@ class JevClientTests(unittest.TestCase):
         self.assertGreaterEqual(len(literals), 15)
         for literal in literals:
             with self.subTest(message=literal):
-                self.assertTrue(client.is_client_message(literal.replace("{status}", "503")))
+                self.assertTrue(client.is_client_message(literal.replace("{status}", "503").replace(
+                    "{request_size}", "123456").replace("{MAX_REQUEST_BYTES}", str(client.MAX_REQUEST_BYTES))))
         self.assertFalse(client.is_client_message("Selected model is at capacity"))
 
 

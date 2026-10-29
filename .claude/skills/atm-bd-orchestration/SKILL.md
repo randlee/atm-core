@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.19.0
+version: 0.19.9
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:
@@ -175,14 +175,25 @@ hook succeeds, sanity-stack claims the phase stack bead, links the layer and
 records it in that bead before the next developer resolves `stack-top`. When
 layer 1 passes sanity, sanity-stack links layers 0 and 1 together with
 `gh stack link --base <trunk> <pr0> <pr1>`. A stack outcome after close is
-reported to the lead, who owns any required repair or dev redispatch.
+reported to the lead, who owns any required repair or dev redispatch. On
+`rebase_required` the notice's `next_steps` name the lead's options and their
+commands: `relink_in_git_order` when the layer is already in the top's history
+(no rebase), else `rebase` in the lead's own worktree, or `dev_rebase` when the
+rebase conflicts. After a rebase the lead pours a re-check sanity bead
+`<sanity bead>-r<N>` from `dev-sanity-bead.json.j2` (same `dev_bead`, the new
+head), closes the old sanity bead `superseded by <new>` (never `PASS at`),
+adds the QA bead's blocker on the new sanity bead (`bd dep add`) and
+dispatches `templates.sanity` with the new `commit`, `base` (the PR's actual
+base), `branch`, `pr_number` and `worktree_path`. The lead never reopens a
+sanity or dev bead, edits bead metadata or hand-makes a bead for it.
 Rebasing is done before sanity or QA is assigned and is the dev's, at
 dev-complete; the lead fixes only what the dev could not, or another stack
 problem, before dispatching sanity or QA, in its own worktree, and dispatches
 with the new `commit`, `base`, `branch`, `pr_number` and `worktree_path`. A layer that
 has passed QA, or has layers above it, is never rebased, and a rebase never
 re-dispatches QA or sanity on any other layer. A passed sanity is
-frozen and a later change is a new fix bead with its own sanity. Sprint work
+frozen and a later change is a new fix bead with its own sanity; a rebase
+alone gets the re-check sanity bead above. Sprint work
 does not wait for QA: the next sprint is dispatched as soon as its sanity
 blockers PASS. QA and fixes interleave by priority (blocking P1, sprint and
 important P2, minor P4).
@@ -274,9 +285,10 @@ No dev bead is dispatched until the plan passes review.
 
 2. Generate the initial phase diagram before review:
    `.claude/skills/sprint-review/scripts/sprint-review --root <root>`
-   writes the HTML locally; it never commits or pushes.
-   The phase integration branch must contain the committed/pushed plan file
-   `<plans_dir>/phase-<x>.jsonl` and phase file `.atm-bd/phase-<x>.toml`. Do not open the
+   writes `<plans_dir>/phase-<x>/phase-<x>-dag.html`; the script never commits
+   or pushes. The phase integration branch must contain the plan file
+   `<plans_dir>/phase-<x>.jsonl`, the phase file `.atm-bd/phase-<x>.toml` and
+   that DAG, committed together and pushed by the planner. Do not open the
    diagram unless `--view` was requested and Wyvern is available.
    Then run `.claude/skills/atm-beads/scripts/validate-plan --phase <x>`
    from the repository root; its header lists what it checks. Exit 0 or stop.
@@ -352,6 +364,7 @@ Then, on each task close:
 | sanity check FAIL | The close hook reopens the checked bead and sends the undone deliverables to its dev on the existing task; no child finding or new dev assignment is created. At the configured round cap the lead receives `SANITY.ROUND_CAP` and rules on the next action. |
 | qa-complete | nothing: quality-mgr poured a fix group under the sprint per blocking finding (round n+1 for a failed fix verification) and filed the rest as finding beads before it closed the QA bead; the fix beads are now ready. A failed quick-fix QA (`metadata.quick_fix`) poured none: file and dispatch its blocking findings (Parallel Quick Fix step 4). When no step is open under the sprint, close it (below) |
 | fix-complete (`fixed`) | verify the dev's PR and record it on the fix bead (`bd update <bead> --append-notes "layer PR #<n> <url>"`); sanity links after its PASS close hook. For a poured fix bead or an important or minor finding bead, nothing more: the group's sanity check is now ready. For a quick-fix finding, once every finding from that failed QA has closed, one more quick-fix QA bead (Parallel Quick Fix step 4) |
+| stack notice `rebase_required` (from sanity-stack-link), or a QA `SANITY_STALE` refusal after a rebase | before the next `bd ready` dispatch: the re-check sanity bead (Stack Discipline). Dispatch no new dev bead while one is pending: `stack-top` sees only linked layers, so a new sprint would fork below the unlinked layer |
 | review-complete | file each finding with `finding-bead.json.j2` (`qa_bead` = the review bead) |
 | task-refused | read the reason and the bead state (`open`, or `blocked-failed` for a dev bead that declared failure). Reassign it only once `bd ready` lists the bead (a blocker refusal: as the not-ready or blocker row), split it, or close the bead yourself with `bd close <bead> --force --reason "<why>"`. A `blocked` bead is never in `bd ready`: run `bd update <bead> --status open --assignee <new agent>` before you re-dispatch it. A sanity refusal for no PR, not stacked or not rebased is yours as stack writer (Stack Discipline). `REVIEW_PENDING_JEV`: file each code finding in its notes with `finding-bead.json.j2` (`qa_bead` = the review bead) and re-dispatch the review only after the Jev outage clears, with the prior `post_mortem_jev` run IDs in its notes so they are reused |
 | fix-complete (`not_reproducible`) | no commit, no sanity check; the finding is closed. For a poured fix bead or an important or minor finding bead, close its group's sanity bead, then its QA bead, each with `bd close <bead> --reason "not_reproducible: <fix bead>"`. For a quick-fix finding, as for `fixed` |

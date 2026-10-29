@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: strict
 """Merge the per-deliverable sanity results and the lint result into a verdict.
 
 Usage:
@@ -52,9 +53,19 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from typing import Protocol, Required, TypedDict, runtime_checkable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads" / "scripts"))
 from sanity_shared import valid_elapsed_s  # noqa: E402
+from operation_models import matches_typeddict  # noqa: E402
+from sprint_index_common import JsonObject, JsonValue, is_json_object, is_json_value  # noqa: E402
+
+
+@runtime_checkable
+class JevClient(Protocol):
+    def verify_receipt(self, value: JsonValue, key: str) -> bool: ...
+
+    def is_client_message(self, message: JsonValue) -> bool: ...
 
 # Tool lock and log files a clean worktree may hold; the same as `IGNORED_STATUS_PATHS` in assignment-gates.py.
 IGNORED_STATUS_PATHS = (".beads.gate.lock", ".sc-compose/")
@@ -68,65 +79,184 @@ FENCED_REPLY = re.compile(r"\s*```(?:json)?[ \t]*\n(.*?)\n```\s*", re.S)
 
 
 class Reject(Exception):
-    def __init__(self, message, code=1):
+    def __init__(self, message: str, code: int = 1) -> None:
         super().__init__(message)
         self.code = code
 
 
-def load_manifest(path):
+class MergeArguments(argparse.Namespace):
+    manifest_path: str
+    sanity_bead: str
+    dev_bead: str
+    sprint: str
+    reviewer: str | None
+    started_at: float | None
+    completed_at: float | None
+    llm_vars: str | None
+    jev_vars: str | None
+    selection: str | None
+    client: str | None
+    fallback_errors: list[JsonValue]
+    parsed_selection: list[JsonValue]
+
+
+class AssignmentText(TypedDict):
+    number: int | float | None
+    text: str | None
+
+
+class LintDescriptor(TypedDict):
+    exit_file: str | None
+    log: str | None
+    command: JsonValue
+    has_command: bool
+
+
+def parse_lint_descriptor(lint: JsonObject) -> LintDescriptor:
+    exit_file, log = lint.get("exit_file"), lint.get("log")
+    return {"exit_file": exit_file if isinstance(exit_file, str) else None,
+            "log": log if isinstance(log, str) else None,
+            "command": lint.get("command"), "has_command": "command" in lint}
+
+
+def lint_command(lint: LintDescriptor) -> JsonValue:
+    if not lint["has_command"]:
+        raise KeyError("command")
+    return lint["command"]
+
+
+class Manifest(TypedDict):
+    sha: str
+    branch: str
+    deliverables_total: int
+    lint: LintDescriptor
+    worktree_path: str | None
+    invalid_worktree: JsonValue
+    run_id: str | None
+    has_run_id: bool
+    operational_reviewer: JsonValue
+    has_operational_reviewer: bool
+    reviewers: list[str] | None
+    assignments: list[AssignmentText]
+    checked_bead_data: JsonValue
+
+
+def load_manifest(path: str | Path) -> Manifest:
     try:
         manifest = json.loads(Path(path).read_text())
     except (OSError, ValueError) as exc:
         raise Reject(f"cannot read manifest: {exc}")
+    if not is_json_object(manifest):
+        raise Reject("manifest must be a JSON object")
     for key in ("sha", "deliverables_total", "branch", "lint"):
         if key not in manifest:
             raise Reject(f"manifest lacks {key}")
     if not isinstance(manifest["lint"], dict):
         raise Reject("manifest has no lint entry; sanity-split ran with --split-only")
-    return manifest
+    sha, branch, total, lint = manifest["sha"], manifest["branch"], manifest["deliverables_total"], manifest["lint"]
+    if not isinstance(sha, str) or not isinstance(branch, str):
+        raise Reject("manifest sha and branch must be strings")
+    if not isinstance(total, int) or isinstance(total, bool):
+        raise Reject("manifest deliverables_total must be an integer")
+    run_id = manifest.get("run_id")
+    if run_id is not None and not isinstance(run_id, str):
+        raise Reject("manifest run_id must be a string or null")
+    assert isinstance(lint, dict)
+    worktree = manifest.get("worktree_path")
+    reviewers = manifest.get("reviewers", [])
+    assignments = manifest.get("assignments", [])
+    parsed_assignments: list[AssignmentText] = []
+    if isinstance(assignments, list):
+        for assignment in assignments:
+            parsed = parse_assignment_text(assignment)
+            if parsed is not None:
+                parsed_assignments.append(parsed)
+    return {"sha": sha, "branch": branch, "deliverables_total": total, "lint": parse_lint_descriptor(lint),
+            "worktree_path": worktree if isinstance(worktree, str) else None,
+            "invalid_worktree": None if isinstance(worktree, str) else worktree,
+            "run_id": run_id, "has_run_id": "run_id" in manifest,
+            "operational_reviewer": manifest.get("operational_reviewer"),
+            "has_operational_reviewer": "operational_reviewer" in manifest,
+            "reviewers": [reviewer for reviewer in reviewers if isinstance(reviewer, str)] if isinstance(reviewers, list) else None,
+            "assignments": parsed_assignments, "checked_bead_data": manifest.get("checked_bead_data")}
 
 
-def read_results():
+def read_results() -> list[JsonValue]:
     try:
         results = json.load(sys.stdin)
     except ValueError as exc:
         raise Reject(f"stdin is not JSON: {exc}")
-    if not isinstance(results, list):
+    if not is_json_value(results) or not isinstance(results, list):
         raise Reject("stdin must be a JSON array of results")
     return [parse_reply(result, index) for index, result in enumerate(results)]
 
 
-def parse_reply(reply, index):
+def parse_reply(reply: JsonValue, index: int) -> JsonValue:
     """A fenced JSON reply string becomes its envelope; any other value is kept as is."""
     if not isinstance(reply, str):
         return reply
     match = FENCED_REPLY.fullmatch(reply)
     try:
-        return json.loads(match.group(1) if match else reply)
+        parsed = json.loads(match.group(1) if match else reply)
+        if not is_json_value(parsed):
+            raise ValueError("reply is not a JSON value")
+        return parsed
     except ValueError as exc:
         raise Reject(f"result {index}: reply is not fenced JSON: {exc}")
 
 
-def failure_envelope(result, index, total):
+class FailureFields(TypedDict):
+    code: str
+    message: str
+    recoverable: bool
+    suggested_action: str
+
+
+class FailureEnvelope(FailureFields):
+    deliverable: int
+
+
+def failure_envelope(result: JsonObject, index: int, total: int) -> FailureEnvelope:
     """A complete failure envelope, or Reject (exit 1) when `success` is false but the envelope is not."""
     error = result.get("error")
     if result.get("data") is not None or not isinstance(error, dict):
         raise Reject(f"result {index}: failure envelope must have data null and an error object")
     number = error.get("deliverable")
-    if (not isinstance(error.get("code"), str) or not error["code"] or not isinstance(error.get("message"), str)
-            or not isinstance(error.get("recoverable"), bool) or not isinstance(error.get("suggested_action"), str)):
+    if not matches_typeddict(error, FailureFields) or not error["code"]:
         raise Reject(f"result {index}: failure envelope must have code, message, recoverable, suggested_action")
-    if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= total:
+    if not matches_typeddict(error, FailureEnvelope) or not 1 <= error["deliverable"] <= total:
         raise Reject(f"result {index}: failure envelope must name its deliverable (1..{total}), got {number!r}")
     return error
 
 
-def validate(result, index, manifest, sanity_bead, dev_bead):
+class DependencyFields(TypedDict):
+    deliverable: int
+    file: str
+    line: int
+
+
+class MergeDependency(DependencyFields):
+    raw: JsonObject
+
+
+class FindingFields(TypedDict):
+    kind: str
+    file: str
+    line: int
+    issue: str
+
+
+class MergeFinding(FindingFields):
+    depends_on: list[MergeDependency]
+
+
+def validate(result: JsonObject, index: int, manifest: Manifest, sanity_bead: str,
+             dev_bead: str) -> tuple[int, list[MergeFinding]]:
     total = manifest["deliverables_total"]
     where = f"result {index}"
-    if not isinstance(result.get("data"), dict):
+    data = result.get("data")
+    if not isinstance(data, dict):
         raise Reject(f"{where}: a success envelope needs a data object")
-    data = result["data"]
     number = data.get("deliverable")
     if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= total:
         raise Reject(f"{where}: deliverable must be an integer in 1..{total}, got {number!r}")
@@ -144,28 +274,33 @@ def validate(result, index, manifest, sanity_bead, dev_bead):
         raise Reject(f"{where}: findings must be a list")
     if len(findings) > 1:
         raise Reject(f"{where}: at most one finding is allowed")
+    validated_findings: list[MergeFinding] = []
     for finding in findings:
-        if (not isinstance(finding, dict) or finding.get("kind") != CHECKER_KIND
-                or not isinstance(finding.get("file"), str) or not finding["file"]
-                or not isinstance(finding.get("line"), int) or isinstance(finding.get("line"), bool)
-                or finding["line"] < 1 or not isinstance(finding.get("issue"), str) or not finding["issue"]):
+        if not isinstance(finding, dict):
             raise Reject(f"{where}: finding must be {{kind: skipped, file, line >= 1, issue}}: {finding!r}")
-        dependencies = finding.get("depends_on", [])
+        raw_finding = finding
+        if (not matches_typeddict(finding, FindingFields) or finding["kind"] != CHECKER_KIND
+                or not finding["file"] or finding["line"] < 1 or not finding["issue"]):
+            raise Reject(f"{where}: finding must be {{kind: skipped, file, line >= 1, issue}}: {finding!r}")
+        dependencies = raw_finding.get("depends_on", [])
         if not isinstance(dependencies, list):
             raise Reject(f"{where}: depends_on must be a list")
+        parsed_dependencies: list[MergeDependency] = []
         for dependency in dependencies:
-            if (not isinstance(dependency, dict)
-                    or not isinstance(dependency.get("deliverable"), int)
-                    or isinstance(dependency["deliverable"], bool)
-                    or not 1 <= dependency["deliverable"] <= total
-                    or not isinstance(dependency.get("file"), str) or not dependency["file"]
-                    or not isinstance(dependency.get("line"), int)
-                    or isinstance(dependency["line"], bool) or dependency["line"] < 1):
+            if not isinstance(dependency, dict):
                 raise Reject(f"{where}: depends_on entries must be {{deliverable: 1..{total}, file, line >= 1}}: {dependency!r}")
-    return number, findings
+            raw_dependency = dependency
+            if (not matches_typeddict(dependency, DependencyFields) or not 1 <= dependency["deliverable"] <= total
+                    or not dependency["file"] or dependency["line"] < 1):
+                raise Reject(f"{where}: depends_on entries must be {{deliverable: 1..{total}, file, line >= 1}}: {dependency!r}")
+            parsed_dependencies.append({**dependency, "raw": raw_dependency})
+        validated_findings.append({"kind": finding["kind"], "file": finding["file"], "line": finding["line"],
+                                   "issue": finding["issue"], "depends_on": parsed_dependencies})
+    return number, validated_findings
 
 
-def reply_status(result, index, manifest, sanity_bead, dev_bead):
+def reply_status(result: JsonValue, index: int, manifest: Manifest, sanity_bead: str,
+                 dev_bead: str) -> tuple[int, str]:
     """Validate one unchanged reply and return its deliverable and coarse status."""
     if (not isinstance(result, dict) or set(result) not in ({"success", "data", "error"}, {"success", "data", "error", "elapsed_s"})
             or not isinstance(result.get("success"), bool)):
@@ -173,24 +308,33 @@ def reply_status(result, index, manifest, sanity_bead, dev_bead):
     if "elapsed_s" in result and not valid_elapsed_s(result["elapsed_s"]):
         raise Reject(f"result {index}: elapsed_s must be a finite nonnegative number")
     if result["success"] is False:
-        error = failure_envelope(result, index, manifest["deliverables_total"])
-        return error["deliverable"], "cannot_run"
+        total = manifest["deliverables_total"]
+        error = failure_envelope(result, index, total)
+        number = error["deliverable"]
+        return number, "cannot_run"
     number, findings = validate(result, index, manifest, sanity_bead, dev_bead)
     return number, "undone" if findings else "done"
 
 
-def canonical_sha256(value):
+def canonical_sha256(value: JsonValue) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def load_reviewer_vars(path, reviewer, manifest):
+class ReviewerVars(TypedDict):
+    run_id: str | None
+    reviewer: str
+    results: list[JsonValue]
+    digest: str
+
+
+def load_reviewer_vars(path: str, reviewer: str, manifest: Manifest) -> ReviewerVars:
     try:
         value = json.loads(Path(path).read_text())
     except (OSError, ValueError) as exc:
         raise Reject(f"cannot read reviewer vars {path}: {exc}")
-    if not isinstance(value, dict):
+    if not is_json_object(value):
         raise Reject(f"reviewer vars {path} must be a JSON object")
-    if value.get("run_id") != manifest.get("run_id"):
+    if value.get("run_id") != manifest["run_id"]:
         raise Reject(f"reviewer vars {path} run_id does not match manifest")
     if value.get("reviewer") != reviewer:
         raise Reject(f"reviewer vars {path} reviewer is not {reviewer}")
@@ -200,10 +344,10 @@ def load_reviewer_vars(path, reviewer, manifest):
     digest = canonical_sha256(results)
     if value.get("reviewer_results_sha256") != digest:
         raise Reject(f"reviewer vars {path} reviewer_results_sha256 does not match reviewer_results")
-    return results, digest
+    return {"run_id": manifest["run_id"], "reviewer": reviewer, "results": results, "digest": digest}
 
 
-def load_client(path):
+def load_client(path: Path) -> tuple[JevClient | None, str | None]:
     """The Jev client module, or the reason it cannot be loaded."""
     try:
         spec = importlib.util.spec_from_file_location("jev_client", path)
@@ -211,23 +355,59 @@ def load_client(path):
             raise ImportError(f"no loader for {path}")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        if not isinstance(module, JevClient):
+            raise ImportError("Jev client does not expose its receipt operations")
         return module, None
     except (OSError, ImportError, AttributeError, SyntaxError) as exc:
         return None, f"cannot load the Jev client {path}: {exc}"
 
 
-def jev_reply_problem(result, client, seen):
+class ScreenedReceipt(TypedDict):
+    choice: str
+    raw: JsonObject
+
+
+class ReviewEnvelope(TypedDict):
+    success: bool
+    data: JsonValue
+    error: JsonValue
+
+
+class ReviewEnvelopeInput(TypedDict, total=False):
+    success: Required[bool]
+    data: JsonValue
+    error: JsonValue
+
+
+class JevPayload(TypedDict):
+    jev: JsonValue
+    final: JsonValue
+    findings: JsonValue
+
+
+def inspect_review_envelope(value: JsonValue) -> ReviewEnvelope | None:
+    if not matches_typeddict(value, ReviewEnvelopeInput):
+        return None
+    return {"success": value["success"], "data": value.get("data"), "error": value.get("error")}
+
+
+def inspect_jev_payload(value: JsonObject) -> JevPayload:
+    return {"jev": value.get("jev"), "final": value.get("jev_final"), "findings": value.get("findings")}
+
+
+def jev_reply_problem(result: JsonValue, client_pair: tuple[JevClient | None, str | None], seen: set[str]) -> str | None:
     """Why a sanity-jev reply cannot stand, or None. A success needs the client's receipt in `data.jev` (verified with
     TYPESAFE_API_KEY), or for a split request every part in order with its own verified receipt; findings that agree
     with the result (no: exactly one; yes: none), which is the parts' common choice or, when they disagree, the
     `data.jev_final` dev-sanity recorded after triage citing every part; and requests no other deliverable's receipt
     used. A SANITY.JEV_* failure needs the client's own message verbatim.
     Anything not an envelope is left to the envelope checks."""
-    if not isinstance(result, dict) or not isinstance(result.get("success"), bool):
+    envelope = inspect_review_envelope(result)
+    if envelope is None:
         return None
-    client, load_error = client
-    if result["success"] is False:
-        error = result.get("error")
+    client, load_error = client_pair
+    if envelope["success"] is False:
+        error = envelope["error"]
         if not isinstance(error, dict):
             return None
         code = error.get("code")
@@ -237,7 +417,7 @@ def jev_reply_problem(result, client, seen):
             return load_error or "Jev client is unavailable"
         return None if client.is_client_message(error.get("message")) else \
             f"Jev failure message is not the client's own text: {error.get('message')!r}"
-    data = result.get("data")
+    data = envelope["data"]
     if not isinstance(data, dict):
         return None
     if load_error or client is None:
@@ -245,18 +425,23 @@ def jev_reply_problem(result, client, seen):
     key = os.environ.get("TYPESAFE_API_KEY", "").strip()
     if not key:
         return "TYPESAFE_API_KEY is not set, so the Jev receipt cannot be verified"
-    jev, final = data.get("jev"), data.get("jev_final")
+    payload = inspect_jev_payload(data)
+    jev, final = payload["jev"], payload["final"]
+    labels: list[str] = []
+    split = isinstance(jev, list)
     if isinstance(jev, list):  # a split request: every part's result, in order, each with its own receipt
-        receipts = []
+        receipts: list[JsonObject] = []
         for i, part in enumerate(jev, 1):
             label = f"{i} of {len(jev)}"
             if not isinstance(part, dict) or part.get("part") != label:
                 return f"Jev part {label} is missing or mislabelled: a split reply returns every part in order"
+            labels.append(label)
             receipt = part.get("receipt")
             if not isinstance(receipt, dict) or not client.verify_receipt(receipt, key):
                 return f"no valid Jev receipt on part {label}: the reply was not written from a jev_client.py call"
             response = part.get("response")
-            answer = response.get("answers", {}).get("written") if isinstance(response, dict) else None
+            answers = response.get("answers") if isinstance(response, dict) else None
+            answer = answers.get("written") if isinstance(answers, dict) else None
             if not isinstance(answer, dict) or (answer.get("choice"), answer.get("probabilities")) != (
                     receipt["choice"], receipt["probabilities"]):
                 return f"Jev part {label}'s response does not match its receipt"
@@ -267,38 +452,50 @@ def jev_reply_problem(result, client, seen):
         if not isinstance(jev, dict) or not client.verify_receipt(jev, key):
             return "no valid Jev receipt in data.jev: the reply was not written from a jev_client.py call"
         receipts = [jev]
+    parsed_receipts: list[ScreenedReceipt] = []
     for receipt in receipts:
         if receipt["question"] != "written" or receipt["choice"] not in ("yes", "no"):
             return f"Jev receipt answers {receipt['question']!r} with {receipt['choice']!r}, not written: yes or no"
-    choices = {receipt["choice"] for receipt in receipts}
+        receipt_choice = receipt["choice"]
+        assert isinstance(receipt_choice, str)
+        parsed_receipts.append({"choice": receipt_choice, "raw": receipt})
+    choices = {receipt["choice"] for receipt in parsed_receipts}
     if len(choices) == 1:
         (choice,) = choices
         if final is not None and (not isinstance(final, dict) or final.get("choice") != choice):
             return f"data.jev_final contradicts every Jev part's choice {choice!r}"
     else:
+        reason = final.get("reason") if isinstance(final, dict) else None
         if not (isinstance(final, dict) and final.get("choice") in ("yes", "no")
-                and isinstance(final.get("reason"), str) and final["reason"].strip()
-                and isinstance(jev, list)
-                and final.get("parts") == [part["part"] for part in jev if isinstance(part, dict)]):
+                and isinstance(reason, str) and reason.strip()
+                and split
+                and final.get("parts") == labels):
             return ("Jev parts disagree and data.jev_final does not record dev-sanity's triaged result "
                     "({choice, reason, parts} citing every part)")
         choice = final["choice"]
-    findings = data.get("findings")
+    findings = payload["findings"]
     if not isinstance(findings, list) or len(findings) != (1 if choice == "no" else 0):
         return f"Jev choice {choice!r} contradicts the reply's findings"
-    if any(receipt["request_sha256"] in seen for receipt in receipts):
+    request_hashes = [receipt["raw"]["request_sha256"] for receipt in parsed_receipts]
+    if not all(isinstance(value, str) for value in request_hashes):
+        return "Jev receipt request hash is not a string"
+    hashes = [value for value in request_hashes if isinstance(value, str)]
+    if any(value in seen for value in hashes):
         return "Jev receipt reused from another deliverable's request"
-    seen.update(receipt["request_sha256"] for receipt in receipts)
+    seen.update(hashes)
     return None
 
 
-def screen_jev_results(results, client):
+def screen_jev_results(results: list[JsonValue], client: tuple[JevClient | None, str | None]) -> tuple[list[JsonValue], list[JsonObject]]:
     """Replace each sanity-jev reply that cannot stand with a coordinator-origin SANITY.RESULT_INVALID failure for its
     deliverable, so selection takes the LLM reply; the replaced replies are kept, with the reason, in `rejected`."""
-    seen, screened, rejected = set(), [], []
+    seen: set[str] = set()
+    screened: list[JsonValue] = []
+    rejected: list[JsonObject] = []
     for result in results:
         reason = jev_reply_problem(result, client, seen)
-        source = (result.get("data") if result.get("success") else result.get("error")) if reason else None
+        envelope = inspect_review_envelope(result) if reason else None
+        source = (envelope["data"] if envelope["success"] else envelope["error"]) if envelope else None
         number = source.get("deliverable") if isinstance(source, dict) else None
         if reason is None or not isinstance(number, int) or isinstance(number, bool):
             screened.append(result)
@@ -311,107 +508,138 @@ def screen_jev_results(results, client):
     return screened, rejected
 
 
-def context_path_exists(manifest, path):
+def context_path_exists(manifest: Manifest, path: str) -> bool:
     """Require re-run context to be a file in the pinned manifest tree; a `path:start-end` entry's lines must lie in it."""
-    worktree = manifest.get("worktree_path")
+    worktree = manifest["worktree_path"]
     if not isinstance(worktree, str) or not worktree:
         return False
     lines = re.fullmatch(r"(?P<path>.+):(?P<start>[0-9]+)-(?P<end>[0-9]+)", path)
     target = f"{manifest['sha']}:{lines['path'] if lines else path}"
-    def git(*args):
+    def git(*args: str) -> str:
         return subprocess.run(["git", "-C", worktree, *args], capture_output=True, text=True).stdout
     if git("cat-file", "-t", target).strip() != "blob":
         return False
     return not lines or 1 <= int(lines["start"]) <= int(lines["end"]) <= len(git("show", target).splitlines())
 
 
-def selected_results(args, manifest, sanity_bead, dev_bead):
+class SelectionEntry(TypedDict):
+    deliverable: int
+    llm: str
+    jev: str
+    selected: str
+    reason: str
+    rerun: JsonValue
+    llm_sha256: str
+    jev_sha256: str
+
+
+class RerunSelection(TypedDict):
+    reviewer: str
+    context: list[str]
+    reply: JsonValue
+
+
+def selected_results(args: MergeArguments, manifest: Manifest, sanity_bead: str,
+                     dev_bead: str) -> tuple[list[JsonValue], list[JsonValue], dict[int, str]]:
     """Choose whole validated replies; selection metadata is never a reply edit."""
-    llm, llm_sha256 = load_reviewer_vars(args.llm_vars, "sanity-llm", manifest)
-    jev, jev_sha256 = load_reviewer_vars(args.jev_vars, "sanity-jev", manifest)
+    assert args.llm_vars is not None and args.jev_vars is not None and args.selection is not None
+    llm_vars = load_reviewer_vars(args.llm_vars, "sanity-llm", manifest)
+    jev_vars = load_reviewer_vars(args.jev_vars, "sanity-jev", manifest)
+    llm, llm_sha256 = llm_vars["results"], llm_vars["digest"]
+    jev, jev_sha256 = jev_vars["results"], jev_vars["digest"]
     args.fallback_errors = [reply["error"] for reply in (*llm, *jev)
                             if isinstance(reply, dict) and reply.get("success") is False and isinstance(reply.get("error"), dict)]
     try:
         selection = json.loads(Path(args.selection).read_text())
     except (OSError, ValueError) as exc:
         raise Reject(f"cannot read selection: {exc}")
-    if not isinstance(selection, list):
+    if not is_json_value(selection) or not isinstance(selection, list):
         raise Reject("selection must be a JSON array")
     args.parsed_selection = selection
 
-    def index_replies(rows, name):
-        indexed = {}
+    total = manifest["deliverables_total"]
+    def index_replies(rows: list[JsonValue], name: str) -> dict[int, tuple[JsonValue, str]]:
+        indexed: dict[int, tuple[JsonValue, str]] = {}
         for index, reply in enumerate(rows):
             number, status = reply_status(reply, index, manifest, sanity_bead, dev_bead)
             if number in indexed:
                 raise Reject(f"deliverable {number}: more than one {name} result")
             indexed[number] = (reply, status)
-        for number in range(1, manifest["deliverables_total"] + 1):
+        for number in range(1, total + 1):
             if number not in indexed:
                 raise Reject(f"deliverable {number}: no {name} result")
         return indexed
 
-    client, jev_seen = load_client(getattr(args, "client", None) or CLIENT), set()
+    client = load_client(Path(args.client) if args.client else CLIENT)
+    jev_seen: set[str] = set()
     for row in jev:
         if (reason := jev_reply_problem(row, client, jev_seen)):
             raise Reject(f"sanity-jev reply: {reason}")
     llm_by, jev_by = index_replies(llm, "llm"), index_replies(jev, "jev")
-    selected, seen, sources = [], set(), {}
-    required = {"deliverable", "llm", "jev", "selected", "reason", "rerun", "llm_sha256", "jev_sha256"}
+    selected: list[JsonValue] = []
+    seen: set[int] = set()
+    sources: dict[int, str] = {}
+    required = set(SelectionEntry.__required_keys__)
     for entry in selection:
         if not isinstance(entry, dict) or set(entry) != required:
             raise Reject("selection entry has incorrect fields")
         number = entry.get("deliverable")
-        if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= manifest["deliverables_total"] or number in seen:
+        if not isinstance(number, int) or isinstance(number, bool) or not 1 <= number <= total or number in seen:
             raise Reject(f"deliverable {number!r}: selection must appear once")
         seen.add(number)
         if entry["llm_sha256"] != llm_sha256 or entry["jev_sha256"] != jev_sha256:
             raise Reject(f"deliverable {number}: selection hashes do not match reviewer results")
         if entry["llm"] != llm_by[number][1] or entry["jev"] != jev_by[number][1]:
             raise Reject(f"deliverable {number}: selection status does not match reply")
-        if entry["selected"] not in {"llm", "jev", "rerun"} or not isinstance(entry["reason"], str):
+        if (not matches_typeddict(entry, SelectionEntry)
+                or entry["selected"] not in {"llm", "jev", "rerun"}):
             raise Reject(f"deliverable {number}: invalid selection or reason")
-        if not entry["reason"] and (entry["llm"] != entry["jev"] or entry["selected"] == "rerun"):
+        parsed_entry = entry
+        if not parsed_entry["reason"] and (parsed_entry["llm"] != parsed_entry["jev"] or parsed_entry["selected"] == "rerun"):
             raise Reject(f"deliverable {number}: reason required for disagreement or rerun")
-        rerun = entry["rerun"]
-        if (entry["selected"] == "rerun") != (rerun is not None):
+        rerun = parsed_entry["rerun"]
+        if (parsed_entry["selected"] == "rerun") != (rerun is not None):
             raise Reject(f"deliverable {number}: rerun must match selected")
         if rerun is not None:
-            if not isinstance(rerun, dict) or set(rerun) != {"reviewer", "context", "reply"}:
+            if not isinstance(rerun, dict) or set(rerun) != set(RerunSelection.__required_keys__):
                 raise Reject(f"deliverable {number}: invalid rerun")
-            if rerun["reviewer"] not in {"sanity-llm", "sanity-jev"} or not isinstance(rerun["context"], list) or not rerun["context"] or not all(isinstance(path, str) and path and not Path(path).is_absolute() for path in rerun["context"]):
+            if not matches_typeddict(rerun, RerunSelection):
                 raise Reject(f"deliverable {number}: rerun requires reviewer and nonempty repo-relative context")
-            for path in rerun["context"]:
+            parsed_rerun: RerunSelection = rerun
+            if (parsed_rerun["reviewer"] not in {"sanity-llm", "sanity-jev"} or not parsed_rerun["context"]
+                    or any(not path or Path(path).is_absolute() for path in parsed_rerun["context"])):
+                raise Reject(f"deliverable {number}: rerun requires reviewer and nonempty repo-relative context")
+            for path in parsed_rerun["context"]:
                 if not context_path_exists(manifest, path):
                     raise Reject(f"deliverable {number}: rerun context path is not a file at manifest sha: {path}")
-            reply = parse_reply(rerun["reply"], number)
-            if rerun["reviewer"] == "sanity-jev" and (reason := jev_reply_problem(reply, client, set(jev_seen))):
+            reply = parse_reply(parsed_rerun["reply"], number)
+            if parsed_rerun["reviewer"] == "sanity-jev" and (reason := jev_reply_problem(reply, client, set(jev_seen))):
                 raise Reject(f"deliverable {number}: rerun reply: {reason}")
             reply_number, status = reply_status(reply, number, manifest, sanity_bead, dev_bead)
             if reply_number != number:
                 raise Reject(f"deliverable {number}: rerun reply names another deliverable")
-            source = rerun["reviewer"]
-        elif entry["selected"] == "llm":
+            source = parsed_rerun["reviewer"]
+        elif parsed_entry["selected"] == "llm":
             reply, status, source = *llm_by[number], "sanity-llm"
         else:
             reply, status, source = *jev_by[number], "sanity-jev"
-        if rerun is None and status == "cannot_run" and "cannot_run" != (llm_by if entry["selected"] == "jev" else jev_by)[number][1]:
+        if rerun is None and status == "cannot_run" and "cannot_run" != (llm_by if parsed_entry["selected"] == "jev" else jev_by)[number][1]:
             raise Reject(f"deliverable {number}: selection must take the reviewer with a valid reply")
-        if rerun is not None and status == "cannot_run" and "cannot_run" != entry["llm"] or \
-                rerun is not None and status == "cannot_run" and "cannot_run" != entry["jev"]:
+        if rerun is not None and status == "cannot_run" and "cannot_run" != parsed_entry["llm"] or \
+                rerun is not None and status == "cannot_run" and "cannot_run" != parsed_entry["jev"]:
             raise Reject(f"deliverable {number}: a failed rerun cannot replace a valid original reply")
         sources[number] = source
         selected.append(reply)
-    missing = [number for number in range(1, manifest["deliverables_total"] + 1) if number not in seen]
+    missing = [number for number in range(1, total + 1) if number not in seen]
     if missing:
         raise Reject(f"deliverable {missing[0]}: missing selection")
     return selected, selection, sources
 
 
-def unique_errors(items):
+def unique_errors(items: list[JsonValue]) -> list[JsonValue]:
     """Keep first-seen error envelopes once when selected and original replies overlap."""
-    seen = set()
-    unique = []
+    seen: set[str] = set()
+    unique: list[JsonValue] = []
     for item in items:
         key = json.dumps(item, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         if key not in seen:
@@ -424,11 +652,11 @@ class TaskFailure(Exception):
     """A task-level failure: printed as `<code> fatal 0`, exit 3."""
 
 
-def verify_worktree(manifest):
-    worktree = manifest.get("worktree_path") or ""
-    if not Path(worktree).is_dir():
+def verify_worktree(manifest: Manifest) -> None:
+    worktree = manifest["worktree_path"] if manifest["worktree_path"] is not None else manifest["invalid_worktree"] or ""
+    if not isinstance(worktree, str) or not Path(worktree).is_dir():
         raise TaskFailure("SANITY.TARGET_UNREADABLE fatal 0", f"worktree {worktree!r} is not a directory")
-    def git(*argv):
+    def git(*argv: str) -> str:
         run = subprocess.run(["git", "-C", worktree, *argv], capture_output=True, text=True)
         if run.returncode != 0:
             raise TaskFailure("SANITY.TARGET_UNREADABLE fatal 0", f"git {' '.join(argv)} failed in {worktree}")
@@ -442,9 +670,18 @@ def verify_worktree(manifest):
         raise TaskFailure("SANITY.COMMIT_MISMATCH fatal 0", "worktree has uncommitted or untracked changes")
 
 
-def lint_result(manifest):
+def lint_result(manifest: JsonObject) -> tuple[int, list[JsonObject], str]:
     lint = manifest["lint"]
-    exit_file = Path(lint["exit_file"])
+    if not isinstance(lint, dict):
+        raise Reject("manifest has no lint entry; sanity-split ran with --split-only")
+    return lint_result_from_descriptor(parse_lint_descriptor(lint), manifest.get("worktree_path"))
+
+
+def lint_result_from_descriptor(lint: LintDescriptor, worktree_value: JsonValue) -> tuple[int, list[JsonObject], str]:
+    exit_name, log_name = lint["exit_file"], lint["log"]
+    if exit_name is None or log_name is None:
+        raise Reject("manifest lint exit_file and log must be strings")
+    exit_file = Path(exit_name)
     if not exit_file.exists():
         raise Reject("lint still running", code=4)
     state = exit_file.read_text().strip()
@@ -455,13 +692,16 @@ def lint_result(manifest):
     except ValueError:
         raise Reject(f"lint exit file {exit_file} is not an integer or timeout/cancelled/error")
     try:
-        log = Path(lint["log"]).read_text(errors="replace")
+        log = Path(log_name).read_text(errors="replace")
     except OSError:
         log = ""
-    findings = []
+    findings: list[JsonObject] = []
     if exit_code != 0:
-        worktree = (manifest.get("worktree_path") or "").rstrip("/") + "/"
-        seen = set()
+        raw_worktree = worktree_value or ""
+        if not isinstance(raw_worktree, str):
+            raise Reject("manifest worktree_path must be a string")
+        worktree = raw_worktree.rstrip("/") + "/"
+        seen: set[tuple[str, int]] = set()
         for match in list(RUSTC.finditer(log)) + list(RUSTFMT.finditer(log)):
             path = match.group("file")
             if worktree != "/" and path.startswith(worktree):
@@ -470,28 +710,44 @@ def lint_result(manifest):
             if key not in seen:
                 seen.add(key)
                 findings.append({"kind": "lint", "file": path, "line": key[1],
-                                 "issue": f"`{lint['command']}` reported a diagnostic here"})
+                                 "issue": f"`{lint_command(lint)}` reported a diagnostic here"})
         if not findings:
             findings.append({"kind": "lint", "file": "(lint)", "line": 0,
-                             "issue": f"`{lint['command']}` exited {exit_code} without locatable diagnostics; see {lint['log']}"})
+                             "issue": f"`{lint_command(lint)}` exited {exit_code} without locatable diagnostics; see {log_name}"})
     return exit_code, findings, log
 
 
-def fmt(finding):
+def fmt(finding: JsonObject) -> str:
     return f"- `{finding['file']}:{finding['line']}` {finding['kind']}: {finding['issue']}"
 
 
-def deliverable_text(manifest, number):
-    for assignment in manifest.get("assignments", []):
-        if assignment.get("number") == number:
-            deliverable = assignment.get("assignment", {}).get("deliverable", {})
-            text = deliverable.get("text")
-            if isinstance(text, str) and text:
-                return text
+def parse_assignment_text(value: JsonValue) -> AssignmentText | None:
+    if not isinstance(value, dict):
+        return None
+    body = value.get("assignment")
+    deliverable = body.get("deliverable") if isinstance(body, dict) else None
+    text = deliverable.get("text") if isinstance(deliverable, dict) else None
+    number = value.get("number")
+    return {"number": number if isinstance(number, (int, float)) else None,
+            "text": text if isinstance(text, str) and text else None}
+
+
+def deliverable_text(manifest: JsonObject, number: int) -> str:
+    assignments = manifest.get("assignments", [])
+    if not isinstance(assignments, list):
+        return f"Deliverable {number}"
+    parsed = [entry for value in assignments if (entry := parse_assignment_text(value)) is not None]
+    return assignment_text(parsed, number)
+
+
+def assignment_text(assignments: list[AssignmentText], number: int) -> str:
+    for assignment in assignments:
+        if assignment["number"] == number and assignment["text"]:
+            return assignment["text"]
     return f"Deliverable {number}"
 
 
-def main(argv):
+def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("manifest_path", "sanity_bead", "dev_bead", "sprint"):
         parser.add_argument(name)
@@ -503,16 +759,23 @@ def main(argv):
     parser.add_argument("--selection")
     parser.add_argument("--client", help="the Jev client that verifies sanity-jev receipts (default .claude/skills/atm-bd-orchestration/scripts/jev_client.py)")
     try:
-        args = parser.parse_args(argv[1:])
+        args = parser.parse_args(argv[1:], namespace=MergeArguments())
     except SystemExit:
         return 1
     manifest_path, sanity_bead, dev_bead, sprint = args.manifest_path, args.sanity_bead, args.dev_bead, args.sprint
-    manifest = None
-    results, selection, selection_sources, rejected = [], None, {}, []
+    manifest: Manifest | None = None
+    results: list[JsonValue] = []
+    selection: list[JsonValue] | None = None
+    selection_sources: dict[int, str] = {}
+    rejected: list[JsonObject] = []
 
-    def metadata():
-        if not args.reviewer or manifest is None:
+    def metadata() -> JsonObject:
+        if not args.reviewer or manifest is None or args.started_at is None or args.completed_at is None:
             return {}
+        if not manifest["has_run_id"]:
+            raise KeyError("run_id")
+        if not manifest["has_operational_reviewer"]:
+            raise KeyError("operational_reviewer")
         completed = datetime.fromtimestamp(args.completed_at, timezone.utc)
         return {"run_id": manifest["run_id"], "reviewer": args.reviewer,
                 "operational_reviewer": manifest["operational_reviewer"],
@@ -523,14 +786,14 @@ def main(argv):
                 "fallbacks": unique_errors([result["error"] for result in results
                               if isinstance(result, dict) and result.get("success") is False and isinstance(result.get("error"), dict)]
                 + getattr(args, "fallback_errors", [])),
-                "checked_bead_data": manifest.get("checked_bead_data"),
+                "checked_bead_data": manifest["checked_bead_data"],
                 "reviewer_results": results,
                 "reviewer_results_sha256": canonical_sha256(results),
-                "rejected_results": rejected,
+                "rejected_results": [*rejected],
                 "selection": selection}
 
-    def unavailable(code, message, legacy_status=None):
-        if args.reviewer and manifest and manifest.get("run_id") and args.started_at is not None and args.completed_at is not None:
+    def unavailable(code: str, message: str, legacy_status: str | None = None) -> None:
+        if args.reviewer and manifest and manifest["run_id"] and args.started_at is not None and args.completed_at is not None:
             cannot_run_selection = selection
             if args.reviewer == "sanity-selected" and cannot_run_selection is None:
                 cannot_run_selection = getattr(args, "parsed_selection", [])
@@ -547,12 +810,14 @@ def main(argv):
 
     try:
         manifest = load_manifest(manifest_path)
-        if manifest.get("run_id") and not args.reviewer:
+        if manifest["run_id"] and not args.reviewer:
             raise Reject("a run manifest requires --reviewer, --started-at, and --completed-at")
-        if args.reviewer and (args.reviewer not in manifest.get("reviewers", []) or args.started_at is None or args.completed_at is None):
+        reviewers = manifest["reviewers"]
+        if args.reviewer and (reviewers is None or args.reviewer not in reviewers or args.started_at is None or args.completed_at is None):
             print("reviewer must be selected in manifest and --started-at/--completed-at are required", file=sys.stderr)
             return 1
         if args.reviewer:
+            assert args.started_at is not None and args.completed_at is not None
             if not math.isfinite(args.started_at) or not math.isfinite(args.completed_at):
                 print("--started-at and --completed-at must be finite epoch values", file=sys.stderr)
                 return 1
@@ -572,8 +837,9 @@ def main(argv):
                 raise Reject("selection inputs are only valid for sanity-selected")
             results = read_results()
             if args.reviewer == "sanity-jev":
-                results, rejected = screen_jev_results(results, load_client(args.client or CLIENT))
-        by_number = {}
+                results, rejected = screen_jev_results(results, load_client(Path(args.client) if args.client else CLIENT))
+        by_number: dict[int, list[MergeFinding]] = {}
+        total = manifest["deliverables_total"]
         for index, result in enumerate(results):
             if (not isinstance(result, dict) or not isinstance(result.get("success"), bool)
                     or any(key not in result for key in ("success", "data", "error"))):
@@ -582,8 +848,9 @@ def main(argv):
             if "elapsed_s" in result and not valid_elapsed_s(result["elapsed_s"]):
                 raise Reject(f"result {index}: elapsed_s must be a finite nonnegative number")
             if result["success"] is False:
-                envelope = failure_envelope(result, index, manifest["deliverables_total"])
-                unavailable(envelope["code"], envelope["message"],
+                envelope = failure_envelope(result, index, total)
+                error_code, error_message = envelope["code"], envelope["message"]
+                unavailable(error_code, error_message,
                             f"{envelope['code']} {'recoverable' if envelope['recoverable'] else 'fatal'} {envelope['deliverable']}")
                 print(f"deliverable {envelope['deliverable']}: {envelope['message']}", file=sys.stderr)
                 return 3
@@ -591,10 +858,11 @@ def main(argv):
             if number in by_number:
                 raise Reject(f"deliverable {number}: more than one result")
             by_number[number] = findings
-        missing = [n for n in range(1, manifest["deliverables_total"] + 1) if n not in by_number]
+        missing = [n for n in range(1, total + 1) if n not in by_number]
         if missing:
             raise Reject(f"deliverable {missing[0]}: no result" + (f" (also {missing[1:]})" if missing[1:] else ""))
-        lint_exit, lint_findings, _ = lint_result(manifest)
+        lint_exit, lint_findings, _ = lint_result_from_descriptor(
+            manifest["lint"], manifest["worktree_path"] if manifest["worktree_path"] is not None else manifest["invalid_worktree"])
         verify_worktree(manifest)
     except Reject as exc:
         print(str(exc), file=sys.stderr)
@@ -607,21 +875,21 @@ def main(argv):
         return 3
 
     report_findings = by_number
-    blocks = []
-    finding_records = []
+    blocks: list[str] = []
+    finding_records: list[JsonObject] = []
     for number in sorted(report_findings):
         findings = report_findings[number]
         blocks.append(
             f"D{number}: done" if not findings
-            else f"D{number}:\n" + "\n".join(fmt(f) for f in findings)
+            else f"D{number}:\n" + "\n".join(fmt({"kind": f["kind"], "file": f["file"], "line": f["line"], "issue": f["issue"]}) for f in findings)
         )
         for index, finding in enumerate(findings, 1):
             finding_records.append({
                 "finding_ref": f"D{number}-F{index}", "deliverable": number,
                 "kind": finding["kind"], "file": finding["file"],
                 "line": finding["line"], "issue": finding["issue"],
-                "depends_on": finding.get("depends_on", []),
-                "deliverable_text": deliverable_text(manifest, number),
+                "depends_on": [dependency["raw"] for dependency in finding["depends_on"]],
+                "deliverable_text": assignment_text(manifest["assignments"], number),
             })
             if selection is not None:
                 finding_records[-1]["reviewer"] = "sc-" + selection_sources[number]
@@ -633,7 +901,8 @@ def main(argv):
             "depends_on": [],
         })
     count = len(finding_records)
-    lint_md = f"`{manifest['lint']['command']}` exit {lint_exit}"
+    lint = manifest["lint"]
+    lint_md = f"`{lint_command(lint)}` exit {lint_exit}"
     if lint_findings:
         lint_md += "\n" + "\n".join(fmt(f) for f in lint_findings)
     json.dump({
