@@ -734,7 +734,7 @@ status:
 
             self.assertIn("boundary docs analyzed:", joined)
             self.assertIn("docs/atm-core/boundaries.md", joined)
-            self.assertIn("boundary records validated: 1", joined)
+            self.assertIn("boundary records validated: 0", joined)
 
 
 if __name__ == "__main__":

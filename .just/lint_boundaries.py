@@ -22,8 +22,6 @@ from lint_common import workspace_manifest_paths
 
 
 LINT_NAME = "boundaries"
-YAML_FENCE_START = "```yaml"
-YAML_FENCE_END = "```"
 # Record schema (required fields, value enums, trait/facade presence,
 # trait_only/concrete implementation shape, owner directory, duplicate
 # boundary_id, TOML syntax, unknown keys) is enforced by the published sc-lint
@@ -898,128 +896,18 @@ def scb_observability_fixture_violation(
     )
 
 
-def yaml_scalar(value: str) -> object:
-    stripped = value.strip()
-    if stripped == "null":
-        return None
-    if stripped == "[]":
-        return []
-    if stripped.lower() == "true":
-        return True
-    if stripped.lower() == "false":
-        return False
-    return stripped
 
 
-def leading_spaces(text: str) -> int:
-    return len(text) - len(text.lstrip(" "))
 
 
-def next_content_line(lines: list[tuple[int, str]], start_index: int) -> tuple[int, str] | None:
-    for index in range(start_index, len(lines)):
-        line_number, text = lines[index]
-        if text.strip():
-            return line_number, text
-    return None
 
 
-def parse_yaml_list(lines: list[tuple[int, str]], start_index: int, indent: int) -> tuple[list[object], int]:
-    items: list[object] = []
-    index = start_index
-    while index < len(lines):
-        line_number, text = lines[index]
-        if not text.strip():
-            index += 1
-            continue
-        current_indent = leading_spaces(text)
-        if current_indent < indent:
-            break
-        if current_indent > indent:
-            raise ValueError(f"unexpected indentation in list item at line {line_number}: {text!r}")
-        stripped = text.strip()
-        if not stripped.startswith("- "):
-            break
-        items.append(yaml_scalar(stripped[2:]))
-        index += 1
-    return items, index
 
 
-def parse_yaml_mapping(lines: list[tuple[int, str]], start_index: int, indent: int) -> tuple[dict[str, object], int]:
-    mapping: dict[str, object] = {}
-    index = start_index
-    while index < len(lines):
-        line_number, text = lines[index]
-        if not text.strip():
-            index += 1
-            continue
-
-        current_indent = leading_spaces(text)
-        if current_indent < indent:
-            break
-        if current_indent > indent:
-            raise ValueError(f"unexpected indentation in mapping at line {line_number}: {text!r}")
-
-        stripped = text.strip()
-        if stripped.startswith("- "):
-            raise ValueError(f"unexpected list item in mapping at line {line_number}: {text!r}")
-        if ":" not in stripped:
-            raise ValueError(f"expected key/value pair at line {line_number}: {text!r}")
-
-        key, remainder = stripped.split(":", 1)
-        remainder = remainder.strip()
-        index += 1
-
-        if remainder:
-            mapping[key] = yaml_scalar(remainder)
-            continue
-
-        next_line = next_content_line(lines, index)
-        if next_line is None:
-            mapping[key] = {}
-            continue
-
-        next_line_number, next_text = next_line
-        next_indent = leading_spaces(next_text)
-        if next_indent <= current_indent:
-            mapping[key] = {}
-            continue
-
-        if next_text.strip().startswith("- "):
-            value, index = parse_yaml_list(lines, index, next_indent)
-        else:
-            value, index = parse_yaml_mapping(lines, index, next_indent)
-        mapping[key] = value
-
-    return mapping, index
 
 
-def parse_simple_yaml_document(text: str) -> dict[str, object]:
-    lines = [(line_number, line) for line_number, line in enumerate(text.splitlines(), start=1)]
-    mapping, _ = parse_yaml_mapping(lines, 0, 0)
-    return mapping
 
 
-def extract_yaml_blocks(path: Path) -> list[tuple[int, str]]:
-    blocks: list[tuple[int, str]] = []
-    lines = path.read_text(encoding="utf-8").splitlines()
-    in_block = False
-    start_line = 0
-    buffer: list[str] = []
-    for line_number, line in enumerate(lines, start=1):
-        stripped = line.strip()
-        if not in_block and stripped == YAML_FENCE_START:
-            in_block = True
-            start_line = line_number + 1
-            buffer = []
-            continue
-        if in_block and stripped == YAML_FENCE_END:
-            blocks.append((start_line, "\n".join(buffer)))
-            in_block = False
-            buffer = []
-            continue
-        if in_block:
-            buffer.append(line)
-    return blocks
 
 
 def nested_get(data: dict[str, object], path: tuple[str, ...]) -> object | None:
@@ -1225,16 +1113,6 @@ def build_boundary_record(
                         errors.append(error)
                 io_forbidden_source_modules.append((tag, tuple(modules)))
 
-    # Markdown records are not read by the published loader; keep their
-    # owner-directory check here until the markdown loader is removed.
-    source_parts = source_path.parts
-    if len(source_parts) >= 3 and source_parts[0] == "docs" and source_parts[-1] == "boundaries.md":
-        doc_owner = source_path.parent.name
-        if doc_owner != owner_package:
-            errors.append(
-                f"document path owner mismatch: docs/{doc_owner}/boundaries.md declares owner_package {owner_package!r}"
-            )
-
     if errors:
         return None, [BoundaryViolation(base_location, f"[{boundary_id}] {error}") for error in errors]
 
@@ -1275,24 +1153,6 @@ def build_boundary_record(
 def parse_boundary_records(repo_root: Path) -> tuple[list[BoundaryRecord], list[BoundaryViolation]]:
     records: list[BoundaryRecord] = []
     violations: list[BoundaryViolation] = []
-    for doc_path in boundary_docs(repo_root):
-        rel_doc = doc_path.relative_to(repo_root)
-        for start_line, yaml_text in extract_yaml_blocks(doc_path):
-            try:
-                data = parse_simple_yaml_document(yaml_text)
-            except ValueError as error:
-                violations.append(
-                    BoundaryViolation(f"{rel_doc.as_posix()}:{start_line}", f"invalid boundary YAML: {error}")
-                )
-                continue
-            record, record_errors = build_boundary_record(
-                data=data,
-                source_path=rel_doc,
-                start_line=start_line,
-            )
-            violations.extend(record_errors)
-            if record is not None:
-                records.append(record)
     for toml_path in boundary_toml_files(repo_root):
         rel_toml = toml_path.relative_to(repo_root)
         try:
