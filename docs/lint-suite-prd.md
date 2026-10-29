@@ -84,12 +84,14 @@ The current `Justfile` exposes:
 
 Current behavior:
 
-- `just lint` runs all host lint steps concurrently, except Cargo build-lock users
-  (`clippy`, `clippy-windows`, and `arch-gates`) share a serialized lane. Every
-  selected step completes and the final summary names all failures.
-- `just lint <tool>` runs one lint target; `just lint ci [host|all]` selects the CI
-  lint set, with `all` adding Windows-target Clippy off Windows.
-- `run_lint.py` has no `all` or `fast` mode; `default` is the full host suite.
+- `just lint` is the sc-lint kit recipe: the published `sc-lint lint --consumer`
+  runner executes every `[[tool.sc-lint.lint]]` step of `sc-lint.toml`
+  concurrently (steps whose program is `cargo` share one serialized lane),
+  completes every step, and names each failed step with its output.
+- `just lint <step>` runs one step; `just lint ci [host|all|linux|macos|windows]`
+  runs the `ci` profile under a platform scope, with `all` adding the
+  Linux-tagged Windows-target Clippy step on Linux and reporting it as skipped
+  elsewhere.
 - `just test` reads named commands from `.sc-lint/install.json`, runs the ordinary
   test steps, and excludes coverage. `just test <selector>` runs selected steps;
   `just test coverage` writes the host's tracked coverage report on macOS/Windows
@@ -103,9 +105,9 @@ Current behavior:
 
 ### Current lint and test orchestrators
 
-The lint entrypoint is:
-
-- `.just/run_lint.py`
+The lint entrypoint is the kit's `just lint` (`.sc-lint/bootstrap.py lint`); its
+step list is the `profiles` object in `.sc-lint/install.json`, rendered into
+`sc-lint.toml` by `plugins/sc-lint/install.py`.
 
 The test entrypoint is `.just/run_tests.py`; its command manifest is the `test`
 object in `.sc-lint/install.json`. The `default` entry preserves the consumer-facing
@@ -115,13 +117,17 @@ explicit opt-in selector.
 Lint execution model:
 
 - Independent lint steps run concurrently, including the Python lint tests.
-- Only steps that take Cargo's build lock run sequentially with each other.
-- Each lint writes its own log file under `.just/logs/`.
-- The umbrella runner keeps going after failures and prints all failed step names.
-- `just lint` is the repository-owned parallel, keep-going runner;
-  `just lint ci` selects host CI checks and `just lint ci all` also includes
-  the Windows-target Clippy profile on non-Windows hosts. CI and
+- Steps whose program is `cargo` run on one serialized lane; other Cargo users
+  (`clippy`, `pytests`) serialize on Cargo's own build lock.
+- The runner keeps going after failures and prints every failed step with its
+  captured output (randlee/sc-lint#195 tracks fuller output visibility).
+- `just lint ci` runs the `ci` profile for the host and `just lint ci all` also
+  runs the Linux-tagged Windows-target Clippy step on Linux. CI and
   `scripts/validate_release.py` run `just lint ci all`.
+- Wheel-only sc-lint helpers (cargo-deny, cargo-shear, manifests, codespell) run
+  on the kit's managed Python through `just _sc-lint-py`, and Clippy keeps
+  PyO3's interpreter through `just _sc-lint-clippy`, until randlee/sc-lint#198
+  ships a consumer step runner.
 
 ### Current custom Python lint tools
 
@@ -262,8 +268,8 @@ Current CI workflow:
 The current command surface does not yet match the intended long-term UX.
 
 The former draft proposal for `just lint fast` is superseded by the implemented
-full-suite/default and named-target contract above. No `all` or `fast` mode is
-exposed by `.just/run_lint.py`.
+full-suite/default and named-step contract above; named profiles are declared in
+`lint_profiles` of `.sc-lint/install.json` (`ci` is the only one).
 
 ### Architecture visualization gaps
 

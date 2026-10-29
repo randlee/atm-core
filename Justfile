@@ -1,5 +1,4 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
-set allow-duplicate-recipes := true
 
 # Homebrew is absent from non-interactive macOS account PATHs. Append its
 # standard location as a developer-account fallback, never ahead of the
@@ -60,6 +59,25 @@ _lint-fmt:
 [private]
 _sc-lint-clippy target binary=env_var_or_default("SC_LINT_BIN", ""):
     {{sc_lint_clippy_prefix}} "{{binary}}" clippy {{target}}
+
+# Wheel-only sc-lint helpers (cargo-deny, cargo-shear, manifests, codespell)
+# run from the kit's managed Python environment, the invocation sc-lint
+# documents for them. Delete when randlee/sc-lint#198 ships a consumer step
+# runner for them.
+sc_lint_venv_python := if os_family() == "windows" { "& \"$PWD\\.sc-lint\\venv\\Scripts\\python.exe\"" } else { "\"$PWD/.sc-lint/venv/bin/python\"" }
+
+[private]
+[unix]
+[positional-arguments]
+_sc-lint-py *args:
+    {{sc_lint_venv_python}} "$@"
+
+[private]
+[windows]
+[positional-arguments]
+[script('pwsh', '-NoLogo', '-NonInteractive', '-File')]
+_sc-lint-py *args:
+    {{sc_lint_venv_python}} @args
 
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
@@ -197,11 +215,6 @@ benchmark-read-under-write-load:
 # Generate architecture visualization artifacts.
 view target='all':
     {{python_cmd}} .just/run_view.py {{target}}
-
-# ATM keeps its repository-specific checks parallel and keep-going; the
-# imported kit recipe is deliberately sequential for ordinary consumers.
-lint *args:
-    {{python_cmd}} .just/run_lint.py {{args}}
 
 # Run the local CI-equivalent command set.
 ci: lint test

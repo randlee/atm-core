@@ -247,9 +247,10 @@ Lint and tooling boundary rules:
 - reusable static-analysis engines are supplied by the published `sc-lint`
   tool (`sc-lint lint sc-boundary`, `sc-portability`, `sc-runtime`) and
   configured by the repository's declarative sc-lint installation
-- `just lint` runs `.just/run_lint.py` (parallel, keep-going); `just lint ci`
-  runs the host's CI checks and `just lint ci all` adds the Windows-target
-  Clippy step, which CI and release validation run
+- `just lint` is the sc-lint kit runner over the `sc-lint.toml` step list
+  (parallel, keep-going); `just lint ci` runs the host's CI checks and
+  `just lint ci all` adds the Linux-tagged Windows-target Clippy step, which
+  CI and release validation run
 - ATM-specific repository policy checks stay local to `atm-core` when they
   depend on ATM role names, ATM-only document schemas, or ATM team-process
   records

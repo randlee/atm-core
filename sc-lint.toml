@@ -21,25 +21,28 @@ enabled = true
 exclude_paths_by_rule = { "SCB-RUNTIME-003" = ["crates/atm/src/commands/internal_nudge.rs", "crates/atm-daemon-client/src/lib.rs"] }
 reason = "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. See randlee/sc-lint#82."
 
+[tool.sc-lint.lint_profiles]
+ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "capability-degradation", "clippy", "clippy-windows", "daemon-signing-coupling", "daemon-singleton", "deny", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests", "nudge-taxonomy", "peer-dial-seam", "pytests", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear", "silent-emit", "site-generated", "site-links", "spell", "template-frontmatter", "ttl-triage", "version"]
+
 [[tool.sc-lint.lint]]
 name = "adr-index"
-command = ["just", "_py", ".just/run_lint.py", "adr-index"]
+command = ["just", "_py", ".just/check_adr_index.py"]
 
 [[tool.sc-lint.lint]]
 name = "arch-gates"
-command = ["just", "_py", ".just/run_lint.py", "arch-gates"]
+command = ["cargo", "test", "-p", "atm-architecture", "--quiet"]
 
 [[tool.sc-lint.lint]]
 name = "atm-graft-python-boundary"
-command = ["just", "_py", ".just/run_lint.py", "atm-graft-python-boundary"]
+command = ["just", "_py", ".just/lint_atm_graft_python_boundary.py"]
 
 [[tool.sc-lint.lint]]
 name = "boundaries"
-command = ["just", "_py", ".just/run_lint.py", "boundaries"]
+command = ["just", "_py", ".just/lint_boundaries.py"]
 
 [[tool.sc-lint.lint]]
 name = "capability-degradation"
-command = ["just", "_py", ".just/run_lint.py", "capability-degradation"]
+command = ["just", "_py", "scripts/check-capability-degradation.py"]
 
 [[tool.sc-lint.lint]]
 name = "clippy"
@@ -48,118 +51,139 @@ command = ["just", "_sc-lint-clippy", "native"]
 [[tool.sc-lint.lint]]
 name = "clippy-windows"
 command = ["just", "_sc-lint-clippy", "xwin"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
 name = "daemon-signing-coupling"
-command = ["just", "_py", ".just/run_lint.py", "daemon-signing-coupling"]
+command = ["just", "_py", ".just/lint_daemon_signing_coupling.py"]
 
 [[tool.sc-lint.lint]]
 name = "daemon-singleton"
-command = ["just", "_py", ".just/run_lint.py", "daemon-singleton"]
+command = ["just", "_py", "scripts/lint_daemon_singleton.py"]
 
 [[tool.sc-lint.lint]]
 name = "deny"
-command = ["just", "_py", ".just/run_lint.py", "deny"]
+command = ["just", "_sc-lint-py", "-m", "sc_lint.lint_cargo_deny"]
 
 [[tool.sc-lint.lint]]
 name = "env-var-boundary"
-command = ["just", "_py", ".just/run_lint.py", "env-var-boundary"]
+command = ["just", "_py", ".just/check_env_var_boundary.py"]
 
 [[tool.sc-lint.lint]]
 name = "fixed-sleep"
-command = ["just", "_py", ".just/run_lint.py", "fixed-sleep"]
+command = ["just", "_py", ".just/check_fixed_sleep_hygiene.py"]
 
 [[tool.sc-lint.lint]]
 name = "fmt"
-command = ["just", "_py", ".just/run_lint.py", "fmt"]
+command = ["just", "fmt", "check"]
 
 [[tool.sc-lint.lint]]
 name = "function-length"
-command = ["just", "_py", ".just/run_lint.py", "function-length"]
+command = ["sc-lint", "lint", "function-length"]
 
 [[tool.sc-lint.lint]]
 name = "hermes-adapter"
-command = ["just", "_py", ".just/run_lint.py", "hermes-adapter"]
+command = ["just", "_py", ".just/lint_hermes_adapter.py"]
 
 [[tool.sc-lint.lint]]
 name = "hermes-atm-boundary"
-command = ["just", "_py", ".just/run_lint.py", "hermes-atm-boundary"]
+command = ["just", "_py", ".just/lint_hermes_atm_boundary.py"]
 
 [[tool.sc-lint.lint]]
 name = "identities"
-command = ["just", "_py", ".just/run_lint.py", "identities"]
+command = ["sc-lint", "lint", "identity-literals"]
+
+[[tool.sc-lint.lint]]
+name = "kit-drift"
+command = ["just", "_py", "plugins/sc-lint/install.py", ".", "--dry-run"]
 
 [[tool.sc-lint.lint]]
 name = "legacy-mailbox-paths"
-command = ["just", "_py", ".just/run_lint.py", "legacy-mailbox-paths"]
+command = ["just", "_py", "scripts/check-legacy-mailbox-paths.py"]
 
 [[tool.sc-lint.lint]]
 name = "legacy-transport-removal"
-command = ["just", "_py", ".just/run_lint.py", "legacy-transport-removal"]
+command = ["just", "_py", "scripts/phase-am/check_legacy_transport_removal.py", "--category", "raw-framing", "--category", "peer-ingress", "--category", "resend-replay", "--category", "direct-sqlite", "--category", "dead-daemon-dispatch"]
 
 [[tool.sc-lint.lint]]
 name = "lines"
-command = ["just", "_py", ".just/run_lint.py", "lines"]
+command = ["sc-lint", "lint", "line-counts"]
 
 [[tool.sc-lint.lint]]
 name = "manifests"
-command = ["just", "_py", ".just/run_lint.py", "manifests"]
+command = ["just", "_sc-lint-py", "-m", "sc_lint.lint_manifests"]
 
 [[tool.sc-lint.lint]]
 name = "nudge-taxonomy"
-command = ["just", "_py", ".just/run_lint.py", "nudge-taxonomy"]
+command = ["just", "_py", "scripts/check-nudge-taxonomy.py"]
 
 [[tool.sc-lint.lint]]
 name = "peer-dial-seam"
-command = ["just", "_py", ".just/run_lint.py", "peer-dial-seam"]
+command = ["just", "_py", ".just/lint_peer_dial_seam.py"]
 
 [[tool.sc-lint.lint]]
 name = "pytests"
-command = ["just", "_py", ".just/run_lint.py", "pytests"]
+command = ["just", "_py", ".just/run_pytests.py"]
 
 [[tool.sc-lint.lint]]
 name = "read-concurrency-gates"
-command = ["just", "_py", ".just/run_lint.py", "read-concurrency-gates"]
+command = ["just", "_py", ".just/check_read_concurrency_gates.py"]
 
 [[tool.sc-lint.lint]]
 name = "runtime-observation-boundary"
-command = ["just", "_py", ".just/run_lint.py", "runtime-observation-boundary"]
+command = ["just", "_py", ".just/check_runtime_observation_boundary.py"]
 
 [[tool.sc-lint.lint]]
 name = "runtime-stderr"
-command = ["just", "_py", ".just/run_lint.py", "runtime-stderr"]
+command = ["just", "_py", "scripts/check-runtime-stderr.py"]
 
 [[tool.sc-lint.lint]]
 name = "same-host-portability"
-command = ["just", "_py", ".just/run_lint.py", "same-host-portability"]
+command = ["just", "_py", ".just/lint_same_host_portability.py"]
+
+[[tool.sc-lint.lint]]
+name = "sc-boundary"
+command = ["sc-lint", "lint", "sc-boundary", "--config", "sc-lint.toml"]
+
+[[tool.sc-lint.lint]]
+name = "sc-portability"
+command = ["sc-lint", "lint", "sc-portability", "--config", "sc-lint.toml"]
+
+[[tool.sc-lint.lint]]
+name = "sc-runtime"
+command = ["sc-lint", "lint", "sc-runtime", "--config", "sc-lint.toml"]
 
 [[tool.sc-lint.lint]]
 name = "shear"
-command = ["just", "_py", ".just/run_lint.py", "shear"]
+command = ["just", "_sc-lint-py", "-m", "sc_lint.lint_cargo_shear"]
 
 [[tool.sc-lint.lint]]
 name = "silent-emit"
-command = ["just", "_py", ".just/run_lint.py", "silent-emit"]
+command = ["just", "_py", "scripts/check-silent-emit.py"]
 
 [[tool.sc-lint.lint]]
 name = "site-generated"
-command = ["just", "_py", ".just/run_lint.py", "site-generated"]
+command = ["just", "_py", ".just/check_site_generated.py"]
 
 [[tool.sc-lint.lint]]
 name = "site-links"
-command = ["just", "_py", ".just/run_lint.py", "site-links"]
+command = ["just", "_py", ".just/check_site_links.py"]
 
 [[tool.sc-lint.lint]]
 name = "spell"
-command = ["just", "_py", ".just/run_lint.py", "spell"]
+command = ["just", "_sc-lint-py", "-m", "sc_lint.lint_codespell"]
+
+[[tool.sc-lint.lint]]
+name = "template-frontmatter"
+command = ["just", "_py", ".just/check_template_frontmatter.py"]
 
 [[tool.sc-lint.lint]]
 name = "ttl-triage"
-command = ["just", "_py", ".just/run_lint.py", "ttl-triage"]
+command = ["just", "_py", ".just/lint_ttl_triage_consistency.py"]
 
 [[tool.sc-lint.lint]]
 name = "version"
-command = ["just", "_py", ".just/run_lint.py", "version"]
+command = ["just", "_py", ".just/check_version_sync.py"]
 
 [[tool.sc-lint.test]]
 name = "build"

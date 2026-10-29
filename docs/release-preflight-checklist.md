@@ -6,8 +6,8 @@ Source-of-truth rules:
 
 - use `just validate` as the default local preflight command
 - use `.github/workflows/release-preflight.yml` for the CI-owned release gate
-- use `scripts/validate_release.py` and `.just/run_lint.py` as the mechanical
-  source of truth for what actually runs
+- use `scripts/validate_release.py` and the `sc-lint.toml` lint steps as the
+  mechanical source of truth for what actually runs
 - keep detail in scripts; keep this document at the checklist layer
 
 ## Default Local Command
@@ -129,38 +129,10 @@ tracking issue and evidence before release continues.
 
 ## `just lint` Gate Breakdown
 
-`just validate` delegates linting to `just lint`, and `just lint all`
-currently gates these 20 subchecks:
-
-- `fmt`
-- `clippy`
-- `deny`
-- `shear`
-- `version`
-- `identities`
-- `lines`
-- `boundaries`
-- `same-host-portability`
-- `runtime-waits`
-- `manifests`
-- `silent-emit`
-- `function-length`
-- `legacy-mailbox-paths`
-- `capability-degradation`
-- `spell`
-- `fixed-sleep`
-- `ttl-triage`
-- `daemon-singleton`
-- `pytests`
-
-## Advisory / Manual Lint Lanes
-
-These lint commands exist in the repo surface but are not part of `just lint
-all`, and therefore do not currently block `just validate`:
-
-- `just lint modules`
-- `just lint sc-boundary`
-- `just lint sc-portability`
+`just validate` delegates linting to `just lint ci all`, the `ci` lint profile
+of `sc-lint.toml`: every `[[tool.sc-lint.lint]]` step, including the published
+`sc-boundary`, `sc-portability` and `sc-runtime` analyzers. The step list in
+`.sc-lint/install.json` is the authority; `just lint <step>` runs one step.
 
 ## CI-Only Additions
 

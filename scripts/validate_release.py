@@ -317,8 +317,8 @@ def validate_lint(root: Path, findings: list[Finding]) -> None:
         failure_summary = "just lint ci all failed"
     else:
         # CI images or minimal local environments may not have `just` installed.
-        lint_cmd = ["python3", ".just/run_lint.py", "ci", "all"]
-        failure_summary = "lint runner failed"
+        lint_cmd = ["python3", ".sc-lint/bootstrap.py", "lint", "--config", "sc-lint.toml", "ci", "all"]
+        failure_summary = "sc-lint ci profile failed"
     completed = run_capture(lint_cmd, cwd=root)
     append_completed_findings(
         findings,

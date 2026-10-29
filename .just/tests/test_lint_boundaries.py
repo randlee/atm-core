@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -22,7 +23,6 @@ from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import run
-from run_lint import build_tasks
 
 
 
@@ -182,7 +182,8 @@ class LintBoundariesTests(unittest.TestCase):
             if record.source_path == Path("boundaries/atm-http-runtime/http-runtime.toml")
         )
         self.assertIn("peer-dial-seam", runtime.lint_rules)
-        self.assertIn("peer-dial-seam", build_tasks(REPO_ROOT))
+        profiles = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["profiles"]
+        self.assertIn("peer-dial-seam", profiles)
 
     def test_graft_shared_client_has_no_direct_interprocess_dependency(self) -> None:
         manifest = tomllib.loads(

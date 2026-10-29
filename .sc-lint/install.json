@@ -488,215 +488,278 @@
   "justfile": {
     "windows_shell": false
   },
+  "lint_profiles": {
+    "ci": [
+      "adr-index",
+      "arch-gates",
+      "atm-graft-python-boundary",
+      "boundaries",
+      "capability-degradation",
+      "clippy",
+      "clippy-windows",
+      "daemon-signing-coupling",
+      "daemon-singleton",
+      "deny",
+      "env-var-boundary",
+      "fixed-sleep",
+      "fmt",
+      "function-length",
+      "hermes-adapter",
+      "hermes-atm-boundary",
+      "identities",
+      "kit-drift",
+      "legacy-mailbox-paths",
+      "legacy-transport-removal",
+      "lines",
+      "manifests",
+      "nudge-taxonomy",
+      "peer-dial-seam",
+      "pytests",
+      "read-concurrency-gates",
+      "runtime-observation-boundary",
+      "runtime-stderr",
+      "same-host-portability",
+      "sc-boundary",
+      "sc-portability",
+      "sc-runtime",
+      "shear",
+      "silent-emit",
+      "site-generated",
+      "site-links",
+      "spell",
+      "template-frontmatter",
+      "ttl-triage",
+      "version"
+    ]
+  },
   "minimum_version": "0.8.2",
   "profiles": {
     "adr-index": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "adr-index"
+      ".just/check_adr_index.py"
     ],
     "arch-gates": [
-      "just",
-      "_py",
-      ".just/run_lint.py",
-      "arch-gates"
+      "cargo",
+      "test",
+      "-p",
+      "atm-architecture",
+      "--quiet"
     ],
     "atm-graft-python-boundary": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "atm-graft-python-boundary"
+      ".just/lint_atm_graft_python_boundary.py"
     ],
     "boundaries": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "boundaries"
+      ".just/lint_boundaries.py"
     ],
     "capability-degradation": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "capability-degradation"
+      "scripts/check-capability-degradation.py"
     ],
     "clippy": [
       "just",
       "_sc-lint-clippy",
       "native"
     ],
-    "clippy-windows": [
-      "just",
-      "_sc-lint-clippy",
-      "xwin"
-    ],
+    "clippy-windows": {
+      "command": [
+        "just",
+        "_sc-lint-clippy",
+        "xwin"
+      ],
+      "platform": "linux"
+    },
     "daemon-signing-coupling": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "daemon-signing-coupling"
+      ".just/lint_daemon_signing_coupling.py"
     ],
     "daemon-singleton": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "daemon-singleton"
+      "scripts/lint_daemon_singleton.py"
     ],
     "deny": [
       "just",
-      "_py",
-      ".just/run_lint.py",
-      "deny"
+      "_sc-lint-py",
+      "-m",
+      "sc_lint.lint_cargo_deny"
     ],
     "env-var-boundary": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "env-var-boundary"
+      ".just/check_env_var_boundary.py"
     ],
     "fixed-sleep": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "fixed-sleep"
+      ".just/check_fixed_sleep_hygiene.py"
     ],
     "fmt": [
       "just",
-      "_py",
-      ".just/run_lint.py",
-      "fmt"
+      "fmt",
+      "check"
     ],
     "function-length": [
-      "just",
-      "_py",
-      ".just/run_lint.py",
+      "sc-lint",
+      "lint",
       "function-length"
     ],
     "hermes-adapter": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "hermes-adapter"
+      ".just/lint_hermes_adapter.py"
     ],
     "hermes-atm-boundary": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "hermes-atm-boundary"
+      ".just/lint_hermes_atm_boundary.py"
     ],
     "identities": [
+      "sc-lint",
+      "lint",
+      "identity-literals"
+    ],
+    "kit-drift": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "identities"
+      "plugins/sc-lint/install.py",
+      ".",
+      "--dry-run"
     ],
     "legacy-mailbox-paths": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "legacy-mailbox-paths"
+      "scripts/check-legacy-mailbox-paths.py"
     ],
     "legacy-transport-removal": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "legacy-transport-removal"
+      "scripts/phase-am/check_legacy_transport_removal.py",
+      "--category",
+      "raw-framing",
+      "--category",
+      "peer-ingress",
+      "--category",
+      "resend-replay",
+      "--category",
+      "direct-sqlite",
+      "--category",
+      "dead-daemon-dispatch"
     ],
     "lines": [
-      "just",
-      "_py",
-      ".just/run_lint.py",
-      "lines"
+      "sc-lint",
+      "lint",
+      "line-counts"
     ],
     "manifests": [
       "just",
-      "_py",
-      ".just/run_lint.py",
-      "manifests"
+      "_sc-lint-py",
+      "-m",
+      "sc_lint.lint_manifests"
     ],
     "nudge-taxonomy": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "nudge-taxonomy"
+      "scripts/check-nudge-taxonomy.py"
     ],
     "peer-dial-seam": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "peer-dial-seam"
+      ".just/lint_peer_dial_seam.py"
     ],
     "pytests": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "pytests"
+      ".just/run_pytests.py"
     ],
     "read-concurrency-gates": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "read-concurrency-gates"
+      ".just/check_read_concurrency_gates.py"
     ],
     "runtime-observation-boundary": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "runtime-observation-boundary"
+      ".just/check_runtime_observation_boundary.py"
     ],
     "runtime-stderr": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "runtime-stderr"
+      "scripts/check-runtime-stderr.py"
     ],
     "same-host-portability": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "same-host-portability"
+      ".just/lint_same_host_portability.py"
+    ],
+    "sc-boundary": [
+      "sc-lint",
+      "lint",
+      "sc-boundary",
+      "--config",
+      "sc-lint.toml"
+    ],
+    "sc-portability": [
+      "sc-lint",
+      "lint",
+      "sc-portability",
+      "--config",
+      "sc-lint.toml"
+    ],
+    "sc-runtime": [
+      "sc-lint",
+      "lint",
+      "sc-runtime",
+      "--config",
+      "sc-lint.toml"
     ],
     "shear": [
       "just",
-      "_py",
-      ".just/run_lint.py",
-      "shear"
+      "_sc-lint-py",
+      "-m",
+      "sc_lint.lint_cargo_shear"
     ],
     "silent-emit": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "silent-emit"
+      "scripts/check-silent-emit.py"
     ],
     "site-generated": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "site-generated"
+      ".just/check_site_generated.py"
     ],
     "site-links": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "site-links"
+      ".just/check_site_links.py"
     ],
     "spell": [
       "just",
+      "_sc-lint-py",
+      "-m",
+      "sc_lint.lint_codespell"
+    ],
+    "template-frontmatter": [
+      "just",
       "_py",
-      ".just/run_lint.py",
-      "spell"
+      ".just/check_template_frontmatter.py"
     ],
     "ttl-triage": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "ttl-triage"
+      ".just/lint_ttl_triage_consistency.py"
     ],
     "version": [
       "just",
       "_py",
-      ".just/run_lint.py",
-      "version"
+      ".just/check_version_sync.py"
     ]
   },
   "test": {
