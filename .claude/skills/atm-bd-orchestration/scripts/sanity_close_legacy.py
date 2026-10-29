@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# ///
 # Frozen copy of the pre-bd-cache sanity close hook (2026-10-23), kept only for
 # sanity-close-repair.py and repair tasks assigned before the cutover.
 # Delete with sanity-close-repair.py, sanity-bead-repair.xml.j2 and

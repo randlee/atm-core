@@ -1,9 +1,9 @@
 {
-  "version": "0.19.10",
-  "commit": "facc93341ca0b0317e36572f91d0b7b19253c300",
+  "version": "0.19.11",
+  "commit": "79e46c8d4bf54eda5317a266406b27f515dcf069",
   "source": {
     "ref": "bundled",
-    "manifest_aggregate": "30264a8372ccd927a9056b26782934c4a55b06128b665286456f61616ffa4076"
+    "manifest_aggregate": "23722e78bcbc387ae4356a7a2a6fad42953c7613574342647488a8745dcafaff"
   },
   "files": [
     {
@@ -12,7 +12,7 @@
     },
     {
       "path": ".claude/agents/dev-sanity.md",
-      "sc_sha": "191f9b36037f12a5b6581f1b64b7cbb4fe704393a240481adc7325ff7c16bf9b"
+      "sc_sha": "8ab4b94c26a579e6038df40c41766dabce95e44129b336f4ee57157caf9bba84"
     },
     {
       "path": ".claude/agents/parallax.md",
@@ -24,7 +24,7 @@
     },
     {
       "path": ".claude/agents/sc-sanity-jev.md",
-      "sc_sha": "f09e69ba3a5b0631b03dd69d2a2e5284eb2391d51f09cc456ec60e2347fe98b7"
+      "sc_sha": "511be9a797731e8fa61e6ed6c9bf64778816bb0c90b5a3ddf6f3fb9ddebcafcc"
     },
     {
       "path": ".claude/agents/sc-sanity-llm.md",
@@ -36,7 +36,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/SKILL.md",
-      "sc_sha": "30fc631602fb859f3e25dcdb54aded645853904bb9511ca5d7bf252143702b1b"
+      "sc_sha": "10528021d6006b75b22837c2f9272991841490c835a35f4c8c2d389ab62a5beb"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/blocking-findings-guidelines.md",
@@ -232,15 +232,15 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/references/post-mortem-context-preparation.md",
-      "sc_sha": "12f2b35ac99bbe5a627c7c4b7d901f7741840df88a5223c70c595bc3f534e96f"
+      "sc_sha": "c645f8e542a3ff795547dff956efe354bcf104dbfb18d50c663e95b13e8367af"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/references/post-mortem-jev.md",
-      "sc_sha": "6233757825543be3e82c55e5dde70889fc97a3e86a990cf8eaebf8441bfee065"
+      "sc_sha": "80a4247254092bb34d2bef5fbf12b6d9e1197c3cb0f9dd059c1d61e74744f26c"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/references/post-mortem.md",
-      "sc_sha": "37c581c76b9583a82645140108b28d474503208c4630a7b5aa04be9b1257d449"
+      "sc_sha": "e4a8a7ffaac094093c7a9e165c101e1f1fc3d68c6a6606b68e1aeb0b76b5c4cf"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/roles/quality-mgr.md",
@@ -248,7 +248,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/BD-CACHE.md",
-      "sc_sha": "fc0a17bd8553c51d336fc411bbef5ecca8e7c11cc804ee75f15b789f97056555"
+      "sc_sha": "aabe64ae1d37671480ae813aea69409849169e529b9af976251f0a751feca4b6"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/SANITY-CLOSE-HOOK.md",
@@ -256,19 +256,19 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/assignment-gates.py",
-      "sc_sha": "06c1076a690c3841ea906de55781a179e32a0fa01ddb7bc9a77a3b50b5906198"
+      "sc_sha": "e171d943ab569ccec7406720bc5286dbb1310df2da0d73a993066da5aa22c579"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/atm-hook-doctor.py",
-      "sc_sha": "88ca89d446971ca2b0df4b025289fb8b0caf5b53aed9b0c45b2327eb6906a36e"
+      "sc_sha": "30d05262c5983b4b6c35dd5fb02d5dfd3b19bac91f108359308264e7d05557cb"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/atm-task-close.py",
-      "sc_sha": "a6327cb8a66e2e0182360bddb4264dc032fffbb6173872cfdda2e9218404aef0"
+      "sc_sha": "dce912cda2134e1b218cad5805497739232c64c21f553b927af160c4ecee3cca"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/bd_cache.py",
-      "sc_sha": "c398f1533094e145ccb0aa52405c9627d6dd28e88489d9e10d9e6866e07076f5"
+      "sc_sha": "47bdec15d85297b1a2d39cac574c2245afbbf98c881954d08e9d0f5a45f37cde"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/bd_cache_cron.py",
@@ -280,7 +280,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/bead-groups",
-      "sc_sha": "ebd67a7e882401e6e6e1af3036e64b8c684081ed944bd2ae316f86d355bd47e3"
+      "sc_sha": "04ce6ef384ca10c6e3c1eff7e95ce05ebfaa57604d8fca6fc9503ce36a7ad911"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/bead-queues",
@@ -292,19 +292,19 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/bv-analyze",
-      "sc_sha": "559e419ca6237ca1a61bf66b80ffc414e74061f4690f02ff3e827ba2aecd65db"
+      "sc_sha": "12aa2abe931812bb4cf8fed59cbea4ddf8a3101490ff62f167e7c4d547eb3148"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/check-review-completion.py",
-      "sc_sha": "88261ba026997414c9853b4ea7d5f2f355235cb0cf038a0ca3b14566aba6f146"
+      "sc_sha": "7f84bb351ca21d36e7576b2ca34245993517e7283768935dc3008188054242f7"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/close-vars.py",
-      "sc_sha": "6676e75bf646a4b4fe3a2e21119fbe0b084b6643ec76f07e9a630c309d2faf91"
+      "sc_sha": "3e361708c13fc9fd5e85428e4f1d68f6e787a936d47191d022b775994e644d31"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/close_fields_backfill.py",
-      "sc_sha": "a0486763a8daf7924496516372666232b98a8e1aa090fcba2c066df805052376"
+      "sc_sha": "ed511f7051f0dab52ecf3db8834a8099fdc813cf4519dadb9506e9588fc3cb0d"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/command_timeout.py",
@@ -312,51 +312,51 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/fix-round-scope",
-      "sc_sha": "cebf8e72080692f1a1d18c6a222a3bb75a38e736d5843042a6ddfa6fbba4ee61"
+      "sc_sha": "76ce3fecf7e82638a70d66c5acf21f1c4596f5b65945b1561b891f4b1b11d4f6"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/jev_client.py",
-      "sc_sha": "48cdcdd92194d07b6e9d2d5ff7669d1107369754a9fd0963bf1a8fde36bc531b"
+      "sc_sha": "9980b7fcf50f406e447768622fd51a49b88f410e99420612ae417593d6951dcf"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/post_mortem_context.py",
-      "sc_sha": "de725ac08555504c3788c1b5849c2e74c575082d257c4adca18352ad7700a2ba"
+      "sc_sha": "ad6a7fec76d425542d8ca36caa7ab765b2851ecebadb1395626fa9aad3a108e6"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py",
-      "sc_sha": "e2a0fdd532e724d07db2b02203fd39392d0792833e276f20b607f57a6a7b53e4"
+      "sc_sha": "fdbdaf0cea6a4570f119c49e4ed07ef29e94cf385e4095154a916f901d5a26fe"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity-close-repair.py",
-      "sc_sha": "951c0b1042742dca478324fb9a6a3df66e922eff96bf808e27b62bc9895f43b3"
+      "sc_sha": "7cce53b07f66dec71be834438eccd59e1a349b63042d8bef0b60294a4d8f1f12"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity-close-vars",
-      "sc_sha": "68614658679b3d997855c361a8de6a57dc94146ec60fcfd140f6c9d0b25f7684"
+      "sc_sha": "60248d9eab89d59a52a2644b9a10609fd419b0f247693643c0b5a5b89d1f5c4b"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity-merge",
-      "sc_sha": "f2f4d25625e1e48e29eb91431cc75b9bbac45226ba1e0e464962db4ce5453b15"
+      "sc_sha": "eb9d35b4b2c56d30e2ccf54b079a8af5dc25b7c907e222b7b387deec2a3a0432"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity-run-history",
-      "sc_sha": "3d94d4f887a44262f8b0f979c92e90a972cc2782f548404d2b5ff3febdc1ad21"
+      "sc_sha": "9eeb520ea441b80baed58844f6ca4a2e0be347be6ea95640c927482eb4195eef"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity-split",
-      "sc_sha": "e4e6566e280b74475f12fd3c5f276f764df4bd65d1af685a88f9fafe8486d589"
+      "sc_sha": "b31e0f4dd027b7e0b2a0329d28f9854226cc621587dfc3cc355ba96716bcecce"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity-stack-link",
-      "sc_sha": "ca318213ba588e4525df5b79b5526b13b64336e7018531936a6f60e92a552dd8"
+      "sc_sha": "493bcc9a220e228c9fd66943352ec153bfbf7abf0994b69a74f5a33966cca677"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity_close_legacy.py",
-      "sc_sha": "f1072f9c17255539f5a9bb246ae280343b0125eeeb419e51d472c21c97a87004"
+      "sc_sha": "3c428cbcb54eef2dd6a13308f8d15b37621b7480f99cdd6c0658348add32240d"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity_task_close_hook.py",
-      "sc_sha": "bb5444f7fe87e076906d0664926ad35b2740f1aa2aa8d44812a07a82faedd49a"
+      "sc_sha": "bfa2dd08cb93d5c29b0492b08b3d9e8d59fea147ff35b24a008da3fb51860c21"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/stack_top.py",
@@ -584,7 +584,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_templates.py",
-      "sc_sha": "971273a6d105507dcf4fb882327bca599bdf98c99527c0c3888552d6bf04d81d"
+      "sc_sha": "847deb415d529ff6af046f87f339d304b54aaf76a23015504e06adbadbeedf0d"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_transitions.py",
@@ -600,7 +600,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/wrap_jev_receipt.py",
-      "sc_sha": "941e584036755f9da42d5c4a81667562459c3c5ffa89bdffc88f6a868cc466bd"
+      "sc_sha": "92e6f1ed0b824b988a15d8f12ee0af11d9201f6b392dae19b50e9e28a37712dc"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/templates/arch-qa-assignment.json.j2",
@@ -692,7 +692,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/templates/review-template.xml.j2",
-      "sc_sha": "c864270b3eb6ca972f2bc95524cd396d4f5eb1a390cf8228c08ff84b31d2022f"
+      "sc_sha": "2f034e1f7f302a5fa6dfd0237b76dd75c3acc839e06e069333b8701cea707f21"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/templates/ruthless-boundary-qa-assignment.json.j2",
@@ -700,7 +700,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/templates/sanity-bead-repair.xml.j2",
-      "sc_sha": "3ad3be29dd9457f92edf095c623ff97b69ad85ef2e33a2d2ade900e608744084"
+      "sc_sha": "ab481a5ea6e573c909418fd0431cbcf97676463b93102013acc8aa02e9dc8839"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/templates/sanity-close-error.md.j2",
@@ -744,7 +744,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/SKILL.md",
-      "sc_sha": "a4c1638a123e0778f9b1db211128c0c6f7542c77ad225c365ca1ec7311516b76"
+      "sc_sha": "bd6e82b4326086f8ae9fabef71784700d3728b25eb304f0d76df281debddf8b7"
     },
     {
       "path": ".claude/skills/atm-beads/examples/dev-sanity-bead-vars-d-4.json",
@@ -768,7 +768,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/references/installation-and-troubleshooting.md",
-      "sc_sha": "2a12fe87fb31472c71fa0ff54b1ecbe8c81e07a4f273e536fb7568d66a75d22b"
+      "sc_sha": "cd0be71b16a61a2cf985fcdce534aa0c35c07a8590f8f6ed4723443550562d25"
     },
     {
       "path": ".claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md",
@@ -832,11 +832,11 @@
     },
     {
       "path": ".claude/skills/atm-beads/scripts/bead_schema.py",
-      "sc_sha": "79a5b96e57461fbb4aefaf8f532963a96b8e48811d3adf43db15da511e24a1ed"
+      "sc_sha": "e3e989f7fd0270503398a984e3b2f1d25887ddc05eaf4edc4e44b090c8b96d42"
     },
     {
       "path": ".claude/skills/atm-beads/scripts/check-phase-artifact",
-      "sc_sha": "7b0b7155f1106db6841ab8a5b2fe477228f2e5d3e8bf121a4a299bad75ba34ed"
+      "sc_sha": "a0b8c335bf11c634cb84326fe1f3ecfe6e0d7e19659096ac1db91c3191b64a0a"
     },
     {
       "path": ".claude/skills/atm-beads/scripts/close_fields.py",
@@ -848,11 +848,11 @@
     },
     {
       "path": ".claude/skills/atm-beads/scripts/phase-config",
-      "sc_sha": "6a8f92e1d50555a4519a95c5a4a076d1444d30f0e7fbd447bd971a36bc2c1f43"
+      "sc_sha": "05db01809694f55e5ba0550b34d39385933860ea825cefe6d58c0c9627f59fd2"
     },
     {
       "path": ".claude/skills/atm-beads/scripts/phase-index-path",
-      "sc_sha": "ce0d72743458e1f4c9f9716d8709a1e9f859ff23d3ac0bdf9da4c33ce8ec20c0"
+      "sc_sha": "08df0b5d7122d19bca48fe8f8b41ae5388bd82c23f56dac9508c54a43c3159f2"
     },
     {
       "path": ".claude/skills/atm-beads/scripts/plan_contract.py",
@@ -860,11 +860,11 @@
     },
     {
       "path": ".claude/skills/atm-beads/scripts/repo_config.py",
-      "sc_sha": "8089d3afba6ce529f83517ba0e7d9a510790bf75b459f4214ce42746caf289ce"
+      "sc_sha": "1ca06f2c56ba147e2bc7e3a4652e49856d2ff3b8da1b5043f24f9b7a8f17586b"
     },
     {
       "path": ".claude/skills/atm-beads/scripts/resolve-role",
-      "sc_sha": "d61e0757e51146b1ed0bb6a213a7ff851504b10e89b7e3a1b7495ec6322a9e3c"
+      "sc_sha": "c3abb86bf704ab322a0cf63c00600d914de70ed4465cdc42e46a01dab2479420"
     },
     {
       "path": ".claude/skills/atm-beads/scripts/sanity_shared.py",
@@ -880,7 +880,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/scripts/validate-plan",
-      "sc_sha": "e3dd74299c5fb3b59ec6082b8e834b762d4e12082b781680e96c9c8afe48c19a"
+      "sc_sha": "3ec78373ca985d533b07208d34092d89b314d6e71c7419af1d5e035aec0fa5e0"
     },
     {
       "path": ".claude/skills/atm-beads/templates/dev-sanity-bead.json.j2",
@@ -932,7 +932,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/tests/test_validate_plan.py",
-      "sc_sha": "10c254593a8c2db408f6e9fa2076dc2667b2896e0965161964de7fc8dba9c427"
+      "sc_sha": "033c6467d2296eb85e33630ee78a5d3e31ca66e9552302c104851ca160835c31"
     },
     {
       "path": ".claude/skills/prompt-rewrite-judge/SKILL.md",
@@ -940,7 +940,7 @@
     },
     {
       "path": ".claude/skills/prompt-rewrite-judge/scripts/judge.py",
-      "sc_sha": "ba4d6c0c3c98552bc17fb66f350da76b4dfc1f7c8c0a74797aaa2893890f665c"
+      "sc_sha": "8339523bf9bc63a4cb0649f84cbbfce9ef215c6da5da807863f7b95cb0497861"
     },
     {
       "path": ".claude/skills/prompt-rewrite-judge/scripts/tests/test_judge.py",
@@ -984,7 +984,7 @@
     },
     {
       "path": ".claude/skills/sprint-report/scripts/sprint-report",
-      "sc_sha": "10bbcafc188d1217eb424987b6f9b9a9dcf85cdc8868d9f2616e71ec96f3700f"
+      "sc_sha": "bf90f029db9ebba8f75de92276fad8f0b8ebdfa46902c0528eb97963cecd6d0f"
     },
     {
       "path": ".claude/skills/sprint-report/scripts/sprint_dag.py",
@@ -1020,7 +1020,7 @@
     },
     {
       "path": ".claude/skills/sprint-review/scripts/sprint-review",
-      "sc_sha": "9eaba9ee4f768c118dccab36d9400f60a40ff80fdf147b2807cdd6b26222bc2d"
+      "sc_sha": "e77249ec5217bc5b9eb68640052fb852dc028a3ac25542b3e49583129545321a"
     }
   ]
 }

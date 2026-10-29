@@ -76,7 +76,7 @@ scales with it.
 | Operation | Measured | Target (Rust) |
 |---|---|---|
 | In-process cached `get` | 0.017 ms median, 0.14 ms max (load 7-10) | < 1 ms |
-| New-process CLI `get` (`python3 bd_cache.py get`) | 129 ms median (load 7-10); 80 ms (load 3.5) | < 50 ms |
+| New-process CLI `get` (`./bd_cache.py get`) | 129 ms median (load 7-10); 80 ms (load 3.5) | < 50 ms |
 | Hook process start + import (`sanity_task_close_hook`, imports pydantic) | 70-80 ms (load 3.5) | Rust binary: no interpreter or pydantic cost |
 | `bd list --id <one bead>` | 160-180 ms (load 3.5); `bd show` 134 ms median, 254 ms max (load 7-10) | n/a (backend) |
 | First full sync, one 810-bead phase | 0.42 s (`bd version` + `bd schema` + one `bd list`) | — |

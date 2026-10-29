@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# ///
 """Close orchestration beads, hand off work, and close the dev task at dev complete.
 
 Every bd, git and gh command is bounded by `ATM_BD_GATE_TIMEOUT_S` seconds (default 180, shared with

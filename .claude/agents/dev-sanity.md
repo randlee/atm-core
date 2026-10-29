@@ -50,7 +50,7 @@ one sc-sanity-llm and one sc-sanity-jev child. Dispatch both families before
 waiting; neither child looks up beads. Keep raw success/failure envelopes.
 The Jev client owns API retries and lossless splitting of oversized evidence,
 including context and inline notes; never ask the coordinator to trim them.
-A terminal client error is retained verbatim; SANITY.JEV_REQUEST_TOO_LARGE is returned only after the client has already split losslessly and is never a reason to run an LLM or haiku check in the Jev slot. When a Jev child returns it, announce it once per run with `python3 .claude/skills/atm-bd-orchestration/scripts/jev_client.py --announce --phase <phase> --error "<code>: <message>"` (the message names the request size) and keep that envelope in the deliverable's Jev slot; the selected LLM reply is the one already running beside it, never a new check. A failed LLM API spawn may be
+A terminal client error is retained verbatim; SANITY.JEV_REQUEST_TOO_LARGE is returned only after the client has already split losslessly and is never a reason to run an LLM or haiku check in the Jev slot. When a Jev child returns it, announce it once per run with `.claude/skills/atm-bd-orchestration/scripts/jev_client.py --announce --phase <phase> --error "<code>: <message>"` (the message names the request size) and keep that envelope in the deliverable's Jev slot; the selected LLM reply is the one already running beside it, never a new check. A failed LLM API spawn may be
 retried up to three times; retain the exhausted SANITY.LLM_API_FAILURE
 envelope. Stop a silent child after 30 minutes.
 

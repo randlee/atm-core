@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# ///
 """Read-only, injectable pre-claim gates for dev, sanity, and QA work, and the read-only stack-top lookup.
 
 Every command the gates run (bd, git, gh, validate-plan) is bounded by `ATM_BD_GATE_TIMEOUT_S` seconds
