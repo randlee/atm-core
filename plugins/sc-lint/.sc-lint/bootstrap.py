@@ -25,6 +25,8 @@ import zipfile
 
 USAGE = ("usage: .sc-lint/bootstrap.py <setup|lint|test|upgrade|exec> --config sc-lint.toml [--check] [--dry-run]; "
          ".sc-lint/bootstrap.py lint [selector] [host|all|linux|macos|windows] --config sc-lint.toml; "
+         ".sc-lint/bootstrap.py lint [--fail-fast] [selector] [host|all|linux|macos|windows] --config sc-lint.toml; "
+         ".sc-lint/bootstrap.py test [--fail-fast|--list] [selector [args...]] --config sc-lint.toml; "
          ".sc-lint/bootstrap.py exec [--config sc-lint.toml] -- <argv...>")
 
 
@@ -53,18 +55,26 @@ def parse(argv):
     config, flags, positional = None, [], []
     while rest:
         token, rest = rest[0], rest[1:]
-        if token == "--config":
+        if operation == "test" and positional:
+            # Everything after the test selector is forwarded verbatim.
+            positional.append(token)
+        elif token == "--config":
             if config is not None or not rest or not rest[0]:
                 usage()
             config, rest = rest[0], rest[1:]
         elif token in ("--check", "--dry-run") and operation in ("setup", "upgrade"):
             flags.append(token)
+        elif (token == "--fail-fast" and operation in ("lint", "test")
+              or token == "--list" and operation == "test") and token not in flags:
+            flags.append(token)
         elif token.startswith("--"):
             usage()
         else:
             positional.append(token)
-    maximum = {"setup": 0, "upgrade": 0, "lint": 2, "test": 1}[operation]
-    if not config or len(positional) > maximum or (len(positional) == 2 and not all(positional)):
+    maximum = {"setup": 0, "upgrade": 0, "lint": 2, "test": len(positional)}[operation]
+    if not config or len(positional) > maximum or (operation == "lint" and len(positional) == 2 and not all(positional)):
+        usage()
+    if "--list" in flags and (positional or "--fail-fast" in flags):
         usage()
     return operation, config, flags, positional, []
 
@@ -273,7 +283,7 @@ def main(argv=None):
             return install_release(config, "upgrade", flags)
         status = run([bootstrap.binary, "--config", config, "upgrade", *flags])
         return status or bootstrap.provision_venv(mode)
-    status = bootstrap.ensure(flags)
+    status = bootstrap.ensure(flags if operation == "setup" else [])
     if status:
         return status
     if operation == "setup":
@@ -284,13 +294,13 @@ def main(argv=None):
     if status:
         return status
     if operation == "test":
-        return run([bootstrap.binary, "test", "--config", config, *positional])
+        return run([bootstrap.binary, "test", "--config", config, *flags, *positional])
     arguments = [bootstrap.binary, "lint", "--consumer", "--config", config, "ci"]
     if positional and positional[0]:
         arguments += ["--profile", positional[0]]
     if len(positional) == 2:
         arguments += ["--platform-scope", positional[1]]
-    return run(arguments)
+    return run([*arguments, *flags])
 
 
 if __name__ == "__main__":

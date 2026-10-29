@@ -1,5 +1,5 @@
 [tool.sc-lint]
-minimum_version = "0.8.0"
+minimum_version = "0.8.1"
 
 [tool.sc-lint.analyzers.boundary]
 enabled = true
@@ -16,7 +16,8 @@ unix_path_prefixes = ["/tmp/", "/home/", "/usr/", "/etc/"]
 
 [tool.sc-lint.analyzers.runtime]
 enabled = true
-reason = "Published sc-lint 0.8.0 runtime analyzer replaces the repository-local runtime-waits checker."
+exclude_paths_by_rule = { "SCB-RUNTIME-003" = ["crates/atm/src/commands/internal_nudge.rs", "crates/atm-daemon-client/src/lib.rs"] }
+reason = "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. See randlee/sc-lint#82."
 
 [[tool.sc-lint.lint]]
 name = "adr-index"

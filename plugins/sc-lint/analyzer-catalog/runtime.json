@@ -4,6 +4,7 @@
   "own_keys": [],
   "rules": [
     "SCB-RUNTIME-001",
-    "SCB-RUNTIME-002"
+    "SCB-RUNTIME-002",
+    "SCB-RUNTIME-003"
   ]
 }

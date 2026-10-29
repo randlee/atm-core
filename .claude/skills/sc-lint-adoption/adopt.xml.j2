@@ -1,3 +1,13 @@
+---
+name: sc-lint-adopt
+version: 1.0.0
+description: Assign the sc-lint adoption procedure for one consumer repository.
+format: xml
+required_variables:
+  - repository
+  - install_json
+  - completion_recipient
+---
 <sc-lint-adoption repository="{{ repository }}">
   <goal>Install the managed sc-lint consumer contract without deleting consumer-owned files.</goal>
   <input>{{ install_json }}</input>
