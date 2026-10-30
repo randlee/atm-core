@@ -1,5 +1,4 @@
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
-set allow-duplicate-recipes := true
 
 # Homebrew is absent from non-interactive macOS account PATHs. Append its
 # standard location as a developer-account fallback, never ahead of the
@@ -197,11 +196,6 @@ benchmark-read-under-write-load:
 # Generate architecture visualization artifacts.
 view target='all':
     {{python_cmd}} .just/run_view.py {{target}}
-
-# ATM keeps its repository-specific checks parallel and keep-going; the
-# imported kit recipe is deliberately sequential for ordinary consumers.
-lint *args:
-    {{python_cmd}} .just/run_lint.py {{args}}
 
 # Run the local CI-equivalent command set.
 ci: lint test

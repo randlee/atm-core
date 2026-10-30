@@ -20,7 +20,7 @@ io_forbidden = ["write_capable_connection", "writer_lane", "socket_io", "process
 
 [dependencies]
 allowed_dependents = ["atm-core", "atm-daemon-bootstrap", "atm-runtime", "atm-storage-rusqlite"]
-allowed_dependencies = []
+allowed_dependencies = ["atm-error"]
 forbidden_edges = ["atm-storage -> atm-core", "atm-storage -> atm-storage-rusqlite"]
 
 [references]

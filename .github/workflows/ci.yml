@@ -178,26 +178,11 @@ jobs:
           sudo ln -sf "${llvm_lib}" /usr/local/bin/llvm-lib
 
       - name: Run just lint
-        # The ATM runner remains parallel and keep-going; `ci all` adds the
-        # Windows-target Clippy step on non-Windows hosts (a Windows host's
-        # native Clippy already targets x86_64-pc-windows-msvc).
+        # The kit runs the `ci` lint profile from sc-lint.toml in parallel and
+        # keep-going, printing every failed step's output; `all` adds the
+        # Linux-tagged Windows-target Clippy step (a Windows host's native
+        # Clippy already targets x86_64-pc-windows-msvc).
         run: just lint ci all
-
-      - name: Show clippy diagnostics on lint failure
-        if: failure()
-        shell: bash
-        run: |
-          clippy_log="$(ls -t .just/logs/*-clippy.log 2>/dev/null | head -n 1)"
-          test -n "$clippy_log"
-          cat "$clippy_log"
-
-      - name: Upload lint logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: just-lint-logs-${{ matrix.os }}
-          path: .just/logs/**
-          retention-days: 7
 
       - name: Run cargo audit
         run: cargo audit

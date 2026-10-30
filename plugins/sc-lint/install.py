@@ -24,14 +24,14 @@ PYTHON_BINDING = 'python := if os_family() == "windows" { "python" } else { "pyt
 RECIPE = r"^([A-Za-z_][\w-]*)[^:\n]*:(?!=)"
 JUST_COLLISION = re.compile(r"(?:recipe|setting) `([^`]+)`", re.I)
 TEMPLATES = {
-    Path("templates/sc-lint.toml.j2"): Path("sc-lint.toml"),
-    Path("templates/Justfile.import.j2"): Path("Justfile"),
-    Path("templates/sc-lint-workflow.yml.j2"): Path(".github/workflows/sc-lint.yml"),
+    Path("templates/sc-lint.toml.tmpl"): Path("sc-lint.toml"),
+    Path("templates/Justfile.import.tmpl"): Path("Justfile"),
+    Path("templates/sc-lint-workflow.yml.tmpl"): Path(".github/workflows/sc-lint.yml"),
 }
 TEMPLATE_PLACEHOLDERS = {
-    "sc-lint.toml.j2": {"minimum_version", "analyzers", "profiles", "test_layers"},
-    "Justfile.import.j2": {"windows_shell", "python_binding"},
-    "sc-lint-workflow.yml.j2": {"ci_os", "lint_steps"},
+    "sc-lint.toml.tmpl": {"minimum_version", "analyzers", "profiles", "test_layers"},
+    "Justfile.import.tmpl": {"windows_shell", "python_binding"},
+    "sc-lint-workflow.yml.tmpl": {"ci_os", "lint_steps"},
 }
 TEMPLATE_VARIABLE = re.compile(r"{{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}")
 CATALOG_DIRECTORY = ROOT / "analyzer-catalog"
@@ -208,7 +208,7 @@ def render(template: Path, data: dict) -> str:
         "ci_os": json.dumps(runners),
         "lint_steps": lint_workflow_steps(data),
     }
-    deferred = {"windows_shell", "python_binding"} if template.name == "Justfile.import.j2" else set()
+    deferred = {"windows_shell", "python_binding"} if template.name == "Justfile.import.tmpl" else set()
     if observed - replacements.keys() != deferred:
         raise ValueError(f"{template.name}: unresolved template variables after rendering")
     return substitute_template_variables(source, replacements)
@@ -247,7 +247,7 @@ def desired(data: dict, repo: Path, input_path: Path) -> Desired:
         if not source.is_file() or "__pycache__" in source.parts or source.suffix == ".pyc" or source.relative_to(ROOT) in TEMPLATES or source.name in {"install.py", "install.schema.json"} or source.relative_to(ROOT).parts[0] in {"templates", ".claude-plugin", ".github", "schema.d", "analyzer-catalog"}: continue
         result[RENAMED.get(source.relative_to(ROOT), source.relative_to(ROOT))] = source.read_bytes()
     for source, target in TEMPLATES.items():
-        if source.name == "sc-lint-workflow.yml.j2" and not data["ci"]["enabled"]: continue
+        if source.name == "sc-lint-workflow.yml.tmpl" and not data["ci"]["enabled"]: continue
         result[target] = render(ROOT / source, data).encode()
     result[INSTALL_INPUT] = json.dumps(data, indent=2, sort_keys=True).encode() + b"\n"
     justfile = repo / "Justfile"; original = justfile.read_text() if justfile.exists() else (ROOT / "templates/Justfile.default").read_text()
@@ -256,7 +256,7 @@ def desired(data: dict, repo: Path, input_path: Path) -> Desired:
     shell = data.get("justfile", {}).get("windows_shell", True) and not re.search(r"^set\s+windows-shell\b", unmanaged(original), re.M)
     python_binding = not re.search(r"^(?:export\s+)?python\s*:?=", unmanaged(original), re.M)
     block = substitute_template_variables(
-        render(ROOT / Path("templates/Justfile.import.j2"), data),
+        render(ROOT / Path("templates/Justfile.import.tmpl"), data),
         {"windows_shell": WINDOWS_SHELL if shell else "", "python_binding": PYTHON_BINDING if python_binding else ""},
     ).strip()
     result[Path("Justfile")] = (re.sub(re.escape(MARKER_START) + r".*?" + re.escape(MARKER_END), block, original, flags=re.S) if MARKER_START in original else (original.rstrip() + "\n\n" + block).lstrip("\n")).encode()

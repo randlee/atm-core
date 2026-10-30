@@ -35,10 +35,10 @@ SECTIONS = (
     (
         "Lint",
         (
-            ("lint", "Run all repo lint steps in parallel, serializing Cargo builds."),
+            ("lint", "Run every sc-lint.toml lint step in parallel, keep-going (kit runner)."),
             ("lint fmt", "Run only the format check."),
             ("lint clippy", "Run only Clippy with warnings denied."),
-            ("lint clippy-windows", "Run the Windows-target Clippy profile."),
+            ("lint clippy-windows", "Run the Windows-target Clippy step (Linux hosts; skipped elsewhere)."),
             ("lint deny", "Run cargo-deny advisories/bans/source checks."),
             ("lint shear", "Run cargo-shear unused-dependency checks."),
             ("lint boundaries", "Run the crate/source boundary checks."),

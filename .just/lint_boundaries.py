@@ -22,8 +22,6 @@ from lint_common import workspace_manifest_paths
 
 
 LINT_NAME = "boundaries"
-YAML_FENCE_START = "```yaml"
-YAML_FENCE_END = "```"
 # Record schema (required fields, value enums, trait/facade presence,
 # trait_only/concrete implementation shape, owner directory, duplicate
 # boundary_id, TOML syntax, unknown keys) is enforced by the published sc-lint
@@ -37,13 +35,8 @@ ATM_REQUIRED_BOUNDARY_FIELDS = (
 # atm-only per-record policy lives in the opaque [extensions.atm] table that
 # the published sc-lint boundary loader ignores (randlee/sc-lint#203).
 ATM_EXTENSION_PATH = ("extensions", "atm")
-# delete when randlee/sc-lint#375 ships (names that resolve to no crate are findings)
-PACKAGE_NAME_RE = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
 RUST_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-FORBIDDEN_EDGE_RE = re.compile(
-    r"^(?P<left>[a-z0-9]+(?:[.-][a-z0-9]+)*)\s*->\s*(?P<right>[a-z0-9]+(?:[.-][a-z0-9]+)*)$"
-)
 PUBLIC_TYPE_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|type)\s+{name}\b"
 PUBLIC_REEXPORT_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+use\b.*\b{name}\b"
 PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b")
@@ -445,29 +438,6 @@ class ManifestInfo:
         return tuple(sorted(aliases))
 
 
-@dataclass(frozen=True)
-class DependencyOwnershipRule:
-    dependency: str
-    allowed_manifest_paths: tuple[Path, ...]
-    allowed_source_roots: tuple[Path, ...]
-    manifest_message: str
-    source_message: str
-
-
-@dataclass(frozen=True)
-class ManifestSectionRule:
-    owner_manifest_path: Path
-    dependency_package: str
-    allowed_sections: tuple[str, ...]
-    message: str
-
-
-@dataclass(frozen=True)
-class ManifestDependencyAllowlist:
-    owner_manifest_path: Path
-    allowed_dependencies: tuple[str, ...]
-    boundary_record_paths: tuple[Path, ...]
-
 
 @dataclass(frozen=True)
 class ScbConfigAllowlistEntry:
@@ -513,45 +483,6 @@ class ScbObservabilityAllowlistEntry:
     why: str
     sunset_sprint: str
 
-
-def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
-    sections: list[tuple[str, dict]] = []
-    for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
-        dependencies = manifest.get(section_name)
-        if isinstance(dependencies, dict):
-            sections.append((section_name, dependencies))
-
-    targets = manifest.get("target", {})
-    if isinstance(targets, dict):
-        for target_name, target in targets.items():
-            if not isinstance(target, dict):
-                continue
-            for section_name in ("dependencies", "dev-dependencies", "build-dependencies"):
-                dependencies = target.get(section_name)
-                if isinstance(dependencies, dict):
-                    sections.append((f"target.{target_name}.{section_name}", dependencies))
-
-    return sections
-
-
-def dependency_package_name(dependency_name: str, dependency: object) -> str:
-    if isinstance(dependency, str):
-        return dependency_name
-    if isinstance(dependency, dict):
-        package_name = dependency.get("package")
-        if isinstance(package_name, str):
-            return package_name
-    return dependency_name
-
-
-def dependency_import_patterns(dependency: str) -> tuple[re.Pattern[str], ...]:
-    crate_path = dependency.replace("-", "_")
-    escaped = re.escape(crate_path)
-    return (
-        re.compile(rf"(?<!\w)(?<!\bself::)(?<!\bsuper::)(?<!\bcrate::){escaped}::"),
-        re.compile(rf"\buse\s+{escaped}\b"),
-        re.compile(rf"\bextern\s+crate\s+{escaped}\b"),
-    )
 
 
 def boundary_config(repo_root: Path) -> dict:
@@ -599,147 +530,6 @@ def boundary_toml_files(repo_root: Path) -> list[Path]:
         raise SystemExit("[boundaries].toml_glob must be a non-empty string when provided")
     return sorted(repo_root.glob(toml_glob))
 
-
-def dependency_ownership_rules(repo_root: Path) -> list[DependencyOwnershipRule]:
-    config = boundary_config(repo_root)
-    raw_rules = config.get("global_dependency_ownership", [])
-    if not isinstance(raw_rules, list):
-        raise SystemExit("[[boundaries.global_dependency_ownership]] entries must be an array of tables")
-
-    rules: list[DependencyOwnershipRule] = []
-    for index, raw_rule in enumerate(raw_rules):
-        if not isinstance(raw_rule, dict):
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}] must be a TOML table"
-            )
-        dependency = raw_rule.get("dependency")
-        allowed_manifest_paths = raw_rule.get("allowed_manifest_paths", [])
-        allowed_source_roots = raw_rule.get("allowed_source_roots", [])
-        manifest_message = raw_rule.get("manifest_message")
-        source_message = raw_rule.get("source_message")
-        if not isinstance(dependency, str) or not dependency:
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].dependency must be a non-empty string"
-            )
-        if not isinstance(allowed_manifest_paths, list) or not all(isinstance(item, str) for item in allowed_manifest_paths):
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].allowed_manifest_paths must be an array of strings"
-            )
-        if not isinstance(allowed_source_roots, list) or not all(isinstance(item, str) for item in allowed_source_roots):
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].allowed_source_roots must be an array of strings"
-            )
-        if not isinstance(manifest_message, str) or not manifest_message:
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].manifest_message must be a non-empty string"
-            )
-        if not isinstance(source_message, str) or not source_message:
-            raise SystemExit(
-                f"[boundaries.global_dependency_ownership][{index}].source_message must be a non-empty string"
-            )
-        rules.append(
-            DependencyOwnershipRule(
-                dependency=dependency,
-                allowed_manifest_paths=tuple(Path(item) for item in allowed_manifest_paths),
-                allowed_source_roots=tuple(Path(item) for item in allowed_source_roots),
-                manifest_message=manifest_message,
-                source_message=source_message,
-            )
-        )
-    return rules
-
-
-def manifest_section_rules(repo_root: Path) -> list[ManifestSectionRule]:
-    config = boundary_config(repo_root)
-    raw_rules = config.get("manifest_section_rules", [])
-    if not isinstance(raw_rules, list):
-        raise SystemExit("[[boundaries.manifest_section_rules]] entries must be an array of tables")
-
-    rules: list[ManifestSectionRule] = []
-    for index, raw_rule in enumerate(raw_rules):
-        if not isinstance(raw_rule, dict):
-            raise SystemExit(
-                f"[boundaries.manifest_section_rules][{index}] must be a TOML table"
-            )
-        owner_manifest_path = raw_rule.get("owner_manifest_path")
-        dependency_package = raw_rule.get("dependency_package")
-        allowed_sections = raw_rule.get("allowed_sections", [])
-        message = raw_rule.get("message")
-        if not isinstance(owner_manifest_path, str) or not owner_manifest_path:
-            raise SystemExit(
-                f"[boundaries.manifest_section_rules][{index}].owner_manifest_path must be a non-empty string"
-            )
-        if not isinstance(dependency_package, str) or not dependency_package:
-            raise SystemExit(
-                f"[boundaries.manifest_section_rules][{index}].dependency_package must be a non-empty string"
-            )
-        if not isinstance(allowed_sections, list) or not all(isinstance(item, str) for item in allowed_sections):
-            raise SystemExit(
-                f"[boundaries.manifest_section_rules][{index}].allowed_sections must be an array of strings"
-            )
-        if not isinstance(message, str) or not message:
-            raise SystemExit(
-                f"[boundaries.manifest_section_rules][{index}].message must be a non-empty string"
-            )
-        rules.append(
-            ManifestSectionRule(
-                owner_manifest_path=Path(owner_manifest_path),
-                dependency_package=dependency_package,
-                allowed_sections=tuple(allowed_sections),
-                message=message,
-            )
-        )
-    return rules
-
-
-def manifest_dependency_allowlists(repo_root: Path) -> list[ManifestDependencyAllowlist]:
-    config = boundary_config(repo_root)
-    raw_rules = config.get("manifest_dependency_allowlists", [])
-    if not isinstance(raw_rules, list):
-        raise SystemExit(
-            "[[boundaries.manifest_dependency_allowlists]] entries must be an array of tables"
-        )
-
-    rules: list[ManifestDependencyAllowlist] = []
-    for index, raw_rule in enumerate(raw_rules):
-        if not isinstance(raw_rule, dict):
-            raise SystemExit(
-                f"[boundaries.manifest_dependency_allowlists][{index}] must be a TOML table"
-            )
-        owner_manifest_path = raw_rule.get("owner_manifest_path")
-        allowed_dependencies = raw_rule.get("allowed_dependencies")
-        boundary_record_path = raw_rule.get("boundary_record_path")
-        if not isinstance(owner_manifest_path, str) or not owner_manifest_path:
-            raise SystemExit(
-                f"[boundaries.manifest_dependency_allowlists][{index}].owner_manifest_path must be a non-empty string"
-            )
-        if not isinstance(allowed_dependencies, list) or not all(
-            isinstance(item, str) and item for item in allowed_dependencies
-        ):
-            raise SystemExit(
-                f"[boundaries.manifest_dependency_allowlists][{index}].allowed_dependencies must be an array of non-empty strings"
-            )
-        # One owner manifest may lock several of its boundary records.
-        if isinstance(boundary_record_path, str):
-            boundary_record_path = [boundary_record_path]
-        if boundary_record_path is not None and (
-            not isinstance(boundary_record_path, list)
-            or not boundary_record_path
-            or not all(isinstance(item, str) and item for item in boundary_record_path)
-        ):
-            raise SystemExit(
-                f"[boundaries.manifest_dependency_allowlists][{index}].boundary_record_path must be a non-empty string or array of non-empty strings when present"
-            )
-        rules.append(
-            ManifestDependencyAllowlist(
-                owner_manifest_path=Path(owner_manifest_path),
-                allowed_dependencies=tuple(allowed_dependencies),
-                boundary_record_paths=tuple(
-                    Path(path) for path in boundary_record_path or ()
-                ),
-            )
-        )
-    return rules
 
 
 def tomllib_load(path: Path) -> dict:
@@ -1106,128 +896,18 @@ def scb_observability_fixture_violation(
     )
 
 
-def yaml_scalar(value: str) -> object:
-    stripped = value.strip()
-    if stripped == "null":
-        return None
-    if stripped == "[]":
-        return []
-    if stripped.lower() == "true":
-        return True
-    if stripped.lower() == "false":
-        return False
-    return stripped
 
 
-def leading_spaces(text: str) -> int:
-    return len(text) - len(text.lstrip(" "))
 
 
-def next_content_line(lines: list[tuple[int, str]], start_index: int) -> tuple[int, str] | None:
-    for index in range(start_index, len(lines)):
-        line_number, text = lines[index]
-        if text.strip():
-            return line_number, text
-    return None
 
 
-def parse_yaml_list(lines: list[tuple[int, str]], start_index: int, indent: int) -> tuple[list[object], int]:
-    items: list[object] = []
-    index = start_index
-    while index < len(lines):
-        line_number, text = lines[index]
-        if not text.strip():
-            index += 1
-            continue
-        current_indent = leading_spaces(text)
-        if current_indent < indent:
-            break
-        if current_indent > indent:
-            raise ValueError(f"unexpected indentation in list item at line {line_number}: {text!r}")
-        stripped = text.strip()
-        if not stripped.startswith("- "):
-            break
-        items.append(yaml_scalar(stripped[2:]))
-        index += 1
-    return items, index
 
 
-def parse_yaml_mapping(lines: list[tuple[int, str]], start_index: int, indent: int) -> tuple[dict[str, object], int]:
-    mapping: dict[str, object] = {}
-    index = start_index
-    while index < len(lines):
-        line_number, text = lines[index]
-        if not text.strip():
-            index += 1
-            continue
-
-        current_indent = leading_spaces(text)
-        if current_indent < indent:
-            break
-        if current_indent > indent:
-            raise ValueError(f"unexpected indentation in mapping at line {line_number}: {text!r}")
-
-        stripped = text.strip()
-        if stripped.startswith("- "):
-            raise ValueError(f"unexpected list item in mapping at line {line_number}: {text!r}")
-        if ":" not in stripped:
-            raise ValueError(f"expected key/value pair at line {line_number}: {text!r}")
-
-        key, remainder = stripped.split(":", 1)
-        remainder = remainder.strip()
-        index += 1
-
-        if remainder:
-            mapping[key] = yaml_scalar(remainder)
-            continue
-
-        next_line = next_content_line(lines, index)
-        if next_line is None:
-            mapping[key] = {}
-            continue
-
-        next_line_number, next_text = next_line
-        next_indent = leading_spaces(next_text)
-        if next_indent <= current_indent:
-            mapping[key] = {}
-            continue
-
-        if next_text.strip().startswith("- "):
-            value, index = parse_yaml_list(lines, index, next_indent)
-        else:
-            value, index = parse_yaml_mapping(lines, index, next_indent)
-        mapping[key] = value
-
-    return mapping, index
 
 
-def parse_simple_yaml_document(text: str) -> dict[str, object]:
-    lines = [(line_number, line) for line_number, line in enumerate(text.splitlines(), start=1)]
-    mapping, _ = parse_yaml_mapping(lines, 0, 0)
-    return mapping
 
 
-def extract_yaml_blocks(path: Path) -> list[tuple[int, str]]:
-    blocks: list[tuple[int, str]] = []
-    lines = path.read_text(encoding="utf-8").splitlines()
-    in_block = False
-    start_line = 0
-    buffer: list[str] = []
-    for line_number, line in enumerate(lines, start=1):
-        stripped = line.strip()
-        if not in_block and stripped == YAML_FENCE_START:
-            in_block = True
-            start_line = line_number + 1
-            buffer = []
-            continue
-        if in_block and stripped == YAML_FENCE_END:
-            blocks.append((start_line, "\n".join(buffer)))
-            in_block = False
-            buffer = []
-            continue
-        if in_block:
-            buffer.append(line)
-    return blocks
 
 
 def nested_get(data: dict[str, object], path: tuple[str, ...]) -> object | None:
@@ -1259,12 +939,6 @@ def validate_atm_required_fields(data: dict[str, object]) -> list[str]:
         if nested_get(data, path) is None:
             errors.append(f"missing required field: {'.'.join(path)}")
     return errors
-
-
-def validate_package_name(value: str, *, field_name: str) -> str | None:
-    if not PACKAGE_NAME_RE.match(value):
-        return f"invalid {field_name}: {value!r}"
-    return None
 
 
 def validate_rust_path(value: str, *, field_name: str) -> str | None:
@@ -1439,68 +1113,6 @@ def build_boundary_record(
                         errors.append(error)
                 io_forbidden_source_modules.append((tag, tuple(modules)))
 
-    # delete when randlee/sc-lint#375 ships: a name that resolves to no crate.
-    error = validate_package_name(owner_package, field_name="owner_package")
-    if error:
-        errors.append(error)
-
-    # delete when randlee/sc-lint#377 ships: identifier and Rust path syntax,
-    # trait_only constructor, forbidden-edge self-edges, composition roots.
-    for label, value in (
-        ("owner_crate_path", owner_crate_path),
-        ("public.trait", public_trait),
-        ("public.facade", public_facade),
-        ("implementation.type", implementation_type),
-    ):
-        if value is not None:
-            error = validate_identifier(value, field_name=label)
-            if error:
-                errors.append(error)
-    if implementation_module is not None:
-        error = validate_rust_path(implementation_module, field_name="implementation.module")
-        if error:
-            errors.append(error)
-    for label, values in (
-        ("composition.roots entry", composition_roots),
-        ("testing.allowed_test_double_paths entry", allowed_test_double_paths),
-        ("testing.forbidden_test_bypasses entry", forbidden_test_bypasses),
-    ):
-        for path_name in values:
-            error = validate_rust_path(path_name, field_name=label)
-            if error:
-                errors.append(error)
-    for ref_name in forbidden_references:
-        if "::" not in ref_name:
-            error = validate_identifier(ref_name, field_name="references.forbidden entry")
-        else:
-            error = validate_rust_path(ref_name, field_name="references.forbidden entry")
-        if error:
-            errors.append(error)
-    if implementation_visibility == "trait_only" and implementation_constructor not in (None, "none"):
-        errors.append("implementation.constructor must be none when implementation.visibility is trait_only")
-    for edge in forbidden_edges:
-        match = FORBIDDEN_EDGE_RE.match(edge)
-        if match is not None and match.group("left") == match.group("right"):
-            errors.append(f"invalid dependencies.forbidden_edges self-edge: {edge!r}")
-    if composition_roots:
-        allowed_dependent_set = set(allowed_dependents)
-        for root in composition_roots:
-            crate_prefix = root.split("::", 1)[0]
-            if crate_prefix != owner_crate_path and crate_prefix.replace("_", "-") not in allowed_dependent_set:
-                errors.append(
-                    f"composition root {root!r} must also appear in dependencies.allowed_dependents"
-                )
-
-    # Markdown records are not read by the published loader; keep their
-    # owner-directory check here until the markdown loader is removed.
-    source_parts = source_path.parts
-    if len(source_parts) >= 3 and source_parts[0] == "docs" and source_parts[-1] == "boundaries.md":
-        doc_owner = source_path.parent.name
-        if doc_owner != owner_package:
-            errors.append(
-                f"document path owner mismatch: docs/{doc_owner}/boundaries.md declares owner_package {owner_package!r}"
-            )
-
     if errors:
         return None, [BoundaryViolation(base_location, f"[{boundary_id}] {error}") for error in errors]
 
@@ -1541,24 +1153,6 @@ def build_boundary_record(
 def parse_boundary_records(repo_root: Path) -> tuple[list[BoundaryRecord], list[BoundaryViolation]]:
     records: list[BoundaryRecord] = []
     violations: list[BoundaryViolation] = []
-    for doc_path in boundary_docs(repo_root):
-        rel_doc = doc_path.relative_to(repo_root)
-        for start_line, yaml_text in extract_yaml_blocks(doc_path):
-            try:
-                data = parse_simple_yaml_document(yaml_text)
-            except ValueError as error:
-                violations.append(
-                    BoundaryViolation(f"{rel_doc.as_posix()}:{start_line}", f"invalid boundary YAML: {error}")
-                )
-                continue
-            record, record_errors = build_boundary_record(
-                data=data,
-                source_path=rel_doc,
-                start_line=start_line,
-            )
-            violations.extend(record_errors)
-            if record is not None:
-                records.append(record)
     for toml_path in boundary_toml_files(repo_root):
         rel_toml = toml_path.relative_to(repo_root)
         try:
@@ -1644,298 +1238,15 @@ def dedupe_violations(violations: list[BoundaryViolation]) -> list[BoundaryViola
     return sorted(unique.values(), key=lambda item: (item.location, item.message))
 
 
-def collect_duplicate_record_violations(records: list[BoundaryRecord]) -> list[BoundaryViolation]:
-    # Duplicate boundary_id is rejected by the published loader. Duplicate
-    # names within one owner are not: delete when randlee/sc-lint#377 ships.
-    violations: list[BoundaryViolation] = []
-    by_owner_name: dict[tuple[str, str], BoundaryRecord] = {}
-    for record in records:
-        key = (record.owner_package, record.name)
-        existing_owner_name = by_owner_name.get(key)
-        if existing_owner_name is not None:
-            violations.append(
-                BoundaryViolation(
-                    record.location,
-                    f"duplicate boundary name {record.name!r} for owner_package {record.owner_package!r}; first declared at {existing_owner_name.location}",
-                )
-            )
-        else:
-            by_owner_name[key] = record
-    return violations
 
 
-def collect_manifest_consistency_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
-    # The published loader checks owner_crate_path when owner_package is a
-    # Cargo package name. It skips owners named by crate directory:
-    # delete when randlee/sc-lint#375 ships.
-    violations: list[BoundaryViolation] = []
-    alias_map = manifest_by_alias(repo_root)
-    for record in records:
-        info = alias_map.get(record.owner_package)
-        if info is None or record.owner_package == info.package_name:
-            continue
-        if record.owner_crate_path != info.crate_path_name:
-            violations.append(
-                BoundaryViolation(
-                    record.location,
-                    f"owner_crate_path {record.owner_crate_path!r} does not match workspace crate path {info.crate_path_name!r}",
-                )
-            )
-    return violations
 
 
-def collect_allowed_dependent_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
-    # Retained because published SCB-DEPENDENCY-002 (0.8.0) misses package-union
-    # allowed dependents, dev-edge separation and stale entries; delete when
-    # randlee/sc-lint#643 ships and a two-fault probe shows parity.
-    violations: list[BoundaryViolation] = []
-    infos = manifest_info(repo_root)
-    alias_map = manifest_by_alias(repo_root)
-    workspace_aliases = {alias for info in infos for alias in info.aliases}
-    records_by_owner: dict[str, list[BoundaryRecord]] = {}
-    for record in records:
-        records_by_owner.setdefault(record.owner_package, []).append(record)
-
-    for owner_package, owner_records in records_by_owner.items():
-        owner_info = next((info for info in infos if owner_package in info.aliases), None)
-        if owner_info is None:
-            continue
-        allowed = {alias for record in owner_records for alias in record.allowed_dependents}
-        live_allowed_aliases: set[str] = set()
-        for depender_info in infos:
-            if depender_info.path == owner_info.path:
-                continue
-            manifest = tomllib_load(depender_info.path)
-            for section_name, dependencies in dependency_sections(manifest):
-                is_dev_section = "dev-dependencies" in section_name
-                for dependency_name, dependency in dependencies.items():
-                    package_name = dependency_package_name(dependency_name, dependency)
-                    dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
-                    if dependency_info is None or dependency_info.path != owner_info.path:
-                        continue
-                    depender_aliases = set(depender_info.aliases)
-                    # A dev edge keeps an allowed dependent live but is never
-                    # an unexpected dependent.
-                    live_allowed_aliases.update(depender_aliases)
-                    if is_dev_section:
-                        continue
-                    if depender_aliases.isdisjoint(allowed):
-                        rel_manifest = depender_info.path.relative_to(repo_root).as_posix()
-                        violations.append(
-                            BoundaryViolation(
-                                f"{rel_manifest} [{section_name}]",
-                                f"{owner_package} allows dependents {sorted(allowed)!r}; found unexpected dependent {depender_info.package_name!r}",
-                            )
-                        )
-        if any(record.is_active for record in owner_records):
-            for allowed_alias in sorted(allowed):
-                if allowed_alias in live_allowed_aliases:
-                    continue
-                if allowed_alias not in workspace_aliases:
-                    violations.append(
-                        BoundaryViolation(
-                            owner_records[0].location,
-                            f"{owner_package} allows dependent {allowed_alias!r}, but no workspace crate exposes that alias",
-                        )
-                    )
-                    continue
-                violations.append(
-                    BoundaryViolation(
-                        owner_records[0].location,
-                        f"{owner_package} allows dependents {sorted(allowed)!r}; stale allowed dependent {allowed_alias!r} has no live Cargo edge",
-                    )
-                )
-    return violations
 
 
-# delete when randlee/sc-lint#136 ships
-def collect_manifest_dependency_allowlist_violations(
-    repo_root: Path,
-    records: list[BoundaryRecord],
-) -> list[BoundaryViolation]:
-    """Require every active boundary owner to declare all direct Cargo dependencies.
-
-    ``BoundaryRecord.allowed_dependencies`` remains per-seam documentation unless
-    a manifest policy explicitly names ``boundary_record_path``. That opt-in
-    makes the record and manifest allowlist mechanically identical. This policy
-    intentionally includes dependencies from normal, dev, build, and
-    target-specific sections so a new test dependency cannot silently bypass
-    review.
-    """
-    allowlists = manifest_dependency_allowlists(repo_root)
-    if not allowlists:
-        return []
-
-    violations: list[BoundaryViolation] = []
-    infos = manifest_info(repo_root)
-    alias_map = manifest_by_alias(repo_root)
-    infos_by_path = {
-        info.path.relative_to(repo_root): info
-        for info in infos
-    }
-    records_by_path = {record.source_path: record for record in records}
-    active_owner_paths = {
-        alias_map[record.owner_package].path.relative_to(repo_root)
-        for record in records
-        if record.is_active and record.owner_package in alias_map
-    }
-    allowlist_by_path: dict[Path, ManifestDependencyAllowlist] = {}
-    for allowlist in allowlists:
-        existing = allowlist_by_path.get(allowlist.owner_manifest_path)
-        if existing is not None:
-            violations.append(
-                BoundaryViolation(
-                    allowlist.owner_manifest_path.as_posix(),
-                    "duplicate manifest dependency allowlist",
-                )
-            )
-            continue
-        allowlist_by_path[allowlist.owner_manifest_path] = allowlist
-
-    for manifest_path in sorted(active_owner_paths):
-        if manifest_path not in allowlist_by_path:
-            violations.append(
-                BoundaryViolation(
-                    manifest_path.as_posix(),
-                    "active boundary owner has no manifest dependency allowlist",
-                )
-            )
-
-    for manifest_path, allowlist in sorted(allowlist_by_path.items()):
-        info = infos_by_path.get(manifest_path)
-        if info is None:
-            violations.append(
-                BoundaryViolation(
-                    manifest_path.as_posix(),
-                    "manifest dependency allowlist does not name a workspace crate manifest",
-                )
-            )
-            continue
-        if manifest_path not in active_owner_paths:
-            violations.append(
-                BoundaryViolation(
-                    manifest_path.as_posix(),
-                    "manifest dependency allowlist does not belong to an active boundary owner",
-                )
-            )
-            continue
-
-        for boundary_record_path in allowlist.boundary_record_paths:
-            record = records_by_path.get(boundary_record_path)
-            if record is None:
-                violations.append(
-                    BoundaryViolation(
-                        manifest_path.as_posix(),
-                        "manifest dependency allowlist names no parsed boundary record",
-                    )
-                )
-            elif record.owner_package not in info.aliases:
-                violations.append(
-                    BoundaryViolation(
-                        record.location,
-                        "manifest dependency allowlist and boundary record have different owners",
-                    )
-                )
-            else:
-                documented = set(record.allowed_dependencies) | set(record.allowed_dev_dependencies)
-                allowlisted = set(allowlist.allowed_dependencies)
-                missing = sorted(allowlisted - documented)
-                extra = sorted(documented - allowlisted)
-                if missing or extra:
-                    violations.append(
-                        BoundaryViolation(
-                            record.location,
-                            "boundary record allowed_dependencies diverges from its manifest dependency allowlist "
-                            f"(missing {missing!r}; extra {extra!r})",
-                        )
-                    )
-
-        manifest = tomllib_load(info.path)
-        actual_dependencies: set[str] = set()
-        actual_production_dependencies: set[str] = set()
-        actual_dev_dependencies: set[str] = set()
-        for section_name, dependencies in dependency_sections(manifest):
-            for dependency_name, dependency in dependencies.items():
-                package_name = dependency_package_name(dependency_name, dependency)
-                dependency_info = alias_map.get(package_name) or alias_map.get(dependency_name)
-                canonical_name = dependency_info.crate_dir_name if dependency_info is not None else package_name
-                actual_dependencies.add(canonical_name)
-                if section_name.endswith("dev-dependencies"):
-                    actual_dev_dependencies.add(canonical_name)
-                else:
-                    actual_production_dependencies.add(canonical_name)
-
-        for boundary_record_path in allowlist.boundary_record_paths:
-            record = records_by_path.get(boundary_record_path)
-            if record is not None and record.allowed_dev_dependencies:
-                documented_production = set(record.allowed_dependencies)
-                documented_dev = set(record.allowed_dev_dependencies)
-                production_missing = sorted(actual_production_dependencies - documented_production)
-                production_extra = sorted(documented_production - actual_production_dependencies)
-                dev_missing = sorted(actual_dev_dependencies - documented_dev)
-                dev_extra = sorted(documented_dev - actual_dev_dependencies)
-                if production_missing or production_extra or dev_missing or dev_extra:
-                    violations.append(
-                        BoundaryViolation(
-                            record.location,
-                            "boundary record dependency sections diverge from Cargo.toml "
-                            f"(production missing {production_missing!r}; production extra {production_extra!r}; "
-                            f"dev missing {dev_missing!r}; dev extra {dev_extra!r})",
-                        )
-                    )
-
-        allowed_dependencies = set(allowlist.allowed_dependencies)
-        location = f"{manifest_path.as_posix()} [manifest-dependency-allowlist]"
-        for dependency in sorted(actual_dependencies - allowed_dependencies):
-            violations.append(
-                BoundaryViolation(
-                    location,
-                    f"Cargo dependency {dependency!r} is not allowlisted",
-                )
-            )
-        for dependency in sorted(allowed_dependencies - actual_dependencies):
-            violations.append(
-                BoundaryViolation(
-                    location,
-                    f"allowlisted dependency {dependency!r} is not declared by Cargo.toml",
-                )
-            )
-    return violations
 
 
-def collect_forbidden_edge_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
-    # The published SCB-DEPENDENCY-003 enforces a forbidden edge when the
-    # record's owner and both edge sides are Cargo package names. It skips
-    # every other edge: delete when randlee/sc-lint#375 ships.
-    violations: list[BoundaryViolation] = []
-    alias_map = manifest_by_alias(repo_root)
-    package_names = {info.package_name for info in manifest_info(repo_root)}
-    for record in records:
-        for edge in record.forbidden_edges:
-            match = FORBIDDEN_EDGE_RE.match(edge)
-            if match is None:
-                continue
-            left_alias = match.group("left")
-            right_alias = match.group("right")
-            if {record.owner_package, left_alias, right_alias} <= package_names:
-                continue
-            left_manifest = alias_map.get(left_alias)
-            if left_manifest is None:
-                continue
-            manifest = tomllib_load(left_manifest.path)
-            rel_manifest = left_manifest.path.relative_to(repo_root).as_posix()
-            for section_name, dependencies in dependency_sections(manifest):
-                for dependency_name, dependency in dependencies.items():
-                    package_name = dependency_package_name(dependency_name, dependency)
-                    dependency_aliases = {dependency_name, package_name, package_name.replace("-", "_")}
-                    if right_alias in dependency_aliases:
-                        violations.append(
-                            BoundaryViolation(
-                                f"{rel_manifest} [{section_name}]",
-                                f"{record.boundary_id} forbids edge {left_alias} -> {right_alias}",
-                            )
-                        )
-    return violations
+
 
 
 def compile_reference_pattern(reference: str) -> re.Pattern[str]:
@@ -2827,62 +2138,6 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
     return violations
 
 
-def collect_special_case_violations(repo_root: Path) -> list[BoundaryViolation]:
-    violations: list[BoundaryViolation] = []
-    ownership_rules = dependency_ownership_rules(repo_root)
-    section_rules = manifest_section_rules(repo_root)
-
-    for manifest_path in workspace_manifests(repo_root):
-        manifest = tomllib_load(manifest_path)
-        rel_manifest_path = manifest_path.relative_to(repo_root)
-        rel_manifest = rel_manifest_path.as_posix()
-        for section_name, dependencies in dependency_sections(manifest):
-            for dependency_name, dependency in dependencies.items():
-                package_name = dependency_package_name(dependency_name, dependency)
-                for rule in ownership_rules:
-                    if package_name == rule.dependency and rel_manifest_path not in rule.allowed_manifest_paths:
-                        violations.append(
-                            BoundaryViolation(
-                                f"{rel_manifest} [{section_name}]",
-                                rule.manifest_message,
-                            )
-                        )
-                for rule in section_rules:
-                    if (
-                        rel_manifest_path == rule.owner_manifest_path
-                        and package_name == rule.dependency_package
-                        and section_name not in rule.allowed_sections
-                    ):
-                        violations.append(
-                            BoundaryViolation(
-                                f"{rel_manifest} [{section_name}]",
-                                rule.message,
-                            )
-                        )
-
-    for source_path in rust_sources(repo_root):
-        rel_source = source_path.relative_to(repo_root).as_posix()
-        text = source_path.read_text(encoding="utf-8")
-        for line_number, line in enumerate(text.splitlines(), start=1):
-            if is_comment_line(line):
-                continue
-            for rule in ownership_rules:
-                if not any(pattern.search(line) for pattern in dependency_import_patterns(rule.dependency)):
-                    continue
-                if any(
-                    (repo_root / allowed_root).resolve() == source_path.resolve()
-                    or (repo_root / allowed_root).resolve() in source_path.resolve().parents
-                    for allowed_root in rule.allowed_source_roots
-                ):
-                    continue
-                violations.append(
-                    BoundaryViolation(
-                        f"{rel_source}:{line_number}",
-                        rule.source_message,
-                    )
-                )
-    return violations
-
 
 def collect_scb_config_rule_violations(
     repo_root: Path,
@@ -3194,17 +2449,11 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     records, parse_violations = parse_boundary_records(repo_root)
     violations: list[BoundaryViolation] = []
     violations.extend(parse_violations)
-    violations.extend(collect_duplicate_record_violations(records))
-    violations.extend(collect_manifest_consistency_violations(repo_root, records))
-    violations.extend(collect_allowed_dependent_violations(repo_root, records))
-    violations.extend(collect_manifest_dependency_allowlist_violations(repo_root, records))
-    violations.extend(collect_forbidden_edge_violations(repo_root, records))
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
     violations.extend(collect_telemetry_sink_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
-    violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))
@@ -3393,17 +2642,11 @@ def run(repo_root: Path) -> int:
     started_monotonic = monotonic_now()
     records, parse_violations = parse_boundary_records(repo_root)
     violations = parse_violations.copy()
-    violations.extend(collect_duplicate_record_violations(records))
-    violations.extend(collect_manifest_consistency_violations(repo_root, records))
-    violations.extend(collect_allowed_dependent_violations(repo_root, records))
-    violations.extend(collect_manifest_dependency_allowlist_violations(repo_root, records))
-    violations.extend(collect_forbidden_edge_violations(repo_root, records))
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
     violations.extend(collect_telemetry_sink_implementation_violations(repo_root, records))
     violations.extend(collect_io_forbidden_source_violations(repo_root, records))
-    violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))

@@ -565,9 +565,15 @@ class BootstrapTests(IsolatedHomeTests):
 
     def test_sc_lint_clippy_profiles_keep_pyo3_on_the_bootstrap_interpreter(self) -> None:
         root = SCRIPT.parents[1]
-        profiles = json.loads((root / ".sc-lint" / "install.json").read_text(encoding="utf-8"))["profiles"]
+        install = json.loads((root / ".sc-lint" / "install.json").read_text(encoding="utf-8"))
+        profiles = install["profiles"]
         self.assertEqual(profiles["clippy"], ["just", "_sc-lint-clippy", "native"])
-        self.assertEqual(profiles["clippy-windows"], ["just", "_sc-lint-clippy", "xwin"])
+        # Windows-target Clippy runs through cargo xwin on the Linux CI leg only; the
+        # Windows leg's native Clippy already targets x86_64-pc-windows-msvc and the
+        # kit's host scope keeps it out of a developer's `just lint` on other hosts.
+        self.assertEqual(profiles["clippy-windows"], {"command": ["just", "_sc-lint-clippy", "xwin"], "platform": "linux"})
+        # `just lint ci all` runs the `ci` profile: every declared step, in declaration order.
+        self.assertEqual(install["lint_profiles"], {"ci": list(profiles)})
         justfile = (root / "Justfile").read_text(encoding="utf-8")
         self.assertIn("PYO3_PYTHON", justfile)
         self.assertIn("sc-lint clippy", justfile)

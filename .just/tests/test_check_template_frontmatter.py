@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json
 import sys
 import subprocess
 import tempfile
@@ -87,37 +86,6 @@ class TemplateFrontmatterTests(unittest.TestCase):
 
         self.assertEqual(len(templates), 2)
         self.assertTrue(any("atm-bd-orchestration" in template for template in templates))
-
-    def test_tracked_templates_skips_only_the_kit_managed_files(self) -> None:
-        listed = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=(
-                "docs/example.j2\n"
-                ".claude/skills/sc-lint-adoption/adopt.xml.j2\n"
-                "plugins/sc-lint/templates/sc-lint.toml.j2\n"
-            ),
-            stderr="",
-        )
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            (root / ".sc-lint").mkdir()
-            (root / ".sc-lint" / "installed.json").write_text(
-                json.dumps(
-                    {
-                        "managed": {
-                            ".claude/skills/sc-lint-adoption/adopt.xml.j2": "0" * 64,
-                            "plugins/sc-lint/templates/sc-lint.toml.j2": "0" * 64,
-                            "plugins/sc-lint/install.py": "0" * 64,
-                        }
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with patch("check_template_frontmatter.subprocess.run", return_value=listed):
-                templates = tracked_templates(root)
-
-        self.assertEqual(templates, ["docs/example.j2"])
 
     def test_tracked_templates_checks_everything_without_a_kit_manifest(self) -> None:
         listed = subprocess.CompletedProcess(
