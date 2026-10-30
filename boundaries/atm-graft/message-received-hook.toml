@@ -21,8 +21,9 @@ io_owns = ["host_nudge_injection"]
 io_forbidden = ["sqlite"]
 
 [dependencies]
-allowed_dependents = []
-allowed_dependencies = ["atm-core"]
+allowed_dependents = ["agent-team-mail"]
+allowed_dependencies = ["atm-core", "atm-daemon-client", "atm-http-runtime"]
+allowed_dev_dependencies = ["atm-runtime-test-support"]
 forbidden_edges = ["atm-graft -> atm-daemon", "atm-graft -> atm-daemon-bootstrap", "atm-graft -> atm-storage-rusqlite"]
 
 [references]

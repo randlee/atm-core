@@ -47,7 +47,10 @@ impl InternalNudgeCommand {
             return Ok(());
         };
         match input.sink_target {
-            BuiltInNudgeSinkTarget::Tmux => TmuxNudgeSink.deliver(&input.event, &template)?,
+            BuiltInNudgeSinkTarget::Tmux => {
+                tokio::task::spawn_blocking(move || TmuxNudgeSink.deliver(&input.event, &template))
+                    .await??;
+            }
             BuiltInNudgeSinkTarget::Graft => {
                 GraftNudgeSink.deliver(&input.event, &template).await?
             }

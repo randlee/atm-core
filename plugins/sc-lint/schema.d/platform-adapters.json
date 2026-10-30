@@ -1,0 +1,25 @@
+{
+  "properties": {
+    "analyzers": {
+      "properties": {
+        "portability": {
+          "properties": {
+            "platform_adapters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["unix_module", "windows_module", "reason"],
+                "properties": {
+                  "unix_module": {"type": "string", "pattern": ".*\\S.*"},
+                  "windows_module": {"type": "string", "pattern": ".*\\S.*"},
+                  "reason": {"type": "string", "pattern": ".*\\S.*"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

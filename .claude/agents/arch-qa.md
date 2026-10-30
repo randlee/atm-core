@@ -198,7 +198,8 @@ violation regardless of functional justification. This includes:
 - Adding new crates to permitted impl sites without updating boundary records
   in `docs/*/boundaries.md` and lead approval
 - Removing or bypassing enforcement layers: lint rules, boundary records,
-  `lint_boundaries.py`, `lint_manifests.py`, or CI checks
+  `lint_boundaries.py`, the `just lint manifests` step (sc-lint.toml step
+  `manifests`), or CI checks
 - Implementing `sealed::Sealed` or any boundary trait in a crate not listed as
   a permitted impl site in the corresponding boundary record
 

@@ -35,7 +35,7 @@ class CiScopeTests(unittest.TestCase):
             ci_scope.requires_runtime(
                 [
                     "scripts/release.py",
-                    ".just/run_lint.py",
+                    ".just/run_view.py",
                     "release/publish-artifacts.toml",
                     "docs/plan.md",
                     ".claude/agents/reviewer.md",

@@ -100,6 +100,10 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      - name: Configure platform cache directories
+        run: >-
+          python -c "import os; from pathlib import Path; cache_root = Path(os.environ['RUNNER_TEMP']); sc_lint = cache_root / 'sc-lint' / 'bin'; xwin = cache_root / 'xwin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(sc_lint) + os.linesep + 'XWIN_CACHE_DIR=' + str(xwin) + os.linesep)"
+
       - name: Expose Cargo binaries on PATH
         run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
 
@@ -112,7 +116,8 @@ jobs:
             ~/.cargo/.crates2.json
             ~/.cargo/binstall
             .bootstrap-venv
-          key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt') }}
+            ${{ env.SC_LINT_INSTALL_DIR }}
+          key: ${{ runner.os }}-bootstrap-${{ hashFiles('tools/bootstrap.toml', 'tools/bootstrap-requirements.txt', 'sc-lint.toml') }}
           restore-keys: |
             ${{ runner.os }}-bootstrap-
 
@@ -126,6 +131,15 @@ jobs:
           key: ${{ runner.os }}-just-lint-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-just-lint-cargo-registry-
+
+      - name: Cache xwin SDK
+        if: runner.os != 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.XWIN_CACHE_DIR }}
+          key: ${{ runner.os }}-xwin-${{ hashFiles('tools/bootstrap.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-xwin-
 
       - name: Install just
         uses: taiki-e/install-action@v2
@@ -142,6 +156,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up sc-lint
+        run: just setup
+
       - name: Verify pinned ecosystem tools
         shell: bash
         run: |
@@ -149,24 +166,23 @@ jobs:
           sc-compose --version
           wyvern --version
 
-      - name: Run just lint
-        run: just lint
-
-      - name: Show clippy diagnostics on lint failure
-        if: failure()
+      - name: Install Windows cross-lint tools
+        if: runner.os == 'Linux'
         shell: bash
         run: |
-          clippy_log="$(ls -t .just/logs/*-clippy.log 2>/dev/null | head -n 1)"
-          test -n "$clippy_log"
-          cat "$clippy_log"
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes llvm nasm
+          llvm_lib="$(command -v llvm-lib || find /usr/bin -maxdepth 1 -name 'llvm-lib-*' -executable -print -quit)"
+          test -n "${llvm_lib}"
+          sudo ln -sf "${llvm_lib}" /usr/local/bin/llvm-lib
 
-      - name: Upload lint logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: just-lint-logs-${{ matrix.os }}
-          path: .just/logs/**
-          retention-days: 7
+      - name: Run just lint
+        # The kit runs the `ci` lint profile from sc-lint.toml in parallel and
+        # keep-going, printing every failed step's output; `all` adds the
+        # Linux-tagged Windows-target Clippy step (a Windows host's native
+        # Clippy already targets x86_64-pc-windows-msvc).
+        run: just lint ci all
 
       - name: Run cargo audit
         run: cargo audit

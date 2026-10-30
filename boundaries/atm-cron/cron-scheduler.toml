@@ -4,7 +4,6 @@ owner_crate_path = "atm_cron"
 name = "CronScheduler"
 
 [public]
-trait = "CronScheduler"
 facade = "AtmCron"
 notes = "The only CronScheduler implementation (ADR-069)."
 
@@ -43,8 +42,10 @@ forbidden_test_bypasses = ["tokio::process::Command", "rusqlite::Connection"]
 [enforcement]
 lint_rules = ["LINT-BOUNDARY-CRON-SCHEDULER"]
 review_gates = ["no_runtime_or_bootstrap_edge", "parse_before_write", "stop_check_before_every_run", "missed_tick_replay", "concurrent_runs_of_one_schedule"]
-io_forbidden_source_modules = { sqlite = ["atm_cron::scheduler", "atm_cron::worker", "atm_cron::tick", "atm_cron::clock", "atm_cron::jitter", "atm_cron::expr"], process_spawn = ["atm_cron::scheduler", "atm_cron::worker", "atm_cron::tick", "atm_cron::clock", "atm_cron::jitter", "atm_cron::expr"], http_server = ["atm_cron::scheduler", "atm_cron::worker", "atm_cron::tick", "atm_cron::clock", "atm_cron::jitter", "atm_cron::expr"] }
 
 [status]
 state = "active"
 notes = ["Phase bk sprint bk-5: the daemon composes one scheduler and supervises its worker lifecycle."]
+
+[extensions.atm]
+io_forbidden_source_modules = { sqlite = ["atm_cron::scheduler", "atm_cron::worker", "atm_cron::tick", "atm_cron::clock", "atm_cron::jitter", "atm_cron::expr"], process_spawn = ["atm_cron::scheduler", "atm_cron::worker", "atm_cron::tick", "atm_cron::clock", "atm_cron::jitter", "atm_cron::expr"], http_server = ["atm_cron::scheduler", "atm_cron::worker", "atm_cron::tick", "atm_cron::clock", "atm_cron::jitter", "atm_cron::expr"] }

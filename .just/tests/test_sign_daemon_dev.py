@@ -11,6 +11,13 @@ import unittest
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "sign_daemon_dev.py"
+REPO_ROOT = SCRIPT.parents[1]
+JUST_DIR = SCRIPT.parent
+if str(JUST_DIR) not in sys.path:
+    sys.path.insert(0, str(JUST_DIR))
+
+from run_tests import load_test_manifest, selected_test_commands
+
 SPEC = importlib.util.spec_from_file_location("sign_daemon_dev", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 sign_daemon_dev = importlib.util.module_from_spec(SPEC)
@@ -140,12 +147,20 @@ class SignDaemonDevTests(unittest.TestCase):
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn("build:\n    cargo build --workspace\n    {{python_cmd}} .just/sign_daemon_dev.py", justfile)
 
-    def test_test_recipe_re_signs_debug_artifacts_after_tests(self) -> None:
-        justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
+    def test_manifest_test_recipe_signs_artifacts_after_test_steps(self) -> None:
+        justfile = (REPO_ROOT / "Justfile").read_text(encoding="utf-8")
+        manifest = load_test_manifest(REPO_ROOT)
+        selected = selected_test_commands(manifest, [])
+        names = [name for name, _ in selected]
+
+        self.assertEqual(names, ["python", "build", "workspace", "cli-surface", "daemon-signing"])
+        self.assertEqual(
+            manifest["daemon-signing"],
+            ["just", "_py", ".just/sign_daemon_dev.py"],
+        )
+        self.assertEqual(names[-1], "daemon-signing")
         self.assertIn(
-            "test mode='default':\n"
-            "    {{python_cmd}} .just/run_tests.py {{mode}}\n"
-            "    {{python_cmd}} .just/sign_daemon_dev.py",
+            "test *selectors:\n    {{python_cmd}} .just/run_tests.py {{selectors}}",
             justfile,
         )
 

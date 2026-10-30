@@ -33,7 +33,7 @@ forbidden = []
 request_types = ["core RuntimeAssembly inputs", "core sealed MessageReceivedHookSelector"]
 response_types = ["typed runtime lifecycle outcome"]
 error_types = ["AtmError"]
-notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral.", "AO2.3 parses the one explicit daemon launch argument into the core PeerWireMode; environment, durable settings, and TLS availability never select it.", "The bootstrap may compose peer-tls only in the explicit mTLS arm and passes only its opaque stream seam to atm-http-runtime.", "The process_spawn prohibition is source-module scoped to the atm_daemon_bootstrap facade and atm_daemon_bootstrap::hook_runner named in enforcement.io_forbidden_source_modules; it is not a crate-wide prohibition.", "atm_daemon_bootstrap::process_deadline is the sole owner of hook_process_spawn; hook_runner delegates all hook subprocess creation to that helper.", "atm_daemon_bootstrap::received_hook_selector is an explicit separate process_spawn exception for the pre-existing receiver-hook selection subprocess, not an owner of hook_process_spawn."]
+notes = ["The concrete storage factory is legal only at this composition boundary; atm-daemon and atm-http-runtime remain backend-neutral.", "AO2.3 parses the one explicit daemon launch argument into the core PeerWireMode; environment, durable settings, and TLS availability never select it.", "The bootstrap may compose peer-tls only in the explicit mTLS arm and passes only its opaque stream seam to atm-http-runtime.", "The process_spawn prohibition is source-module scoped to the atm_daemon_bootstrap facade and atm_daemon_bootstrap::hook_runner named in extensions.atm.io_forbidden_source_modules; it is not a crate-wide prohibition.", "atm_daemon_bootstrap::process_deadline is the sole owner of hook_process_spawn; hook_runner delegates all hook subprocess creation to that helper.", "atm_daemon_bootstrap::received_hook_selector is an explicit separate process_spawn exception for the pre-existing receiver-hook selection subprocess, not an owner of hook_process_spawn."]
 
 [testing]
 allowed_test_double_paths = []
@@ -43,9 +43,9 @@ forbidden_test_bypasses = ["legacy_daemon_server", "legacy_dispatcher", "raw_htt
 lint_rules = ["LINT-BOUNDARY-REPLACEMENT-DAEMON-COMPOSITION"]
 review_gates = ["owner_before_bind", "one_runtime_root", "framework_adapters_only", "no_legacy_fallback"]
 
-[enforcement.io_forbidden_source_modules]
-process_spawn = ["atm_daemon_bootstrap", "atm_daemon_bootstrap::hook_runner"]
-
 [status]
 state = "active"
 notes = ["AL.8 active composition boundary. The old atm-daemon source tree remains reference-only until Phase AM removes it."]
+
+[extensions.atm.io_forbidden_source_modules]
+process_spawn = ["atm_daemon_bootstrap", "atm_daemon_bootstrap::hook_runner"]

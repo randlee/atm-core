@@ -34,7 +34,8 @@ io_forbidden = [
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core"]
+allowed_dependencies = ["atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-http-runtime", "atm-observability", "atm-storage"]
+allowed_dev_dependencies = ["atm-graft", "atm-runtime-test-support"]
 forbidden_edges = [
   "atm-core -> sc-observability",
 ]

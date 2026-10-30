@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -12,7 +14,6 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from unittest import mock
-import hashlib
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "bootstrap.py"
@@ -254,12 +255,14 @@ class BootstrapTests(IsolatedHomeTests):
             "cargo-audit": "0.22.2",
             "cargo-shear": "1.13.3",
             "cargo-modules": "0.26.0",
+            "cargo-xwin": "0.18.4",
         })
         self.assertEqual(dict(manifest.cargo_allowed_strategies), {
             "cargo-deny": (),
             "cargo-audit": ("quick-install",),
             "cargo-shear": (),
             "cargo-modules": ("quick-install",),
+            "cargo-xwin": (),
         })
         self.assertEqual(manifest.cargo_binstall, "1.22.0")
         self.assertEqual(
@@ -302,6 +305,25 @@ class BootstrapTests(IsolatedHomeTests):
             bootstrap.bootstrap(manifest, dry_run=True)
         run.assert_not_called()
         verify.assert_not_called()
+
+    def test_windows_target_is_installed_only_off_windows(self) -> None:
+        with mock.patch.object(bootstrap, "run") as run:
+            with mock.patch.object(bootstrap.sys, "platform", "linux"):
+                bootstrap.install_windows_msvc_target(dry_run=False)
+        run.assert_called_once_with(
+            ["rustup", "target", "add", bootstrap.WINDOWS_MSVC_TARGET], dry_run=False
+        )
+        with mock.patch.object(bootstrap, "run") as run:
+            with mock.patch.object(bootstrap.sys, "platform", "win32"):
+                bootstrap.install_windows_msvc_target(dry_run=False)
+        run.assert_not_called()
+
+    def test_cargo_xwin_is_required_only_off_windows(self) -> None:
+        manifest = bootstrap.load_manifest()
+        with mock.patch.object(bootstrap.sys, "platform", "win32"):
+            self.assertNotIn(bootstrap.CARGO_XWIN, dict(bootstrap.cargo_tools_for_host(manifest)))
+        with mock.patch.object(bootstrap.sys, "platform", "linux"):
+            self.assertIn(bootstrap.CARGO_XWIN, dict(bootstrap.cargo_tools_for_host(manifest)))
 
     def test_bootstrap_installs_pinned_binstall_before_cargo_tools(self) -> None:
         manifest = bootstrap.load_manifest()
@@ -389,6 +411,7 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=True),
             mock.patch.object(bootstrap, "verify_installed_tools"),
+            mock.patch.object(bootstrap, "install_windows_msvc_target"),
             mock.patch.object(bootstrap, "run") as run,
             redirect_stdout(output),
         ):
@@ -409,6 +432,7 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "wyvern_matches", return_value=True),
             mock.patch.object(bootstrap, "sc_compose_wheel_matches", return_value=False),
             mock.patch.object(bootstrap, "verify_installed_tools"),
+            mock.patch.object(bootstrap, "install_windows_msvc_target"),
             mock.patch.object(bootstrap, "run") as run,
         ):
             bootstrap.bootstrap(manifest, dry_run=False)
@@ -502,6 +526,32 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertIn("cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c", workflow)
         self.assertEqual(workflow.count("Pre-seed pinned cargo-binstall (bootstrap also verifies)"), 2)
         self.assertGreaterEqual(workflow.count("run: just bootstrap"), 2)
+        just_lint = workflow.split("\n  fmt:", 1)[0]
+        sc_lint_setup = "- name: Set up sc-lint\n        run: just setup"
+        self.assertIn(sc_lint_setup, just_lint)
+        self.assertLess(just_lint.index("SC_LINT_INSTALL_DIR"), just_lint.index(sc_lint_setup))
+        self.assertLess(just_lint.index(sc_lint_setup), just_lint.index("- name: Run just lint"))
+        self.assertLess(just_lint.index("run: just bootstrap"), just_lint.index("sc-compose --version"))
+
+    def test_ci_caches_xwin_sdk_for_non_windows_lint_before_clippy(self) -> None:
+        workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertNotIn("SC_LINT_INSTALL_DIR: ${{ runner.temp }}", workflow)
+        self.assertEqual(workflow.count("- name: Configure platform cache directories"), 1)
+        self.assertEqual(workflow.count("os.environ['RUNNER_TEMP']"), 1)
+        self.assertEqual(workflow.count("os.environ['GITHUB_ENV']"), 1)
+        self.assertEqual(workflow.count("${{ env.SC_LINT_INSTALL_DIR }}"), 1)
+        just_lint = workflow.split("\n  fmt:", 1)[0]
+        self.assertIn("xwin = cache_root / 'xwin'", just_lint)
+        self.assertIn("'XWIN_CACHE_DIR=' + str(xwin)", just_lint)
+        cache_step = "- name: Cache xwin SDK\n        if: runner.os != 'Windows'\n        uses: actions/cache@v4"
+        self.assertIn(cache_step, just_lint)
+        self.assertIn("path: ${{ env.XWIN_CACHE_DIR }}", just_lint)
+        self.assertLess(just_lint.index("XWIN_CACHE_DIR=' + str(xwin)"), just_lint.index(cache_step))
+        self.assertLess(just_lint.index(cache_step), just_lint.index("run: just lint ci all"))
+
+        test_job = workflow.split("\n  test:", 1)[1].split("\n  hermes-atm-release-wheels:", 1)[0]
+        self.assertNotIn("SC_LINT_INSTALL_DIR", test_job)
+        self.assertNotIn("Configure platform cache directories", test_job)
 
     def test_just_recipes_propagate_the_bootstrap_python_to_children(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
@@ -512,6 +562,22 @@ class BootstrapTests(IsolatedHomeTests):
             "    {{python_cmd}} -m unittest scripts/smoke/test_run_admission_capacity.py",
             justfile,
         )
+
+    def test_sc_lint_clippy_profiles_keep_pyo3_on_the_bootstrap_interpreter(self) -> None:
+        root = SCRIPT.parents[1]
+        install = json.loads((root / ".sc-lint" / "install.json").read_text(encoding="utf-8"))
+        profiles = install["profiles"]
+        self.assertEqual(profiles["clippy"], ["just", "_sc-lint-clippy", "native"])
+        # Windows-target Clippy runs through cargo xwin on the Linux CI leg only; the
+        # Windows leg's native Clippy already targets x86_64-pc-windows-msvc and the
+        # kit's host scope keeps it out of a developer's `just lint` on other hosts.
+        self.assertEqual(profiles["clippy-windows"], {"command": ["just", "_sc-lint-clippy", "xwin"], "platform": "linux"})
+        # `just lint ci all` runs the `ci` profile: every declared step, in declaration order.
+        self.assertEqual(install["lint_profiles"], {"ci": list(profiles)})
+        justfile = (root / "Justfile").read_text(encoding="utf-8")
+        self.assertIn("PYO3_PYTHON", justfile)
+        self.assertIn("sc-lint clippy", justfile)
+        self.assertIn("Delete when randlee/sc-lint#198 ships.", justfile)
 
     def test_ci_uses_bootstrap_python_and_requirements_for_all_pydantic_consumers(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")

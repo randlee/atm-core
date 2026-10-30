@@ -25,12 +25,12 @@ dependencies = [
  "chrono",
  "clap",
  "libc",
+ "noyalib",
  "opentelemetry-proto",
  "sc-observability",
  "sc-observability-types",
  "serde",
  "serde_json",
- "serde_yaml",
  "serial_test",
  "tempfile",
  "time",
@@ -57,7 +57,7 @@ dependencies = [
  "interprocess",
  "libc",
  "parking_lot",
- "sc-lint-attributes 0.5.0",
+ "sc-lint-attributes 0.8.0",
  "semver",
  "serde",
  "serde_json",
@@ -341,10 +341,10 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "noyalib",
  "reqwest",
  "serde",
  "serde_json",
- "serde_yaml",
  "tempfile",
  "tokio",
  "tower",
@@ -451,7 +451,7 @@ version = "1.6.5"
 dependencies = [
  "async-trait",
  "atm-storage",
- "base64",
+ "base64 0.22.1",
  "chrono",
  "ring",
  "rusqlite",
@@ -1399,6 +1399,8 @@ checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
 dependencies = [
  "equivalent",
  "hashbrown 0.17.1",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1473,6 +1475,12 @@ name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
+
+[[package]]
+name = "libm"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libsqlite3-sys"
@@ -1589,6 +1597,24 @@ checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
+]
+
+[[package]]
+name = "noyalib"
+version = "0.0.57"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70b8960f9f4668b69cae4ca71106c84d38ca1ea9f41a9acc20ce55473b967849"
+dependencies = [
+ "hashbrown 0.17.1",
+ "indexmap",
+ "itoa",
+ "libm",
+ "memchr",
+ "rustc-hash",
+ "ryu",
+ "serde_core",
+ "serde_ignored",
+ "smallvec",
 ]
 
 [[package]]
@@ -2349,32 +2375,14 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-attributes"
-version = "0.5.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46de564becf8b5da1445d9b58c14807d8c2a2fec58fc23b597ddf48f354acd89"
+checksum = "8d5f14a8255d64edb629cd09440f8d7808938f8a10f5a0192f0c35d166a89bb3"
 dependencies = [
  "proc-macro2",
  "quote",
- "sc-lint-directives 0.5.0",
+ "sc-lint-directives 0.8.0",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "sc-lint-boundary"
-version = "1.6.5"
-dependencies = [
- "anyhow",
- "cargo_metadata",
- "clap",
- "proc-macro2",
- "quote",
- "sc-lint-attributes 0.5.0",
- "sc-lint-directives 1.6.5",
- "serde",
- "serde_json",
- "syn 2.0.119",
- "tempfile",
- "toml 0.8.23",
 ]
 
 [[package]]
@@ -2388,18 +2396,10 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-directives"
-version = "0.5.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad3306ff8f041d4c122cfac038aa1be7893c7b399f5e8f28b95d74362538c615"
+checksum = "db07782696a5de983279df5f635489a00c7b681b57d5812fad05e82da6dc9fa8"
 dependencies = [
- "syn 2.0.119",
-]
-
-[[package]]
-name = "sc-lint-directives"
-version = "1.6.5"
-dependencies = [
- "quote",
  "syn 2.0.119",
 ]
 
@@ -2541,6 +2541,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.3",
+]
+
+[[package]]
+name = "serde_ignored"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "115dffd5f3853e06e746965a20dcbae6ee747ae30b543d91b0e089668bb07798"
+dependencies = [
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
