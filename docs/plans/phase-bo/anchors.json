@@ -728,7 +728,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "The fundamental atm-bd types must live in one Rust crate distributed through crates.io and a PyPI abi3 wheel, never through a git-source or GitHub-asset pin.",
-      "quote": "I am fine w/ you building a rust crate w/ the fundemental types if it can easily be distributed. does wheel pull from gh?",
+      "quote": "I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed. does wheel pull from gh?",
       "kind": "structural",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",

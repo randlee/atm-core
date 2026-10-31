@@ -318,7 +318,7 @@ Fixtures:
 
 Anchor: The fundamental atm-bd types must live in one Rust crate distributed through crates.io and a PyPI abi3 wheel, never through a git-source or GitHub-asset pin.
 
-> I am fine w/ you building a rust crate w/ the fundemental types if it can easily be distributed. does wheel pull from gh?
+> I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed. does wheel pull from gh?
 
 Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 3.
 

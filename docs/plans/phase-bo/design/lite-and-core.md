@@ -40,7 +40,7 @@ need publishing for quick Python fixes. So `crates/atm-bd-types` (PyO3 behind a 
 version; the Python package pins a compatible range and `release.yml` never touches the crate. The crate defines:
 `Profile {Full, Lite}`, `Provider {Github, Azure}`, `Transition {DevClose, FixClose, QaPass, QaFail, Refused}`,
 `ErrorKind` + `Error {kind, message, fix}`, `StackGateResult`, `PrOp`, `ProviderOp`, `ProviderCommands`, `CloseVars`.
-Python re-declares none of them.
+Python redeclares none of them.
 
 ## Profiles and providers (bo-2)
 
