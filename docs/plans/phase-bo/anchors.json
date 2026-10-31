@@ -25,8 +25,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -52,6 +52,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -77,8 +83,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -97,6 +103,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -122,8 +134,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -149,6 +161,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -174,8 +192,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -201,6 +219,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -226,8 +250,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 5,
-      "status": "proposed",
+      "version": 6,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -267,6 +291,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -292,8 +322,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -312,6 +342,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -337,8 +373,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -364,6 +400,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -389,8 +431,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 5,
-      "status": "proposed",
+      "version": 6,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -434,6 +476,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -459,8 +507,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -486,6 +534,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -511,8 +565,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -538,6 +592,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -563,8 +623,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -590,6 +650,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -615,8 +681,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -635,6 +701,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -660,8 +732,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -680,6 +752,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -705,8 +783,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -725,6 +803,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -750,8 +834,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -777,6 +861,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -802,8 +892,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -822,6 +912,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -847,8 +943,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -867,6 +963,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -892,8 +994,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -919,6 +1021,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -944,8 +1052,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -971,6 +1079,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -996,8 +1110,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "proposed",
+      "version": 4,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1023,6 +1137,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -1048,8 +1168,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 4,
-      "status": "proposed",
+      "version": 5,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1082,6 +1202,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -1107,8 +1233,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 6,
-      "status": "proposed",
+      "version": 7,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1160,6 +1286,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -1185,8 +1317,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1205,6 +1337,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -1230,8 +1368,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1250,6 +1388,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     },
@@ -1275,8 +1419,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1295,6 +1439,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-10-31T23:58:50+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-10-31: \"lock\""
         }
       ]
     }

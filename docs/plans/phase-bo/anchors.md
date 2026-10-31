@@ -6,31 +6,31 @@ Intent: `docs/plans/phase-bo/intent.md`
 
 | ID | Status | Summary | Stated |
 | --- | --- | --- | --- |
-| ANC-001 | proposed | Installer --github/--azure select template commands | 2026-10-31 |
-| ANC-002 | proposed | Lite hook business logic in one file | 2026-10-31 |
-| ANC-003 | proposed | Transitions are enums with exhaustive checks | 2026-10-31 |
-| ANC-004 | proposed | Repeated test patterns use common helpers | 2026-10-31 |
-| ANC-005 | proposed | Same tool interfaces for every profile | 2026-10-31 |
-| ANC-006 | proposed | One bead schema for all profiles | 2026-10-31 |
-| ANC-007 | proposed | Lite leaves sanity schema items undefined | 2026-10-31 |
-| ANC-008 | proposed | Stack check is git-only, no gh stack | 2026-10-31 |
-| ANC-009 | proposed | Stack check compares base and top only | 2026-10-31 |
-| ANC-010 | proposed | Close hook blocks on PR base vs stack top mismatch | 2026-10-31 |
-| ANC-011 | proposed | One profile per phase | 2026-10-31 |
-| ANC-012 | proposed | Profile-only files under the profile skill | 2026-10-31 |
-| ANC-013 | proposed | Shared files installed once to .atm-bd | 2026-10-31 |
-| ANC-014 | proposed | Lite has its own task hook file | 2026-10-31 |
-| ANC-015 | proposed | Lite runs with one agent | 2026-10-31 |
-| ANC-016 | proposed | Result values, no throwing | 2026-10-31 |
-| ANC-017 | proposed | Fundamental types in one Rust crate | 2026-10-31 |
-| ANC-018 | proposed | Python fixes release without the crate | 2026-10-31 |
-| ANC-019 | proposed | Hook organized by transition type | 2026-10-31 |
-| ANC-020 | proposed | Shared types live in atm-bd-core | 2026-10-31 |
-| ANC-021 | proposed | Stacking works on Azure Git repos | 2026-10-31 |
-| ANC-022 | proposed | pyright covers every plugin and console script | 2026-10-31 |
-| ANC-023 | proposed | Profile comes from the phase file; hook, templates, cron and console align on it | 2026-10-31 |
-| ANC-024 | proposed | No console on a lite phase | 2026-10-31 |
-| ANC-025 | proposed | GitHub prompts use gh stack; gh stack view --json is the view | 2026-10-31 |
+| ANC-001 | locked | Installer --github/--azure select template commands | 2026-10-31 |
+| ANC-002 | locked | Lite hook business logic in one file | 2026-10-31 |
+| ANC-003 | locked | Transitions are enums with exhaustive checks | 2026-10-31 |
+| ANC-004 | locked | Repeated test patterns use common helpers | 2026-10-31 |
+| ANC-005 | locked | Same tool interfaces for every profile | 2026-10-31 |
+| ANC-006 | locked | One bead schema for all profiles | 2026-10-31 |
+| ANC-007 | locked | Lite leaves sanity schema items undefined | 2026-10-31 |
+| ANC-008 | locked | Stack check is git-only, no gh stack | 2026-10-31 |
+| ANC-009 | locked | Stack check compares base and top only | 2026-10-31 |
+| ANC-010 | locked | Close hook blocks on PR base vs stack top mismatch | 2026-10-31 |
+| ANC-011 | locked | One profile per phase | 2026-10-31 |
+| ANC-012 | locked | Profile-only files under the profile skill | 2026-10-31 |
+| ANC-013 | locked | Shared files installed once to .atm-bd | 2026-10-31 |
+| ANC-014 | locked | Lite has its own task hook file | 2026-10-31 |
+| ANC-015 | locked | Lite runs with one agent | 2026-10-31 |
+| ANC-016 | locked | Result values, no throwing | 2026-10-31 |
+| ANC-017 | locked | Fundamental types in one Rust crate | 2026-10-31 |
+| ANC-018 | locked | Python fixes release without the crate | 2026-10-31 |
+| ANC-019 | locked | Hook organized by transition type | 2026-10-31 |
+| ANC-020 | locked | Shared types live in atm-bd-core | 2026-10-31 |
+| ANC-021 | locked | Stacking works on Azure Git repos | 2026-10-31 |
+| ANC-022 | locked | pyright covers every plugin and console script | 2026-10-31 |
+| ANC-023 | locked | Profile comes from the phase file; hook, templates, cron and console align on it | 2026-10-31 |
+| ANC-024 | locked | No console on a lite phase | 2026-10-31 |
+| ANC-025 | locked | GitHub prompts use gh stack; gh stack view --json is the view | 2026-10-31 |
 
 ## ANC-001
 
@@ -38,7 +38,7 @@ Anchor: The installer must accept --github and --azure flags that select the pro
 
 > could we add --github and --azure flags which inject the proper commands into sc-compose j2 templates?
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Installer --github/--azure select template commands
 
@@ -56,7 +56,7 @@ Anchor: The lite profile's task-close hook business logic must live in a single 
 
 > The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 3.
 
 Summary: Lite hook business logic in one file
 
@@ -74,7 +74,7 @@ Anchor: Transitions in the lite hook must be enum members with exhaustive checks
 
 > The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Transitions are enums with exhaustive checks
 
@@ -92,7 +92,7 @@ Anchor: Test code written in the phase must implement its repeated patterns thro
 
 > test code is fine, but should be written efficiently w/ repeated patterns using common methods.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Repeated test patterns use common helpers
 
@@ -110,7 +110,7 @@ Anchor: atm-bd cron, atm-bd console and atm-bd queues must be invoked with the s
 
 > We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 5.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 6.
 
 Summary: Same tool interfaces for every profile
 
@@ -128,7 +128,7 @@ Anchor: All profiles must use the same schema.
 
 > This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 3.
 
 Summary: One bead schema for all profiles
 
@@ -146,7 +146,7 @@ Anchor: The shared schema must allow the lite profile to leave its sanity items 
 
 > This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Lite leaves sanity schema items undefined
 
@@ -164,7 +164,7 @@ Anchor: The stack check of the dev and fix close hook never invokes the gh stack
 
 > This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 5.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 6.
 
 Summary: Stack check is git-only, no gh stack
 
@@ -182,7 +182,7 @@ Anchor: The stack check must verify stacking by comparing only the PR base and t
 
 > This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Stack check compares base and top only
 
@@ -200,7 +200,7 @@ Anchor: The dev and fix close hook must compare the PR base with the stack top (
 
 > 1) dev/fix 'atm task close' would check pr base vs. stack top (blocking close if not stacked properly) then do bd close, atm task close.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Close hook blocks on PR base vs stack top mismatch
 
@@ -218,7 +218,7 @@ Anchor: All beads of a phase must carry the same profile value (lite or full) as
 
 > 2) never mix profiles in the same phase.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: One profile per phase
 
@@ -236,7 +236,7 @@ Anchor: Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only 
 
 > i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 3.
 
 Summary: Profile-only files under the profile skill
 
@@ -254,7 +254,7 @@ Anchor: Shared scripts and templates must live at one common point, .atm-bd/scri
 
 > scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 3.
 
 Summary: Shared files installed once to .atm-bd
 
@@ -272,7 +272,7 @@ Anchor: The atm-bd-lite skill must have its own task-hook Python file, separate 
 
 > the atm-bd-lite would have a completely different atm-task-hook python file.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 3.
 
 Summary: Lite has its own task hook file
 
@@ -290,7 +290,7 @@ Anchor: The lite profile's orchestration must be runnable by a single agent.
 
 > it will be a much simpler orchestration that could be run by a single agent or small team.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Lite runs with one agent
 
@@ -308,7 +308,7 @@ Anchor: New or rewritten Python code in the phase must return Result<T,Err> valu
 
 > use pyright, return Result<T,Err> (no throwing)
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 3.
 
 Summary: Result values, no throwing
 
@@ -326,7 +326,7 @@ Anchor: The fundamental atm-bd types must be defined in one Rust crate.
 
 > I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 3.
 
 Summary: Fundamental types in one Rust crate
 
@@ -344,7 +344,7 @@ Anchor: A quick Python-only fix of atm-bd must release without a crate publish s
 
 > I am hopeful we won't be changing the atm-bd crate too often so we don't need a complicated publish process for quick python fixes
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Python fixes release without the crate
 
@@ -362,7 +362,7 @@ Anchor: The lite task-hook file must be organized by transition type: one handle
 
 > The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Hook organized by transition type
 
@@ -380,7 +380,7 @@ Anchor: Types shared between all profiles must be defined in atm-bd-core.
 
 > This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Shared types live in atm-bd-core
 
@@ -398,7 +398,7 @@ Anchor: Stack linking and the stack check in both profiles must work on an Azure
 
 > One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 4.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 5.
 
 Summary: Stacking works on Azure Git repos
 
@@ -416,7 +416,7 @@ Anchor: Every Python file and extensionless Python script in the plugin and the 
 
 > use pyright, return Result<T,Err> (no throwing)
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 6.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 7.
 
 Summary: pyright covers every plugin and console script
 
@@ -434,7 +434,7 @@ Anchor: The task hook, the dispatch templates, the cron script and the console m
 
 > the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.
 
-Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note, 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note, 2026-10-31. Status: locked. Version 3.
 
 Summary: Profile comes from the phase file; hook, templates, cron and console align on it
 
@@ -452,7 +452,7 @@ Anchor: The console never dispatches work for a phase whose phase file sets the 
 
 > the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.
 
-Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note, 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note, 2026-10-31. Status: locked. Version 3.
 
 Summary: No console on a lite phase
 
@@ -470,7 +470,7 @@ Anchor: Agent prompt templates rendered for the GitHub provider must use gh stac
 
 > we can and should use ‘gh stack’ in agent prompts if github is used.  ‘gh stack view —json’ is best view of stack and inexpensive if tokens available.
 
-Said by Rand, planning session 2026-10-31 (fenix), note on ANC-008, 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-31 (fenix), note on ANC-008, 2026-10-31. Status: locked. Version 3.
 
 Summary: GitHub prompts use gh stack; gh stack view --json is the view
 
