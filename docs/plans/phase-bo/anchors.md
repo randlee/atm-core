@@ -1,8 +1,8 @@
-# Anchors - phase-current
+# Anchors - phase-bo
 
 Constraints captured during planning. Each anchor is a testable statement written by the orchestrator and approved by the user; the user's verbatim words are kept beneath it as provenance. Every anchor is judged at the planning gate and again at the development gate. Edit `anchors.json`, not this file; this file is rendered.
 
-Intent: `doc/plan/phase-current/intent.md`
+Intent: `docs/plans/phase-bo/intent.md`
 
 | ID | Status | Summary | Stated |
 | --- | --- | --- | --- |
@@ -21,6 +21,10 @@ Intent: `doc/plan/phase-current/intent.md`
 | ANC-013 | proposed | Shared files installed once to .atm-bd | 2026-10-31 |
 | ANC-014 | proposed | Lite has its own hook file | 2026-10-31 |
 | ANC-015 | proposed | Lite runs with one agent, no sanity | 2026-10-27 |
+| ANC-016 | proposed | pyright strict + Result, no throwing | 2026-10-31 |
+| ANC-017 | proposed | Types crate on crates.io + PyPI wheel | 2026-10-31 |
+| ANC-018 | proposed | Hook logic pure, fireable by Rust cron | 2026-10-31 |
+| ANC-019 | proposed | Crate version independent of Python releases | 2026-10-31 |
 
 ## ANC-001
 
@@ -291,3 +295,75 @@ Deterministic check to pair with the development gate: the lite sprint-group for
 Fixtures:
 - pass: The lite sprint-group formula pours dev and qa beads; one agent dispatches, develops and closes QA in the live run.
 - fail: The lite formula pours a sanity bead that a second agent must close before QA.
+
+## ANC-016
+
+Anchor: New or rewritten Python code in the phase must return Result values for expected failures instead of raising, and every touched file must pass pyright strict.
+
+> ok, are we following the unwritten python-best-practices?  use pyright, return Result<T,Err> (no throwing), can you define rust traits for python to use?
+
+Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+
+Summary: pyright strict + Result, no throwing
+
+Scope: adds or rewrites Python code in atm-bd-orchestration
+
+Deterministic check to pair with the development gate: pyright strict reports 0 errors on every file in the phase diff; grep '^\s*raise ' over new modules finds only programmer-error asserts
+
+Fixtures:
+- pass: profile.py returns Result[Profile]; main maps Err to exit code 2 and JSON; the file is pyright strict.
+- fail: load_provider raises ValueError on an unknown provider and the module has no strict directive.
+
+## ANC-017
+
+Anchor: The fundamental atm-bd types must live in one Rust crate distributed through crates.io and a PyPI abi3 wheel, never through a git-source or GitHub-asset pin.
+
+> I am fine w/ you building a rust crate w/ the fundemental types if it can easily be distributed. does wheel pull from gh?
+
+Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 3.
+
+Summary: Types crate on crates.io + PyPI wheel
+
+Scope: adds or changes shared enums, error types, provider or stack-gate types, or their distribution
+
+Deterministic check to pair with the development gate: uv pip install 'atm-bd-types>=<X.Y>,<X+1>' resolves from PyPI; cargo add atm-bd-types@<crate version> resolves from crates.io; no git= or url= dependency on the crate anywhere
+
+Fixtures:
+- pass: atm-bd-types 0.20.0 is on PyPI and crates.io; pyproject pins atm-bd-types==0.20.0.
+- fail: The crate is pulled with a git+https dependency on the sc-runtime repo.
+
+## ANC-018
+
+Anchor: The lite hook's transition logic must be a pure function returning a command plan, with no I/O, so a Rust cron can fire it under monty or CPython.
+
+> rust libraries will be arriving soon which will replace beads cache w/ rust and tokio and cron for firing monty (or python hooks).
+
+Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+
+Summary: Hook logic pure, fireable by Rust cron
+
+Scope: adds or changes the lite hook or the hook runner
+
+Deterministic check to pair with the development gate: atm-bd-task-hook.py imports only enum, dataclasses, typing and atm_bd_types and calls no subprocess, open or os function
+
+Fixtures:
+- pass: plan() returns a list of Command records; hook_runner.py executes them.
+- fail: The hook calls subprocess.run for bd close inside the transition match.
+
+## ANC-019
+
+Anchor: The atm-bd-types crate must be versioned and released independently of the Python package, so a Python-only fix never publishes the crate.
+
+> I am hopeful we won't be changing the atm-bd crate too often so we don't need a complicated publish process for quick python fixes
+
+Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+
+Summary: Crate version independent of Python releases
+
+Scope: adds or changes release workflows, version files or the crate pin
+
+Deterministic check to pair with the development gate: release.yml has no cargo publish or maturin step; crate-release.yml is manual dispatch; pyproject pins a compatible range, not an exact crate version
+
+Fixtures:
+- pass: atm-bd 0.21.1 ships a Python fix; atm-bd-types stays at 0.2.0 and no crate workflow runs.
+- fail: Every Python release bumps and republishes atm-bd-types at the same version number.

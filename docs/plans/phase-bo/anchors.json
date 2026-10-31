@@ -1,7 +1,7 @@
 {
   "schema": "plan-anchoring/anchors/1",
-  "plan": "phase-current",
-  "intent_ref": "doc/plan/phase-current/intent.md",
+  "plan": "phase-bo",
+  "intent_ref": "docs/plans/phase-bo/intent.md",
   "anchors": [
     {
       "id": "ANC-001",
@@ -671,6 +671,193 @@
         },
         {
           "at": "2026-10-31T20:11:10+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "New or rewritten Python code in the phase must return Result values for expected failures instead of raising, and every touched file must pass pyright strict.",
+      "quote": "ok, are we following the unwritten python-best-practices?  use pyright, return Result<T,Err> (no throwing), can you define rust traits for python to use?",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix)",
+      "summary": "pyright strict + Result, no throwing",
+      "scope": "adds or rewrites Python code in atm-bd-orchestration",
+      "deterministic_check": "pyright strict reports 0 errors on every file in the phase diff; grep '^\\s*raise ' over new modules finds only programmer-error asserts",
+      "fixtures": {
+        "pass": [
+          "profile.py returns Result[Profile]; main maps Err to exit code 2 and JSON; the file is pyright strict."
+        ],
+        "fail": [
+          "load_provider raises ValueError on an unknown provider and the module has no strict directive."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T20:54:51+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T20:54:51+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The fundamental atm-bd types must live in one Rust crate distributed through crates.io and a PyPI abi3 wheel, never through a git-source or GitHub-asset pin.",
+      "quote": "I am fine w/ you building a rust crate w/ the fundemental types if it can easily be distributed. does wheel pull from gh?",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix)",
+      "summary": "Types crate on crates.io + PyPI wheel",
+      "scope": "adds or changes shared enums, error types, provider or stack-gate types, or their distribution",
+      "deterministic_check": "uv pip install 'atm-bd-types>=<X.Y>,<X+1>' resolves from PyPI; cargo add atm-bd-types@<crate version> resolves from crates.io; no git= or url= dependency on the crate anywhere",
+      "fixtures": {
+        "pass": [
+          "atm-bd-types 0.20.0 is on PyPI and crates.io; pyproject pins atm-bd-types==0.20.0."
+        ],
+        "fail": [
+          "The crate is pulled with a git+https dependency on the sc-runtime repo."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T20:54:51+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T20:54:51+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T20:55:32+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite hook's transition logic must be a pure function returning a command plan, with no I/O, so a Rust cron can fire it under monty or CPython.",
+      "quote": "rust libraries will be arriving soon which will replace beads cache w/ rust and tokio and cron for firing monty (or python hooks).",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix)",
+      "summary": "Hook logic pure, fireable by Rust cron",
+      "scope": "adds or changes the lite hook or the hook runner",
+      "deterministic_check": "atm-bd-task-hook.py imports only enum, dataclasses, typing and atm_bd_types and calls no subprocess, open or os function",
+      "fixtures": {
+        "pass": [
+          "plan() returns a list of Command records; hook_runner.py executes them."
+        ],
+        "fail": [
+          "The hook calls subprocess.run for bd close inside the transition match."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T20:54:51+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T20:54:51+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-019",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd-types crate must be versioned and released independently of the Python package, so a Python-only fix never publishes the crate.",
+      "quote": "I am hopeful we won't be changing the atm-bd crate too often so we don't need a complicated publish process for quick python fixes",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix)",
+      "summary": "Crate version independent of Python releases",
+      "scope": "adds or changes release workflows, version files or the crate pin",
+      "deterministic_check": "release.yml has no cargo publish or maturin step; crate-release.yml is manual dispatch; pyproject pins a compatible range, not an exact crate version",
+      "fixtures": {
+        "pass": [
+          "atm-bd 0.21.1 ships a Python fix; atm-bd-types stays at 0.2.0 and no crate workflow runs."
+        ],
+        "fail": [
+          "Every Python release bumps and republishes atm-bd-types at the same version number."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T20:55:32+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T20:55:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
