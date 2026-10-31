@@ -159,16 +159,15 @@ fn render_values(
         ),
         _ => (String::new(), String::new(), String::new()),
     };
-    let assignee = if matches!(
-        event.task_transition,
-        Some(TaskTransition::Started | TaskTransition::Complete { .. })
-    ) {
-        event.recipient.to_string()
-    } else {
+    // Peer ingress supplies sender_host only for an authenticated cross-host
+    // sender; local sends leave it absent.
+    let sender = if event.sender_team == event.recipient_team && event.sender_host.is_none() {
         event.sender.to_string()
+    } else {
+        qualified_sender_identity(event)
     };
     BTreeMap::from([
-        ("from", qualified_sender_identity(event)),
+        ("from", sender.clone()),
         ("team", event.recipient_team.to_string()),
         ("message_id", event.message_id.to_string()),
         ("description", event.description.clone()),
@@ -190,9 +189,9 @@ fn render_values(
         ),
         ("position", position),
         ("attempt", attempt),
-        ("assignee", assignee),
+        ("assignee", sender.clone()),
         ("outcome", outcome),
-        ("by", event.sender.to_string()),
+        ("by", sender),
     ])
 }
 
@@ -375,8 +374,80 @@ mod tests {
             &[],
         )
         .expect("rendered template");
-        assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
+        assert!(rendered.contains(&format!("from=\"{TEST_LEAD}\"")));
         assert!(rendered.contains("01KX1TEST00000000000000000"));
+    }
+
+    #[test]
+    fn task_notice_sender_identity_is_relative_to_recipient() {
+        let cases = [
+            (TEST_TEAM, None, TEST_LEAD.to_owned()),
+            ("other-team", None, format!("{TEST_LEAD}@other-team")),
+            (
+                TEST_TEAM,
+                Some("peer.example"),
+                format!("{TEST_LEAD}@{TEST_TEAM}.peer.example"),
+            ),
+            (
+                "other-team",
+                Some("peer.example"),
+                format!("{TEST_LEAD}@other-team.peer.example"),
+            ),
+        ];
+        for (sender_team, host, expected) in cases {
+            let mut event = base_event();
+            event.sender_team = TeamName::from_validated(sender_team);
+            event.sender_host = host.map(|value| value.parse().expect("host"));
+            event.task_id = Some("task-9".parse().expect("task"));
+            for (kind, transition) in [
+                (
+                    BuiltInNudgeTemplateKind::TaskStarted,
+                    TaskTransition::Started,
+                ),
+                (
+                    BuiltInNudgeTemplateKind::TaskComplete,
+                    TaskTransition::Complete {
+                        outcome: TaskCloseOutcome::Completed,
+                    },
+                ),
+            ] {
+                event.task_transition = Some(transition);
+                let rendered =
+                    render_built_in_nudge(&event, default_template(kind), &[]).expect("render");
+                assert!(
+                    rendered.contains(&format!("agent=\"{expected}\"")),
+                    "{kind:?}: {rendered}"
+                );
+            }
+            let rendered = render_built_in_nudge(&event, "from=\"{{from}}\" by=\"{{by}}\"", &[])
+                .expect("render");
+            assert_eq!(rendered, format!("from=\"{expected}\" by=\"{expected}\""));
+            let closed = render_built_in_nudge(
+                &event,
+                default_template(BuiltInNudgeTemplateKind::TaskClosed),
+                &[],
+            )
+            .expect("render");
+            assert!(closed.contains(&format!("by=\"{expected}\"")), "{closed}");
+        }
+    }
+
+    #[test]
+    fn notice_sender_chat_is_retained_in_qualified_addresses() {
+        let mut event = base_event();
+        event.sender_chat_id = Some("chat-42".parse().expect("chat"));
+        let body = "{{from}}|{{assignee}}|{{by}}";
+        assert_eq!(
+            render_built_in_nudge(&event, body, &[]).expect("local"),
+            format!("{TEST_LEAD}|{TEST_LEAD}|{TEST_LEAD}")
+        );
+        event.sender_team = TeamName::from_validated("other-team");
+        assert_eq!(
+            render_built_in_nudge(&event, body, &[]).expect("cross-team"),
+            format!(
+                "{TEST_LEAD}:chat-42@other-team|{TEST_LEAD}:chat-42@other-team|{TEST_LEAD}:chat-42@other-team"
+            )
+        );
     }
 
     #[test]
