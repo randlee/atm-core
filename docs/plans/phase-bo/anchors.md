@@ -27,7 +27,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-019 | proposed | Hook organized by transition type | 2026-10-31 |
 | ANC-020 | proposed | Shared types live in atm-bd-core | 2026-10-31 |
 | ANC-021 | proposed | Stacking works on Azure Git repos | 2026-10-31 |
-| ANC-022 | proposed | Touched Python passes pyright | 2026-10-31 |
+| ANC-022 | proposed | pyright covers every plugin and console script | 2026-10-31 |
 | ANC-023 | proposed | Profile comes from the phase file; hook, templates, cron and console align on it | 2026-10-31 |
 | ANC-024 | proposed | No console on a lite phase | 2026-10-31 |
 | ANC-025 | proposed | GitHub prompts use gh stack; gh stack view --json is the view | 2026-10-31 |
@@ -412,21 +412,21 @@ Fixtures:
 
 ## ANC-022
 
-Anchor: Python files created or changed in the phase must pass pyright.
+Anchor: Every Python file and extensionless Python script in the plugin and the console must be inside the pyright include and pass pyright in just lint and CI.
 
 > use pyright, return Result<T,Err> (no throwing)
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 6.
 
-Summary: Touched Python passes pyright
+Summary: pyright covers every plugin and console script
 
-Scope: adds or rewrites Python code in atm-bd-orchestration
+Scope: adds, moves or changes any Python file or script in plugins/, apps/atm-bd-console or .github/scripts, or pyrightconfig.json
 
-Deterministic check to pair with the development gate: pyright on the files in the phase diff reports 0 errors
+Deterministic check to pair with the development gate: a test walks the tree for *.py files and python-shebang scripts and asserts each is matched by the pyrightconfig include; just lint runs pyright at 0 errors
 
 Fixtures:
-- pass: profile.py and providers.py carry # pyright: strict and pyright reports 0 errors on them.
-- fail: The new provider module is excluded from pyright because of untyped dict access.
+- pass: pyrightconfig.json include covers plugins/, apps/atm-bd-console, release_scripts, .github/scripts and every extensionless script including bead-queues; tests/test_pyright_include_complete.py walks the tree and asserts each Python file and python-shebang script is matched; just lint runs pyright with 0 errors (CI log for the head).
+- fail: Deliverable: pyrightconfig.json lists only the moved core modules; bead-queues and the .github/scripts files stay outside the include with no test over the include, and just lint runs pyright on the console package alone.
 
 ## ANC-023
 

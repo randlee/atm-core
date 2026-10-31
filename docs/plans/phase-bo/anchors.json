@@ -1089,25 +1089,25 @@
       "id": "ANC-022",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Python files created or changed in the phase must pass pyright.",
+      "statement": "Every Python file and extensionless Python script in the plugin and the console must be inside the pyright include and pass pyright in just lint and CI.",
       "quote": "use pyright, return Result<T,Err> (no throwing)",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
       "context": "planning session 2026-10-27..31 (fenix)",
-      "summary": "Touched Python passes pyright",
-      "scope": "adds or rewrites Python code in atm-bd-orchestration",
-      "deterministic_check": "pyright on the files in the phase diff reports 0 errors",
+      "summary": "pyright covers every plugin and console script",
+      "scope": "adds, moves or changes any Python file or script in plugins/, apps/atm-bd-console or .github/scripts, or pyrightconfig.json",
+      "deterministic_check": "a test walks the tree for *.py files and python-shebang scripts and asserts each is matched by the pyrightconfig include; just lint runs pyright at 0 errors",
       "fixtures": {
         "pass": [
-          "profile.py and providers.py carry # pyright: strict and pyright reports 0 errors on them."
+          "pyrightconfig.json include covers plugins/, apps/atm-bd-console, release_scripts, .github/scripts and every extensionless script including bead-queues; tests/test_pyright_include_complete.py walks the tree and asserts each Python file and python-shebang script is matched; just lint runs pyright with 0 errors (CI log for the head)."
         ],
         "fail": [
-          "The new provider module is excluded from pyright because of untyped dict access."
+          "Deliverable: pyrightconfig.json lists only the moved core modules; bead-queues and the .github/scripts files stay outside the include with no test over the include, and just lint runs pyright on the console package alone."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 6,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -1123,6 +1123,39 @@
         },
         {
           "at": "2026-10-31T21:27:10+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:54:20+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "scope",
+            "summary",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "Python files created or changed in the phase must pass pyright."
+        },
+        {
+          "at": "2026-10-31T21:54:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:55:07+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:55:07+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
