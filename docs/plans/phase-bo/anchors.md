@@ -7,24 +7,27 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ID | Status | Summary | Stated |
 | --- | --- | --- | --- |
 | ANC-001 | proposed | Installer --github/--azure select template commands | 2026-10-31 |
-| ANC-002 | proposed | Lite hook: one file, organized by transition type | 2026-10-27 |
-| ANC-003 | proposed | Lite transitions: exhaustive enum matches | 2026-10-27 |
-| ANC-004 | proposed | Tests share repeated patterns via helpers | 2026-10-28 |
-| ANC-005 | proposed | Same tool interfaces for both profiles | 2026-10-31 |
-| ANC-006 | proposed | One core schema for both profiles | 2026-10-31 |
-| ANC-007 | proposed | Lite leaves sanity schema fields undefined | 2026-10-31 |
-| ANC-008 | proposed | No gh stack anywhere | 2026-10-31 |
-| ANC-009 | proposed | Git-only base/top stack check | 2026-10-31 |
-| ANC-010 | proposed | Close hook: stack gate blocks, then bd close, then task close | 2026-10-31 |
+| ANC-002 | proposed | Lite hook business logic in one file | 2026-10-31 |
+| ANC-003 | proposed | Transitions are enums with exhaustive checks | 2026-10-31 |
+| ANC-004 | proposed | Repeated test patterns use common helpers | 2026-10-31 |
+| ANC-005 | proposed | Same tool interfaces for every profile | 2026-10-31 |
+| ANC-006 | proposed | One bead schema for all profiles | 2026-10-31 |
+| ANC-007 | proposed | Lite leaves sanity schema items undefined | 2026-10-31 |
+| ANC-008 | proposed | Never gh stack | 2026-10-31 |
+| ANC-009 | proposed | Stack check compares base and top only | 2026-10-31 |
+| ANC-010 | proposed | Close hook blocks on PR base vs stack top mismatch | 2026-10-31 |
 | ANC-011 | proposed | One profile per phase | 2026-10-31 |
-| ANC-012 | proposed | Profile files live under the profile skill | 2026-10-31 |
+| ANC-012 | proposed | Profile-only files under the profile skill | 2026-10-31 |
 | ANC-013 | proposed | Shared files installed once to .atm-bd | 2026-10-31 |
-| ANC-014 | proposed | Lite has its own hook file | 2026-10-31 |
-| ANC-015 | proposed | Lite runs with one agent, no sanity | 2026-10-27 |
-| ANC-016 | proposed | pyright strict + Result, no throwing | 2026-10-31 |
-| ANC-017 | proposed | Types crate on crates.io + PyPI wheel | 2026-10-31 |
-| ANC-018 | proposed | Hook logic pure, fireable by Rust cron | 2026-10-31 |
-| ANC-019 | proposed | Crate version independent of Python releases | 2026-10-31 |
+| ANC-014 | proposed | Lite has its own task hook file | 2026-10-31 |
+| ANC-015 | proposed | Lite runs with one agent | 2026-10-31 |
+| ANC-016 | proposed | Result values, no throwing | 2026-10-31 |
+| ANC-017 | proposed | Fundamental types in one Rust crate | 2026-10-31 |
+| ANC-018 | proposed | Python fixes release without the crate | 2026-10-31 |
+| ANC-019 | proposed | Hook organized by transition type | 2026-10-31 |
+| ANC-020 | proposed | Shared types live in atm-bd-core | 2026-10-31 |
+| ANC-021 | proposed | Stacking works on Azure Git repos | 2026-10-31 |
+| ANC-022 | proposed | Touched Python passes pyright | 2026-10-31 |
 
 ## ANC-001
 
@@ -32,7 +35,7 @@ Anchor: The installer must accept --github and --azure flags that select the pro
 
 > could we add --github and --azure flags which inject the proper commands into sc-compose j2 templates?
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
 Summary: Installer --github/--azure select template commands
 
@@ -41,22 +44,22 @@ Scope: adds or changes the installer, provider vars files, sc_render or template
 Deterministic check to pair with the development gate: atm-bd skill --azure renders a dispatch template containing 'az repos pr' and no 'gh pr'
 
 Fixtures:
-- pass: The installer gains --github and --azure flags; the chosen provider's command set is merged into the template render context.
+- pass: The installer gains --github and --azure flags (install.py, test_install_provider_flags) and the chosen provider's command set is merged into the template render context; see the PR diff of install.py.
 - fail: Templates keep hard-coded gh pr commands and the installer has no provider flag.
 
 ## ANC-002
 
-Anchor: The lite hook's transition logic must live in one Python file organized by transition type.
+Anchor: The lite profile's task-close hook business logic must live in a single Python file, skills/atm-bd-lite/scripts/atm-bd-task-hook.py.
 
 > The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-27. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
 
-Summary: Lite hook: one file, organized by transition type
+Summary: Lite hook business logic in one file
 
-Scope: adds or changes the lite hook atm-bd-task-hook.py or splits logic out of it
+Scope: adds or changes the lite hook or moves hook logic into another module
 
-Deterministic check to pair with the development gate: no module under skills/atm-bd-lite/scripts other than atm-bd-task-hook.py calls bd close, bd update, atm task or git
+Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts contains one hook file and no other module imports or defines transition handling
 
 Fixtures:
 - pass: All dev, fix and qa close transitions are implemented in skills/atm-bd-lite/scripts/atm-bd-task-hook.py, one section per transition.
@@ -64,197 +67,197 @@ Fixtures:
 
 ## ANC-003
 
-Anchor: Every transition in the lite hook must be an enum matched exhaustively, so that a missing arm fails pyright strict.
+Anchor: Transitions in the lite hook must be enum members with exhaustive checks, so that an unhandled member is a static error.
 
 > The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-27. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
-Summary: Lite transitions: exhaustive enum matches
+Summary: Transitions are enums with exhaustive checks
 
 Scope: adds or changes transition handling in the lite hook
 
-Deterministic check to pair with the development gate: pyright --strict on atm-bd-task-hook.py with reportMatchNotExhaustive=error reports 0 errors
+Deterministic check to pair with the development gate: pyright strict with reportMatchNotExhaustive=error passes on the hook and a test removing one match arm makes it fail
 
 Fixtures:
-- pass: Transition is a StrEnum and every handler uses match with no default arm; pyright strict reportMatchNotExhaustive is on.
+- pass: Transition is a StrEnum and every handler uses match with no default arm; pyright strict with reportMatchNotExhaustive=error passes on the hook (pyright output in the PR, test_transition_exhaustive).
 - fail: Transitions are compared as strings in if/elif chains with a final else that logs unknown.
 
 ## ANC-004
 
-Anchor: Lite hook tests must put each repeated setup or assertion pattern in a shared helper method.
+Anchor: Test code written in the phase must implement its repeated patterns through common helper methods instead of repeating them inline.
 
-> I want less code in the business logic.  test code is fine, but should be written efficiently w/ repeated patterns using common methods.
+> test code is fine, but should be written efficiently w/ repeated patterns using common methods.
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-28. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
-Summary: Tests share repeated patterns via helpers
+Summary: Repeated test patterns use common helpers
 
-Scope: adds or changes tests for the lite hook or lite cron
+Scope: adds or changes Python tests in atm-bd-orchestration
 
-Deterministic check to pair with the development gate: a duplicate-block scan over skills/atm-bd-lite/scripts/tests finds no repeated block longer than 5 lines
+Deterministic check to pair with the development gate: no setup or assertion block of five or more identical lines appears in two test functions of the touched test files
 
 Fixtures:
-- pass: Tests build hooks through a make_close_vars() and run_hook() helper shared by every case.
+- pass: Tests build hooks through the shared make_close_vars() and run_hook() helpers in tests/lite/conftest.py; no test repeats that setup inline (diff of tests/lite/test_hook.py).
 - fail: Each test repeats the twelve-line close-vars setup and subprocess stub inline.
 
 ## ANC-005
 
-Anchor: The atm-bd console, cron and queues commands must serve lite and full phases through one unchanged command-line interface.
+Anchor: atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a full phase.
 
-> Some items would be atm-bd-<profile> specific i.e. atm-bd-task-hook.py the task assignment j2 templates, the cron script.  We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).  This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
+> We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
-Summary: Same tool interfaces for both profiles
+Summary: Same tool interfaces for every profile
 
 Scope: adds or changes atm-bd console, cron, queues, sprint-report or bv-analyze
 
-Deterministic check to pair with the development gate: atm-bd console/cron/queues --help text is unchanged, and the lite fixture phase renders in each with no profile flag
+Deterministic check to pair with the development gate: the --help output of atm-bd console, cron and queues is byte-identical before and after the phase
 
 Fixtures:
-- pass: atm-bd console, cron and queues read profile from the phase toml and render the lite phase with the same arguments as today.
+- pass: atm-bd console, cron and queues read the profile from the phase toml and render a lite phase with the same arguments as today; their --help output is byte-identical before and after (tests/test_cli_help_unchanged.py).
 - fail: A new atm-bd lite-console command is added for lite phases.
 
 ## ANC-006
 
-Anchor: Both profiles must use the single bead schema defined in atm-bd-core.
+Anchor: All profiles must use the same schema.
 
-> Some items would be atm-bd-<profile> specific i.e. atm-bd-task-hook.py the task assignment j2 templates, the cron script.  We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).  This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
+> This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
 
-Summary: One core schema for both profiles
+Summary: One bead schema for all profiles
 
 Scope: adds or changes bead_schema, close_fields, bead models or formulas
 
-Deterministic check to pair with the development gate: skills/atm-bd-lite contains no schema or TypedDict model files
+Deterministic check to pair with the development gate: no schema file exists under skills/atm-bd-lite and lite beads validate against the core bead_schema models
 
 Fixtures:
-- pass: Lite beads validate against core bead_schema models; no schema file is added under skills/atm-bd-lite.
+- pass: Lite beads validate against the core bead_schema models; no schema file is added under skills/atm-bd-lite.
 - fail: skills/atm-bd-lite/schemas/lite-dev-bead.schema.json defines a separate lite schema.
 
 ## ANC-007
 
-Anchor: In the lite profile the sanity fields of the shared schema must be optional, left undefined rather than filled.
+Anchor: The shared schema must allow the lite profile to leave its sanity items undefined.
 
-> Some items would be atm-bd-<profile> specific i.e. atm-bd-task-hook.py the task assignment j2 templates, the cron script.  We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).  This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
+> This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
-Summary: Lite leaves sanity schema fields undefined
+Summary: Lite leaves sanity schema items undefined
 
 Scope: adds or changes bead_schema, close_fields or close vars
 
-Deterministic check to pair with the development gate: core bead_schema and CloseFields mark sanity_bead and max_sanity_rounds NotRequired, and a lite close-vars fixture without them validates
+Deterministic check to pair with the development gate: a lite close-vars file without any sanity key validates, and a full close-vars file without them is rejected
 
 Fixtures:
-- pass: sanity_bead and max_sanity_rounds are NotRequired in CloseFields and lite close vars omit them.
+- pass: sanity_bead and max_sanity_rounds are NotRequired in CloseFields (core/scripts/close_fields.py) and a lite close-vars file without them validates (test_lite_close_vars_without_sanity).
 - fail: Lite close vars set sanity_bead to the string none to satisfy the required field.
 
 ## ANC-008
 
-Anchor: Scripts and templates of either profile never invoke the gh stack subcommand or the GitHub stacks API.
+Anchor: Scripts and templates of either profile never invoke the gh stack subcommand.
 
-> One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.  This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command
+> This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
-Summary: No gh stack anywhere
+Summary: Never gh stack
 
 Scope: adds or changes stack linking, stack checks, sanity-stack-link, or dispatch templates
 
-Deterministic check to pair with the development gate: grep -rn 'gh stack\|/stacks' over core/ and skills/ (*.py, *.j2, sanity-stack-link) finds nothing
+Deterministic check to pair with the development gate: grep -rn 'gh stack' plugins/atm-bd-orchestration/skills plugins/atm-bd-orchestration/core finds only prose
 
 Fixtures:
-- pass: sanity-stack-link records layers in the stack bead and sets the PR base with the provider command; no gh stack call remains.
+- pass: sanity-stack-link records layers in the stack bead and sets the PR base with the provider command; grep -rn 'gh stack' plugins/atm-bd-orchestration returns prose only, no command (CI grep log attached).
 - fail: The lite hook calls gh stack link to attach the layer.
 
 ## ANC-009
 
-Anchor: Stack checks must compare the PR base with the stack top using git alone.
+Anchor: The stack check must verify stacking by comparing only the PR base and the stack top branch, using no other stack record.
 
-> One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.  This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command
+> This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
-Summary: Git-only base/top stack check
+Summary: Stack check compares base and top only
 
 Scope: adds or changes the stack gate or stack linking
 
-Deterministic check to pair with the development gate: stack_gate.py subprocess calls are git only; a test with an Azure-style remote URL passes the gate
+Deterministic check to pair with the development gate: stack_gate.py calls git merge-base and reads the PR base ref and no other stack source
 
 Fixtures:
-- pass: stack_gate.check runs git merge-base --is-ancestor on origin/<base> and head and compares the base ref to the stack top branch.
+- pass: The stack check compares the PR base ref with the stack top branch and reads no other stack record; stack_gate.py makes no gh or API call (test_stack_gate_git_only, PR diff of stack_gate.py).
 - fail: The stack check queries the GitHub stacks API for the stack's top PR.
 
 ## ANC-010
 
-Anchor: The dev and fix close hook must refuse the close when the PR base differs from the stack top, before running bd close and atm task close.
+Anchor: The dev and fix close hook must compare the PR base with the stack top (the branch of the layer below) and block the close when they differ, before it runs bd close and atm task close.
 
 > 1) dev/fix 'atm task close' would check pr base vs. stack top (blocking close if not stacked properly) then do bd close, atm task close.
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
-Summary: Close hook: stack gate blocks, then bd close, then task close
+Summary: Close hook blocks on PR base vs stack top mismatch
 
 Scope: adds or changes a dev or fix close hook or the stack gate
 
-Deterministic check to pair with the development gate: a hook test with PR base != stack top exits non-zero with no bd or atm subprocess recorded
+Deterministic check to pair with the development gate: a hook test with a mis-based PR exits non-zero and records no bd close or atm task close command
 
 Fixtures:
-- pass: On NotStacked the hook exits 2 with the fix command before any bd close or atm task close subprocess.
+- pass: The dev close hook compares the PR base with the stack top first and exits 2 when they differ; bd close and atm task close run only after that check passes (test_hook_blocks_misbased_pr records no bd or atm command).
 - fail: The hook runs bd close first and then warns that the PR base does not match the stack top.
 
 ## ANC-011
 
-Anchor: A phase never contains beads of more than one profile.
+Anchor: All beads of a phase must carry the same profile value (lite or full) as the phase file.
 
 > 2) never mix profiles in the same phase.
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
 Summary: One profile per phase
 
 Scope: adds or changes phase-config, validate-plan, bead-groups or bead_schema
 
-Deterministic check to pair with the development gate: validate-plan on a lite phase containing a stage:dev-sanity bead exits 5
+Deterministic check to pair with the development gate: validate-plan exits non-zero on a phase file whose beads carry two profiles
 
 Fixtures:
-- pass: validate-plan exits 5 when a lite phase contains a stage:dev-sanity bead.
-- fail: A phase mixes lite sprints and full sprints by setting profile per sprint bead.
+- pass: validate-plan rejects a lite phase that contains a stage:dev-sanity bead with exit 5 (test_validate_plan_mixed_profiles; run log in the PR).
+- fail: A phase mixes lite sprints and full sprints by setting the profile per sprint bead.
 
 ## ANC-012
 
-Anchor: Profile-specific scripts and templates must live under their own skill directory, skills/<profile>/scripts and skills/<profile>/templates.
+Anchor: Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; full-only ones live relative to the atm-bd-orchestration skill.
 
-> i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.  scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today
+> i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
 
-Summary: Profile files live under the profile skill
+Summary: Profile-only files under the profile skill
 
 Scope: adds or moves scripts or templates of a profile
 
-Deterministic check to pair with the development gate: the full profile's hook, sanity scripts and dev/fix/sanity templates sit under skills/atm-bd-orchestration; the lite hook, cron and templates sit under skills/atm-bd-lite
+Deterministic check to pair with the development gate: every file under skills/atm-bd-lite/scripts and templates is imported or rendered only by lite; core/ holds nothing lite-only
 
 Fixtures:
-- pass: atm-bd-task-hook.py, lite_cron.py and the lite dev/fix/qa templates sit under skills/atm-bd-lite/scripts and templates.
+- pass: atm-bd-task-hook.py, lite_cron.py and the lite dev/fix/qa templates sit under skills/atm-bd-lite/scripts and skills/atm-bd-lite/templates.
 - fail: The lite hook is placed in core/scripts next to the shared modules.
 
 ## ANC-013
 
-Anchor: Shared scripts and templates must be installed once, to .atm-bd/scripts and .atm-bd/templates at the repository root.
+Anchor: Shared scripts and templates must live at one common point, .atm-bd/scripts and .atm-bd/templates at the repository root, removing the duplicates under .claude, .codex and .agents.
 
-> i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.  scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today
+> scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
 
 Summary: Shared files installed once to .atm-bd
 
 Scope: adds, moves or installs shared scripts or templates
 
-Deterministic check to pair with the development gate: after install, no file under .atm-bd/scripts or .atm-bd/templates also exists under .claude/skills, .codex/skills or .agents
+Deterministic check to pair with the development gate: after atm-bd skill install, each shared module exists once under .atm-bd and diff finds no copy under .claude, .codex or .agents
 
 Fixtures:
 - pass: core/scripts and core/templates install to .atm-bd/scripts and .atm-bd/templates; the skill directories no longer carry copies.
@@ -262,17 +265,17 @@ Fixtures:
 
 ## ANC-014
 
-Anchor: The atm-bd-lite profile must ship its own task-close hook file, separate from the full profile's atm-task-close.py.
+Anchor: The atm-bd-lite skill must have its own task-hook Python file, separate from the atm-bd-orchestration skill's atm-task-close.py.
 
 > the atm-bd-lite would have a completely different atm-task-hook python file.
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
 
-Summary: Lite has its own hook file
+Summary: Lite has its own task hook file
 
 Scope: adds or changes a task-close hook, or selects a hook by profile
 
-Deterministic check to pair with the development gate: test -f plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/atm-bd-task-hook.py; grep -c lite plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/atm-task-close.py prints 0
+Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts contains a hook file and the full profile's atm-task-close.py has no lite branch
 
 Fixtures:
 - pass: skills/atm-bd-lite/scripts/atm-bd-task-hook.py is a separate file; atm-task-close.py is unchanged.
@@ -280,90 +283,144 @@ Fixtures:
 
 ## ANC-015
 
-Anchor: The lite profile must run a phase end to end with a single agent and no sanity stage.
+Anchor: The lite profile's orchestration must be runnable by a single agent.
 
-> we haven't designed 'lite' yet. it will be a much simpler orchestration that could be run by a single agent or small team.
+> it will be a much simpler orchestration that could be run by a single agent or small team.
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-27. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
-Summary: Lite runs with one agent, no sanity
+Summary: Lite runs with one agent
 
 Scope: adds or changes the lite skill, lite formulas or lite templates
 
-Deterministic check to pair with the development gate: the lite sprint-group formula pours dev and qa beads only, and the lite SKILL.md names no sanity member
+Deterministic check to pair with the development gate: the bo-7 live lite phase log shows one ATM identity performing dispatch, dev, QA and landing
 
 Fixtures:
-- pass: The lite sprint-group formula pours dev and qa beads; one agent dispatches, develops and closes QA in the live run.
-- fail: The lite formula pours a sanity bead that a second agent must close before QA.
+- pass: The live lite phase log in bo-7 shows one ATM identity performing dispatch, dev, QA and landing; the lite formula pours only dev and qa beads (atm-bd queues output attached).
+- fail: The lite formula pours a sanity bead that a second agent must close before QA can start.
 
 ## ANC-016
 
-Anchor: New or rewritten Python code in the phase must return Result values for expected failures instead of raising, and every touched file must pass pyright strict.
+Anchor: New or rewritten Python code in the phase must return Result<T,Err> values instead of throwing exceptions.
 
-> ok, are we following the unwritten python-best-practices?  use pyright, return Result<T,Err> (no throwing), can you define rust traits for python to use?
+> use pyright, return Result<T,Err> (no throwing)
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
 
-Summary: pyright strict + Result, no throwing
+Summary: Result values, no throwing
 
 Scope: adds or rewrites Python code in atm-bd-orchestration
 
-Deterministic check to pair with the development gate: pyright strict reports 0 errors on every file in the phase diff; grep '^\s*raise ' over new modules finds only programmer-error asserts
+Deterministic check to pair with the development gate: grep raise in the files created by the phase finds only programmer-error guards; every public function returns Ok or Err
 
 Fixtures:
-- pass: profile.py returns Result[Profile]; main maps Err to exit code 2 and JSON; the file is pyright strict.
-- fail: load_provider raises ValueError on an unknown provider and the module has no strict directive.
+- pass: profile.py returns Result[Profile]; main maps Err to exit code 2 and JSON output.
+- fail: load_provider raises ValueError on an unknown provider and callers catch it.
 
 ## ANC-017
 
-Anchor: The fundamental atm-bd types must live in one Rust crate distributed through crates.io and a PyPI abi3 wheel, never through a git-source or GitHub-asset pin.
+Anchor: The fundamental atm-bd types must be defined in one Rust crate.
 
-> I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed. does wheel pull from gh?
+> I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed.
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
 
-Summary: Types crate on crates.io + PyPI wheel
+Summary: Fundamental types in one Rust crate
 
 Scope: adds or changes shared enums, error types, provider or stack-gate types, or their distribution
 
-Deterministic check to pair with the development gate: uv pip install 'atm-bd-types>=<X.Y>,<X+1>' resolves from PyPI; cargo add atm-bd-types@<crate version> resolves from crates.io; no git= or url= dependency on the crate anywhere
+Deterministic check to pair with the development gate: crates/atm-bd-types defines Profile, Provider, Transition and Error and no Python module redefines them
 
 Fixtures:
-- pass: atm-bd-types 0.20.0 is on PyPI and crates.io; pyproject pins atm-bd-types==0.20.0.
-- fail: The crate is pulled with a git+https dependency on the sc-runtime repo.
+- pass: The Profile, Provider and Transition enums and the Error type are defined in crates/atm-bd-types and exposed to Python through its wheel.
+- fail: The shared enums are defined in Python dataclasses under core/scripts and no Rust crate exists.
 
 ## ANC-018
 
-Anchor: The lite hook's transition logic must be a pure function returning a command plan, with no I/O, so a Rust cron can fire it under monty or CPython.
-
-> rust libraries will be arriving soon which will replace beads cache w/ rust and tokio and cron for firing monty (or python hooks).
-
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
-
-Summary: Hook logic pure, fireable by Rust cron
-
-Scope: adds or changes the lite hook or the hook runner
-
-Deterministic check to pair with the development gate: atm-bd-task-hook.py imports only enum, dataclasses, typing and atm_bd_types and calls no subprocess, open or os function
-
-Fixtures:
-- pass: plan() returns a list of Command records; hook_runner.py executes them.
-- fail: The hook calls subprocess.run for bd close inside the transition match.
-
-## ANC-019
-
-Anchor: The atm-bd-types crate must be versioned and released independently of the Python package, so a Python-only fix never publishes the crate.
+Anchor: A quick Python-only fix of atm-bd must release without a crate publish step.
 
 > I am hopeful we won't be changing the atm-bd crate too often so we don't need a complicated publish process for quick python fixes
 
-Said by Rand, planning session 2026-10-31 (fenix), 2026-10-31. Status: proposed. Version 2.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
 
-Summary: Crate version independent of Python releases
+Summary: Python fixes release without the crate
 
 Scope: adds or changes release workflows, version files or the crate pin
 
-Deterministic check to pair with the development gate: release.yml has no cargo publish or maturin step; crate-release.yml is manual dispatch; pyproject pins a compatible range, not an exact crate version
+Deterministic check to pair with the development gate: release.yml for a Python-only tag runs no crate publish job
 
 Fixtures:
-- pass: atm-bd 0.21.1 ships a Python fix; atm-bd-types stays at 0.2.0 and no crate workflow runs.
+- pass: atm-bd 0.21.1 shipped a Python-only fix: release.yml ran no crate publish job and atm-bd-types stays at 0.2.0 (workflow run log and the crates.io version page).
 - fail: Every Python release bumps and republishes atm-bd-types at the same version number.
+
+## ANC-019
+
+Anchor: The lite task-hook file must be organized by transition type: one handler section per transition (dev close, fix close, QA close).
+
+> The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)
+
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+
+Summary: Hook organized by transition type
+
+Scope: adds or changes the lite hook
+
+Deterministic check to pair with the development gate: the hook file has one handler per Transition member and no handler serves two transitions
+
+Fixtures:
+- pass: atm-bd-task-hook.py has one handler section each for dev close, fix close and qa close, selected by the Transition enum (file outline in the PR; test_one_handler_per_transition).
+- fail: The hook is organized by bead field, with one function per close-vars key that branches on the transition inside.
+
+## ANC-020
+
+Anchor: Types shared between all profiles must be defined in atm-bd-core.
+
+> This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
+
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+
+Summary: Shared types live in atm-bd-core
+
+Scope: adds or changes enums, dataclasses, models or schema types used by a profile or a shared tool
+
+Deterministic check to pair with the development gate: no module under skills/atm-bd-lite or skills/atm-bd-orchestration defines a type imported by another skill or by core
+
+Fixtures:
+- pass: Profile, Provider and Transition are defined once in atm-bd-core (crates/atm-bd-types, re-exported by core/scripts) and imported by both profile hooks; grep finds no second definition (PR diff).
+- fail: skills/atm-bd-lite/scripts/types.py defines its own Transition enum copied from the full profile.
+
+## ANC-021
+
+Anchor: Stack linking and the stack check in both profiles must work on an Azure Git repository, not only on GitHub.
+
+> One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.
+
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 4.
+
+Summary: Stacking works on Azure Git repos
+
+Scope: adds or changes stack linking, the stack gate, or provider commands
+
+Deterministic check to pair with the development gate: a stack gate test against an Azure-style remote URL passes and the azure render of the dispatch templates contains az repos pr commands
+
+Fixtures:
+- pass: Stack linking and the stack check both pass against an Azure-style remote: test_stack_gate_azure_remote maps an Azure Git URL to a local bare repository with git insteadOf, and test_stack_link_azure links a layer on it with az repos pr commands (test log in the PR).
+- fail: The stack check requires the gh CLI and a GitHub remote; Azure repositories are out of scope.
+
+## ANC-022
+
+Anchor: Python files created or changed in the phase must pass pyright.
+
+> use pyright, return Result<T,Err> (no throwing)
+
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 2.
+
+Summary: Touched Python passes pyright
+
+Scope: adds or rewrites Python code in atm-bd-orchestration
+
+Deterministic check to pair with the development gate: pyright on the files in the phase diff reports 0 errors
+
+Fixtures:
+- pass: profile.py and providers.py carry # pyright: strict and pyright reports 0 errors on them.
+- fail: The new provider module is excluded from pyright because of untyped dict access.

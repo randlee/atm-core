@@ -1,0 +1,111 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261031T212948Z-fixture_ANC-021_pass_1",
+  "gate": "dev",
+  "created_at": "2026-10-31T21:29:48+00:00",
+  "anchors_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/ae4c4073-991a-428e-a239-d8a12fdb63c3/scratchpad/tuning/anchors.rebuilt.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-021:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 266,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Stack linking and the stack check in both profiles must work on an Azure Git repository, not only on GitHub.",
+      "quote": "One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 4,
+      "deterministic_check": "a stack gate test against an Azure-style remote URL passes and the azure render of the dispatch templates contains az repos pr commands",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.01,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive was followed and evidenced.",
+      "usage": {
+        "input_tokens": 1231,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 266,
+      "item_shortened": false,
+      "request_bytes": 3960
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

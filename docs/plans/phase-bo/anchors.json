@@ -12,20 +12,20 @@
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
+      "context": "planning session 2026-10-27..31 (fenix)",
       "summary": "Installer --github/--azure select template commands",
       "scope": "adds or changes the installer, provider vars files, sc_render or templates that run PR commands",
       "deterministic_check": "atm-bd skill --azure renders a dispatch template containing 'az repos pr' and no 'gh pr'",
       "fixtures": {
         "pass": [
-          "The installer gains --github and --azure flags; the chosen provider's command set is merged into the template render context."
+          "The installer gains --github and --azure flags (install.py, test_install_provider_flags) and the chosen provider's command set is merged into the template render context; see the PR diff of install.py."
         ],
         "fail": [
           "Templates keep hard-coded gh pr commands and the installer has no provider flag."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -35,12 +35,19 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:09:53+00:00",
+          "at": "2026-10-31T21:27:02+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:02+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -52,15 +59,15 @@
       "id": "ANC-002",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The lite hook's transition logic must live in one Python file organized by transition type.",
+      "statement": "The lite profile's task-close hook business logic must live in a single Python file, skills/atm-bd-lite/scripts/atm-bd-task-hook.py.",
       "quote": "The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)",
       "kind": "structural",
       "stated_by": "Rand",
-      "stated_at": "2026-10-27",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Lite hook: one file, organized by transition type",
-      "scope": "adds or changes the lite hook atm-bd-task-hook.py or splits logic out of it",
-      "deterministic_check": "no module under skills/atm-bd-lite/scripts other than atm-bd-task-hook.py calls bd close, bd update, atm task or git",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Lite hook business logic in one file",
+      "scope": "adds or changes the lite hook or moves hook logic into another module",
+      "deterministic_check": "skills/atm-bd-lite/scripts contains one hook file and no other module imports or defines transition handling",
       "fixtures": {
         "pass": [
           "All dev, fix and qa close transitions are implemented in skills/atm-bd-lite/scripts/atm-bd-task-hook.py, one section per transition."
@@ -80,12 +87,12 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:28+00:00",
+          "at": "2026-10-31T21:27:02+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:03+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -97,25 +104,25 @@
       "id": "ANC-003",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Every transition in the lite hook must be an enum matched exhaustively, so that a missing arm fails pyright strict.",
+      "statement": "Transitions in the lite hook must be enum members with exhaustive checks, so that an unhandled member is a static error.",
       "quote": "The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)",
       "kind": "structural",
       "stated_by": "Rand",
-      "stated_at": "2026-10-27",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Lite transitions: exhaustive enum matches",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Transitions are enums with exhaustive checks",
       "scope": "adds or changes transition handling in the lite hook",
-      "deterministic_check": "pyright --strict on atm-bd-task-hook.py with reportMatchNotExhaustive=error reports 0 errors",
+      "deterministic_check": "pyright strict with reportMatchNotExhaustive=error passes on the hook and a test removing one match arm makes it fail",
       "fixtures": {
         "pass": [
-          "Transition is a StrEnum and every handler uses match with no default arm; pyright strict reportMatchNotExhaustive is on."
+          "Transition is a StrEnum and every handler uses match with no default arm; pyright strict with reportMatchNotExhaustive=error passes on the hook (pyright output in the PR, test_transition_exhaustive)."
         ],
         "fail": [
           "Transitions are compared as strings in if/elif chains with a final else that logs unknown."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -125,12 +132,19 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:28+00:00",
+          "at": "2026-10-31T21:27:03+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:03+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -142,25 +156,25 @@
       "id": "ANC-004",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Lite hook tests must put each repeated setup or assertion pattern in a shared helper method.",
-      "quote": "I want less code in the business logic.  test code is fine, but should be written efficiently w/ repeated patterns using common methods.",
+      "statement": "Test code written in the phase must implement its repeated patterns through common helper methods instead of repeating them inline.",
+      "quote": "test code is fine, but should be written efficiently w/ repeated patterns using common methods.",
       "kind": "directive",
       "stated_by": "Rand",
-      "stated_at": "2026-10-28",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Tests share repeated patterns via helpers",
-      "scope": "adds or changes tests for the lite hook or lite cron",
-      "deterministic_check": "a duplicate-block scan over skills/atm-bd-lite/scripts/tests finds no repeated block longer than 5 lines",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Repeated test patterns use common helpers",
+      "scope": "adds or changes Python tests in atm-bd-orchestration",
+      "deterministic_check": "no setup or assertion block of five or more identical lines appears in two test functions of the touched test files",
       "fixtures": {
         "pass": [
-          "Tests build hooks through a make_close_vars() and run_hook() helper shared by every case."
+          "Tests build hooks through the shared make_close_vars() and run_hook() helpers in tests/lite/conftest.py; no test repeats that setup inline (diff of tests/lite/test_hook.py)."
         ],
         "fail": [
           "Each test repeats the twelve-line close-vars setup and subprocess stub inline."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -170,12 +184,19 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:28+00:00",
+          "at": "2026-10-31T21:27:03+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:03+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -187,25 +208,25 @@
       "id": "ANC-005",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The atm-bd console, cron and queues commands must serve lite and full phases through one unchanged command-line interface.",
-      "quote": "Some items would be atm-bd-<profile> specific i.e. atm-bd-task-hook.py the task assignment j2 templates, the cron script.  We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).  This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
-      "kind": "structural",
+      "statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a full phase.",
+      "quote": "We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).",
+      "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Same tool interfaces for both profiles",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Same tool interfaces for every profile",
       "scope": "adds or changes atm-bd console, cron, queues, sprint-report or bv-analyze",
-      "deterministic_check": "atm-bd console/cron/queues --help text is unchanged, and the lite fixture phase renders in each with no profile flag",
+      "deterministic_check": "the --help output of atm-bd console, cron and queues is byte-identical before and after the phase",
       "fixtures": {
         "pass": [
-          "atm-bd console, cron and queues read profile from the phase toml and render the lite phase with the same arguments as today."
+          "atm-bd console, cron and queues read the profile from the phase toml and render a lite phase with the same arguments as today; their --help output is byte-identical before and after (tests/test_cli_help_unchanged.py)."
         ],
         "fail": [
           "A new atm-bd lite-console command is added for lite phases."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -215,12 +236,19 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:28+00:00",
+          "at": "2026-10-31T21:27:04+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:04+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -232,18 +260,18 @@
       "id": "ANC-006",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Both profiles must use the single bead schema defined in atm-bd-core.",
-      "quote": "Some items would be atm-bd-<profile> specific i.e. atm-bd-task-hook.py the task assignment j2 templates, the cron script.  We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).  This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
-      "kind": "structural",
+      "statement": "All profiles must use the same schema.",
+      "quote": "This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
+      "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "One core schema for both profiles",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "One bead schema for all profiles",
       "scope": "adds or changes bead_schema, close_fields, bead models or formulas",
-      "deterministic_check": "skills/atm-bd-lite contains no schema or TypedDict model files",
+      "deterministic_check": "no schema file exists under skills/atm-bd-lite and lite beads validate against the core bead_schema models",
       "fixtures": {
         "pass": [
-          "Lite beads validate against core bead_schema models; no schema file is added under skills/atm-bd-lite."
+          "Lite beads validate against the core bead_schema models; no schema file is added under skills/atm-bd-lite."
         ],
         "fail": [
           "skills/atm-bd-lite/schemas/lite-dev-bead.schema.json defines a separate lite schema."
@@ -260,12 +288,12 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:28+00:00",
+          "at": "2026-10-31T21:27:04+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:04+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -277,25 +305,25 @@
       "id": "ANC-007",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "In the lite profile the sanity fields of the shared schema must be optional, left undefined rather than filled.",
-      "quote": "Some items would be atm-bd-<profile> specific i.e. atm-bd-task-hook.py the task assignment j2 templates, the cron script.  We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).  This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
-      "kind": "structural",
+      "statement": "The shared schema must allow the lite profile to leave its sanity items undefined.",
+      "quote": "This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
+      "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Lite leaves sanity schema fields undefined",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Lite leaves sanity schema items undefined",
       "scope": "adds or changes bead_schema, close_fields or close vars",
-      "deterministic_check": "core bead_schema and CloseFields mark sanity_bead and max_sanity_rounds NotRequired, and a lite close-vars fixture without them validates",
+      "deterministic_check": "a lite close-vars file without any sanity key validates, and a full close-vars file without them is rejected",
       "fixtures": {
         "pass": [
-          "sanity_bead and max_sanity_rounds are NotRequired in CloseFields and lite close vars omit them."
+          "sanity_bead and max_sanity_rounds are NotRequired in CloseFields (core/scripts/close_fields.py) and a lite close-vars file without them validates (test_lite_close_vars_without_sanity)."
         ],
         "fail": [
           "Lite close vars set sanity_bead to the string none to satisfy the required field."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -305,12 +333,19 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:28+00:00",
+          "at": "2026-10-31T21:27:04+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:04+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -322,25 +357,25 @@
       "id": "ANC-008",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Scripts and templates of either profile never invoke the gh stack subcommand or the GitHub stacks API.",
-      "quote": "One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.  This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command",
+      "statement": "Scripts and templates of either profile never invoke the gh stack subcommand.",
+      "quote": "This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "No gh stack anywhere",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Never gh stack",
       "scope": "adds or changes stack linking, stack checks, sanity-stack-link, or dispatch templates",
-      "deterministic_check": "grep -rn 'gh stack\\|/stacks' over core/ and skills/ (*.py, *.j2, sanity-stack-link) finds nothing",
+      "deterministic_check": "grep -rn 'gh stack' plugins/atm-bd-orchestration/skills plugins/atm-bd-orchestration/core finds only prose",
       "fixtures": {
         "pass": [
-          "sanity-stack-link records layers in the stack bead and sets the PR base with the provider command; no gh stack call remains."
+          "sanity-stack-link records layers in the stack bead and sets the PR base with the provider command; grep -rn 'gh stack' plugins/atm-bd-orchestration returns prose only, no command (CI grep log attached)."
         ],
         "fail": [
           "The lite hook calls gh stack link to attach the layer."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -350,12 +385,19 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:28+00:00",
+          "at": "2026-10-31T21:27:05+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:05+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -367,25 +409,25 @@
       "id": "ANC-009",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Stack checks must compare the PR base with the stack top using git alone.",
-      "quote": "One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.  This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command",
+      "statement": "The stack check must verify stacking by comparing only the PR base and the stack top branch, using no other stack record.",
+      "quote": "This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Git-only base/top stack check",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Stack check compares base and top only",
       "scope": "adds or changes the stack gate or stack linking",
-      "deterministic_check": "stack_gate.py subprocess calls are git only; a test with an Azure-style remote URL passes the gate",
+      "deterministic_check": "stack_gate.py calls git merge-base and reads the PR base ref and no other stack source",
       "fixtures": {
         "pass": [
-          "stack_gate.check runs git merge-base --is-ancestor on origin/<base> and head and compares the base ref to the stack top branch."
+          "The stack check compares the PR base ref with the stack top branch and reads no other stack record; stack_gate.py makes no gh or API call (test_stack_gate_git_only, PR diff of stack_gate.py)."
         ],
         "fail": [
           "The stack check queries the GitHub stacks API for the stack's top PR."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -395,12 +437,19 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:28+00:00",
+          "at": "2026-10-31T21:27:05+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:05+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -412,25 +461,25 @@
       "id": "ANC-010",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The dev and fix close hook must refuse the close when the PR base differs from the stack top, before running bd close and atm task close.",
+      "statement": "The dev and fix close hook must compare the PR base with the stack top (the branch of the layer below) and block the close when they differ, before it runs bd close and atm task close.",
       "quote": "1) dev/fix 'atm task close' would check pr base vs. stack top (blocking close if not stacked properly) then do bd close, atm task close.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Close hook: stack gate blocks, then bd close, then task close",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Close hook blocks on PR base vs stack top mismatch",
       "scope": "adds or changes a dev or fix close hook or the stack gate",
-      "deterministic_check": "a hook test with PR base != stack top exits non-zero with no bd or atm subprocess recorded",
+      "deterministic_check": "a hook test with a mis-based PR exits non-zero and records no bd close or atm task close command",
       "fixtures": {
         "pass": [
-          "On NotStacked the hook exits 2 with the fix command before any bd close or atm task close subprocess."
+          "The dev close hook compares the PR base with the stack top first and exits 2 when they differ; bd close and atm task close run only after that check passes (test_hook_blocks_misbased_pr records no bd or atm command)."
         ],
         "fail": [
           "The hook runs bd close first and then warns that the PR base does not match the stack top."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -440,12 +489,19 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:28+00:00",
+          "at": "2026-10-31T21:27:06+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:09+00:00",
+          "at": "2026-10-31T21:27:06+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -457,25 +513,25 @@
       "id": "ANC-011",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "A phase never contains beads of more than one profile.",
+      "statement": "All beads of a phase must carry the same profile value (lite or full) as the phase file.",
       "quote": "2) never mix profiles in the same phase.",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
+      "context": "planning session 2026-10-27..31 (fenix)",
       "summary": "One profile per phase",
       "scope": "adds or changes phase-config, validate-plan, bead-groups or bead_schema",
-      "deterministic_check": "validate-plan on a lite phase containing a stage:dev-sanity bead exits 5",
+      "deterministic_check": "validate-plan exits non-zero on a phase file whose beads carry two profiles",
       "fixtures": {
         "pass": [
-          "validate-plan exits 5 when a lite phase contains a stage:dev-sanity bead."
+          "validate-plan rejects a lite phase that contains a stage:dev-sanity bead with exit 5 (test_validate_plan_mixed_profiles; run log in the PR)."
         ],
         "fail": [
-          "A phase mixes lite sprints and full sprints by setting profile per sprint bead."
+          "A phase mixes lite sprints and full sprints by setting the profile per sprint bead."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -485,12 +541,19 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:29+00:00",
+          "at": "2026-10-31T21:27:06+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:10+00:00",
+          "at": "2026-10-31T21:27:06+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:32+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -502,18 +565,18 @@
       "id": "ANC-012",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Profile-specific scripts and templates must live under their own skill directory, skills/<profile>/scripts and skills/<profile>/templates.",
-      "quote": "i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.  scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today",
+      "statement": "Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; full-only ones live relative to the atm-bd-orchestration skill.",
+      "quote": "i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.",
       "kind": "structural",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Profile files live under the profile skill",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Profile-only files under the profile skill",
       "scope": "adds or moves scripts or templates of a profile",
-      "deterministic_check": "the full profile's hook, sanity scripts and dev/fix/sanity templates sit under skills/atm-bd-orchestration; the lite hook, cron and templates sit under skills/atm-bd-lite",
+      "deterministic_check": "every file under skills/atm-bd-lite/scripts and templates is imported or rendered only by lite; core/ holds nothing lite-only",
       "fixtures": {
         "pass": [
-          "atm-bd-task-hook.py, lite_cron.py and the lite dev/fix/qa templates sit under skills/atm-bd-lite/scripts and templates."
+          "atm-bd-task-hook.py, lite_cron.py and the lite dev/fix/qa templates sit under skills/atm-bd-lite/scripts and skills/atm-bd-lite/templates."
         ],
         "fail": [
           "The lite hook is placed in core/scripts next to the shared modules."
@@ -530,12 +593,12 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:29+00:00",
+          "at": "2026-10-31T21:27:06+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:10+00:00",
+          "at": "2026-10-31T21:27:06+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -547,15 +610,15 @@
       "id": "ANC-013",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Shared scripts and templates must be installed once, to .atm-bd/scripts and .atm-bd/templates at the repository root.",
-      "quote": "i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.  scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today",
+      "statement": "Shared scripts and templates must live at one common point, .atm-bd/scripts and .atm-bd/templates at the repository root, removing the duplicates under .claude, .codex and .agents.",
+      "quote": "scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today",
       "kind": "structural",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
+      "context": "planning session 2026-10-27..31 (fenix)",
       "summary": "Shared files installed once to .atm-bd",
       "scope": "adds, moves or installs shared scripts or templates",
-      "deterministic_check": "after install, no file under .atm-bd/scripts or .atm-bd/templates also exists under .claude/skills, .codex/skills or .agents",
+      "deterministic_check": "after atm-bd skill install, each shared module exists once under .atm-bd and diff finds no copy under .claude, .codex or .agents",
       "fixtures": {
         "pass": [
           "core/scripts and core/templates install to .atm-bd/scripts and .atm-bd/templates; the skill directories no longer carry copies."
@@ -575,12 +638,12 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:29+00:00",
+          "at": "2026-10-31T21:27:07+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:10+00:00",
+          "at": "2026-10-31T21:27:07+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -592,15 +655,15 @@
       "id": "ANC-014",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The atm-bd-lite profile must ship its own task-close hook file, separate from the full profile's atm-task-close.py.",
+      "statement": "The atm-bd-lite skill must have its own task-hook Python file, separate from the atm-bd-orchestration skill's atm-task-close.py.",
       "quote": "the atm-bd-lite would have a completely different atm-task-hook python file.",
       "kind": "structural",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Lite has its own hook file",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Lite has its own task hook file",
       "scope": "adds or changes a task-close hook, or selects a hook by profile",
-      "deterministic_check": "test -f plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/atm-bd-task-hook.py; grep -c lite plugins/atm-bd-orchestration/skills/atm-bd-orchestration/scripts/atm-task-close.py prints 0",
+      "deterministic_check": "skills/atm-bd-lite/scripts contains a hook file and the full profile's atm-task-close.py has no lite branch",
       "fixtures": {
         "pass": [
           "skills/atm-bd-lite/scripts/atm-bd-task-hook.py is a separate file; atm-task-close.py is unchanged."
@@ -620,12 +683,12 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:10:29+00:00",
+          "at": "2026-10-31T21:27:07+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:11:10+00:00",
+          "at": "2026-10-31T21:27:07+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -637,111 +700,21 @@
       "id": "ANC-015",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The lite profile must run a phase end to end with a single agent and no sanity stage.",
-      "quote": "we haven't designed 'lite' yet. it will be a much simpler orchestration that could be run by a single agent or small team.",
+      "statement": "The lite profile's orchestration must be runnable by a single agent.",
+      "quote": "it will be a much simpler orchestration that could be run by a single agent or small team.",
       "kind": "directive",
       "stated_by": "Rand",
-      "stated_at": "2026-10-27",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Lite runs with one agent, no sanity",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Lite runs with one agent",
       "scope": "adds or changes the lite skill, lite formulas or lite templates",
-      "deterministic_check": "the lite sprint-group formula pours dev and qa beads only, and the lite SKILL.md names no sanity member",
+      "deterministic_check": "the bo-7 live lite phase log shows one ATM identity performing dispatch, dev, QA and landing",
       "fixtures": {
         "pass": [
-          "The lite sprint-group formula pours dev and qa beads; one agent dispatches, develops and closes QA in the live run."
+          "The live lite phase log in bo-7 shows one ATM identity performing dispatch, dev, QA and landing; the lite formula pours only dev and qa beads (atm-bd queues output attached)."
         ],
         "fail": [
-          "The lite formula pours a sanity bead that a second agent must close before QA."
-        ]
-      },
-      "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
-      "promoted_to": null,
-      "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
-      },
-      "history": [
-        {
-          "at": "2026-10-31T20:10:29+00:00",
-          "event": "created",
-          "status": "proposed"
-        },
-        {
-          "at": "2026-10-31T20:11:10+00:00",
-          "event": "updated",
-          "fields": [
-            "fixtures"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "ANC-016",
-      "source_type": "ANC",
-      "source_ref": null,
-      "statement": "New or rewritten Python code in the phase must return Result values for expected failures instead of raising, and every touched file must pass pyright strict.",
-      "quote": "ok, are we following the unwritten python-best-practices?  use pyright, return Result<T,Err> (no throwing), can you define rust traits for python to use?",
-      "kind": "directive",
-      "stated_by": "Rand",
-      "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "pyright strict + Result, no throwing",
-      "scope": "adds or rewrites Python code in atm-bd-orchestration",
-      "deterministic_check": "pyright strict reports 0 errors on every file in the phase diff; grep '^\\s*raise ' over new modules finds only programmer-error asserts",
-      "fixtures": {
-        "pass": [
-          "profile.py returns Result[Profile]; main maps Err to exit code 2 and JSON; the file is pyright strict."
-        ],
-        "fail": [
-          "load_provider raises ValueError on an unknown provider and the module has no strict directive."
-        ]
-      },
-      "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
-      "promoted_to": null,
-      "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
-      },
-      "history": [
-        {
-          "at": "2026-10-31T20:54:51+00:00",
-          "event": "created",
-          "status": "proposed"
-        },
-        {
-          "at": "2026-10-31T20:54:51+00:00",
-          "event": "updated",
-          "fields": [
-            "fixtures"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "ANC-017",
-      "source_type": "ANC",
-      "source_ref": null,
-      "statement": "The fundamental atm-bd types must live in one Rust crate distributed through crates.io and a PyPI abi3 wheel, never through a git-source or GitHub-asset pin.",
-      "quote": "I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed. does wheel pull from gh?",
-      "kind": "structural",
-      "stated_by": "Rand",
-      "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Types crate on crates.io + PyPI wheel",
-      "scope": "adds or changes shared enums, error types, provider or stack-gate types, or their distribution",
-      "deterministic_check": "uv pip install 'atm-bd-types>=<X.Y>,<X+1>' resolves from PyPI; cargo add atm-bd-types@<crate version> resolves from crates.io; no git= or url= dependency on the crate anywhere",
-      "fixtures": {
-        "pass": [
-          "atm-bd-types 0.20.0 is on PyPI and crates.io; pyproject pins atm-bd-types==0.20.0."
-        ],
-        "fail": [
-          "The crate is pulled with a git+https dependency on the sc-runtime repo."
+          "The lite formula pours a sanity bead that a second agent must close before QA can start."
         ]
       },
       "question_overrides": {},
@@ -755,45 +728,45 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:54:51+00:00",
+          "at": "2026-10-31T21:27:07+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:54:51+00:00",
+          "at": "2026-10-31T21:27:07+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
           ]
         },
         {
-          "at": "2026-10-31T20:55:32+00:00",
+          "at": "2026-10-31T21:28:33+00:00",
           "event": "updated",
           "fields": [
-            "deterministic_check"
+            "fixtures"
           ]
         }
       ]
     },
     {
-      "id": "ANC-018",
+      "id": "ANC-016",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The lite hook's transition logic must be a pure function returning a command plan, with no I/O, so a Rust cron can fire it under monty or CPython.",
-      "quote": "rust libraries will be arriving soon which will replace beads cache w/ rust and tokio and cron for firing monty (or python hooks).",
-      "kind": "structural",
+      "statement": "New or rewritten Python code in the phase must return Result<T,Err> values instead of throwing exceptions.",
+      "quote": "use pyright, return Result<T,Err> (no throwing)",
+      "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Hook logic pure, fireable by Rust cron",
-      "scope": "adds or changes the lite hook or the hook runner",
-      "deterministic_check": "atm-bd-task-hook.py imports only enum, dataclasses, typing and atm_bd_types and calls no subprocess, open or os function",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Result values, no throwing",
+      "scope": "adds or rewrites Python code in atm-bd-orchestration",
+      "deterministic_check": "grep raise in the files created by the phase finds only programmer-error guards; every public function returns Ok or Err",
       "fixtures": {
         "pass": [
-          "plan() returns a list of Command records; hook_runner.py executes them."
+          "profile.py returns Result[Profile]; main maps Err to exit code 2 and JSON output."
         ],
         "fail": [
-          "The hook calls subprocess.run for bd close inside the transition match."
+          "load_provider raises ValueError on an unknown provider and callers catch it."
         ]
       },
       "question_overrides": {},
@@ -807,12 +780,109 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:54:51+00:00",
+          "at": "2026-10-31T21:27:08+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:54:51+00:00",
+          "at": "2026-10-31T21:27:08+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The fundamental atm-bd types must be defined in one Rust crate.",
+      "quote": "I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Fundamental types in one Rust crate",
+      "scope": "adds or changes shared enums, error types, provider or stack-gate types, or their distribution",
+      "deterministic_check": "crates/atm-bd-types defines Profile, Provider, Transition and Error and no Python module redefines them",
+      "fixtures": {
+        "pass": [
+          "The Profile, Provider and Transition enums and the Error type are defined in crates/atm-bd-types and exposed to Python through its wheel."
+        ],
+        "fail": [
+          "The shared enums are defined in Python dataclasses under core/scripts and no Rust crate exists."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T21:27:08+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T21:27:08+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A quick Python-only fix of atm-bd must release without a crate publish step.",
+      "quote": "I am hopeful we won't be changing the atm-bd crate too often so we don't need a complicated publish process for quick python fixes",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Python fixes release without the crate",
+      "scope": "adds or changes release workflows, version files or the crate pin",
+      "deterministic_check": "release.yml for a Python-only tag runs no crate publish job",
+      "fixtures": {
+        "pass": [
+          "atm-bd 0.21.1 shipped a Python-only fix: release.yml ran no crate publish job and atm-bd-types stays at 0.2.0 (workflow run log and the crates.io version page)."
+        ],
+        "fail": [
+          "Every Python release bumps and republishes atm-bd-types at the same version number."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T21:27:08+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T21:27:08+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:33+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -824,21 +894,184 @@
       "id": "ANC-019",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The atm-bd-types crate must be versioned and released independently of the Python package, so a Python-only fix never publishes the crate.",
-      "quote": "I am hopeful we won't be changing the atm-bd crate too often so we don't need a complicated publish process for quick python fixes",
+      "statement": "The lite task-hook file must be organized by transition type: one handler section per transition (dev close, fix close, QA close).",
+      "quote": "The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)",
       "kind": "structural",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
-      "context": "planning session 2026-10-31 (fenix)",
-      "summary": "Crate version independent of Python releases",
-      "scope": "adds or changes release workflows, version files or the crate pin",
-      "deterministic_check": "release.yml has no cargo publish or maturin step; crate-release.yml is manual dispatch; pyproject pins a compatible range, not an exact crate version",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Hook organized by transition type",
+      "scope": "adds or changes the lite hook",
+      "deterministic_check": "the hook file has one handler per Transition member and no handler serves two transitions",
       "fixtures": {
         "pass": [
-          "atm-bd 0.21.1 ships a Python fix; atm-bd-types stays at 0.2.0 and no crate workflow runs."
+          "atm-bd-task-hook.py has one handler section each for dev close, fix close and qa close, selected by the Transition enum (file outline in the PR; test_one_handler_per_transition)."
         ],
         "fail": [
-          "Every Python release bumps and republishes atm-bd-types at the same version number."
+          "The hook is organized by bead field, with one function per close-vars key that branches on the transition inside."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T21:27:09+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T21:27:09+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Types shared between all profiles must be defined in atm-bd-core.",
+      "quote": "This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Shared types live in atm-bd-core",
+      "scope": "adds or changes enums, dataclasses, models or schema types used by a profile or a shared tool",
+      "deterministic_check": "no module under skills/atm-bd-lite or skills/atm-bd-orchestration defines a type imported by another skill or by core",
+      "fixtures": {
+        "pass": [
+          "Profile, Provider and Transition are defined once in atm-bd-core (crates/atm-bd-types, re-exported by core/scripts) and imported by both profile hooks; grep finds no second definition (PR diff)."
+        ],
+        "fail": [
+          "skills/atm-bd-lite/scripts/types.py defines its own Transition enum copied from the full profile."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T21:27:09+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T21:27:09+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Stack linking and the stack check in both profiles must work on an Azure Git repository, not only on GitHub.",
+      "quote": "One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Stacking works on Azure Git repos",
+      "scope": "adds or changes stack linking, the stack gate, or provider commands",
+      "deterministic_check": "a stack gate test against an Azure-style remote URL passes and the azure render of the dispatch templates contains az repos pr commands",
+      "fixtures": {
+        "pass": [
+          "Stack linking and the stack check both pass against an Azure-style remote: test_stack_gate_azure_remote maps an Azure Git URL to a local bare repository with git insteadOf, and test_stack_link_azure links a layer on it with az repos pr commands (test log in the PR)."
+        ],
+        "fail": [
+          "The stack check requires the gh CLI and a GitHub remote; Azure repositories are out of scope."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T21:27:09+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T21:27:09+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:28:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:29:10+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Python files created or changed in the phase must pass pyright.",
+      "quote": "use pyright, return Result<T,Err> (no throwing)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "summary": "Touched Python passes pyright",
+      "scope": "adds or rewrites Python code in atm-bd-orchestration",
+      "deterministic_check": "pyright on the files in the phase diff reports 0 errors",
+      "fixtures": {
+        "pass": [
+          "profile.py and providers.py carry # pyright: strict and pyright reports 0 errors on them."
+        ],
+        "fail": [
+          "The new provider module is excluded from pyright because of untyped dict access."
         ]
       },
       "question_overrides": {},
@@ -852,12 +1085,12 @@
       },
       "history": [
         {
-          "at": "2026-10-31T20:55:32+00:00",
+          "at": "2026-10-31T21:27:10+00:00",
           "event": "created",
           "status": "proposed"
         },
         {
-          "at": "2026-10-31T20:55:32+00:00",
+          "at": "2026-10-31T21:27:10+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
