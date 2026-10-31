@@ -71,14 +71,17 @@ Python redeclares none of them.
   single Result type; new code never raises for an expected failure, and `main` is the only place an `Err` becomes an
   exit code (Rand: "use pyright, return Result<T,Err> (no throwing)").
 
-## Stack without `gh stack` (bo-4)
+## Git-only stack gate (bo-4)
 
 `GitStackGate.check(pr_base_ref, head_branch, head_sha, stack_top_branch, remote)` returns `Stacked` when the PR base
 ref equals the stack top branch, `origin/<base>` is an ancestor of `head`, and `head` is pushed; one test maps an
 Azure-style remote URL to a local bare repository with `insteadOf` to prove the gate is provider-agnostic. The dev/fix close hook of both profiles calls
 it and refuses the close on any non-Ok result with the typed error and the exact fix command. `sanity-stack-link`
-loses `gh stack link/unstack` and the stacks API; `stack_link.py` records layers in the stack bead
-(`metadata.layers`, no `stack_number`) and sets the PR base through the provider command.
+loses its hard-coded `gh stack link/unstack` and stacks API calls; `stack_link.py` records layers in the stack bead
+(`metadata.layers`, no `stack_number`), runs the provider `StackLink` op and sets the PR base through the provider
+command. On GitHub the ops stay `gh stack link` and `gh stack view --json`, so agent prompts keep the native stack
+view (Rand, 2026-10-31: "we can and should use 'gh stack' in agent prompts if github is used. 'gh stack view --json'
+is best view of stack and inexpensive if tokens available"); Azure gets the stack-bead equivalents.
 
 ## Lite hook (bo-5)
 

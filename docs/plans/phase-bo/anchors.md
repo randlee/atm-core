@@ -13,7 +13,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-005 | proposed | Same tool interfaces for every profile | 2026-10-31 |
 | ANC-006 | proposed | One bead schema for all profiles | 2026-10-31 |
 | ANC-007 | proposed | Lite leaves sanity schema items undefined | 2026-10-31 |
-| ANC-008 | proposed | Never gh stack | 2026-10-31 |
+| ANC-008 | proposed | Stack check is git-only, no gh stack | 2026-10-31 |
 | ANC-009 | proposed | Stack check compares base and top only | 2026-10-31 |
 | ANC-010 | proposed | Close hook blocks on PR base vs stack top mismatch | 2026-10-31 |
 | ANC-011 | proposed | One profile per phase | 2026-10-31 |
@@ -30,6 +30,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-022 | proposed | Touched Python passes pyright | 2026-10-31 |
 | ANC-023 | proposed | Profile comes from the phase file; hook, templates, cron and console align on it | 2026-10-31 |
 | ANC-024 | proposed | No console on a lite phase | 2026-10-31 |
+| ANC-025 | proposed | GitHub prompts use gh stack; gh stack view --json is the view | 2026-10-31 |
 
 ## ANC-001
 
@@ -159,21 +160,21 @@ Fixtures:
 
 ## ANC-008
 
-Anchor: Scripts and templates of either profile never invoke the gh stack subcommand.
+Anchor: The stack check of the dev and fix close hook never invokes the gh stack subcommand or the GitHub stacks API.
 
 > This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 5.
 
-Summary: Never gh stack
+Summary: Stack check is git-only, no gh stack
 
-Scope: adds or changes stack linking, stack checks, sanity-stack-link, or dispatch templates
+Scope: adds or changes the stack gate called by the dev or fix close hook
 
 Deterministic check to pair with the development gate: grep -rn 'gh stack' plugins/atm-bd-orchestration/skills plugins/atm-bd-orchestration/core finds only prose
 
 Fixtures:
-- pass: sanity-stack-link records layers in the stack bead and sets the PR base with the provider command; grep -rn 'gh stack' plugins/atm-bd-orchestration returns prose only, no command (CI grep log attached).
-- fail: The lite hook calls gh stack link to attach the layer.
+- pass: stack_gate.py compares the PR base ref with the stack top through git only; test_stack_gate_no_gh asserts no gh subprocess is spawned during check, and the hook test shows the gate result produced with the gh binary absent from PATH.
+- fail: The close hook's stack check calls gh stack view --json to find the layer below.
 
 ## ANC-009
 
@@ -462,3 +463,21 @@ Deterministic check to pair with the development gate: a test runs atm-bd consol
 Fixtures:
 - pass: atm-bd console --phase bo exits with PROFILE.MISMATCH and dispatches nothing when .atm-bd/phase-bo.toml sets profile = "lite"; tests/test_console_refuses_lite.py asserts the exit code and an empty dispatch log.
 - fail: atm-bd console dispatches the ready beads of a lite phase because the profile check was added only to the cron script.
+
+## ANC-025
+
+Anchor: Agent prompt templates rendered for the GitHub provider must use gh stack commands for stack work, with gh stack view --json as the stack view.
+
+> we can and should use ‘gh stack’ in agent prompts if github is used.  ‘gh stack view —json’ is best view of stack and inexpensive if tokens available.
+
+Said by Rand, planning session 2026-10-31 (fenix), note on ANC-008, 2026-10-31. Status: proposed. Version 2.
+
+Summary: GitHub prompts use gh stack; gh stack view --json is the view
+
+Scope: adds or changes dispatch templates or the provider command vars files
+
+Deterministic check to pair with the development gate: the github provider vars file maps the stack_view op to gh stack view --json and stack_link to gh stack link; a render test asserts both strings in the github render and neither in the azure render
+
+Fixtures:
+- pass: providers/github.json maps stack_link to gh stack link and stack_view to gh stack view --json; the dev template rendered with --github contains both and rendered with --azure contains neither (test_provider_render_stack_ops, render diffs in the PR body).
+- fail: The dev template rendered for GitHub tells the agent to inspect the stack with one gh pr view per branch and never mentions gh stack.
