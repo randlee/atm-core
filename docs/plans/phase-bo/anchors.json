@@ -219,14 +219,14 @@
       "deterministic_check": "the --help output of atm-bd console, cron and queues is byte-identical before and after the phase",
       "fixtures": {
         "pass": [
-          "atm-bd console, cron and queues read the profile from the phase toml and render a lite phase with the same arguments as today; their --help output is byte-identical before and after (tests/test_cli_help_unchanged.py)."
+          "atm-bd console, cron and queues keep their argv and read the profile from the phase toml; on a lite phase queues prints the lite columns, cron runs the lite tick and console exits with the typed ProfileMismatch error, all through the same subcommands and arguments as today; their --help output is byte-identical before and after (tests/test_cli_help_unchanged.py)."
         ],
         "fail": [
           "A new atm-bd lite-console command is added for lite phases."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 5,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -249,6 +249,20 @@
         },
         {
           "at": "2026-10-31T21:28:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:48:49+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-10-31T21:48:49+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -1091,6 +1105,96 @@
         },
         {
           "at": "2026-10-31T21:27:10+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-023",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The task hook, the dispatch templates, the cron script and the console must each read the profile (lite or full) from the phase file and refuse to run when the phase file's profile is not their own.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix), ANC-005 note",
+      "summary": "Profile comes from the phase file; hook, templates, cron and console align on it",
+      "scope": "adds or changes the task hook, the dispatch templates, the cron script, the console, or the phase file schema",
+      "deterministic_check": "every entrypoint of the hook, cron script and console calls the shared phase-file profile reader, and a test asserts the mismatch exit for each of the four",
+      "fixtures": {
+        "pass": [
+          "atm-bd-task-hook.py, the dispatch templates, atm-bd cron and atm-bd console each call the shared reader atm_bd_core.profile.read_phase_profile(phase_file) and exit with PROFILE.MISMATCH when the phase file's profile is not theirs; tests/test_profile_gate.py asserts the mismatch exit for all four."
+        ],
+        "fail": [
+          "The console takes the profile from a --profile command-line flag that defaults to full and never reads the phase file."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T21:46:13+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T21:46:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-024",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console never dispatches work for a phase whose phase file sets the lite profile.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix), ANC-005 note",
+      "summary": "No console on a lite phase",
+      "scope": "adds or changes atm-bd console or its dispatch path",
+      "deterministic_check": "a test runs atm-bd console against a phase file with profile lite and asserts a refusal exit with no dispatch",
+      "fixtures": {
+        "pass": [
+          "atm-bd console --phase bo exits with PROFILE.MISMATCH and dispatches nothing when .atm-bd/phase-bo.toml sets profile = \"lite\"; tests/test_console_refuses_lite.py asserts the exit code and an empty dispatch log."
+        ],
+        "fail": [
+          "atm-bd console dispatches the ready beads of a lite phase because the profile check was added only to the cron script."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-10-31T21:46:29+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-10-31T21:46:41+00:00",
           "event": "updated",
           "fields": [
             "fixtures"

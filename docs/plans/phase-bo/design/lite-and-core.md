@@ -45,7 +45,10 @@ Python redeclares none of them.
 ## Profiles and providers (bo-2)
 
 - `Profile` is read from `.atm-bd/phase-<x>.toml` key `profile` (default full so existing phase files keep loading)
-  by `core/scripts/profile.py`; `phase-config init --profile lite` writes it.
+  by `core/scripts/profile.py`; `phase-config init --profile lite` writes it. `require_profile(phase_file, expected)`
+  is the one gate every hook, template render, cron tick and console run passes first; it returns the typed
+  `ProfileMismatch` error (with the fix) when the phase file's profile is not the caller's (Rand, 2026-10-31:
+  "the lite/orchestration flag is set in phase toml/json file ... hooks/templates/cron/console must all align").
 - `Provider` is read from the repo config key `provider` (written by the installer flag `--github` / `--azure`,
   default github) by `core/scripts/providers.py`. The provider-operation boundary: `ProviderCommands` maps each
   `PrOp {Create, View, EditBase, Comment, Checks, LookupByHead}` to a `ProviderOp {argv with placeholders {base}
@@ -100,8 +103,10 @@ lead-closes rule for sanity).
 ## Tool interfaces by profile (bo-6)
 
 `atm-bd console`, `atm-bd cron`, `atm-bd queues`, `sprint-report`, `sprint-review`, `bv-analyze` read the phase profile
-and switch suffix sets (`group-dev`, `group-qa` only for lite), optional `dev_sanity_member`, and queue tables, with
-no new command or flag. `atm-bd cron` dispatches to the profile's tick; the tick contract (argv, empty stdout or one
+with no new command or flag. The console never runs a lite phase: in lite the agents orchestrate, so
+`atm-bd console` on a lite phase file exits with the typed `ProfileMismatch` error and dispatches nothing (Rand,
+2026-10-31: "You can't run console for lite if agents are orchestrating. This is critically important"). cron, queues
+and the reports switch suffix sets (`group-dev`, `group-qa` only for lite), optional `dev_sanity_member`, and queue tables. `atm-bd cron` dispatches to the profile's tick; the tick contract (argv, empty stdout or one
 JSON object, exit code) is documented so the arriving Rust cron (sc-cron, once on crates.io) can fire it directly.
 `bd_cache*.py` move unchanged and are marked as replaced by the arriving Rust library.
 

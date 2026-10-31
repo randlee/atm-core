@@ -28,6 +28,8 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-020 | proposed | Shared types live in atm-bd-core | 2026-10-31 |
 | ANC-021 | proposed | Stacking works on Azure Git repos | 2026-10-31 |
 | ANC-022 | proposed | Touched Python passes pyright | 2026-10-31 |
+| ANC-023 | proposed | Profile comes from the phase file; hook, templates, cron and console align on it | 2026-10-31 |
+| ANC-024 | proposed | No console on a lite phase | 2026-10-31 |
 
 ## ANC-001
 
@@ -107,7 +109,7 @@ Anchor: atm-bd cron, atm-bd console and atm-bd queues must be invoked with the s
 
 > We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: proposed. Version 5.
 
 Summary: Same tool interfaces for every profile
 
@@ -116,7 +118,7 @@ Scope: adds or changes atm-bd console, cron, queues, sprint-report or bv-analyze
 Deterministic check to pair with the development gate: the --help output of atm-bd console, cron and queues is byte-identical before and after the phase
 
 Fixtures:
-- pass: atm-bd console, cron and queues read the profile from the phase toml and render a lite phase with the same arguments as today; their --help output is byte-identical before and after (tests/test_cli_help_unchanged.py).
+- pass: atm-bd console, cron and queues keep their argv and read the profile from the phase toml; on a lite phase queues prints the lite columns, cron runs the lite tick and console exits with the typed ProfileMismatch error, all through the same subcommands and arguments as today; their --help output is byte-identical before and after (tests/test_cli_help_unchanged.py).
 - fail: A new atm-bd lite-console command is added for lite phases.
 
 ## ANC-006
@@ -424,3 +426,39 @@ Deterministic check to pair with the development gate: pyright on the files in t
 Fixtures:
 - pass: profile.py and providers.py carry # pyright: strict and pyright reports 0 errors on them.
 - fail: The new provider module is excluded from pyright because of untyped dict access.
+
+## ANC-023
+
+Anchor: The task hook, the dispatch templates, the cron script and the console must each read the profile (lite or full) from the phase file and refuse to run when the phase file's profile is not their own.
+
+> the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.
+
+Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note, 2026-10-31. Status: proposed. Version 2.
+
+Summary: Profile comes from the phase file; hook, templates, cron and console align on it
+
+Scope: adds or changes the task hook, the dispatch templates, the cron script, the console, or the phase file schema
+
+Deterministic check to pair with the development gate: every entrypoint of the hook, cron script and console calls the shared phase-file profile reader, and a test asserts the mismatch exit for each of the four
+
+Fixtures:
+- pass: atm-bd-task-hook.py, the dispatch templates, atm-bd cron and atm-bd console each call the shared reader atm_bd_core.profile.read_phase_profile(phase_file) and exit with PROFILE.MISMATCH when the phase file's profile is not theirs; tests/test_profile_gate.py asserts the mismatch exit for all four.
+- fail: The console takes the profile from a --profile command-line flag that defaults to full and never reads the phase file.
+
+## ANC-024
+
+Anchor: The console never dispatches work for a phase whose phase file sets the lite profile.
+
+> the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.
+
+Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note, 2026-10-31. Status: proposed. Version 2.
+
+Summary: No console on a lite phase
+
+Scope: adds or changes atm-bd console or its dispatch path
+
+Deterministic check to pair with the development gate: a test runs atm-bd console against a phase file with profile lite and asserts a refusal exit with no dispatch
+
+Fixtures:
+- pass: atm-bd console --phase bo exits with PROFILE.MISMATCH and dispatches nothing when .atm-bd/phase-bo.toml sets profile = "lite"; tests/test_console_refuses_lite.py asserts the exit code and an empty dispatch log.
+- fail: atm-bd console dispatches the ready beads of a lite phase because the profile check was added only to the cron script.

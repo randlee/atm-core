@@ -10,7 +10,7 @@ Two coupled problems ride along. First, the package duplicates its scripts and t
 
 ## What success looks like
 
-- A phase file declares `profile = "lite"` and a single agent runs a lite phase end to end from GitHub release assets: dev bead dispatched, dev task closed by the lite hook (stack check -> bd close -> link layer -> QA assigned), QA closed, the stack landed, with `atm-bd console`, `atm-bd cron` and `atm-bd queues` showing the phase correctly.
+- A phase file declares `profile = "lite"` and a single agent runs a lite phase end to end from GitHub release assets: dev bead dispatched, dev task closed by the lite hook (stack check -> bd close -> link layer -> QA assigned), QA closed, the stack landed, with `atm-bd cron` and `atm-bd queues` showing the phase correctly and `atm-bd console` refusing it (the console never runs a lite phase).
 - Shared types, schema, render helpers and tool entry points live in `atm-bd-core` and are installed once to `.atm-bd/scripts` and `.atm-bd/templates`; profile skills carry only their own hook, templates, cron tick and formulas.
 - Neither profile calls `gh stack` or the GitHub stacks API; the stack gate is `git merge-base` plus the PR base ref, and the Azure provider renders the same templates with `az repos` commands.
 - The full profile (`atm-bd-orchestration`) keeps its behaviour and its tests green on the new layout.
