@@ -43,9 +43,9 @@ def work_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore,
                 return HookReply.refused(Refusal(ErrorId.STACK_LAYER_MOVED, layer=layer, remote=remote))
             if (failed := beads.update(BeadPatch.close(bead, f"{layer.branch} at {layer.head}; PR #{layer.pr}"), actor=req.caller)) is not None:
                 return HookReply.refused(failed)
-            return qa_handoff(req, phase, bead, qa, beads)
+            return qa_handoff(req, phase, bead, qa, beads, fresh=True)
         case Status.CLOSED:  # recovery: the recorded layer is the proof; the branch may have moved on or merged
-            return qa_handoff(req, phase, bead, qa, beads)
+            return qa_handoff(req, phase, bead, qa, beads, fresh=False)
         case Status.BLOCKED | Status.DEFERRED:
             return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))
 
@@ -65,7 +65,7 @@ def recorded_layer(phase: PhaseFile, bead: Bead, beads: BeadStore) -> Layer | Re
     return layer
 
 
-def qa_handoff(req: HookRequest, phase: PhaseFile, bead: Bead, qa: Bead, beads: BeadStore) -> HookReply:
+def qa_handoff(req: HookRequest, phase: PhaseFile, bead: Bead, qa: Bead, beads: BeadStore, fresh: bool) -> HookReply:
     match qa.status:
         case Status.CLOSED:  # QA already finished: let the original close complete, never redispatch
             return HookReply.pass_through()
@@ -74,8 +74,11 @@ def qa_handoff(req: HookRequest, phase: PhaseFile, bead: Bead, qa: Bead, beads: 
         case Status.OPEN | Status.IN_PROGRESS:
             if qa.open_blockers(ignoring=bead.id):
                 return HookReply.pass_through()
-            if not qa.assigned_to(phase.qa_member) or qa.checked_bead() != bead.id:  # QA reviews this layer
-                if (failed := beads.update(BeadPatch.handoff(qa, phase.qa_member, checked=bead.id), actor=phase.lead)) is not None:
+            checked = bead.id  # a fresh close points QA at its layer; a retry keeps the target set since (fix, lead)
+            if not fresh and not isinstance(current := qa.checked_bead(), Refusal):
+                checked = current
+            if not qa.assigned_to(phase.qa_member) or qa.checked_bead() != checked:
+                if (failed := beads.update(BeadPatch.handoff(qa, phase.qa_member, checked=checked), actor=phase.lead)) is not None:
                     return HookReply.refused(failed)
             assign = TaskAssign(task=qa.id, recipient=phase.qa_member, actor=phase.lead, template=phase.template(Template.QA))
             return HookReply.handled([HookAction.assign(req, assign), HookAction.original(req)])
