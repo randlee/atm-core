@@ -46,7 +46,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-038 | locked | Python trait implementations pass pyright strict | 2026-11-01 |
 | ANC-039 | locked | Lite work does not break atm-bd-orchestration | 2026-11-01 |
 | ANC-040 | locked | Non-lite-specific code goes in the shared location | 2026-11-01 |
-| ANC-041 | locked | Shared code is tested on full-profile inputs | 2026-11-01 |
+| ANC-041 | locked | Shared code is tested on orchestration-profile inputs | 2026-11-01 |
 | ANC-042 | locked | Shared code is tested on lite-profile inputs | 2026-11-01 |
 | ANC-043 | locked | Shared code matches orchestration's output | 2026-11-01 |
 | ANC-044 | locked | Shared code has no profile-specific logic | 2026-11-01 |
@@ -141,11 +141,11 @@ Fixtures:
 
 ## ANC-005
 
-Anchor: atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a full phase.
+Anchor: atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a orchestration phase.
 
 > We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 6.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 7.
 
 Summary: Same tool interfaces for every profile
 
@@ -181,13 +181,13 @@ Anchor: The shared schema must allow the lite profile to leave its sanity items 
 
 > This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 5.
 
 Summary: Lite leaves sanity schema items undefined
 
 Scope: adds or changes bead_schema, close_fields or close vars
 
-Deterministic check to pair with the development gate: a lite close-vars file without any sanity key validates, and a full close-vars file without them is rejected
+Deterministic check to pair with the development gate: a lite close-vars file without any sanity key validates, and a orchestration close-vars file without them is rejected
 
 Fixtures:
 - pass: sanity_bead and max_sanity_rounds are NotRequired in CloseFields (core/scripts/close_fields.py) and a lite close-vars file without them validates (test_lite_close_vars_without_sanity).
@@ -252,11 +252,11 @@ Fixtures:
 
 ## ANC-011
 
-Anchor: All beads of a phase must carry the same profile value (lite or full) as the phase file.
+Anchor: All beads of a phase must carry the same profile value (lite or orchestration) as the phase file.
 
 > 2) never mix profiles in the same phase.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 5.
 
 Summary: One profile per phase
 
@@ -266,15 +266,15 @@ Deterministic check to pair with the development gate: validate-plan exits non-z
 
 Fixtures:
 - pass: validate-plan rejects a lite phase that contains a stage:dev-sanity bead with exit 5 (test_validate_plan_mixed_profiles; run log in the PR).
-- fail: A phase mixes lite sprints and full sprints by setting the profile per sprint bead.
+- fail: A phase mixes lite sprints and orchestration sprints by setting the profile per sprint bead.
 
 ## ANC-012
 
-Anchor: Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; full-only ones live relative to the atm-bd-orchestration skill.
+Anchor: Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; orchestration-only ones live relative to the atm-bd-orchestration skill.
 
 > i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Profile-only files under the profile skill
 
@@ -310,13 +310,13 @@ Anchor: The atm-bd-lite skill must have its own task-hook Python file, separate 
 
 > the atm-bd-lite would have a completely different atm-task-hook python file.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 3.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Lite has its own task hook file
 
 Scope: adds or changes a task-close hook, or selects a hook by profile
 
-Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts contains a hook file and the full profile's atm-task-close.py has no lite branch
+Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts contains a hook file and the orchestration profile's atm-task-close.py has no lite branch
 
 Fixtures:
 - pass: skills/atm-bd-lite/scripts/atm-bd-task-hook.py is a separate file; atm-task-close.py is unchanged.
@@ -421,7 +421,7 @@ Anchor: Types shared between all profiles must be defined in atm-bd-core.
 
 > This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 5.
 
 Summary: Shared types live in atm-bd-core
 
@@ -431,7 +431,7 @@ Deterministic check to pair with the development gate: no module under skills/at
 
 Fixtures:
 - pass: Profile, Provider and Transition are defined once in atm-bd-core (crates/atm-bd-types, re-exported by core/scripts) and imported by both profile hooks; grep finds no second definition (PR diff).
-- fail: skills/atm-bd-lite/scripts/types.py defines its own Transition enum copied from the full profile.
+- fail: skills/atm-bd-lite/scripts/types.py defines its own Transition enum copied from the orchestration profile.
 
 ## ANC-021
 
@@ -529,17 +529,17 @@ Anchor: The lite task hook and the lite dispatch templates must take the profile
 
 > the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.
 
-Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal "complete phase-bo plan with qa + anc all passing and start Bo sprints", 2026-10-31. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal "complete phase-bo plan with qa + anc all passing and start Bo sprints", 2026-10-31. Status: locked. Version 3.
 
 Summary: Lite hook and templates refuse a non-lite phase file
 
 Scope: adds or changes the lite task hook, its runner, or the lite dispatch templates
 
-Deterministic check to pair with the development gate: a test runs the hook runner and renders each lite template against a full phase file and asserts the ProfileMismatch exit
+Deterministic check to pair with the development gate: a test runs the hook runner and renders each lite template against a orchestration phase file and asserts the ProfileMismatch exit
 
 Fixtures:
-- pass: hook_runner.py and the lite template render call require_profile(phase_file, Profile.LITE) first and exit with ProfileMismatch on a full phase file; tests/test_lite_profile_gate.py asserts the exit for the runner and for each lite template.
-- fail: The lite hook takes the profile from a --profile argument and runs its close plan against a full phase file without reading the phase file.
+- pass: hook_runner.py and the lite template render call require_profile(phase_file, "lite") first and exit with ProfileMismatch on a orchestration phase file; tests/test_lite_profile_gate.py asserts the exit for the runner and for each lite template.
+- fail: The lite hook takes the profile from a --profile argument and runs its close plan against a orchestration phase file without reading the phase file.
 
 ## ANC-027
 
@@ -547,17 +547,17 @@ Anchor: Each atm-bd cron tick must take the profile from the phase file and refu
 
 > the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.
 
-Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal "complete phase-bo plan with qa + anc all passing and start Bo sprints", 2026-10-31. Status: locked. Version 2.
+Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal "complete phase-bo plan with qa + anc all passing and start Bo sprints", 2026-10-31. Status: locked. Version 3.
 
 Summary: Cron ticks refuse the other profile's phase file
 
 Scope: adds or changes atm-bd cron or a profile cron tick
 
-Deterministic check to pair with the development gate: a test runs the full tick on a lite phase file and the lite tick on a full phase file and asserts the ProfileMismatch exit for both
+Deterministic check to pair with the development gate: a test runs the orchestration tick on a lite phase file and the lite tick on a orchestration phase file and asserts the ProfileMismatch exit for both
 
 Fixtures:
-- pass: atm-bd cron reads the profile with read_profile; the full tick calls require_profile(phase_file, Profile.FULL) and lite_cron.py Profile.LITE; tests/test_cron_profile_gate.py runs each tick on the other profile's phase file and asserts ProfileMismatch.
-- fail: lite_cron.py runs its tick on whatever phase file it is given and lists queues for a full phase.
+- pass: atm-bd cron reads the profile with read_profile; the orchestration tick calls require_profile(phase_file, "orchestration") and lite_cron.py "lite"; tests/test_cron_profile_gate.py runs each tick on the other profile's phase file and asserts ProfileMismatch.
+- fail: lite_cron.py runs its tick on whatever phase file it is given and lists queues for a orchestration phase.
 
 ## ANC-028
 
@@ -633,16 +633,16 @@ Anchor: Each atm-bd subcommand must run the script with the same file name from 
 
 > and the atm-bd commands just call the profile's scripts by the same name.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 4.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 5.
 
 Summary: atm-bd commands call the profile's same-named script
 
 Scope: adds or changes how an atm-bd subcommand selects or calls profile code
 
-Deterministic check to pair with the development gate: a test runs each subcommand on a lite and a full phase file and asserts the called script path is <profile skill>/scripts/<same file name>
+Deterministic check to pair with the development gate: a test runs each subcommand on a lite and a orchestration phase file and asserts the called script path is <profile skill>/scripts/<same file name>
 
 Fixtures:
-- pass: atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues; test_subcommand_routing asserts the called path for lite and full phase files for console, cron, queues, show and snapshot.
+- pass: atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues; test_subcommand_routing asserts the called path for lite and orchestration phase files for console, cron, queues, show and snapshot.
 - fail: atm-bd cron runs a new lite-cron entry point with a different file name and argument list for lite phases.
 
 ## ANC-033
@@ -787,20 +787,20 @@ Fixtures:
 
 ## ANC-041
 
-Anchor: Every public function and trait implementation in the shared location must have a test that runs it on full-profile inputs: a real full-profile phase file and bead data from a full phase.
+Anchor: Every public function and trait implementation in the shared location must have a test that runs it on orchestration-profile inputs: a real orchestration-profile phase file and bead data from a orchestration phase.
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 5.
 
-Summary: Shared code is tested on full-profile inputs
+Summary: Shared code is tested on orchestration-profile inputs
 
 Scope: adds or changes code in the shared location or atm-bd-types
 
-Deterministic check to pair with the development gate: test inventory: every public item in the shared location is exercised by a test whose fixture is a full-profile phase file and full-phase bead data
+Deterministic check to pair with the development gate: test inventory: every public item in the shared location is exercised by a test whose fixture is a orchestration-profile phase file and orchestration-phase bead data
 
 Fixtures:
-- pass: tests/shared/test_phase_file.py runs read_profile on .atm-bd/phase-bj.toml and the phase-bj bead export, both real full-profile data.
+- pass: tests/shared/test_phase_file.py runs read_profile on .atm-bd/phase-bj.toml and the phase-bj bead export, both real orchestration-profile data.
 - fail: The shared module's tests use only a synthetic lite phase file.
 
 ## ANC-042
@@ -809,7 +809,7 @@ Anchor: Every public function and trait implementation in the shared location mu
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 4.
 
 Summary: Shared code is tested on lite-profile inputs
 
@@ -819,24 +819,24 @@ Deterministic check to pair with the development gate: test inventory: every pub
 
 Fixtures:
 - pass: tests/shared/test_phase_file.py also runs read_profile on a lite-profile phase file fixture.
-- fail: The shared stack gate is tested only against full-profile phase data.
+- fail: The shared stack gate is tested only against orchestration-profile phase data.
 
 ## ANC-043
 
-Anchor: Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same full-profile inputs.
+Anchor: Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same orchestration-profile inputs.
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 4.
 
 Summary: Shared code matches orchestration's output
 
 Scope: adds or changes code in the shared location or atm-bd-types
 
-Deterministic check to pair with the development gate: each shared item with an orchestration counterpart has a comparison test that calls the unmodified orchestration code and the shared code on the same full-profile input and asserts equal output
+Deterministic check to pair with the development gate: each shared item with an orchestration counterpart has a comparison test that calls the unmodified orchestration code and the shared code on the same orchestration-profile input and asserts equal output
 
 Fixtures:
-- pass: test_phase_file_parity calls the unmodified orchestration phase-config reader and shared read_phase on the same full-profile file and asserts equal output.
+- pass: test_phase_file_parity calls the unmodified orchestration phase-config reader and shared read_phase on the same orchestration-profile file and asserts equal output.
 - fail: The shared reader re-implements the orchestration behaviour and no test compares the two outputs.
 
 ## ANC-044
@@ -845,17 +845,17 @@ Anchor: Code in the shared location must not branch on, or hard-code, either pro
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 4.
 
 Summary: Shared code has no profile-specific logic
 
 Scope: adds or changes code in the shared location or atm-bd-types
 
-Deterministic check to pair with the development gate: grep of the shared location for profile literals (lite, full, Profile.LITE, Profile.FULL) and branches on the profile is empty
+Deterministic check to pair with the development gate: grep of the shared location for profile literals (lite, orchestration, "lite", "orchestration") and branches on the profile is empty
 
 Fixtures:
-- pass: grep of the shared location for "lite", "full", Profile.LITE and Profile.FULL is empty; behaviour differences come from the caller's arguments.
-- fail: shared/stack_gate.py contains "if profile == Profile.LITE: skip sanity check".
+- pass: grep of the shared location for "lite", "orchestration", "lite" and "orchestration" is empty; behaviour differences come from the caller's arguments.
+- fail: shared/stack_gate.py contains "if profile == "lite": skip sanity check".
 
 ## ANC-045
 

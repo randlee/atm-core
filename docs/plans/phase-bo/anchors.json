@@ -232,7 +232,7 @@
       "id": "ANC-005",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a full phase.",
+      "statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a orchestration phase.",
       "quote": "We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).",
       "kind": "directive",
       "stated_by": "Rand",
@@ -250,7 +250,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 6,
+      "version": 7,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -297,6 +297,14 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a full phase."
         }
       ]
     },
@@ -363,7 +371,7 @@
       "context": "planning session 2026-10-27..31 (fenix)",
       "summary": "Lite leaves sanity schema items undefined",
       "scope": "adds or changes bead_schema, close_fields or close vars",
-      "deterministic_check": "a lite close-vars file without any sanity key validates, and a full close-vars file without them is rejected",
+      "deterministic_check": "a lite close-vars file without any sanity key validates, and a orchestration close-vars file without them is rejected",
       "fixtures": {
         "pass": [
           "sanity_bead and max_sanity_rounds are NotRequired in CloseFields (core/scripts/close_fields.py) and a lite close-vars file without them validates (test_lite_close_vars_without_sanity)."
@@ -373,7 +381,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -406,6 +414,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check"
+          ]
         }
       ]
     },
@@ -618,7 +633,7 @@
       "id": "ANC-011",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "All beads of a phase must carry the same profile value (lite or full) as the phase file.",
+      "statement": "All beads of a phase must carry the same profile value (lite or orchestration) as the phase file.",
       "quote": "2) never mix profiles in the same phase.",
       "kind": "prohibition",
       "stated_by": "Rand",
@@ -632,11 +647,11 @@
           "validate-plan rejects a lite phase that contains a stage:dev-sanity bead with exit 5 (test_validate_plan_mixed_profiles; run log in the PR)."
         ],
         "fail": [
-          "A phase mixes lite sprints and full sprints by setting the profile per sprint bead."
+          "A phase mixes lite sprints and orchestration sprints by setting the profile per sprint bead."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -669,6 +684,15 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "fixtures"
+          ],
+          "previous_statement": "All beads of a phase must carry the same profile value (lite or full) as the phase file."
         }
       ]
     },
@@ -676,7 +700,7 @@
       "id": "ANC-012",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; full-only ones live relative to the atm-bd-orchestration skill.",
+      "statement": "Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; orchestration-only ones live relative to the atm-bd-orchestration skill.",
       "quote": "i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.",
       "kind": "structural",
       "stated_by": "Rand",
@@ -694,7 +718,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -720,6 +744,14 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; full-only ones live relative to the atm-bd-orchestration skill."
         }
       ]
     },
@@ -786,7 +818,7 @@
       "context": "planning session 2026-10-27..31 (fenix)",
       "summary": "Lite has its own task hook file",
       "scope": "adds or changes a task-close hook, or selects a hook by profile",
-      "deterministic_check": "skills/atm-bd-lite/scripts contains a hook file and the full profile's atm-task-close.py has no lite branch",
+      "deterministic_check": "skills/atm-bd-lite/scripts contains a hook file and the orchestration profile's atm-task-close.py has no lite branch",
       "fixtures": {
         "pass": [
           "skills/atm-bd-lite/scripts/atm-bd-task-hook.py is a separate file; atm-task-close.py is unchanged."
@@ -796,7 +828,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -822,6 +854,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check"
+          ]
         }
       ]
     },
@@ -1132,11 +1171,11 @@
           "Profile, Provider and Transition are defined once in atm-bd-core (crates/atm-bd-types, re-exported by core/scripts) and imported by both profile hooks; grep finds no second definition (PR diff)."
         ],
         "fail": [
-          "skills/atm-bd-lite/scripts/types.py defines its own Transition enum copied from the full profile."
+          "skills/atm-bd-lite/scripts/types.py defines its own Transition enum copied from the orchestration profile."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1169,6 +1208,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1506,17 +1552,17 @@
       "context": "planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal \"complete phase-bo plan with qa + anc all passing and start Bo sprints\"",
       "summary": "Lite hook and templates refuse a non-lite phase file",
       "scope": "adds or changes the lite task hook, its runner, or the lite dispatch templates",
-      "deterministic_check": "a test runs the hook runner and renders each lite template against a full phase file and asserts the ProfileMismatch exit",
+      "deterministic_check": "a test runs the hook runner and renders each lite template against a orchestration phase file and asserts the ProfileMismatch exit",
       "fixtures": {
         "pass": [
-          "hook_runner.py and the lite template render call require_profile(phase_file, Profile.LITE) first and exit with ProfileMismatch on a full phase file; tests/test_lite_profile_gate.py asserts the exit for the runner and for each lite template."
+          "hook_runner.py and the lite template render call require_profile(phase_file, \"lite\") first and exit with ProfileMismatch on a orchestration phase file; tests/test_lite_profile_gate.py asserts the exit for the runner and for each lite template."
         ],
         "fail": [
-          "The lite hook takes the profile from a --profile argument and runs its close plan against a full phase file without reading the phase file."
+          "The lite hook takes the profile from a --profile argument and runs its close plan against a orchestration phase file without reading the phase file."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1536,6 +1582,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1551,17 +1605,17 @@
       "context": "planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal \"complete phase-bo plan with qa + anc all passing and start Bo sprints\"",
       "summary": "Cron ticks refuse the other profile's phase file",
       "scope": "adds or changes atm-bd cron or a profile cron tick",
-      "deterministic_check": "a test runs the full tick on a lite phase file and the lite tick on a full phase file and asserts the ProfileMismatch exit for both",
+      "deterministic_check": "a test runs the orchestration tick on a lite phase file and the lite tick on a orchestration phase file and asserts the ProfileMismatch exit for both",
       "fixtures": {
         "pass": [
-          "atm-bd cron reads the profile with read_profile; the full tick calls require_profile(phase_file, Profile.FULL) and lite_cron.py Profile.LITE; tests/test_cron_profile_gate.py runs each tick on the other profile's phase file and asserts ProfileMismatch."
+          "atm-bd cron reads the profile with read_profile; the orchestration tick calls require_profile(phase_file, \"orchestration\") and lite_cron.py \"lite\"; tests/test_cron_profile_gate.py runs each tick on the other profile's phase file and asserts ProfileMismatch."
         ],
         "fail": [
-          "lite_cron.py runs its tick on whatever phase file it is given and lists queues for a full phase."
+          "lite_cron.py runs its tick on whatever phase file it is given and lists queues for a orchestration phase."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1579,6 +1633,14 @@
           "at": "2026-11-01T00:34:20+00:00",
           "event": "updated",
           "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
             "fixtures"
           ]
         }
@@ -1816,17 +1878,17 @@
       "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
       "summary": "atm-bd commands call the profile's same-named script",
       "scope": "adds or changes how an atm-bd subcommand selects or calls profile code",
-      "deterministic_check": "a test runs each subcommand on a lite and a full phase file and asserts the called script path is <profile skill>/scripts/<same file name>",
+      "deterministic_check": "a test runs each subcommand on a lite and a orchestration phase file and asserts the called script path is <profile skill>/scripts/<same file name>",
       "fixtures": {
         "pass": [
-          "atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues; test_subcommand_routing asserts the called path for lite and full phase files for console, cron, queues, show and snapshot."
+          "atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues; test_subcommand_routing asserts the called path for lite and orchestration phase files for console, cron, queues, show and snapshot."
         ],
         "fail": [
           "atm-bd cron runs a new lite-cron entry point with a different file name and argument list for lite phases."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1858,6 +1920,14 @@
           "at": "2026-11-01T19:19:56+00:00",
           "event": "updated",
           "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
             "fixtures"
           ]
         }
@@ -2301,25 +2371,25 @@
       "id": "ANC-041",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Every public function and trait implementation in the shared location must have a test that runs it on full-profile inputs: a real full-profile phase file and bead data from a full phase.",
+      "statement": "Every public function and trait implementation in the shared location must have a test that runs it on orchestration-profile inputs: a real orchestration-profile phase file and bead data from a orchestration phase.",
       "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-11-01",
       "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
-      "summary": "Shared code is tested on full-profile inputs",
+      "summary": "Shared code is tested on orchestration-profile inputs",
       "scope": "adds or changes code in the shared location or atm-bd-types",
-      "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a full-profile phase file and full-phase bead data",
+      "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a orchestration-profile phase file and orchestration-phase bead data",
       "fixtures": {
         "pass": [
-          "tests/shared/test_phase_file.py runs read_profile on .atm-bd/phase-bj.toml and the phase-bj bead export, both real full-profile data."
+          "tests/shared/test_phase_file.py runs read_profile on .atm-bd/phase-bj.toml and the phase-bj bead export, both real orchestration-profile data."
         ],
         "fail": [
           "The shared module's tests use only a synthetic lite phase file."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2345,6 +2415,23 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "Every public function and trait implementation in the shared location must have a test that runs it on full-profile inputs: a real full-profile phase file and bead data from a full phase."
+        },
+        {
+          "at": "2026-11-01T19:32:13+00:00",
+          "event": "updated",
+          "fields": [
+            "summary"
+          ]
         }
       ]
     },
@@ -2366,11 +2453,11 @@
           "tests/shared/test_phase_file.py also runs read_profile on a lite-profile phase file fixture."
         ],
         "fail": [
-          "The shared stack gate is tested only against full-profile phase data."
+          "The shared stack gate is tested only against orchestration-profile phase data."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2392,6 +2479,13 @@
         },
         {
           "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
           "event": "updated",
           "fields": [
             "fixtures"
@@ -2403,7 +2497,7 @@
       "id": "ANC-043",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same full-profile inputs.",
+      "statement": "Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same orchestration-profile inputs.",
       "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
       "kind": "directive",
       "stated_by": "Rand",
@@ -2411,17 +2505,17 @@
       "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
       "summary": "Shared code matches orchestration's output",
       "scope": "adds or changes code in the shared location or atm-bd-types",
-      "deterministic_check": "each shared item with an orchestration counterpart has a comparison test that calls the unmodified orchestration code and the shared code on the same full-profile input and asserts equal output",
+      "deterministic_check": "each shared item with an orchestration counterpart has a comparison test that calls the unmodified orchestration code and the shared code on the same orchestration-profile input and asserts equal output",
       "fixtures": {
         "pass": [
-          "test_phase_file_parity calls the unmodified orchestration phase-config reader and shared read_phase on the same full-profile file and asserts equal output."
+          "test_phase_file_parity calls the unmodified orchestration phase-config reader and shared read_phase on the same orchestration-profile file and asserts equal output."
         ],
         "fail": [
           "The shared reader re-implements the orchestration behaviour and no test compares the two outputs."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2447,6 +2541,16 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same full-profile inputs."
         }
       ]
     },
@@ -2462,17 +2566,17 @@
       "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
       "summary": "Shared code has no profile-specific logic",
       "scope": "adds or changes code in the shared location or atm-bd-types",
-      "deterministic_check": "grep of the shared location for profile literals (lite, full, Profile.LITE, Profile.FULL) and branches on the profile is empty",
+      "deterministic_check": "grep of the shared location for profile literals (lite, orchestration, \"lite\", \"orchestration\") and branches on the profile is empty",
       "fixtures": {
         "pass": [
-          "grep of the shared location for \"lite\", \"full\", Profile.LITE and Profile.FULL is empty; behaviour differences come from the caller's arguments."
+          "grep of the shared location for \"lite\", \"orchestration\", \"lite\" and \"orchestration\" is empty; behaviour differences come from the caller's arguments."
         ],
         "fail": [
-          "shared/stack_gate.py contains \"if profile == Profile.LITE: skip sanity check\"."
+          "shared/stack_gate.py contains \"if profile == \"lite\": skip sanity check\"."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2496,6 +2600,14 @@
           "at": "2026-11-01T19:19:57+00:00",
           "event": "updated",
           "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
             "fixtures"
           ]
         }
