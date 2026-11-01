@@ -23,6 +23,41 @@
         "SCB-MANIFEST-006",
         "SCB-BOUNDARY-004"
       ],
+      "global_dependency_ownership": [
+        {
+          "allowed_manifest_paths": [
+            "crates/atm-storage-rusqlite/Cargo.toml"
+          ],
+          "allowed_source_roots": [
+            "crates/atm-storage-rusqlite/src"
+          ],
+          "dependency": "rusqlite",
+          "manifest_message": "only crates/atm-storage-rusqlite may depend on rusqlite",
+          "source_message": "only crates/atm-storage-rusqlite source may import rusqlite directly"
+        },
+        {
+          "allowed_manifest_paths": [
+            "crates/atm-daemon-bootstrap/Cargo.toml"
+          ],
+          "allowed_source_roots": [
+            "crates/atm-daemon-bootstrap/src/process_deadline.rs"
+          ],
+          "dependency": "rustix",
+          "manifest_message": "only atm-daemon-bootstrap may depend on rustix",
+          "source_message": "only atm-daemon-bootstrap process_deadline may import rustix"
+        },
+        {
+          "allowed_manifest_paths": [
+            "crates/atm-cron/Cargo.toml"
+          ],
+          "allowed_source_roots": [
+            "crates/atm-cron/src"
+          ],
+          "dependency": "cron",
+          "manifest_message": "only atm-cron may depend on cron",
+          "source_message": "only atm-cron source may import cron"
+        }
+      ],
       "manifest_dependency_allowlists": [
         {
           "allowed_dependencies": [
