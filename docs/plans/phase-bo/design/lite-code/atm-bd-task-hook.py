@@ -144,12 +144,9 @@ def qa_verdict(req: HookRequest, phase: PhaseFile, bead: Bead, verdict: QaPass |
 
 def give_back(req: HookRequest, bead: Bead, beads: BeadStore, reason: str) -> HookReply:
     r"""A refused or cancelled task gives its bead back (Rand): open and unassigned, so the lead can assign it
-    to any dev, and the stack claim released if the refusing dev still holds it."""
-    if not bead.assigned_to(req.caller):  # already given back or re-assigned: nothing of the caller's to release
+    to any dev. No stack claim exists here: the dev claims the stack only when its work is complete."""
+    if not bead.assigned_to(req.caller):  # already given back or re-assigned
         return HookReply.pass_through()
-    if not isinstance(stack_id := bead.stack_bead(), Refusal):
-        if (released := beads.release(stack_id, req.caller)) is not None and released.id != ErrorId.STACK_CLAIM_LOST:
-            return HookReply.refused(released)  # STACK_CLAIM_LOST: the caller held no claim, which is the normal case
     match bead.status:
         case Status.OPEN | Status.IN_PROGRESS:
             return HookReply.from_result(beads.update(BeadPatch.reopen(bead, reason), actor=req.caller))
