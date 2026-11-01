@@ -5,3 +5,20 @@ path = "/v1/systemone"
 max_request_bytes = 96000
 attempts = 4
 timeout_seconds = 60
+
+# LLM backends: same request, reply forced into {choice, confidence} per question.
+# transport = "api" calls the vendor HTTP API with the named key; "cli" runs the local CLI
+# (claude -p / codex exec), which uses that tool's own login.
+[haiku]
+model = "claude-haiku-5-5"
+transport = "api"
+key_env = "ANTHROPIC_API_KEY"
+
+[luna]
+model = "gpt-6-luna"
+transport = "api"
+key_env = "OPENAI_API_KEY"
+
+[sessions]
+dir = "~/.cache/jev-check/sessions"
+keep_days = 7
