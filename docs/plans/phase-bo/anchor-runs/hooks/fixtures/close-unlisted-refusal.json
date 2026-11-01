@@ -1,0 +1,296 @@
+{
+  "hook": "design/lite-code/gate-fixtures/close-unlisted-refusal.py",
+  "spec": "hooks/task-close.md",
+  "lines": 75,
+  "rows": [
+    [
+      "T-CLOSE-01",
+      "GIVE_BACK"
+    ],
+    [
+      "T-CLOSE-02",
+      "WORK_CLOSE"
+    ],
+    [
+      "T-CLOSE-03",
+      "QA_PASS"
+    ],
+    [
+      "T-CLOSE-04",
+      "QA_FINDINGS"
+    ]
+  ],
+  "facts": {
+    "arms": [
+      [
+        "Transition.GIVE_BACK",
+        28
+      ],
+      [
+        "Transition.WORK_CLOSE",
+        32
+      ],
+      [
+        "Transition.QA_PASS",
+        42
+      ],
+      [
+        "Transition.QA_FINDINGS",
+        50
+      ]
+    ],
+    "transition_arms": [
+      [
+        "Transition.GIVE_BACK",
+        28
+      ],
+      [
+        "Transition.WORK_CLOSE",
+        32
+      ],
+      [
+        "Transition.QA_PASS",
+        42
+      ],
+      [
+        "Transition.QA_FINDINGS",
+        50
+      ]
+    ],
+    "beads_calls": [
+      [
+        "show",
+        17
+      ],
+      [
+        "update",
+        63
+      ],
+      [
+        "show",
+        35
+      ],
+      [
+        "show",
+        43
+      ],
+      [
+        "show",
+        45
+      ],
+      [
+        "show",
+        51
+      ],
+      [
+        "show",
+        53
+      ],
+      [
+        "show",
+        59
+      ]
+    ],
+    "replies": [
+      [
+        "HookReply.handled(phase.close_action(req, template, args))",
+        65
+      ],
+      [
+        "HookReply.not_applicable()",
+        14
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))",
+        22
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead))",
+        24
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))",
+        26
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.STACK_HELD, holder=ledger.assignee))",
+        38
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.STACK_NOT_RECORDED, branch=bead.work.branch))",
+        40
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=sha, head=head))",
+        48
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, head=head))",
+        57
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=unpoured, sprint=bead.sprint))",
+        61
+      ]
+    ],
+    "stack_bead_writes": [],
+    "subprocess_sites": []
+  },
+  "deterministic_failures": [],
+  "jev": {
+    "answers": {
+      "implemented:T-CLOSE-01": {
+        "choice": "yes",
+        "confidence": 0.28,
+        "probabilities": {
+          "no": 0.36,
+          "yes": 0.64
+        }
+      },
+      "implemented:T-CLOSE-02": {
+        "choice": "no",
+        "confidence": 0.92,
+        "probabilities": {
+          "no": 0.96,
+          "yes": 0.04
+        }
+      },
+      "implemented:T-CLOSE-03": {
+        "choice": "no",
+        "confidence": 0.12,
+        "probabilities": {
+          "no": 0.56,
+          "yes": 0.44
+        }
+      },
+      "implemented:T-CLOSE-04": {
+        "choice": "no",
+        "confidence": 0.58,
+        "probabilities": {
+          "no": 0.79,
+          "yes": 0.21
+        }
+      },
+      "listed:L14": {
+        "choice": "no",
+        "confidence": 0.94,
+        "probabilities": {
+          "no": 0.97,
+          "yes": 0.03
+        }
+      },
+      "listed:L22": {
+        "choice": "yes",
+        "confidence": 0.94,
+        "probabilities": {
+          "no": 0.03,
+          "yes": 0.97
+        }
+      },
+      "listed:L24": {
+        "choice": "yes",
+        "confidence": 0.96,
+        "probabilities": {
+          "no": 0.02,
+          "yes": 0.98
+        }
+      },
+      "listed:L26": {
+        "choice": "yes",
+        "confidence": 0.92,
+        "probabilities": {
+          "no": 0.04,
+          "yes": 0.96
+        }
+      },
+      "listed:L28": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "probabilities": {
+          "no": 0.01,
+          "yes": 0.99
+        }
+      },
+      "listed:L32": {
+        "choice": "yes",
+        "confidence": 0.58,
+        "probabilities": {
+          "no": 0.21,
+          "yes": 0.79
+        }
+      },
+      "listed:L38": {
+        "choice": "no",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 1.0,
+          "yes": 0.0
+        }
+      },
+      "listed:L40": {
+        "choice": "yes",
+        "confidence": 0.94,
+        "probabilities": {
+          "no": 0.03,
+          "yes": 0.97
+        }
+      },
+      "listed:L42": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "probabilities": {
+          "no": 0.01,
+          "yes": 0.99
+        }
+      },
+      "listed:L48": {
+        "choice": "yes",
+        "confidence": 0.9,
+        "probabilities": {
+          "no": 0.05,
+          "yes": 0.95
+        }
+      },
+      "listed:L50": {
+        "choice": "yes",
+        "confidence": 0.94,
+        "probabilities": {
+          "no": 0.03,
+          "yes": 0.97
+        }
+      },
+      "listed:L57": {
+        "choice": "yes",
+        "confidence": 0.94,
+        "probabilities": {
+          "no": 0.03,
+          "yes": 0.97
+        }
+      },
+      "listed:L61": {
+        "choice": "yes",
+        "confidence": 0.9,
+        "probabilities": {
+          "no": 0.05,
+          "yes": 0.95
+        }
+      },
+      "listed:L65": {
+        "choice": "yes",
+        "confidence": 0.06,
+        "probabilities": {
+          "no": 0.47,
+          "yes": 0.53
+        }
+      }
+    },
+    "no": [
+      "implemented:T-CLOSE-02",
+      "implemented:T-CLOSE-03",
+      "implemented:T-CLOSE-04",
+      "listed:L14",
+      "listed:L38"
+    ]
+  },
+  "pass": false
+}

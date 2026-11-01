@@ -24,7 +24,7 @@ QUESTIONS = Path(__file__).with_name("gate-questions.json")
 WRITES, FORBIDDEN_WRITES = {"update", "create", "claim", "release"}, {"create", "claim", "release"}
 READS = {("beads", "show"), ("cache", "get")}
 CLI_ADAPTERS, OS_SPAWN, CLI_TOOLS = {"BdCli", "GitCli", "AtmCli"}, ("system", "popen", "exec", "spawn"), {"gh", "bd", "git"}
-REPLIES = {"refused", "pass_through", "not_applicable", "handled", "from_result"}
+REPLIES = {"pass_through", "not_applicable", "handled"}  # plus refused(Refusal(ErrorId.X, ...)) (§B.1)
 MAX_LINES = 100
 
 
@@ -47,7 +47,13 @@ def facts(src: str) -> dict:
     transition_arms = [(p, line) for p, line in arms if "Transition." in p]
     calls = [(n, call_name(n)) for n in ast.walk(tree) if isinstance(n, ast.Call)]
     beads_calls = [(name[1], n.lineno) for n, name in calls if name and name[0] == "beads"]
-    replies = [(ast.unparse(n), n.lineno) for n, name in calls if name and name[0] == "HookReply" and name[1] in REPLIES]
+    def typed_refusal(n: ast.Call) -> bool:
+        arg = n.args[0] if n.args else None
+        return (isinstance(arg, ast.Call) and getattr(arg.func, "id", None) == "Refusal" and bool(arg.args)
+                and ast.unparse(arg.args[0]).startswith("ErrorId."))
+
+    replies = [(ast.unparse(n), n.lineno) for n, name in calls if name and name[0] == "HookReply"
+               and (name[1] in REPLIES or (name[1] == "refused" and typed_refusal(n)))]
 
     def only_read(node: ast.AST) -> bool:
         while (node := parents.get(node)) is not None:

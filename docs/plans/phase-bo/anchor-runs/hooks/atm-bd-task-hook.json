@@ -92,116 +92,20 @@
         28
       ],
       [
-        "HookReply.refused(phase)",
-        30
-      ],
-      [
-        "HookReply.refused(bead)",
-        32
-      ],
-      [
-        "HookReply.refused(outcome)",
-        34
-      ],
-      [
-        "HookReply.refused(layer)",
-        56
-      ],
-      [
-        "HookReply.refused(stack_id)",
-        58
-      ],
-      [
-        "HookReply.refused(stack_bead)",
-        60
-      ],
-      [
-        "HookReply.refused(stack)",
-        62
-      ],
-      [
         "HookReply.refused(Refusal(ErrorId.STACK_NOT_STACKED, layer=layer, top=top))",
         66
-      ],
-      [
-        "HookReply.refused(failed)",
-        69
-      ],
-      [
-        "HookReply.refused(failed)",
-        72
-      ],
-      [
-        "HookReply.refused(assigns)",
-        74
-      ],
-      [
-        "HookReply.refused(verdict)",
-        80
-      ],
-      [
-        "HookReply.refused(target)",
-        82
       ],
       [
         "HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, checked=layer.branch))",
         85
       ],
       [
-        "HookReply.from_result(beads.update(BeadPatch.reopen(bead, reason), actor=req.caller))",
-        39
-      ],
-      [
-        "HookReply.refused(released)",
-        65
-      ],
-      [
-        "HookReply.from_result(beads.update(BeadPatch.close(bead, f'PASS at {verdict.sha}', reviewed=verdict.sha), actor=req.caller))",
-        88
-      ],
-      [
         "HookReply.handled([HookAction.assign(req, assign), HookAction.original(req)])",
         105
       ],
       [
-        "HookReply.refused(reason)",
-        38
-      ],
-      [
         "HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))",
         42
-      ],
-      [
-        "HookReply.refused(report)",
-        44
-      ],
-      [
-        "HookReply.refused(stage)",
-        46
-      ],
-      [
-        "HookReply.refused(work)",
-        92
-      ],
-      [
-        "HookReply.refused(stack_id)",
-        94
-      ],
-      [
-        "HookReply.refused(dev)",
-        96
-      ],
-      [
-        "HookReply.refused(created)",
-        103
-      ],
-      [
-        "HookReply.refused(req)",
-        111
-      ],
-      [
-        "HookReply.refused(beads)",
-        113
       ]
     ],
     "stack_bead_writes": [
