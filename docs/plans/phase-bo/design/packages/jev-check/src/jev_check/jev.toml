@@ -1,0 +1,7 @@
+# The only place the Jev model id, host and path are set.
+model = "jev-1.13.0"
+host = "api.typesafe.ai"
+path = "/v1/systemone"
+max_request_bytes = 96000
+attempts = 4
+timeout_seconds = 60
