@@ -34,6 +34,7 @@ pub(crate) trait HttpRuntimeConnector: Send + Sync {
 /// The physical socket is the only Unix-specific concern. Request encoding,
 /// response decoding, deadline enforcement, and the public error contract are
 /// all owned by [`HttpRuntimeClient`].
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "This HTTP client adapter uses Unix domain sockets; other transports use their own client.")]
 #[cfg(unix)]
 pub fn unix_socket_client(
     socket_path: impl AsRef<Path>,
@@ -103,6 +104,7 @@ impl UnixSocketConnector {
     }
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "This reqwest builder configures a Unix domain socket transport.")]
 #[cfg(unix)]
 fn build_unix_socket_reqwest_client(
     socket_path: &Path,
@@ -115,6 +117,7 @@ fn build_unix_socket_reqwest_client(
         })
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix socket metadata identifies the current socket generation.")]
 #[cfg(unix)]
 fn unix_socket_generation(
     socket_path: &Path,

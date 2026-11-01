@@ -126,6 +126,7 @@ pub fn synthesized_transfer_script_env(env: &dyn EnvSource) -> Vec<(&'static str
     vars
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "The Unix transfer script uses POSIX system executable directories; Windows uses its own path policy.")]
 #[cfg(unix)]
 fn unix_synthesized_transfer_script_path() -> OsString {
     let root = PathBuf::from(std::path::MAIN_SEPARATOR.to_string());
@@ -796,6 +797,7 @@ fn normalized_prefix_key(kind: std::path::Prefix<'_>) -> String {
 
 /// Pure predicate so tests can exercise "not owner-executable" without
 /// depending on how the mode bits were produced.
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "POSIX owner-executable mode is checked when validating Unix transfer scripts.")]
 #[cfg(unix)]
 fn is_owner_executable(mode: u32) -> bool {
     mode & 0o100 != 0

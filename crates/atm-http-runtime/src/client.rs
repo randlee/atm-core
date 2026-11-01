@@ -395,6 +395,7 @@ pub fn preferred_local_client(
 /// Performs the one bounded local ownership check used while constructing a
 /// preferred Unix client. This synchronous metadata read happens before any
 /// async request exchange and never performs daemon I/O.
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix client socket selection checks the runtime directory POSIX uid.")]
 #[cfg(unix)]
 fn runtime_directory_is_root_owned(runtime_directory: &Path) -> Result<bool, AtmError> {
     Ok(std::fs::metadata(runtime_directory)

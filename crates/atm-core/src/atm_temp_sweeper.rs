@@ -149,6 +149,7 @@ impl EntryAge {
     }
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix metadata ctime exposes seconds and nanoseconds; non-Unix expiry uses mtime only.")]
 #[cfg(unix)]
 fn unix_epoch_time(secs: i64, nsecs: i64) -> Option<SystemTime> {
     let secs = u64::try_from(secs).ok()?;

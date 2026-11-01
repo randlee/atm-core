@@ -251,6 +251,7 @@ dependencies = [
  "opentelemetry_sdk",
  "peer-tls",
  "rustix",
+ "sc-lint-attributes 0.8.3",
  "sc-observability-log",
  "serde",
  "serde_json",
@@ -275,6 +276,7 @@ dependencies = [
  "atm-storage",
  "fs4",
  "interprocess",
+ "sc-lint-attributes 0.8.3",
  "serde_json",
  "tempfile",
  "tokio",
@@ -321,6 +323,7 @@ name = "atm-herdr"
 version = "1.6.5"
 dependencies = [
  "agent-team-mail-core",
+ "sc-lint-attributes 0.8.3",
  "serde_json",
  "tokio",
 ]
@@ -343,6 +346,7 @@ dependencies = [
  "hyper-util",
  "noyalib",
  "reqwest",
+ "sc-lint-attributes 0.8.3",
  "serde",
  "serde_json",
  "tempfile",

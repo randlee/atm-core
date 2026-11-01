@@ -1010,6 +1010,7 @@ fn unix_socket_config(
     Ok(unix_socket_config_for_uid(scope.runtime_root.as_ref(), uid))
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix domain socket configuration derives its owner from the Unix uid; other transports use separate configuration.")]
 #[cfg(unix)]
 fn unix_socket_config_for_uid(
     runtime_root: &std::path::Path,

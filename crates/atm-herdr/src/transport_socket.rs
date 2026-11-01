@@ -350,6 +350,7 @@ fn oversized_response(observed_bytes: usize, max_line_bytes: usize) -> HerdrErro
     }
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "This adapter connects Herdr endpoints through Tokio UnixStream.")]
 #[cfg(unix)]
 async fn connect_unix(
     endpoint: &HerdrEndpoint,
