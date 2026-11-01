@@ -149,50 +149,50 @@
     "answers": {
       "implemented:T-CLOSE-01": {
         "choice": "yes",
+        "confidence": 0.64,
+        "probabilities": {
+          "no": 0.18,
+          "yes": 0.82
+        }
+      },
+      "implemented:T-CLOSE-02": {
+        "choice": "no",
+        "confidence": 0.8,
+        "probabilities": {
+          "no": 0.9,
+          "yes": 0.1
+        }
+      },
+      "implemented:T-CLOSE-03": {
+        "choice": "yes",
         "confidence": 0.32,
         "probabilities": {
           "no": 0.34,
           "yes": 0.66
         }
       },
-      "implemented:T-CLOSE-02": {
-        "choice": "no",
-        "confidence": 0.64,
-        "probabilities": {
-          "no": 0.82,
-          "yes": 0.18
-        }
-      },
-      "implemented:T-CLOSE-03": {
-        "choice": "no",
-        "confidence": 0.04,
-        "probabilities": {
-          "no": 0.52,
-          "yes": 0.48
-        }
-      },
       "implemented:T-CLOSE-04": {
         "choice": "yes",
-        "confidence": 0.06,
+        "confidence": 0.26,
         "probabilities": {
-          "no": 0.47,
-          "yes": 0.53
+          "no": 0.37,
+          "yes": 0.63
         }
       },
       "listed:L14": {
         "choice": "yes",
-        "confidence": 0.88,
+        "confidence": 0.86,
         "probabilities": {
-          "no": 0.06,
-          "yes": 0.94
+          "no": 0.07,
+          "yes": 0.93
         }
       },
       "listed:L22": {
         "choice": "yes",
-        "confidence": 0.92,
+        "confidence": 0.94,
         "probabilities": {
-          "no": 0.04,
-          "yes": 0.96
+          "no": 0.03,
+          "yes": 0.97
         }
       },
       "listed:L24": {
@@ -205,26 +205,26 @@
       },
       "listed:L26": {
         "choice": "yes",
-        "confidence": 0.96,
+        "confidence": 0.94,
         "probabilities": {
-          "no": 0.02,
-          "yes": 0.98
+          "no": 0.03,
+          "yes": 0.97
         }
       },
       "listed:L28": {
         "choice": "yes",
-        "confidence": 0.96,
+        "confidence": 0.98,
         "probabilities": {
-          "no": 0.02,
-          "yes": 0.98
+          "no": 0.01,
+          "yes": 0.99
         }
       },
       "listed:L32": {
         "choice": "yes",
-        "confidence": 0.54,
+        "confidence": 0.5,
         "probabilities": {
-          "no": 0.23,
-          "yes": 0.77
+          "no": 0.25,
+          "yes": 0.75
         }
       },
       "listed:L38": {
@@ -253,18 +253,18 @@
       },
       "listed:L44": {
         "choice": "yes",
-        "confidence": 0.96,
+        "confidence": 0.98,
         "probabilities": {
-          "no": 0.02,
-          "yes": 0.98
+          "no": 0.01,
+          "yes": 0.99
         }
       },
       "listed:L52": {
         "choice": "yes",
-        "confidence": 0.92,
+        "confidence": 0.88,
         "probabilities": {
-          "no": 0.04,
-          "yes": 0.96
+          "no": 0.06,
+          "yes": 0.94
         }
       },
       "listed:L54": {
@@ -277,10 +277,10 @@
       },
       "listed:L56": {
         "choice": "yes",
-        "confidence": 0.98,
+        "confidence": 0.96,
         "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
+          "no": 0.02,
+          "yes": 0.98
         }
       },
       "listed:L64": {
@@ -301,21 +301,19 @@
       },
       "listed:L74": {
         "choice": "yes",
-        "confidence": 0.6,
+        "confidence": 0.66,
         "probabilities": {
-          "no": 0.2,
-          "yes": 0.8
+          "no": 0.17,
+          "yes": 0.83
         }
       }
     },
     "findings": [
       "implement T-CLOSE-02",
-      "implement T-CLOSE-03",
       "add a row for L38 `HookReply.refused(Refusal(ErrorId.STACK_HELD, holder=ledger.assignee))`, or remove the branch"
     ],
     "no": [
       "implemented:T-CLOSE-02",
-      "implemented:T-CLOSE-03",
       "listed:L38"
     ]
   },
