@@ -1,4 +1,4 @@
-# Sprint bo-15: `jev-check.py`, a configured check script that calls Jev, Haiku or Luna
+# Proposal (not a bo sprint): `jev-check.py`, a configured check script that calls Jev, Haiku or Luna
 
 Repo: **atm-bd**, as its own package, separate from all atm-bd code. Branch `sprint/bo-15-jev-check`. No dependencies. Owned paths:
 - `packages/jev-check/`: its own `pyproject.toml`, `src/jev_check/`, `scripts/jev-check.py`, `typings/` and tests. It imports nothing from atm-bd, atm-bd-types or `atm_bd_shared`, and contains no atm-bd vocabulary.

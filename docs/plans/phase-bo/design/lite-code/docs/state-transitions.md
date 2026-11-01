@@ -114,7 +114,7 @@ flowchart TD
 The dev rebases onto the stack top (the trunk on a new stack), pushes and opens the PR with base = top. The dev's close report ends with one fenced JSON block:
 
 ```json
-{"layer": {"branch": "sprint/bo-12-task-close-hook", "head": "<full sha>", "pr": 1234, "base": "<top branch>"}}
+{"layer": {"branch": "sprint/bo-10-lite-hooks", "head": "<full sha>", "pr": 1234, "base": "<top branch>"}}
 ```
 
 The dev runs no stack command and never touches the stack bead. task.close claims the stack bead, checks the block, records the layer and releases (§5, T-CLOSE-02..04).

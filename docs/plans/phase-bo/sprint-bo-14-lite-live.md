@@ -1,6 +1,6 @@
 # Sprint bo-14: lite templates, install, release, one live lite phase
 
-This is the old bo-11 sprint, renumbered and unchanged. It depends on bo-10, bo-11, bo-12 and bo-13.
+The live run. It depends on bo-10 (the lite hooks).
 
 ## Cron
 The lite cron runs the shared `qa_handoff` for each lite phase and assigns what it returns. It is the safety net for a close whose returned actions never ran.
