@@ -53,6 +53,13 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-045 | proposed | Lite uses shared code in the sprint that adds it | 2026-11-01 |
 | ANC-046 | proposed | Shared module design lists orchestration requirements | 2026-11-01 |
 | ANC-047 | proposed | Shared interfaces support every listed orchestration behavior | 2026-11-01 |
+| ANC-048 | proposed | Lite task.assign hook is its own file | 2026-11-01 |
+| ANC-049 | proposed | Lite task.start hook is its own file | 2026-11-01 |
+| ANC-050 | proposed | Lite task.close hook is its own file | 2026-11-01 |
+| ANC-051 | proposed | Each lite hook has its own state-transition diagram | 2026-11-01 |
+| ANC-052 | proposed | One diagram row per hook match arm | 2026-11-01 |
+| ANC-053 | proposed | Jev: every diagram row is implemented | 2026-11-01 |
+| ANC-054 | proposed | Jev: every code arm is in the diagram | 2026-11-01 |
 
 ## ANC-001
 
@@ -825,3 +832,101 @@ Summary: Shared interfaces support every listed orchestration behavior
 Scope: adds or changes code, design or an interface in the shared location or atm-bd-types
 
 Deterministic check to pair with the development gate: every row of each shared module's orchestration requirements table maps to an ANC-043 output-parity test
+
+## ANC-048
+
+Anchor: The lite task.assign hook must be its own Python file under skills/atm-bd-lite/scripts/.
+
+> I want all three to be independent files and independently tested by jev against the state transition diagrams.
+
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Lite task.assign hook is its own file
+
+Scope: adds, moves or changes a lite task hook file
+
+Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.assign hook, and it imports no other hook file
+
+## ANC-049
+
+Anchor: The lite task.start hook must be its own Python file under skills/atm-bd-lite/scripts/.
+
+> I want all three to be independent files and independently tested by jev against the state transition diagrams.
+
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Lite task.start hook is its own file
+
+Scope: adds, moves or changes a lite task hook file
+
+Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.start hook, and it imports no other hook file
+
+## ANC-050
+
+Anchor: The lite task.close hook must be its own Python file under skills/atm-bd-lite/scripts/.
+
+> I want all three to be independent files and independently tested by jev against the state transition diagrams.
+
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Lite task.close hook is its own file
+
+Scope: adds, moves or changes a lite task hook file
+
+Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.close hook, and it imports no other hook file
+
+## ANC-051
+
+Anchor: Each lite task hook file must have its own state-transition diagram in the phase design docs.
+
+> I want all three to be independent files and independently tested by jev against the state transition diagrams.
+
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Each lite hook has its own state-transition diagram
+
+Scope: adds or changes a lite task hook file or its state-transition diagram
+
+Deterministic check to pair with the development gate: the lite hooks design doc has one diagram section per hook file, named after the hook
+
+## ANC-052
+
+Anchor: A lite hook's state-transition diagram must have one Transitions-table row per match arm in that hook's code.
+
+> I want all three to be independent files and independently tested by jev against the state transition diagrams.
+
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: proposed. Version 1.
+
+Summary: One diagram row per hook match arm
+
+Scope: adds or changes a lite task hook file or its state-transition diagram
+
+Deterministic check to pair with the development gate: count of Transitions-table rows equals count of match arms in the hook file
+
+## ANC-053
+
+Anchor: Jev must judge every Transitions-table row of a lite hook's diagram as implemented by that hook's code, with no row failing.
+
+> I one one file for atm-bd-lite task close and jev verifies 100% matches the design.
+
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Jev: every diagram row is implemented
+
+Scope: adds or changes a lite task hook file or its state-transition diagram
+
+Deterministic check to pair with the development gate: the per-hook Jev verification run reports pass for every diagram row; the run JSON is committed under anchor-runs/
+
+## ANC-054
+
+Anchor: Jev must judge every match arm in a lite hook's code as listed in that hook's state-transition diagram, with no arm unlisted.
+
+> I one one file for atm-bd-lite task close and jev verifies 100% matches the design.
+
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Jev: every code arm is in the diagram
+
+Scope: adds or changes a lite task hook file or its state-transition diagram
+
+Deterministic check to pair with the development gate: the per-hook Jev verification run reports every match arm as listed; the run JSON is committed under anchor-runs/
