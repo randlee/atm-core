@@ -34,12 +34,16 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-026 | locked | Lite hook and templates refuse a non-lite phase file | 2026-10-31 |
 | ANC-027 | locked | Cron ticks refuse the other profile's phase file | 2026-10-31 |
 | ANC-028 | proposed | atm-bd-lite is its own skill directory | 2026-11-01 |
-| ANC-029 | proposed | Shared code is new code in the shared location | 2026-11-01 |
+| ANC-029 | proposed | Shared code is in the shared location | 2026-11-01 |
 | ANC-030 | proposed | atm-bd-orchestration is not changed to use shared code | 2026-11-01 |
 | ANC-031 | proposed | Profile hooks, templates and cron live in the profile's skill | 2026-11-01 |
 | ANC-032 | proposed | atm-bd commands call the profile's same-named script | 2026-11-01 |
-| ANC-033 | proposed | Each console data source is its own independent Rust trait | 2026-11-01 |
-| ANC-034 | proposed | Every trait ships a generated .pyi stub checked by pyright | 2026-11-01 |
+| ANC-033 | proposed | Each console data source is its own Rust trait | 2026-11-01 |
+| ANC-034 | proposed | Every trait ships a generated .pyi stub | 2026-11-01 |
+| ANC-035 | proposed | atm-bd-lite shares no files with atm-bd-orchestration | 2026-11-01 |
+| ANC-036 | proposed | Shared code is newly written | 2026-11-01 |
+| ANC-037 | proposed | Console data sources share no code | 2026-11-01 |
+| ANC-038 | proposed | Python trait implementations pass pyright strict | 2026-11-01 |
 
 ## ANC-001
 
@@ -535,39 +539,39 @@ Fixtures:
 
 ## ANC-028
 
-Anchor: atm-bd-lite must be its own skill in its own directory (skills/atm-bd-lite/) and must share no files with the atm-bd-orchestration skill.
+Anchor: atm-bd-lite must be its own skill in the skills/atm-bd-lite/ directory.
 
 > Lite is separate.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
 
 Summary: atm-bd-lite is its own skill directory
 
 Scope: adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestration/
 
-Deterministic check to pair with the development gate: git diff --name-only shows no path under skills/atm-bd-lite/ that is a symlink to, or imported from, skills/atm-bd-orchestration/; grep of skills/atm-bd-lite for atm-bd-orchestration paths is empty
+Deterministic check to pair with the development gate: skills/atm-bd-lite/SKILL.md exists and names the skill atm-bd-lite
 
 ## ANC-029
 
-Anchor: Code used by more than one profile must be newly written for that purpose and placed in the shared location; it must not be code moved or extracted out of atm-bd-orchestration.
+Anchor: Code used by more than one profile must be placed in the shared location.
 
 > The shared code is new code, placed in the shared location.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
 
-Summary: Shared code is new code in the shared location
+Summary: Shared code is in the shared location
 
 Scope: adds code to the shared location or to atm-bd-types
 
-Deterministic check to pair with the development gate: git log --follow on every shared-location file shows no rename or copy from a skills/atm-bd-orchestration/ path
+Deterministic check to pair with the development gate: no module under a profile skill is imported by another profile's skill
 
 ## ANC-030
 
-Anchor: atm-bd-orchestration skill files must not be modified, moved or deleted to make them use the shared code.
+Anchor: atm-bd-orchestration skill files must not be changed to use the shared code.
 
 > atm-bd-orchestration doesn't change to use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
 
 Summary: atm-bd-orchestration is not changed to use shared code
 
@@ -591,11 +595,11 @@ Deterministic check to pair with the development gate: find shows every lite hoo
 
 ## ANC-032
 
-Anchor: atm-bd console, cron, queues, show and snapshot must be the same command for every profile, and each must run the script with the same file name from the skill of the profile set in the phase file.
+Anchor: Each atm-bd subcommand must run the script with the same file name from the skill of the profile set in the phase file.
 
 > and the atm-bd commands just call the profile's scripts by the same name.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
 
 Summary: atm-bd commands call the profile's same-named script
 
@@ -605,28 +609,84 @@ Deterministic check to pair with the development gate: a test runs each subcomma
 
 ## ANC-033
 
-Anchor: Each console data source (sanity-log, qa-log, pr-log and any later source) must be its own Rust trait in atm-bd-types, implemented in its own file, sharing no code with any other source except the shared types.
+Anchor: Each console data source (sanity-log, qa-log, pr-log and any later source) must be its own Rust trait in atm-bd-types.
 
 > console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code. | a protocol can not be consumed by rust.  a trait can be consumed by both.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
 
-Summary: Each console data source is its own independent Rust trait
+Summary: Each console data source is its own Rust trait
 
 Scope: adds or changes an atm-bd console data source
 
-Deterministic check to pair with the development gate: each source file imports no other source module; one trait per source in atm-bd-types; each source has its own fixture-input test
+Deterministic check to pair with the development gate: atm-bd-types defines one trait per console data source
 
 ## ANC-034
 
-Anchor: Every atm-bd-types trait must ship a .pyi stub generated from the trait, and every Python implementation of the trait must pass pyright strict against that stub.
+Anchor: Every atm-bd-types trait must ship a .pyi stub generated from the trait.
 
 > approved ` .pyi stub `
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
 
-Summary: Every trait ships a generated .pyi stub checked by pyright
+Summary: Every trait ships a generated .pyi stub
 
 Scope: adds or changes an atm-bd-types trait or a Python implementation of one
 
-Deterministic check to pair with the development gate: regenerating the stubs produces no diff, and pyright --strict on the Python implementations passes
+Deterministic check to pair with the development gate: regenerating the stubs produces no diff
+
+## ANC-035
+
+Anchor: atm-bd-lite must share no files with the atm-bd-orchestration skill.
+
+> Lite is separate.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-028), 2026-11-01. Status: proposed. Version 1.
+
+Summary: atm-bd-lite shares no files with atm-bd-orchestration
+
+Scope: adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestration/
+
+Deterministic check to pair with the development gate: no path under skills/atm-bd-lite/ is a symlink into skills/atm-bd-orchestration/, and grep of skills/atm-bd-lite for atm-bd-orchestration paths is empty
+
+## ANC-036
+
+Anchor: Code in the shared location must be newly written, not moved or copied out of atm-bd-orchestration.
+
+> The shared code is new code, placed in the shared location.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-029), 2026-11-01. Status: proposed. Version 1.
+
+Summary: Shared code is newly written
+
+Scope: adds code to the shared location or to atm-bd-types
+
+Deterministic check to pair with the development gate: git log --follow on every shared-location file shows no rename or copy from a skills/atm-bd-orchestration/ path
+
+## ANC-037
+
+Anchor: Console data source implementations must share no code with each other apart from the atm-bd-types shared types.
+
+> console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-033), 2026-11-01. Status: proposed. Version 1.
+
+Summary: Console data sources share no code
+
+Scope: adds or changes an atm-bd console data source
+
+Deterministic check to pair with the development gate: each source module imports no other source module; each source has its own fixture-input test
+
+## ANC-038
+
+Anchor: Every Python implementation of an atm-bd-types trait must pass pyright strict against the trait's .pyi stub.
+
+> approved ` .pyi stub `
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-034), 2026-11-01. Status: proposed. Version 1.
+
+Summary: Python trait implementations pass pyright strict
+
+Scope: adds or changes a Python implementation of an atm-bd-types trait
+
+Deterministic check to pair with the development gate: pyright --strict on the Python implementations passes
