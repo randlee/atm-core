@@ -11,49 +11,38 @@
   release --bead B             give the stack back without recording (abort); the lead recovers an abandoned
                                claim with bd reclaim, after which the old holder's record is STACK_CLAIM_LOST
 
-Only a live (OPEN/IN_PROGRESS) work bead may claim or record; CLOSED, BLOCKED and DEFERRED refuse.
 """
 import sys
 
-from atm_bd_types import (Acquire, BdCli, Bead, BeadPatch, BeadStore, ErrorId, Git, GitCli, Layer, PhaseFile, PhaseFiles,
+from atm_bd_types import (Acquire, BdCli, BeadPatch, BeadStore, ErrorId, Git, GitCli, Layer, PhaseFiles,
                           PhaseFilesCli, ProviderCli, PullRequests, Record, Refusal, Release, Stack, StackCommand,
-                          StackReply, Status, Work)
+                          StackReply, Work)
 
-PROFILE = "lite"  # policy: this file serves phases whose phase file says profile = "lite" (ANC-026, ANC-061)
+PROFILE = "lite"
 
 
-def work_bead(bead_id: str, phase: PhaseFile, beads: BeadStore) -> tuple[Bead, Work, str, str] | Refusal:
-    r"""A live (OPEN/IN_PROGRESS) work bead, its work, owner and stack bead id. A CLOSED bead never
-    writes the stack again: its close-side retry is the task.close hook's recovery from the recorded layer."""
+def work_bead(bead_id: str, beads: BeadStore) -> tuple[Work, str, str] | Refusal:
+    r"""The dev's work, owner and stack bead id, from the bead."""
     if isinstance(bead := beads.show(bead_id), Refusal):
         return bead
-    match bead.status:
-        case Status.OPEN | Status.IN_PROGRESS:  # task.start already refused a blocked bead
-            pass
-        case Status.CLOSED:
-            return Refusal(ErrorId.BEAD_CLOSED, bead=bead, phase=phase)
-        case Status.BLOCKED | Status.DEFERRED:
-            return Refusal(ErrorId.BEAD_NOT_READY, bead=bead)
     if isinstance(work := bead.work(), Refusal):
         return work
     if isinstance(owner := bead.owner(), Refusal):
         return owner
     if isinstance(stack_id := bead.stack_bead(), Refusal):
         return stack_id
-    return bead, work, owner, stack_id
+    return work, owner, stack_id
 
 
 def acquire(cmd: Acquire, beads: BeadStore, phases: PhaseFiles) -> StackReply:
     if isinstance(phase := phases.load(cmd.phase_config_path(), PROFILE), Refusal):
         return StackReply.refused(phase)
-    if isinstance(found := work_bead(cmd.bead, phase, beads), Refusal):
+    if isinstance(found := work_bead(cmd.bead, beads), Refusal):
         return StackReply.refused(found)
-    _, work, owner, stack_id = found
-    if isinstance(stack_bead := beads.claim(stack_id, owner), Refusal):
+    work, owner, stack_id = found
+    if isinstance(stack_bead := beads.claim(stack_id, owner), Refusal):  # held: STACK_HELD (holder)
         return StackReply.refused(stack_bead)
-    if isinstance(stack := Stack.decode(stack_bead), Refusal):
-        if (released := beads.release(stack_id, owner)) is not None:
-            return StackReply.refused(Refusal(ErrorId.STACK_RELEASE_FAILED, stack_bead=stack_id, holder=owner, cause=stack, release=released))
+    if isinstance(stack := Stack.decode(stack_bead), Refusal):  # lead error; the lead runs bd reclaim
         return StackReply.refused(stack)
     top = stack.top(excluding=work.branch)
     return StackReply.acquired(top=top, first=top == stack.trunk)
@@ -62,16 +51,14 @@ def acquire(cmd: Acquire, beads: BeadStore, phases: PhaseFiles) -> StackReply:
 def record(cmd: Record, beads: BeadStore, git: Git, prs: PullRequests, phases: PhaseFiles) -> StackReply:
     if isinstance(phase := phases.load(cmd.phase_config_path(), PROFILE), Refusal):
         return StackReply.refused(phase)
-    if isinstance(found := work_bead(cmd.bead, phase, beads), Refusal):
+    if isinstance(found := work_bead(cmd.bead, beads), Refusal):
         return StackReply.refused(found)
-    _, work, owner, stack_id = found
+    work, owner, stack_id = found
     if isinstance(stack_bead := beads.show(stack_id), Refusal):
         return StackReply.refused(stack_bead)
     if isinstance(stack := Stack.decode(stack_bead), Refusal):
         return StackReply.refused(stack)
     top = stack.top(excluding=work.branch)  # the trunk for the first layer
-    if isinstance(top_head := git.remote_head(top), Refusal):
-        return StackReply.refused(top_head)
     if isinstance(head := git.pushed_head(work), Refusal):
         return StackReply.refused(head)
     if isinstance(pr := prs.open_pr(work.branch, phase.provider), Refusal):
@@ -82,11 +69,7 @@ def record(cmd: Record, beads: BeadStore, git: Git, prs: PullRequests, phases: P
         return StackReply.refused(Refusal(ErrorId.HEAD_NOT_PUSHED, work=work, head=head))
     if pr.base != top:
         return StackReply.refused(Refusal(ErrorId.STACK_NOT_STACKED, pr=pr, top=top))
-    if isinstance(stacked := git.contains(work, head, top_head), Refusal):
-        return StackReply.refused(stacked)
-    if not stacked:
-        return StackReply.refused(Refusal(ErrorId.STACK_NOT_ANCESTOR, work=work, top=top))
-    layer = Layer(base=top, branch=work.branch, head=head, pr=pr.number)
+    layer = Layer(base=top, branch=work.branch, head=head, pr=pr.number)  # one write: layer + release, --if-assignee owner
     return StackReply.recorded(beads.update(BeadPatch.record(stack_bead, stack.with_layer(layer), owner), actor=owner), layer)
 
 
