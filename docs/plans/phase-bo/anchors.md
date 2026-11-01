@@ -50,6 +50,9 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-042 | proposed | Shared code is tested on lite-profile inputs | 2026-11-01 |
 | ANC-043 | proposed | Shared code matches orchestration's output | 2026-11-01 |
 | ANC-044 | proposed | Shared code has no profile-specific logic | 2026-11-01 |
+| ANC-045 | proposed | Lite uses shared code in the sprint that adds it | 2026-11-01 |
+| ANC-046 | proposed | Shared module design lists orchestration requirements | 2026-11-01 |
+| ANC-047 | proposed | Shared interfaces support every listed orchestration behavior | 2026-11-01 |
 
 ## ANC-001
 
@@ -780,3 +783,45 @@ Summary: Shared code has no profile-specific logic
 Scope: adds or changes code in the shared location or atm-bd-types
 
 Deterministic check to pair with the development gate: grep of the shared location for profile literals (lite, full, Profile.LITE, Profile.FULL) and branches on the profile is empty
+
+## ANC-045
+
+Anchor: atm-bd-lite must call each shared-location module in the same sprint that adds the module.
+
+> I don't think you understand the concept of writing 'shared' modules without cutting over and using them immediately.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Lite uses shared code in the sprint that adds it
+
+Scope: adds or changes code, design or an interface in the shared location or atm-bd-types
+
+Deterministic check to pair with the development gate: every module added to the shared location in a sprint's diff is imported by atm-bd-lite code in that same diff
+
+## ANC-046
+
+Anchor: Each shared-location module's design must list the atm-bd-orchestration behaviors it must meet, each citing the orchestration file and function that implements it today.
+
+> How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Shared module design lists orchestration requirements
+
+Scope: adds or changes code, design or an interface in the shared location or atm-bd-types
+
+Deterministic check to pair with the development gate: each shared module has a requirements table in the phase design docs; every cited orchestration path and function exists at the phase base
+
+## ANC-047
+
+Anchor: Each shared-location interface (Rust trait or .pyi stub) must support every atm-bd-orchestration behavior listed in that module's requirements.
+
+> If you don't do this, you will not have shared code that works WHEN we cut over and use it.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Shared interfaces support every listed orchestration behavior
+
+Scope: adds or changes code, design or an interface in the shared location or atm-bd-types
+
+Deterministic check to pair with the development gate: every row of each shared module's orchestration requirements table maps to an ANC-043 output-parity test
