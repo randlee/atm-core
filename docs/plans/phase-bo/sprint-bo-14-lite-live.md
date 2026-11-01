@@ -40,6 +40,10 @@ if __name__ == "__main__":
 ```
 - [ ] A ready, unassigned QA bead is assigned by cron when no close did it. A QA bead the close hook already assigned is skipped.
 
+## Upstream gate (Rand: "lite must use beads-cache")
+- A beads-cache release with the `create` op (randlee/beads-cache#104) is published, and bo-9 pins its bd-cache-rs wheel. Until then, T-CLOSE-07 (QA FAIL) cannot run.
+- The beads-cache Rust drain is the only drainer of the cache journal in the run's repository: orchestration's Python `bd_cache.py` cron is not running there. There is no `bd` fallback and no hand-poured fix bead.
+
 ## Acceptance
 - [ ] A lite phase runs end to end from release assets with one agent (ANC-015). Steps: dev started, dev close with the layer block, QA assigned by the close hook, QA FAIL and fix, fix close with the layer block, QA PASS, and the stack landed.
 - [ ] An orchestration phase file with no `profile` key runs unchanged, and orchestration's tests pass unedited (ANC-039).
