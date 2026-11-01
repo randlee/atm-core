@@ -557,8 +557,8 @@
       "ttl-triage",
       "version-linux",
       "version-macos",
-      "version-windows",
-      "version-python-pins"
+      "version-python-pins",
+      "version-windows"
     ]
   },
   "minimum_version": "0.8.3",
