@@ -1,0 +1,63 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T225808Z-fixture_ANC-017_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T22:58:08+00:00",
+  "anchors_path": "anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-017:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 95,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": null,
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The fundamental atm-bd types must be defined in one Rust crate.",
+      "quote": "I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 4,
+      "deterministic_check": "crates/atm-bd-types defines Transition and ErrorId (no Profile type, ANC-061) and grep finds no class Transition or class ErrorId under skills/atm-bd-lite",
+      "kind": "structural",
+      "leaning": null,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 95,
+      "item_shortened": false
+    }
+  ],
+  "summary": {
+    "counts": {
+      "deterministic_only": 1
+    },
+    "failing": [],
+    "leaning_counts": {},
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

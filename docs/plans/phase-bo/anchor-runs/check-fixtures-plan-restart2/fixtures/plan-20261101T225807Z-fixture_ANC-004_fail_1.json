@@ -1,0 +1,103 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T225807Z-fixture_ANC-004_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T22:58:07+00:00",
+  "anchors_path": "anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-004:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 75,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Test code written in the phase must implement its repeated patterns through common helper methods instead of repeating them inline.",
+      "quote": "test code is fine, but should be written efficiently w/ repeated patterns using common methods.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 5,
+      "deterministic_check": "no setup or assertion block of five or more identical lines appears in two test functions of the touched test files",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.01,
+            "unclear": 0.03
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.35,
+          "probabilities": {
+            "yes": 0.22,
+            "no": 0.57,
+            "unclear": 0.21
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.73,
+          "probabilities": {
+            "yes": 0.82,
+            "no": 0.16,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.35,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1001,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 75,
+      "item_shortened": false,
+      "request_bytes": 3029
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-004"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

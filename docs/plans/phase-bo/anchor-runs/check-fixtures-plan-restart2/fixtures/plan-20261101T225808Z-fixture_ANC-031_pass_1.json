@@ -1,0 +1,63 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T225808Z-fixture_ANC-031_pass_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T22:58:08+00:00",
+  "anchors_path": "anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-031:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 179,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": null,
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-031",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each profile's task hooks, task-assignment templates and cron script must be inside that profile's own skill directory.",
+      "quote": "The profile-specific parts (the hooks, the templates and the cron script) live in each profile's own skill",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "anchor_version": 4,
+      "deterministic_check": "find shows every lite hook, template and cron script under skills/atm-bd-lite/; none in the shared location",
+      "kind": "structural",
+      "leaning": null,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 179,
+      "item_shortened": false
+    }
+  ],
+  "summary": {
+    "counts": {
+      "deterministic_only": 1
+    },
+    "failing": [],
+    "leaning_counts": {},
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

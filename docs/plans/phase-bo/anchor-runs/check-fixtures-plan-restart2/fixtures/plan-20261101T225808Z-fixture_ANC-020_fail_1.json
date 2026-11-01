@@ -1,0 +1,63 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T225808Z-fixture_ANC-020_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T22:58:08+00:00",
+  "anchors_path": "anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-020:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 106,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": null,
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Types shared between all profiles must be defined in atm-bd-core.",
+      "quote": "This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 7,
+      "deterministic_check": "no module under skills/atm-bd-lite or skills/atm-bd-orchestration defines a type imported by another skill or by core",
+      "kind": "structural",
+      "leaning": null,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 106,
+      "item_shortened": false
+    }
+  ],
+  "summary": {
+    "counts": {
+      "deterministic_only": 1
+    },
+    "failing": [],
+    "leaning_counts": {},
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

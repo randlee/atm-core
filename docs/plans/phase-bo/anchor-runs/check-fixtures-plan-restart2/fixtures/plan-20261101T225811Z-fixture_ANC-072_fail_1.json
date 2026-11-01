@@ -1,0 +1,150 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T225811Z-fixture_ANC-072_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T22:58:11+00:00",
+  "anchors_path": "anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-072:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 113,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-072",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A review finding that would add a write, an arm, a subprocess or a guard to a lite hook must be out of scope unless it cites the hooks/*.md row it implements.",
+      "quote": "ANC-072 Review findings bind to the spec, not the code. A review finding that would add a write, an arm, a subprocess or a guard to a hook is out of scope unless it cites the `hooks/*.md` row it implements. The reply template is one line: \"Not in <hook>.md; file against the spec (ANC-071).\" Check: ANC-064/065/066/070 fail any such change regardless of what the review said. Fail fixture: solar round asks for a retry path; fenix adds an arm; gate fails on rows ≠ arms.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "anchor_version": 2,
+      "deterministic_check": "atm-bd-lite-gate.py exits 0 on the changed hook (rows == arms, writes <= 1, ANC-065/066 greps, <= 100 lines, both Jev question sets)",
+      "kind": "prohibition",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.22,
+          "probabilities": {
+            "yes": 0.48,
+            "no": 0.38,
+            "unclear": 0.14
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.5,
+          "probabilities": {
+            "yes": 0.67,
+            "no": 0.29,
+            "unclear": 0.04
+          }
+        }
+      },
+      "verdict_first": "contradicted",
+      "verdict_second": "underspecified",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.34,
+          "probabilities": {
+            "yes": 0.56,
+            "no": 0.35,
+            "unclear": 0.09
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.62,
+          "probabilities": {
+            "yes": 0.75,
+            "no": 0.23,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.5,
+      "explanation": "Jev was not confident (min confidence 0.50); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1028,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "second",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "yes",
+          "confidence": 0.5
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 113,
+      "item_shortened": false,
+      "request_bytes": 3081
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-072"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [
+      "ANC-072"
+    ],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}
