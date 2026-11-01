@@ -1,5 +1,8 @@
 # atm-bd-lite task hooks: task.assign, task.start, task.close
 
+> **Superseded in part (2026-11-01).** The authoritative hook code is `design/lite-code/` (solar PASS, round 12, plus Rand's QA ruling); sprints bo-9..bo-14 carry it. Where this page differs (stack-bead layer writes, per-finding fix beads in D-6, any runner text), the code wins. Current rules: the dev claims the stack bead (bd `--claim`), rebases onto the top (the trunk for a new stack), records its layer and releases in one guarded write, then closes; task.close only verifies the recorded layer. QA reviews the QA bead's `checked_bead` layer (set at handoff, moved by the lead); later layers are ignored. A QA FAIL files one fix bead per QA bead and full sha.
+
+
 > **Phase bo design (2026-11-01).** These are the state-transition
 > designs for the three lite ATM task hooks. Jev will judge each hook file against
 > its own section (ANC-051..054). The format follows bm v2
