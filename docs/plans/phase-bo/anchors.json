@@ -1252,14 +1252,14 @@
       "deterministic_check": "a test walks the tree for *.py files and python-shebang scripts and asserts each is matched by the pyrightconfig include; just lint runs pyright at 0 errors",
       "fixtures": {
         "pass": [
-          "pyrightconfig.json include covers plugins/, apps/atm-bd-console, release_scripts, .github/scripts and every extensionless script including bead-queues; tests/test_pyright_include_complete.py walks the tree and asserts each Python file and python-shebang script is matched; just lint runs pyright with 0 errors (CI log for the head)."
+          "pyrightconfig.json include covers plugins/, apps/atm-bd-console, release_scripts, .github/scripts and every python-shebang extensionless script; tests/test_pyright_include_complete.py walks the tree and asserts each Python file and python-shebang script is matched while shell wrappers such as bead-queues are not; just lint runs pyright with 0 errors (CI log for the head)."
         ],
         "fail": [
-          "Deliverable: pyrightconfig.json lists only the moved core modules; bead-queues and the .github/scripts files stay outside the include with no test over the include, and just lint runs pyright on the console package alone."
+          "Deliverable: pyrightconfig.json lists only the moved core modules; the .github/scripts files stay outside the include with no test over the include, and just lint runs pyright on the console package alone."
         ]
       },
       "question_overrides": {},
-      "version": 7,
+      "version": 9,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1318,6 +1318,20 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T00:41:19+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T00:41:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },

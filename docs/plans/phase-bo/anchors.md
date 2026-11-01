@@ -424,7 +424,7 @@ Anchor: Every Python file and extensionless Python script in the plugin and the 
 
 > use pyright, return Result<T,Err> (no throwing)
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 7.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 9.
 
 Summary: pyright covers every plugin and console script
 
@@ -433,8 +433,8 @@ Scope: adds, moves or changes any Python file or script in plugins/, apps/atm-bd
 Deterministic check to pair with the development gate: a test walks the tree for *.py files and python-shebang scripts and asserts each is matched by the pyrightconfig include; just lint runs pyright at 0 errors
 
 Fixtures:
-- pass: pyrightconfig.json include covers plugins/, apps/atm-bd-console, release_scripts, .github/scripts and every extensionless script including bead-queues; tests/test_pyright_include_complete.py walks the tree and asserts each Python file and python-shebang script is matched; just lint runs pyright with 0 errors (CI log for the head).
-- fail: Deliverable: pyrightconfig.json lists only the moved core modules; bead-queues and the .github/scripts files stay outside the include with no test over the include, and just lint runs pyright on the console package alone.
+- pass: pyrightconfig.json include covers plugins/, apps/atm-bd-console, release_scripts, .github/scripts and every python-shebang extensionless script; tests/test_pyright_include_complete.py walks the tree and asserts each Python file and python-shebang script is matched while shell wrappers such as bead-queues are not; just lint runs pyright with 0 errors (CI log for the head).
+- fail: Deliverable: pyrightconfig.json lists only the moved core modules; the .github/scripts files stay outside the include with no test over the include, and just lint runs pyright on the console package alone.
 
 ## ANC-023
 

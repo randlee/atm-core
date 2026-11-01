@@ -1,17 +1,17 @@
 {
   "schema": "plan-anchoring/run/1",
-  "run_id": "plan-20261101T003438Z-atm-bo-1",
+  "run_id": "plan-20261101T004120Z-atm-bo-1",
   "gate": "plan",
-  "created_at": "2026-11-01T00:34:38+00:00",
+  "created_at": "2026-11-01T00:41:20+00:00",
   "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bo/docs/plans/phase-bo/anchors.json",
   "plan": "phase-bo",
   "item": {
     "id": "atm-bo-1",
     "title": "bo-1: atm-bd-core layout and installer destinations",
-    "source": "/private/tmp/claude-501/-Users-randlee-github-atm-core/ae4c4073-991a-428e-a239-d8a12fdb63c3/scratchpad/tuning/plangate5/atm-bo-1.txt",
-    "chars": 5834,
+    "source": "/private/tmp/claude-501/-Users-randlee-github-atm-core/ae4c4073-991a-428e-a239-d8a12fdb63c3/scratchpad/tuning/plangate7/atm-bo-1.txt",
+    "chars": 6027,
     "truncated": false,
-    "chars_before_reduction": 5834,
+    "chars_before_reduction": 6027,
     "code_reduced": {
       "blocks": 0,
       "lines": 0
@@ -34,7 +34,7 @@
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
       "context": "planning session 2026-10-27..31 (fenix)",
-      "anchor_version": 7,
+      "anchor_version": 9,
       "deterministic_check": "a test walks the tree for *.py files and python-shebang scripts and asserts each is matched by the pyrightconfig include; just lint runs pyright at 0 errors",
       "kind": "directive",
       "leaning": "satisfied",
@@ -69,24 +69,24 @@
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 0.92,
+          "confidence": 0.94,
           "probabilities": {
-            "yes": 0.05,
-            "no": 0.95,
+            "yes": 0.04,
+            "no": 0.96,
             "unclear": 0.0
           }
         }
       },
-      "min_confidence": 0.92,
+      "min_confidence": 0.94,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 2559,
+        "input_tokens": 2601,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 5834,
+      "item_chars_sent": 6027,
       "item_shortened": false,
-      "request_bytes": 8949
+      "request_bytes": 9142
     },
     {
       "anchor_id": "ANC-012",
@@ -112,7 +112,7 @@
       "min_confidence": null,
       "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
       "attempts": 0,
-      "item_chars_sent": 5834,
+      "item_chars_sent": 6027,
       "item_shortened": false
     },
     {
@@ -139,7 +139,7 @@
       "min_confidence": null,
       "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
       "attempts": 0,
-      "item_chars_sent": 5834,
+      "item_chars_sent": 6027,
       "item_shortened": false
     }
   ],
