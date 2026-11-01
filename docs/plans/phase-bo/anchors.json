@@ -784,7 +784,7 @@
       },
       "question_overrides": {},
       "version": 4,
-      "status": "retired",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -815,6 +815,12 @@
           "event": "retired",
           "replaced_by": null,
           "reason": "Rand 2026-11-01: \"you can remove the problematic anchors\". Removing the .claude/.codex/.agents duplicates changes atm-bd-orchestration (conflicts with ANC-030, ANC-039)."
+        },
+        {
+          "at": "2026-11-01T19:40:22+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand 2026-11-01: \"that is reasonable\" (fenix: retiring ANC-013/020 was wrong; atm-bd-core is the shared location; bo-1 erred only by moving orchestration code into it)"
         }
       ]
     },
@@ -1188,7 +1194,7 @@
       },
       "question_overrides": {},
       "version": 6,
-      "status": "retired",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1233,6 +1239,12 @@
           "event": "retired",
           "replaced_by": null,
           "reason": "Rand 2026-11-01: \"you can remove the problematic anchors\". atm-bd-core was the bo-1 layer being removed; shared types live in the atm-bd-types crate (ANC-017)."
+        },
+        {
+          "at": "2026-11-01T19:40:22+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand 2026-11-01: \"that is reasonable\" (fenix: retiring ANC-013/020 was wrong; atm-bd-core is the shared location; bo-1 erred only by moving orchestration code into it)"
         }
       ]
     },

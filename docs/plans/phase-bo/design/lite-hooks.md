@@ -428,7 +428,7 @@ running doctor also warms the uv cache).
 | D-6 (was O-6) | On QA FAIL, each blocking finding gets one fix bead. Important and minor findings become plain finding beads under the phase root. This matches atm-beads `planning.md`. |
 | D-7 (was O-7) | Lite creates no dotted ids. Fix and finding beads use bd-generated ids, with `--parent` set to the QA bead. The parent link replaces the id convention. |
 
-The shared location is `plugins/atm-bd-orchestration/shared/` in the atm-bd repo, installed to `.atm-bd/scripts/shared/`. All of it is new code (ANC-036). The orchestration skill does not import it (ANC-030).
+Shared code is atm-bd-core (ANC-013, ANC-020). Its source is `plugins/atm-bd-orchestration/core/` in the atm-bd repo, and it installs once per repository to `.atm-bd/scripts` and `.atm-bd/templates`. All of it is new code that lite uses as soon as it lands (ANC-036, ANC-045). Nothing is moved out of the orchestration skill, and the orchestration skill does not import atm-bd-core yet (ANC-030). Shared types live in the `atm-bd-types` crate (ANC-017).
 
 ## G. UNVERIFIED
 

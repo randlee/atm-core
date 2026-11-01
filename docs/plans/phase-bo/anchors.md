@@ -18,14 +18,14 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-010 | locked | Close hook blocks on PR base vs stack top mismatch | 2026-10-31 |
 | ANC-011 | retired | One profile per phase | 2026-10-31 |
 | ANC-012 | locked | Profile-only files under the profile skill | 2026-10-31 |
-| ANC-013 | retired | Shared files installed once to .atm-bd | 2026-10-31 |
+| ANC-013 | locked | Shared files installed once to .atm-bd | 2026-10-31 |
 | ANC-014 | locked | Lite has its own task hook file | 2026-10-31 |
 | ANC-015 | locked | Lite runs with one agent | 2026-10-31 |
 | ANC-016 | locked | Result values, no throwing | 2026-10-31 |
 | ANC-017 | locked | Fundamental types in one Rust crate | 2026-10-31 |
 | ANC-018 | locked | Python fixes release without the crate | 2026-10-31 |
 | ANC-019 | locked | Hook organized by transition type | 2026-10-31 |
-| ANC-020 | retired | Shared types live in atm-bd-core | 2026-10-31 |
+| ANC-020 | locked | Shared types live in atm-bd-core | 2026-10-31 |
 | ANC-021 | locked | Stacking works on Azure Git repos | 2026-10-31 |
 | ANC-022 | retired | pyright covers every plugin and console script | 2026-10-31 |
 | ANC-023 | retired | Profile comes from the phase file; hook, templates, cron and console align on it | 2026-10-31 |
@@ -293,7 +293,7 @@ Anchor: Shared scripts and templates must live at one common point, .atm-bd/scri
 
 > scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: retired. Version 4.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 4.
 
 Summary: Shared files installed once to .atm-bd
 
@@ -422,7 +422,7 @@ Anchor: Types shared between all profiles must be defined in atm-bd-core.
 
 > This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: retired. Version 6.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 6.
 
 Summary: Shared types live in atm-bd-core
 
