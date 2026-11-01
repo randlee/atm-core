@@ -1,18 +1,24 @@
 {
   "schema": "plan-anchoring/questions/1",
   "gate": "atm-bd-lite-gate",
-  "version": 1,
-  "notes": "Question templates for atm-bd-lite-gate.py, expanded once per subject. state.hook is the hook source; state.spec is its hooks/*.md. implemented = ANC-053 (one per Transitions row); listed = ANC-054 (one per match arm and HookReply site).",
+  "version": 3,
+  "notes": "Question templates for atm-bd-lite-gate.py, expanded once per subject. state.hook is the hook source; state.spec is its hooks/*.md. implemented = ANC-053 (one per Transitions row); listed = ANC-054 (one per match arm and HookReply site; the diagram counts, Rand 2026-11-01).",
   "questions": {
     "implemented": {
       "type": "choice",
-      "instructions": "{subject} Is this row implemented by exactly one match arm of state.hook, with no check or write beyond the row's 'hook checks' and 'write' cells?",
-      "criteria": {"yes": "exactly one arm implements the row and does nothing the row does not list", "no": "no arm implements the row, more than one does, or the arm adds a check or write the row does not list"}
+      "instructions": "{subject} Read the row together with the branch of state.spec's diagram for the same transition and the Errors entries that branch names. Is the row implemented by exactly one match arm of state.hook: that arm performs every check in the row's 'hook checks' cell and in the diagram branch, and the write in the row's 'write' cell, and it adds no write and no check beyond them? Lookups named in the Facts table, and refusals for checks the diagram branch lists, are not additional.",
+      "criteria": {
+        "yes": "one arm performs every listed check and the listed write, and nothing else",
+        "no": "no single arm implements the row, or the arm misses a listed check or the listed write, or it adds a write or check that neither the row nor the diagram branch lists"
+      }
     },
     "listed": {
       "type": "choice",
-      "instructions": "{subject} Is this arm or reply listed in state.spec as a Transitions row or an Errors entry?",
-      "criteria": {"yes": "a Transitions row or an Errors entry of state.spec covers it", "no": "neither a Transitions row nor an Errors entry of state.spec covers it"}
+      "instructions": "{subject} Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+      "criteria": {
+        "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+        "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+      }
     }
   }
 }

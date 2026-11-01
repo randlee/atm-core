@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["jev-check"]
 # [tool.uv.sources]
-# jev-check = { path = "../packages/jev-check" }  # bo-12: skills/atm-bd-lite/scripts -> atm-bd packages/jev-check
+# jev-check = { path = "../packages/jev-check", editable = true }  # bo-12: skills/atm-bd-lite/scripts -> atm-bd packages/jev-check
 # ///
 """atm-bd-lite gate: hold one hook file to its hooks/*.md spec (fenix-brief.md §B).
 
@@ -109,6 +109,18 @@ def questions(f: dict, rows: list[list[str]]) -> dict[str, Question]:
             | qs.expand("listed", {f"L{line}": f"state.hook line {line}: `{text}`." for text, line in f["arms"] + f["replies"]}))
 
 
+def findings(answers: dict, f: dict) -> list[str]:
+    """jev-check result -> gate findings (proposal deliverable 6)."""
+    sites = {f"L{line}": text for text, line in f["arms"] + f["replies"]}
+    out = []
+    for key, a in answers.items():
+        kind, subject = key.split(":", 1)
+        if a["choice"] != "yes":
+            out.append(f"implement {subject}" if kind == "implemented"
+                       else f"add a row for {subject} `{sites.get(subject, '')}`, or remove the branch")
+    return out
+
+
 def main(argv: list[str]) -> int:
     if len(argv) not in (2, 4) or (len(argv) == 4 and argv[2] != "--out"):
         print(__doc__, file=sys.stderr)
@@ -126,7 +138,7 @@ def main(argv: list[str]) -> int:
         except JevCheckError as exc:
             run["jev_error"] = str(exc)
         else:
-            run["jev"] = {"answers": answers,
+            run["jev"] = {"answers": answers, "findings": findings(answers, f),
                           "no": sorted(k for k, a in answers.items() if a.get("choice") != "yes")}
     run["pass"] = not run["deterministic_failures"] and run["jev"] is not None and not run["jev"]["no"]
     out.parent.mkdir(parents=True, exist_ok=True)

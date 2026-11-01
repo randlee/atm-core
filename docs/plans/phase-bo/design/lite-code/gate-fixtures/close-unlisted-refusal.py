@@ -40,26 +40,35 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
                 return HookReply.refused(Refusal(ErrorId.STACK_NOT_RECORDED, branch=bead.work.branch))
             patch, template, args = BeadPatch.close(bead, evidence=layer), Template.DEV_CLOSE, layer
         case Transition.QA_PASS:  # T-CLOSE-03
-            if isinstance(target := beads.show(bead.target_bead()), Refusal):
+            if (target_id := bead.checked_bead or bead.closed_work_blocker()) is None:
+                return HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))
+            if isinstance(target := beads.show(target_id), Refusal):
                 return HookReply.refused(target)
             if isinstance(ledger := beads.show(target.stack_bead), Refusal):
                 return HookReply.refused(ledger)
-            if (head := ledger.head_of(target.work.branch)) != (sha := req.qa_verdict().sha):
+            if isinstance(verdict := req.qa_verdict(), Refusal):
+                return HookReply.refused(verdict)
+            if (head := ledger.head_of(target.work.branch)) != (sha := verdict.sha):
                 return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=sha, head=head))
             patch, template, args = BeadPatch.close(bead, evidence=sha), Template.QA_PASS, sha
         case Transition.QA_FINDINGS:  # T-CLOSE-04
-            if isinstance(target := beads.show(bead.target_bead()), Refusal):
+            if (target_id := bead.checked_bead or bead.closed_work_blocker()) is None:
+                return HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))
+            if isinstance(target := beads.show(target_id), Refusal):
                 return HookReply.refused(target)
             if isinstance(ledger := beads.show(target.stack_bead), Refusal):
                 return HookReply.refused(ledger)
-            verdict = req.qa_verdict()
+            if isinstance(verdict := req.qa_verdict(), Refusal):
+                return HookReply.refused(verdict)
             if (head := ledger.head_of(target.work.branch)) != verdict.sha:
                 return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, head=head))
-            unpoured = [f for f in verdict.findings
-                        if isinstance(poured := beads.show(f.id), Refusal) or not poured.blocks(f.blocker(bead))]
+            unpoured = [f for f in verdict.findings if isinstance(poured := beads.show(f.id), Refusal)
+                        or not poured.blocks(bead.sprint if f.blocking else bead.phase_bead)]
             if unpoured:
-                return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=unpoured, sprint=bead.sprint))
-            patch, template, args = BeadPatch.close(bead, evidence=verdict), Template.QA_FINDINGS, verdict
+                return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=unpoured, sprint=bead.sprint,
+                                                 phase=bead.phase_bead))
+            ids = [f.id for f in verdict.findings]
+            patch, template, args = BeadPatch.close(bead, evidence=(verdict.sha, ids)), Template.QA_FINDINGS, (verdict.sha, ids)
     if (failed := beads.update(patch, actor=req.caller)) is not None:
         return HookReply.refused(failed)
     return HookReply.handled(phase.close_action(req, template, args))
