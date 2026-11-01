@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -264,23 +263,7 @@ def sync_winget_manifests(
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
-    venv_python = repo_root / ".sc-lint/venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    if not venv_python.is_file():
-        bootstrap = repo_root / ".sc-lint" / "bootstrap.py"
-        setup_command = [sys.executable, str(bootstrap), "setup", "--config", "sc-lint.toml"]
-        setup = subprocess.run(setup_command, cwd=repo_root, check=False)
-        if setup.returncode != 0:
-            return setup.returncode
-    published = subprocess.run(
-        [str(venv_python), "-m", "sc_lint.check_version_sync"],
-        cwd=repo_root,
-        check=False,
-    )
-    if published.returncode != 0:
-        return published.returncode
-
-    # delete when randlee/sc-lint#783 ships: the published version check does
-    # not yet verify workspace-tracked Python dependency specifiers.
+    # Delete this check when randlee/sc-lint#783 ships.
     workspace_version = validate_workspace_version(repo_root)
     validate_python_dependency_pins(repo_root, workspace_version)
     return 0

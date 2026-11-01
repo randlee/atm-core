@@ -21,7 +21,7 @@ exclude_paths_by_rule = { "SCB-RUNTIME-003" = ["crates/atm/src/commands/internal
 reason = "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. See randlee/sc-lint#82."
 
 [tool.sc-lint.lint_profiles]
-ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "capability-degradation", "clippy", "clippy-windows", "daemon-signing-coupling", "daemon-singleton", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy", "peer-dial-seam", "pytests", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit", "site-generated", "site-links", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter", "ttl-triage", "version"]
+ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "capability-degradation", "clippy", "clippy-windows", "daemon-signing-coupling", "daemon-singleton", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy", "peer-dial-seam", "pytests", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit", "site-generated", "site-links", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter", "ttl-triage", "version-linux", "version-macos", "version-windows", "version-python-pins"]
 
 [[tool.sc-lint.lint]]
 name = "adr-index"
@@ -225,8 +225,23 @@ name = "ttl-triage"
 command = ["just", "_py", ".just/lint_ttl_triage_consistency.py"]
 
 [[tool.sc-lint.lint]]
-name = "version"
+name = "version-python-pins"
 command = ["just", "_py", ".just/check_version_sync.py"]
+
+[[tool.sc-lint.lint]]
+name = "version-linux"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.check_version_sync"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "version-macos"
+command = [".sc-lint/venv/bin/python", "-m", "sc_lint.check_version_sync"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "version-windows"
+command = [".sc-lint\\venv\\Scripts\\python.exe", "-m", "sc_lint.check_version_sync"]
+platform = "windows"
 
 [[tool.sc-lint.test]]
 name = "build"
