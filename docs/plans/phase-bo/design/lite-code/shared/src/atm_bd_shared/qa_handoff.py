@@ -11,7 +11,7 @@ def qa_handoff(phase_id: str, phase: PhaseFile, beads: BeadStore) -> list[TaskAs
     if isinstance(ready := beads.ready(phase_id, Stage.QA), Refusal):
         return ready
     assigns: list[TaskAssign] = []
-    for qa in ready:  # bd ready order is priority order
+    for qa in ready:  # cache.ready order is priority order
         if qa.status != Status.OPEN or qa.assignee is not None:
             continue
         if isinstance(target := qa_target(qa, beads), Refusal):

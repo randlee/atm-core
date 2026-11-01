@@ -3,10 +3,10 @@
 # requires-python = ">=3.11"
 # dependencies = ["atm-bd-types==0.2.0"]
 # ///
-"""atm-bd-lite task.assign hook: the lead assigns a ready bead, and bd records the assignee."""
+"""atm-bd-lite task.assign hook: the lead assigns a ready bead, and the cache records the assignee."""
 import sys
 
-from atm_bd_types import BdCli, BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli, Refusal, Status
+from atm_bd_types import CacheStore, BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli, Refusal, Status
 
 PROFILE = "lite"  # hook policy: this file serves phases whose phase file says profile = "lite" (ANC-026, ANC-061)
 
@@ -37,4 +37,9 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
 
 if __name__ == "__main__":
     req = HookRequest.parse(sys.stdin.read())
-    print((HookReply.refused(req) if isinstance(req, Refusal) else hook(req, BdCli(timeout_seconds=2), PhaseFilesCli())).to_json())
+    if isinstance(req, Refusal):
+        print(HookReply.refused(req).to_json())
+    elif isinstance(beads := CacheStore.for_phase(req.phase), Refusal):
+        print(HookReply.refused(beads).to_json())
+    else:
+        print(hook(req, beads, PhaseFilesCli()).to_json())

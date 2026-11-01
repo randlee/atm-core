@@ -68,6 +68,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-060 | locked | Lite never calls wrapper-blocked gh commands | 2026-11-01 |
 | ANC-061 | locked | No profile names hard-coded in atm-bd-types | 2026-11-01 |
 | ANC-062 | locked | No dicts or Any in lite code; use atm-bd-types | 2026-11-01 |
+| ANC-063 | locked | lite beads access only via beads-cache | 2026-11-01 |
 
 ## ANC-001
 
@@ -1162,3 +1163,21 @@ Deterministic check to pair with the development gate: grep of skills/atm-bd-lit
 Fixtures:
 - pass: def hook(req: HookRequest) -> HookReply: ... bead = Bead.show(req.task_id)
 - fail: def hook(env: dict[str, Any]) -> dict[str, str]: task = env["request"]["task_id"]
+
+## ANC-063
+
+Anchor: Every atm-bd-lite hook, script and agent step must read and write beads only through beads-cache (bd_cache_rs) and must never run bd directly.
+
+> we have found 20-30 second timeout is not enough ... that is why we designed bd cache which you forgot is a mandatory requirement
+
+Said by Rand, Rand 2026-11-01, phase bo replan, after the lite plan was found to call bd (BdCli) inside 2.5 s hooks; locked on Rand's 'lock it', 2026-11-01. Status: locked. Version 2.
+
+Summary: lite beads access only via beads-cache
+
+Scope: any lite hook, script, template step or adapter that reads or writes beads
+
+Deterministic check to pair with the development gate: no bd subprocess call and no BdCli in any lite file or template; BeadStore is the bd_cache_rs adapter
+
+Fixtures:
+- pass: The lite close hook reads the bead with cache.get from bd_cache_rs and closes it with cache.write(bead, 'close', ...); no bd process is started.
+- fail: The lite close hook runs 'bd show' and 'bd update --if-status' through a BdCli subprocess adapter.

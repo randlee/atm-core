@@ -1253,7 +1253,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "Stack linking and the stack check in both profiles must work on an Azure Git repository, not only on GitHub.",
-      "quote": "One item that also needs to be addressed both ATM \u2013 BD \u2013 lite and ATM \u2013 BD \u2013 orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.",
+      "quote": "One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
@@ -1422,7 +1422,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "The task hook, the dispatch templates, the cron script and the console must each read the profile (lite or full) from the phase file and refuse to run when the phase file's profile is not their own.",
-      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can\u2019t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
@@ -1479,7 +1479,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "The console never dispatches work for a phase whose phase file sets the lite profile.",
-      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can\u2019t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
       "kind": "prohibition",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
@@ -1530,7 +1530,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "Agent prompt templates rendered for the GitHub provider must use gh stack commands for stack work, with gh stack view --json as the stack view.",
-      "quote": "we can and should use \u2018gh stack\u2019 in agent prompts if github is used.  \u2018gh stack view \u2014json\u2019 is best view of stack and inexpensive if tokens available.",
+      "quote": "we can and should use ‘gh stack’ in agent prompts if github is used.  ‘gh stack view —json’ is best view of stack and inexpensive if tokens available.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
@@ -1587,7 +1587,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "The lite task hook and the lite dispatch templates must take the profile from the phase file and refuse to run or render when it is not lite.",
-      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can\u2019t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
@@ -1640,7 +1640,7 @@
       "source_type": "ANC",
       "source_ref": null,
       "statement": "Each atm-bd cron tick must take the profile from the phase file and refuse to run when it is not the tick's own profile.",
-      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can\u2019t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-31",
@@ -3483,6 +3483,51 @@
           "at": "2026-11-01T19:48:10+00:00",
           "event": "created",
           "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-063",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every atm-bd-lite hook, script and agent step must read and write beads only through beads-cache (bd_cache_rs) and must never run bd directly.",
+      "quote": "we have found 20-30 second timeout is not enough ... that is why we designed bd cache which you forgot is a mandatory requirement",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01, phase bo replan, after the lite plan was found to call bd (BdCli) inside 2.5 s hooks; locked on Rand's 'lock it'",
+      "summary": "lite beads access only via beads-cache",
+      "scope": "any lite hook, script, template step or adapter that reads or writes beads",
+      "deterministic_check": "no bd subprocess call and no BdCli in any lite file or template; BeadStore is the bd_cache_rs adapter",
+      "fixtures": {
+        "pass": [
+          "The lite close hook reads the bead with cache.get from bd_cache_rs and closes it with cache.write(bead, 'close', ...); no bd process is started."
+        ],
+        "fail": [
+          "The lite close hook runs 'bd show' and 'bd update --if-status' through a BdCli subprocess adapter."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T21:49:19+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T21:49:23+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     }

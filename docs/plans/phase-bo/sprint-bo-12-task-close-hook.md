@@ -1,14 +1,14 @@
-# Sprint bo-12: lite task.close hook and the dev's stack claim command
+# Sprint bo-12: lite task.close hook (stacks the dev's layer)
 
-Repo: atm-bd-orchestration. Branch `sprint/bo-12-task-close-hook`, stacked on bo-9. Owned paths: `plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/atm-bd-task-hook.py`, `.../atm-bd-lite-stack.py`, `plugins/atm-bd-orchestration/shared/` (the `atm-bd-shared` package, installed to `.atm-bd/shared/`), and their tests.
+Repo: atm-bd-orchestration. Branch `sprint/bo-12-task-close-hook`, stacked on bo-9. Owned paths: `plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/atm-bd-task-hook.py`, `plugins/atm-bd-orchestration/shared/` (the `atm-bd-shared` package, installed to `.atm-bd/shared/`), and their tests.
 
 ## Goal
-- **Dev workflow** (Rand): obtain the stack bead, rebase, update the stack bead, release it, close the task. On a new stack, rebase onto the trunk.
+- **Dev workflow** (Rand): rebase onto the stack top (the trunk on a new stack), push, open the PR, then `atm task close` with the report ending in one fenced JSON layer block (Rand: "that should be fenced json"). The close hook claims the stack bead, checks the block's base is the top, records the layer and releases, in cache writes only (ANC-063).
 - **QA** (Rand): QA runs on a stacked layer, and layers stacked later are ignored. The lead may send QA to a higher layer by updating the QA bead's existing `checked_bead`.
-- A FAIL verdict files one fix bead that carries the whole report and dispatches it.
+- A FAIL verdict files one fix bead that carries the whole report and dispatches it. **BLOCKED:** beads-cache has no `create` op, and a closed ATM task is terminal, so the dev bead cannot be reused. Needs Rand's decision (beads-cache `create` op upstream, or another shape).
 
 ## Install layout (Rand)
-- Lite scripts install to `.atm-bd/atm-bd-lite/scripts/`: the three task hooks, `atm-bd-lite-stack.py` and `atm-bd-lite-cron.py`.
+- Lite scripts install to `.atm-bd/atm-bd-lite/scripts/`: the three task hooks and `atm-bd-lite-cron.py`.
 - Shared code installs to `.atm-bd/shared/` as the `atm-bd-shared` package.
 - Each lite script's uv header names it with `atm-bd-shared = { path = "../../shared" }`. uv resolves that against the script's own directory, so the working directory does not matter (checked 2026-11-01: 0.49 s on a fresh directory).
 - [ ] A test runs the installed close hook from an unrelated working directory and imports `atm_bd_shared`.
@@ -16,25 +16,20 @@ Repo: atm-bd-orchestration. Branch `sprint/bo-12-task-close-hook`, stacked on bo
 ## Rules (all lite sprints)
 - The code below is the deliverable. Implement it as written; any change it needs is a plan change and goes to fenix first.
 - Pyright strict passes with 0 errors (`design/lite-code/pyrightconfig.json`); no `dict`, `Any`, untyped JSON, inline profile/metadata/branch strings or hand-built paths (ANC-062).
-- Tests drive the hook's `hook()`/command function with in-memory fakes of the atm-bd-types traits (`BeadStore`, `Git`, `PullRequests`, `PhaseFiles`). Every interleaving is stepped by hand: no sleeps, threads, timing or real bd/dolt/daemon (CLAUDE.md flaky-test rule).
-- Every case asserts the exact `HookReply`/`StackReply` JSON, including the `ErrorId` of each refusal, and the exact list of writes the fake received (empty when none).
-
-## Acceptance: stack command (`atm-bd-lite-stack.py`)
-
-It implements §4 of the lite state transitions. One test per row:
-- [ ] acquire: claim → reply `top` (the trunk and `first=true` for a new stack). Held by another agent → `STACK_HELD` with the holder.
-- [ ] record: PR head = pushed head and PR base = top → ONE `BeadPatch.record` write (layer + release, guarded by `--if-assignee`). Otherwise one test each: `PR_NOT_FOUND`, `HEAD_NOT_PUSHED`, `STACK_NOT_STACKED`, and claim lost (`STACK_CLAIM_LOST`). None of them writes.
-- [ ] release: releases the claim.
+- Tests drive the hook's `hook()`/command function with in-memory fakes of the atm-bd-types traits (`BeadStore`, `PhaseFiles`). Every interleaving is stepped by hand: no sleeps, threads, timing or real bd/dolt/daemon (CLAUDE.md flaky-test rule).
+- Every case asserts the exact `HookReply` JSON, including the `ErrorId` of each refusal, and the exact list of writes the fake received (empty when none).
 
 ## Acceptance: task.close
 
 The hook implements `docs/task-close.md` (§5 of the lite state transitions), and nothing else. There is one test per transition row, against a fake `BeadStore`:
 - [ ] T-CLOSE-01: refused or cancelled → one `BeadPatch.reopen` (open, unassigned); the task closes.
-- [ ] T-CLOSE-02: dev bead with no recorded layer → refused `STACK_NOT_RECORDED`, no write.
-- [ ] T-CLOSE-03: dev bead with a recorded layer → one `BeadPatch.close`, then one assign per ready QA bead, then the original close.
-- [ ] T-CLOSE-04: QA verdict sha is not the target head → refused `QA_NOT_ON_STACK`, no write.
-- [ ] T-CLOSE-05: QA PASS → one `BeadPatch.close(reviewed=sha)`.
-- [ ] T-CLOSE-06: QA FAIL → one `bd create` of the fix bead (blocks QA, owner = dev); an existing fix id is reused; then one assign of the fix to the dev.
+- [ ] T-CLOSE-02: dev bead whose report has no valid fenced layer block → refused `LAYER_BLOCK_MISSING`, no write.
+- [ ] T-CLOSE-03: block's base is not the stack top → claim, then release, then refused `STACK_NOT_STACKED` naming the top. The stack bead is held by another close → refused `STACK_HELD`. Neither records anything.
+- [ ] T-CLOSE-04: block's base is the top (the trunk on a new stack) → claim, then ONE `BeadPatch.record` (layer + release), then one `BeadPatch.close`, then one assign per ready QA bead, then the original close.
+- [ ] T-CLOSE-05: QA verdict sha is not the target head → refused `QA_NOT_ON_STACK`, no write.
+- [ ] T-CLOSE-06: QA PASS → one `BeadPatch.close(reviewed=sha)`.
+- [ ] T-CLOSE-07: QA FAIL → **BLOCKED** on a beads-cache create path (see Goal).
+- [ ] Every write goes through the fake `CacheStore`. The grep for `bd ` subprocess calls and `BdCli` in the lite scripts is empty (ANC-063).
 - [ ] Each error in the doc's error table: its code, its owner, and a message containing the exact fix command.
 - [ ] Jev: `jev-check` on `task-close.toml` passes every T-CLOSE row and every code branch.
 
@@ -49,14 +44,15 @@ The hook implements `docs/task-close.md` (§5 of the lite state transitions), an
 # ///
 """atm-bd-lite task.close hook. Implements docs/task-close.md, nothing else.
 
-Work bead (dev/fix): the recorded layer exists -> close the bead, assign ready QA beads.
+Work bead (dev/fix): the report's fenced layer block is stacked on the top -> record the layer, close the bead,
+assign ready QA beads. Beads only through beads-cache (ANC-063).
 QA bead: the verdict sha is the target layer's head -> PASS closes QA; FAIL creates a fix bead for the dev.
 Refused or cancelled: the bead goes back to open, unassigned.
 """
 import sys
 from atm_bd_shared.qa_handoff import qa_handoff, qa_target
-from atm_bd_types import (BdCli, Bead, BeadMeta, BeadPatch, BeadStore, ErrorId, HookAction, HookReply, HookRequest,
-                          Layer, NewBead, Outcome, PhaseFile, PhaseFiles, PhaseFilesCli, QaFail, QaPass, Refusal,
+from atm_bd_types import (Bead, CacheStore, BeadMeta, BeadPatch, BeadStore, ErrorId, HookAction, HookReply, HookRequest,
+                          NewBead, Outcome, PhaseFile, PhaseFiles, PhaseFilesCli, QaFail, QaPass, Refusal,
                           Stack, Stage, TaskAssign, Template)
 
 PROFILE = "lite"
@@ -93,28 +89,27 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
 
 
 def work_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -> HookReply:
-    if isinstance(layer := recorded_layer(bead, beads), Refusal):  # T-CLOSE-02
+    if isinstance(layer := req.layer_block(), Refusal):  # T-CLOSE-02
         return HookReply.refused(layer)
+    if isinstance(stack_id := bead.stack_bead(), Refusal):
+        return HookReply.refused(stack_id)
+    if isinstance(stack_bead := beads.claim(stack_id, req.caller), Refusal):  # another close is stacking: close again
+        return HookReply.refused(stack_bead)
+    if isinstance(stack := Stack.decode(stack_bead), Refusal):
+        return HookReply.refused(stack)
+    if layer.base != (top := stack.top(excluding=layer.branch)):  # T-CLOSE-03: rebase onto the top
+        if (released := beads.release(stack_id, req.caller)) is not None:
+            return HookReply.refused(released)
+        return HookReply.refused(Refusal(ErrorId.STACK_NOT_STACKED, layer=layer, top=top))
+    if (failed := beads.update(BeadPatch.record(stack_bead, stack.with_layer(layer), req.caller),
+                               actor=req.caller)) is not None:  # layer + release, one write
+        return HookReply.refused(failed)
     if (failed := beads.update(BeadPatch.close(bead, f"{layer.branch} at {layer.head}; PR #{layer.pr}"),
                                actor=req.caller)) is not None:
         return HookReply.refused(failed)
-    if isinstance(assigns := qa_handoff(req.phase, phase, beads), Refusal):  # T-CLOSE-03
+    if isinstance(assigns := qa_handoff(req.phase, phase, beads), Refusal):  # T-CLOSE-04
         return HookReply.refused(assigns)
     return HookReply.handled([HookAction.assign(req, a) for a in assigns] + [HookAction.original(req)])
-
-
-def recorded_layer(bead: Bead, beads: BeadStore) -> Layer | Refusal:
-    if isinstance(work := bead.work(), Refusal):
-        return work
-    if isinstance(stack_id := bead.stack_bead(), Refusal):
-        return stack_id
-    if isinstance(stack_bead := beads.show(stack_id), Refusal):
-        return stack_bead
-    if isinstance(stack := Stack.decode(stack_bead), Refusal):
-        return stack
-    if (layer := stack.layer_for(work.branch)) is None:
-        return Refusal(ErrorId.STACK_NOT_RECORDED, bead=bead, stack_bead=stack_bead)
-    return layer
 
 
 def qa_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -> HookReply:
@@ -123,13 +118,13 @@ def qa_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -
     if isinstance(target := qa_target(bead, beads), Refusal):
         return HookReply.refused(target)
     checked, layer = target
-    if layer.head != verdict.sha:  # T-CLOSE-04
+    if layer.head != verdict.sha:  # T-CLOSE-05
         return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, checked=layer.branch))
     match verdict:
-        case QaPass():  # T-CLOSE-05
+        case QaPass():  # T-CLOSE-06
             return HookReply.from_result(
                 beads.update(BeadPatch.close(bead, f"PASS at {verdict.sha}", reviewed=verdict.sha), actor=req.caller))
-        case QaFail(report=report):  # T-CLOSE-06
+        case QaFail(report=report):  # T-CLOSE-07 (BLOCKED: beads-cache has no create op)
             if isinstance(work := checked.work(), Refusal):
                 return HookReply.refused(work)
             if isinstance(stack_id := bead.stack_bead(), Refusal):
@@ -149,8 +144,12 @@ def qa_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -
 
 if __name__ == "__main__":
     req = HookRequest.parse(sys.stdin.read())
-    reply = HookReply.refused(req) if isinstance(req, Refusal) else hook(req, BdCli(timeout_seconds=2), PhaseFilesCli())
-    print(reply.to_json())
+    if isinstance(req, Refusal):
+        print(HookReply.refused(req).to_json())
+    elif isinstance(beads := CacheStore.for_phase(req.phase), Refusal):
+        print(HookReply.refused(beads).to_json())
+    else:
+        print(hook(req, beads, PhaseFilesCli()).to_json())
 ```
 
 ## Code: shared qa_handoff (`.atm-bd/shared`, package `atm-bd-shared`, module `atm_bd_shared.qa_handoff`)
@@ -168,7 +167,7 @@ def qa_handoff(phase_id: str, phase: PhaseFile, beads: BeadStore) -> list[TaskAs
     if isinstance(ready := beads.ready(phase_id, Stage.QA), Refusal):
         return ready
     assigns: list[TaskAssign] = []
-    for qa in ready:  # bd ready order is priority order
+    for qa in ready:  # cache.ready order is priority order
         if qa.status != Status.OPEN or qa.assignee is not None:
             continue
         if isinstance(target := qa_target(qa, beads), Refusal):
@@ -202,103 +201,4 @@ def qa_target(qa: Bead, beads: BeadStore) -> tuple[Bead, Layer] | Refusal:
         return Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=qa)
     return best[1], best[2]
 ```
-## Code: stack claim command
-```python
-#!/usr/bin/env -S uv run --quiet --script
-# /// script
-# requires-python = ">=3.11"
-# dependencies = ["atm-bd-types==0.2.0"]
-# ///
-"""atm-bd-lite stack claim: the dev holds the stack bead while it rebases (bd --claim, as sanity-stack-link).
 
-  acquire --phase P --bead B   claim the stack bead; prints the top to rebase onto (the trunk for a new stack)
-  record  --phase P --bead B   check the pushed PR is stacked on the top; record the layer and release the
-                               claim in one write guarded by --if-assignee <dev>
-  release --bead B             give the stack back without recording (abort); the lead recovers an abandoned
-                               claim with bd reclaim, after which the old holder's record is STACK_CLAIM_LOST
-
-"""
-import sys
-
-from atm_bd_types import (Acquire, BdCli, BeadPatch, BeadStore, ErrorId, Git, GitCli, Layer, PhaseFiles,
-                          PhaseFilesCli, ProviderCli, PullRequests, Record, Refusal, Release, Stack, StackCommand,
-                          StackReply, Work)
-
-PROFILE = "lite"
-
-
-def work_bead(bead_id: str, beads: BeadStore) -> tuple[Work, str, str] | Refusal:
-    r"""The dev's work, owner and stack bead id, from the bead."""
-    if isinstance(bead := beads.show(bead_id), Refusal):
-        return bead
-    if isinstance(work := bead.work(), Refusal):
-        return work
-    if isinstance(owner := bead.owner(), Refusal):
-        return owner
-    if isinstance(stack_id := bead.stack_bead(), Refusal):
-        return stack_id
-    return work, owner, stack_id
-
-
-def acquire(cmd: Acquire, beads: BeadStore, phases: PhaseFiles) -> StackReply:
-    if isinstance(phase := phases.load(cmd.phase_config_path(), PROFILE), Refusal):
-        return StackReply.refused(phase)
-    if isinstance(found := work_bead(cmd.bead, beads), Refusal):
-        return StackReply.refused(found)
-    work, owner, stack_id = found
-    if isinstance(stack_bead := beads.claim(stack_id, owner), Refusal):  # held: STACK_HELD (holder)
-        return StackReply.refused(stack_bead)
-    if isinstance(stack := Stack.decode(stack_bead), Refusal):  # lead error; the lead runs bd reclaim
-        return StackReply.refused(stack)
-    top = stack.top(excluding=work.branch)
-    return StackReply.acquired(top=top, first=top == stack.trunk)
-
-
-def record(cmd: Record, beads: BeadStore, git: Git, prs: PullRequests, phases: PhaseFiles) -> StackReply:
-    if isinstance(phase := phases.load(cmd.phase_config_path(), PROFILE), Refusal):
-        return StackReply.refused(phase)
-    if isinstance(found := work_bead(cmd.bead, beads), Refusal):
-        return StackReply.refused(found)
-    work, owner, stack_id = found
-    if isinstance(stack_bead := beads.show(stack_id), Refusal):
-        return StackReply.refused(stack_bead)
-    if isinstance(stack := Stack.decode(stack_bead), Refusal):
-        return StackReply.refused(stack)
-    top = stack.top(excluding=work.branch)  # the trunk for the first layer
-    if isinstance(head := git.pushed_head(work), Refusal):
-        return StackReply.refused(head)
-    if isinstance(pr := prs.open_pr(work.branch, phase.provider), Refusal):
-        return StackReply.refused(pr)
-    if pr is None:
-        return StackReply.refused(Refusal(ErrorId.PR_NOT_FOUND, work=work, top=top))
-    if pr.head != head:
-        return StackReply.refused(Refusal(ErrorId.HEAD_NOT_PUSHED, work=work, head=head))
-    if pr.base != top:
-        return StackReply.refused(Refusal(ErrorId.STACK_NOT_STACKED, pr=pr, top=top))
-    layer = Layer(base=top, branch=work.branch, head=head, pr=pr.number)  # one write: layer + release, --if-assignee owner
-    return StackReply.recorded(beads.update(BeadPatch.record(stack_bead, stack.with_layer(layer), owner), actor=owner), layer)
-
-
-def release(cmd: Release, beads: BeadStore) -> StackReply:
-    if isinstance(bead := beads.show(cmd.bead), Refusal):
-        return StackReply.refused(bead)
-    if isinstance(owner := bead.owner(), Refusal):
-        return StackReply.refused(owner)
-    if isinstance(stack_id := bead.stack_bead(), Refusal):
-        return StackReply.refused(stack_id)
-    return StackReply.released(beads.release(stack_id, owner))
-
-
-if __name__ == "__main__":
-    beads = BdCli(timeout_seconds=10)
-    match StackCommand.parse(sys.argv[1:]):
-        case Refusal() as refusal:
-            reply = StackReply.refused(refusal)
-        case Acquire() as cmd:
-            reply = acquire(cmd, beads, PhaseFilesCli())
-        case Record() as cmd:
-            reply = record(cmd, beads, GitCli(timeout_seconds=10), ProviderCli(timeout_seconds=10), PhaseFilesCli())
-        case Release() as cmd:
-            reply = release(cmd, beads)
-    print(reply.to_json())
-```

@@ -10,7 +10,7 @@ The assignee starts an unblocked bead. The start records the work's base: the st
 ## Rules (all lite sprints)
 - The code below is the deliverable. Implement it as written; any change it needs is a plan change and goes to fenix first.
 - Pyright strict passes with 0 errors (`design/lite-code/pyrightconfig.json`); no `dict`, `Any`, untyped JSON, inline profile/metadata/branch strings or hand-built paths (ANC-062).
-- Tests drive the hook's `hook()`/command function with in-memory fakes of the atm-bd-types traits (`BeadStore`, `Git`, `PullRequests`, `PhaseFiles`). Every interleaving is stepped by hand: no sleeps, threads, timing or real bd/dolt/daemon (CLAUDE.md flaky-test rule).
+- Tests drive the hook's `hook()`/command function with in-memory fakes of the atm-bd-types traits (`BeadStore`, `PhaseFiles`). Every interleaving is stepped by hand: no sleeps, threads, timing or real bd/dolt/daemon (CLAUDE.md flaky-test rule).
 - Every case asserts the exact `HookReply`/`StackReply` JSON, including the `ErrorId` of each refusal, and the exact list of writes the fake received (empty when none).
 
 ## Acceptance: one case per arm
@@ -37,7 +37,7 @@ The assignee starts an unblocked bead. The start records the work's base: the st
 for a new stack), recorded on the bead. No claim: the dev claims the stack only when its work is complete."""
 import sys
 
-from atm_bd_types import BdCli, BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli, Refusal, Stack, Status
+from atm_bd_types import CacheStore, BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli, Refusal, Stack, Status
 
 PROFILE = "lite"  # hook policy: this file serves phases whose phase file says profile = "lite" (ANC-026, ANC-061)
 
@@ -74,5 +74,10 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
 
 if __name__ == "__main__":
     req = HookRequest.parse(sys.stdin.read())
-    print((HookReply.refused(req) if isinstance(req, Refusal) else hook(req, BdCli(timeout_seconds=2), PhaseFilesCli())).to_json())
+    if isinstance(req, Refusal):
+        print(HookReply.refused(req).to_json())
+    elif isinstance(beads := CacheStore.for_phase(req.phase), Refusal):
+        print(HookReply.refused(beads).to_json())
+    else:
+        print(hook(req, beads, PhaseFilesCli()).to_json())
 ```

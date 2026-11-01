@@ -19,7 +19,7 @@ The lite cron runs the shared `qa_handoff` for each lite phase and assigns what 
 """
 import sys
 
-from atm_bd_types import AtmCli, BdCli, CronCommand, CronReply, PhaseFilesCli, Refusal
+from atm_bd_types import AtmCli, CacheStore, CronCommand, CronReply, PhaseFilesCli, Refusal
 from atm_bd_shared.qa_handoff import qa_handoff
 
 PROFILE = "lite"  # policy: this file serves phases whose phase file says profile = "lite" (ANC-026, ANC-061)
@@ -29,7 +29,9 @@ if __name__ == "__main__":
         reply = CronReply.refused(cmd)
     elif isinstance(phase := PhaseFilesCli().load(cmd.phase_config_path(), PROFILE), Refusal):
         reply = CronReply.refused(phase)
-    elif isinstance(assigns := qa_handoff(cmd.phase, phase, BdCli(timeout_seconds=10)), Refusal):
+    elif isinstance(beads := CacheStore.for_phase(cmd.phase), Refusal):
+        reply = CronReply.refused(beads)
+    elif isinstance(assigns := qa_handoff(cmd.phase, phase, beads), Refusal):
         reply = CronReply.refused(assigns)
     else:
         tasks = AtmCli(timeout_seconds=10)
@@ -39,10 +41,10 @@ if __name__ == "__main__":
 - [ ] A ready, unassigned QA bead is assigned by cron when no close did it. A QA bead the close hook already assigned is skipped.
 
 ## Acceptance
-- [ ] A lite phase runs end to end from release assets with one agent (ANC-015). Steps: dev started, dev acquire/record/close, QA assigned by the close hook, QA FAIL and fix, fix acquire/record/close, QA PASS, and the stack landed.
+- [ ] A lite phase runs end to end from release assets with one agent (ANC-015). Steps: dev started, dev close with the layer block, QA assigned by the close hook, QA FAIL and fix, fix close with the layer block, QA PASS, and the stack landed.
 - [ ] An orchestration phase file with no `profile` key runs unchanged, and orchestration's tests pass unedited (ANC-039).
 - [ ] Every hook result of the run appears in the bo-13 audit log.
 
 ## Validation
 - `just lint`, `just test`.
-- The live run's `atm task events` and `bd show` output for every bead.
+- The live run's `atm task events` for every task, and the cache's view of every bead.

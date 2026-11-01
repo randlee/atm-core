@@ -6,7 +6,7 @@ every row is implemented, and every code path appears as a row. Jev checks
 this (ANC-053, ANC-054). If the code and this page disagree, that is a defect
 in one of them. It is never resolved by editing whichever is more convenient.
 
-Bead states are bd's: `open`, `in_progress`, `blocked`, `deferred` and
+All bead reads and writes go through beads-cache (`bd_cache_rs`), never `bd` (ANC-063). Bead states are bd's: `open`, `in_progress`, `blocked`, `deferred` and
 `closed`. A refusal is a typed `ErrorId` whose message and fix come from
 atm-bd-types. Every reply is recorded by ATM's hook audit log.
 
@@ -19,8 +19,7 @@ stateDiagram-v2
         [*] --> w_open: planned, or filed by a QA FAIL (fix)
         w_open --> w_open: lead assigns (task.assign)
         w_open --> w_prog: assignee starts (task.start): records base = stack top
-        w_prog --> w_prog: dev completes: acquire, rebase, record + release (stack command)
-        w_prog --> w_closed: assignee closes completed (task.close)
+                w_prog --> w_closed: assignee closes completed with its layer block (task.close stacks it)
         w_prog --> w_open: assignee closes refused/cancelled (give back)
         w_closed --> [*]
     }
@@ -36,11 +35,11 @@ stateDiagram-v2
     }
 ```
 
-`q_blocked` and `q_ready` are both bd `open`. "Ready" means `bd ready` lists
+`q_blocked` and `q_ready` are both bd `open`. "Ready" means `cache.ready` lists
 the bead: open, with no open blocker. `q_assigned` is `open` with an assignee.
 
-**The stack bead** holds `trunk` and the ordered `layers`. Only the stack
-command writes it, and only between a claim and its release. A new stack has
+**The stack bead** holds `trunk` and the ordered `layers`. Only the task.close
+hook writes it, between its own claim and release. A new stack has
 no layers, so its top is the trunk.
 
 **Who acts:**
@@ -110,44 +109,15 @@ flowchart TD
 | closed | none | refused `BEAD_CLOSED` |
 | blocked, deferred | none | refused `BEAD_NOT_READY` |
 
-## 4. Stack command (`atm-bd-lite-stack.py`, run by the dev at completion)
+## 4. Stacking (done by the dev, recorded by task.close)
 
-The dev runs it only when its work is complete. There is no claim before
-that.
+The dev rebases onto the stack top (the trunk on a new stack), pushes and opens the PR with base = top. The dev's close report ends with one fenced JSON block:
 
-```mermaid
-sequenceDiagram
-    participant Dev
-    participant Cmd as atm-bd-lite-stack.py
-    participant S as stack bead
-    Dev->>Cmd: acquire --phase P --bead B
-    Cmd->>S: bd update --claim
-    alt held by another agent
-        S-->>Dev: refused STACK_HELD (holder, claimed at)
-    else claimed
-        S-->>Dev: top (trunk if new stack, first=true)
-        Dev->>Dev: rebase onto top, push, open/update PR (base = top)
-        Dev->>Cmd: record --phase P --bead B
-        Cmd->>Cmd: PR head = pushed head, PR base = top, top is ancestor
-        Cmd->>S: one bd update: layers + release, --if-assignee dev
-        alt claim was reclaimed
-            S-->>Dev: refused STACK_CLAIM_LOST (no write)
-        else
-            S-->>Dev: recorded (layer)
-        end
-    end
-    Dev->>Dev: atm task close B completed (task.close)
+```json
+{"layer": {"branch": "sprint/bo-12-task-close-hook", "head": "<full sha>", "pr": 1234, "base": "<top branch>"}}
 ```
 
-| id | command | when | does | reply |
-|---|---|---|---|---|
-| T-STACK-01 | acquire | stack free | claim | `top` (trunk and `first` for a new stack) |
-| T-STACK-02 | acquire | held by another agent | none | refused `STACK_HELD` (holder) |
-| T-STACK-03 | record | PR head = pushed head, PR base = top, claim held | one write: layer + release | recorded |
-| T-STACK-04 | record | no PR / head not pushed / base ≠ top / claim lost | none | refused `PR_NOT_FOUND` / `HEAD_NOT_PUSHED` / `STACK_NOT_STACKED` / `STACK_CLAIM_LOST` |
-| T-STACK-05 | release | (any) | release | released |
-
-The lead recovers an abandoned claim with `bd reclaim`.
+The dev runs no stack command and never touches the stack bead. task.close claims the stack bead, checks the block, records the layer and releases (§5, T-CLOSE-02..04).
 
 ## 5. task.close (`atm-bd-task-hook.py`)
 
@@ -157,13 +127,23 @@ Input: `atm task close <bead-id> <outcome>` with the report or reason. Everythin
 
 ```mermaid
 stateDiagram-v2
-    state "check: layer recorded on stack bead?" as chk
-    state "write: bd close bead" as close
+    state "check: fenced layer block in report?" as blk
+    state "write: claim stack bead" as claim
+    state "check: block base = stack top?" as top
+    state "write: release stack bead" as release
+    state "write: record layer + release (one write)" as record
+    state "write: close bead" as close
     state "send: assign each ready QA bead to the QA member" as send
     state "write: bead open, unassigned" as reopen
-    [*] --> chk: completed
-    chk --> refused: no
-    chk --> close: yes
+    [*] --> blk: completed
+    blk --> refused: no
+    blk --> claim: yes
+    claim --> refused: held by another close
+    claim --> top
+    top --> release: no
+    release --> refused
+    top --> record: yes
+    record --> close
     close --> send
     send --> [*]: task closes
     [*] --> reopen: refused / cancelled
@@ -176,8 +156,8 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     state "check: verdict sha = target layer head?" as chk
-    state "write: bd close QA bead, reviewed = sha" as pass
-    state "write: bd create fix bead, blocks QA" as fail
+    state "write: close QA bead, reviewed = sha" as pass
+    state "write: create fix bead, blocks QA (BLOCKED: no cache create)" as fail
     state "send: assign fix bead to the dev" as send
     state "write: bead open, unassigned" as reopen
     [*] --> chk: completed
@@ -199,11 +179,12 @@ The target layer is the layer recorded by the QA bead's closed dev or fix bead, 
 | id | bead | when | does | task |
 |---|---|---|---|---|
 | T-CLOSE-01 | any | refused or cancelled | bead → open, unassigned | closes |
-| T-CLOSE-02 | dev, fix | completed, no recorded layer | none | stays open: `STACK_NOT_RECORDED` |
-| T-CLOSE-03 | dev, fix | completed, layer recorded | close bead; assign ready QA beads to the QA member | closes |
-| T-CLOSE-04 | QA | verdict sha is not the target head | none | stays open: `QA_NOT_ON_STACK` |
-| T-CLOSE-05 | QA | PASS | close QA, reviewed = sha | closes |
-| T-CLOSE-06 | QA | FAIL | create fix bead (blocks QA; if it exists, reuse it); assign it to the dev | closes |
+| T-CLOSE-02 | dev, fix | completed, no valid layer block | none | stays open: `LAYER_BLOCK_MISSING` |
+| T-CLOSE-03 | dev, fix | stack bead held by another close, or block base ≠ stack top | claim + release, or none | stays open: `STACK_HELD` / `STACK_NOT_STACKED` |
+| T-CLOSE-04 | dev, fix | block base = stack top | claim; record layer + release; close bead; assign ready QA beads | closes |
+| T-CLOSE-05 | QA | verdict sha is not the target head | none | stays open: `QA_NOT_ON_STACK` |
+| T-CLOSE-06 | QA | PASS | close QA, reviewed = sha | closes |
+| T-CLOSE-07 | QA | FAIL | **BLOCKED**: needs a fix bead, and beads-cache has no create op | — |
 
 ### Errors
 
@@ -211,12 +192,14 @@ Each refusal says what happened, the exact command to run next, and who owns it.
 
 | code | owner | the reader sees |
 |---|---|---|
-| `STACK_NOT_RECORDED` | dev | "<bead> has no layer on the stack. Run `atm-bd-lite-stack.py acquire --phase <p> --bead <bead>`, rebase onto the top it prints, push, run `… record --phase <p> --bead <bead>`, then close again." |
+| `LAYER_BLOCK_MISSING` | dev | "Your close report needs one layer block. End it with: ```json {\"layer\": {\"branch\": …, \"head\": …, \"pr\": …, \"base\": …}}```, then close again." |
+| `STACK_NOT_STACKED` | dev | "Your layer is based on <base>; the stack top is <top>. Rebase onto <top>, push, update the PR base, fix the block, then close again." |
+| `STACK_HELD` | dev | "Another close (<holder>) is recording its layer. Close again." |
 | `TASK_NOT_ASSIGNEE` | dev | "<bead> is assigned to <agent>, not you. Close only your own task." |
 | `CLOSE_REPORT_EMPTY`, `CLOSE_REASON_EMPTY` | dev | "A close needs a report (or a reason). Run `atm task close <bead> <outcome> --stdin` with it." |
 | `QA_NOT_ON_STACK` | dev (QA) | "Your verdict is for <sha>; the layer under review (<branch>) is at <head>. Review <head>, then close again." |
 | `QA_NOTHING_TO_REVIEW` | lead | "<qa> has no recorded layer to review. Not yours to fix; the lead has it." |
-| `BEAD_NOT_FOUND`, `PHASE_UNREADABLE`, bd unreachable, `BEAD_RACED`, any other | lead | "Not yours to fix: <what failed>. The lead has it; leave the task open." |
+| `BEAD_NOT_FOUND`, `PHASE_UNREADABLE`, `CACHE_UNAVAILABLE`, `BEAD_RACED`, any other | lead | "Not yours to fix: <what failed>. The lead has it; leave the task open." |
 
 A `lead` refusal reaches the lead through ATM (bo-13: `owner` on the structured refusal).
 

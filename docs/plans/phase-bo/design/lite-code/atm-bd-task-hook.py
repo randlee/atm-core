@@ -7,14 +7,15 @@
 # ///
 """atm-bd-lite task.close hook. Implements docs/task-close.md, nothing else.
 
-Work bead (dev/fix): the recorded layer exists -> close the bead, assign ready QA beads.
+Work bead (dev/fix): the report's fenced layer block is stacked on the top -> record the layer, close the bead,
+assign ready QA beads. Beads only through beads-cache (ANC-063).
 QA bead: the verdict sha is the target layer's head -> PASS closes QA; FAIL creates a fix bead for the dev.
 Refused or cancelled: the bead goes back to open, unassigned.
 """
 import sys
 from atm_bd_shared.qa_handoff import qa_handoff, qa_target
-from atm_bd_types import (BdCli, Bead, BeadMeta, BeadPatch, BeadStore, ErrorId, HookAction, HookReply, HookRequest,
-                          Layer, NewBead, Outcome, PhaseFile, PhaseFiles, PhaseFilesCli, QaFail, QaPass, Refusal,
+from atm_bd_types import (Bead, CacheStore, BeadMeta, BeadPatch, BeadStore, ErrorId, HookAction, HookReply, HookRequest,
+                          NewBead, Outcome, PhaseFile, PhaseFiles, PhaseFilesCli, QaFail, QaPass, Refusal,
                           Stack, Stage, TaskAssign, Template)
 
 PROFILE = "lite"
@@ -51,28 +52,27 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
 
 
 def work_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -> HookReply:
-    if isinstance(layer := recorded_layer(bead, beads), Refusal):  # T-CLOSE-02
+    if isinstance(layer := req.layer_block(), Refusal):  # T-CLOSE-02
         return HookReply.refused(layer)
+    if isinstance(stack_id := bead.stack_bead(), Refusal):
+        return HookReply.refused(stack_id)
+    if isinstance(stack_bead := beads.claim(stack_id, req.caller), Refusal):  # another close is stacking: close again
+        return HookReply.refused(stack_bead)
+    if isinstance(stack := Stack.decode(stack_bead), Refusal):
+        return HookReply.refused(stack)
+    if layer.base != (top := stack.top(excluding=layer.branch)):  # T-CLOSE-03: rebase onto the top
+        if (released := beads.release(stack_id, req.caller)) is not None:
+            return HookReply.refused(released)
+        return HookReply.refused(Refusal(ErrorId.STACK_NOT_STACKED, layer=layer, top=top))
+    if (failed := beads.update(BeadPatch.record(stack_bead, stack.with_layer(layer), req.caller),
+                               actor=req.caller)) is not None:  # layer + release, one write
+        return HookReply.refused(failed)
     if (failed := beads.update(BeadPatch.close(bead, f"{layer.branch} at {layer.head}; PR #{layer.pr}"),
                                actor=req.caller)) is not None:
         return HookReply.refused(failed)
-    if isinstance(assigns := qa_handoff(req.phase, phase, beads), Refusal):  # T-CLOSE-03
+    if isinstance(assigns := qa_handoff(req.phase, phase, beads), Refusal):  # T-CLOSE-04
         return HookReply.refused(assigns)
     return HookReply.handled([HookAction.assign(req, a) for a in assigns] + [HookAction.original(req)])
-
-
-def recorded_layer(bead: Bead, beads: BeadStore) -> Layer | Refusal:
-    if isinstance(work := bead.work(), Refusal):
-        return work
-    if isinstance(stack_id := bead.stack_bead(), Refusal):
-        return stack_id
-    if isinstance(stack_bead := beads.show(stack_id), Refusal):
-        return stack_bead
-    if isinstance(stack := Stack.decode(stack_bead), Refusal):
-        return stack
-    if (layer := stack.layer_for(work.branch)) is None:
-        return Refusal(ErrorId.STACK_NOT_RECORDED, bead=bead, stack_bead=stack_bead)
-    return layer
 
 
 def qa_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -> HookReply:
@@ -81,13 +81,13 @@ def qa_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -
     if isinstance(target := qa_target(bead, beads), Refusal):
         return HookReply.refused(target)
     checked, layer = target
-    if layer.head != verdict.sha:  # T-CLOSE-04
+    if layer.head != verdict.sha:  # T-CLOSE-05
         return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, checked=layer.branch))
     match verdict:
-        case QaPass():  # T-CLOSE-05
+        case QaPass():  # T-CLOSE-06
             return HookReply.from_result(
                 beads.update(BeadPatch.close(bead, f"PASS at {verdict.sha}", reviewed=verdict.sha), actor=req.caller))
-        case QaFail(report=report):  # T-CLOSE-06
+        case QaFail(report=report):  # T-CLOSE-07 (BLOCKED: beads-cache has no create op)
             if isinstance(work := checked.work(), Refusal):
                 return HookReply.refused(work)
             if isinstance(stack_id := bead.stack_bead(), Refusal):
@@ -107,5 +107,9 @@ def qa_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -
 
 if __name__ == "__main__":
     req = HookRequest.parse(sys.stdin.read())
-    reply = HookReply.refused(req) if isinstance(req, Refusal) else hook(req, BdCli(timeout_seconds=2), PhaseFilesCli())
-    print(reply.to_json())
+    if isinstance(req, Refusal):
+        print(HookReply.refused(req).to_json())
+    elif isinstance(beads := CacheStore.for_phase(req.phase), Refusal):
+        print(HookReply.refused(beads).to_json())
+    else:
+        print(hook(req, beads, PhaseFilesCli()).to_json())

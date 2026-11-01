@@ -9,28 +9,30 @@ The Rust crate behind every name the lite hooks import. The Python surface is ex
 1. Every enum, value type, write spec, request/reply type and trait in `atm_bd_types.pyi`, in Rust, exposed through the abi3 wheel. The generated stub equals `design/lite-code/typings/atm_bd_types/__init__.pyi` apart from formatting.
 2. `ErrorId`: one variant per name in the stub. Each variant has a crate-const message template and fix template; `Refusal` construction is typed per variant (the stub's overloads).
 3. No profile names or literals anywhere in the crate (ANC-061). The profile is a string read from the phase file.
-4. The real adapters, each one external command per method:
-   - `BdCli.show`: `bd show <id> --json`; a missing bead is `BEAD_NOT_FOUND`.
-   - `BdCli.update(BeadPatch)`: one `bd update` with the patch's `--if-status`/`--if-assignee` guards. Exit 13 maps to `BEAD_RACED`; for `BeadPatch.record` it maps to `STACK_CLAIM_LOST`.
-   - `BdCli.create(NewBead)`: one `bd create --id <id>` carrying the labels, metadata, parent and `--deps blocks:<id>`. An existing id is `BEAD_EXISTS`.
-   - `BdCli.claim`: `bd update <id> --claim`, as orchestration's `sanity-stack-link` does. Held by another agent is `STACK_HELD`, naming the holder and claim time.
-   - `BdCli.release`: `bd update <id> --assignee '' --status open --if-assignee <holder>`.
-   - `GitCli`: `git rev-parse` and `git merge-base --is-ancestor` against `origin/*`, plus a clean-worktree check.
-   - `ProviderCli`: github runs `gh pr view <branch> --json number,url,baseRefName,headRefOid`; azure runs `az repos pr list --source-branch`. Never `gh pr list`.
+4. The real adapters. Beads go through beads-cache only, never `bd` (ANC-063: Rand, "we have found 20-30 second timeout is not enough ... that is why we designed bd cache which you forgot is a mandatory requirement"):
+   - `CacheStore.for_phase(phase)`: opens `bd_cache_rs.Cache(<repo root>, scopes=[phase])`. The bd-cache-rs 0.1.0 wheel is pinned to the published GitHub release asset `randlee/beads-cache` `prerelease/v0.1.0` (macOS arm64 and Linux x86_64 abi3 wheels; it is not on PyPI yet). A failure to open is `CACHE_UNAVAILABLE`.
+   - `CacheStore.show`: `cache.get`; a missing bead is `BEAD_NOT_FOUND`.
+   - `CacheStore.ready`: `cache.ready(phase)`, filtered by the stage label, in its order.
+   - `CacheStore.update(BeadPatch)`: one `cache.write` (op `close` or `update`) with the patch's status/assignee precondition and an idempotency key. `BD_CACHE.PRECONDITION` maps to `BEAD_RACED`, and for `BeadPatch.record` to `STACK_CLAIM_LOST`.
+   - `CacheStore.claim`: `cache.write` update assignee = holder, precondition assignee = "". If another agent holds it, the result is `STACK_HELD`, naming the holder.
+   - `CacheStore.release`: `cache.write` update assignee = "", precondition assignee = holder.
+   - `CacheStore.create`: **BLOCKED**. beads-cache has no `create` op (its ops are close, update and dep_add). It waits on Rand's decision (bo-12 T-CLOSE-07).
    - `AtmCli.assign`: `atm task assign` as the TaskAssign's actor (cron's path).
    - `PhaseFilesCli`: reads `.atm-bd/phase-<x>.toml`. Unreadable is `PHASE_UNREADABLE`; any other profile is `PROFILE_MISMATCH`.
-5. Every adapter takes a timeout. A timeout is `COMMAND_TIMEOUT` and any other failure is `COMMAND_FAILED`, each carrying the argv and stderr.
+   - `HookRequest.layer_block()`: the one fenced JSON block `{"layer": {branch, head, pr, base}}` in the close report. Missing or invalid is `LAYER_BLOCK_MISSING`.
+5. `AtmCli` takes a timeout: a timeout is `COMMAND_TIMEOUT` and any other failure is `COMMAND_FAILED`, each carrying the argv and stderr. No bd process is started anywhere.
 
 ## Acceptance
 - [ ] Pyright strict on `design/lite-code/` against the generated stub: 0 errors.
-- [ ] Each adapter method's argv is asserted exactly in a test that uses a recorded runner. No bd, dolt, git remote or gh is run.
-- [ ] `BeadPatch.record` produces ONE `bd update` that sets the layers metadata, `--assignee ''` and `--status open`, guarded by `--if-assignee <holder>`. Exit 13 maps to `STACK_CLAIM_LOST`.
-- [ ] `NewBead` produces ONE `bd create --id` carrying the metadata and the blocks edge. `NewBead.made` compares only parent, stage, assignee, meta.work, meta.stack_bead, meta.qa_bead, meta.reviewed and the blocks edge. A CLOSED fix that later gained other fields still matches; each mismatched field, including a missing blocks edge, fails.
+- [ ] Each `CacheStore` method is asserted exactly: its `cache.write` op, args, precondition and idempotency key, against a fake `bd_cache_rs` handle. No bd or dolt is run.
+- [ ] The grep for `bd ` subprocess calls and for `BdCli` in the crate, the stub and the lite scripts is empty (ANC-063).
+- [ ] `BeadPatch.record` is ONE `cache.write` update that sets the layers metadata and assignee "", with the precondition assignee = holder. A precondition failure maps to `STACK_CLAIM_LOST`.
 - [ ] `Stack.decode`: a missing `trunk` is `BEAD_FIELD_MISSING`; absent or empty layers are a new stack whose `top()` is the trunk.
 - [ ] `Stack.layer_for(branch)` returns the recorded layer, and `Stack.position(branch)` its index, 0 for the first.
-- [ ] `BeadStore.ready(phase, stage)` is one `bd ready` filtered by the phase label and stage label, in bd's order.
+- [ ] `BeadStore.ready(phase, stage)` is one `cache.ready(phase)` filtered by the stage label, in its order.
 - [ ] `BeadPatch.start(snapshot, base)` is ONE guarded update setting in_progress and `meta.work.base`.
 - [ ] `AtmCli.assign` is one `atm task assign <recipient> --task-id <id> --template <path>` run as the actor. A QA assign carries the review layer's branch, head and PR as vars.
+- [ ] `HookRequest.layer_block()`: a report with one valid block parses into `Layer`; no block, two blocks or a missing key each give `LAYER_BLOCK_MISSING`.
 - [ ] `Sha`: `str()` is the full 40 hex digits; `short()` appears only in titles.
 - [ ] The grep for `lite`, `orchestration` or `Full` used as a profile in the crate and the stub is empty (ANC-061).
 - [ ] atm-bd-types 0.2.0 is published to crates.io and PyPI.
@@ -85,14 +87,13 @@ class ErrorId(enum.Enum):
     BEAD_RACED = ...
     BEAD_EXISTS = ...
     STACK_HELD = ...
+    CACHE_UNAVAILABLE = ...
     STACK_CLAIM_LOST = ...
-    STACK_NOT_RECORDED = ...
     TASK_NOT_ASSIGNEE = ...
     ASSIGN_NOT_LEAD = ...
     CLOSE_REASON_EMPTY = ...
     CLOSE_REPORT_NOT_INLINE = ...
-    HEAD_NOT_PUSHED = ...
-    PR_NOT_FOUND = ...
+    LAYER_BLOCK_MISSING = ...
     STACK_NOT_STACKED = ...
     QA_VERDICT = ...
     QA_NOT_ON_STACK = ...
@@ -221,18 +222,6 @@ class Stack:
         r"""Appends `layer`, or replaces the layer of the same branch."""
 
 @typing.final
-class PrRef:
-    def __new__(cls, number: int, url: str, base: str, head: Sha) -> PrRef: ...
-    @property
-    def number(self) -> int: ...
-    @property
-    def url(self) -> str: ...
-    @property
-    def base(self) -> str: ...
-    @property
-    def head(self) -> Sha: ...
-
-@typing.final
 class QaPass:
     __match_args__ = ("sha",)
     def __new__(cls, sha: Sha) -> QaPass: ...
@@ -294,7 +283,7 @@ class PhaseFile:
 @typing.final
 class BeadPatch:
     r"""A change guarded by the snapshot it was decided on: the store applies it only if the bead's
-    status and assignee still equal the snapshot's (bd --if-status / --if-assignee), else BEAD_RACED."""
+    status and assignee still equal the snapshot's (cache precondition on status / assignee), else BEAD_RACED."""
     @staticmethod
     def start(snapshot: Bead, base: str) -> BeadPatch:
         r"""Status IN_PROGRESS and meta.work.base = `base`, guarded by the snapshot."""
@@ -306,10 +295,10 @@ class BeadPatch:
         ready to be assigned again, to any dev."""
     @staticmethod
     def close(snapshot: Bead, reason: str, *, reviewed: Sha | None = None) -> BeadPatch:
-        r"""Status CLOSED (+ the verdict sha) in one guarded bd update: of two racing closes one gets BEAD_RACED."""
+        r"""Status CLOSED (+ the verdict sha) in one guarded cache write: of two racing closes one gets BEAD_RACED."""
     @staticmethod
     def record(stack_bead: Bead, stack: Stack, holder: str) -> BeadPatch:
-        r"""Writes the stack's layers AND releases the claim (assignee '', status open) in one bd update guarded by
+        r"""Writes the stack's layers AND releases the claim (assignee '', status open) in one cache write guarded by
         --if-assignee <holder>: a released or reclaimed stack bead is STACK_CLAIM_LOST and nothing is written."""
 
 @typing.final
@@ -344,6 +333,8 @@ class HookRequest:
     def phase_config_path(self) -> str: ...
     def close_reason(self) -> str | Refusal: ...
     def close_report(self) -> str | Refusal: ...
+    def layer_block(self) -> Layer | Refusal:
+        r"""The one fenced JSON block {"layer": {branch, head, pr, base}} in the close report: LAYER_BLOCK_MISSING."""
     def qa_verdict(self) -> QaPass | QaFail | Refusal: ...
 
 @typing.final
@@ -374,13 +365,7 @@ class Refusal:
     @typing.overload
     def __new__(cls, id: typing.Literal[ErrorId.BEAD_CLOSED], *, bead: Bead, phase: PhaseFile) -> Refusal: ...
     @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.PR_NOT_FOUND], *, work: Work, top: str) -> Refusal: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.HEAD_NOT_PUSHED], *, work: Work, head: Sha) -> Refusal: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.STACK_NOT_STACKED], *, pr: PrRef, top: str) -> Refusal: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.STACK_NOT_RECORDED], *, bead: Bead, stack_bead: Bead) -> Refusal: ...
+    def __new__(cls, id: typing.Literal[ErrorId.STACK_NOT_STACKED], *, layer: Layer, top: str) -> Refusal: ...
     @typing.overload
     def __new__(cls, id: typing.Literal[ErrorId.QA_NOT_ON_STACK], *, reviewed: Sha, checked: str) -> Refusal: ...
     @typing.overload
@@ -413,27 +398,19 @@ class HookReply:
 # ---------- general traits (no profile, stage-routing or naming policy); Cli = real adapters ----------
 
 class BeadStore(typing.Protocol):
-    def show(self, bead_id: str) -> Bead | Refusal: ...
+    r"""Beads through beads-cache only (ANC-063): reads from the cache file, writes journaled with a precondition."""
+    def show(self, bead_id: str) -> Bead | Refusal:
+        r"""cache.get."""
     def ready(self, phase: str, stage: Stage) -> list[Bead] | Refusal:
-        r"""`bd ready` for the phase and stage, in bd's priority order."""
+        r"""cache.ready for the phase, filtered by stage, in its order."""
     def claim(self, bead_id: str, holder: str) -> Bead | Refusal:
-        r"""bd update --claim (as sanity-stack-link does): STACK_HELD naming the holder and claim time when another
-        agent holds it. Returns the snapshot."""
+        r"""cache.write update assignee=holder, precondition assignee="": STACK_HELD naming the holder."""
     def release(self, bead_id: str, holder: str) -> Refusal | None:
-        r"""bd update --assignee '' --status open --if-assignee <holder>: STACK_CLAIM_LOST when not held by `holder`."""
+        r"""cache.write update assignee="", precondition assignee=holder."""
     def create(self, new: NewBead, actor: str) -> Refusal | None:
-        r"""One bd create --id with metadata and the blocks edge (one transaction). BEAD_EXISTS when the id exists."""
-    def update(self, patch: BeadPatch, actor: str) -> Refusal | None: ...
-
-class Git(typing.Protocol):
-    def pushed_head(self, work: Work) -> Sha | Refusal:
-        r"""HEAD equal to origin/<branch>: HEAD_NOT_PUSHED."""
-    def remote_head(self, branch: str) -> Sha | Refusal: ...
-    def contains(self, work: Work, head: Sha, ancestor: Sha) -> bool | Refusal: ...
-
-class PullRequests(typing.Protocol):
-    def open_pr(self, branch: str, provider: ProviderConfig) -> PrRef | None | Refusal:
-        r"""github: one `gh pr view <branch>`; azure: `az repos pr list --source-branch`. Never `gh pr list`."""
+        r"""BLOCKED: beads-cache has no create op (ops: close, update, dep_add). See bo-12 T-CLOSE-06."""
+    def update(self, patch: BeadPatch, actor: str) -> Refusal | None:
+        r"""cache.write (close or update) with the patch's precondition and idempotency key."""
 
 class PhaseFiles(typing.Protocol):
     def load(self, path: str, profile: str) -> PhaseFile | Refusal:
@@ -444,72 +421,23 @@ class Tasks(typing.Protocol):
         r"""`atm task assign` as the assign's actor (cron's path; hooks return HookAction.assign instead)."""
 
 @typing.final
-class BdCli(BeadStore):
-    def __new__(cls, timeout_seconds: float) -> BdCli: ...
+class CacheStore(BeadStore):
+    r"""The bd_cache_rs adapter (beads-cache PyO3 wheel). Never starts a bd process on a hook path."""
+    @staticmethod
+    def for_phase(phase: str) -> CacheStore | Refusal:
+        r"""bd_cache_rs.Cache(<repo root>, scopes=[phase]); CACHE_UNAVAILABLE when it cannot open."""
     def show(self, bead_id: str) -> Bead | Refusal: ...
     def ready(self, phase: str, stage: Stage) -> list[Bead] | Refusal: ...
     def claim(self, bead_id: str, holder: str) -> Bead | Refusal: ...
     def release(self, bead_id: str, holder: str) -> Refusal | None: ...
-    def create(self, new: NewBead, actor: str) -> Refusal | None:
-        r"""One bd create --id with metadata and the blocks edge (one transaction). BEAD_EXISTS when the id exists."""
+    def create(self, new: NewBead, actor: str) -> Refusal | None: ...
     def update(self, patch: BeadPatch, actor: str) -> Refusal | None: ...
-
-@typing.final
-class GitCli(Git):
-    def __new__(cls, timeout_seconds: float) -> GitCli: ...
-    def pushed_head(self, work: Work) -> Sha | Refusal: ...
-    def remote_head(self, branch: str) -> Sha | Refusal: ...
-    def contains(self, work: Work, head: Sha, ancestor: Sha) -> bool | Refusal: ...
-
-@typing.final
-class ProviderCli(PullRequests):
-    def __new__(cls, timeout_seconds: float) -> ProviderCli: ...
-    def open_pr(self, branch: str, provider: ProviderConfig) -> PrRef | None | Refusal: ...
 
 @typing.final
 class PhaseFilesCli(PhaseFiles):
     def __new__(cls) -> PhaseFilesCli: ...
     def load(self, path: str, profile: str) -> PhaseFile | Refusal: ...
 
-
-# ---------- the dev's stack lease command (atm-bd-lite-stack.py) ----------
-
-@typing.final
-class Acquire:
-    @property
-    def bead(self) -> str: ...
-    def phase_config_path(self) -> str: ...
-
-@typing.final
-class Record:
-    @property
-    def bead(self) -> str: ...
-    def phase_config_path(self) -> str: ...
-
-@typing.final
-class Release:
-    @property
-    def bead(self) -> str: ...
-
-@typing.final
-class StackCommand:
-    @staticmethod
-    def parse(argv: list[str]) -> Acquire | Record | Release | Refusal:
-        r"""acquire --phase P --bead B | record --phase P --bead B | release --bead B."""
-
-@typing.final
-class StackReply:
-    r"""JSON on stdout: {outcome, top?, layer?, refusal?}; refusals carry ErrorId, message and fix."""
-    @staticmethod
-    def acquired(top: str, first: bool) -> StackReply:
-        r"""`first`: the stack is new, so rebase onto the trunk and open the PR against the trunk."""
-    @staticmethod
-    def recorded(result: Refusal | None, layer: Layer) -> StackReply: ...
-    @staticmethod
-    def released(result: Refusal | None) -> StackReply: ...
-    @staticmethod
-    def refused(refusal: Refusal) -> StackReply: ...
-    def to_json(self) -> str: ...
 
 @typing.final
 class AtmCli(Tasks):
@@ -535,4 +463,5 @@ class CronReply:
     @staticmethod
     def refused(refusal: Refusal) -> CronReply: ...
     def to_json(self) -> str: ...
+
 ```
