@@ -1602,8 +1602,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1624,6 +1624,12 @@
             "deterministic_check"
           ],
           "previous_statement": "atm-bd-lite must be its own skill in its own directory (skills/atm-bd-lite/) and must share no files with the atm-bd-orchestration skill."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -1695,8 +1701,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1716,6 +1722,12 @@
             "statement"
           ],
           "previous_statement": "atm-bd-orchestration skill files must not be modified, moved or deleted to make them use the shared code."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -1737,8 +1749,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1750,6 +1762,12 @@
           "at": "2026-11-01T18:34:15+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -1771,8 +1789,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1792,6 +1810,12 @@
             "statement"
           ],
           "previous_statement": "atm-bd console, cron, queues, show and snapshot must be the same command for every profile, and each must run the script with the same file name from the skill of the profile set in the phase file."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -1813,8 +1837,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1836,6 +1860,12 @@
             "deterministic_check"
           ],
           "previous_statement": "Each console data source (sanity-log, qa-log, pr-log and any later source) must be its own Rust trait in atm-bd-types, implemented in its own file, sharing no code with any other source except the shared types."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -1857,8 +1887,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1880,6 +1910,12 @@
             "deterministic_check"
           ],
           "previous_statement": "Every atm-bd-types trait must ship a .pyi stub generated from the trait, and every Python implementation of the trait must pass pyright strict against that stub."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -1941,8 +1977,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1954,6 +1990,12 @@
           "at": "2026-11-01T18:57:12+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -1975,8 +2017,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1988,6 +2030,12 @@
           "at": "2026-11-01T18:57:12+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2009,8 +2057,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2022,6 +2070,12 @@
           "at": "2026-11-01T18:57:12+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2043,8 +2097,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2064,6 +2118,12 @@
             "statement"
           ],
           "previous_statement": "No change made for atm-bd-lite may break atm-bd-orchestration: the atm-bd-orchestration tests pass with no test file edited."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2085,8 +2145,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2107,6 +2167,12 @@
             "summary"
           ],
           "previous_statement": "Code used by more than one profile must be placed in the shared location, not in a profile's skill directory."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2128,8 +2194,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2141,6 +2207,12 @@
           "at": "2026-11-01T19:01:25+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2162,8 +2234,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2175,6 +2247,12 @@
           "at": "2026-11-01T19:01:26+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2196,8 +2274,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2209,6 +2287,12 @@
           "at": "2026-11-01T19:01:26+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2230,8 +2314,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2243,6 +2327,12 @@
           "at": "2026-11-01T19:01:26+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2264,8 +2354,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2277,6 +2367,12 @@
           "at": "2026-11-01T19:04:42+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2298,8 +2394,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2311,6 +2407,12 @@
           "at": "2026-11-01T19:04:43+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },
@@ -2332,8 +2434,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2345,6 +2447,12 @@
           "at": "2026-11-01T19:04:43+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
         }
       ]
     },

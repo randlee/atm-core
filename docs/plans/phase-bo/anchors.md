@@ -33,26 +33,26 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-025 | locked | GitHub prompts use gh stack; gh stack view --json is the view | 2026-10-31 |
 | ANC-026 | locked | Lite hook and templates refuse a non-lite phase file | 2026-10-31 |
 | ANC-027 | locked | Cron ticks refuse the other profile's phase file | 2026-10-31 |
-| ANC-028 | proposed | atm-bd-lite is its own skill directory | 2026-11-01 |
+| ANC-028 | locked | atm-bd-lite is its own skill directory | 2026-11-01 |
 | ANC-029 | retired | Shared code is in the shared location | 2026-11-01 |
-| ANC-030 | proposed | atm-bd-orchestration is not changed to use shared code | 2026-11-01 |
-| ANC-031 | proposed | Profile hooks, templates and cron live in the profile's skill | 2026-11-01 |
-| ANC-032 | proposed | atm-bd commands call the profile's same-named script | 2026-11-01 |
-| ANC-033 | proposed | Each console data source is its own Rust trait | 2026-11-01 |
-| ANC-034 | proposed | Every trait ships a generated .pyi stub | 2026-11-01 |
+| ANC-030 | locked | atm-bd-orchestration is not changed to use shared code | 2026-11-01 |
+| ANC-031 | locked | Profile hooks, templates and cron live in the profile's skill | 2026-11-01 |
+| ANC-032 | locked | atm-bd commands call the profile's same-named script | 2026-11-01 |
+| ANC-033 | locked | Each console data source is its own Rust trait | 2026-11-01 |
+| ANC-034 | locked | Every trait ships a generated .pyi stub | 2026-11-01 |
 | ANC-035 | retired | atm-bd-lite shares no files with atm-bd-orchestration | 2026-11-01 |
-| ANC-036 | proposed | Shared code is newly written | 2026-11-01 |
-| ANC-037 | proposed | Console data sources share no code | 2026-11-01 |
-| ANC-038 | proposed | Python trait implementations pass pyright strict | 2026-11-01 |
-| ANC-039 | proposed | Lite work does not break atm-bd-orchestration | 2026-11-01 |
-| ANC-040 | proposed | Non-lite-specific code goes in the shared location | 2026-11-01 |
-| ANC-041 | proposed | Shared code is tested on full-profile inputs | 2026-11-01 |
-| ANC-042 | proposed | Shared code is tested on lite-profile inputs | 2026-11-01 |
-| ANC-043 | proposed | Shared code matches orchestration's output | 2026-11-01 |
-| ANC-044 | proposed | Shared code has no profile-specific logic | 2026-11-01 |
-| ANC-045 | proposed | Lite uses shared code in the sprint that adds it | 2026-11-01 |
-| ANC-046 | proposed | Shared module design lists orchestration requirements | 2026-11-01 |
-| ANC-047 | proposed | Shared interfaces support every listed orchestration behavior | 2026-11-01 |
+| ANC-036 | locked | Shared code is newly written | 2026-11-01 |
+| ANC-037 | locked | Console data sources share no code | 2026-11-01 |
+| ANC-038 | locked | Python trait implementations pass pyright strict | 2026-11-01 |
+| ANC-039 | locked | Lite work does not break atm-bd-orchestration | 2026-11-01 |
+| ANC-040 | locked | Non-lite-specific code goes in the shared location | 2026-11-01 |
+| ANC-041 | locked | Shared code is tested on full-profile inputs | 2026-11-01 |
+| ANC-042 | locked | Shared code is tested on lite-profile inputs | 2026-11-01 |
+| ANC-043 | locked | Shared code matches orchestration's output | 2026-11-01 |
+| ANC-044 | locked | Shared code has no profile-specific logic | 2026-11-01 |
+| ANC-045 | locked | Lite uses shared code in the sprint that adds it | 2026-11-01 |
+| ANC-046 | locked | Shared module design lists orchestration requirements | 2026-11-01 |
+| ANC-047 | locked | Shared interfaces support every listed orchestration behavior | 2026-11-01 |
 | ANC-048 | locked | Lite task.assign hook is its own file | 2026-11-01 |
 | ANC-049 | locked | Lite task.start hook is its own file | 2026-11-01 |
 | ANC-050 | locked | Lite task.close hook is its own file | 2026-11-01 |
@@ -559,7 +559,7 @@ Anchor: atm-bd-lite must be its own skill in the skills/atm-bd-lite/ directory.
 
 > Lite is separate.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
 
 Summary: atm-bd-lite is its own skill directory
 
@@ -587,7 +587,7 @@ Anchor: atm-bd-orchestration skill files must not be changed to use the shared c
 
 > atm-bd-orchestration doesn't change to use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
 
 Summary: atm-bd-orchestration is not changed to use shared code
 
@@ -601,7 +601,7 @@ Anchor: Each profile's task hooks, task-assignment templates and cron script mus
 
 > The profile-specific parts (the hooks, the templates and the cron script) live in each profile's own skill
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 2.
 
 Summary: Profile hooks, templates and cron live in the profile's skill
 
@@ -615,7 +615,7 @@ Anchor: Each atm-bd subcommand must run the script with the same file name from 
 
 > and the atm-bd commands just call the profile's scripts by the same name.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
 
 Summary: atm-bd commands call the profile's same-named script
 
@@ -629,7 +629,7 @@ Anchor: Each console data source (sanity-log, qa-log, pr-log and any later sourc
 
 > console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code. | a protocol can not be consumed by rust.  a trait can be consumed by both.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
 
 Summary: Each console data source is its own Rust trait
 
@@ -643,7 +643,7 @@ Anchor: Every atm-bd-types trait must ship a .pyi stub generated from the trait.
 
 > approved ` .pyi stub `
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
 
 Summary: Every trait ships a generated .pyi stub
 
@@ -671,7 +671,7 @@ Anchor: Code in the shared location must be newly written, not moved or copied o
 
 > The shared code is new code, placed in the shared location.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-029), 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-029), 2026-11-01. Status: locked. Version 2.
 
 Summary: Shared code is newly written
 
@@ -685,7 +685,7 @@ Anchor: Console data source implementations must share no code with each other a
 
 > console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-033), 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-033), 2026-11-01. Status: locked. Version 2.
 
 Summary: Console data sources share no code
 
@@ -699,7 +699,7 @@ Anchor: Every Python implementation of an atm-bd-types trait must pass pyright s
 
 > approved ` .pyi stub `
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-034), 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-034), 2026-11-01. Status: locked. Version 2.
 
 Summary: Python trait implementations pass pyright strict
 
@@ -713,7 +713,7 @@ Anchor: No change made for atm-bd-lite may break atm-bd-orchestration.
 
 > Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: locked. Version 3.
 
 Summary: Lite work does not break atm-bd-orchestration
 
@@ -727,7 +727,7 @@ Anchor: atm-bd-lite code that is not specific to the lite profile must be placed
 
 > Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: locked. Version 3.
 
 Summary: Non-lite-specific code goes in the shared location
 
@@ -741,7 +741,7 @@ Anchor: Every public function and trait implementation in the shared location mu
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 2.
 
 Summary: Shared code is tested on full-profile inputs
 
@@ -755,7 +755,7 @@ Anchor: Every public function and trait implementation in the shared location mu
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 2.
 
 Summary: Shared code is tested on lite-profile inputs
 
@@ -769,7 +769,7 @@ Anchor: Where atm-bd-orchestration already implements the same behavior, a test 
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 2.
 
 Summary: Shared code matches orchestration's output
 
@@ -783,7 +783,7 @@ Anchor: Code in the shared location must not branch on, or hard-code, either pro
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 2.
 
 Summary: Shared code has no profile-specific logic
 
@@ -797,7 +797,7 @@ Anchor: atm-bd-lite must call each shared-location module in the same sprint tha
 
 > I don't think you understand the concept of writing 'shared' modules without cutting over and using them immediately.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 2.
 
 Summary: Lite uses shared code in the sprint that adds it
 
@@ -811,7 +811,7 @@ Anchor: Each shared-location module's design must list the atm-bd-orchestration 
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 2.
 
 Summary: Shared module design lists orchestration requirements
 
@@ -825,7 +825,7 @@ Anchor: Each shared-location interface (Rust trait or .pyi stub) must support ev
 
 > If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 2.
 
 Summary: Shared interfaces support every listed orchestration behavior
 
