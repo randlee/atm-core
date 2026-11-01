@@ -25,7 +25,10 @@ Repo: atm-bd-orchestration. Branch `sprint/bo-12-task-close-hook`, stacked on bo
 - [ ] release by the owner: released. Release when not held: `STACK_CLAIM_LOST`.
 
 ## Acceptance: task.close (work beads)
-- [ ] REFUSED or CANCELLED: requires a reason (`CLOSE_REASON_EMPTY`); pass-through. COMPLETED: assignee check, inline report (`CLOSE_REPORT_NOT_INLINE`), stage (`BEAD_STAGE_MISSING`/`AMBIGUOUS`).
+- [ ] REFUSED or CANCELLED (Rand: the bead "should probably revert to open"), for both work and QA beads: an empty reason gives `CLOSE_REASON_EMPTY`.
+  - [ ] An OPEN or IN_PROGRESS bead owned by the caller gets ONE `BeadPatch.reopen` (open, unassigned). It is then re-assignable to another dev through task.assign and task.start.
+  - [ ] If the caller holds the stack claim, it is released first. A release returning `STACK_CLAIM_LOST` (no claim held) is ignored, and a release timeout is refused.
+  - [ ] A retry after the bead was given back, or after it was re-assigned to someone else, passes through with no write. CLOSED, BLOCKED and DEFERRED pass through. COMPLETED: assignee check, inline report (`CLOSE_REPORT_NOT_INLINE`), stage (`BEAD_STAGE_MISSING`/`AMBIGUOUS`).
 - [ ] No recorded layer: `STACK_NOT_RECORDED`. Remote head differs from the recorded head: `STACK_LAYER_MOVED`, no write.
 - [ ] Fresh close: one guarded `BeadPatch.close`. If two closes of the same bead are stepped by hand, one gets `BEAD_RACED` and its retry takes recovery.
 - [ ] Recovery (CLOSED bead) in each of these states, with no PR or tip checks:
@@ -198,6 +201,21 @@ def qa_verdict(req: HookRequest, phase: PhaseFile, bead: Bead, verdict: QaPass |
                     return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=fix))
 
 
+def give_back(req: HookRequest, bead: Bead, beads: BeadStore, reason: str) -> HookReply:
+    r"""A refused or cancelled task gives its bead back (Rand): open and unassigned, so the lead can assign it
+    to any dev, and the stack claim released if the refusing dev still holds it."""
+    if not bead.assigned_to(req.caller):  # already given back or re-assigned: nothing of the caller's to release
+        return HookReply.pass_through()
+    if not isinstance(stack_id := bead.stack_bead(), Refusal):
+        if (released := beads.release(stack_id, req.caller)) is not None and released.id != ErrorId.STACK_CLAIM_LOST:
+            return HookReply.refused(released)  # STACK_CLAIM_LOST: the caller held no claim, which is the normal case
+    match bead.status:
+        case Status.OPEN | Status.IN_PROGRESS:
+            return HookReply.from_result(beads.update(BeadPatch.reopen(bead, reason), actor=req.caller))
+        case Status.CLOSED | Status.BLOCKED | Status.DEFERRED:
+            return HookReply.pass_through()
+
+
 def hook(req: HookRequest, beads: BeadStore, git: Git, phases: PhaseFiles) -> HookReply:
     if not req.is_phase_task():
         return HookReply.not_applicable()
@@ -209,8 +227,9 @@ def hook(req: HookRequest, beads: BeadStore, git: Git, phases: PhaseFiles) -> Ho
         return HookReply.refused(bead)
     match outcome:
         case Outcome.REFUSED | Outcome.CANCELLED:
-            reason = req.close_reason()
-            return HookReply.refused(reason) if isinstance(reason, Refusal) else HookReply.pass_through()
+            if isinstance(reason := req.close_reason(), Refusal):
+                return HookReply.refused(reason)
+            return give_back(req, bead, beads, reason)
         case Outcome.COMPLETED:
             if not bead.assigned_to(req.caller):
                 return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))

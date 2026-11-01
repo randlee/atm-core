@@ -142,6 +142,21 @@ def qa_verdict(req: HookRequest, phase: PhaseFile, bead: Bead, verdict: QaPass |
                     return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=fix))
 
 
+def give_back(req: HookRequest, bead: Bead, beads: BeadStore, reason: str) -> HookReply:
+    r"""A refused or cancelled task gives its bead back (Rand): open and unassigned, so the lead can assign it
+    to any dev, and the stack claim released if the refusing dev still holds it."""
+    if not bead.assigned_to(req.caller):  # already given back or re-assigned: nothing of the caller's to release
+        return HookReply.pass_through()
+    if not isinstance(stack_id := bead.stack_bead(), Refusal):
+        if (released := beads.release(stack_id, req.caller)) is not None and released.id != ErrorId.STACK_CLAIM_LOST:
+            return HookReply.refused(released)  # STACK_CLAIM_LOST: the caller held no claim, which is the normal case
+    match bead.status:
+        case Status.OPEN | Status.IN_PROGRESS:
+            return HookReply.from_result(beads.update(BeadPatch.reopen(bead, reason), actor=req.caller))
+        case Status.CLOSED | Status.BLOCKED | Status.DEFERRED:
+            return HookReply.pass_through()
+
+
 def hook(req: HookRequest, beads: BeadStore, git: Git, phases: PhaseFiles) -> HookReply:
     if not req.is_phase_task():
         return HookReply.not_applicable()
@@ -153,8 +168,9 @@ def hook(req: HookRequest, beads: BeadStore, git: Git, phases: PhaseFiles) -> Ho
         return HookReply.refused(bead)
     match outcome:
         case Outcome.REFUSED | Outcome.CANCELLED:
-            reason = req.close_reason()
-            return HookReply.refused(reason) if isinstance(reason, Refusal) else HookReply.pass_through()
+            if isinstance(reason := req.close_reason(), Refusal):
+                return HookReply.refused(reason)
+            return give_back(req, bead, beads, reason)
         case Outcome.COMPLETED:
             if not bead.assigned_to(req.caller):
                 return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))

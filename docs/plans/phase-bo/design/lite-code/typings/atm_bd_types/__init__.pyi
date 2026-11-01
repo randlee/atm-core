@@ -256,6 +256,10 @@ class BeadPatch:
     @staticmethod
     def assign(snapshot: Bead, agent: str) -> BeadPatch: ...
     @staticmethod
+    def reopen(snapshot: Bead, reason: str) -> BeadPatch:
+        r"""Status OPEN, assignee '' (with `reason` as a note) in one update guarded by the snapshot: the bead is
+        ready to be assigned again, to any dev."""
+    @staticmethod
     def handoff(qa: Bead, agent: str, checked: str) -> BeadPatch:
         r"""Assigns the QA bead to `agent` and sets its `checked_bead` to the work bead whose layer QA reviews,
         in one update guarded by the QA snapshot. The lead directs QA to another layer by updating `checked_bead`."""
