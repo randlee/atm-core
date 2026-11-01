@@ -45,7 +45,11 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-037 | proposed | Console data sources share no code | 2026-11-01 |
 | ANC-038 | proposed | Python trait implementations pass pyright strict | 2026-11-01 |
 | ANC-039 | proposed | Lite work does not break atm-bd-orchestration | 2026-11-01 |
-| ANC-040 | proposed | Shared code is in the shared location | 2026-11-01 |
+| ANC-040 | proposed | Non-lite-specific code goes in the shared location | 2026-11-01 |
+| ANC-041 | proposed | Shared code is tested on full-profile inputs | 2026-11-01 |
+| ANC-042 | proposed | Shared code is tested on lite-profile inputs | 2026-11-01 |
+| ANC-043 | proposed | Shared code matches orchestration's output | 2026-11-01 |
+| ANC-044 | proposed | Shared code has no profile-specific logic | 2026-11-01 |
 
 ## ANC-001
 
@@ -709,14 +713,70 @@ Deterministic check to pair with the development gate: the atm-bd-orchestration 
 
 ## ANC-040
 
-Anchor: Code used by more than one profile must be placed in the shared location, not in a profile's skill directory.
+Anchor: atm-bd-lite code that is not specific to the lite profile must be placed in the shared location, not in skills/atm-bd-lite/.
 
 > Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: proposed. Version 2.
 
-Summary: Shared code is in the shared location
+Summary: Non-lite-specific code goes in the shared location
 
 Scope: adds code to the shared location, atm-bd-types or a profile skill
 
 Deterministic check to pair with the development gate: no module under a profile skill is imported by another profile's skill
+
+## ANC-041
+
+Anchor: Every public function and trait implementation in the shared location must have a test that runs it on full-profile inputs: a real full-profile phase file and bead data from a full phase.
+
+> How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Shared code is tested on full-profile inputs
+
+Scope: adds or changes code in the shared location or atm-bd-types
+
+Deterministic check to pair with the development gate: test inventory: every public item in the shared location is exercised by a test whose fixture is a full-profile phase file and full-phase bead data
+
+## ANC-042
+
+Anchor: Every public function and trait implementation in the shared location must have a test that runs it on lite-profile inputs.
+
+> How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Shared code is tested on lite-profile inputs
+
+Scope: adds or changes code in the shared location or atm-bd-types
+
+Deterministic check to pair with the development gate: test inventory: every public item in the shared location is exercised by a test whose fixture is a lite-profile phase file
+
+## ANC-043
+
+Anchor: Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same full-profile inputs.
+
+> How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Shared code matches orchestration's output
+
+Scope: adds or changes code in the shared location or atm-bd-types
+
+Deterministic check to pair with the development gate: each shared item with an orchestration counterpart has a comparison test that calls the unmodified orchestration code and the shared code on the same full-profile input and asserts equal output
+
+## ANC-044
+
+Anchor: Code in the shared location must not branch on, or hard-code, either profile.
+
+> How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: proposed. Version 1.
+
+Summary: Shared code has no profile-specific logic
+
+Scope: adds or changes code in the shared location or atm-bd-types
+
+Deterministic check to pair with the development gate: grep of the shared location for profile literals (lite, full, Profile.LITE, Profile.FULL) and branches on the profile is empty

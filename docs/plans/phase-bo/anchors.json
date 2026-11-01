@@ -2071,15 +2071,58 @@
       "id": "ANC-040",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Code used by more than one profile must be placed in the shared location, not in a profile's skill directory.",
+      "statement": "atm-bd-lite code that is not specific to the lite profile must be placed in the shared location, not in skills/atm-bd-lite/.",
       "quote": "Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.",
       "kind": "structural",
       "stated_by": "Rand",
       "stated_at": "2026-11-01",
       "context": "phase-bo replan session 2026-11-01 (fenix); Rand clarified \"Lite is separate\"; follow-up: \"shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today\"",
-      "summary": "Shared code is in the shared location",
+      "summary": "Non-lite-specific code goes in the shared location",
       "scope": "adds code to the shared location, atm-bd-types or a profile skill",
       "deterministic_check": "no module under a profile skill is imported by another profile's skill",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:59:50+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:01:26+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary"
+          ],
+          "previous_statement": "Code used by more than one profile must be placed in the shared location, not in a profile's skill directory."
+        }
+      ]
+    },
+    {
+      "id": "ANC-041",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every public function and trait implementation in the shared location must have a test that runs it on full-profile inputs: a real full-profile phase file and bead data from a full phase.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+      "summary": "Shared code is tested on full-profile inputs",
+      "scope": "adds or changes code in the shared location or atm-bd-types",
+      "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a full-profile phase file and full-phase bead data",
       "fixtures": {
         "pass": [],
         "fail": []
@@ -2095,7 +2138,109 @@
       },
       "history": [
         {
-          "at": "2026-11-01T18:59:50+00:00",
+          "at": "2026-11-01T19:01:25+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-042",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every public function and trait implementation in the shared location must have a test that runs it on lite-profile inputs.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+      "summary": "Shared code is tested on lite-profile inputs",
+      "scope": "adds or changes code in the shared location or atm-bd-types",
+      "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a lite-profile phase file",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:01:26+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-043",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same full-profile inputs.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+      "summary": "Shared code matches orchestration's output",
+      "scope": "adds or changes code in the shared location or atm-bd-types",
+      "deterministic_check": "each shared item with an orchestration counterpart has a comparison test that calls the unmodified orchestration code and the shared code on the same full-profile input and asserts equal output",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:01:26+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-044",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Code in the shared location must not branch on, or hard-code, either profile.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+      "summary": "Shared code has no profile-specific logic",
+      "scope": "adds or changes code in the shared location or atm-bd-types",
+      "deterministic_check": "grep of the shared location for profile literals (lite, full, Profile.LITE, Profile.FULL) and branches on the profile is empty",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:01:26+00:00",
           "event": "created",
           "status": "proposed"
         }
