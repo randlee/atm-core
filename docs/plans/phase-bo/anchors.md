@@ -67,6 +67,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-059 | locked | Lite has no repair or backfill scripts | 2026-11-01 |
 | ANC-060 | locked | Lite never calls wrapper-blocked gh commands | 2026-11-01 |
 | ANC-061 | locked | No profile names hard-coded in atm-bd-types | 2026-11-01 |
+| ANC-062 | locked | No dicts or Any in lite code; use atm-bd-types | 2026-11-01 |
 
 ## ANC-001
 
@@ -1143,3 +1144,21 @@ Deterministic check to pair with the development gate: grep of crates/atm-bd-typ
 Fixtures:
 - pass: crates/atm-bd-types/src/lib.rs has `pub struct ProfileName(String)` parsed from the phase file; grep for "lite" and "orchestration" in the crate is empty.
 - fail: crates/atm-bd-types/src/lib.rs has `pub enum Profile { Orchestration, Lite }`.
+
+## ANC-062
+
+Anchor: atm-bd-lite code must not pass or hold hook input, bead data, phase-file data or replies as dict, Any or untyped JSON; it uses the atm-bd-types types and traits.
+
+> why are we passing a dictionary into the task-start hook call. that is red-flag #1 | a dictionary is a great way to get around pyright and using rust traits/types we defined in crate
+
+Said by Rand, phase-bo replan 2026-11-01 (fenix); first hook drafts took dict[str, Any] envelopes, 2026-11-01. Status: locked. Version 1.
+
+Summary: No dicts or Any in lite code; use atm-bd-types
+
+Scope: adds or changes atm-bd-lite code
+
+Deterministic check to pair with the development gate: grep of skills/atm-bd-lite for 'dict[', 'Any', 'json.loads' outside atm-bd-types parsing is empty; pyright strict reports no reportUnknown* diagnostics
+
+Fixtures:
+- pass: def hook(req: HookRequest) -> HookReply: ... bead = Bead.show(req.task_id)
+- fail: def hook(env: dict[str, Any]) -> dict[str, str]: task = env["request"]["task_id"]
