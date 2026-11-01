@@ -3654,14 +3654,14 @@
       "deterministic_check": "atm-bd-lite-gate.py (ast): per hook file in skills/atm-bd-lite/scripts/atm-bd-task-*.py, count of beads.update(/beads.create(/beads.claim(/beads.release( call sites <= 1 and create/claim/release count == 0",
       "fixtures": {
         "pass": [
-          "The lite close hook calls beads.update once, closing the bead with the layer evidence; it has no beads.create, beads.claim or beads.release call."
+          "The lite close hook has exactly one beads-cache write: one beads.update call that closes the work bead. The file has no beads.create, beads.claim or beads.release call."
         ],
         "fail": [
           "The lite close hook calls beads.update twice: first to record the layer on the stack bead, then to close the work bead."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -3687,6 +3687,13 @@
           "event": "status",
           "status": "proposed",
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-01T23:58:28+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -3818,11 +3825,11 @@
           "The lite dev template has one fenced bash block: bdc lock the stack bead, git rebase onto the top, git push, bdc record the layer and release; the QA template has one fenced block that runs bdc pour per finding."
         ],
         "fail": [
-          "skills/atm-bd-lite/scripts/atm-bd-lite-stack.py takes the stack lock, rebases, pushes and records the layer for the dev."
+          "The dev template has no fenced stack block. Instead skills/atm-bd-lite/scripts/atm-bd-lite-stack.py, a Python file, runs bdc lock, git rebase, git push and bdc record for the dev."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -3848,6 +3855,13 @@
           "event": "status",
           "status": "proposed",
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-01T23:58:29+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
