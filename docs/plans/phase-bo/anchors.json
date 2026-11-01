@@ -1583,6 +1583,244 @@
           ]
         }
       ]
+    },
+    {
+      "id": "ANC-028",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite must be its own skill in its own directory (skills/atm-bd-lite/) and must share no files with the atm-bd-orchestration skill.",
+      "quote": "Lite is separate.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "atm-bd-lite is its own skill directory",
+      "scope": "adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestration/",
+      "deterministic_check": "git diff --name-only shows no path under skills/atm-bd-lite/ that is a symlink to, or imported from, skills/atm-bd-orchestration/; grep of skills/atm-bd-lite for atm-bd-orchestration paths is empty",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:14+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-029",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Code used by more than one profile must be newly written for that purpose and placed in the shared location; it must not be code moved or extracted out of atm-bd-orchestration.",
+      "quote": "The shared code is new code, placed in the shared location.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "Shared code is new code in the shared location",
+      "scope": "adds code to the shared location or to atm-bd-types",
+      "deterministic_check": "git log --follow on every shared-location file shows no rename or copy from a skills/atm-bd-orchestration/ path",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:14+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-030",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-orchestration skill files must not be modified, moved or deleted to make them use the shared code.",
+      "quote": "atm-bd-orchestration doesn't change to use it.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "atm-bd-orchestration is not changed to use shared code",
+      "scope": "touches any file under skills/atm-bd-orchestration/",
+      "deterministic_check": "git diff --name-only <phase base>..<phase top> -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/ is empty",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-031",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each profile's task hooks, task-assignment templates and cron script must be inside that profile's own skill directory.",
+      "quote": "The profile-specific parts (the hooks, the templates and the cron script) live in each profile's own skill",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "Profile hooks, templates and cron live in the profile's skill",
+      "scope": "adds or moves a task hook, a task-assignment template or a cron script",
+      "deterministic_check": "find shows every lite hook, template and cron script under skills/atm-bd-lite/; none in the shared location",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-032",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd console, cron, queues, show and snapshot must be the same command for every profile, and each must run the script with the same file name from the skill of the profile set in the phase file.",
+      "quote": "and the atm-bd commands just call the profile's scripts by the same name.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "atm-bd commands call the profile's same-named script",
+      "scope": "adds or changes how an atm-bd subcommand selects or calls profile code",
+      "deterministic_check": "a test runs each subcommand on a lite and a full phase file and asserts the called script path is <profile skill>/scripts/<same file name>",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-033",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each console data source (sanity-log, qa-log, pr-log and any later source) must be its own Rust trait in atm-bd-types, implemented in its own file, sharing no code with any other source except the shared types.",
+      "quote": "console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code. | a protocol can not be consumed by rust.  a trait can be consumed by both.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "Each console data source is its own independent Rust trait",
+      "scope": "adds or changes an atm-bd console data source",
+      "deterministic_check": "each source file imports no other source module; one trait per source in atm-bd-types; each source has its own fixture-input test",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-034",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every atm-bd-types trait must ship a .pyi stub generated from the trait, and every Python implementation of the trait must pass pyright strict against that stub.",
+      "quote": "approved ` .pyi stub `",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "Every trait ships a generated .pyi stub checked by pyright",
+      "scope": "adds or changes an atm-bd-types trait or a Python implementation of one",
+      "deterministic_check": "regenerating the stubs produces no diff, and pyright --strict on the Python implementations passes",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
     }
   ]
 }
