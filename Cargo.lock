@@ -57,7 +57,7 @@ dependencies = [
  "interprocess",
  "libc",
  "parking_lot",
- "sc-lint-attributes 0.8.0",
+ "sc-lint-attributes 0.8.3",
  "semver",
  "serde",
  "serde_json",
@@ -2375,13 +2375,13 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-attributes"
-version = "0.8.0"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d5f14a8255d64edb629cd09440f8d7808938f8a10f5a0192f0c35d166a89bb3"
+checksum = "6e9ae3bfa54d0b977d9fffb9b9913daab1cd13d15c2c7caf424e7760bf521ae1"
 dependencies = [
  "proc-macro2",
  "quote",
- "sc-lint-directives 0.8.0",
+ "sc-lint-directives 0.8.3",
  "syn 2.0.119",
 ]
 
@@ -2396,9 +2396,9 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-directives"
-version = "0.8.0"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db07782696a5de983279df5f635489a00c7b681b57d5812fad05e82da6dc9fa8"
+checksum = "13bb66717dcc2c2ba0eec0bc38b74b604f2cdee94abaa33e6bb69893d23565f6"
 dependencies = [
  "syn 2.0.119",
 ]
