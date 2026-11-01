@@ -34,16 +34,18 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-026 | locked | Lite hook and templates refuse a non-lite phase file | 2026-10-31 |
 | ANC-027 | locked | Cron ticks refuse the other profile's phase file | 2026-10-31 |
 | ANC-028 | proposed | atm-bd-lite is its own skill directory | 2026-11-01 |
-| ANC-029 | proposed | Shared code is in the shared location | 2026-11-01 |
+| ANC-029 | retired | Shared code is in the shared location | 2026-11-01 |
 | ANC-030 | proposed | atm-bd-orchestration is not changed to use shared code | 2026-11-01 |
 | ANC-031 | proposed | Profile hooks, templates and cron live in the profile's skill | 2026-11-01 |
 | ANC-032 | proposed | atm-bd commands call the profile's same-named script | 2026-11-01 |
 | ANC-033 | proposed | Each console data source is its own Rust trait | 2026-11-01 |
 | ANC-034 | proposed | Every trait ships a generated .pyi stub | 2026-11-01 |
-| ANC-035 | proposed | atm-bd-lite shares no files with atm-bd-orchestration | 2026-11-01 |
+| ANC-035 | retired | atm-bd-lite shares no files with atm-bd-orchestration | 2026-11-01 |
 | ANC-036 | proposed | Shared code is newly written | 2026-11-01 |
 | ANC-037 | proposed | Console data sources share no code | 2026-11-01 |
 | ANC-038 | proposed | Python trait implementations pass pyright strict | 2026-11-01 |
+| ANC-039 | proposed | Lite work does not break atm-bd-orchestration | 2026-11-01 |
+| ANC-040 | proposed | Shared code is in the shared location | 2026-11-01 |
 
 ## ANC-001
 
@@ -557,7 +559,7 @@ Anchor: Code used by more than one profile must be placed in the shared location
 
 > The shared code is new code, placed in the shared location.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: retired. Version 3.
 
 Summary: Shared code is in the shared location
 
@@ -641,7 +643,7 @@ Anchor: atm-bd-lite must share no files with the atm-bd-orchestration skill.
 
 > Lite is separate.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-028), 2026-11-01. Status: proposed. Version 1.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-028), 2026-11-01. Status: retired. Version 2.
 
 Summary: atm-bd-lite shares no files with atm-bd-orchestration
 
@@ -690,3 +692,31 @@ Summary: Python trait implementations pass pyright strict
 Scope: adds or changes a Python implementation of an atm-bd-types trait
 
 Deterministic check to pair with the development gate: pyright --strict on the Python implementations passes
+
+## ANC-039
+
+Anchor: No change made for atm-bd-lite may break atm-bd-orchestration.
+
+> Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: proposed. Version 2.
+
+Summary: Lite work does not break atm-bd-orchestration
+
+Scope: touches any file under skills/atm-bd-orchestration/, atm-bd-types or the shared location
+
+Deterministic check to pair with the development gate: the atm-bd-orchestration test suite passes at the phase top, and git diff <phase base>..<phase top> shows no atm-bd-orchestration test file changed
+
+## ANC-040
+
+Anchor: Code used by more than one profile must be placed in the shared location, not in a profile's skill directory.
+
+> Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: proposed. Version 1.
+
+Summary: Shared code is in the shared location
+
+Scope: adds code to the shared location, atm-bd-types or a profile skill
+
+Deterministic check to pair with the development gate: no module under a profile skill is imported by another profile's skill

@@ -1645,8 +1645,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 2,
-      "status": "proposed",
+      "version": 3,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1668,6 +1668,12 @@
             "deterministic_check"
           ],
           "previous_statement": "Code used by more than one profile must be newly written for that purpose and placed in the shared location; it must not be code moved or extracted out of atm-bd-orchestration."
+        },
+        {
+          "at": "2026-11-01T18:59:58+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-040",
+          "reason": "same requirement, now carried by Rand's explicit quote 'lite code is divided into lite specific and shared code'"
         }
       ]
     },
@@ -1895,8 +1901,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1908,6 +1914,12 @@
           "at": "2026-11-01T18:57:11+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T18:59:58+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-039",
+          "reason": "Rand clarified 'Lite is separate' means no breaking changes to orchestration, not 'shares no files'"
         }
       ]
     },
@@ -2008,6 +2020,82 @@
       "history": [
         {
           "at": "2026-11-01T18:57:12+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-039",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "No change made for atm-bd-lite may break atm-bd-orchestration.",
+      "quote": "Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand clarified \"Lite is separate\"; follow-up: \"shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today\"",
+      "summary": "Lite work does not break atm-bd-orchestration",
+      "scope": "touches any file under skills/atm-bd-orchestration/, atm-bd-types or the shared location",
+      "deterministic_check": "the atm-bd-orchestration test suite passes at the phase top, and git diff <phase base>..<phase top> shows no atm-bd-orchestration test file changed",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:59:50+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:00:06+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "No change made for atm-bd-lite may break atm-bd-orchestration: the atm-bd-orchestration tests pass with no test file edited."
+        }
+      ]
+    },
+    {
+      "id": "ANC-040",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Code used by more than one profile must be placed in the shared location, not in a profile's skill directory.",
+      "quote": "Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand clarified \"Lite is separate\"; follow-up: \"shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today\"",
+      "summary": "Shared code is in the shared location",
+      "scope": "adds code to the shared location, atm-bd-types or a profile skill",
+      "deterministic_check": "no module under a profile skill is imported by another profile's skill",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:59:50+00:00",
           "event": "created",
           "status": "proposed"
         }
