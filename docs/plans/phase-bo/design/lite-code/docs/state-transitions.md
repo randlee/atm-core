@@ -184,7 +184,7 @@ The target layer is the layer recorded by the QA bead's closed dev or fix bead, 
 | T-CLOSE-04 | dev, fix | block base = stack top | claim; record layer + release; close bead; assign ready QA beads | closes |
 | T-CLOSE-05 | QA | verdict sha is not the target head | none | stays open: `QA_NOT_ON_STACK` |
 | T-CLOSE-06 | QA | PASS | close QA, reviewed = sha | closes |
-| T-CLOSE-07 | QA | FAIL | **BLOCKED**: needs a fix bead, and beads-cache has no create op | — |
+| T-CLOSE-07 | QA | FAIL | **BLOCKED**: needs a fix bead, and beads-cache has no create op (randlee/beads-cache#104) | — |
 
 ### Errors
 

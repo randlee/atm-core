@@ -16,7 +16,7 @@ The Rust crate behind every name the lite hooks import. The Python surface is ex
    - `CacheStore.update(BeadPatch)`: one `cache.write` (op `close` or `update`) with the patch's status/assignee precondition and an idempotency key. `BD_CACHE.PRECONDITION` maps to `BEAD_RACED`, and for `BeadPatch.record` to `STACK_CLAIM_LOST`.
    - `CacheStore.claim`: `cache.write` update assignee = holder, precondition assignee = "". If another agent holds it, the result is `STACK_HELD`, naming the holder.
    - `CacheStore.release`: `cache.write` update assignee = "", precondition assignee = holder.
-   - `CacheStore.create`: **BLOCKED**. beads-cache has no `create` op (its ops are close, update and dep_add). It waits on Rand's decision (bo-12 T-CLOSE-07).
+   - `CacheStore.create`: **BLOCKED**. beads-cache has no `create` op (randlee/beads-cache#104) (its ops are close, update and dep_add). It waits on Rand's decision (bo-12 T-CLOSE-07).
    - `AtmCli.assign`: `atm task assign` as the TaskAssign's actor (cron's path).
    - `PhaseFilesCli`: reads `.atm-bd/phase-<x>.toml`. Unreadable is `PHASE_UNREADABLE`; any other profile is `PROFILE_MISMATCH`.
    - `HookRequest.layer_block()`: the one fenced JSON block `{"layer": {branch, head, pr, base}}` in the close report. Missing or invalid is `LAYER_BLOCK_MISSING`.
@@ -408,7 +408,7 @@ class BeadStore(typing.Protocol):
     def release(self, bead_id: str, holder: str) -> Refusal | None:
         r"""cache.write update assignee="", precondition assignee=holder."""
     def create(self, new: NewBead, actor: str) -> Refusal | None:
-        r"""BLOCKED: beads-cache has no create op (ops: close, update, dep_add). See bo-12 T-CLOSE-06."""
+        r"""BLOCKED: beads-cache has no create op (randlee/beads-cache#104) (ops: close, update, dep_add). See bo-12 T-CLOSE-06."""
     def update(self, patch: BeadPatch, actor: str) -> Refusal | None:
         r"""cache.write (close or update) with the patch's precondition and idempotency key."""
 

@@ -87,7 +87,7 @@ def qa_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -
         case QaPass():  # T-CLOSE-06
             return HookReply.from_result(
                 beads.update(BeadPatch.close(bead, f"PASS at {verdict.sha}", reviewed=verdict.sha), actor=req.caller))
-        case QaFail(report=report):  # T-CLOSE-07 (BLOCKED: beads-cache has no create op)
+        case QaFail(report=report):  # T-CLOSE-07 (BLOCKED: beads-cache has no create op (randlee/beads-cache#104))
             if isinstance(work := checked.work(), Refusal):
                 return HookReply.refused(work)
             if isinstance(stack_id := bead.stack_bead(), Refusal):

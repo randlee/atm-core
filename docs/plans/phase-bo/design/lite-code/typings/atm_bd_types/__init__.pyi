@@ -364,7 +364,7 @@ class BeadStore(typing.Protocol):
     def release(self, bead_id: str, holder: str) -> Refusal | None:
         r"""cache.write update assignee="", precondition assignee=holder."""
     def create(self, new: NewBead, actor: str) -> Refusal | None:
-        r"""BLOCKED: beads-cache has no create op (ops: close, update, dep_add). See bo-12 T-CLOSE-06."""
+        r"""BLOCKED: beads-cache has no create op (randlee/beads-cache#104) (ops: close, update, dep_add). See bo-12 T-CLOSE-06."""
     def update(self, patch: BeadPatch, actor: str) -> Refusal | None:
         r"""cache.write (close or update) with the patch's precondition and idempotency key."""
 

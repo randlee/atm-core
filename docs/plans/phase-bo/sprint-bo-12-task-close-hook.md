@@ -5,7 +5,7 @@ Repo: atm-bd-orchestration. Branch `sprint/bo-12-task-close-hook`, stacked on bo
 ## Goal
 - **Dev workflow** (Rand): rebase onto the stack top (the trunk on a new stack), push, open the PR, then `atm task close` with the report ending in one fenced JSON layer block (Rand: "that should be fenced json"). The close hook claims the stack bead, checks the block's base is the top, records the layer and releases, in cache writes only (ANC-063).
 - **QA** (Rand): QA runs on a stacked layer, and layers stacked later are ignored. The lead may send QA to a higher layer by updating the QA bead's existing `checked_bead`.
-- A FAIL verdict files one fix bead that carries the whole report and dispatches it. **BLOCKED:** beads-cache has no `create` op, and a closed ATM task is terminal, so the dev bead cannot be reused. Needs Rand's decision (beads-cache `create` op upstream, or another shape).
+- A FAIL verdict files one fix bead that carries the whole report and dispatches it. **BLOCKED:** beads-cache has no `create` op (randlee/beads-cache#104), and a closed ATM task is terminal, so the dev bead cannot be reused. Needs Rand's decision (beads-cache `create` op upstream, or another shape).
 
 ## Install layout (Rand)
 - Lite scripts install to `.atm-bd/atm-bd-lite/scripts/`: the three task hooks and `atm-bd-lite-cron.py`.
@@ -124,7 +124,7 @@ def qa_close(req: HookRequest, phase: PhaseFile, bead: Bead, beads: BeadStore) -
         case QaPass():  # T-CLOSE-06
             return HookReply.from_result(
                 beads.update(BeadPatch.close(bead, f"PASS at {verdict.sha}", reviewed=verdict.sha), actor=req.caller))
-        case QaFail(report=report):  # T-CLOSE-07 (BLOCKED: beads-cache has no create op)
+        case QaFail(report=report):  # T-CLOSE-07 (BLOCKED: beads-cache has no create op (randlee/beads-cache#104))
             if isinstance(work := checked.work(), Refusal):
                 return HookReply.refused(work)
             if isinstance(stack_id := bead.stack_bead(), Refusal):
