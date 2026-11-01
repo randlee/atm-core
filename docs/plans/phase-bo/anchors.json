@@ -2366,8 +2366,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2379,6 +2379,12 @@
           "at": "2026-11-01T19:13:44+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
         }
       ]
     },
@@ -2400,8 +2406,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2413,6 +2419,12 @@
           "at": "2026-11-01T19:13:44+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
         }
       ]
     },
@@ -2434,8 +2446,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2447,6 +2459,12 @@
           "at": "2026-11-01T19:13:44+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
         }
       ]
     },
@@ -2468,8 +2486,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2481,6 +2499,12 @@
           "at": "2026-11-01T19:13:44+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
         }
       ]
     },
@@ -2502,8 +2526,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2515,6 +2539,12 @@
           "at": "2026-11-01T19:13:44+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
         }
       ]
     },
@@ -2536,8 +2566,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2549,6 +2579,12 @@
           "at": "2026-11-01T19:13:44+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
         }
       ]
     },
@@ -2570,8 +2606,8 @@
         "fail": []
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -2583,6 +2619,12 @@
           "at": "2026-11-01T19:13:44+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
         }
       ]
     }
