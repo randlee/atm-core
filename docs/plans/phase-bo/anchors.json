@@ -540,6 +540,19 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T00:00:17+00:00",
+          "event": "excluded",
+          "item": "atm-bo-2",
+          "reason": "bo-2 only declares the StackGateResult type and the StackGate Protocol; the PR-base-versus-stack-top comparison is implemented and judged in bo-4, which satisfies ANC-009.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bo-2",
+          "reason": "bo-2 only declares the StackGateResult type and the StackGate Protocol; the PR-base-versus-stack-top comparison is implemented and judged in bo-4, which satisfies ANC-009."
         }
       ]
     },
@@ -867,6 +880,19 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T00:00:17+00:00",
+          "event": "excluded",
+          "item": "atm-bo-6",
+          "reason": "bo-6 changes read-only views and the console refusal; single-agent runnability of the lite loop is delivered by bo-5 and proved live by bo-7, both satisfying ANC-015.",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bo-6",
+          "reason": "bo-6 changes read-only views and the console refusal; single-agent runnability of the lite loop is delivered by bo-5 and proved live by bo-7, both satisfying ANC-015."
         }
       ]
     },

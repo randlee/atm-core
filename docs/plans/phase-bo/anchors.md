@@ -190,6 +190,9 @@ Scope: adds or changes the stack gate or stack linking
 
 Deterministic check to pair with the development gate: stack_gate.py calls git merge-base and reads the PR base ref and no other stack source
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bo-2`: bo-2 only declares the StackGateResult type and the StackGate Protocol; the PR-base-versus-stack-top comparison is implemented and judged in bo-4, which satisfies ANC-009.
+
 Fixtures:
 - pass: The stack check compares the PR base ref with the stack top branch and reads no other stack record; stack_gate.py makes no gh or API call (test_stack_gate_git_only, PR diff of stack_gate.py).
 - fail: The stack check queries the GitHub stacks API for the stack's top PR.
@@ -297,6 +300,9 @@ Summary: Lite runs with one agent
 Scope: adds or changes the lite skill, lite formulas or lite templates
 
 Deterministic check to pair with the development gate: the bo-7 live lite phase log shows one ATM identity performing dispatch, dev, QA and landing
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bo-6`: bo-6 changes read-only views and the console refusal; single-agent runnability of the lite loop is delivered by bo-5 and proved live by bo-7, both satisfying ANC-015.
 
 Fixtures:
 - pass: The live lite phase log in bo-7 shows one ATM identity performing dispatch, dev, QA and landing; the lite formula pours only dev and qa beads (atm-bd queues output attached).
