@@ -26,7 +26,7 @@
 
 ### 0.1 Files
 
-| hook | file (installed under `.claude/skills/atm-bd-lite/scripts/`) | anchor |
+| hook | file (installed under `.atm-bd/atm-bd-lite/scripts/`) | anchor |
 | --- | --- | --- |
 | task.assign | `atm-bd-task-assign-hook.py` | ANC-048 |
 | task.start | `atm-bd-task-start-hook.py` | ANC-049 |
