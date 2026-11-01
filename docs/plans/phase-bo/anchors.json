@@ -3662,7 +3662,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3681,6 +3681,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
     },
@@ -3707,7 +3713,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3726,6 +3732,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
     },
@@ -3741,7 +3753,7 @@
       "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
       "summary": "no subprocess in a hook",
       "scope": "any lite hook file",
-      "deterministic_check": "grep -nE 'subprocess|BdCli|GitCli|AtmCli|gh |bd ' skills/atm-bd-lite/scripts/atm-bd-task-*.py is empty (run by atm-bd-lite-gate.py)",
+      "deterministic_check": "atm-bd-lite-gate.py (ast) on skills/atm-bd-lite/scripts/atm-bd-task-*.py: no import of subprocess; no reference to BdCli, GitCli or AtmCli; no call to os.system/os.popen/os.exec*/os.spawn*; no call whose first argument is a list or string starting with gh, bd or git",
       "fixtures": {
         "pass": [
           "The three lite hooks import only json, sys, atm_bd_types and bd_cache_rs; grep for subprocess, BdCli, GitCli, AtmCli, gh and bd in them is empty."
@@ -3752,7 +3764,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3771,6 +3783,20 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check"
+          ],
+          "reason": "Rand: ANC-066 is an ast check on imports/calls, not a regex over docstrings"
         }
       ]
     },
@@ -3797,7 +3823,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3816,6 +3842,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
     },
@@ -3842,7 +3874,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3861,6 +3893,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
     },
@@ -3887,7 +3925,7 @@
       },
       "question_overrides": {},
       "version": 3,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3913,6 +3951,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
     },
@@ -3939,7 +3983,7 @@
       },
       "question_overrides": {},
       "version": 4,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3972,6 +4016,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
     },
@@ -3998,7 +4048,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4017,6 +4067,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
     },
@@ -4043,7 +4099,7 @@
       },
       "question_overrides": {},
       "version": 3,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4069,6 +4125,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
     },
@@ -4095,7 +4157,7 @@
       },
       "question_overrides": {},
       "version": 3,
-      "status": "locked",
+      "status": "proposed",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4121,6 +4183,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
     }

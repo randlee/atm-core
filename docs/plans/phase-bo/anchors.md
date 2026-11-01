@@ -69,16 +69,16 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-061 | locked | No profile names hard-coded in atm-bd-types | 2026-11-01 |
 | ANC-062 | locked | No dicts or Any in lite code; use atm-bd-types | 2026-11-01 |
 | ANC-063 | locked | lite beads access only via beads-cache | 2026-11-01 |
-| ANC-064 | locked | one beads-cache write per hook | 2026-11-01 |
-| ANC-065 | locked | hooks only read the ledger | 2026-11-01 |
-| ANC-066 | locked | no subprocess in a hook | 2026-11-01 |
-| ANC-067 | locked | stack and pour are template blocks | 2026-11-01 |
-| ANC-068 | locked | stub carries only used names | 2026-11-01 |
-| ANC-069 | locked | stack bead is the atomic ledger | 2026-11-01 |
-| ANC-070 | locked | hook file <= 100 lines | 2026-11-01 |
-| ANC-071 | locked | only Rand commits the spec | 2026-11-01 |
-| ANC-072 | locked | review findings bind to the spec | 2026-11-01 |
-| ANC-073 | locked | anchor checks are mechanical | 2026-11-01 |
+| ANC-064 | proposed | one beads-cache write per hook | 2026-11-01 |
+| ANC-065 | proposed | hooks only read the ledger | 2026-11-01 |
+| ANC-066 | proposed | no subprocess in a hook | 2026-11-01 |
+| ANC-067 | proposed | stack and pour are template blocks | 2026-11-01 |
+| ANC-068 | proposed | stub carries only used names | 2026-11-01 |
+| ANC-069 | proposed | stack bead is the atomic ledger | 2026-11-01 |
+| ANC-070 | proposed | hook file <= 100 lines | 2026-11-01 |
+| ANC-071 | proposed | only Rand commits the spec | 2026-11-01 |
+| ANC-072 | proposed | review findings bind to the spec | 2026-11-01 |
+| ANC-073 | proposed | anchor checks are mechanical | 2026-11-01 |
 
 ## ANC-001
 
@@ -1198,7 +1198,7 @@ Anchor: A lite hook must make at most one beads-cache write and must never creat
 
 > ANC-064 Gate, not sequence. A lite hook makes at most one beads-cache write. Check: count of `beads.update(`/`beads.create(`/`beads.claim(`/`beads.release(` call sites per hook file ≤ 1, and `create`/`claim`/`release` count = 0. Fail fixture: a close hook that calls `beads.update` twice (record layer, then close).
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
 
 Summary: one beads-cache write per hook
 
@@ -1216,7 +1216,7 @@ Anchor: A lite hook must never write the stack bead (the ledger).
 
 > ANC-065 Hooks never write the ledger. Check: no hook file passes a stack bead to a write; grep for `stack_bead` in a hook file appears only as an argument to `beads.show(` / `cache.get(`. Fail fixture: `BeadPatch.record(stack_bead, …)` in any hook.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
 
 Summary: hooks only read the ledger
 
@@ -1234,13 +1234,13 @@ Anchor: A lite hook must not run a subprocess or use the BdCli, GitCli or AtmCli
 
 > ANC-066 No subprocess in a hook. Check: grep for `subprocess`, `BdCli`, `GitCli`, `AtmCli`, `gh `, `bd ` in `skills/atm-bd-lite/scripts/atm-bd-task-*.py` is empty. Fail fixture: any of them.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
 
 Summary: no subprocess in a hook
 
 Scope: any lite hook file
 
-Deterministic check to pair with the development gate: grep -nE 'subprocess|BdCli|GitCli|AtmCli|gh |bd ' skills/atm-bd-lite/scripts/atm-bd-task-*.py is empty (run by atm-bd-lite-gate.py)
+Deterministic check to pair with the development gate: atm-bd-lite-gate.py (ast) on skills/atm-bd-lite/scripts/atm-bd-task-*.py: no import of subprocess; no reference to BdCli, GitCli or AtmCli; no call to os.system/os.popen/os.exec*/os.spawn*; no call whose first argument is a list or string starting with gh, bd or git
 
 Fixtures:
 - pass: The three lite hooks import only json, sys, atm_bd_types and bd_cache_rs; grep for subprocess, BdCli, GitCli, AtmCli, gh and bd in them is empty.
@@ -1252,7 +1252,7 @@ Anchor: Every multi-step procedure a lite agent must run (stack, pour) must be a
 
 > ANC-067 Sequences live in templates. Every multi-step procedure an agent must run (stack, pour) is a fenced bash block in a template under `skills/atm-bd-lite/templates/`. Check: the dev template contains one block whose lines are, in order, bdc lock, git rebase, git push, bdc record; the QA template contains one block with bdc pour. Fail fixture: a Python file that performs those steps.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
 
 Summary: stack and pour are template blocks
 
@@ -1270,7 +1270,7 @@ Anchor: The generated atm_bd_types stub must carry only names used by a lite hoo
 
 > ANC-068 Stub carries only used names. Check: every `ErrorId` member, class and method in the generated `.pyi` is referenced by a hook file or a `hooks/*.md` table. Fail fixture: `STACK_CLAIM_LOST` with no caller.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
 
 Summary: stub carries only used names
 
@@ -1288,7 +1288,7 @@ Anchor: The stack bead must be the ledger: its assignee is the lock, its layers 
 
 > ANC-069 Stack bead is the ledger. Its assignee is the lock; its layers are the record; only the fenced stack block writes it, through bdc, under the lock. Check: ANC-065 plus the ANC-067 block shape.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 3.
 
 Summary: stack bead is the atomic ledger
 
@@ -1306,7 +1306,7 @@ Anchor: Each lite hook file must be at most 100 lines, including header and docs
 
 > ANC-070 Line ceiling. Each hook file ≤ 100 lines including header and docstring. Check: `wc -l`. Fail fixture: 101 lines. This is the cheapest creep detector there is; a stack claim does not fit.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 4.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 4.
 
 Summary: hook file <= 100 lines
 
@@ -1324,7 +1324,7 @@ Anchor: docs/plans/phase-bo/intent.md and docs/plans/phase-bo/hooks/*.md must ch
 
 > ANC-071 Spec is owned. `intent.md` and `hooks/*.md` change only in a commit authored by Rand. Check: `git log --format=%ae -- docs/plans/phase-bo/intent.md docs/plans/phase-bo/hooks/` shows only rand@randlee.com. Fail fixture: a commit from fenix editing a Transitions table. If fenix or a reviewer thinks the spec is wrong, the output is a question to Rand, never an edit.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
 
 Summary: only Rand commits the spec
 
@@ -1342,7 +1342,7 @@ Anchor: A review finding that would add a write, an arm, a subprocess or a guard
 
 > ANC-072 Review findings bind to the spec, not the code. A review finding that would add a write, an arm, a subprocess or a guard to a hook is out of scope unless it cites the `hooks/*.md` row it implements. The reply template is one line: "Not in <hook>.md; file against the spec (ANC-071)." Check: ANC-064/065/066/070 fail any such change regardless of what the review said. Fail fixture: solar round asks for a retry path; fenix adds an arm; gate fails on rows ≠ arms.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 3.
 
 Summary: review findings bind to the spec
 
@@ -1360,7 +1360,7 @@ Anchor: Every phase-bo anchor check must name a command (grep, wc, ast, pyright,
 
 > ANC-073 Every anchor check is mechanical. A new anchor whose check is prose ("is simple", "is maintainable") is rejected by plan-anchor. Check: each anchor's `check` names a command (grep, wc, ast, pyright, the gate) or a Jev fixture pair. Fail fixture: "Jev judges the hook is reasonable."
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 3.
 
 Summary: anchor checks are mechanical
 

@@ -1,6 +1,9 @@
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
 # requires-python = ">=3.11"
+# dependencies = ["jev-check"]
+# [tool.uv.sources]
+# jev-check = { path = "../packages/jev-check" }  # bo-12: skills/atm-bd-lite/scripts -> atm-bd packages/jev-check
 # ///
 """atm-bd-lite gate: hold one hook file to its hooks/*.md spec (fenix-brief.md §B).
 
@@ -13,13 +16,14 @@ is implemented by exactly one arm with no additional check or write (ANC-053); e
 is listed as a row or an Errors entry (ANC-054). Writes the run JSON; exits 1 on any failure or "no",
 2 when Jev cannot be asked.
 """
-import ast, http.client, json, os, re, sys, time
+import ast, json, sys
 from pathlib import Path
+from jev_check import JevCheckError, Question, check, load_question_set
 
-MODEL, HOST, MAX_REQUEST_BYTES, ATTEMPTS = "jev-1.13.0", "api.typesafe.ai", 96000, 4
+QUESTIONS = Path(__file__).with_name("gate-questions.json")
 WRITES, FORBIDDEN_WRITES = {"update", "create", "claim", "release"}, {"create", "claim", "release"}
 READS = {("beads", "show"), ("cache", "get")}
-SUBPROCESS = re.compile(r"subprocess|BdCli|GitCli|AtmCli|\bgh |\bbd ")
+CLI_ADAPTERS, OS_SPAWN, CLI_TOOLS = {"BdCli", "GitCli", "AtmCli"}, ("system", "popen", "exec", "spawn"), {"gh", "bd", "git"}
 REPLIES = {"refused", "pass_through", "not_applicable", "handled", "from_result"}
 MAX_LINES = 100
 
@@ -51,10 +55,28 @@ def facts(src: str) -> dict:
                 return True
         return False
 
+    def runs_cli(n: ast.Call) -> bool:
+        first = n.args[0] if n.args else None
+        if isinstance(first, (ast.List, ast.Tuple)) and first.elts:
+            first = first.elts[0]
+        return isinstance(first, ast.Constant) and isinstance(first.value, str) and first.value.split(" ")[0] in CLI_TOOLS
+
+    subprocess_sites = sorted(
+        [(f"import {a.name}", n.lineno) for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
+         if a.name.split(".")[0] == "subprocess"]
+        + [(f"from {n.module} import", n.lineno) for n in ast.walk(tree)
+           if isinstance(n, ast.ImportFrom) and (n.module or "").split(".")[0] == "subprocess"]
+        + [(getattr(n, "id", None) or n.attr, n.lineno) for n in ast.walk(tree)
+           if getattr(n, "id", None) in CLI_ADAPTERS or getattr(n, "attr", None) in CLI_ADAPTERS]
+        + [(f"import {a.name}", n.lineno) for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
+           for a in n.names if a.name in CLI_ADAPTERS]
+        + [(ast.unparse(n)[:60], n.lineno) for n, name in calls
+           if (name and name[0] == "os" and name[1].startswith(OS_SPAWN)) or runs_cli(n)], key=lambda x: x[1])
     stack_uses = [n.lineno for n in ast.walk(tree)
                   if (getattr(n, "id", None) == "stack_bead" or getattr(n, "attr", None) == "stack_bead") and not only_read(n)]
     return {"arms": arms, "transition_arms": transition_arms, "beads_calls": beads_calls, "replies": replies,
-            "stack_bead_writes": stack_uses}
+            "stack_bead_writes": stack_uses,
+            "subprocess_sites": subprocess_sites}
 
 
 def deterministic(src: str, f: dict, rows: list[list[str]]) -> list[str]:
@@ -68,48 +90,17 @@ def deterministic(src: str, f: dict, rows: list[list[str]]) -> list[str]:
         fails.append(f"ANC-064 writes: {writes} (at most one beads.update; no create/claim/release)")
     if f["stack_bead_writes"]:
         fails.append(f"ANC-065 stack_bead used outside beads.show(/cache.get( at lines {f['stack_bead_writes']}")
-    if hits := [f"{i}: {line.strip()}" for i, line in enumerate(src.splitlines(), 1) if SUBPROCESS.search(line)]:
-        fails.append(f"ANC-066 subprocess/bd/gh: {hits}")
+    if f["subprocess_sites"]:
+        fails.append(f"ANC-066 subprocess/CLI adapter/bd/gh/git: {f['subprocess_sites']}")
     if (n := len(src.splitlines())) > MAX_LINES:
         fails.append(f"ANC-070 {n} lines > {MAX_LINES}")
     return fails
 
 
-def questions(f: dict, rows: list[list[str]]) -> dict:
-    yes_no = lambda q: {"type": "choice", "instructions": q, "criteria": {"yes": "yes", "no": "no"}}
-    qs = {f"row:{r[0]}": yes_no(f"Spec Transitions row {r[0]} ({r[1]}). Is this row implemented by exactly one "
-                                "match arm of state.hook, with no check or write beyond the row's 'hook checks' and "
-                                "'write' cells?") for r in rows}
-    for text, line in f["arms"] + f["replies"]:
-        qs[f"site:L{line}:{text[:60]}"] = yes_no(f"state.hook line {line}: `{text}`. Is this arm or reply listed in "
-                                                  "state.spec as a Transitions row or an Errors entry?")
-    return qs
-
-
-def ask_jev(state: dict, qs: dict) -> dict:
-    key = os.environ.get("TYPESAFE_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("TYPESAFE_API_KEY is missing; no Jev evaluation ran")
-    body = json.dumps({"model": MODEL, "state": state, "questions": qs}).encode()
-    if len(body) > MAX_REQUEST_BYTES:
-        raise RuntimeError(f"Jev request is {len(body)} bytes > {MAX_REQUEST_BYTES}")
-    for attempt in range(ATTEMPTS):
-        conn = http.client.HTTPSConnection(HOST, timeout=60)
-        conn.request("POST", "/v1/systemone", body=body,
-                     headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
-        resp = conn.getresponse()
-        raw, status = resp.read(), resp.status
-        conn.close()
-        if status in (429, 502, 529) and attempt + 1 < ATTEMPTS:
-            time.sleep(min(30.0, float(resp.getheader("Retry-After") or 1)))
-            continue
-        if status != 200:
-            raise RuntimeError(f"Jev HTTP {status}")
-        answers = json.loads(raw).get("answers", {})
-        if set(answers) != set(qs):
-            raise RuntimeError("Jev answers do not match the questions")
-        return answers
-    raise RuntimeError("Jev busy; attempts exhausted")
+def questions(f: dict, rows: list[list[str]]) -> dict[str, Question]:
+    qs = load_question_set(QUESTIONS)
+    return (qs.expand("implemented", {r[0]: f"Spec Transitions row {r[0]} ({r[1]})." for r in rows})
+            | qs.expand("listed", {f"L{line}": f"state.hook line {line}: `{text}`." for text, line in f["arms"] + f["replies"]}))
 
 
 def main(argv: list[str]) -> int:
@@ -125,11 +116,11 @@ def main(argv: list[str]) -> int:
            "facts": f, "deterministic_failures": deterministic(src, f, rows), "jev": None}
     if not run["deterministic_failures"]:
         try:
-            answers = ask_jev({"hook": src, "spec": spec_md}, questions(f, rows))
-        except (RuntimeError, OSError, ValueError) as exc:
+            answers = check({"hook": src, "spec": spec_md}, questions(f, rows))
+        except JevCheckError as exc:
             run["jev_error"] = str(exc)
         else:
-            run["jev"] = {"model": MODEL, "answers": answers,
+            run["jev"] = {"answers": answers,
                           "no": sorted(k for k, a in answers.items() if a.get("choice") != "yes")}
     run["pass"] = not run["deterministic_failures"] and run["jev"] is not None and not run["jev"]["no"]
     out.parent.mkdir(parents=True, exist_ok=True)
