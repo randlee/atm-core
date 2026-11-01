@@ -1,0 +1,928 @@
+{
+  "analyzers": {
+    "boundary": {
+      "enabled": true,
+      "fail_rules": [
+        "SCB-CYCLE-001",
+        "SCB-CYCLE-002",
+        "SCB-CYCLE-003",
+        "SCB-BOUNDARY-001",
+        "SCB-BOUNDARY-002",
+        "SCB-BOUNDARY-003",
+        "SCB-CALLER-001",
+        "SCB-DEPENDENCY-001",
+        "SCB-DEPENDENCY-002",
+        "SCB-DEPENDENCY-003",
+        "SCB-DEPENDENCY-004",
+        "SCB-FEATURE-001",
+        "SCB-MANIFEST-001",
+        "SCB-MANIFEST-002",
+        "SCB-MANIFEST-003",
+        "SCB-MANIFEST-004",
+        "SCB-MANIFEST-005",
+        "SCB-MANIFEST-006",
+        "SCB-BOUNDARY-004"
+      ],
+      "global_dependency_ownership": [
+        {
+          "allowed_manifest_paths": [
+            "crates/atm-storage-rusqlite/Cargo.toml"
+          ],
+          "allowed_source_roots": [
+            "crates/atm-storage-rusqlite/src",
+            "crates/atm-storage-rusqlite/tests"
+          ],
+          "dependency": "rusqlite",
+          "manifest_message": "only crates/atm-storage-rusqlite may depend on rusqlite",
+          "source_message": "only crates/atm-storage-rusqlite source may import rusqlite directly"
+        },
+        {
+          "allowed_manifest_paths": [
+            "crates/atm-daemon-bootstrap/Cargo.toml"
+          ],
+          "allowed_source_roots": [
+            "crates/atm-daemon-bootstrap/src/process_deadline.rs"
+          ],
+          "dependency": "rustix",
+          "manifest_message": "only atm-daemon-bootstrap may depend on rustix",
+          "source_message": "only atm-daemon-bootstrap process_deadline may import rustix"
+        },
+        {
+          "allowed_manifest_paths": [
+            "crates/atm-cron/Cargo.toml"
+          ],
+          "allowed_source_roots": [
+            "crates/atm-cron/src",
+            "crates/atm-cron/tests"
+          ],
+          "dependency": "cron",
+          "manifest_message": "only atm-cron may depend on cron",
+          "source_message": "only atm-cron source may import cron"
+        }
+      ],
+      "manifest_dependency_allowlists": [
+        {
+          "allowed_dependencies": [
+            "anyhow",
+            "async-trait",
+            "agent-team-mail-core",
+            "atm-daemon-bootstrap",
+            "atm-daemon-client",
+            "atm-graft",
+            "atm-http-runtime",
+            "atm-observability",
+            "atm-runtime-test-support",
+            "atm-storage",
+            "chrono",
+            "clap",
+            "libc",
+            "noyalib",
+            "opentelemetry-proto",
+            "sc-observability",
+            "sc-observability-types",
+            "serde",
+            "serde_json",
+            "serial_test",
+            "tempfile",
+            "time",
+            "toml",
+            "tokio",
+            "tokio-stream",
+            "tonic",
+            "tracing",
+            "tracing-subscriber",
+            "ulid"
+          ],
+          "owner_manifest_path": "crates/atm/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "async-trait",
+            "atm-error",
+            "atm-runtime-test-support",
+            "atm-storage",
+            "base64",
+            "chrono",
+            "fs4",
+            "interprocess",
+            "libc",
+            "parking_lot",
+            "sc-lint-attributes",
+            "semver",
+            "serde",
+            "serde_json",
+            "serial_test",
+            "tempfile",
+            "toml",
+            "tracing",
+            "tracing-subscriber",
+            "ulid",
+            "windows-sys"
+          ],
+          "owner_manifest_path": "crates/atm-core/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "agent-team-mail-core",
+            "atm-runtime",
+            "opentelemetry",
+            "opentelemetry_sdk",
+            "opentelemetry-otlp",
+            "opentelemetry-proto",
+            "sc-observability",
+            "sc-observability-log",
+            "sc-observability-types",
+            "serde_json",
+            "serial_test",
+            "sha2",
+            "tempfile",
+            "tokio",
+            "tokio-stream",
+            "tonic",
+            "tracing",
+            "tracing-subscriber",
+            "trybuild"
+          ],
+          "boundary_record_path": [
+            "boundaries/atm-observability/tracing-bridge.toml",
+            "boundaries/atm-observability/otel-exporter.toml"
+          ],
+          "owner_manifest_path": "crates/atm-observability/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "serde",
+            "serde_json"
+          ],
+          "boundary_record_path": "boundaries/atm-error/error-codes.toml",
+          "owner_manifest_path": "crates/atm-error/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "agent-team-mail-core",
+            "async-trait",
+            "atm-cron",
+            "atm-herdr",
+            "atm-http-runtime",
+            "atm-observability",
+            "atm-runtime",
+            "atm-runtime-test-support",
+            "atm-storage",
+            "atm-storage-rusqlite",
+            "atm-template-sc-compose",
+            "chrono",
+            "fs4",
+            "opentelemetry",
+            "opentelemetry-proto",
+            "opentelemetry_sdk",
+            "peer-tls",
+            "rustix",
+            "sc-lint-attributes",
+            "sc-observability-log",
+            "serde",
+            "serde_json",
+            "serial_test",
+            "tempfile",
+            "tokio",
+            "tokio-stream",
+            "toml",
+            "tonic",
+            "tracing",
+            "tracing-subscriber",
+            "ulid",
+            "windows-sys"
+          ],
+          "boundary_record_path": [
+            "boundaries/atm-daemon-bootstrap/replacement-bootstrap.toml",
+            "boundaries/atm-daemon-bootstrap/daemon-observability.toml"
+          ],
+          "owner_manifest_path": "crates/atm-daemon-bootstrap/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "agent-team-mail-core",
+            "atm-http-runtime",
+            "atm-storage",
+            "fs4",
+            "interprocess",
+            "sc-lint-attributes",
+            "serde_json",
+            "tempfile",
+            "tokio",
+            "tracing"
+          ],
+          "owner_manifest_path": "crates/atm-daemon-client/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "async-trait",
+            "agent-team-mail-core",
+            "atm-daemon-client",
+            "atm-http-runtime",
+            "atm-runtime-test-support",
+            "serde_json",
+            "tempfile",
+            "tokio",
+            "tracing"
+          ],
+          "owner_manifest_path": "crates/atm-graft/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "agent-team-mail-core",
+            "atm-graft",
+            "pyo3",
+            "serde_json",
+            "tempfile",
+            "tokio"
+          ],
+          "owner_manifest_path": "crates/atm-graft-python/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "atm-storage",
+            "atm-storage-rusqlite",
+            "pyo3",
+            "tempfile"
+          ],
+          "owner_manifest_path": "crates/atm-query-python/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "agent-team-mail-core",
+            "async-trait",
+            "atm-herdr",
+            "atm-observability",
+            "atm-runtime",
+            "atm-runtime-test-support",
+            "axum",
+            "base64",
+            "fs4",
+            "http-body-util",
+            "hyper",
+            "hyper-util",
+            "noyalib",
+            "reqwest",
+            "sc-lint-attributes",
+            "serde",
+            "serde_json",
+            "tempfile",
+            "tokio",
+            "tower",
+            "tracing",
+            "tracing-subscriber",
+            "ulid",
+            "windows-sys"
+          ],
+          "boundary_record_path": "boundaries/atm-http-runtime/http-runtime.toml",
+          "owner_manifest_path": "crates/atm-http-runtime/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "agent-team-mail-core",
+            "sc-lint-attributes",
+            "serde_json",
+            "tokio"
+          ],
+          "boundary_record_path": "boundaries/atm-herdr/herdr-process-adapter.toml",
+          "owner_manifest_path": "crates/atm-herdr/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "async-trait",
+            "agent-team-mail-core",
+            "atm-runtime-test-support",
+            "atm-storage",
+            "serde_json",
+            "tokio",
+            "tracing"
+          ],
+          "owner_manifest_path": "crates/atm-runtime/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "async-trait",
+            "atm-error",
+            "base64",
+            "chrono",
+            "getrandom",
+            "rustls",
+            "serde",
+            "serde_json",
+            "sha2",
+            "toml",
+            "trybuild",
+            "ulid",
+            "x509-parser",
+            "zeroize"
+          ],
+          "owner_manifest_path": "crates/atm-storage/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "async-trait",
+            "atm-storage",
+            "base64",
+            "chrono",
+            "ring",
+            "rusqlite",
+            "serde",
+            "serde_json",
+            "sha2",
+            "tempfile",
+            "tokio",
+            "tracing",
+            "tracing-subscriber"
+          ],
+          "boundary_record_path": "boundaries/atm-storage-rusqlite/tool-sender-registry-sqlite.toml",
+          "owner_manifest_path": "crates/atm-storage-rusqlite/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "atm-storage",
+            "rcgen",
+            "rustls",
+            "tempfile",
+            "tokio",
+            "tokio-rustls",
+            "tracing"
+          ],
+          "boundary_record_path": "boundaries/peer-tls/mtls-peer-stream-adapter.toml",
+          "owner_manifest_path": "crates/peer-tls/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "agent-team-mail-core",
+            "atm-storage",
+            "base64",
+            "sc-composer",
+            "sc-sha",
+            "serde_json"
+          ],
+          "boundary_record_path": "boundaries/atm-template-sc-compose/sc-composer.toml",
+          "owner_manifest_path": "crates/atm-template-sc-compose/Cargo.toml"
+        },
+        {
+          "allowed_dependencies": [
+            "async-trait",
+            "agent-team-mail-core",
+            "atm-runtime-test-support",
+            "atm-storage",
+            "chrono",
+            "cron",
+            "getrandom",
+            "serde_json",
+            "syn",
+            "tokio",
+            "tracing",
+            "tracing-subscriber"
+          ],
+          "boundary_record_path": "boundaries/atm-cron/cron-scheduler.toml",
+          "owner_manifest_path": "crates/atm-cron/Cargo.toml"
+        }
+      ],
+      "manifest_section_rules": [
+        {
+          "allowed_sections": [
+            "dev-dependencies"
+          ],
+          "dependency_package": "atm-storage-rusqlite",
+          "message": "atm-core may reference atm-storage-rusqlite only in dev-dependencies",
+          "owner_manifest_path": "crates/atm-core/Cargo.toml"
+        },
+        {
+          "allowed_sections": [
+            "dev-dependencies"
+          ],
+          "dependency_package": "atm-runtime-test-support",
+          "message": "atm-cron may reference atm-runtime-test-support only in dev-dependencies",
+          "owner_manifest_path": "crates/atm-cron/Cargo.toml"
+        },
+        {
+          "allowed_sections": [
+            "dev-dependencies"
+          ],
+          "dependency_package": "opentelemetry-proto",
+          "message": "atm may reference opentelemetry-proto only in dev-dependencies, for the in-process OTLP collector in its log-destination test",
+          "owner_manifest_path": "crates/atm/Cargo.toml"
+        },
+        {
+          "allowed_sections": [
+            "dev-dependencies"
+          ],
+          "dependency_package": "tokio-stream",
+          "message": "atm may reference tokio-stream only in dev-dependencies, for the in-process OTLP collector in its log-destination test",
+          "owner_manifest_path": "crates/atm/Cargo.toml"
+        },
+        {
+          "allowed_sections": [
+            "dev-dependencies"
+          ],
+          "dependency_package": "tonic",
+          "message": "atm may reference tonic only in dev-dependencies, for the in-process OTLP collector in its log-destination test",
+          "owner_manifest_path": "crates/atm/Cargo.toml"
+        },
+        {
+          "allowed_sections": [],
+          "dependency_package": "atm-daemon",
+          "message": "atm must not depend on atm-daemon",
+          "owner_manifest_path": "crates/atm/Cargo.toml"
+        },
+        {
+          "allowed_sections": [],
+          "dependency_package": "atm-daemon",
+          "message": "atm-core must not depend on atm-daemon",
+          "owner_manifest_path": "crates/atm-core/Cargo.toml"
+        },
+        {
+          "allowed_sections": [
+            "dependencies"
+          ],
+          "dependency_package": "atm-storage-rusqlite",
+          "message": "atm-daemon may depend on atm-storage-rusqlite only through the documented runtime-owned SQLite boundaries",
+          "owner_manifest_path": "crates/atm-daemon/Cargo.toml"
+        },
+        {
+          "allowed_sections": [
+            "dev-dependencies"
+          ],
+          "dependency_package": "atm-runtime-test-support",
+          "message": "atm-http-runtime must not depend on atm-runtime-test-support in production; it is a test-only fixture dependency",
+          "owner_manifest_path": "crates/atm-http-runtime/Cargo.toml"
+        },
+        {
+          "allowed_sections": [
+            "dev-dependencies"
+          ],
+          "dependency_package": "noyalib",
+          "message": "atm-http-runtime must not depend on noyalib in production; it is a test-only fixture dependency",
+          "owner_manifest_path": "crates/atm-http-runtime/Cargo.toml"
+        },
+        {
+          "allowed_sections": [
+            "dev-dependencies"
+          ],
+          "dependency_package": "tempfile",
+          "message": "atm-http-runtime must not depend on tempfile in production; it is a test-only fixture dependency",
+          "owner_manifest_path": "crates/atm-http-runtime/Cargo.toml"
+        }
+      ],
+      "reason": "Boundary inventory, crate cycles, forbidden crate edges, and composition-root policy for the atm-core workspace."
+    },
+    "portability": {
+      "config_home_env": "ATM_CONFIG_HOME",
+      "enabled": true,
+      "targets": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "unix_path_prefixes": [
+        "/tmp/",
+        "/home/",
+        "/usr/",
+        "/etc/"
+      ]
+    },
+    "runtime": {
+      "enabled": true,
+      "exclude_paths_by_rule": {
+        "SCB-RUNTIME-003": [
+          "crates/atm/src/commands/internal_nudge.rs",
+          "crates/atm-daemon-client/src/lib.rs"
+        ]
+      },
+      "reason": "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. See randlee/sc-lint#82."
+    }
+  },
+  "ci": {
+    "enabled": false,
+    "os": [
+      "linux",
+      "macos",
+      "windows"
+    ]
+  },
+  "justfile": {
+    "windows_shell": false
+  },
+  "lint_profiles": {
+    "ci": [
+      "adr-index",
+      "arch-gates",
+      "atm-graft-python-boundary",
+      "boundaries",
+      "clippy",
+      "clippy-windows",
+      "daemon-signing-coupling",
+      "daemon-singleton",
+      "deny-linux",
+      "deny-macos",
+      "deny-windows",
+      "env-var-boundary",
+      "fixed-sleep",
+      "fmt",
+      "function-length",
+      "hermes-adapter",
+      "hermes-atm-boundary",
+      "identities",
+      "kit-drift",
+      "legacy-mailbox-paths",
+      "legacy-transport-removal",
+      "lines",
+      "manifests-linux",
+      "manifests-macos",
+      "manifests-windows",
+      "nudge-taxonomy",
+      "peer-dial-seam",
+      "pytests",
+      "read-concurrency-gates",
+      "runtime-observation-boundary",
+      "runtime-stderr",
+      "same-host-portability",
+      "sc-boundary",
+      "sc-portability",
+      "sc-runtime",
+      "shear-linux",
+      "shear-macos",
+      "shear-windows",
+      "silent-emit",
+      "site-generated",
+      "site-links",
+      "spell-linux",
+      "spell-macos",
+      "spell-windows",
+      "template-frontmatter",
+      "ttl-triage",
+      "version-linux",
+      "version-macos",
+      "version-python-pins",
+      "version-windows"
+    ]
+  },
+  "minimum_version": "0.8.3",
+  "profiles": {
+    "adr-index": [
+      "just",
+      "_py",
+      ".just/check_adr_index.py"
+    ],
+    "arch-gates": [
+      "cargo",
+      "test",
+      "-p",
+      "atm-architecture",
+      "--quiet"
+    ],
+    "atm-graft-python-boundary": [
+      "just",
+      "_py",
+      ".just/lint_atm_graft_python_boundary.py"
+    ],
+    "boundaries": [
+      "just",
+      "_py",
+      ".just/lint_boundaries.py"
+    ],
+    "clippy": [
+      "just",
+      "_sc-lint-clippy",
+      "native"
+    ],
+    "clippy-windows": {
+      "command": [
+        "just",
+        "_sc-lint-clippy",
+        "xwin"
+      ],
+      "platform": "linux"
+    },
+    "daemon-signing-coupling": [
+      "just",
+      "_py",
+      ".just/lint_daemon_signing_coupling.py"
+    ],
+    "daemon-singleton": [
+      "just",
+      "_py",
+      "scripts/lint_daemon_singleton.py"
+    ],
+    "deny-linux": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_cargo_deny"
+      ],
+      "platform": "linux"
+    },
+    "deny-macos": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_cargo_deny"
+      ],
+      "platform": "macos"
+    },
+    "deny-windows": {
+      "command": [
+        ".sc-lint\\venv\\Scripts\\python.exe",
+        "-m",
+        "sc_lint.lint_cargo_deny"
+      ],
+      "platform": "windows"
+    },
+    "env-var-boundary": [
+      "just",
+      "_py",
+      ".just/check_env_var_boundary.py"
+    ],
+    "fixed-sleep": [
+      "just",
+      "_py",
+      ".just/check_fixed_sleep_hygiene.py"
+    ],
+    "fmt": [
+      "just",
+      "fmt",
+      "check"
+    ],
+    "function-length": [
+      "sc-lint",
+      "lint",
+      "function-length"
+    ],
+    "hermes-adapter": [
+      "just",
+      "_py",
+      ".just/lint_hermes_adapter.py"
+    ],
+    "hermes-atm-boundary": [
+      "just",
+      "_py",
+      ".just/lint_hermes_atm_boundary.py"
+    ],
+    "identities": [
+      "sc-lint",
+      "lint",
+      "identity-literals"
+    ],
+    "kit-drift": [
+      "just",
+      "_py",
+      "plugins/sc-lint/install.py",
+      ".",
+      "--dry-run"
+    ],
+    "legacy-mailbox-paths": [
+      "just",
+      "_py",
+      "scripts/check-legacy-mailbox-paths.py"
+    ],
+    "legacy-transport-removal": [
+      "just",
+      "_py",
+      "scripts/phase-am/check_legacy_transport_removal.py",
+      "--category",
+      "raw-framing",
+      "--category",
+      "peer-ingress",
+      "--category",
+      "resend-replay",
+      "--category",
+      "direct-sqlite",
+      "--category",
+      "dead-daemon-dispatch"
+    ],
+    "lines": [
+      "sc-lint",
+      "lint",
+      "line-counts"
+    ],
+    "manifests-linux": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_manifests"
+      ],
+      "platform": "linux"
+    },
+    "manifests-macos": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_manifests"
+      ],
+      "platform": "macos"
+    },
+    "manifests-windows": {
+      "command": [
+        ".sc-lint\\venv\\Scripts\\python.exe",
+        "-m",
+        "sc_lint.lint_manifests"
+      ],
+      "platform": "windows"
+    },
+    "nudge-taxonomy": [
+      "just",
+      "_py",
+      "scripts/check-nudge-taxonomy.py"
+    ],
+    "peer-dial-seam": [
+      "just",
+      "_py",
+      ".just/lint_peer_dial_seam.py"
+    ],
+    "pytests": [
+      "just",
+      "_py",
+      ".just/run_pytests.py"
+    ],
+    "read-concurrency-gates": [
+      "just",
+      "_py",
+      ".just/check_read_concurrency_gates.py"
+    ],
+    "runtime-observation-boundary": [
+      "just",
+      "_py",
+      ".just/check_runtime_observation_boundary.py"
+    ],
+    "runtime-stderr": [
+      "just",
+      "_py",
+      "scripts/check-runtime-stderr.py"
+    ],
+    "same-host-portability": [
+      "just",
+      "_py",
+      ".just/lint_same_host_portability.py"
+    ],
+    "sc-boundary": [
+      "sc-lint",
+      "lint",
+      "sc-boundary",
+      "--config",
+      "sc-lint.toml"
+    ],
+    "sc-portability": [
+      "sc-lint",
+      "lint",
+      "sc-portability",
+      "--config",
+      "sc-lint.toml"
+    ],
+    "sc-runtime": [
+      "sc-lint",
+      "lint",
+      "sc-runtime",
+      "--config",
+      "sc-lint.toml"
+    ],
+    "shear-linux": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_cargo_shear"
+      ],
+      "platform": "linux"
+    },
+    "shear-macos": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_cargo_shear"
+      ],
+      "platform": "macos"
+    },
+    "shear-windows": {
+      "command": [
+        ".sc-lint\\venv\\Scripts\\python.exe",
+        "-m",
+        "sc_lint.lint_cargo_shear"
+      ],
+      "platform": "windows"
+    },
+    "silent-emit": [
+      "just",
+      "_py",
+      "scripts/check-silent-emit.py"
+    ],
+    "site-generated": [
+      "just",
+      "_py",
+      ".just/check_site_generated.py"
+    ],
+    "site-links": [
+      "just",
+      "_py",
+      ".just/check_site_links.py"
+    ],
+    "spell-linux": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_codespell"
+      ],
+      "platform": "linux"
+    },
+    "spell-macos": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.lint_codespell"
+      ],
+      "platform": "macos"
+    },
+    "spell-windows": {
+      "command": [
+        ".sc-lint\\venv\\Scripts\\python.exe",
+        "-m",
+        "sc_lint.lint_codespell"
+      ],
+      "platform": "windows"
+    },
+    "template-frontmatter": [
+      "just",
+      "_py",
+      ".just/check_template_frontmatter.py"
+    ],
+    "ttl-triage": [
+      "just",
+      "_py",
+      ".just/lint_ttl_triage_consistency.py"
+    ],
+    "version-linux": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.check_version_sync"
+      ],
+      "platform": "linux"
+    },
+    "version-macos": {
+      "command": [
+        ".sc-lint/venv/bin/python",
+        "-m",
+        "sc_lint.check_version_sync"
+      ],
+      "platform": "macos"
+    },
+    "version-python-pins": [
+      "just",
+      "_py",
+      ".just/check_version_sync.py"
+    ],
+    "version-windows": {
+      "command": [
+        ".sc-lint\\venv\\Scripts\\python.exe",
+        "-m",
+        "sc_lint.check_version_sync"
+      ],
+      "platform": "windows"
+    }
+  },
+  "test": {
+    "build": [
+      "cargo",
+      "build",
+      "--workspace"
+    ],
+    "cli-surface": [
+      "cargo",
+      "test",
+      "-p",
+      "agent-team-mail",
+      "--features",
+      "cli-surface-dump",
+      "--test",
+      "cli_surface"
+    ],
+    "coverage": [
+      "just",
+      "_py",
+      "scripts/coverage/run.py",
+      "--write-artifacts"
+    ],
+    "daemon-signing": [
+      "just",
+      "_py",
+      ".just/sign_daemon_dev.py"
+    ],
+    "default": [
+      "just",
+      "test"
+    ],
+    "python": [
+      "just",
+      "_py",
+      ".just/run_pytests.py"
+    ],
+    "workspace": [
+      "cargo",
+      "test",
+      "--workspace",
+      "--exclude",
+      "atm-daemon"
+    ]
+  }
+}

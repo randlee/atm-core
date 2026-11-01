@@ -335,6 +335,7 @@ impl UnixSocketOwnerUid {
     }
 
     #[must_use]
+    #[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix socket owner uid is applied only when configuring a Unix socket.")]
     #[cfg(unix)]
     const fn get(self) -> u32 {
         self.0.get()
@@ -359,6 +360,7 @@ impl UnixSocketMode {
     }
 
     #[must_use]
+    #[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix socket mode is applied only when configuring a Unix socket.")]
     #[cfg(unix)]
     const fn get(self) -> u32 {
         self.0.get()

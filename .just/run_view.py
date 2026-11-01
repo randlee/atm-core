@@ -40,7 +40,12 @@ def build_tasks(repo_root: Path) -> dict[str, ViewTask]:
     python_executable = sys.executable
     return {
         "boundaries": ViewTask("boundaries", [python_executable, str(repo_root / ".just/view_boundaries.py")]),
-        "lines": ViewTask("lines", [python_executable, str(repo_root / ".just/view_lines.py")]),
+        # The published RULE-003 check renders the lines view; the kit's exec
+        # pass-through resolves the managed sc-lint binary (randlee/sc-lint#388).
+        "lines": ViewTask(
+            "lines",
+            [python_executable, str(repo_root / ".sc-lint/bootstrap.py"), "exec", "--config", "sc-lint.toml", "--", "sc-lint", "lint", "line-counts"],
+        ),
         "modules": ViewTask("modules", [python_executable, str(repo_root / ".just/view_modules.py")]),
         "deps": ViewTask("deps", [python_executable, str(repo_root / ".just/view_deps.py")]),
         "unsafe": ViewTask("unsafe", [python_executable, str(repo_root / ".just/view_unsafe.py")]),

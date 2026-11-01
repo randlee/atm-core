@@ -20,9 +20,11 @@ impl ApiCommand {
             ApiSubcommand::Spec { format } => {
                 let output = match format.as_str() {
                     "yaml" => OPENAPI_YAML.to_owned(),
-                    "json" => serde_json::to_string_pretty(&serde_yaml::from_str::<
-                        serde_json::Value,
-                    >(OPENAPI_YAML)?)?,
+                    "json" => {
+                        serde_json::to_string_pretty(&noyalib::compat::serde_yaml::from_str::<
+                            serde_json::Value,
+                        >(OPENAPI_YAML)?)?
+                    }
                     _ => unreachable!("clap constrains API spec formats"),
                 };
                 println!("{output}");
@@ -51,14 +53,16 @@ mod tests {
 
     #[test]
     fn openapi_contract_is_versioned_and_parseable() {
-        let document: serde_json::Value = serde_yaml::from_str(OPENAPI_YAML).expect("OpenAPI YAML");
+        let document: serde_json::Value =
+            noyalib::compat::serde_yaml::from_str(OPENAPI_YAML).expect("OpenAPI YAML");
         assert_eq!(document["openapi"], "3.1.0");
         assert!(document["paths"]["/messages"].is_object());
     }
 
     #[test]
     fn openapi_declares_the_implemented_doctor_exchange() {
-        let document: serde_json::Value = serde_yaml::from_str(OPENAPI_YAML).expect("OpenAPI YAML");
+        let document: serde_json::Value =
+            noyalib::compat::serde_yaml::from_str(OPENAPI_YAML).expect("OpenAPI YAML");
         let request = RequestEnvelope::Doctor(DoctorQuery::default());
         let (method, path) = endpoint_for(&request);
         let openapi_path = path.strip_prefix("/v1/atm").expect("API base path");

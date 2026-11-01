@@ -89,6 +89,7 @@ pub fn raise_descriptor_soft_limit() -> DescriptorLimitOutcome {
     }
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "POSIX descriptor-limit errors are reported through errno; Windows reports the operation unsupported.")]
 #[cfg(unix)]
 fn last_errno() -> i32 {
     std::io::Error::last_os_error().raw_os_error().unwrap_or(0)

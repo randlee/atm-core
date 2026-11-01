@@ -72,7 +72,7 @@ pub fn load_protected_tool_sender_configs() -> Result<ProtectedToolSenderConfigs
 pub fn system_trust_root_path() -> Result<PathBuf, AtmError> {
     #[cfg(windows)]
     {
-        return windows::system_trust_root_path();
+        windows::system_trust_root_path()
     }
 
     #[cfg(unix)]
@@ -253,6 +253,7 @@ fn config_error(path: &Path, detail: impl std::fmt::Display) -> AtmError {
     ))
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix trust-root validation verifies POSIX ownership and mode metadata.")]
 #[cfg(unix)]
 fn verify_protected_path(path: &Path) -> Result<(), AtmError> {
     use std::os::unix::fs::MetadataExt;
@@ -279,6 +280,7 @@ fn verify_protected_path(path: &Path) -> Result<(), AtmError> {
     )
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix trust-root safety checks depend on uid and POSIX mode bits.")]
 #[cfg(unix)]
 fn verify_unix_metadata(
     path: &Path,
@@ -306,9 +308,9 @@ fn verify_unix_metadata(
 
 #[cfg(test)]
 mod tests {
+    use super::RawTrustRoot;
     #[cfg(unix)]
     use super::verify_unix_metadata;
-    use super::{RawTrustRoot, load_from_protected_path};
     use atm_storage::AtmErrorCode;
     use std::path::Path;
 
@@ -414,6 +416,5 @@ mod tests {
                 .expect("refreshed snapshot");
         assert!(initial.into_configs(&path).is_ok());
         assert!(refreshed.into_configs(&path).is_ok());
-        let _ = load_from_protected_path;
     }
 }

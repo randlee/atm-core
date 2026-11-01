@@ -246,7 +246,11 @@ def should_refresh_placeholder(path: Path) -> bool:
 def main() -> int:
     args = parse_args()
     root = repo_root()
-    platform_slug = detect_platform()
+    try:
+        platform_slug = detect_platform()
+    except RuntimeError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
     started_at = datetime.now(timezone.utc)
     stamp = args.timestamp or timestamp_slug(started_at)
     started = time.perf_counter()

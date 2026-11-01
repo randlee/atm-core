@@ -11,7 +11,9 @@ seed_python_cmd := if os_family() == "windows" { "py -3.12" } else { "env PATH=\
 # directly. The path is absolute so helpers remain pinned after changing cwd;
 # PyO3 additionally receives its interpreter explicitly.
 python_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; & \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" \"$PWD/.bootstrap-venv/bin/python\"" }
-clippy_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; cargo clippy --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\" cargo clippy --workspace --all-targets -- -D warnings" }
+# sc-lint delegates clippy to cargo, so its process must receive the bootstrap
+# interpreter PyO3 uses. Delete when randlee/sc-lint#198 ships.
+sc_lint_clippy_prefix := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; &" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\"" }
 
 # Show the curated repo task help.
 default: help
@@ -26,90 +28,37 @@ help:
 bootstrap *args:
     {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
+# Execute a repository Python command through the pinned bootstrap environment.
+# The sc-lint adoption profiles use this private bridge until sc-lint provides
+# a repository-runner setting (randlee/sc-lint#198).
+# Arguments reach Python as given, never re-split by the shell.
 [private]
-_fmt-write:
-    cargo fmt --all
+[unix]
+[positional-arguments]
+_py *args:
+    {{python_cmd}} "$@"
 
 [private]
-_fmt-check:
-    cargo fmt --all --check
+[windows]
+[positional-arguments]
+[script('pwsh', '-NoLogo', '-NonInteractive', '-File')]
+_py *args:
+    {{python_cmd}} @args
 
 # Format the Rust workspace or run the formatting gate.
 fmt mode='check':
-    {{python_cmd}} .just/run_fmt.py {{mode}}
+    cargo fmt --all {{if mode == "check" { "-- --check" } else { "" }}}
 
 [private]
 _lint-fmt:
     @just fmt check
 
+# Preserve PyO3's pinned interpreter while the adoption kit runs its published
+# `sc-lint clippy` profiles through the resolved binary. Delete when
+# randlee/sc-lint#198 ships.
 [private]
-_lint-clippy:
-    {{clippy_cmd}}
-
-[private]
-_lint-modules:
-    {{python_cmd}} .just/lint_cargo_modules.py
-
-[private]
-_lint-deny:
-    {{python_cmd}} .just/lint_cargo_deny.py
-
-[private]
-_lint-shear:
-    {{python_cmd}} .just/lint_cargo_shear.py
-
-[private]
-_lint-boundaries:
-    {{python_cmd}} .just/lint_boundaries.py
-
-[private]
-_lint-sc-boundary:
-    {{python_cmd}} .just/lint_sc_boundary.py
-
-[private]
-_lint-sc-portability:
-    {{python_cmd}} .just/lint_sc_portability.py
-
-[private]
-_lint-unix-gating:
-    {{python_cmd}} .just/lint_unix_gating.py
-
-[private]
-_lint-runtime-waits:
-    {{python_cmd}} .just/lint_runtime_waits.py
-
-[private]
-_lint-manifests:
-    {{python_cmd}} .just/lint_manifests.py
-
-[private]
-_lint-silent-emit:
-    {{python_cmd}} scripts/check-silent-emit.py
-
-[private]
-_lint-runtime-stderr:
-    {{python_cmd}} scripts/check-runtime-stderr.py
-
-[private]
-_lint-function-length:
-    {{python_cmd}} scripts/check-function-length.py
-
-[private]
-_lint-legacy-mailbox-paths:
-    {{python_cmd}} scripts/check-legacy-mailbox-paths.py
-
-[private]
-_lint-nudge-taxonomy:
-    {{python_cmd}} scripts/check-nudge-taxonomy.py
-
-[private]
-_lint-capability-degradation:
-    {{python_cmd}} scripts/check-capability-degradation.py
-
-# Verify crate/release versions stay aligned.
-[private]
-_lint-version:
-    {{python_cmd}} .just/check_version_sync.py
+_sc-lint-clippy target binary=env_var_or_default("SC_LINT_BIN", ""):
+    {{sc_lint_clippy_prefix}} "{{binary}}" clippy {{target}}
 
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
@@ -120,53 +69,14 @@ version mode='current':
 prerelease-tag *args:
     {{python_cmd}} .just/prerelease_tag.py {{args}}
 
-# Enforce RULE-008 for test and cfg(test) code.
-[private]
-_lint-identities:
-    {{python_cmd}} .just/check_test_identity_literals.py
-
-[private]
-_lint-env-var-boundary:
-    {{python_cmd}} .just/check_env_var_boundary.py
-
-[private]
-_lint-fixed-sleep:
-    {{python_cmd}} .just/check_fixed_sleep_hygiene.py
-
-[private]
-_lint-ttl-triage:
-    {{python_cmd}} .just/lint_ttl_triage_consistency.py
-
-# Enforce RULE-003 source file size limits.
-[private]
-_lint-lines:
-    {{python_cmd}} .just/check_line_counts.py
-
-[private]
-_lint-spell:
-    {{python_cmd}} .just/lint_codespell.py
-
-[private]
-_lint-pytests:
-    {{python_cmd}} .just/run_pytests.py
-
-[private]
-_lint-daemon-singleton:
-    {{python_cmd}} scripts/lint_daemon_singleton.py
-
-[private]
-_lint-same-host-portability:
-    {{python_cmd}} .just/lint_same_host_portability.py
-
 # Build the full workspace.
 build:
     cargo build --workspace
     {{python_cmd}} .just/sign_daemon_dev.py
 
-# Run the full workspace test suite or explicit coverage reporting.
-test mode='default':
-    {{python_cmd}} .just/run_tests.py {{mode}}
-    {{python_cmd}} .just/sign_daemon_dev.py
+# Run the manifest-defined test suite, a named test selector, or explicit coverage.
+test *selectors:
+    {{python_cmd}} .just/run_tests.py {{selectors}}
 
 # Validate and plan a bounded adversarial-fuzz campaign (no real execution).
 fuzz *args:
@@ -214,10 +124,6 @@ verify-hermes-bridge-deployment profile_registry *args:
 # Remove workspace build artifacts.
 clean:
     cargo clean
-
-# Run the repo lint suite.
-lint target='all':
-    {{python_cmd}} .just/run_lint.py {{target}}
 
 # Run the retained release validation / preflight suite.
 validate target='all':
@@ -293,3 +199,8 @@ view target='all':
 
 # Run the local CI-equivalent command set.
 ci: lint test
+
+# >>> sc-lint managed integration >>>
+python := if os_family() == "windows" { "python" } else { "python3" }
+import '.sc-lint/justfile'
+# <<< sc-lint managed integration <<<

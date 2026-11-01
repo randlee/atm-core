@@ -663,7 +663,11 @@ fn listen_for_graft_nudges(
                     );
                 }
             }
-            Ok(None) => thread::sleep(GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL),
+            Ok(None) => {
+                if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL) {
+                    return Ok(());
+                }
+            }
             Err(error) => match recover_after_poll_accept_error(ctx, listener, &error)? {
                 Some(rebound_listener) => listener = rebound_listener,
                 None => return Ok(()),

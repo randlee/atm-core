@@ -10,6 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+sc-lint-attributes = "0.8.3"
 atm-core.workspace = true
 atm-http-runtime.workspace = true
 atm-storage.workspace = true

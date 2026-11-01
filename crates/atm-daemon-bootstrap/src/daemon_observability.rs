@@ -171,6 +171,7 @@ impl Export {
 /// The daemon process's observability owner: the retained logger and the
 /// standard SDK providers. The entrypoint bootstraps it once and passes it
 /// into daemon composition, which drains and shuts it down.
+#[derive(Clone)]
 pub struct DaemonObservability {
     // Keep one shared logger lifecycle behind a mutex so emit/health paths and
     // shutdown can coordinate a single transition into the stopped state.
@@ -184,16 +185,6 @@ impl std::fmt::Debug for DaemonObservability {
         f.debug_struct("DaemonObservability")
             .field("active_log_path", &self.active_log_path)
             .finish_non_exhaustive()
-    }
-}
-
-impl Clone for DaemonObservability {
-    fn clone(&self) -> Self {
-        Self {
-            logger: Arc::clone(&self.logger),
-            active_log_path: self.active_log_path.clone(),
-            export: Arc::clone(&self.export),
-        }
     }
 }
 
@@ -211,6 +202,21 @@ impl DaemonObservability {
         env: &dyn atm_core::atm_temp::EnvSource,
         log_dir: PathBuf,
     ) -> Result<Self, AtmError> {
+        Self::bootstrap_routed(
+            env,
+            log_dir,
+            retained_log_policy(RETAINED_LOG_ROTATION_MAX_BYTES),
+        )
+        .await
+    }
+
+    /// [`Self::bootstrap_from`] with an explicit retained-log policy. The
+    /// daemon passes its production policy; tests pass their own bounds.
+    async fn bootstrap_routed(
+        env: &dyn atm_core::atm_temp::EnvSource,
+        log_dir: PathBuf,
+        retained_log_policy: RetainedLogPolicy,
+    ) -> Result<Self, AtmError> {
         let export = resolve_export(env);
         let destination = export.destination;
         let otel_logger = export
@@ -226,7 +232,7 @@ impl DaemonObservability {
             let logger = build_routed_retained_logger(
                 ATM_SERVICE_NAME,
                 &log_dir,
-                retained_log_policy(RETAINED_LOG_ROTATION_MAX_BYTES),
+                retained_log_policy,
                 level,
                 destination,
                 otel_logger,
@@ -832,6 +838,19 @@ mod tests {
                 .count()
         }
 
+        // Every wait on another thread or task in this test shares one
+        // runner-paced bound. The canonical `flush` waits for the writer
+        // thread within the logger's configured writer timeout; the daemon's
+        // 1s `RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT` is a shutdown budget whose
+        // overrun production tolerates (`flush_logger` abandons the wait), but
+        // `flush_for_test` is a barrier before the sinks are read, so the test
+        // logger is given this bound instead of the daemon's.
+        const RUNNER_PACED_BOUND: Duration = Duration::from_secs(15);
+        let policy = RetainedLogPolicy {
+            writer_shutdown_timeout: RUNNER_PACED_BOUND,
+            ..super::retained_log_policy(super::RETAINED_LOG_ROTATION_MAX_BYTES)
+        };
+
         for destination in ["file", "otel", "both"] {
             let receiver = Receiver::start(false).await;
             let root = TempDir::new().expect("tempdir");
@@ -840,9 +859,10 @@ mod tests {
                 ("ATM_OTEL_ENDPOINT", Some(receiver.endpoint.as_str())),
                 ("ATM_LOG_DESTINATION", Some(destination)),
             ]);
-            let observability = DaemonObservability::bootstrap_from(&env, log_dir.clone())
-                .await
-                .expect("bootstrap");
+            let observability =
+                DaemonObservability::bootstrap_routed(&env, log_dir.clone(), policy)
+                    .await
+                    .expect("bootstrap");
             let mut direct_sc_attachment = observability
                 .logger
                 .lock()
@@ -892,7 +912,7 @@ mod tests {
             if destination != "file" {
                 receiver
                     .capture
-                    .wait(Duration::from_secs(15), "both exported records", || {
+                    .wait(RUNNER_PACED_BOUND, "both exported records", || {
                         let logs = exported(&receiver);
                         count(&logs, "cli_startup") == 1
                             && count(&logs, "bd6.direct_sc_macro") == 1

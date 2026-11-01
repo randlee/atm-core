@@ -43,7 +43,6 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-observability", "atm-daemon-bootstrap"),
     ("atm-observability", "atm-http-runtime"),
     ("atm-observability", "atm-storage-rusqlite"),
-    ("atm-observability", "sc-observability-otlp"),
     ("atm-runtime", "atm-storage-rusqlite"),
     ("atm-runtime", "opentelemetry"),
     ("atm-storage", "atm-core"),
@@ -93,8 +92,6 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-herdr", "atm-daemon-bootstrap"),
     ("atm-herdr", "atm-http-runtime"),
     ("atm-herdr", "atm-storage-rusqlite"),
-    ("hermes-atm", "atm-daemon"),
-    ("hermes-atm", "atm-storage-rusqlite"),
 ];
 
 const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
@@ -1769,6 +1766,26 @@ fn atm_graft_must_not_depend_on_atm_storage_rusqlite() {
 }
 
 #[test]
+fn atm_observability_must_not_depend_on_sc_observability_otlp() {
+    let metadata = MetadataCommand::new()
+        .manifest_path(workspace_root().join("Cargo.toml"))
+        .no_deps()
+        .exec()
+        .expect("cargo metadata must succeed for the workspace");
+    let package = metadata
+        .packages
+        .into_iter()
+        .find(|package| package.name == "atm-observability")
+        .expect("atm-observability package must exist");
+    assert!(
+        !package.dependencies.iter().any(|dependency| {
+            dependency.kind == DependencyKind::Normal && dependency.name == "sc-observability-otlp"
+        }),
+        "atm-observability must not use the synchronous sc-observability-otlp wrapper"
+    );
+}
+
+#[test]
 fn template_sc_compose_is_bootstrap_owned_and_forbidden_elsewhere() {
     for source in [
         "atm-core",
@@ -2575,7 +2592,7 @@ fn al1_compatibility_oracle_retains_negative_inputs_after_ipc_retirement() {
 #[test]
 fn hermes_atm_runtime_boundary_keeps_generic_graft_host_agnostic() {
     let root = workspace_root();
-    let boundary_path = root.join("boundaries/hermes-atm/runtime-composition.toml");
+    let boundary_path = root.join("policy/hermes-atm/runtime-composition.toml");
     let boundary: BoundaryToml = toml::from_str(&read_source(&boundary_path))
         .expect("hermes-atm boundary record must parse");
     assert_eq!(boundary.name, "HermesAtmRuntime");

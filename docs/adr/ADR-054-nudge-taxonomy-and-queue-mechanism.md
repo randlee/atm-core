@@ -220,8 +220,8 @@ Per D8, the phase-ao2 terminology sweep is cut down to exactly two renames
 in AQ1: `PostSendBuiltInTarget::LocalTmux` → `PostSendBuiltInTarget::LocalSteer`,
 and the two new `NudgeKind`/`NudgeMode` enums. Everything below is
 explicitly **deferred**, not silently dropped, and is enforced by
-`scripts/check-nudge-taxonomy.py` (wired into `just lint` /
-`.just/run_lint.py` as the `nudge-taxonomy` target): any *new*
+`scripts/check-nudge-taxonomy.py` (wired into `just lint` as the
+`nudge-taxonomy` step of `sc-lint.toml`): any *new*
 `nudge`-family identifier introduced outside the script's frozen inventory
 fails CI, so the deferred breadth below cannot grow by accident.
 
@@ -371,8 +371,10 @@ supporting override-lifecycle identifiers introduced above.
   `LocalSteer` rename lands; it enforces both the retired-identifier list
   and the frozen nudge-family inventory this ADR references.
 - Boundary evidence: `boundaries/atm-storage/pending-nudge-store.toml` and
-  `boundaries/atm-core/message-received-hook-emitter.toml` pass
-  `.just/lint_boundaries.py`; `boundary-guard` review recorded before merge
+  `boundaries/atm-core/message-received-hook-emitter.toml` pass the
+  published `sc-lint lint sc-boundary` analyzer (inventory schema and
+  workspace dependency edges) and `.just/lint_boundaries.py` (atm-only
+  boundary rules); `boundary-guard` review recorded before merge
   per (d).
 - `atm queue <to> <msg>` full-surface parity truth-table against `atm send`
   (AC 3), including `--attach` parity arriving free from the shared

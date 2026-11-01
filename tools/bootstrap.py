@@ -65,6 +65,7 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
         ("cargo-audit", cargo["cargo-audit"]),
         ("cargo-shear", cargo["cargo-shear"]),
         ("cargo-modules", cargo["cargo-modules"]),
+        ("cargo-xwin", cargo["cargo-xwin"]),
     )
     if set(cargo_allowed) != {name for name, _version in cargo_tools}:
         raise BootstrapError("cargo-allowed-strategies must name every cargo tool exactly once.")
@@ -706,7 +707,7 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
     """Prove installed tools meet their manifest compatibility contracts."""
     if not cargo_binstall_matches(manifest):
         raise BootstrapError(f"cargo-binstall is not the exact pinned prebuilt release {manifest.cargo_binstall}.")
-    for name, version in manifest.cargo_tools:
+    for name, version in cargo_tools_for_host(manifest):
         if not binstall_tool_matches(name, version):
             raise BootstrapError(f"{name} is not the exact pinned prebuilt version {version}.")
     sc_compose = cargo_bin_path("sc-compose")
@@ -728,6 +729,27 @@ def verify_installed_tools(manifest: BootstrapManifest, python: Path) -> None:
             raise BootstrapError(f"Python package {package} must be exactly {version}; found {actual}.")
 
 
+WINDOWS_MSVC_TARGET = "x86_64-pc-windows-msvc"
+CARGO_XWIN = "cargo-xwin"
+
+
+def cargo_tools_for_host(manifest: BootstrapManifest) -> tuple[tuple[str, str], ...]:
+    """Return the manifest tools that apply to the current bootstrap host.
+
+    cargo-xwin is used to cross-compile Windows artifacts from non-Windows
+    hosts. It has no Windows release, and native Windows CI does not need it.
+    """
+    if sys.platform == "win32":
+        return tuple((name, version) for name, version in manifest.cargo_tools if name != CARGO_XWIN)
+    return manifest.cargo_tools
+
+
+def install_windows_msvc_target(*, dry_run: bool) -> None:
+    """Install the cross-host Windows target; Windows already ships it."""
+    if sys.platform != "win32":
+        run(["rustup", "target", "add", WINDOWS_MSVC_TARGET], dry_run=dry_run)
+
+
 def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     """Install the complete contract, then verify it rather than trusting installs."""
     synchronize_macos_seed_tools(manifest, dry_run=dry_run)
@@ -737,7 +759,7 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
     if not cargo_binstall_matches(manifest):
         install_cargo_binstall_release(manifest, dry_run=dry_run)
     allowed_strategies = dict(manifest.cargo_allowed_strategies)
-    for name, version in manifest.cargo_tools:
+    for name, version in cargo_tools_for_host(manifest):
         if binstall_tool_matches(name, version):
             continue
         run(
@@ -749,6 +771,7 @@ def bootstrap(manifest: BootstrapManifest, *, dry_run: bool) -> None:
             ),
             dry_run=dry_run,
         )
+    install_windows_msvc_target(dry_run=dry_run)
     if not sc_compose_matches(manifest):
         install_sc_compose_release(manifest, dry_run=dry_run)
     else:

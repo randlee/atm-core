@@ -117,7 +117,8 @@ fn operation_has_required_input(operation: &Value) -> bool {
 
 fn live_surface() -> Value {
     let source = std::fs::read_to_string(document_path()).expect("read OpenAPI contract");
-    let document: Value = serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
+    let document: Value =
+        noyalib::compat::serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
     assert_eq!(document["openapi"], "3.1.0", "OpenAPI version changed");
 
     let mut paths = BTreeMap::new();
@@ -184,7 +185,8 @@ fn documented_route_surface(document: &Value) -> BTreeSet<(String, String)> {
 #[test]
 fn openapi_routes_match_live_router_surface() {
     let source = std::fs::read_to_string(document_path()).expect("read OpenAPI contract");
-    let document: Value = serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
+    let document: Value =
+        noyalib::compat::serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
     let documented = documented_route_surface(&document);
     let live = atm_core::api::http_route_surface()
         .map(|route| (route.method.to_owned(), route.path_template.to_owned()))
@@ -381,7 +383,8 @@ fn assert_required_properties_are_serialized(
 #[test]
 fn documented_message_bodies_match_serialized_outcomes() {
     let source = std::fs::read_to_string(document_path()).expect("read OpenAPI contract");
-    let document: Value = serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
+    let document: Value =
+        noyalib::compat::serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
     let list = atm_core::list::ListOutcome {
         action: atm_core::types::CommandAction::List,
         team: "team".parse().expect("team"),
@@ -427,7 +430,8 @@ fn documented_message_bodies_match_serialized_outcomes() {
 #[test]
 fn documented_hook_actions_header_and_timeout_bounds_match_the_runtime() {
     let source = std::fs::read_to_string(document_path()).expect("read OpenAPI contract");
-    let document: Value = serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
+    let document: Value =
+        noyalib::compat::serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
 
     // A hooked task command answers 200 with HookActions and X-ATM-Hook-Actions, and list and
     // events are served by GET /messages, so both operations must document the header.

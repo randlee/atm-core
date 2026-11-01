@@ -20,7 +20,7 @@ io_forbidden = ["task_changed_notifications", "socket_io"]
 
 [dependencies]
 allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
-allowed_dependencies = []
+allowed_dependencies = ["atm-error"]
 forbidden_edges = ["atm-storage -> atm-core"]
 
 [references]
@@ -38,10 +38,12 @@ forbidden_test_bypasses = []
 
 [enforcement]
 # No production implementer exists; the sole DummyStore implementation is cfg(test)-scoped.
-no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-STORAGENOTIFIER-REFERENCES"]
 review_gates = ["post_commit_notifications_only"]
 
 [status]
 state = "concrete_landed"
 notes = ["AC.1 created the shared notification trait in crates/atm-storage", "task notifications are intentionally out of scope for the initial contract"]
+
+[extensions.atm]
+no_in_repo_implementation = true

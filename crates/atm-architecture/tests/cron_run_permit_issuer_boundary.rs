@@ -12,6 +12,16 @@ const TRAIT: &str = "CronRunPermitIssuer";
 
 #[derive(Deserialize)]
 struct BoundaryManifest {
+    extensions: Extensions,
+}
+
+#[derive(Deserialize)]
+struct Extensions {
+    atm: AtmExtensions,
+}
+
+#[derive(Deserialize)]
+struct AtmExtensions {
     issuer: Issuer,
 }
 
@@ -31,7 +41,7 @@ fn only_the_scheduler_implements_the_permit_issuer_seal() {
         .map(|path| relative(&root, &path))
         .collect::<BTreeSet<_>>();
     assert_eq!(
-        actual, manifest.issuer.allowed_impl_paths,
+        actual, manifest.extensions.atm.issuer.allowed_impl_paths,
         "CronRunPermitIssuer must remain implemented only by the authorized private scheduler record"
     );
 }

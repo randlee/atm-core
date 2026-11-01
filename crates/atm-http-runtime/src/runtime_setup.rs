@@ -80,6 +80,7 @@ pub(super) fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError
     Ok(())
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix socket preflight validates the configured filesystem path.")]
 #[cfg(unix)]
 pub(crate) fn validate_unix_socket_path(path: &Path) -> Result<(), AtmError> {
     if path.as_os_str().is_empty() {

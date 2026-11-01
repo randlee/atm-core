@@ -292,7 +292,7 @@ impl DecomposedMessageAdmission {
         &self,
         snapshot: &WorkflowSnapshot,
     ) -> Result<MessageTagProvenance, AtmError> {
-        Self::expected_tag_provenance_for(
+        Self::derive_tag_provenance(
             &self.message.tags,
             &self.template.frontmatter.template_tags,
             self.template.template_type.as_deref(),
@@ -305,6 +305,22 @@ impl DecomposedMessageAdmission {
     /// durable source values. Readers use this to detect corrupt stored
     /// projections without reopening a nested catalog connection.
     pub fn expected_tag_provenance_for(
+        instance_tags: &[InstanceTag],
+        applied_template_tags: &[TemplateTag],
+        template_type: Option<&str>,
+        content_format: Option<&str>,
+        snapshot: &WorkflowSnapshot,
+    ) -> Result<MessageTagProvenance, AtmError> {
+        Self::derive_tag_provenance(
+            instance_tags,
+            applied_template_tags,
+            template_type,
+            content_format,
+            snapshot,
+        )
+    }
+
+    fn derive_tag_provenance(
         instance_tags: &[InstanceTag],
         applied_template_tags: &[TemplateTag],
         template_type: Option<&str>,

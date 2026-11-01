@@ -244,9 +244,13 @@ Product-level boundary rules:
 Lint and tooling boundary rules:
 - `atm-core` owns repository-local lint orchestration through `just`,
   `.just/`, and `scripts/`
-- reusable static-analysis engines are incubated on `atm-core` through the
-  embedded `crates/sc-lint-*` workspace members, then migrated to the
-  standalone `sc-lint` repository only after the rule semantics stabilize
+- reusable static-analysis engines are supplied by the published `sc-lint`
+  tool (`sc-lint lint sc-boundary`, `sc-portability`, `sc-runtime`) and
+  configured by the repository's declarative sc-lint installation
+- `just lint` is the sc-lint kit runner over the `sc-lint.toml` step list
+  (parallel, keep-going); `just lint ci` runs the host's CI checks and
+  `just lint ci all` adds the Linux-tagged Windows-target Clippy step, which
+  CI and release validation run
 - ATM-specific repository policy checks stay local to `atm-core` when they
   depend on ATM role names, ATM-only document schemas, or ATM team-process
   records
@@ -303,10 +307,8 @@ Historical Phase R boundary direction (retired by Phase AI):
     `crates/atm-architecture/tests/boundary_enforcement.rs` fails on that edge
 
 Current Phase R lint partition direction:
-- extend the existing `sc-portability` analyzer for reusable platform-gating
-  rules
-- extend the existing `sc-boundary` analyzer for reusable production-liveness
-  rules that need Rust-aware analysis
+- consume published `sc-portability`, `sc-boundary`, and `sc-runtime`
+  analyzers for reusable platform-gating, boundary, and liveness rules
 - treat fixed-sleep test hygiene as a reusable lint family whose current
   repository-local rule is the proving implementation before `sc-lint`
   extraction
