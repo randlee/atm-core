@@ -29,7 +29,8 @@
             "crates/atm-storage-rusqlite/Cargo.toml"
           ],
           "allowed_source_roots": [
-            "crates/atm-storage-rusqlite/src"
+            "crates/atm-storage-rusqlite/src",
+            "crates/atm-storage-rusqlite/tests"
           ],
           "dependency": "rusqlite",
           "manifest_message": "only crates/atm-storage-rusqlite may depend on rusqlite",
@@ -51,7 +52,8 @@
             "crates/atm-cron/Cargo.toml"
           ],
           "allowed_source_roots": [
-            "crates/atm-cron/src"
+            "crates/atm-cron/src",
+            "crates/atm-cron/tests"
           ],
           "dependency": "cron",
           "manifest_message": "only atm-cron may depend on cron",
