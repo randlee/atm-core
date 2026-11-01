@@ -1,0 +1,111 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261101T192012Z-fixture_ANC-036_pass_1",
+  "gate": "dev",
+  "created_at": "2026-11-01T19:20:12+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-036:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 175,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-036",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Code in the shared location must be newly written, not moved or copied out of atm-bd-orchestration.",
+      "quote": "The shared code is new code, placed in the shared location.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-029)",
+      "anchor_version": 3,
+      "deterministic_check": "git log --follow on every shared-location file shows no rename or copy from a skills/atm-bd-orchestration/ path",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.01,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive was followed and evidenced.",
+      "usage": {
+        "input_tokens": 1211,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 175,
+      "item_shortened": false,
+      "request_bytes": 3844
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

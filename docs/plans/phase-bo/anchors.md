@@ -60,6 +60,11 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-052 | locked | One diagram row per hook match arm | 2026-11-01 |
 | ANC-053 | locked | Jev: every diagram row is implemented | 2026-11-01 |
 | ANC-054 | locked | Jev: every code arm is in the diagram | 2026-11-01 |
+| ANC-055 | locked | Lite has no close-vars or state file | 2026-11-01 |
+| ANC-056 | locked | Lite hooks look up facts at hook time | 2026-11-01 |
+| ANC-057 | locked | Lite dev close is one atm task close | 2026-11-01 |
+| ANC-058 | locked | Missing fact means refuse with the fix | 2026-11-01 |
+| ANC-059 | locked | Lite has no repair or backfill scripts | 2026-11-01 |
 
 ## ANC-001
 
@@ -559,13 +564,17 @@ Anchor: atm-bd-lite must be its own skill in the skills/atm-bd-lite/ directory.
 
 > Lite is separate.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 4.
 
 Summary: atm-bd-lite is its own skill directory
 
 Scope: adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestration/
 
 Deterministic check to pair with the development gate: skills/atm-bd-lite/SKILL.md exists and names the skill atm-bd-lite
+
+Fixtures:
+- pass: The lite profile ships as plugins/atm-bd-orchestration/skills/atm-bd-lite/ with its own SKILL.md (name: atm-bd-lite); test_lite_skill_layout asserts the directory and skill name.
+- fail: Lite is a mode flag inside skills/atm-bd-orchestration/SKILL.md; no skills/atm-bd-lite directory exists.
 
 ## ANC-029
 
@@ -587,7 +596,7 @@ Anchor: atm-bd-orchestration skill files must not be changed to use the shared c
 
 > atm-bd-orchestration doesn't change to use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 4.
 
 Summary: atm-bd-orchestration is not changed to use shared code
 
@@ -595,13 +604,17 @@ Scope: touches any file under skills/atm-bd-orchestration/
 
 Deterministic check to pair with the development gate: git diff --name-only <phase base>..<phase top> -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/ is empty
 
+Fixtures:
+- pass: git diff origin/main..HEAD -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/ is empty; orchestration keeps importing its own scripts and none of them imports the shared location.
+- fail: skills/atm-bd-orchestration/scripts/atm-task-close.py now imports stack_gate from the shared location instead of its own stack_top module.
+
 ## ANC-031
 
 Anchor: Each profile's task hooks, task-assignment templates and cron script must be inside that profile's own skill directory.
 
 > The profile-specific parts (the hooks, the templates and the cron script) live in each profile's own skill
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
 
 Summary: Profile hooks, templates and cron live in the profile's skill
 
@@ -609,13 +622,17 @@ Scope: adds or moves a task hook, a task-assignment template or a cron script
 
 Deterministic check to pair with the development gate: find shows every lite hook, template and cron script under skills/atm-bd-lite/; none in the shared location
 
+Fixtures:
+- pass: The lite task hooks, the lite dev/fix/qa assignment templates and lite_cron.py are all under skills/atm-bd-lite/ (scripts/ and templates/); find shows none of them in the shared location.
+- fail: The lite dev-template.xml.j2 and lite_cron.py are placed in the shared location next to the shared modules.
+
 ## ANC-032
 
 Anchor: Each atm-bd subcommand must run the script with the same file name from the skill of the profile set in the phase file.
 
 > and the atm-bd commands just call the profile's scripts by the same name.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 4.
 
 Summary: atm-bd commands call the profile's same-named script
 
@@ -623,13 +640,17 @@ Scope: adds or changes how an atm-bd subcommand selects or calls profile code
 
 Deterministic check to pair with the development gate: a test runs each subcommand on a lite and a full phase file and asserts the called script path is <profile skill>/scripts/<same file name>
 
+Fixtures:
+- pass: atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues; test_subcommand_routing asserts the called path for lite and full phase files for console, cron, queues, show and snapshot.
+- fail: atm-bd cron runs a new lite-cron entry point with a different file name and argument list for lite phases.
+
 ## ANC-033
 
 Anchor: Each console data source (sanity-log, qa-log, pr-log and any later source) must be its own Rust trait in atm-bd-types.
 
 > console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code. | a protocol can not be consumed by rust.  a trait can be consumed by both.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 4.
 
 Summary: Each console data source is its own Rust trait
 
@@ -637,19 +658,27 @@ Scope: adds or changes an atm-bd console data source
 
 Deterministic check to pair with the development gate: atm-bd-types defines one trait per console data source
 
+Fixtures:
+- pass: atm-bd-types defines trait SanityLogSource, trait QaLogSource and trait PrLogSource in src/console_sources.rs, one trait per console data source.
+- fail: All console data sources implement one generic DataSource trait with a source-kind enum argument.
+
 ## ANC-034
 
 Anchor: Every atm-bd-types trait must ship a .pyi stub generated from the trait.
 
 > approved ` .pyi stub `
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 4.
 
 Summary: Every trait ships a generated .pyi stub
 
 Scope: adds or changes an atm-bd-types trait or a Python implementation of one
 
 Deterministic check to pair with the development gate: regenerating the stubs produces no diff
+
+Fixtures:
+- pass: crates/atm-bd-types/atm_bd_types.pyi is generated by stub_gen from the traits; CI regenerates it and fails on any diff.
+- fail: The .pyi stub is hand-written and has drifted from the Rust trait signatures.
 
 ## ANC-035
 
@@ -671,7 +700,7 @@ Anchor: Code in the shared location must be newly written, not moved or copied o
 
 > The shared code is new code, placed in the shared location.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-029), 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-029), 2026-11-01. Status: locked. Version 3.
 
 Summary: Shared code is newly written
 
@@ -679,13 +708,17 @@ Scope: adds code to the shared location or to atm-bd-types
 
 Deterministic check to pair with the development gate: git log --follow on every shared-location file shows no rename or copy from a skills/atm-bd-orchestration/ path
 
+Fixtures:
+- pass: The shared phase_file.py module is new code written for this phase; git log --follow shows it created in sprint bo-10 with no rename or copy from skills/atm-bd-orchestration/.
+- fail: shared/stack_top.py is skills/atm-bd-orchestration/scripts/stack_top.py moved with git mv and lightly edited.
+
 ## ANC-037
 
 Anchor: Console data source implementations must share no code with each other apart from the atm-bd-types shared types.
 
 > console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-033), 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-033), 2026-11-01. Status: locked. Version 3.
 
 Summary: Console data sources share no code
 
@@ -693,13 +726,17 @@ Scope: adds or changes an atm-bd console data source
 
 Deterministic check to pair with the development gate: each source module imports no other source module; each source has its own fixture-input test
 
+Fixtures:
+- pass: shared/sources/qa_log.py and shared/sources/pr_log.py import only atm_bd_types and the standard library; neither imports the other.
+- fail: pr_log.py imports the line parser helper from qa_log.py.
+
 ## ANC-038
 
 Anchor: Every Python implementation of an atm-bd-types trait must pass pyright strict against the trait's .pyi stub.
 
 > approved ` .pyi stub `
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-034), 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction "separate anchors for single requirement per anchor" (from ANC-034), 2026-11-01. Status: locked. Version 3.
 
 Summary: Python trait implementations pass pyright strict
 
@@ -707,13 +744,17 @@ Scope: adds or changes a Python implementation of an atm-bd-types trait
 
 Deterministic check to pair with the development gate: pyright --strict on the Python implementations passes
 
+Fixtures:
+- pass: The Python QaLogSource implementation passes pyright --strict against atm_bd_types.pyi in just lint and CI.
+- fail: The Python implementation is excluded from the pyright include and uses Any for the trait's return types.
+
 ## ANC-039
 
 Anchor: No change made for atm-bd-lite may break atm-bd-orchestration.
 
 > Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: locked. Version 4.
 
 Summary: Lite work does not break atm-bd-orchestration
 
@@ -721,13 +762,17 @@ Scope: touches any file under skills/atm-bd-orchestration/, atm-bd-types or the 
 
 Deterministic check to pair with the development gate: the atm-bd-orchestration test suite passes at the phase top, and git diff <phase base>..<phase top> shows no atm-bd-orchestration test file changed
 
+Fixtures:
+- pass: At the stack top the atm-bd-orchestration test suite (just test-orchestration at origin/main) passes with no orchestration test file changed.
+- fail: Lite work renames an orchestration helper and edits three orchestration tests to match the new name.
+
 ## ANC-040
 
 Anchor: atm-bd-lite code that is not specific to the lite profile must be placed in the shared location, not in skills/atm-bd-lite/.
 
 > Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: locked. Version 4.
 
 Summary: Non-lite-specific code goes in the shared location
 
@@ -735,13 +780,17 @@ Scope: adds code to the shared location, atm-bd-types or a profile skill
 
 Deterministic check to pair with the development gate: no module under a profile skill is imported by another profile's skill
 
+Fixtures:
+- pass: shared/phase_file.py (profile reading, no lite-only logic) is in the shared location; skills/atm-bd-lite/ holds only the lite hooks, templates and cron.
+- fail: A profile-neutral phase-file reader is written inside skills/atm-bd-lite/scripts/.
+
 ## ANC-041
 
 Anchor: Every public function and trait implementation in the shared location must have a test that runs it on full-profile inputs: a real full-profile phase file and bead data from a full phase.
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 3.
 
 Summary: Shared code is tested on full-profile inputs
 
@@ -749,13 +798,17 @@ Scope: adds or changes code in the shared location or atm-bd-types
 
 Deterministic check to pair with the development gate: test inventory: every public item in the shared location is exercised by a test whose fixture is a full-profile phase file and full-phase bead data
 
+Fixtures:
+- pass: tests/shared/test_phase_file.py runs read_profile on .atm-bd/phase-bj.toml and the phase-bj bead export, both real full-profile data.
+- fail: The shared module's tests use only a synthetic lite phase file.
+
 ## ANC-042
 
 Anchor: Every public function and trait implementation in the shared location must have a test that runs it on lite-profile inputs.
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 3.
 
 Summary: Shared code is tested on lite-profile inputs
 
@@ -763,13 +816,17 @@ Scope: adds or changes code in the shared location or atm-bd-types
 
 Deterministic check to pair with the development gate: test inventory: every public item in the shared location is exercised by a test whose fixture is a lite-profile phase file
 
+Fixtures:
+- pass: tests/shared/test_phase_file.py also runs read_profile on a lite-profile phase file fixture.
+- fail: The shared stack gate is tested only against full-profile phase data.
+
 ## ANC-043
 
 Anchor: Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same full-profile inputs.
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 3.
 
 Summary: Shared code matches orchestration's output
 
@@ -777,13 +834,17 @@ Scope: adds or changes code in the shared location or atm-bd-types
 
 Deterministic check to pair with the development gate: each shared item with an orchestration counterpart has a comparison test that calls the unmodified orchestration code and the shared code on the same full-profile input and asserts equal output
 
+Fixtures:
+- pass: test_phase_file_parity calls the unmodified orchestration phase-config reader and shared read_phase on the same full-profile file and asserts equal output.
+- fail: The shared reader re-implements the orchestration behaviour and no test compares the two outputs.
+
 ## ANC-044
 
 Anchor: Code in the shared location must not branch on, or hard-code, either profile.
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 3.
 
 Summary: Shared code has no profile-specific logic
 
@@ -791,13 +852,17 @@ Scope: adds or changes code in the shared location or atm-bd-types
 
 Deterministic check to pair with the development gate: grep of the shared location for profile literals (lite, full, Profile.LITE, Profile.FULL) and branches on the profile is empty
 
+Fixtures:
+- pass: grep of the shared location for "lite", "full", Profile.LITE and Profile.FULL is empty; behaviour differences come from the caller's arguments.
+- fail: shared/stack_gate.py contains "if profile == Profile.LITE: skip sanity check".
+
 ## ANC-045
 
 Anchor: atm-bd-lite must call each shared-location module in the same sprint that adds the module.
 
 > I don't think you understand the concept of writing 'shared' modules without cutting over and using them immediately.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 3.
 
 Summary: Lite uses shared code in the sprint that adds it
 
@@ -805,13 +870,17 @@ Scope: adds or changes code, design or an interface in the shared location or at
 
 Deterministic check to pair with the development gate: every module added to the shared location in a sprint's diff is imported by atm-bd-lite code in that same diff
 
+Fixtures:
+- pass: Sprint bo-10 adds shared/phase_file.py and skills/atm-bd-lite/scripts/atm-bd-task-hook.py imports it in the same diff.
+- fail: shared/provider_commands.py lands in bo-9 and no lite code calls it until bo-12.
+
 ## ANC-046
 
 Anchor: Each shared-location module's design must list the atm-bd-orchestration behaviors it must meet, each citing the orchestration file and function that implements it today.
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 3.
 
 Summary: Shared module design lists orchestration requirements
 
@@ -819,13 +888,17 @@ Scope: adds or changes code, design or an interface in the shared location or at
 
 Deterministic check to pair with the development gate: each shared module has a requirements table in the phase design docs; every cited orchestration path and function exists at the phase base
 
+Fixtures:
+- pass: The design section for shared/stack_gate.py lists the orchestration behaviours it must meet, each citing skills/atm-bd-orchestration/scripts/stack_top.py and the function implementing it today.
+- fail: The shared stack gate design describes only what lite needs and names no orchestration file or function.
+
 ## ANC-047
 
 Anchor: Each shared-location interface (Rust trait or .pyi stub) must support every atm-bd-orchestration behavior listed in that module's requirements.
 
 > If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 3.
 
 Summary: Shared interfaces support every listed orchestration behavior
 
@@ -833,13 +906,17 @@ Scope: adds or changes code, design or an interface in the shared location or at
 
 Deterministic check to pair with the development gate: every row of each shared module's orchestration requirements table maps to an ANC-043 output-parity test
 
+Fixtures:
+- pass: Each row of the stack gate's orchestration requirements table has a same-output test; the StackGate trait signature covers all rows including the not-pushed case.
+- fail: The StackGate trait omits the not-pushed result that orchestration's stack check returns today.
+
 ## ANC-048
 
 Anchor: The lite task.assign hook must be its own Python file under skills/atm-bd-lite/scripts/.
 
 > I want all three to be independent files and independently tested by jev against the state transition diagrams.
 
-Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 2.
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 3.
 
 Summary: Lite task.assign hook is its own file
 
@@ -847,13 +924,17 @@ Scope: adds, moves or changes a lite task hook file
 
 Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.assign hook, and it imports no other hook file
 
+Fixtures:
+- pass: skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py is the lite task.assign hook and imports no other hook file.
+- fail: task.assign handling is a branch inside the lite task.close hook file.
+
 ## ANC-049
 
 Anchor: The lite task.start hook must be its own Python file under skills/atm-bd-lite/scripts/.
 
 > I want all three to be independent files and independently tested by jev against the state transition diagrams.
 
-Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 2.
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 3.
 
 Summary: Lite task.start hook is its own file
 
@@ -861,13 +942,17 @@ Scope: adds, moves or changes a lite task hook file
 
 Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.start hook, and it imports no other hook file
 
+Fixtures:
+- pass: skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py is the lite task.start hook and imports no other hook file.
+- fail: task.start and task.assign share one lite hook file.
+
 ## ANC-050
 
 Anchor: The lite task.close hook must be its own Python file under skills/atm-bd-lite/scripts/.
 
 > I want all three to be independent files and independently tested by jev against the state transition diagrams.
 
-Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 2.
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 3.
 
 Summary: Lite task.close hook is its own file
 
@@ -875,13 +960,17 @@ Scope: adds, moves or changes a lite task hook file
 
 Deterministic check to pair with the development gate: skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.close hook, and it imports no other hook file
 
+Fixtures:
+- pass: skills/atm-bd-lite/scripts/atm-bd-task-hook.py is the lite task.close hook and imports no other hook file.
+- fail: The lite task.close logic is split between atm-bd-task-hook.py and a qa_close.py helper module.
+
 ## ANC-051
 
 Anchor: Each lite task hook file must have its own state-transition diagram in the phase design docs.
 
 > I want all three to be independent files and independently tested by jev against the state transition diagrams.
 
-Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 2.
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 3.
 
 Summary: Each lite hook has its own state-transition diagram
 
@@ -889,13 +978,17 @@ Scope: adds or changes a lite task hook file or its state-transition diagram
 
 Deterministic check to pair with the development gate: the lite hooks design doc has one diagram section per hook file, named after the hook
 
+Fixtures:
+- pass: docs/plans/phase-bo/design/lite-hooks.md has one state-transition diagram section per lite hook file: task.assign, task.start, task.close.
+- fail: One combined diagram covers all three lite hooks.
+
 ## ANC-052
 
 Anchor: A lite hook's state-transition diagram must have one Transitions-table row per match arm in that hook's code.
 
 > I want all three to be independent files and independently tested by jev against the state transition diagrams.
 
-Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 2.
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 3.
 
 Summary: One diagram row per hook match arm
 
@@ -903,13 +996,17 @@ Scope: adds or changes a lite task hook file or its state-transition diagram
 
 Deterministic check to pair with the development gate: count of Transitions-table rows equals count of match arms in the hook file
 
+Fixtures:
+- pass: The task.close diagram has six Transitions rows (T-CLOSE-01..06) and the hook's match statement has six arms, one per row.
+- fail: The diagram has four rows while the hook's match has six arms.
+
 ## ANC-053
 
 Anchor: Jev must judge every Transitions-table row of a lite hook's diagram as implemented by that hook's code, with no row failing.
 
 > I one one file for atm-bd-lite task close and jev verifies 100% matches the design.
 
-Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 2.
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 3.
 
 Summary: Jev: every diagram row is implemented
 
@@ -917,16 +1014,94 @@ Scope: adds or changes a lite task hook file or its state-transition diagram
 
 Deterministic check to pair with the development gate: the per-hook Jev verification run reports pass for every diagram row; the run JSON is committed under anchor-runs/
 
+Fixtures:
+- pass: The Jev run anchor-runs/hooks/task-close.json judges T-CLOSE-01..06 each implemented by atm-bd-task-hook.py, no row failing.
+- fail: Jev reports T-CLOSE-04 (QA FAIL pours findings) as not implemented in the hook code.
+
 ## ANC-054
 
 Anchor: Jev must judge every match arm in a lite hook's code as listed in that hook's state-transition diagram, with no arm unlisted.
 
 > I one one file for atm-bd-lite task close and jev verifies 100% matches the design.
 
-Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 2.
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 3.
 
 Summary: Jev: every code arm is in the diagram
 
 Scope: adds or changes a lite task hook file or its state-transition diagram
 
 Deterministic check to pair with the development gate: the per-hook Jev verification run reports every match arm as listed; the run JSON is committed under anchor-runs/
+
+Fixtures:
+- pass: The Jev run anchor-runs/hooks/task-close.json judges each of the six match arms in atm-bd-task-hook.py as listed in the task.close diagram.
+- fail: The hook has a match arm for a refused close that the task.close diagram does not list.
+
+## ANC-055
+
+Anchor: The lite profile must not write or read a close-vars file or any other per-task state file.
+
+> that is what I wanted done in the first place.
+
+Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 1.
+
+Summary: Lite has no close-vars or state file
+
+Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure
+
+Deterministic check to pair with the development gate: grep of skills/atm-bd-lite for close-vars, close_vars and file writes outside the shared runner is empty; no lite template asks for a vars file
+
+## ANC-056
+
+Anchor: The lite hooks must look up every fact other than the task id at hook time from bd, git, the provider, the phase file or the ATM request.
+
+> that is what I wanted done in the first place.
+
+Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 1.
+
+Summary: Lite hooks look up facts at hook time
+
+Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure
+
+Deterministic check to pair with the development gate: each lite hook diagram has a Facts table whose every row names its lookup command; the hook code reads no other source
+
+## ANC-057
+
+Anchor: A lite dev or fix closes its task with one atm task close command carrying its report as the close message.
+
+> that is what I wanted done in the first place.
+
+Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 1.
+
+Summary: Lite dev close is one atm task close
+
+Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure
+
+Deterministic check to pair with the development gate: the lite dev and fix templates contain exactly one close instruction, atm task close <bead id> completed with the report via --stdin
+
+## ANC-058
+
+Anchor: When a lite hook cannot look up a fact, it must refuse with the exact command that fixes it, never fall back to stored state.
+
+> that is what I wanted done in the first place.
+
+Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 1.
+
+Summary: Missing fact means refuse with the fix
+
+Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure
+
+Deterministic check to pair with the development gate: every Errors-table row of the lite hook diagrams names a fix command; a test removes each lookup's data and asserts the refused reply text
+
+## ANC-059
+
+Anchor: The lite profile must have no repair, backfill or legacy-compatibility script.
+
+> that is what I wanted done in the first place.
+
+Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 1.
+
+Summary: Lite has no repair or backfill scripts
+
+Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure
+
+Deterministic check to pair with the development gate: find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' is empty

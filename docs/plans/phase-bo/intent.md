@@ -1,27 +1,32 @@
-# Intent - phase-bo
+# Intent - phase-bo (restart)
 
-Written 2026-10-31 by fenix. One page at most. This is the "why" that frames every anchor beneath it; Jev questions are judged against anchors, not against this document, so keep it short and let the anchors carry the testable facts.
+Rewritten 2026-11-01 by fenix for the phase-bo restart. One page at most. This is the "why" that frames every anchor; Jev judges plans and work against the anchors in `anchors.json`, not against this page.
 
 ## What this plan is for
 
-atm-bd-orchestration runs a full phase pipeline: dev, dev-sanity (Jev + LLM), stack link, QA, fix rounds, landing. That pipeline is right for a large agent team and wrong for a single agent or a small team, where the sanity stage and its ~10k lines of code and tests are overhead with no consumer. Rand wants an `atm-bd-lite` profile: the same bead state model and schema, the same tool interfaces (`atm-bd console`, `atm-bd cron`, `atm-bd queues`), but a much simpler dev -> QA transition driven by its own small task-close hook, written as one Python file organized by transition type with exhaustive enum checks.
+atm-bd-orchestration runs a full phase pipeline: dev, dev-sanity, stack link, QA, fix rounds, landing. That is right for a large agent team and wrong for one agent or a small team. Rand wants an `atm-bd-lite` profile: the same bead state model, schema and `atm-bd` command interfaces, with a dev -> QA pipeline and no sanity stage, run by one agent.
 
-Two coupled problems ride along. First, the package duplicates its scripts and templates into `.claude/`, `.codex/` and `.agents/` on install; the profiles need one shared `atm-bd-core` layer at a common point (`.atm-bd/scripts`, `.atm-bd/templates`) with only the profile-specific hook, assignment templates, cron and formulas living under each profile skill. Second, stacking depends on the `gh stack` extension and the GitHub stacks API, so the pipeline cannot run against Azure Git repos. Rand ruled that both profiles check stacking by comparing the PR base with the stack top (git only, blocking the dev/fix close), never through the `gh stack` subcommand; agent prompts keep using `gh stack` when the provider is GitHub, with `gh stack view --json` as the stack view (Rand, 2026-10-31); and that provider-specific commands (`gh` vs `az repos`) are injected into the sc-compose templates by an installer flag (`--github` / `--azure`).
+The first attempt (bo-1..bo-7) broke atm-bd-orchestration: it moved orchestration's scripts and templates into a new `core/` layer and rewired orchestration onto it. That is a breaking refactor and is not wanted. Rand, 2026-11-01: "atm-bd lite was supposed to be separate w/ shared code in a shared location. (atm-bd-orchestration was NOT supposed to change to use the 'shared' code. the 'shared' code was in shared/ location by design not refactor."
+
+This restart:
+
+1. Repairs the current stack first: everything that breaks atm-bd-orchestration is removed, so orchestration is byte-identical to its released state; the published `atm-bd-types` crate stays, and shared code already written stays if it is new code, valid and simple.
+2. Builds lite on top: lite-specific code in `skills/atm-bd-lite/`, everything not lite-specific in the shared location as new code.
+3. Makes the shared code real shared code before anyone cuts over to it. Lite uses each shared module the sprint it lands. Orchestration stays untouched and cuts over in a later phase. Each shared module is designed now to the behaviors orchestration's existing code has today (an inventory citing orchestration's files and functions), and tests run it on real full-profile data and show it gives the same output as orchestration's unchanged code. Rand: "If you don't do this, you will not have shared code that works WHEN we cut over and use it."
+4. Keeps lite tight: the lite scripts are small, pyright strict, and built on `atm-bd-types` with its interfaces as Rust traits (Python implementations checked against generated `.pyi` stubs). The three ATM task hooks (task.assign, task.start, task.close) are three independent files, each with its own state-transition diagram, and Jev verifies each file matches its diagram 100%, both directions.
 
 ## What success looks like
 
-- A phase file declares `profile = "lite"` and a single agent runs a lite phase end to end from GitHub release assets: dev bead dispatched, dev task closed by the lite hook (stack check -> bd close -> link layer -> QA assigned), QA closed, the stack landed, with `atm-bd cron` and `atm-bd queues` showing the phase correctly and `atm-bd console` refusing it (the console never runs a lite phase).
-- Shared types, schema, render helpers and tool entry points live in `atm-bd-core` and are installed once to `.atm-bd/scripts` and `.atm-bd/templates`; profile skills carry only their own hook, templates, cron tick and formulas.
-- The stack gate of neither profile calls `gh stack` or the GitHub stacks API; it is `git merge-base` plus the PR base ref. GitHub prompts still use `gh stack link` and `gh stack view --json` through the provider ops; the Azure provider renders the same templates with `az repos` commands and stack-bead equivalents.
-- The full profile (`atm-bd-orchestration`) keeps its behaviour and its tests green on the new layout.
+- The stack top leaves atm-bd-orchestration exactly as released, and its existing tests pass with no test edited.
+- A phase file declares `profile = "lite"` and one agent runs a lite phase end to end from release assets: dev dispatched, dev closed by the lite task.close hook (git-only stack check, bd close, QA assigned), QA closed, the stack landed.
+- Every shared module has full-profile tests and same-output tests against orchestration, so the later cutover is a switch, not a rewrite.
 
-## What is deliberately out of scope
+## Deliberately out of scope
 
-- Redesigning the full profile's sanity pipeline or its close hook (phase bm scope).
-- Running a live Azure phase: no Azure repo exists in this environment, so Azure acceptance is render-level and unit-level only.
-- The TUI modularity work and the `quick_fix` flow.
-- Mixing profiles inside one phase (ruled out by Rand).
+- Changing atm-bd-orchestration, its close hook or its sanity pipeline, including cutting it over to the shared code.
+- A live Azure phase (no Azure repo here; Azure is render- and unit-level only).
+- Mixing profiles in one phase.
 
 ## Anchors
 
-Anchors for this plan live in `anchors.json` (record of truth) and are rendered to `anchors.md`. Requirements and ADRs that govern this plan are listed there too, under their own IDs.
+`anchors.json` is the record of truth, rendered to `anchors.md`. Retired anchors stay for history.

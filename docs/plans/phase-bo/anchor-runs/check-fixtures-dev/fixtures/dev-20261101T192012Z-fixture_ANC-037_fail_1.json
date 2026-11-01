@@ -1,0 +1,113 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261101T192012Z-fixture_ANC-037_fail_1",
+  "gate": "dev",
+  "created_at": "2026-11-01T19:20:12+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-037:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 56,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-037",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Console data source implementations must share no code with each other apart from the atm-bd-types shared types.",
+      "quote": "console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-033)",
+      "anchor_version": 3,
+      "deterministic_check": "each source module imports no other source module; each source has its own fixture-input test",
+      "kind": "prohibition",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.42,
+          "probabilities": {
+            "yes": 0.61,
+            "no": 0.19,
+            "unclear": 0.2
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.96,
+            "unclear": 0.03
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.79,
+          "probabilities": {
+            "yes": 0.86,
+            "no": 0.03,
+            "unclear": 0.11
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.96,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.97,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.42,
+      "explanation": "The delivered work went against this anchor.",
+      "usage": {
+        "input_tokens": 1178,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 56,
+      "item_shortened": false,
+      "request_bytes": 3732
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-037"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

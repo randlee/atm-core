@@ -1,0 +1,103 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T192010Z-fixture_ANC-032_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T19:20:10+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-032:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 106,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-032",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each atm-bd subcommand must run the script with the same file name from the skill of the profile set in the phase file.",
+      "quote": "and the atm-bd commands just call the profile's scripts by the same name.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "anchor_version": 4,
+      "deterministic_check": "a test runs each subcommand on a lite and a full phase file and asserts the called script path is <profile skill>/scripts/<same file name>",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.04,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.77,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.85,
+            "unclear": 0.13
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.77,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1022,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 106,
+      "item_shortened": false,
+      "request_bytes": 3066
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-032"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

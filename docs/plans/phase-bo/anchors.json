@@ -1598,11 +1598,15 @@
       "scope": "adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestration/",
       "deterministic_check": "skills/atm-bd-lite/SKILL.md exists and names the skill atm-bd-lite",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The lite profile ships as plugins/atm-bd-orchestration/skills/atm-bd-lite/ with its own SKILL.md (name: atm-bd-lite); test_lite_skill_layout asserts the directory and skill name."
+        ],
+        "fail": [
+          "Lite is a mode flag inside skills/atm-bd-orchestration/SKILL.md; no skills/atm-bd-lite directory exists."
+        ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1630,6 +1634,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1697,11 +1708,15 @@
       "scope": "touches any file under skills/atm-bd-orchestration/",
       "deterministic_check": "git diff --name-only <phase base>..<phase top> -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/ is empty",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "git diff origin/main..HEAD -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/ is empty; orchestration keeps importing its own scripts and none of them imports the shared location."
+        ],
+        "fail": [
+          "skills/atm-bd-orchestration/scripts/atm-task-close.py now imports stack_gate from the shared location instead of its own stack_top module."
+        ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1728,6 +1743,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1745,11 +1767,15 @@
       "scope": "adds or moves a task hook, a task-assignment template or a cron script",
       "deterministic_check": "find shows every lite hook, template and cron script under skills/atm-bd-lite/; none in the shared location",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The lite task hooks, the lite dev/fix/qa assignment templates and lite_cron.py are all under skills/atm-bd-lite/ (scripts/ and templates/); find shows none of them in the shared location."
+        ],
+        "fail": [
+          "The lite dev-template.xml.j2 and lite_cron.py are placed in the shared location next to the shared modules."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1768,6 +1794,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1785,11 +1818,15 @@
       "scope": "adds or changes how an atm-bd subcommand selects or calls profile code",
       "deterministic_check": "a test runs each subcommand on a lite and a full phase file and asserts the called script path is <profile skill>/scripts/<same file name>",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues; test_subcommand_routing asserts the called path for lite and full phase files for console, cron, queues, show and snapshot."
+        ],
+        "fail": [
+          "atm-bd cron runs a new lite-cron entry point with a different file name and argument list for lite phases."
+        ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1816,6 +1853,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1833,11 +1877,15 @@
       "scope": "adds or changes an atm-bd console data source",
       "deterministic_check": "atm-bd-types defines one trait per console data source",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "atm-bd-types defines trait SanityLogSource, trait QaLogSource and trait PrLogSource in src/console_sources.rs, one trait per console data source."
+        ],
+        "fail": [
+          "All console data sources implement one generic DataSource trait with a source-kind enum argument."
+        ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1866,6 +1914,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1883,11 +1938,15 @@
       "scope": "adds or changes an atm-bd-types trait or a Python implementation of one",
       "deterministic_check": "regenerating the stubs produces no diff",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "crates/atm-bd-types/atm_bd_types.pyi is generated by stub_gen from the traits; CI regenerates it and fails on any diff."
+        ],
+        "fail": [
+          "The .pyi stub is hand-written and has drifted from the Rust trait signatures."
+        ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1916,6 +1975,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1973,11 +2039,15 @@
       "scope": "adds code to the shared location or to atm-bd-types",
       "deterministic_check": "git log --follow on every shared-location file shows no rename or copy from a skills/atm-bd-orchestration/ path",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The shared phase_file.py module is new code written for this phase; git log --follow shows it created in sprint bo-10 with no rename or copy from skills/atm-bd-orchestration/."
+        ],
+        "fail": [
+          "shared/stack_top.py is skills/atm-bd-orchestration/scripts/stack_top.py moved with git mv and lightly edited."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1996,6 +2066,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2013,11 +2090,15 @@
       "scope": "adds or changes an atm-bd console data source",
       "deterministic_check": "each source module imports no other source module; each source has its own fixture-input test",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "shared/sources/qa_log.py and shared/sources/pr_log.py import only atm_bd_types and the standard library; neither imports the other."
+        ],
+        "fail": [
+          "pr_log.py imports the line parser helper from qa_log.py."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2036,6 +2117,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2053,11 +2141,15 @@
       "scope": "adds or changes a Python implementation of an atm-bd-types trait",
       "deterministic_check": "pyright --strict on the Python implementations passes",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The Python QaLogSource implementation passes pyright --strict against atm_bd_types.pyi in just lint and CI."
+        ],
+        "fail": [
+          "The Python implementation is excluded from the pyright include and uses Any for the trait's return types."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2076,6 +2168,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2093,11 +2192,15 @@
       "scope": "touches any file under skills/atm-bd-orchestration/, atm-bd-types or the shared location",
       "deterministic_check": "the atm-bd-orchestration test suite passes at the phase top, and git diff <phase base>..<phase top> shows no atm-bd-orchestration test file changed",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "At the stack top the atm-bd-orchestration test suite (just test-orchestration at origin/main) passes with no orchestration test file changed."
+        ],
+        "fail": [
+          "Lite work renames an orchestration helper and edits three orchestration tests to match the new name."
+        ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2124,6 +2227,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2141,11 +2251,15 @@
       "scope": "adds code to the shared location, atm-bd-types or a profile skill",
       "deterministic_check": "no module under a profile skill is imported by another profile's skill",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "shared/phase_file.py (profile reading, no lite-only logic) is in the shared location; skills/atm-bd-lite/ holds only the lite hooks, templates and cron."
+        ],
+        "fail": [
+          "A profile-neutral phase-file reader is written inside skills/atm-bd-lite/scripts/."
+        ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2173,6 +2287,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2190,11 +2311,15 @@
       "scope": "adds or changes code in the shared location or atm-bd-types",
       "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a full-profile phase file and full-phase bead data",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "tests/shared/test_phase_file.py runs read_profile on .atm-bd/phase-bj.toml and the phase-bj bead export, both real full-profile data."
+        ],
+        "fail": [
+          "The shared module's tests use only a synthetic lite phase file."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2213,6 +2338,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2230,11 +2362,15 @@
       "scope": "adds or changes code in the shared location or atm-bd-types",
       "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a lite-profile phase file",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "tests/shared/test_phase_file.py also runs read_profile on a lite-profile phase file fixture."
+        ],
+        "fail": [
+          "The shared stack gate is tested only against full-profile phase data."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2253,6 +2389,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2270,11 +2413,15 @@
       "scope": "adds or changes code in the shared location or atm-bd-types",
       "deterministic_check": "each shared item with an orchestration counterpart has a comparison test that calls the unmodified orchestration code and the shared code on the same full-profile input and asserts equal output",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "test_phase_file_parity calls the unmodified orchestration phase-config reader and shared read_phase on the same full-profile file and asserts equal output."
+        ],
+        "fail": [
+          "The shared reader re-implements the orchestration behaviour and no test compares the two outputs."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2293,6 +2440,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2310,11 +2464,15 @@
       "scope": "adds or changes code in the shared location or atm-bd-types",
       "deterministic_check": "grep of the shared location for profile literals (lite, full, Profile.LITE, Profile.FULL) and branches on the profile is empty",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "grep of the shared location for \"lite\", \"full\", Profile.LITE and Profile.FULL is empty; behaviour differences come from the caller's arguments."
+        ],
+        "fail": [
+          "shared/stack_gate.py contains \"if profile == Profile.LITE: skip sanity check\"."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2333,6 +2491,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2350,11 +2515,15 @@
       "scope": "adds or changes code, design or an interface in the shared location or atm-bd-types",
       "deterministic_check": "every module added to the shared location in a sprint's diff is imported by atm-bd-lite code in that same diff",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Sprint bo-10 adds shared/phase_file.py and skills/atm-bd-lite/scripts/atm-bd-task-hook.py imports it in the same diff."
+        ],
+        "fail": [
+          "shared/provider_commands.py lands in bo-9 and no lite code calls it until bo-12."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2373,6 +2542,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2390,11 +2566,15 @@
       "scope": "adds or changes code, design or an interface in the shared location or atm-bd-types",
       "deterministic_check": "each shared module has a requirements table in the phase design docs; every cited orchestration path and function exists at the phase base",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The design section for shared/stack_gate.py lists the orchestration behaviours it must meet, each citing skills/atm-bd-orchestration/scripts/stack_top.py and the function implementing it today."
+        ],
+        "fail": [
+          "The shared stack gate design describes only what lite needs and names no orchestration file or function."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2413,6 +2593,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2430,11 +2617,15 @@
       "scope": "adds or changes code, design or an interface in the shared location or atm-bd-types",
       "deterministic_check": "every row of each shared module's orchestration requirements table maps to an ANC-043 output-parity test",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Each row of the stack gate's orchestration requirements table has a same-output test; the StackGate trait signature covers all rows including the not-pushed case."
+        ],
+        "fail": [
+          "The StackGate trait omits the not-pushed result that orchestration's stack check returns today."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2453,6 +2644,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2470,11 +2668,15 @@
       "scope": "adds, moves or changes a lite task hook file",
       "deterministic_check": "skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.assign hook, and it imports no other hook file",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py is the lite task.assign hook and imports no other hook file."
+        ],
+        "fail": [
+          "task.assign handling is a branch inside the lite task.close hook file."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2493,6 +2695,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2510,11 +2719,15 @@
       "scope": "adds, moves or changes a lite task hook file",
       "deterministic_check": "skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.start hook, and it imports no other hook file",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py is the lite task.start hook and imports no other hook file."
+        ],
+        "fail": [
+          "task.start and task.assign share one lite hook file."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2533,6 +2746,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2550,11 +2770,15 @@
       "scope": "adds, moves or changes a lite task hook file",
       "deterministic_check": "skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.close hook, and it imports no other hook file",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "skills/atm-bd-lite/scripts/atm-bd-task-hook.py is the lite task.close hook and imports no other hook file."
+        ],
+        "fail": [
+          "The lite task.close logic is split between atm-bd-task-hook.py and a qa_close.py helper module."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2573,6 +2797,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2590,11 +2821,15 @@
       "scope": "adds or changes a lite task hook file or its state-transition diagram",
       "deterministic_check": "the lite hooks design doc has one diagram section per hook file, named after the hook",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "docs/plans/phase-bo/design/lite-hooks.md has one state-transition diagram section per lite hook file: task.assign, task.start, task.close."
+        ],
+        "fail": [
+          "One combined diagram covers all three lite hooks."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2613,6 +2848,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2630,11 +2872,15 @@
       "scope": "adds or changes a lite task hook file or its state-transition diagram",
       "deterministic_check": "count of Transitions-table rows equals count of match arms in the hook file",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The task.close diagram has six Transitions rows (T-CLOSE-01..06) and the hook's match statement has six arms, one per row."
+        ],
+        "fail": [
+          "The diagram has four rows while the hook's match has six arms."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2653,6 +2899,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2670,11 +2923,15 @@
       "scope": "adds or changes a lite task hook file or its state-transition diagram",
       "deterministic_check": "the per-hook Jev verification run reports pass for every diagram row; the run JSON is committed under anchor-runs/",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The Jev run anchor-runs/hooks/task-close.json judges T-CLOSE-01..06 each implemented by atm-bd-task-hook.py, no row failing."
+        ],
+        "fail": [
+          "Jev reports T-CLOSE-04 (QA FAIL pours findings) as not implemented in the hook code."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2693,6 +2950,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -2710,11 +2974,15 @@
       "scope": "adds or changes a lite task hook file or its state-transition diagram",
       "deterministic_check": "the per-hook Jev verification run reports every match arm as listed; the run JSON is committed under anchor-runs/",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The Jev run anchor-runs/hooks/task-close.json judges each of the six match arms in atm-bd-task-hook.py as listed in the task.close diagram."
+        ],
+        "fail": [
+          "The hook has a match arm for a refused close that the task.close diagram does not list."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2733,6 +3001,183 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-055",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite profile must not write or read a close-vars file or any other per-task state file.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+      "summary": "Lite has no close-vars or state file",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "grep of skills/atm-bd-lite for close-vars, close_vars and file writes outside the shared runner is empty; no lite template asks for a vars file",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-056",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite hooks must look up every fact other than the task id at hook time from bd, git, the provider, the phase file or the ATM request.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+      "summary": "Lite hooks look up facts at hook time",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "each lite hook diagram has a Facts table whose every row names its lookup command; the hook code reads no other source",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-057",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A lite dev or fix closes its task with one atm task close command carrying its report as the close message.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+      "summary": "Lite dev close is one atm task close",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "the lite dev and fix templates contain exactly one close instruction, atm task close <bead id> completed with the report via --stdin",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-058",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a lite hook cannot look up a fact, it must refuse with the exact command that fixes it, never fall back to stored state.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+      "summary": "Missing fact means refuse with the fix",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "every Errors-table row of the lite hook diagrams names a fix command; a test removes each lookup's data and asserts the refused reply text",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-059",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite profile must have no repair, backfill or legacy-compatibility script.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+      "summary": "Lite has no repair or backfill scripts",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' is empty",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
         }
       ]
     }

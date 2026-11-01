@@ -1,0 +1,131 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261101T192010Z-fixture_ANC-028_pass_1",
+  "gate": "dev",
+  "created_at": "2026-11-01T19:20:10+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-028:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 178,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-028",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite must be its own skill in the skills/atm-bd-lite/ directory.",
+      "quote": "Lite is separate.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "anchor_version": 4,
+      "deterministic_check": "skills/atm-bd-lite/SKILL.md exists and names the skill atm-bd-lite",
+      "kind": "structural",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.94,
+            "no": 0.06,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.58,
+          "probabilities": {
+            "yes": 0.24,
+            "no": 0.72,
+            "unclear": 0.04
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.49,
+          "probabilities": {
+            "yes": 0.66,
+            "no": 0.33,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.73,
+          "probabilities": {
+            "yes": 0.82,
+            "no": 0.09,
+            "unclear": 0.09
+          }
+        }
+      },
+      "min_confidence": 0.49,
+      "explanation": "Jev was not confident (min confidence 0.49); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 1223,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "implemented",
+          "choice": "no",
+          "confidence": 0.58
+        },
+        {
+          "ask": "first",
+          "role": "conflict",
+          "question_id": "violated",
+          "choice": "yes",
+          "confidence": 0.49
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 178,
+      "item_shortened": false,
+      "request_bytes": 3845
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-028"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

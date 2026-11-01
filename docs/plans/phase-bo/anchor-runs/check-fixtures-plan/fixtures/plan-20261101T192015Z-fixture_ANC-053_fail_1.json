@@ -1,0 +1,119 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T192015Z-fixture_ANC-053_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T19:20:15+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-053:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 84,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-053",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Jev must judge every Transitions-table row of a lite hook's diagram as implemented by that hook's code, with no row failing.",
+      "quote": "I one one file for atm-bd-lite task close and jev verifies 100% matches the design.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+      "anchor_version": 3,
+      "deterministic_check": "the per-hook Jev verification run reports pass for every diagram row; the run JSON is committed under anchor-runs/",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.91,
+            "no": 0.05,
+            "unclear": 0.04
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.44,
+          "probabilities": {
+            "yes": 0.16,
+            "no": 0.63,
+            "unclear": 0.21
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.42,
+          "probabilities": {
+            "yes": 0.61,
+            "no": 0.35,
+            "unclear": 0.04
+          }
+        }
+      },
+      "min_confidence": 0.42,
+      "explanation": "Jev was not confident (min confidence 0.42); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1020,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "addressed",
+          "choice": "no",
+          "confidence": 0.44
+        },
+        {
+          "ask": "first",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "yes",
+          "confidence": 0.42
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 84,
+      "item_shortened": false,
+      "request_bytes": 3048
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-053"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}
