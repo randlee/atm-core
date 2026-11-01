@@ -11,8 +11,7 @@
 > Rulings applied (relayed by the coordinator as Rand's, 2026-11-01, binding):
 > (1) rows come from A, C (folded into A), D and E, and B is dropped; (2) there is no close-vars file of any kind
 > and no progress or state file. The task id is the bead id, and every other fact is
-> looked up at hook time; (3) hooks only decide, with a pure `plan(event, facts) ->
-> commands + reply`, and one shared runner executes; (4) no repair, backfill or
+> looked up at hook time; (3) each hook does its own work: no runner (Rand: "so to keep the hook small, you delegate everything to a runner? that doesn't pass the smell test"); (4) no repair, backfill or
 > legacy paths: a fact that cannot be looked up refuses with the exact command that
 > fixes it.
 >
@@ -30,21 +29,19 @@
 | task.start | `atm-bd-task-start-hook.py` | ANC-049 |
 | task.close | `atm-bd-task-hook.py` (name fixed by ANC-002) | ANC-002, ANC-050 |
 
-Each file holds exactly these parts: the interpreter bootstrap (0.6), `TIMEOUT_MS = 2500`,
-a `FACTS` list (its Facts table), an arm enum, `classify(event, facts) -> Result[Arm]`,
-`plan(event, facts) -> Result[Plan]` containing **exactly one `match` statement** over
-the arm enum with no wildcard arm (pyright `reportMatchNotExhaustive=error`, ANC-003),
-`doctor(request)`, and a `__main__` block that calls the shared runner. A hook file
-imports no other hook file (ANC-048..050). It does no I/O: every subprocess call is
-made by the runner.
+Each file holds: the interpreter bootstrap (0.6), `TIMEOUT_MS = 2500`, the phase-file
+read, its fact lookups (its Facts table), an arm enum, and **exactly one `match`
+statement** over the arm enum with no wildcard arm (pyright
+`reportMatchNotExhaustive=error`, ANC-003). Each arm runs its own `bd`, `git` and `atm`
+commands. There is no runner: the hook does its own work, and its line count is the
+real one. A hook file imports no other hook file (ANC-048..050).
 
-Shared runner: `.atm-bd/scripts/task_hook_runner.py`. It is new shared code (ANC-036,
-ANC-040). It holds no profile literal (ANC-044): the hook passes its expected
-`Profile`. It needs ANC-041..043 full-profile tests and parity tests, and lite uses
-it in the sprint that adds it (ANC-045). One lite-only helper, `lite_assign_vars.py`
-in the lite skill, builds the assignment template vars. Both task.assign and
-task.close (for its QA and fix assigns) use it. It holds no transition handling
-(ANC-002).
+atm-bd-core (`.atm-bd/scripts/`) holds only the lookups more than one hook uses: bead
+facts (`bd show`), the PR for a branch (`gh pr view <branch>` / `az repos pr list`),
+the stack top (git), and one `run(argv, timeout) -> Result` subprocess helper that
+tests replace. It holds no profile literal (ANC-044) and has tests on lite and
+orchestration-profile inputs (ANC-041, ANC-042). The lite-only `lite_assign_vars.py`
+in the lite skill builds assignment template vars for task.assign and task.close.
 
 ### 0.2 Input (ADR-068 envelope, fields used)
 
@@ -59,7 +56,7 @@ task.close (for its QA and fix assigns) use it. It holds no transition handling
 | `request.task_op` | `{"op":"start"}` or `{"op":"close","outcome":"completed\|refused\|cancelled","reason":...}` |
 | `request.to.agent` | assignee (task.assign only) |
 | `request.message_source` | `{"Inline": "<text>"}` from positional text or `--stdin` (verified: `crates/atm/src/commands/send.rs:575-595`); `{"File":...}` from `--file`; `{"Template":...}` from `--template` |
-| `request.dry_run` | runner runs no write command and returns the planned reply |
+| `request.dry_run` | the hook runs no write command and returns the planned reply |
 
 The hook runs in the daemon's cleared environment: `PATH`, `HOME`, `ATM_TEAM`,
 `ATM_PHASE` and the registered cwd (the primary checkout). There is no `ATM_IDENTITY`
@@ -84,26 +81,20 @@ uses the right account is **UNVERIFIED** (G-8). No table uses `gh pr list`.
 `qa_member` and `provider` are new keys that the lite phase file needs. The
 `phase-bo.toml` on `plan/phase-bo-replan` has neither key, and no `profile` key either.
 
-### 0.4 Runner algorithm (fixed; tested once, in the runner)
+### 0.4 Hook flow (the same in every hook, written inline)
 
-| id | step | result |
-| --- | --- | --- |
-| R-01 | argv[1] is not the hook's own name (and is not `doctor`) | reply `not-applicable` |
-| R-02 | `request.task_id` absent or not prefixed by `custom.task_prefix` | reply `not-applicable` |
-| R-03 | read the phase file (`tomllib`) | unreadable → refused PHASE.UNREADABLE |
-| R-04 | `profile` ≠ the hook's `Profile.LITE` | refused PROFILE.MISMATCH |
-| R-05 | look up `FACTS` in table order. Lookups marked ∥ run concurrently; a failed lookup refuses with that row's error | refused with the fact's error |
-| R-06 | `classify`, then `plan`; an `Err` is refused with its error | refused |
-| R-07 | run `plan.commands` in order (none when `dry_run`). A command whose `skip_when` holds on the facts is skipped. The first failure stops the run and refuses with COMMAND.FAILED, COMMAND.TIMEOUT or the command's own guard error | refused |
-| R-08 | print `plan.reply` (`handled` with `atm-action`, or `pass-through`) | reply |
+1. Not this hook's event, or `request.task_id` lacks `custom.task_prefix` → reply `not-applicable`.
+2. Read the phase file; `profile` ≠ `"lite"` → refused PROFILE.MISMATCH (ANC-026).
+3. Look up the facts in table order; a failed lookup refuses with that row's error and fix command (ANC-058).
+4. `match` the arm; the arm checks its guards, runs its commands in order (none when
+   `dry_run`), and stops at the first failure with COMMAND.FAILED or COMMAND.TIMEOUT.
+5. Print the reply.
 
-Each subprocess gets the time left before `start + TIMEOUT_MS - 300 ms`. A
-`subprocess.TimeoutExpired` becomes the `Err` COMMAND.TIMEOUT, never an uncaught
-exception (ANC-016). Any other exception is a programmer error: the process exits
-non-zero and ATM reports `ATM_HOOK_EXIT` to the caller (fail closed).
-
-A rerun is idempotent because each write command's `skip_when` reads the facts of the
-rerun. No progress file exists (ruling 2).
+A write is skipped when the looked-up facts show it already happened (e.g. the bead is
+already closed), so a rerun after a timeout finishes the rest. No progress file
+exists (ANC-055). `subprocess.TimeoutExpired` becomes COMMAND.TIMEOUT, never an
+uncaught exception (ANC-016); any other exception exits non-zero and ATM reports
+`ATM_HOOK_EXIT` (fail closed).
 
 ### 0.5 Replies and actions
 
@@ -153,7 +144,7 @@ is inherited across the exec. Measured: `uv run --with atm-bd-types==0.2.0` take
 | any bd **write** | **UNVERIFIED** (a read-only session cannot measure it) |
 | `az repos pr list` | **UNVERIFIED** (no Azure organization available) |
 
-A dev or fix close costs about 1.8 s before its 3-4 bd writes. The runner budget is
+A dev or fix close costs about 1.8 s before its 3-4 bd writes. The hook's budget is
 `min(2500, remaining - 500)` (bk §9.7). **The p95 of a full dev close must be measured
 before approval.** An `ATM_HOOK_TIMEOUT` leaves the task open, and the rerun skips
 the writes that already ran.
@@ -176,7 +167,7 @@ the writes that already ran.
 
 ### A.2 Facts
 
-| fact | lookup command (run by the runner) | when | cannot be looked up |
+| fact | lookup command (run by the hook) | when | cannot be looked up |
 | --- | --- | --- | --- |
 | F1 bead | `bd show <task> --json` → `status`, `assignee`, `labels`, `metadata.{branch, worktree, sprint, stack, stack_bead, qa_bead, checked_bead, round}`, `dependencies[].{id, dependency_type, status}` | always | BEAD.NOT_FOUND; FACT.MISSING per key |
 | F2 role | the one label of `stage:dev`, `stage:fix`, `stage:qa` in F1 `labels`; F1 must also carry `phase-<phase>` | always | BEAD.STAGE |
