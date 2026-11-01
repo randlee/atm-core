@@ -2,6 +2,8 @@
 
 Repo: atm-bd-orchestration. Branch `sprint/bo-10-task-start-hook`, stacked on bo-9. Owned paths: `plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py` and its test.
 
+Installs to `.atm-bd/atm-bd-lite/scripts/` (see bo-12, "Install layout").
+
 ## Goal
 The assignee starts an unblocked bead. The start records the work's base: the stack top at start (the trunk for a new stack), with no claim.
 

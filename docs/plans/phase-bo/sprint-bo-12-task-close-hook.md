@@ -1,11 +1,17 @@
 # Sprint bo-12: lite task.close hook and the dev's stack claim command
 
-Repo: atm-bd-orchestration. Branch `sprint/bo-12-task-close-hook`, stacked on bo-9. Owned paths: `plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/atm-bd-task-hook.py`, `.../atm-bd-lite-stack.py`, `plugins/atm-bd-orchestration/shared/scripts/qa_handoff.py` (installed to `.atm-bd/shared/scripts/`), and their tests.
+Repo: atm-bd-orchestration. Branch `sprint/bo-12-task-close-hook`, stacked on bo-9. Owned paths: `plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/atm-bd-task-hook.py`, `.../atm-bd-lite-stack.py`, `plugins/atm-bd-orchestration/shared/` (the `atm-bd-shared` package, installed to `.atm-bd/shared/`), and their tests.
 
 ## Goal
 - **Dev workflow** (Rand): obtain the stack bead, rebase, update the stack bead, release it, close the task. On a new stack, rebase onto the trunk.
 - **QA** (Rand): QA runs on a stacked layer, and layers stacked later are ignored. The lead may send QA to a higher layer by updating the QA bead's existing `checked_bead`.
 - A FAIL verdict files one fix bead that carries the whole report and dispatches it.
+
+## Install layout (Rand)
+- Lite scripts install to `.atm-bd/atm-bd-lite/scripts/`: the three task hooks, `atm-bd-lite-stack.py` and `atm-bd-lite-cron.py`.
+- Shared code installs to `.atm-bd/shared/` as the `atm-bd-shared` package.
+- Each lite script's uv header names it with `atm-bd-shared = { path = "../../shared" }`. uv resolves that against the script's own directory, so the working directory does not matter (checked 2026-11-01: 0.49 s on a fresh directory).
+- [ ] A test runs the installed close hook from an unrelated working directory and imports `atm_bd_shared`.
 
 ## Rules (all lite sprints)
 - The code below is the deliverable. Implement it as written; any change it needs is a plan change and goes to fenix first.
@@ -34,7 +40,7 @@ Repo: atm-bd-orchestration. Branch `sprint/bo-12-task-close-hook`, stacked on bo
 - [ ] Recovery (CLOSED bead) in each of these states, with no PR or tip checks:
   - [ ] S+A+B with A retried;
   - [ ] the same, with A's PR merged.
-- [ ] QA dispatch: after the close write, the hook calls the shared `qa_handoff` (`.atm-bd/shared/scripts/qa_handoff.py`, which cron also uses).
+- [ ] QA dispatch: after the close write, the hook calls the shared `qa_handoff` (`atm_bd_shared.qa_handoff`, which cron also uses).
   - [ ] No QA bead ready: pass-through.
   - [ ] A QA bead that is ready, open and unassigned: handled with [assign to `qa_member`, actor = lead, QA template, review = target layer, then the original].
   - [ ] Several ready: one assign each, in bd ready order.
@@ -59,7 +65,9 @@ Repo: atm-bd-orchestration. Branch `sprint/bo-12-task-close-hook`, stacked on bo
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["atm-bd-types==0.2.0"]
+# dependencies = ["atm-bd-types==0.2.0", "atm-bd-shared"]
+# [tool.uv.sources]
+# atm-bd-shared = { path = "../../shared" }  # .atm-bd/atm-bd-lite/scripts -> .atm-bd/shared
 # ///
 """atm-bd-lite task.close hook.
 
@@ -74,7 +82,7 @@ A refused or cancelled close gives the bead back: open and unassigned.
 """
 import sys
 
-from qa_handoff import qa_handoff, qa_target  # .atm-bd/shared/scripts
+from atm_bd_shared.qa_handoff import qa_handoff, qa_target
 
 from atm_bd_types import (BdCli, Bead, BeadMeta, BeadPatch, BeadStore, ErrorId, Git, GitCli, HookAction, HookReply,
                           HookRequest, Layer, NewBead, Outcome, PhaseFile, PhaseFiles, PhaseFilesCli,
@@ -230,9 +238,9 @@ if __name__ == "__main__":
     print(reply.to_json())
 ```
 
-## Code: shared qa_handoff (`.atm-bd/shared/scripts/qa_handoff.py`)
+## Code: shared qa_handoff (`.atm-bd/shared`, package `atm-bd-shared`, module `atm_bd_shared.qa_handoff`)
 ```python
-"""Shared (.atm-bd/shared/scripts): hand ready QA beads to the phase's QA member.
+"""Shared (.atm-bd/shared, package atm-bd-shared): hand ready QA beads to the phase's QA member.
 
 Used by the task.close hook right after a work bead closes (no delay) and by cron (safety net for a close
 whose actions never ran). It writes nothing: the task.assign hook records the assignee when ATM runs the

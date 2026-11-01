@@ -2,6 +2,8 @@
 
 Repo: atm-bd-orchestration. Branch `sprint/bo-11-task-assign-hook`, stacked on bo-9. Owned paths: `plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py` and its test.
 
+Installs to `.atm-bd/atm-bd-lite/scripts/` (see bo-12, "Install layout").
+
 ## Goal
 The lead assigns a ready bead, and bd records the assignee.
 

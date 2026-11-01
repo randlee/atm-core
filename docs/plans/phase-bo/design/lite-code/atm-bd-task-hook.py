@@ -1,7 +1,9 @@
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["atm-bd-types==0.2.0"]
+# dependencies = ["atm-bd-types==0.2.0", "atm-bd-shared"]
+# [tool.uv.sources]
+# atm-bd-shared = { path = "../../shared" }  # .atm-bd/atm-bd-lite/scripts -> .atm-bd/shared
 # ///
 """atm-bd-lite task.close hook.
 
@@ -16,7 +18,7 @@ A refused or cancelled close gives the bead back: open and unassigned.
 """
 import sys
 
-from qa_handoff import qa_handoff, qa_target  # .atm-bd/shared/scripts
+from atm_bd_shared.qa_handoff import qa_handoff, qa_target
 
 from atm_bd_types import (BdCli, Bead, BeadMeta, BeadPatch, BeadStore, ErrorId, Git, GitCli, HookAction, HookReply,
                           HookRequest, Layer, NewBead, Outcome, PhaseFile, PhaseFiles, PhaseFilesCli,

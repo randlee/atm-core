@@ -1,7 +1,9 @@
 #!/usr/bin/env -S uv run --quiet --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["atm-bd-types==0.2.0"]
+# dependencies = ["atm-bd-types==0.2.0", "atm-bd-shared"]
+# [tool.uv.sources]
+# atm-bd-shared = { path = "../../shared" }  # .atm-bd/atm-bd-lite/scripts -> .atm-bd/shared
 # ///
 """atm-bd-lite cron: hand ready QA beads to the QA member (safety net for a close whose actions never ran).
 
@@ -10,7 +12,7 @@
 import sys
 
 from atm_bd_types import AtmCli, BdCli, CronCommand, CronReply, PhaseFilesCli, Refusal
-from qa_handoff import qa_handoff  # .atm-bd/shared/scripts
+from atm_bd_shared.qa_handoff import qa_handoff
 
 PROFILE = "lite"  # policy: this file serves phases whose phase file says profile = "lite" (ANC-026, ANC-061)
 

@@ -1,1 +1,1 @@
-{"typeCheckingMode":"strict","pythonVersion":"3.11","stubPath":"typings","extraPaths":["shared/scripts"]}
+{"typeCheckingMode":"strict","pythonVersion":"3.11","stubPath":"typings","extraPaths":["shared/src"]}

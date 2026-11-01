@@ -1,4 +1,4 @@
-"""Shared (.atm-bd/shared/scripts): hand ready QA beads to the phase's QA member.
+"""Shared (.atm-bd/shared, package atm-bd-shared): hand ready QA beads to the phase's QA member.
 
 Used by the task.close hook right after a work bead closes (no delay) and by cron (safety net for a close
 whose actions never ran). It writes nothing: the task.assign hook records the assignee when ATM runs the
