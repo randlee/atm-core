@@ -122,9 +122,13 @@ def minimum_version(config):
 def release_target():
     key = (platform.system(), platform.machine().lower())
     targets = {("Linux", "x86_64"): ("x86_64-unknown-linux-gnu", "tar.gz"),
+               ("Linux", "aarch64"): ("aarch64-unknown-linux-gnu", "tar.gz"),
+               ("Linux", "arm64"): ("aarch64-unknown-linux-gnu", "tar.gz"),
                ("Darwin", "x86_64"): ("x86_64-apple-darwin", "tar.gz"),
                ("Darwin", "arm64"): ("aarch64-apple-darwin", "tar.gz"),
                ("Windows", "amd64"): ("x86_64-pc-windows-msvc", "zip"),
+               ("Windows", "arm64"): ("aarch64-pc-windows-msvc", "zip"),
+               ("Windows", "aarch64"): ("aarch64-pc-windows-msvc", "zip"),
                ("Windows", "x86_64"): ("x86_64-pc-windows-msvc", "zip")}
     if key not in targets:
         fail(f"setup: no verified sc-lint release for {key[0]}/{key[1]} (CLI.SC_LINT_INSTALL_UNSUPPORTED_PLATFORM)", 4)

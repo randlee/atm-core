@@ -16,6 +16,7 @@ homepage.workspace = true
 test-support = []
 
 [dependencies]
+sc-lint-attributes = "0.8.3"
 atm-core.workspace = true
 atm-herdr.workspace = true
 atm-runtime.workspace = true

@@ -12,7 +12,7 @@ inputs:
   version:
     description: Released sc-lint version to install (deliberate ecosystem pin)
     required: false
-    default: "0.4.0"
+    default: "0.8.3"
   repository:
     description: GitHub repository slug hosting sc-lint releases
     required: false
