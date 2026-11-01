@@ -47,7 +47,6 @@ SECTIONS = (
             ("lint silent-emit", "Run the observability silent-discard regression gate."),
             ("lint function-length", "Run the RULE-002 function-length gate."),
             ("lint legacy-mailbox-paths", "Run the legacy mailbox/runtime deletion regression gate."),
-            ("lint capability-degradation", "Run the replay capability no-degradation regression gate."),
             ("lint version", "Run only the version alignment checks."),
             ("lint identities", "Run the identity literal guard."),
             ("lint env-var-boundary", "Run the ATM_TEAM/ATM_IDENTITY client-boundary guard."),

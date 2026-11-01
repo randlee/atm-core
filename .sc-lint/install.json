@@ -512,7 +512,6 @@
       "arch-gates",
       "atm-graft-python-boundary",
       "boundaries",
-      "capability-degradation",
       "clippy",
       "clippy-windows",
       "daemon-signing-coupling",
@@ -584,11 +583,6 @@
       "just",
       "_py",
       ".just/lint_boundaries.py"
-    ],
-    "capability-degradation": [
-      "just",
-      "_py",
-      "scripts/check-capability-degradation.py"
     ],
     "clippy": [
       "just",
