@@ -66,6 +66,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-058 | locked | Missing fact means refuse with the fix | 2026-11-01 |
 | ANC-059 | locked | Lite has no repair or backfill scripts | 2026-11-01 |
 | ANC-060 | locked | Lite never calls wrapper-blocked gh commands | 2026-11-01 |
+| ANC-061 | locked | No profile names hard-coded in atm-bd-types | 2026-11-01 |
 
 ## ANC-001
 
@@ -854,7 +855,7 @@ Scope: adds or changes code in the shared location or atm-bd-types
 Deterministic check to pair with the development gate: grep of the shared location for profile literals (lite, orchestration, "lite", "orchestration") and branches on the profile is empty
 
 Fixtures:
-- pass: grep of the shared location for "lite", "orchestration", "lite" and "orchestration" is empty; behaviour differences come from the caller's arguments.
+- pass: grep of the shared location for "lite" and "orchestration" is empty; behaviour differences come from the caller's arguments.
 - fail: shared/stack_gate.py contains "if profile == "lite": skip sanity check".
 
 ## ANC-045
@@ -863,7 +864,7 @@ Anchor: atm-bd-lite must call each shared-location module in the same sprint tha
 
 > I don't think you understand the concept of writing 'shared' modules without cutting over and using them immediately.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by orchestration-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 3.
 
 Summary: Lite uses shared code in the sprint that adds it
 
@@ -881,7 +882,7 @@ Anchor: Each shared-location module's design must list the atm-bd-orchestration 
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by orchestration-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 3.
 
 Summary: Shared module design lists orchestration requirements
 
@@ -899,7 +900,7 @@ Anchor: Each shared-location interface (Rust trait or .pyi stub) must support ev
 
 > If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed "items 1-4 are correct" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by orchestration-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set, 2026-11-01. Status: locked. Version 3.
 
 Summary: Shared interfaces support every listed orchestration behavior
 
@@ -1124,3 +1125,21 @@ Deterministic check to pair with the development gate: grep -rnE 'gh pr list|gh 
 Fixtures:
 - pass: The lite task.close hook gets PR facts with one gh pr view <branch> --json number,baseRefName,headRefOid call; grep of skills/atm-bd-lite for gh pr list, gh pr checks, gh run watch and --watch is empty.
 - fail: The lite QA template tells the agent to wait for CI with gh pr checks --watch.
+
+## ANC-061
+
+Anchor: atm-bd-types must not define profile names: no profile enum and no profile string literals; a profile is a name read from the phase file.
+
+> the profile names should not be hardcoded in the crate | we can create as many profiles as we want.
+
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); atm-bd-types 0.1.1 has enum Profile {Full, Lite}, which this rules out, 2026-11-01. Status: locked. Version 1.
+
+Summary: No profile names hard-coded in atm-bd-types
+
+Scope: adds or changes code in atm-bd-types
+
+Deterministic check to pair with the development gate: grep of crates/atm-bd-types and its generated .pyi for an enum or literal named lite, orchestration or full used as a profile is empty
+
+Fixtures:
+- pass: crates/atm-bd-types/src/lib.rs has `pub struct ProfileName(String)` parsed from the phase file; grep for "lite" and "orchestration" in the crate is empty.
+- fail: crates/atm-bd-types/src/lib.rs has `pub enum Profile { Orchestration, Lite }`.
