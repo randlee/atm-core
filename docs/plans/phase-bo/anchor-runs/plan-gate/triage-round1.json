@@ -125,5 +125,17 @@
    "old": "The lite hook and lite cron tick itself (bo-5); the live run (bo-7).",
    "new": "The lite hook and lite cron tick itself, and the profile gates of the hook and the lite templates (bo-5, ANC-023); the live run (bo-7)."
   }
- ]
+ ],
+ "round3": {
+  "split": "ANC-023 retired -> ANC-026 (hook, templates; bo-5), ANC-027 (cron ticks; bo-6); console = ANC-024",
+  "to_fix": [
+   {
+    "bead": "atm-bo-3",
+    "anchor": "ANC-021",
+    "action": "add",
+    "old": "and the rendered dev template contains `az repos pr create` and no `gh ` (no `gh stack` either); tested",
+    "new": "and the rendered dev template contains `az repos pr create` and no `gh ` (no `gh stack` either), and its stack-link and stack-view steps render the Azure `StackLink` and `StackView` ops (stack-bead record and read) so stacking works on an Azure Git repository (ANC-021); tested"
+   }
+  ]
+ }
 }

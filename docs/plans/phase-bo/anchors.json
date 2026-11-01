@@ -1343,8 +1343,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "locked",
+      "version": 4,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1369,6 +1369,12 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T00:34:20+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-026",
+          "reason": "bundled four components owned by two sprints (single_constraint); split into ANC-026 (hook, templates), ANC-027 (cron ticks), console already ANC-024"
         }
       ]
     },
@@ -1471,6 +1477,96 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-026",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite task hook and the lite dispatch templates must take the profile from the phase file and refuse to run or render when it is not lite.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal \"complete phase-bo plan with qa + anc all passing and start Bo sprints\"",
+      "summary": "Lite hook and templates refuse a non-lite phase file",
+      "scope": "adds or changes the lite task hook, its runner, or the lite dispatch templates",
+      "deterministic_check": "a test runs the hook runner and renders each lite template against a full phase file and asserts the ProfileMismatch exit",
+      "fixtures": {
+        "pass": [
+          "hook_runner.py and the lite template render call require_profile(phase_file, Profile.LITE) first and exit with ProfileMismatch on a full phase file; tests/test_lite_profile_gate.py asserts the exit for the runner and for each lite template."
+        ],
+        "fail": [
+          "The lite hook takes the profile from a --profile argument and runs its close plan against a full phase file without reading the phase file."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T00:34:20+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T00:34:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-027",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each atm-bd cron tick must take the profile from the phase file and refuse to run when it is not the tick's own profile.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal \"complete phase-bo plan with qa + anc all passing and start Bo sprints\"",
+      "summary": "Cron ticks refuse the other profile's phase file",
+      "scope": "adds or changes atm-bd cron or a profile cron tick",
+      "deterministic_check": "a test runs the full tick on a lite phase file and the lite tick on a full phase file and asserts the ProfileMismatch exit for both",
+      "fixtures": {
+        "pass": [
+          "atm-bd cron reads the profile with read_profile; the full tick calls require_profile(phase_file, Profile.FULL) and lite_cron.py Profile.LITE; tests/test_cron_profile_gate.py runs each tick on the other profile's phase file and asserts ProfileMismatch."
+        ],
+        "fail": [
+          "lite_cron.py runs its tick on whatever phase file it is given and lists queues for a full phase."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T00:34:20+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T00:34:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     }

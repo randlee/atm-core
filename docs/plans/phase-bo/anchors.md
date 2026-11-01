@@ -28,9 +28,11 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-020 | locked | Shared types live in atm-bd-core | 2026-10-31 |
 | ANC-021 | locked | Stacking works on Azure Git repos | 2026-10-31 |
 | ANC-022 | locked | pyright covers every plugin and console script | 2026-10-31 |
-| ANC-023 | locked | Profile comes from the phase file; hook, templates, cron and console align on it | 2026-10-31 |
+| ANC-023 | retired | Profile comes from the phase file; hook, templates, cron and console align on it | 2026-10-31 |
 | ANC-024 | locked | No console on a lite phase | 2026-10-31 |
 | ANC-025 | locked | GitHub prompts use gh stack; gh stack view --json is the view | 2026-10-31 |
+| ANC-026 | locked | Lite hook and templates refuse a non-lite phase file | 2026-10-31 |
+| ANC-027 | locked | Cron ticks refuse the other profile's phase file | 2026-10-31 |
 
 ## ANC-001
 
@@ -440,7 +442,7 @@ Anchor: The task hook, the dispatch templates, the cron script and the console m
 
 > the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.
 
-Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note, 2026-10-31. Status: locked. Version 3.
+Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note, 2026-10-31. Status: retired. Version 4.
 
 Summary: Profile comes from the phase file; hook, templates, cron and console align on it
 
@@ -487,3 +489,39 @@ Deterministic check to pair with the development gate: the github provider vars 
 Fixtures:
 - pass: providers/github.json maps stack_link to gh stack link and stack_view to gh stack view --json; the dev template rendered with --github contains both and rendered with --azure contains neither (test_provider_render_stack_ops, render diffs in the PR body).
 - fail: The dev template rendered for GitHub tells the agent to inspect the stack with one gh pr view per branch and never mentions gh stack.
+
+## ANC-026
+
+Anchor: The lite task hook and the lite dispatch templates must take the profile from the phase file and refuse to run or render when it is not lite.
+
+> the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.
+
+Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal "complete phase-bo plan with qa + anc all passing and start Bo sprints", 2026-10-31. Status: locked. Version 2.
+
+Summary: Lite hook and templates refuse a non-lite phase file
+
+Scope: adds or changes the lite task hook, its runner, or the lite dispatch templates
+
+Deterministic check to pair with the development gate: a test runs the hook runner and renders each lite template against a full phase file and asserts the ProfileMismatch exit
+
+Fixtures:
+- pass: hook_runner.py and the lite template render call require_profile(phase_file, Profile.LITE) first and exit with ProfileMismatch on a full phase file; tests/test_lite_profile_gate.py asserts the exit for the runner and for each lite template.
+- fail: The lite hook takes the profile from a --profile argument and runs its close plan against a full phase file without reading the phase file.
+
+## ANC-027
+
+Anchor: Each atm-bd cron tick must take the profile from the phase file and refuse to run when it is not the tick's own profile.
+
+> the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.
+
+Said by Rand, planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal "complete phase-bo plan with qa + anc all passing and start Bo sprints", 2026-10-31. Status: locked. Version 2.
+
+Summary: Cron ticks refuse the other profile's phase file
+
+Scope: adds or changes atm-bd cron or a profile cron tick
+
+Deterministic check to pair with the development gate: a test runs the full tick on a lite phase file and the lite tick on a full phase file and asserts the ProfileMismatch exit for both
+
+Fixtures:
+- pass: atm-bd cron reads the profile with read_profile; the full tick calls require_profile(phase_file, Profile.FULL) and lite_cron.py Profile.LITE; tests/test_cron_profile_gate.py runs each tick on the other profile's phase file and asserts ProfileMismatch.
+- fail: lite_cron.py runs its tick on whatever phase file it is given and lists queues for a full phase.
