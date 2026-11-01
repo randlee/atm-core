@@ -3,7 +3,9 @@
 Repo: atm-bd-orchestration. Branch `sprint/bo-9-types-020`, stacked on `sprint/bo-8-stack-repair`. Owned path: `crates/atm-bd-types/`.
 
 ## Goal
-The Rust crate behind every name the lite hooks import. The Python surface is exactly `design/lite-code/typings/atm_bd_types/__init__.pyi` (reviewed by solar, rounds 1-12, PASS 2026-11-01, then aligned to Rand's QA ruling).
+> **NOT APPROVED.** The contract stub below is fenix's draft. Rand has not approved it. It must not be dispatched until Rand approves it.
+
+The Rust crate behind every name the lite hooks import. Its Python surface is `design/lite-code/typings/atm_bd_types/__init__.pyi` (draft).
 
 ## Deliverables
 1. Every enum, value type, write spec, request/reply type and trait in `atm_bd_types.pyi`, in Rust, exposed through the abi3 wheel. The generated stub equals `design/lite-code/typings/atm_bd_types/__init__.pyi` apart from formatting.

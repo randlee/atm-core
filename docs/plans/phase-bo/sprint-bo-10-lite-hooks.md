@@ -2,7 +2,9 @@
 
 Repo: atm-bd-orchestration. Branch `sprint/bo-10-lite-hooks`, stacked on bo-9. One dev.
 
-## Deliverables (implement as written; any change is a plan change and goes to fenix first)
+> **NOT APPROVED.** The code in this sprint is fenix's draft. Rand has not approved it. It must not be dispatched or implemented until Rand approves it.
+
+## Deliverables (draft)
 
 | file (installed path) | source in this plan | lines |
 |---|---|---|
