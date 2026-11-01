@@ -16,9 +16,10 @@ is implemented by exactly one arm with no additional check or write (ANC-053); e
 is listed as a row or an Errors entry (ANC-054). Writes the run JSON; exits 1 on any failure or "no",
 2 when Jev cannot be asked.
 """
-import ast, json, sys
+import ast, dataclasses, json, sys
 from pathlib import Path
 from jev_check import JevCheckError, Question, check, load_question_set
+from jev_check.checks import input_record
 
 QUESTIONS = Path(__file__).with_name("gate-questions.json")
 WRITES, FORBIDDEN_WRITES = {"update", "create", "claim", "release"}, {"create", "claim", "release"}
@@ -133,12 +134,15 @@ def main(argv: list[str]) -> int:
     run = {"hook": str(hook), "spec": str(spec), "lines": len(src.splitlines()), "rows": [r[:2] for r in rows],
            "facts": f, "deterministic_failures": deterministic(src, f, rows), "jev": None}
     if not run["deterministic_failures"]:
+        state, qs = {"hook": src, "spec": spec_md}, questions(f, rows)
         try:
-            answers = check({"hook": src, "spec": spec_md}, questions(f, rows))
+            reply = check(state, qs)
         except JevCheckError as exc:
             run["jev_error"] = str(exc)
         else:
+            answers = reply.answers
             run["jev"] = {"answers": answers, "findings": findings(answers, f),
+                          "input": dataclasses.asdict(input_record(state, qs, reply.input_tokens, None, 0)),
                           "no": sorted(k for k, a in answers.items() if a.get("choice") != "yes")}
     run["pass"] = not run["deterministic_failures"] and run["jev"] is not None and not run["jev"]["no"]
     out.parent.mkdir(parents=True, exist_ok=True)

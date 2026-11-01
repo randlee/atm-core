@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from jev_check import Config, JevCheckError, Question, Response, check, load_config, load_question_set
+from jev_check import Config, JevCheckError, Question, Response, check, load_config, load_question_set, payload_bytes
 
 CONFIG = Config(model="jev-test", host="jev.invalid", path="/v1/x", max_request_bytes=400, attempts=3,
                 timeout_seconds=1)
@@ -22,15 +22,22 @@ class FakeTransport:
 
 
 def ok(model: str = "jev-test") -> Response:
-    return Response(200, json.dumps({"model": model, "answers": {"q": ANSWER}}).encode())
+    return Response(200, json.dumps({"model": model, "answers": {"q": ANSWER},
+                                     "usage": {"input_tokens": 318, "output_tokens": 31}}).encode())
 
 
 def test_one_check_is_one_request_byte_exact() -> None:
     t = FakeTransport(ok())
-    answers = check({"code": "x = 1"}, QUESTIONS, transport=t, config=CONFIG)
+    reply = check({"code": "x = 1"}, QUESTIONS, transport=t, config=CONFIG)
     assert t.sent == [b'{"model":"jev-test","questions":{"q":{"criteria":{"no":"n","yes":"y"},'
                       b'"instructions":"Is it?","type":"choice"}},"state":{"code":"x = 1"}}']
-    assert answers == {"q": ANSWER}
+    assert reply.answers == {"q": ANSWER} and reply.input_tokens == 318
+
+
+def test_payload_bytes_are_the_jev_request_without_the_model() -> None:
+    t = FakeTransport(ok())
+    check({"code": "x = 1"}, QUESTIONS, transport=t, config=CONFIG)
+    assert t.sent[0] == b'{"model":"jev-test",' + payload_bytes({"code": "x = 1"}, QUESTIONS)[1:]
 
 
 def test_oversized_input_is_refused_and_nothing_is_sent() -> None:

@@ -6,11 +6,11 @@
 # jev-check = { path = "..", editable = true }
 # ///
 """jev-check run <check.toml> --rev <rev> --backend jev|haiku|luna   -> JevCheckResult JSON
-jev-check ask --session <id> --backend haiku|luna "<question>"      -> the follow-up answer"""
+jev-check ask --session <id> "<question>"                          -> the follow-up answer (haiku/luna sessions)"""
 import argparse, dataclasses, json, sys
 from pathlib import Path
 
-from jev_check import JevCheckError, SessionStore, load_backend, load_check, run_check
+from jev_check import JevCheckError, SessionStore, load_check, run_check
 
 
 def main() -> int:
@@ -22,14 +22,13 @@ def main() -> int:
     r.add_argument("--backend", choices=["jev", "haiku", "luna"], default="jev")
     a = sub.add_parser("ask")
     a.add_argument("--session", required=True)
-    a.add_argument("--backend", choices=["haiku", "luna"], required=True)
     a.add_argument("question")
     args = p.parse_args()
     try:
         if args.cmd == "run":
             print(json.dumps(dataclasses.asdict(run_check(load_check(args.check), args.rev, args.backend)), indent=1))
         else:
-            print(SessionStore.default().ask(args.session, load_backend(args.backend), args.question))
+            print(SessionStore.default().ask(args.session, args.question))
     except JevCheckError as exc:
         print(json.dumps({"error": exc.code, "message": str(exc)}), file=sys.stderr)
         return 2

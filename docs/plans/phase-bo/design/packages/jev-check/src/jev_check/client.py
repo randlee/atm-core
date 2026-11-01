@@ -45,6 +45,12 @@ class Config:
     timeout_seconds: float
 
 
+@dataclass(frozen=True)
+class JevReply:
+    answers: dict[str, "Answer"]
+    input_tokens: int | None  # Jev's usage.input_tokens; Jev has no count endpoint, so no prompt_tokens
+
+
 class JevCheckError(Exception):
     """code is one of INPUT_TOO_LARGE, INPUT_INVALID, KEY_MISSING, JEV_UNAVAILABLE, RESPONSE_INVALID."""
 
@@ -78,6 +84,12 @@ class HttpsTransport:
             raise JevCheckError("JEV_UNAVAILABLE", f"Jev connection failed: {type(exc).__name__}") from None
         finally:
             conn.close()
+
+
+def payload_bytes(state: Any, questions: dict[str, Question]) -> bytes:
+    """The {questions, state} bytes every backend gets: Jev inside its request, Haiku/Luna as the user message."""
+    return json.dumps({"questions": questions, "state": state}, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False).encode()
 
 
 def encode_request(config: Config, state: Any, questions: dict[str, Question]) -> bytes:
@@ -127,7 +139,7 @@ def parse_answers(raw: bytes, config: Config, questions: dict[str, Question]) ->
 
 
 def check(state: Any, questions: dict[str, Question], *, transport: Transport | None = None,
-          config: Config | None = None, sleep: Callable[[float], None] = time.sleep) -> dict[str, Answer]:
+          config: Config | None = None, sleep: Callable[[float], None] = time.sleep) -> JevReply:
     """One check = one request. Retries only a busy reply, up to config.attempts sends in total."""
     config = config or load_config()
     body = encode_request(config, state, questions)
@@ -139,8 +151,15 @@ def check(state: Any, questions: dict[str, Question], *, transport: Transport | 
             continue
         if resp.status != 200:
             raise JevCheckError("JEV_UNAVAILABLE", f"Jev HTTP {resp.status}")
-        return parse_answers(resp.body, config, questions)
+        return JevReply(parse_answers(resp.body, config, questions), parse_usage(resp.body))
     raise JevCheckError("JEV_UNAVAILABLE", "Jev busy; attempts exhausted")
+
+
+def parse_usage(raw: bytes) -> int | None:
+    body = as_object(json.loads(raw)) or {}
+    usage = as_object(body.get("usage")) or {}
+    tokens = usage.get("input_tokens")
+    return tokens if isinstance(tokens, int) and not isinstance(tokens, bool) else None
 
 
 def retry_delay(retry_after: str | None) -> float:

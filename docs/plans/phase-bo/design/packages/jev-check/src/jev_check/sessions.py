@@ -1,18 +1,16 @@
-"""Sessions: each run stores its request and answers; `ask` follows up with an LLM seeded from them."""
+"""Sessions: each run stores its request, reply and answers; `ask` continues that conversation on its backend."""
 import json
 import os
 import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from jev_check.client import JevCheckError, as_object
-from jev_check.llm import Backend, LlmTransport, default_transport
+from jev_check.client import JevCheckError, Question, as_object, payload_bytes
+from jev_check.llm import Http, Turn, as_list, complete, load_backend
 
 DAY = 86400.0
-ASK_SYSTEM = ("You are following up on a set of choice answers about `state`. The request and the answers given "
-              "are below. Answer the follow-up question in plain text, citing the parts of `state` you rely on.")
 
 
 class SessionStore:
@@ -42,13 +40,19 @@ class SessionStore:
             raise JevCheckError("SESSION_EXPIRED", f"session {sid} is older than {self.keep / DAY:g} days")
         return record
 
-    def ask(self, sid: str, backend: Backend, question: str, transport: LlmTransport | None = None) -> str:
+    def ask(self, sid: str, question: str, http: Http | None = None) -> str:
+        """Re-prompt the session: the same user payload, the backend's own reply, earlier follow-ups, then this one."""
         record = self.read(sid)
-        prompt = json.dumps({"request": record.get("request"), "answers": record.get("answers"),
-                             "backend": record.get("backend"), "follow_up": question}, ensure_ascii=False)
-        answer = (transport or default_transport(backend)).complete(backend, ASK_SYSTEM, prompt)
-        followups = record.get("followups")
-        record["followups"] = [*(followups if isinstance(followups, list) else []),
-                               {"backend": backend.name, "model": backend.model, "question": question, "answer": answer}]
+        backend, reply = record.get("backend"), record.get("reply_text")
+        request = as_object(record.get("request")) or {}
+        if not isinstance(backend, str) or backend == "jev" or not isinstance(reply, str):
+            raise JevCheckError("SESSION_NOT_ASKABLE", f"session {sid} is a {backend} run; only haiku/luna runs continue")
+        questions = cast(dict[str, Question], request.get("questions"))
+        turns: list[Turn] = [("user", payload_bytes(request.get("state"), questions).decode()), ("assistant", reply)]
+        followups = [f for f in map(as_object, as_list(record.get("followups"))) if f is not None]
+        for f in followups:
+            turns += [("user", str(f.get("question"))), ("assistant", str(f.get("answer")))]
+        answer = complete(load_backend(backend), [*turns, ("user", question)], None, http).text
+        record["followups"] = [*followups, {"question": question, "answer": answer}]
         (self.root / f"{sid}.json").write_text(json.dumps(record, indent=1))
         return answer

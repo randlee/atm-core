@@ -6,17 +6,18 @@ max_request_bytes = 96000
 attempts = 4
 timeout_seconds = 60
 
-# LLM backends: same request, reply forced into {choice, confidence} per question.
-# transport = "api" calls the vendor HTTP API with the named key; "cli" runs the local CLI
-# (claude -p / codex exec), which uses that tool's own login.
+# Equal input: an LLM run is equal when |input_tokens - prompt_tokens| <= leak_tolerance * prompt_tokens
+# and it made no tool calls. Set before any API-direct run was measured.
+leak_tolerance = 0.01
+
+# LLM backends, API-direct: the user message is the payload bytes; no system prompt, no tools;
+# the reply is forced into {choice, confidence} per question by a JSON-schema output format.
 [haiku]
 model = "claude-haiku-5-5"
-transport = "api"
 key_env = "ANTHROPIC_API_KEY"
 
 [luna]
 model = "gpt-6-luna"
-transport = "api"
 key_env = "OPENAI_API_KEY"
 
 [sessions]
