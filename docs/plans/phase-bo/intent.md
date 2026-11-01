@@ -1,32 +1,33 @@
-# Intent - phase-bo (restart)
+# Intent — phase-bo (restart 2)
 
-Rewritten 2026-11-01 by fenix for the phase-bo restart. One page at most. This is the "why" that frames every anchor; Jev judges plans and work against the anchors in `anchors.json`, not against this page.
+Rewritten 2026-11-01 by Rand with Claude. One page. Jev judges against `anchors.json`; this page is the why.
 
-## What this plan is for
+## The rule everything else follows from
 
-atm-bd-orchestration runs a full phase pipeline: dev, dev-sanity, stack link, QA, fix rounds, landing. That is right for a large agent team and wrong for one agent or a small team. Rand wants an `atm-bd-lite` profile: the same bead state model, schema and `atm-bd` command interfaces, with a dev -> QA pipeline and no sanity stage, run by one agent.
+**Python is for gates. Sequences are for agents.**
 
-The first attempt (bo-1..bo-7) broke atm-bd-orchestration: it moved orchestration's scripts and templates into a new `core/` layer and rewired orchestration onto it. That is a breaking refactor and is not wanted. Rand, 2026-11-01: "atm-bd lite was supposed to be separate w/ shared code in a shared location. (atm-bd-orchestration was NOT supposed to change to use the 'shared' code. the 'shared' code was in shared/ location by design not refactor."
+A lite hook checks facts and makes at most one beads-cache write. Anything that is "do A, then B, then C, and any step can fail" is not Python: it is a fenced bash block in the agent's task template, and the agent runs it, reads the error when a step fails, and reruns. This is the only way lite stays small. atm-bd-orchestration is 3–5k lines of Python for one more state than lite has because every hardening pass moved one more sequence into Python. phase-bo r1–r14 did the same thing in a week. Plan hardening must not do it again; ANC-064..067 make that mechanical.
 
-This restart:
+## What lite is
 
-1. Repairs the current stack first: everything that breaks atm-bd-orchestration is removed, so orchestration is byte-identical to its released state; the published `atm-bd-types` crate stays, and shared code already written stays if it is new code, valid and simple.
-2. Builds lite on top: lite-specific code in `skills/atm-bd-lite/`, everything not lite-specific in the shared location as new code.
-3. Makes the shared code real shared code before anyone cuts over to it. Lite uses each shared module the sprint it lands. Orchestration stays untouched and cuts over in a later phase. Each shared module is designed now to the behaviors orchestration's existing code has today (an inventory citing orchestration's files and functions), and tests run it on real full-profile data and show it gives the same output as orchestration's unchanged code. Rand: "If you don't do this, you will not have shared code that works WHEN we cut over and use it."
-4. Keeps lite tight: the lite scripts are small, pyright strict, and built on `atm-bd-types` with its interfaces as Rust traits (Python implementations checked against generated `.pyi` stubs). The three ATM task hooks (task.assign, task.start, task.close) are three independent files, each with its own state-transition diagram, and Jev verifies each file matches its diagram 100%, both directions.
+Same bead state model, schema and `atm-bd` commands as orchestration; dev → QA, no sanity stage; one agent can run a phase. Orchestration is untouched (ANC-039). Shared code is new code in the shared location, used by lite the sprint it lands (ANC-040, ANC-045).
 
-## What success looks like
+## The stack bead is an atomic ledger
 
-- The stack top leaves atm-bd-orchestration exactly as released, and its existing tests pass with no test edited.
-- A phase file declares `profile = "lite"` and one agent runs a lite phase end to end from release assets: dev dispatched, dev closed by the lite task.close hook (git-only stack check, bd close, QA assigned), QA closed, the stack landed.
-- Every shared module has full-profile tests and same-output tests against orchestration, so the later cutover is a switch, not a rewrite.
+Its assignee is the lock: one agent at a time rebases, pushes and records. Its layers are the record. The dev takes the lock, rebases onto the top, pushes, records its layer and releases, in one fenced block in the dev template, through `bdc` (beads-cache) and `git`. No script, no hook writes the ledger. Hooks only read it.
 
-## Deliberately out of scope
+## The close contract
 
-- Changing atm-bd-orchestration, its close hook or its sanity pipeline, including cutting it over to the shared code.
-- A live Azure phase (no Azure repo here; Azure is render- and unit-level only).
-- Mixing profiles in one phase.
+Dev, on success: finish the work; run the stack block; `atm task close completed` with the report.
+Hook: check the report is present and the ledger holds the dev's layer; close the bead with that evidence; return `atm task close --template <close-template> --args <evidence>`.
 
-## Anchors
+Dev, on refusal: `atm task close refused` with a reason. Hook: reopen the bead (open, unassigned); return `atm task close --template <refuse-template> --args <reason>`.
 
-`anchors.json` is the record of truth, rendered to `anchors.md`. Retired anchors stay for history.
+QA, on pass: `atm task close completed` with the verdict. Hook: verdict sha is the target layer's head; close with that evidence.
+QA, with findings: pour each finding through `bdc` in a fenced block (blocking findings block the sprint bead; non-blocking block the phase bead), then close with the report listing the poured ids. Hook: every blocking finding has its poured bead blocking the sprint; close. The QA bead cannot close until blocking findings are poured.
+
+The QA bead is blocked by its dev bead. When the dev bead closes the QA bead is released and is assigned by the existing `atm task assign` path. The close hook does not assign anything.
+
+## Out of scope
+
+Changing orchestration. A jev-check package. A stack script. Retry or recovery doctrine (ATM does not die). Creating beads from a hook. Any hook writing the ledger.
