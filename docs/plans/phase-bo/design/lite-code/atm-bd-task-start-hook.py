@@ -3,10 +3,11 @@
 # requires-python = ">=3.11"
 # dependencies = ["atm-bd-types==0.2.0"]
 # ///
-"""atm-bd-lite task.start hook: the assignee starts an unblocked bead."""
+"""atm-bd-lite task.start hook: the assignee starts an unblocked bead; its base is the stack top at start (the trunk
+for a new stack), recorded on the bead. No claim: the dev claims the stack only when its work is complete."""
 import sys
 
-from atm_bd_types import BdCli, BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli, Refusal, Status
+from atm_bd_types import BdCli, BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli, Refusal, Stack, Status
 
 PROFILE = "lite"  # hook policy: this file serves phases whose phase file says profile = "lite" (ANC-026, ANC-061)
 
@@ -23,8 +24,16 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
     if bead.open_blockers():
         return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))
     match bead.status:
-        case Status.OPEN:
-            return HookReply.from_result(beads.update(BeadPatch.start(bead), actor=req.caller))
+        case Status.OPEN:  # the work's base is the stack top now; no claim (the dev claims only at completion)
+            if isinstance(work := bead.work(), Refusal):
+                return HookReply.refused(work)
+            if isinstance(stack_id := bead.stack_bead(), Refusal):
+                return HookReply.refused(stack_id)
+            if isinstance(stack_bead := beads.show(stack_id), Refusal):
+                return HookReply.refused(stack_bead)
+            if isinstance(stack := Stack.decode(stack_bead), Refusal):
+                return HookReply.refused(stack)
+            return HookReply.from_result(beads.update(BeadPatch.start(bead, base=stack.top(excluding=work.branch)), actor=req.caller))
         case Status.IN_PROGRESS:
             return HookReply.pass_through()
         case Status.CLOSED:

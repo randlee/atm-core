@@ -3,7 +3,7 @@
 Repo: atm-bd-orchestration. Branch `sprint/bo-10-task-start-hook`, stacked on bo-9. Owned paths: `plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py` and its test.
 
 ## Goal
-The assignee starts an unblocked bead.
+The assignee starts an unblocked bead. The start records the work's base: the stack top at start (the trunk for a new stack), with no claim.
 
 ## Rules (all lite sprints)
 - The code below is the deliverable. Implement it as written; any change it needs is a plan change and goes to fenix first.
@@ -14,7 +14,12 @@ The assignee starts an unblocked bead.
 ## Acceptance: one case per arm
 - [ ] Not a phase task: not-applicable. Phase file unreadable or another profile: refused `PHASE_UNREADABLE` / `PROFILE_MISMATCH`.
 - [ ] Bead missing: `BEAD_NOT_FOUND`. Caller is not the assignee: `TASK_NOT_ASSIGNEE`. The bead has an open blocker: `BEAD_NOT_READY`.
-- [ ] OPEN: exactly one write, `BeadPatch.start(snapshot)`. If the fake reports exit 13, the reply is refused `BEAD_RACED`.
+- [ ] OPEN: exactly one write, `BeadPatch.start(snapshot, base)`. If the fake reports exit 13, the reply is refused `BEAD_RACED`.
+- [ ] Base (Rand: "there should be a base for the work (current stack top) when the work starts, but no 'claim'"):
+  - [ ] a new stack gives base = trunk;
+  - [ ] a stack with layers gives base = the top layer's branch;
+  - [ ] the stack bead is only read, never claimed or written.
+- [ ] A missing `work`, missing `stack_bead` or undecodable stack refuses with the typed error and makes no write.
 - [ ] IN_PROGRESS: pass-through with no write. CLOSED: `BEAD_CLOSED`. BLOCKED or DEFERRED: `BEAD_NOT_READY`.
 - [ ] Malformed stdin: refused `REQUEST_INVALID` from `HookRequest.parse`.
 - [ ] Jev: the file matches the arms above in both directions (ANC-053, 054).
@@ -26,10 +31,11 @@ The assignee starts an unblocked bead.
 # requires-python = ">=3.11"
 # dependencies = ["atm-bd-types==0.2.0"]
 # ///
-"""atm-bd-lite task.start hook: the assignee starts an unblocked bead."""
+"""atm-bd-lite task.start hook: the assignee starts an unblocked bead; its base is the stack top at start (the trunk
+for a new stack), recorded on the bead. No claim: the dev claims the stack only when its work is complete."""
 import sys
 
-from atm_bd_types import BdCli, BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli, Refusal, Status
+from atm_bd_types import BdCli, BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli, Refusal, Stack, Status
 
 PROFILE = "lite"  # hook policy: this file serves phases whose phase file says profile = "lite" (ANC-026, ANC-061)
 
@@ -46,8 +52,16 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
     if bead.open_blockers():
         return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))
     match bead.status:
-        case Status.OPEN:
-            return HookReply.from_result(beads.update(BeadPatch.start(bead), actor=req.caller))
+        case Status.OPEN:  # the work's base is the stack top now; no claim (the dev claims only at completion)
+            if isinstance(work := bead.work(), Refusal):
+                return HookReply.refused(work)
+            if isinstance(stack_id := bead.stack_bead(), Refusal):
+                return HookReply.refused(stack_id)
+            if isinstance(stack_bead := beads.show(stack_id), Refusal):
+                return HookReply.refused(stack_bead)
+            if isinstance(stack := Stack.decode(stack_bead), Refusal):
+                return HookReply.refused(stack)
+            return HookReply.from_result(beads.update(BeadPatch.start(bead, base=stack.top(excluding=work.branch)), actor=req.caller))
         case Status.IN_PROGRESS:
             return HookReply.pass_through()
         case Status.CLOSED:

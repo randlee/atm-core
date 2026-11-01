@@ -17,6 +17,7 @@ The Rust crate behind every name the lite hooks import. The Python surface is ex
    - `BdCli.release`: `bd update <id> --assignee '' --status open --if-assignee <holder>`.
    - `GitCli`: `git rev-parse` and `git merge-base --is-ancestor` against `origin/*`, plus a clean-worktree check.
    - `ProviderCli`: github runs `gh pr view <branch> --json number,url,baseRefName,headRefOid`; azure runs `az repos pr list --source-branch`. Never `gh pr list`.
+   - `AtmCli.assign`: `atm task assign` as the TaskAssign's actor (cron's path).
    - `PhaseFilesCli`: reads `.atm-bd/phase-<x>.toml`. Unreadable is `PHASE_UNREADABLE`; any other profile is `PROFILE_MISMATCH`.
 5. Every adapter takes a timeout. A timeout is `COMMAND_TIMEOUT` and any other failure is `COMMAND_FAILED`, each carrying the argv and stderr.
 
@@ -26,7 +27,10 @@ The Rust crate behind every name the lite hooks import. The Python surface is ex
 - [ ] `BeadPatch.record` produces ONE `bd update` that sets the layers metadata, `--assignee ''` and `--status open`, guarded by `--if-assignee <holder>`. Exit 13 maps to `STACK_CLAIM_LOST`.
 - [ ] `NewBead` produces ONE `bd create --id` carrying the metadata and the blocks edge. `NewBead.made` compares only parent, stage, assignee, meta.work, meta.stack_bead, meta.qa_bead, meta.reviewed and the blocks edge. A CLOSED fix that later gained other fields still matches; each mismatched field, including a missing blocks edge, fails.
 - [ ] `Stack.decode`: a missing `trunk` is `BEAD_FIELD_MISSING`; absent or empty layers are a new stack whose `top()` is the trunk.
-- [ ] `Stack.layer_for(branch)` returns the recorded layer; `BeadPatch.handoff` is ONE guarded update setting the assignee and `checked_bead`.
+- [ ] `Stack.layer_for(branch)` returns the recorded layer, and `Stack.position(branch)` its index, 0 for the first.
+- [ ] `BeadStore.ready(phase, stage)` is one `bd ready` filtered by the phase label and stage label, in bd's order.
+- [ ] `BeadPatch.start(snapshot, base)` is ONE guarded update setting in_progress and `meta.work.base`.
+- [ ] `AtmCli.assign` is one `atm task assign <recipient> --task-id <id> --template <path>` run as the actor. A QA assign carries the review layer's branch, head and PR as vars.
 - [ ] `Sha`: `str()` is the full 40 hex digits; `short()` appears only in titles.
 - [ ] The grep for `lite`, `orchestration` or `Full` used as a profile in the crate and the stub is empty (ANC-061).
 - [ ] atm-bd-types 0.2.0 is published to crates.io and PyPI.
@@ -97,6 +101,7 @@ class ErrorId(enum.Enum):
     STACK_NOT_ANCESTOR = ...
     QA_VERDICT = ...
     QA_NOT_ON_STACK = ...
+    QA_NOTHING_TO_REVIEW = ...
     QA_VERDICT_CONFLICT = ...
     COMMAND_FAILED = ...
     COMMAND_TIMEOUT = ...
@@ -128,7 +133,10 @@ class Dependency:
 
 @typing.final
 class Work:
-    def __new__(cls, branch: str, worktree: str, sprint: str) -> Work: ...
+    def __new__(cls, branch: str, worktree: str, sprint: str, base: str | None = None) -> Work: ...
+    @property
+    def base(self) -> str | None:
+        r"""The stack top when the work started (set by task.start); the dev cuts or rebases its worktree from it."""
     @property
     def branch(self) -> str: ...
     @property
@@ -188,6 +196,8 @@ class Bead:
     def assigned_to(self, agent: str) -> bool: ...
     def owner(self) -> str | Refusal: ...
     def open_blockers(self, ignoring: str | None = None) -> list[Dependency]: ...
+    def blockers(self) -> list[Dependency]:
+        r"""Every bead blocking this one, open or closed."""
     def blocks(self, bead_id: str) -> bool: ...
     # required-metadata accessors: absent key -> BEAD_FIELD_MISSING naming the key
     def work(self) -> Work | Refusal: ...
@@ -211,6 +221,8 @@ class Stack:
         r"""Branch of the last layer other than `excluding`; the trunk for a new stack (or when only `excluding` is on it)."""
 
     def layer_for(self, branch: str) -> Layer | None: ...
+    def position(self, branch: str) -> int | None:
+        r"""0 for the first layer; None when `branch` is not on the stack."""
     def with_layer(self, layer: Layer) -> Stack:
         r"""Appends `layer`, or replaces the layer of the same branch."""
 
@@ -290,17 +302,14 @@ class BeadPatch:
     r"""A change guarded by the snapshot it was decided on: the store applies it only if the bead's
     status and assignee still equal the snapshot's (bd --if-status / --if-assignee), else BEAD_RACED."""
     @staticmethod
-    def start(snapshot: Bead) -> BeadPatch: ...
+    def start(snapshot: Bead, base: str) -> BeadPatch:
+        r"""Status IN_PROGRESS and meta.work.base = `base`, guarded by the snapshot."""
     @staticmethod
     def assign(snapshot: Bead, agent: str) -> BeadPatch: ...
     @staticmethod
     def reopen(snapshot: Bead, reason: str) -> BeadPatch:
         r"""Status OPEN, assignee '' (with `reason` as a note) in one update guarded by the snapshot: the bead is
         ready to be assigned again, to any dev."""
-    @staticmethod
-    def handoff(qa: Bead, agent: str, checked: str) -> BeadPatch:
-        r"""Assigns the QA bead to `agent` and sets its `checked_bead` to the work bead whose layer QA reviews,
-        in one update guarded by the QA snapshot. The lead directs QA to another layer by updating `checked_bead`."""
     @staticmethod
     def close(snapshot: Bead, reason: str, *, reviewed: Sha | None = None) -> BeadPatch:
         r"""Status CLOSED (+ the verdict sha) in one guarded bd update: of two racing closes one gets BEAD_RACED."""
@@ -346,7 +355,8 @@ class HookRequest:
 @typing.final
 class TaskAssign:
     r"""A task.assign action: explicit actor, recipient, task and template; the daemon still authorizes the actor."""
-    def __new__(cls, *, task: str, recipient: str, actor: str, template: TemplateRef) -> TaskAssign: ...
+    def __new__(cls, *, task: str, recipient: str, actor: str, template: TemplateRef, review: Layer | None = None) -> TaskAssign:
+        r"""`review`: for a QA task, the layer to review, rendered into the template vars (branch, head, PR)."""
 
 @typing.final
 class HookAction:
@@ -390,6 +400,8 @@ class Refusal:
         r"""The stack bead is still claimed: fix = release it (the command names the holder), then retry."""
     @typing.overload
     def __new__(cls, id: typing.Literal[ErrorId.QA_NOT_ON_STACK], *, reviewed: Sha, checked: str) -> Refusal: ...
+    @typing.overload
+    def __new__(cls, id: typing.Literal[ErrorId.QA_NOTHING_TO_REVIEW], *, bead: Bead) -> Refusal: ...
 
     # adapter failures, for the real adapters and for fakes
     @staticmethod
@@ -419,6 +431,8 @@ class HookReply:
 
 class BeadStore(typing.Protocol):
     def show(self, bead_id: str) -> Bead | Refusal: ...
+    def ready(self, phase: str, stage: Stage) -> list[Bead] | Refusal:
+        r"""`bd ready` for the phase and stage, in bd's priority order."""
     def claim(self, bead_id: str, holder: str) -> Bead | Refusal:
         r"""bd update --claim (as sanity-stack-link does): STACK_HELD naming the holder and claim time when another
         agent holds it. Returns the snapshot."""
@@ -442,10 +456,15 @@ class PhaseFiles(typing.Protocol):
     def load(self, path: str, profile: str) -> PhaseFile | Refusal:
         r"""PHASE_UNREADABLE, or PROFILE_MISMATCH when the file's profile is not `profile`."""
 
+class Tasks(typing.Protocol):
+    def assign(self, assign: TaskAssign) -> Refusal | None:
+        r"""`atm task assign` as the assign's actor (cron's path; hooks return HookAction.assign instead)."""
+
 @typing.final
 class BdCli(BeadStore):
     def __new__(cls, timeout_seconds: float) -> BdCli: ...
     def show(self, bead_id: str) -> Bead | Refusal: ...
+    def ready(self, phase: str, stage: Stage) -> list[Bead] | Refusal: ...
     def claim(self, bead_id: str, holder: str) -> Bead | Refusal: ...
     def release(self, bead_id: str, holder: str) -> Refusal | None: ...
     def create(self, new: NewBead, actor: str) -> Refusal | None:
@@ -507,5 +526,30 @@ class StackReply:
     def released(result: Refusal | None) -> StackReply: ...
     @staticmethod
     def refused(refusal: Refusal) -> StackReply: ...
+    def to_json(self) -> str: ...
+
+@typing.final
+class AtmCli(Tasks):
+    def __new__(cls, timeout_seconds: float) -> AtmCli: ...
+    def assign(self, assign: TaskAssign) -> Refusal | None: ...
+
+# ---------- lite cron (atm-bd-lite-cron.py) ----------
+
+@typing.final
+class CronCommand:
+    @staticmethod
+    def parse(argv: list[str]) -> CronCommand | Refusal:
+        r"""--phase P."""
+    @property
+    def phase(self) -> str: ...
+    def phase_config_path(self) -> str: ...
+
+@typing.final
+class CronReply:
+    r"""JSON on stdout: each assign with its result (None = assigned, else the typed refusal)."""
+    @staticmethod
+    def assigned(results: list[tuple[TaskAssign, Refusal | None]]) -> CronReply: ...
+    @staticmethod
+    def refused(refusal: Refusal) -> CronReply: ...
     def to_json(self) -> str: ...
 ```
