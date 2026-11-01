@@ -3180,6 +3180,51 @@
           "status": "locked"
         }
       ]
+    },
+    {
+      "id": "ANC-060",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite scripts, hooks and templates must not invoke gh pr list, gh pr checks, gh run watch or any gh command with --watch.",
+      "quote": "make a anc which prohibits prohibited git/gh calls (which burn a lot of tokens)",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). The host gh wrapper (~/.local/bin/gh) blocks gh pr list, gh pr checks, gh run watch and any --watch flag because they poll and drain the shared GitHub rate limit; the lite PR lookup is gh pr view <branch> --json number,baseRefName,headRefOid (one call, ~110 bytes).",
+      "summary": "Lite never calls wrapper-blocked gh commands",
+      "scope": "adds or changes a lite script, hook, template or test that runs gh",
+      "deterministic_check": "grep -rnE 'gh pr list|gh pr checks|gh run watch|--watch' skills/atm-bd-lite is empty",
+      "fixtures": {
+        "pass": [
+          "The lite task.close hook gets PR facts with one gh pr view <branch> --json number,baseRefName,headRefOid call; grep of skills/atm-bd-lite for gh pr list, gh pr checks, gh run watch and --watch is empty."
+        ],
+        "fail": [
+          "The lite QA template tells the agent to wait for CI with gh pr checks --watch."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:27:21+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T19:27:21+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
     }
   ]
 }

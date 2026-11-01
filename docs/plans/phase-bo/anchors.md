@@ -65,6 +65,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-057 | locked | Lite dev close is one atm task close | 2026-11-01 |
 | ANC-058 | locked | Missing fact means refuse with the fix | 2026-11-01 |
 | ANC-059 | locked | Lite has no repair or backfill scripts | 2026-11-01 |
+| ANC-060 | locked | Lite never calls wrapper-blocked gh commands | 2026-11-01 |
 
 ## ANC-001
 
@@ -1105,3 +1106,21 @@ Summary: Lite has no repair or backfill scripts
 Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure
 
 Deterministic check to pair with the development gate: find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' is empty
+
+## ANC-060
+
+Anchor: atm-bd-lite scripts, hooks and templates must not invoke gh pr list, gh pr checks, gh run watch or any gh command with --watch.
+
+> make a anc which prohibits prohibited git/gh calls (which burn a lot of tokens)
+
+Said by Rand, phase-bo restart 2026-11-01 (fenix). The host gh wrapper (~/.local/bin/gh) blocks gh pr list, gh pr checks, gh run watch and any --watch flag because they poll and drain the shared GitHub rate limit; the lite PR lookup is gh pr view <branch> --json number,baseRefName,headRefOid (one call, ~110 bytes)., 2026-11-01. Status: locked. Version 2.
+
+Summary: Lite never calls wrapper-blocked gh commands
+
+Scope: adds or changes a lite script, hook, template or test that runs gh
+
+Deterministic check to pair with the development gate: grep -rnE 'gh pr list|gh pr checks|gh run watch|--watch' skills/atm-bd-lite is empty
+
+Fixtures:
+- pass: The lite task.close hook gets PR facts with one gh pr view <branch> --json number,baseRefName,headRefOid call; grep of skills/atm-bd-lite for gh pr list, gh pr checks, gh run watch and --watch is empty.
+- fail: The lite QA template tells the agent to wait for CI with gh pr checks --watch.
