@@ -1,0 +1,103 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T003420Z-fixture_ANC-027_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T00:34:20+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-027:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 96,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-027",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each atm-bd cron tick must take the profile from the phase file and refuse to run when it is not the tick's own profile.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal \"complete phase-bo plan with qa + anc all passing and start Bo sprints\"",
+      "anchor_version": 2,
+      "deterministic_check": "a test runs the full tick on a lite phase file and the lite tick on a full phase file and asserts the ProfileMismatch exit for both",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.96,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.02,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.73,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.82,
+            "unclear": 0.12
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.03,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.73,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1016,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 96,
+      "item_shortened": false,
+      "request_bytes": 3037
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-027"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

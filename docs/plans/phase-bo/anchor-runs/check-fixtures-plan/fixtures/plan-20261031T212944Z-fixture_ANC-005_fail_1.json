@@ -1,0 +1,103 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261031T212944Z-fixture_ANC-005_fail_1",
+  "gate": "plan",
+  "created_at": "2026-10-31T21:29:44+00:00",
+  "anchors_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/ae4c4073-991a-428e-a239-d8a12fdb63c3/scratchpad/tuning/anchors.rebuilt.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-005:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 59,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a full phase.",
+      "quote": "We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "the --help output of atm-bd console, cron and queues is byte-identical before and after the phase",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.83,
+            "unclear": 0.16
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.74,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1022,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 59,
+      "item_shortened": false,
+      "request_bytes": 3042
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-005"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

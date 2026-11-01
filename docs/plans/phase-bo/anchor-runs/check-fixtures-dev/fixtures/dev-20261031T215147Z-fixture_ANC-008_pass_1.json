@@ -1,0 +1,111 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261031T215147Z-fixture_ANC-008_pass_1",
+  "gate": "dev",
+  "created_at": "2026-10-31T21:51:47+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-008:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 233,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The stack check of the dev and fix close hook never invokes the gh stack subcommand or the GitHub stacks API.",
+      "quote": "This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 5,
+      "deterministic_check": "grep -rn 'gh stack' plugins/atm-bd-orchestration/skills plugins/atm-bd-orchestration/core finds only prose",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.01,
+            "unclear": 0.01
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive was followed and evidenced.",
+      "usage": {
+        "input_tokens": 1221,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 233,
+      "item_shortened": false,
+      "request_bytes": 3927
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

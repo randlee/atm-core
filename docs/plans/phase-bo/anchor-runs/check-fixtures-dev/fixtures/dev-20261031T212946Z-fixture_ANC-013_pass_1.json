@@ -1,0 +1,111 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261031T212946Z-fixture_ANC-013_pass_1",
+  "gate": "dev",
+  "created_at": "2026-10-31T21:29:46+00:00",
+  "anchors_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/ae4c4073-991a-428e-a239-d8a12fdb63c3/scratchpad/tuning/anchors.rebuilt.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-013:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 127,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Shared scripts and templates must live at one common point, .atm-bd/scripts and .atm-bd/templates at the repository root, removing the duplicates under .claude, .codex and .agents.",
+      "quote": "scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "after atm-bd skill install, each shared module exists once under .atm-bd and diff finds no copy under .claude, .codex or .agents",
+      "kind": "structural",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.66,
+          "probabilities": {
+            "yes": 0.77,
+            "no": 0.1,
+            "unclear": 0.13
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.96,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.44,
+          "probabilities": {
+            "yes": 0.63,
+            "no": 0.31,
+            "unclear": 0.06
+          }
+        }
+      },
+      "min_confidence": 0.66,
+      "explanation": "The directive was followed and evidenced.",
+      "usage": {
+        "input_tokens": 1212,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 127,
+      "item_shortened": false,
+      "request_bytes": 3877
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

@@ -1,0 +1,141 @@
+{
+ "run": "plangate2 (locked anchors, 2026-10-31)",
+ "to_fix": [
+  {
+   "bead": "atm-bo-2",
+   "field": "description",
+   "anchor": "ANC-006",
+   "action": "replace",
+   "old": "`bead_schema.py` adds `LiteSprintGroup` (dev, qa) and `LiteFindingGroup` (fix, qa); `validate_phase(beads, profile)` selects the model set;",
+   "new": "both profiles use this one schema: the same bead models with the sanity fields optional, never a second lite schema; `bead_schema.py` adds the group shapes `LiteSprintGroup` (dev, qa) and `LiteFindingGroup` (fix, qa) to it; `validate_phase(beads, profile)` checks which group shapes the profile may pour;"
+  },
+  {
+   "bead": "atm-bo-2",
+   "field": "acceptance_criteria",
+   "anchor": "ANC-022",
+   "action": "replace",
+   "old": "- [ ] `just lint` and `just test` green; pyright strict on every touched file",
+   "new": "- [ ] `just lint` and `just test` green; pyright at 0 errors with every new Python file inside the pyright include (`test_pyright_include_complete.py` passes); strict on every touched file"
+  },
+  {
+   "bead": "atm-bo-5",
+   "field": "description",
+   "anchor": "ANC-010",
+   "action": "replace",
+   "old": "dev/fix close = validate close vars -> `GitStackGate.check` (blocking) -> `bd close`",
+   "new": "dev/fix close = validate close vars -> `GitStackGate.check` comparing the PR base with the stack top (the branch of the layer below); any result but `Stacked` ends the plan with that `Err`, so neither `bd close` nor `atm task close` runs -> `bd close`"
+  },
+  {
+   "bead": "atm-bo-5",
+   "field": "description",
+   "anchor": "ANC-023",
+   "action": "replace",
+   "old": "using `{{ provider.* }}` and the lite hook command;",
+   "new": "using `{{ provider.* }}` and the lite hook command; a lite template is rendered only after `require_profile(phase_file, Profile.LITE)` passes, so it never renders for a full phase;"
+  },
+  {
+   "bead": "atm-bo-5",
+   "field": "acceptance_criteria",
+   "anchor": "ANC-023",
+   "action": "replace",
+   "old": "- [ ] `lite_cron.py` follows the cron contract (empty stdout / JSON / nonzero); tested",
+   "new": "- [ ] `lite_cron.py` follows the cron contract (empty stdout / JSON / nonzero); tested\n- [ ] the hook runner, the lite template render and `lite_cron.py` each exit with `ProfileMismatch` on a full phase file; tested"
+  },
+  {
+   "bead": "atm-bo-6",
+   "field": "description",
+   "anchor": "ANC-006",
+   "action": "replace",
+   "old": "`model.py` carries `Profile` on the phase snapshot.",
+   "new": "`model.py` carries `Profile` on the phase snapshot and parses lite and full beads with the same bead models (one schema, no lite-only model)."
+  },
+  {
+   "bead": "atm-bo-6",
+   "field": "description",
+   "anchor": "ANC-023",
+   "action": "replace",
+   "old": "2. `atm-bd cron`: reads the profile and, for a lite phase, runs the lite tick",
+   "new": "2. `atm-bd cron`: reads the profile from the phase file with `read_profile`; the full tick calls `require_profile(phase_file, Profile.FULL)` and the lite tick `Profile.LITE`, so neither tick runs against the other profile's phase; for a lite phase it runs the lite tick"
+  },
+  {
+   "bead": "atm-bo-6",
+   "field": "acceptance_criteria",
+   "anchor": "ANC-023",
+   "action": "replace",
+   "old": "- [ ] `atm-bd cron` on the lite fixture dispatches to the lite tick; on a full fixture behaviour is unchanged; tested",
+   "new": "- [ ] `atm-bd cron` on the lite fixture dispatches to the lite tick; on a full fixture behaviour is unchanged; the full tick run on the lite fixture exits with `ProfileMismatch`; tested"
+  },
+  {
+   "bead": "atm-bo-7",
+   "field": "description",
+   "anchor": "ANC-005",
+   "action": "replace",
+   "old": "`atm-bd cron` and `atm-bd queues --phase` outputs captured at the exact revision.",
+   "new": "`atm-bd cron` and `atm-bd queues --phase` outputs captured at the exact revision, each invoked with the same subcommands and arguments as on a full phase of atm-core (only the phase id differs), with the full-phase invocations captured beside them."
+  },
+  {
+   "bead": "atm-bo-7",
+   "field": "acceptance_criteria",
+   "anchor": "ANC-005",
+   "action": "replace",
+   "old": "- [ ] `atm-bd console` refusal (`ProfileMismatch`, no dispatch), `cron` and `queues` outputs for the lite phase captured at the exact revision",
+   "new": "- [ ] `atm-bd console` refusal (`ProfileMismatch`, no dispatch), `cron` and `queues` outputs for the lite phase captured at the exact revision; their argv differ from the full-phase invocations only in the phase id"
+  },
+  {
+   "bead": "atm-bo-7",
+   "field": "description",
+   "anchor": "ANC-021",
+   "action": "replace",
+   "old": "captured in the evidence directory with the limitation (no live Azure repo) stated.",
+   "new": "the bo-4 Azure-remote stack tests (`test_stack_gate_azure_remote`, `test_stack_link_azure`) run from the installed release and pass; both captured in the evidence directory with the limitation (no live Azure repo) stated."
+  },
+  {
+   "bead": "atm-bo-7",
+   "field": "acceptance_criteria",
+   "anchor": "ANC-021",
+   "action": "replace",
+   "old": "- [ ] azure render captured: `az repos pr create` present, no `gh `",
+   "new": "- [ ] azure render captured: `az repos pr create` present, no `gh `; the Azure-remote stack gate and stack link tests pass from the installed release, log captured"
+  }
+ ],
+ "exclude": [
+  {
+   "anchor": "ANC-009",
+   "item": "atm-bo-2",
+   "reason": "bo-2 only declares the StackGateResult type and the StackGate Protocol; the PR-base-versus-stack-top comparison is implemented and judged in bo-4, which satisfies ANC-009."
+  },
+  {
+   "anchor": "ANC-015",
+   "item": "atm-bo-6",
+   "reason": "bo-6 changes read-only views and the console refusal; single-agent runnability of the lite loop is delivered by bo-5 and proved live by bo-7, both satisfying ANC-015."
+  }
+ ],
+ "round2": [
+  {
+   "bead": "atm-bo-5",
+   "anchor": "ANC-023",
+   "action": "cut",
+   "old": "`plugins/atm-bd-orchestration/core/scripts/hook_runner.py` (new, shared by both profiles later) first calls",
+   "new": "`plugins/atm-bd-orchestration/core/scripts/hook_runner.py` (new) first calls"
+  },
+  {
+   "bead": "atm-bo-6",
+   "anchor": "ANC-023",
+   "action": "add",
+   "old": "The lite hook and lite cron tick itself (bo-5); the live run (bo-7).",
+   "new": "The lite hook and lite cron tick itself, and the profile gates of the hook and the lite templates (bo-5, ANC-023); the live run (bo-7)."
+  }
+ ],
+ "round3": {
+  "split": "ANC-023 retired -> ANC-026 (hook, templates; bo-5), ANC-027 (cron ticks; bo-6); console = ANC-024",
+  "to_fix": [
+   {
+    "bead": "atm-bo-3",
+    "anchor": "ANC-021",
+    "action": "add",
+    "old": "and the rendered dev template contains `az repos pr create` and no `gh ` (no `gh stack` either); tested",
+    "new": "and the rendered dev template contains `az repos pr create` and no `gh ` (no `gh stack` either), and its stack-link and stack-view steps render the Azure `StackLink` and `StackView` ops (stack-bead record and read) so stacking works on an Azure Git repository (ANC-021); tested"
+   }
+  ]
+ }
+}

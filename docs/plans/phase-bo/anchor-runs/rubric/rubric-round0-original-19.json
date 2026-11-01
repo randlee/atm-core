@@ -1,0 +1,3469 @@
+{
+  "success": true,
+  "data": {
+    "threshold": 0.6,
+    "dry_run": false,
+    "fixture": false,
+    "path": "docs/plans/phase-bo/anchors.json",
+    "anchors": [
+      {
+        "id": "ANC-001",
+        "statement": "The installer must accept --github and --azure flags that select the provider commands rendered into the sc-compose templates.",
+        "quote": "could we add --github and --azure flags which inject the proper commands into sc-compose j2 templates?",
+        "scope": "adds or changes the installer, provider vars files, sc_render or templates that run PR commands",
+        "verdict": "testable",
+        "failing": [],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.62,
+            "probabilities": {
+              "no": 0.24,
+              "unclear": 0.01,
+              "yes": 0.75
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.94,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.03,
+              "yes": 0.96
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.7,
+            "probabilities": {
+              "no": 0.19,
+              "unclear": 0.01,
+              "yes": 0.8
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.67,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.1,
+              "yes": 0.78
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.68,
+            "probabilities": {
+              "no": 0.2,
+              "unclear": 0.01,
+              "yes": 0.79
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.94,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.03,
+              "yes": 0.96
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.67,
+            "probabilities": {
+              "no": 0.21,
+              "unclear": 0.01,
+              "yes": 0.78
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.02,
+              "yes": 0.98
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.68,
+            "probabilities": {
+              "no": 0.09,
+              "unclear": 0.12,
+              "yes": 0.79
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "testable",
+          "failing": [],
+          "low_confidence": [],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.62,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.94,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "yes",
+              "confidence": 0.67,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.97,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.67,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-002",
+        "statement": "The lite hook's transition logic must live in one Python file organized by transition type.",
+        "quote": "The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)",
+        "scope": "adds or changes the lite hook atm-bd-task-hook.py or splits logic out of it",
+        "verdict": "inconclusive",
+        "failing": [
+          "single_constraint",
+          "faithful",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.4,
+            "probabilities": {
+              "no": 0.39,
+              "unclear": 0.01,
+              "yes": 0.6
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.83,
+            "probabilities": {
+              "no": 0.07,
+              "unclear": 0.04,
+              "yes": 0.89
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.37,
+            "probabilities": {
+              "no": 0.37,
+              "unclear": 0.05,
+              "yes": 0.58
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.25,
+            "probabilities": {
+              "no": 0.5,
+              "unclear": 0.05,
+              "yes": 0.45
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.44,
+            "probabilities": {
+              "no": 0.36,
+              "unclear": 0.01,
+              "yes": 0.63
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.86,
+            "probabilities": {
+              "no": 0.05,
+              "unclear": 0.04,
+              "yes": 0.91
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.48,
+            "probabilities": {
+              "no": 0.32,
+              "unclear": 0.03,
+              "yes": 0.65
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.26,
+            "probabilities": {
+              "no": 0.44,
+              "unclear": 0.05,
+              "yes": 0.51
+            }
+          }
+        },
+        "answers_third": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.46,
+            "probabilities": {
+              "no": 0.35,
+              "unclear": 0.01,
+              "yes": 0.64
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.77,
+            "probabilities": {
+              "no": 0.1,
+              "unclear": 0.05,
+              "yes": 0.85
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.46,
+            "probabilities": {
+              "no": 0.33,
+              "unclear": 0.03,
+              "yes": 0.64
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.33,
+            "probabilities": {
+              "no": 0.55,
+              "unclear": 0.05,
+              "yes": 0.4
+            }
+          }
+        },
+        "attempts": 3,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "single_constraint",
+            "faithful",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "single_constraint",
+            "faithful",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [
+            "self_contained"
+          ],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.4,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.83,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "yes",
+              "confidence": 0.37,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.98,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": null,
+              "confidence": null,
+              "matching_calls": []
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-003",
+        "statement": "Every transition in the lite hook must be an enum matched exhaustively, so that a missing arm fails pyright strict.",
+        "quote": "The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)",
+        "scope": "adds or changes transition handling in the lite hook",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.79,
+            "probabilities": {
+              "no": 0.13,
+              "unclear": 0.01,
+              "yes": 0.86
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.86,
+            "probabilities": {
+              "no": 0.04,
+              "unclear": 0.05,
+              "yes": 0.91
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.33,
+            "probabilities": {
+              "no": 0.44,
+              "unclear": 0.01,
+              "yes": 0.55
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.72,
+            "probabilities": {
+              "no": 0.13,
+              "unclear": 0.06,
+              "yes": 0.81
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.8,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.01,
+              "yes": 0.87
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.85,
+            "probabilities": {
+              "no": 0.05,
+              "unclear": 0.05,
+              "yes": 0.9
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.25,
+            "probabilities": {
+              "no": 0.48,
+              "unclear": 0.02,
+              "yes": 0.5
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.74,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.05,
+              "yes": 0.83
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful"
+          ],
+          "low_confidence": [
+            "faithful"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.79,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.85,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "yes",
+              "confidence": 0.25,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.98,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.72,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-004",
+        "statement": "Lite hook tests must put each repeated setup or assertion pattern in a shared helper method.",
+        "quote": "I want less code in the business logic.  test code is fine, but should be written efficiently w/ repeated patterns using common methods.",
+        "scope": "adds or changes tests for the lite hook or lite cron",
+        "verdict": "inconclusive",
+        "failing": [
+          "single_constraint",
+          "faithful",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.68,
+            "probabilities": {
+              "no": 0.19,
+              "unclear": 0.02,
+              "yes": 0.79
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.6,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.15,
+              "yes": 0.73
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.42,
+            "probabilities": {
+              "no": 0.38,
+              "unclear": 0.01,
+              "yes": 0.61
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.44,
+            "probabilities": {
+              "no": 0.31,
+              "unclear": 0.06,
+              "yes": 0.63
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.52,
+            "probabilities": {
+              "no": 0.3,
+              "unclear": 0.02,
+              "yes": 0.68
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.62,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.13,
+              "yes": 0.75
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.43,
+            "probabilities": {
+              "no": 0.37,
+              "unclear": 0.01,
+              "yes": 0.62
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.48,
+            "probabilities": {
+              "no": 0.31,
+              "unclear": 0.04,
+              "yes": 0.65
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "single_constraint",
+            "faithful",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "single_constraint",
+            "faithful",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.52,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.6,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "yes",
+              "confidence": 0.42,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.98,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.44,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-005",
+        "statement": "The atm-bd console, cron and queues commands must serve lite and full phases through one unchanged command-line interface.",
+        "quote": "Some items would be atm-bd-<profile> specific i.e. atm-bd-task-hook.py the task assignment j2 templates, the cron script.  We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).  This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
+        "scope": "adds or changes atm-bd console, cron, queues, sprint-report or bv-analyze",
+        "verdict": "inconclusive",
+        "failing": [
+          "self_contained",
+          "observable",
+          "faithful"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.74,
+            "probabilities": {
+              "no": 0.16,
+              "unclear": 0.01,
+              "yes": 0.83
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.3,
+            "probabilities": {
+              "no": 0.18,
+              "unclear": 0.29,
+              "yes": 0.53
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.24,
+            "probabilities": {
+              "no": 0.49,
+              "unclear": 0.04,
+              "yes": 0.47
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.68,
+            "probabilities": {
+              "no": 0.79,
+              "unclear": 0.07,
+              "yes": 0.14
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.8,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.01,
+              "yes": 0.87
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.37,
+            "probabilities": {
+              "no": 0.18,
+              "unclear": 0.24,
+              "yes": 0.58
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.26,
+            "probabilities": {
+              "no": 0.51,
+              "unclear": 0.05,
+              "yes": 0.44
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.66,
+            "probabilities": {
+              "no": 0.77,
+              "unclear": 0.07,
+              "yes": 0.16
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "self_contained",
+            "observable",
+            "faithful"
+          ],
+          "low_confidence": [
+            "observable",
+            "faithful"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.74,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.3,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.24,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.98,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "no",
+              "confidence": 0.66,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-006",
+        "statement": "Both profiles must use the single bead schema defined in atm-bd-core.",
+        "quote": "Some items would be atm-bd-<profile> specific i.e. atm-bd-task-hook.py the task assignment j2 templates, the cron script.  We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).  This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
+        "scope": "adds or changes bead_schema, close_fields, bead models or formulas",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.79,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.02,
+              "yes": 0.86
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.62,
+            "probabilities": {
+              "no": 0.07,
+              "unclear": 0.18,
+              "yes": 0.75
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.62,
+            "probabilities": {
+              "no": 0.75,
+              "unclear": 0.03,
+              "yes": 0.22
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.86,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.08,
+              "yes": 0.91
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.18,
+            "probabilities": {
+              "no": 0.31,
+              "unclear": 0.24,
+              "yes": 0.45
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.85,
+            "probabilities": {
+              "no": 0.09,
+              "unclear": 0.01,
+              "yes": 0.9
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.62,
+            "probabilities": {
+              "no": 0.08,
+              "unclear": 0.17,
+              "yes": 0.75
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.66,
+            "probabilities": {
+              "no": 0.77,
+              "unclear": 0.02,
+              "yes": 0.21
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.89,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.06,
+              "yes": 0.93
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.24,
+            "probabilities": {
+              "no": 0.31,
+              "unclear": 0.2,
+              "yes": 0.49
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.79,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.62,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.62,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.86,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.18,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-007",
+        "statement": "In the lite profile the sanity fields of the shared schema must be optional, left undefined rather than filled.",
+        "quote": "Some items would be atm-bd-<profile> specific i.e. atm-bd-task-hook.py the task assignment j2 templates, the cron script.  We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).  This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
+        "scope": "adds or changes bead_schema, close_fields or close vars",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.94,
+            "probabilities": {
+              "no": 0.03,
+              "unclear": 0.01,
+              "yes": 0.96
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.83,
+            "probabilities": {
+              "no": 0.04,
+              "unclear": 0.07,
+              "yes": 0.89
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.42,
+            "probabilities": {
+              "no": 0.36,
+              "unclear": 0.03,
+              "yes": 0.61
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.82,
+            "probabilities": {
+              "no": 0.02,
+              "unclear": 0.1,
+              "yes": 0.88
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.35,
+            "probabilities": {
+              "no": 0.57,
+              "unclear": 0.12,
+              "yes": 0.31
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.94,
+            "probabilities": {
+              "no": 0.03,
+              "unclear": 0.01,
+              "yes": 0.96
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.79,
+            "probabilities": {
+              "no": 0.05,
+              "unclear": 0.09,
+              "yes": 0.86
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.35,
+            "probabilities": {
+              "no": 0.4,
+              "unclear": 0.03,
+              "yes": 0.57
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.82,
+            "probabilities": {
+              "no": 0.02,
+              "unclear": 0.1,
+              "yes": 0.88
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.22,
+            "probabilities": {
+              "no": 0.48,
+              "unclear": 0.14,
+              "yes": 0.38
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "faithful",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.94,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.79,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "yes",
+              "confidence": 0.35,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.82,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "no",
+              "confidence": 0.22,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-008",
+        "statement": "Scripts and templates of either profile never invoke the gh stack subcommand or the GitHub stacks API.",
+        "quote": "One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.  This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command",
+        "scope": "adds or changes stack linking, stack checks, sanity-stack-link, or dispatch templates",
+        "verdict": "inconclusive",
+        "failing": [
+          "single_constraint",
+          "faithful"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.48,
+            "probabilities": {
+              "no": 0.34,
+              "unclear": 0.01,
+              "yes": 0.65
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.92,
+            "probabilities": {
+              "no": 0.02,
+              "unclear": 0.03,
+              "yes": 0.95
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.66,
+            "probabilities": {
+              "no": 0.77,
+              "unclear": 0.02,
+              "yes": 0.21
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.02,
+              "yes": 0.98
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.6,
+            "probabilities": {
+              "no": 0.14,
+              "unclear": 0.13,
+              "yes": 0.73
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.37,
+            "probabilities": {
+              "no": 0.41,
+              "unclear": 0.01,
+              "yes": 0.58
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.96,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.02,
+              "yes": 0.97
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.56,
+            "probabilities": {
+              "no": 0.71,
+              "unclear": 0.02,
+              "yes": 0.27
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.96,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.02,
+              "yes": 0.97
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.67,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.1,
+              "yes": 0.78
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "single_constraint",
+            "faithful"
+          ],
+          "low_confidence": [
+            "single_constraint",
+            "faithful"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.37,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.92,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.56,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.96,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.6,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-009",
+        "statement": "Stack checks must compare the PR base with the stack top using git alone.",
+        "quote": "One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.  This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command",
+        "scope": "adds or changes the stack gate or stack linking",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.88,
+            "probabilities": {
+              "no": 0.07,
+              "unclear": 0.01,
+              "yes": 0.92
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.83,
+            "probabilities": {
+              "no": 0.03,
+              "unclear": 0.08,
+              "yes": 0.89
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.43,
+            "probabilities": {
+              "no": 0.36,
+              "unclear": 0.02,
+              "yes": 0.62
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.96,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.03,
+              "yes": 0.97
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.61,
+            "probabilities": {
+              "no": 0.14,
+              "unclear": 0.12,
+              "yes": 0.74
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.88,
+            "probabilities": {
+              "no": 0.07,
+              "unclear": 0.01,
+              "yes": 0.92
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.76,
+            "probabilities": {
+              "no": 0.05,
+              "unclear": 0.11,
+              "yes": 0.84
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.28,
+            "probabilities": {
+              "no": 0.45,
+              "unclear": 0.03,
+              "yes": 0.52
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.02,
+              "yes": 0.98
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.53,
+            "probabilities": {
+              "no": 0.16,
+              "unclear": 0.15,
+              "yes": 0.69
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "faithful",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.88,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.76,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "yes",
+              "confidence": 0.28,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.96,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.53,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-010",
+        "statement": "The dev and fix close hook must refuse the close when the PR base differs from the stack top, before running bd close and atm task close.",
+        "quote": "1) dev/fix 'atm task close' would check pr base vs. stack top (blocking close if not stacked properly) then do bd close, atm task close.",
+        "scope": "adds or changes a dev or fix close hook or the stack gate",
+        "verdict": "inconclusive",
+        "failing": [
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.79,
+            "probabilities": {
+              "no": 0.13,
+              "unclear": 0.01,
+              "yes": 0.86
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.86,
+            "probabilities": {
+              "no": 0.03,
+              "unclear": 0.06,
+              "yes": 0.91
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.73,
+            "probabilities": {
+              "no": 0.17,
+              "unclear": 0.01,
+              "yes": 0.82
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.2,
+            "probabilities": {
+              "no": 0.37,
+              "unclear": 0.16,
+              "yes": 0.47
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.74,
+            "probabilities": {
+              "no": 0.16,
+              "unclear": 0.01,
+              "yes": 0.83
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.88,
+            "probabilities": {
+              "no": 0.03,
+              "unclear": 0.05,
+              "yes": 0.92
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.82,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.0,
+              "yes": 0.88
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.0,
+              "yes": 1.0
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.24,
+            "probabilities": {
+              "no": 0.38,
+              "unclear": 0.13,
+              "yes": 0.49
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "self_contained"
+          ],
+          "low_confidence": [
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.74,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.86,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "yes",
+              "confidence": 0.73,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.98,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.2,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-011",
+        "statement": "A phase never contains beads of more than one profile.",
+        "quote": "2) never mix profiles in the same phase.",
+        "scope": "adds or changes phase-config, validate-plan, bead-groups or bead_schema",
+        "verdict": "inconclusive",
+        "failing": [
+          "observable",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.0,
+              "yes": 1.0
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.53,
+            "probabilities": {
+              "no": 0.1,
+              "unclear": 0.21,
+              "yes": 0.69
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.86,
+            "probabilities": {
+              "no": 0.08,
+              "unclear": 0.01,
+              "yes": 0.91
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.8,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.12,
+              "yes": 0.87
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.24,
+            "probabilities": {
+              "no": 0.18,
+              "unclear": 0.33,
+              "yes": 0.49
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.0,
+              "yes": 1.0
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.62,
+            "probabilities": {
+              "no": 0.06,
+              "unclear": 0.19,
+              "yes": 0.75
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.91,
+            "probabilities": {
+              "no": 0.05,
+              "unclear": 0.01,
+              "yes": 0.94
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.74,
+            "probabilities": {
+              "no": 0.02,
+              "unclear": 0.15,
+              "yes": 0.83
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.04,
+            "probabilities": {
+              "no": 0.36,
+              "unclear": 0.34,
+              "yes": 0.3
+            }
+          }
+        },
+        "answers_third": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.0,
+              "yes": 1.0
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.67,
+            "probabilities": {
+              "no": 0.08,
+              "unclear": 0.14,
+              "yes": 0.78
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.86,
+            "probabilities": {
+              "no": 0.08,
+              "unclear": 0.01,
+              "yes": 0.91
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.7,
+            "probabilities": {
+              "no": 0.02,
+              "unclear": 0.18,
+              "yes": 0.8
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.06,
+            "probabilities": {
+              "no": 0.28,
+              "unclear": 0.35,
+              "yes": 0.37
+            }
+          }
+        },
+        "attempts": 3,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "observable",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "observable",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [
+            "self_contained"
+          ],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 1.0,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.53,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "yes",
+              "confidence": 0.86,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.74,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": null,
+              "confidence": null,
+              "matching_calls": []
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-012",
+        "statement": "Profile-specific scripts and templates must live under their own skill directory, skills/<profile>/scripts and skills/<profile>/templates.",
+        "quote": "i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.  scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today",
+        "scope": "adds or moves scripts or templates of a profile",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful",
+          "single_constraint"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.35,
+            "probabilities": {
+              "no": 0.42,
+              "unclear": 0.01,
+              "yes": 0.57
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.01,
+              "yes": 0.98
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.61,
+            "probabilities": {
+              "no": 0.74,
+              "unclear": 0.03,
+              "yes": 0.23
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.96,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.02,
+              "yes": 0.97
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.76,
+            "probabilities": {
+              "no": 0.11,
+              "unclear": 0.05,
+              "yes": 0.84
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.31,
+            "probabilities": {
+              "no": 0.45,
+              "unclear": 0.01,
+              "yes": 0.54
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.01,
+              "yes": 0.98
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.66,
+            "probabilities": {
+              "no": 0.77,
+              "unclear": 0.03,
+              "yes": 0.2
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.94,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.03,
+              "yes": 0.96
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.73,
+            "probabilities": {
+              "no": 0.12,
+              "unclear": 0.06,
+              "yes": 0.82
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful",
+            "single_constraint"
+          ],
+          "low_confidence": [
+            "single_constraint"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.31,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.97,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.61,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.94,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.73,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-013",
+        "statement": "Shared scripts and templates must be installed once, to .atm-bd/scripts and .atm-bd/templates at the repository root.",
+        "quote": "i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.  scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today",
+        "scope": "adds, moves or installs shared scripts or templates",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.73,
+            "probabilities": {
+              "no": 0.17,
+              "unclear": 0.01,
+              "yes": 0.82
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.96,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.02,
+              "yes": 0.97
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.4,
+            "probabilities": {
+              "no": 0.6,
+              "unclear": 0.02,
+              "yes": 0.38
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.7,
+            "probabilities": {
+              "no": 0.14,
+              "unclear": 0.06,
+              "yes": 0.8
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.74,
+            "probabilities": {
+              "no": 0.16,
+              "unclear": 0.01,
+              "yes": 0.83
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.38,
+            "probabilities": {
+              "no": 0.59,
+              "unclear": 0.02,
+              "yes": 0.39
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.74,
+            "probabilities": {
+              "no": 0.11,
+              "unclear": 0.06,
+              "yes": 0.83
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful"
+          ],
+          "low_confidence": [
+            "faithful"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.73,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.96,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.38,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.98,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.7,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-014",
+        "statement": "The atm-bd-lite profile must ship its own task-close hook file, separate from the full profile's atm-task-close.py.",
+        "quote": "the atm-bd-lite would have a completely different atm-task-hook python file.",
+        "scope": "adds or changes a task-close hook, or selects a hook by profile",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.83,
+            "probabilities": {
+              "no": 0.1,
+              "unclear": 0.01,
+              "yes": 0.89
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.92,
+            "probabilities": {
+              "no": 0.02,
+              "unclear": 0.03,
+              "yes": 0.95
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.3,
+            "probabilities": {
+              "no": 0.53,
+              "unclear": 0.07,
+              "yes": 0.4
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.02,
+              "yes": 0.98
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.6,
+            "probabilities": {
+              "no": 0.15,
+              "unclear": 0.12,
+              "yes": 0.73
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.82,
+            "probabilities": {
+              "no": 0.11,
+              "unclear": 0.01,
+              "yes": 0.88
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.91,
+            "probabilities": {
+              "no": 0.02,
+              "unclear": 0.04,
+              "yes": 0.94
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.26,
+            "probabilities": {
+              "no": 0.51,
+              "unclear": 0.07,
+              "yes": 0.42
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.91,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.05,
+              "yes": 0.94
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.52,
+            "probabilities": {
+              "no": 0.19,
+              "unclear": 0.13,
+              "yes": 0.68
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "faithful",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.82,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.91,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.26,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.91,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.52,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-015",
+        "statement": "The lite profile must run a phase end to end with a single agent and no sanity stage.",
+        "quote": "we haven't designed 'lite' yet. it will be a much simpler orchestration that could be run by a single agent or small team.",
+        "scope": "adds or changes the lite skill, lite formulas or lite templates",
+        "verdict": "inconclusive",
+        "failing": [
+          "single_constraint",
+          "faithful",
+          "observable",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.7,
+            "probabilities": {
+              "no": 0.8,
+              "unclear": 0.01,
+              "yes": 0.19
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.42,
+            "probabilities": {
+              "no": 0.26,
+              "unclear": 0.13,
+              "yes": 0.61
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.99,
+              "unclear": 0.0,
+              "yes": 0.01
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.02,
+              "yes": 0.98
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.34,
+            "probabilities": {
+              "no": 0.56,
+              "unclear": 0.07,
+              "yes": 0.37
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.67,
+            "probabilities": {
+              "no": 0.78,
+              "unclear": 0.01,
+              "yes": 0.21
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.37,
+            "probabilities": {
+              "no": 0.3,
+              "unclear": 0.12,
+              "yes": 0.58
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.99,
+              "unclear": 0.0,
+              "yes": 0.01
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.96,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.02,
+              "yes": 0.97
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.34,
+            "probabilities": {
+              "no": 0.56,
+              "unclear": 0.07,
+              "yes": 0.37
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "single_constraint",
+            "faithful",
+            "observable",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "observable",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "no",
+              "confidence": 0.67,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.37,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.98,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.96,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "no",
+              "confidence": 0.34,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-016",
+        "statement": "New or rewritten Python code in the phase must return Result values for expected failures instead of raising, and every touched file must pass pyright strict.",
+        "quote": "ok, are we following the unwritten python-best-practices?  use pyright, return Result<T,Err> (no throwing), can you define rust traits for python to use?",
+        "scope": "adds or rewrites Python code in atm-bd-orchestration",
+        "verdict": "inconclusive",
+        "failing": [
+          "single_constraint",
+          "faithful",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.94,
+            "probabilities": {
+              "no": 0.96,
+              "unclear": 0.0,
+              "yes": 0.04
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.76,
+            "probabilities": {
+              "no": 0.07,
+              "unclear": 0.09,
+              "yes": 0.84
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.48,
+            "probabilities": {
+              "no": 0.65,
+              "unclear": 0.02,
+              "yes": 0.33
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.96,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.03,
+              "yes": 0.97
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.58,
+            "probabilities": {
+              "no": 0.25,
+              "unclear": 0.03,
+              "yes": 0.72
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.92,
+            "probabilities": {
+              "no": 0.95,
+              "unclear": 0.0,
+              "yes": 0.05
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.73,
+            "probabilities": {
+              "no": 0.09,
+              "unclear": 0.09,
+              "yes": 0.82
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.64,
+            "probabilities": {
+              "no": 0.76,
+              "unclear": 0.02,
+              "yes": 0.22
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.02,
+              "yes": 0.98
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.46,
+            "probabilities": {
+              "no": 0.3,
+              "unclear": 0.06,
+              "yes": 0.64
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "single_constraint",
+            "faithful",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "faithful",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "no",
+              "confidence": 0.92,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.73,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.48,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.96,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.46,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-017",
+        "statement": "The fundamental atm-bd types must live in one Rust crate distributed through crates.io and a PyPI abi3 wheel, never through a git-source or GitHub-asset pin.",
+        "quote": "I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed. does wheel pull from gh?",
+        "scope": "adds or changes shared enums, error types, provider or stack-gate types, or their distribution",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful",
+          "single_constraint",
+          "observable",
+          "self_contained"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.4,
+            "probabilities": {
+              "no": 0.39,
+              "unclear": 0.01,
+              "yes": 0.6
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.58,
+            "probabilities": {
+              "no": 0.16,
+              "unclear": 0.12,
+              "yes": 0.72
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.88,
+            "probabilities": {
+              "no": 0.92,
+              "unclear": 0.01,
+              "yes": 0.07
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.26,
+            "probabilities": {
+              "no": 0.43,
+              "unclear": 0.06,
+              "yes": 0.51
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.38,
+            "probabilities": {
+              "no": 0.4,
+              "unclear": 0.01,
+              "yes": 0.59
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.64,
+            "probabilities": {
+              "no": 0.13,
+              "unclear": 0.11,
+              "yes": 0.76
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.89,
+            "probabilities": {
+              "no": 0.93,
+              "unclear": 0.01,
+              "yes": 0.06
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.01,
+              "yes": 0.99
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.33,
+            "probabilities": {
+              "no": 0.38,
+              "unclear": 0.07,
+              "yes": 0.55
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful",
+            "single_constraint",
+            "observable",
+            "self_contained"
+          ],
+          "low_confidence": [
+            "single_constraint",
+            "observable",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.38,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.58,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.88,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.98,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.26,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-018",
+        "statement": "The lite hook's transition logic must be a pure function returning a command plan, with no I/O, so a Rust cron can fire it under monty or CPython.",
+        "quote": "rust libraries will be arriving soon which will replace beads cache w/ rust and tokio and cron for firing monty (or python hooks).",
+        "scope": "adds or changes the lite hook or the hook runner",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful",
+          "single_constraint",
+          "observable",
+          "self_contained",
+          "written as speech, not as a requirement"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.5,
+            "probabilities": {
+              "no": 0.32,
+              "unclear": 0.01,
+              "yes": 0.67
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.44,
+            "probabilities": {
+              "no": 0.19,
+              "unclear": 0.18,
+              "yes": 0.63
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.89,
+            "probabilities": {
+              "no": 0.93,
+              "unclear": 0.01,
+              "yes": 0.06
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.02,
+              "yes": 0.98
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.37,
+            "probabilities": {
+              "no": 0.58,
+              "unclear": 0.13,
+              "yes": 0.29
+            }
+          }
+        },
+        "lint": {
+          "warnings": [
+            "written as speech, not as a requirement"
+          ],
+          "errors": [
+            "written as speech, not as a requirement"
+          ]
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.48,
+            "probabilities": {
+              "no": 0.34,
+              "unclear": 0.01,
+              "yes": 0.65
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.5,
+            "probabilities": {
+              "no": 0.16,
+              "unclear": 0.17,
+              "yes": 0.67
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.89,
+            "probabilities": {
+              "no": 0.93,
+              "unclear": 0.01,
+              "yes": 0.06
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.97,
+            "probabilities": {
+              "no": 0.0,
+              "unclear": 0.02,
+              "yes": 0.98
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.33,
+            "probabilities": {
+              "no": 0.55,
+              "unclear": 0.15,
+              "yes": 0.3
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful",
+            "single_constraint",
+            "observable",
+            "self_contained",
+            "written as speech, not as a requirement"
+          ],
+          "low_confidence": [
+            "single_constraint",
+            "observable",
+            "self_contained"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.48,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.44,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.89,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.97,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "no",
+              "confidence": 0.33,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "ANC-019",
+        "statement": "The atm-bd-types crate must be versioned and released independently of the Python package, so a Python-only fix never publishes the crate.",
+        "quote": "I am hopeful we won't be changing the atm-bd crate too often so we don't need a complicated publish process for quick python fixes",
+        "scope": "adds or changes release workflows, version files or the crate pin",
+        "verdict": "inconclusive",
+        "failing": [
+          "faithful",
+          "single_constraint"
+        ],
+        "answers": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.58,
+            "probabilities": {
+              "no": 0.26,
+              "unclear": 0.02,
+              "yes": 0.72
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.73,
+            "probabilities": {
+              "no": 0.09,
+              "unclear": 0.09,
+              "yes": 0.82
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.83,
+            "probabilities": {
+              "no": 0.89,
+              "unclear": 0.03,
+              "yes": 0.08
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.91,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.05,
+              "yes": 0.94
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.74,
+            "probabilities": {
+              "no": 0.09,
+              "unclear": 0.08,
+              "yes": 0.83
+            }
+          }
+        },
+        "lint": {
+          "warnings": [],
+          "errors": []
+        },
+        "answers_second": {
+          "single_constraint": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.48,
+            "probabilities": {
+              "no": 0.33,
+              "unclear": 0.02,
+              "yes": 0.65
+            }
+          },
+          "observable": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.7,
+            "probabilities": {
+              "no": 0.11,
+              "unclear": 0.09,
+              "yes": 0.8
+            }
+          },
+          "faithful": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.88,
+            "probabilities": {
+              "no": 0.92,
+              "unclear": 0.02,
+              "yes": 0.06
+            }
+          },
+          "scoped": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.89,
+            "probabilities": {
+              "no": 0.01,
+              "unclear": 0.06,
+              "yes": 0.93
+            }
+          },
+          "self_contained": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.77,
+            "probabilities": {
+              "no": 0.08,
+              "unclear": 0.07,
+              "yes": 0.85
+            }
+          }
+        },
+        "attempts": 2,
+        "confirmations": {
+          "verdict": "inconclusive",
+          "failing": [
+            "faithful",
+            "single_constraint"
+          ],
+          "low_confidence": [
+            "single_constraint"
+          ],
+          "unstable": [],
+          "initial_disagreements": [],
+          "resolved": {
+            "single_constraint": {
+              "choice": "yes",
+              "confidence": 0.48,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "observable": {
+              "choice": "yes",
+              "confidence": 0.7,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "faithful": {
+              "choice": "no",
+              "confidence": 0.83,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "scoped": {
+              "choice": "yes",
+              "confidence": 0.89,
+              "matching_calls": [
+                1,
+                2
+              ]
+            },
+            "self_contained": {
+              "choice": "yes",
+              "confidence": 0.74,
+              "matching_calls": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "needs_work": [
+      "ANC-002",
+      "ANC-003",
+      "ANC-004",
+      "ANC-005",
+      "ANC-006",
+      "ANC-007",
+      "ANC-008",
+      "ANC-009",
+      "ANC-010",
+      "ANC-011",
+      "ANC-012",
+      "ANC-013",
+      "ANC-014",
+      "ANC-015",
+      "ANC-016",
+      "ANC-017",
+      "ANC-018",
+      "ANC-019"
+    ],
+    "pass": false
+  },
+  "error": null
+}

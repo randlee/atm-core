@@ -1,0 +1,611 @@
+{
+  "success": true,
+  "data": {
+    "gate": "dev",
+    "dry_run": false,
+    "fixture": false,
+    "checks": [
+      {
+        "anchor_id": "ANC-001",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The installer gains --github and --azure flags (install.py, test_install_provider_flags) and the chosen provider's command set is merged into the template render context; see the PR diff of install.py.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-001_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-001",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Templates keep hard-coded gh pr commands and the installer has no provider flag.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-001_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-002",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "All dev, fix and qa close transitions are implemented in skills/atm-bd-lite/scripts/atm-bd-task-hook.py, one section per transition.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-002_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-002",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite close logic is split across hook.py, qa_close.py and dispatch.py helper modules.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-002_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-003",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Transition is a StrEnum and every handler uses match with no default arm; pyright strict with reportMatchNotExhaustive=error passes on the hook (pyright output in the PR, test_transition_exhaustive).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-003_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-003",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Transitions are compared as strings in if/elif chains with a final else that logs unknown.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-003_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-004",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Tests build hooks through the shared make_close_vars() and run_hook() helpers in tests/lite/conftest.py; no test repeats that setup inline (diff of tests/lite/test_hook.py).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-004_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-004",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Each test repeats the twelve-line close-vars setup and subprocess stub inline.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-004_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-005",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd console, cron and queues read the profile from the phase toml and render a lite phase with the same arguments as today; their --help output is byte-identical before and after (tests/test_cli_help_unchanged.py).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-005_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-005",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "A new atm-bd lite-console command is added for lite phases.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-005_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-006",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Lite beads validate against the core bead_schema models; no schema file is added under skills/atm-bd-lite.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-006_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-006",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "skills/atm-bd-lite/schemas/lite-dev-bead.schema.json defines a separate lite schema.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-006_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-007",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "sanity_bead and max_sanity_rounds are NotRequired in CloseFields (core/scripts/close_fields.py) and a lite close-vars file without them validates (test_lite_close_vars_without_sanity).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-007_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-007",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Lite close vars set sanity_bead to the string none to satisfy the required field.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-007_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-008",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "sanity-stack-link records layers in the stack bead and sets the PR base with the provider command; grep -rn 'gh stack' plugins/atm-bd-orchestration returns prose only, no command (CI grep log attached).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-008_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-008",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite hook calls gh stack link to attach the layer.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-008_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-009",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The stack check compares the PR base ref with the stack top branch and reads no other stack record; stack_gate.py makes no gh or API call (test_stack_gate_git_only, PR diff of stack_gate.py).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-009_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-009",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The stack check queries the GitHub stacks API for the stack's top PR.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-009_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-010",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The dev close hook compares the PR base with the stack top first and exits 2 when they differ; bd close and atm task close run only after that check passes (test_hook_blocks_misbased_pr records no bd or atm command).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-010_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-010",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The hook runs bd close first and then warns that the PR base does not match the stack top.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-010_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-011",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "validate-plan rejects a lite phase that contains a stage:dev-sanity bead with exit 5 (test_validate_plan_mixed_profiles; run log in the PR).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-011_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-011",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "A phase mixes lite sprints and full sprints by setting the profile per sprint bead.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-011_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-012",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd-task-hook.py, lite_cron.py and the lite dev/fix/qa templates sit under skills/atm-bd-lite/scripts and skills/atm-bd-lite/templates.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-012_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-012",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite hook is placed in core/scripts next to the shared modules.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-012_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-013",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "core/scripts and core/templates install to .atm-bd/scripts and .atm-bd/templates; the skill directories no longer carry copies.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-013_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-013",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Shared modules are copied into .claude/skills and .codex/skills on install as before.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-013_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-014",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "skills/atm-bd-lite/scripts/atm-bd-task-hook.py is a separate file; atm-task-close.py is unchanged.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-014_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-014",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "atm-task-close.py gains an if profile == lite branch that skips sanity.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-014_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-015",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The live lite phase log in bo-7 shows one ATM identity performing dispatch, dev, QA and landing; the lite formula pours only dev and qa beads (atm-bd queues output attached).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-015_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-015",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite formula pours a sanity bead that a second agent must close before QA can start.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-015_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-016",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "profile.py returns Result[Profile]; main maps Err to exit code 2 and JSON output.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-016_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-016",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "load_provider raises ValueError on an unknown provider and callers catch it.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-016_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-017",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The Profile, Provider and Transition enums and the Error type are defined in crates/atm-bd-types and exposed to Python through its wheel.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-017_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-017",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The shared enums are defined in Python dataclasses under core/scripts and no Rust crate exists.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-017_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-018",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd 0.21.1 shipped a Python-only fix: release.yml ran no crate publish job and atm-bd-types stays at 0.2.0 (workflow run log and the crates.io version page).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-018_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-018",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Every Python release bumps and republishes atm-bd-types at the same version number.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-018_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-019",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd-task-hook.py has one handler section each for dev close, fix close and qa close, selected by the Transition enum (file outline in the PR; test_one_handler_per_transition).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-019_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-019",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The hook is organized by bead field, with one function per close-vars key that branches on the transition inside.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-019_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-020",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Profile, Provider and Transition are defined once in atm-bd-core (crates/atm-bd-types, re-exported by core/scripts) and imported by both profile hooks; grep finds no second definition (PR diff).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-020_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-020",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "skills/atm-bd-lite/scripts/types.py defines its own Transition enum copied from the full profile.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-020_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-021",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Stack linking and the stack check both pass against an Azure-style remote: test_stack_gate_azure_remote maps an Azure Git URL to a local bare repository with git insteadOf, and test_stack_link_azure links a layer on it with az repos pr commands (test log in the PR).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212948Z-fixture_ANC-021_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-021",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The stack check requires the gh CLI and a GitHub remote; Azure repositories are out of scope.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212948Z-fixture_ANC-021_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-022",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "profile.py and providers.py carry # pyright: strict and pyright reports 0 errors on them.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212948Z-fixture_ANC-022_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-022",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The new provider module is excluded from pyright because of untyped dict access.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212948Z-fixture_ANC-022_fail_1.json"
+      }
+    ],
+    "mismatches": [],
+    "pass": true,
+    "path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures",
+    "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures",
+    "runs": [
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-001_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-001_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-002_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-002_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-003_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-003_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212944Z-fixture_ANC-004_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-004_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-005_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-005_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-006_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-006_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-007_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-007_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-008_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-008_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-009_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212945Z-fixture_ANC-009_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-010_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-010_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-011_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-011_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-012_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-012_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-013_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-013_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-014_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-014_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212946Z-fixture_ANC-015_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-015_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-016_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-016_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-017_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-017_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-018_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-018_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-019_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-019_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-020_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212947Z-fixture_ANC-020_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212948Z-fixture_ANC-021_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212948Z-fixture_ANC-021_fail_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212948Z-fixture_ANC-022_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-dev/fixtures/dev-20261031T212948Z-fixture_ANC-022_fail_1.json"
+    ]
+  },
+  "error": null
+}

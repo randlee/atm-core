@@ -1,0 +1,413 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T003439Z-atm-bo-7",
+  "gate": "plan",
+  "created_at": "2026-11-01T00:34:39+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/plan/phase-bo/docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "atm-bo-7",
+    "title": "bo-7: release, dogfood install into atm-core, live lite phase",
+    "source": "/private/tmp/claude-501/-Users-randlee-github-atm-core/ae4c4073-991a-428e-a239-d8a12fdb63c3/scratchpad/tuning/plangate5/atm-bo-7.txt",
+    "chars": 4499,
+    "truncated": false,
+    "chars_before_reduction": 4499,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The installer must accept --github and --azure flags that select the provider commands rendered into the sc-compose templates.",
+      "quote": "could we add --github and --azure flags which inject the proper commands into sc-compose j2 templates?",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 4,
+      "deterministic_check": "atm-bd skill --azure renders a dispatch template containing 'az repos pr' and no 'gh pr'",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.89,
+          "probabilities": {
+            "yes": 0.93,
+            "no": 0.07,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.88,
+          "probabilities": {
+            "yes": 0.92,
+            "no": 0.06,
+            "unclear": 0.02
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.88,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 2173,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 4499,
+      "item_shortened": false,
+      "request_bytes": 7575
+    },
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a full phase.",
+      "quote": "We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 6,
+      "deterministic_check": "the --help output of atm-bd console, cron and queues is byte-identical before and after the phase",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 2187,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 4499,
+      "item_shortened": false,
+      "request_bytes": 7566
+    },
+    {
+      "anchor_id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite profile's orchestration must be runnable by a single agent.",
+      "quote": "it will be a much simpler orchestration that could be run by a single agent or small team.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 4,
+      "deterministic_check": "the bo-7 live lite phase log shows one ATM identity performing dispatch, dev, QA and landing",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 2160,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 4499,
+      "item_shortened": false,
+      "request_bytes": 7485
+    },
+    {
+      "anchor_id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Stack linking and the stack check in both profiles must work on an Azure Git repository, not only on GitHub.",
+      "quote": "One item that also needs to be addressed both ATM – BD – lite and ATM – BD – orchestration is for GH stacking to work on non-GitHub repos, a.k.a. azure git repos.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 5,
+      "deterministic_check": "a stack gate test against an Azure-style remote URL passes and the azure render of the dispatch templates contains az repos pr commands",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.96,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.02,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.15,
+            "no": 0.83,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.74,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 2169,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 4499,
+      "item_shortened": false,
+      "request_bytes": 7529
+    },
+    {
+      "anchor_id": "ANC-024",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The console never dispatches work for a phase whose phase file sets the lite profile.",
+      "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-31 (fenix), ANC-005 note",
+      "anchor_version": 3,
+      "deterministic_check": "a test runs atm-bd console against a phase file with profile lite and asserts a refusal exit with no dispatch",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.06,
+            "no": 0.94,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.91,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 2162,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 4499,
+      "item_shortened": false,
+      "request_bytes": 7490
+    },
+    {
+      "anchor_id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Shared scripts and templates must live at one common point, .atm-bd/scripts and .atm-bd/templates at the repository root, removing the duplicates under .claude, .codex and .agents.",
+      "quote": "scripts/templates would be at a common point (which perhaps would best be at repo root in .atm-bd/scripts and /templates.  That would remove duplicates across .claude/ .codex/ and .agents/ that exist today",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "after atm-bd skill install, each shared module exists once under .atm-bd and diff finds no copy under .claude, .codex or .agents",
+      "kind": "structural",
+      "leaning": null,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 4499,
+      "item_shortened": false
+    },
+    {
+      "anchor_id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A quick Python-only fix of atm-bd must release without a crate publish step.",
+      "quote": "I am hopeful we won't be changing the atm-bd crate too often so we don't need a complicated publish process for quick python fixes",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 4,
+      "deterministic_check": "release.yml for a Python-only tag runs no crate publish job",
+      "kind": "structural",
+      "leaning": null,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 4499,
+      "item_shortened": false
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 5,
+      "deterministic_only": 2
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 5
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}
