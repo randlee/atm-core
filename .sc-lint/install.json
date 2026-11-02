@@ -560,7 +560,7 @@
       "version-windows"
     ]
   },
-  "minimum_version": "0.8.3",
+  "minimum_version": "0.8.4",
   "profiles": {
     "adr-index": [
       "just",
