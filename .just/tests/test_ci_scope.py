@@ -26,6 +26,12 @@ class CiScopeTests(unittest.TestCase):
             ".github/workflows/ci.yml",
             ".github/scripts/ci_scope.py",
             "Justfile",
+            ".just/run_view.py",
+            ".just/tests/test_example.py",
+            "scripts/release.py",
+            "scripts/nested/check.py",
+            "sc-lint.toml",
+            ".sc-lint/install.json",
         ):
             with self.subTest(path=path):
                 self.assertTrue(ci_scope.requires_runtime(["docs/readme.md", path]))
@@ -34,8 +40,6 @@ class CiScopeTests(unittest.TestCase):
         self.assertFalse(
             ci_scope.requires_runtime(
                 [
-                    "scripts/release.py",
-                    ".just/run_view.py",
                     "release/publish-artifacts.toml",
                     "docs/plan.md",
                     ".claude/agents/reviewer.md",
