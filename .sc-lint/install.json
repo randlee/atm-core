@@ -512,7 +512,9 @@
       "arch-gates",
       "atm-graft-python-boundary",
       "boundaries",
-      "clippy",
+      "clippy-linux",
+      "clippy-macos",
+      "clippy-native-windows",
       "clippy-windows",
       "daemon-signing-coupling",
       "daemon-singleton",
@@ -560,7 +562,7 @@
       "version-windows"
     ]
   },
-  "minimum_version": "0.8.3",
+  "minimum_version": "0.8.4",
   "profiles": {
     "adr-index": [
       "just",
@@ -584,18 +586,67 @@
       "_py",
       ".just/lint_boundaries.py"
     ],
-    "clippy": [
-      "just",
-      "_sc-lint-clippy",
-      "native"
-    ],
+    "clippy-linux": {
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "env_paths": {
+        "PYO3_PYTHON": ".bootstrap-venv/bin/python"
+      },
+      "platform": "linux"
+    },
+    "clippy-macos": {
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "env_paths": {
+        "PYO3_PYTHON": ".bootstrap-venv/bin/python"
+      },
+      "platform": "macos"
+    },
+    "clippy-native-windows": {
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "env_paths": {
+        "PYO3_PYTHON": ".bootstrap-venv/Scripts/python.exe"
+      },
+      "platform": "windows"
+    },
     "clippy-windows": {
       "command": [
-        "just",
-        "_sc-lint-clippy",
-        "xwin"
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
       ],
-      "platform": "linux"
+      "env_paths": {
+        "PYO3_PYTHON": ".bootstrap-venv/bin/python"
+      },
+      "host": "linux",
+      "platform": "windows",
+      "target": "x86_64-pc-windows-msvc"
     },
     "daemon-signing-coupling": [
       "just",

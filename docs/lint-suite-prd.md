@@ -122,15 +122,14 @@ Lint execution model:
 - The runner keeps going after failures and prints every failed step with its
   captured output (randlee/sc-lint#195 tracks fuller output visibility).
 - `just lint ci` runs the `ci` profile for the host and `just lint ci all` also
-  runs the Linux-tagged Windows-target Clippy step on Linux. CI and
+  runs the Linux-hosted Windows-target Clippy step on Linux. CI and
   `scripts/validate_release.py` run `just lint ci all`.
 - Wheel-only sc-lint helpers (cargo-deny, cargo-shear, manifests, codespell) are
   plain `sc-lint.toml` steps that call the kit's managed interpreter directly
   (`.sc-lint/venv/bin/python -m sc_lint.<helper>`, the invocation sc-lint
   documents), one platform-tagged step per OS because the interpreter path
-  differs on Windows. Clippy keeps PyO3's interpreter through
-  `just _sc-lint-clippy` until randlee/sc-lint#198 ships a consumer step
-  runner.
+  differs on Windows. Clippy uses host-aware steps with `env_paths` to select
+  the bootstrap interpreter for PyO3.
 
 ### Current custom Python lint tools
 
