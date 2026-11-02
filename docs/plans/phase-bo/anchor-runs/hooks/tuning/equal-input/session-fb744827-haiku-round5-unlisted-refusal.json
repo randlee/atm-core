@@ -1,0 +1,353 @@
+{
+ "id": "fb744827-7ba1-47cd-9785-ab97905ec4d2",
+ "created_at": 1793579835.288082,
+ "check_id": "close-unlisted-refusal",
+ "rev": "worktree",
+ "backend": "haiku",
+ "model": "claude-haiku-5-5",
+ "request": {
+  "state": {
+   "hook": "\"\"\"GATE FIXTURE, not bo-10 code. ANC-054 question set, expected listed = no for the STACK_HELD refusal.\n\nA task.close hook shaped to pass the gate's deterministic checks (four Transition arms, one beads.update,\nstack_bead only read, no subprocess, <= 100 lines). Its WORK_CLOSE arm refuses with STACK_HELD when the\nledger is locked by another agent: a refusal that is neither a row nor an Errors entry of hooks/task-close.md.\n\"\"\"\nimport sys\nfrom atm_bd_types import (BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli,\n                          CacheStore, Refusal, Status, Template, Transition)\n\n\ndef hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:\n    if not req.is_phase_task():\n        return HookReply.not_applicable()\n    if isinstance(phase := phases.load(req.phase_config_path(), \"lite\"), Refusal):\n        return HookReply.refused(phase)\n    if isinstance(bead := beads.show(req.task_id), Refusal):\n        return HookReply.refused(bead)\n    if isinstance(transition := Transition.for_close(req.outcome, bead.stage, req.qa_verdict()), Refusal):\n        return HookReply.refused(transition)\n    if not bead.assigned_to(req.caller):\n        return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))\n    if bead.status is Status.CLOSED:\n        return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead))\n    if bead.status is not Status.IN_PROGRESS:\n        return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))\n    match transition:\n        case Transition.GIVE_BACK:  # T-CLOSE-01\n            if isinstance(reason := req.close_reason(), Refusal):\n                return HookReply.refused(reason)\n            patch, template, args = BeadPatch.reopen(bead), Template.REFUSE, reason\n        case Transition.WORK_CLOSE:  # T-CLOSE-02\n            if isinstance(report := req.close_report(), Refusal):\n                return HookReply.refused(report)\n            if isinstance(ledger := beads.show(bead.stack_bead), Refusal):\n                return HookReply.refused(ledger)\n            if ledger.assignee and ledger.assignee != req.caller:\n                return HookReply.refused(Refusal(ErrorId.STACK_HELD, holder=ledger.assignee))\n            if (layer := ledger.layer_for(bead.work.branch)) is None:\n                return HookReply.refused(Refusal(ErrorId.STACK_NOT_RECORDED, branch=bead.work.branch))\n            patch, template, args = BeadPatch.close(bead, evidence=layer), Template.DEV_CLOSE, layer\n        case Transition.QA_PASS:  # T-CLOSE-03\n            if (target_id := bead.checked_bead or bead.closed_work_blocker()) is None:\n                return HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))\n            if isinstance(target := beads.show(target_id), Refusal):\n                return HookReply.refused(target)\n            if isinstance(ledger := beads.show(target.stack_bead), Refusal):\n                return HookReply.refused(ledger)\n            if isinstance(verdict := req.qa_verdict(), Refusal):\n                return HookReply.refused(verdict)\n            if (head := ledger.head_of(target.work.branch)) != (sha := verdict.sha):\n                return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=sha, head=head))\n            patch, template, args = BeadPatch.close(bead, evidence=sha), Template.QA_PASS, sha\n        case Transition.QA_FINDINGS:  # T-CLOSE-04\n            if (target_id := bead.checked_bead or bead.closed_work_blocker()) is None:\n                return HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))\n            if isinstance(target := beads.show(target_id), Refusal):\n                return HookReply.refused(target)\n            if isinstance(ledger := beads.show(target.stack_bead), Refusal):\n                return HookReply.refused(ledger)\n            if isinstance(verdict := req.qa_verdict(), Refusal):\n                return HookReply.refused(verdict)\n            if (head := ledger.head_of(target.work.branch)) != verdict.sha:\n                return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, head=head))\n            unpoured = [f for f in verdict.findings if isinstance(poured := beads.show(f.id), Refusal)\n                        or not poured.blocks(bead.sprint if f.blocking else bead.phase_bead)]\n            if unpoured:\n                return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=unpoured, sprint=bead.sprint,\n                                                 phase=bead.phase_bead))\n            ids = [f.id for f in verdict.findings]\n            patch, template, args = BeadPatch.close(bead, evidence=(verdict.sha, ids)), Template.QA_FINDINGS, (verdict.sha, ids)\n    if (failed := beads.update(patch, actor=req.caller)) is not None:\n        return HookReply.refused(failed)\n    return HookReply.handled(phase.close_action(req, template, args))\n\n\nif __name__ == \"__main__\":\n    req = HookRequest.parse(sys.stdin.read())\n    if isinstance(req, Refusal):\n        print(HookReply.refused(req).to_json())\n    elif isinstance(beads := CacheStore.for_phase(req.phase), Refusal):\n        print(HookReply.refused(beads).to_json())\n    else:\n        print(hook(req, beads, PhaseFilesCli()).to_json())\n",
+   "spec": "# task.close \u2014 `atm-bd-task-hook.py`\n\nCloses the caller's own bead with evidence, or gives it back. One write. Reads: phase file, the bead, the ledger (stack bead), poured finding beads. Writes nothing to the ledger; assigns nothing; creates nothing.\n\nWhat the agent did before calling close is in its template's fenced blocks (dev: stack block; QA: pour block). The hook verifies the result of those blocks; it never performs them.\n\n```mermaid\nflowchart TD\n    A([task.close]) --> P{phase task?}\n    P -- no --> NA[not-applicable]\n    P -- yes --> L{phase file is lite?}\n    L -- no --> R0[refused PHASE_UNREADABLE / PROFILE_MISMATCH]\n    L -- yes --> G{bead found, outcome valid?}\n    G -- no --> R1[refused BEAD_NOT_FOUND / REQUEST_INVALID]\n    G -- yes --> O{caller is assignee?}\n    O -- no --> R2[refused TASK_NOT_ASSIGNEE]\n    O -- yes --> S{status in_progress?}\n    S -- no --> R3[refused BEAD_CLOSED / BEAD_NOT_READY]\n    S -- yes --> T{transition = outcome \u00d7 stage}\n    T -- GIVE_BACK --> RS{reason present?}\n    RS -- no --> R4[refused CLOSE_REASON_EMPTY]\n    RS -- yes --> W1[write reopen, guarded] --> H1[handled: close --template refuse --args reason]\n    T -- WORK_CLOSE --> RP{report present, ledger has layer for work.branch?}\n    RP -- no --> R5[refused CLOSE_REPORT_NOT_INLINE / STACK_NOT_RECORDED]\n    RP -- yes --> W2[write close with layer evidence, guarded] --> H2[handled: close --template dev-close --args layer]\n    T -- QA_PASS --> V1{verdict valid, sha == target head?}\n    V1 -- no --> R6[refused QA_VERDICT / QA_NOT_ON_STACK / QA_NOTHING_TO_REVIEW]\n    V1 -- yes --> W3[write close with sha, guarded] --> H3[handled: close --template qa-pass --args sha]\n    T -- QA_FINDINGS --> V2{verdict valid, sha matches,<br/>every blocking finding poured and blocking the sprint bead?}\n    V2 -- no --> R7[refused QA_VERDICT / QA_NOT_ON_STACK / FINDINGS_NOT_POURED]\n    V2 -- yes --> W4[write close with sha + finding ids, guarded] --> H4[handled: close --template qa-findings --args sha, ids]\n```\n\n## Transitions (one row per match arm)\n| id | transition | outcome | stage | hook checks | write | returns |\n|---|---|---|---|---|---|---|\n| T-CLOSE-01 | GIVE_BACK | refused, cancelled | any | reason present | reopen: open, assignee '' (guarded) | `atm task close --template <refuse> --args reason` |\n| T-CLOSE-02 | WORK_CLOSE | completed | dev, fix | report present; ledger has a layer for `work.branch` | close, evidence = layer (branch, head, pr, base) | `atm task close --template <dev-close> --args layer` |\n| T-CLOSE-03 | QA_PASS | completed | qa, no findings | verdict sha == target layer head | close, evidence = sha | `atm task close --template <qa-pass> --args sha` |\n| T-CLOSE-04 | QA_FINDINGS | completed | qa, findings | sha matches; each blocking finding's poured bead exists and blocks the sprint bead; each non-blocking one blocks the phase bead | close, evidence = sha + finding ids | `atm task close --template <qa-findings> --args sha, ids` |\n\nTarget layer (T-CLOSE-03/04): the layer recorded for the QA bead's closed dev/fix blocker, or the lead's `checked_bead` if set. Findings are matched to beads by the id the pour returned, listed in the QA report.\n\n## Facts\n| fact | lookup |\n|---|---|\n| profile, templates | phase file |\n| bead status, assignee, stage, work.branch, stack_bead, blockers, checked_bead | cache.get(bead) |\n| ledger layers | cache.get(stack_bead) |\n| poured finding beads and their blocks | cache.get(id) per finding id in the report |\n| outcome, report, reason, verdict | ATM request |\n\n## Errors\n| code | owner | fix |\n|---|---|---|\n| STACK_NOT_RECORDED | dev | \"<branch> is not on the ledger. Run the stack block in your task, then close again.\" |\n| CLOSE_REPORT_NOT_INLINE / CLOSE_REASON_EMPTY | dev | \"Run `atm task close <bead> <outcome> --stdin` with the report (or reason).\" |\n| TASK_NOT_ASSIGNEE | dev | \"<bead> is assigned to <agent>, not you.\" |\n| BEAD_CLOSED | dev | \"<bead> is already closed.\" |\n| BEAD_NOT_READY | dev | \"<bead> is <status>; `atm task start` it first.\" |\n| QA_VERDICT | qa | \"End the report with one fenced block {\\\"verdict\\\": PASS or FINDINGS, \\\"sha\\\": \u2026, \\\"findings\\\": [ids]}.\" |\n| QA_NOT_ON_STACK | qa | \"Your verdict is for <sha>; <branch> is at <head>. Review <head>, then close again.\" |\n| FINDINGS_NOT_POURED | qa | \"Findings <ids> are not poured or do not block <sprint>. Run the pour block, then close again.\" |\n| QA_NOTHING_TO_REVIEW, BEAD_NOT_FOUND, BEAD_RACED, PHASE_UNREADABLE, PROFILE_MISMATCH, CACHE_UNAVAILABLE | lead | \"Not yours to fix: <what failed>. The lead has it.\" |\n"
+  },
+  "questions": {
+   "implemented:T-CLOSE-01": {
+    "type": "choice",
+    "instructions": "Spec Transitions row T-CLOSE-01 (GIVE_BACK). Judge only the match arm of state.hook whose Transition case is this row's transition, together with the shared code before and after the match that it relies on for this row's checks and write. Do not count anything in other transition arms against this row. Read the row with its branch of state.spec's diagram and the Errors entries that branch names. Does that arm perform every check in the row's 'hook checks' cell and its diagram branch, make the row's write, and add no unlisted check or write of its own? Lookups named in the Facts table, and refusals for checks the diagram branch lists, are not additional.",
+    "criteria": {
+     "yes": "the row's arm, with the shared code it relies on, performs every listed check and the listed write, and adds nothing of its own",
+     "no": "no arm matches the row's transition, or the row's arm misses a listed check or the listed write, or it adds a check or write of its own that neither the row nor the diagram branch lists"
+    }
+   },
+   "implemented:T-CLOSE-02": {
+    "type": "choice",
+    "instructions": "Spec Transitions row T-CLOSE-02 (WORK_CLOSE). Judge only the match arm of state.hook whose Transition case is this row's transition, together with the shared code before and after the match that it relies on for this row's checks and write. Do not count anything in other transition arms against this row. Read the row with its branch of state.spec's diagram and the Errors entries that branch names. Does that arm perform every check in the row's 'hook checks' cell and its diagram branch, make the row's write, and add no unlisted check or write of its own? Lookups named in the Facts table, and refusals for checks the diagram branch lists, are not additional.",
+    "criteria": {
+     "yes": "the row's arm, with the shared code it relies on, performs every listed check and the listed write, and adds nothing of its own",
+     "no": "no arm matches the row's transition, or the row's arm misses a listed check or the listed write, or it adds a check or write of its own that neither the row nor the diagram branch lists"
+    }
+   },
+   "implemented:T-CLOSE-03": {
+    "type": "choice",
+    "instructions": "Spec Transitions row T-CLOSE-03 (QA_PASS). Judge only the match arm of state.hook whose Transition case is this row's transition, together with the shared code before and after the match that it relies on for this row's checks and write. Do not count anything in other transition arms against this row. Read the row with its branch of state.spec's diagram and the Errors entries that branch names. Does that arm perform every check in the row's 'hook checks' cell and its diagram branch, make the row's write, and add no unlisted check or write of its own? Lookups named in the Facts table, and refusals for checks the diagram branch lists, are not additional.",
+    "criteria": {
+     "yes": "the row's arm, with the shared code it relies on, performs every listed check and the listed write, and adds nothing of its own",
+     "no": "no arm matches the row's transition, or the row's arm misses a listed check or the listed write, or it adds a check or write of its own that neither the row nor the diagram branch lists"
+    }
+   },
+   "implemented:T-CLOSE-04": {
+    "type": "choice",
+    "instructions": "Spec Transitions row T-CLOSE-04 (QA_FINDINGS). Judge only the match arm of state.hook whose Transition case is this row's transition, together with the shared code before and after the match that it relies on for this row's checks and write. Do not count anything in other transition arms against this row. Read the row with its branch of state.spec's diagram and the Errors entries that branch names. Does that arm perform every check in the row's 'hook checks' cell and its diagram branch, make the row's write, and add no unlisted check or write of its own? Lookups named in the Facts table, and refusals for checks the diagram branch lists, are not additional.",
+    "criteria": {
+     "yes": "the row's arm, with the shared code it relies on, performs every listed check and the listed write, and adds nothing of its own",
+     "no": "no arm matches the row's transition, or the row's arm misses a listed check or the listed write, or it adds a check or write of its own that neither the row nor the diagram branch lists"
+    }
+   },
+   "listed:L28": {
+    "type": "choice",
+    "instructions": "state.hook line 28: `Transition.GIVE_BACK`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L32": {
+    "type": "choice",
+    "instructions": "state.hook line 32: `Transition.WORK_CLOSE`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L42": {
+    "type": "choice",
+    "instructions": "state.hook line 42: `Transition.QA_PASS`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L54": {
+    "type": "choice",
+    "instructions": "state.hook line 54: `Transition.QA_FINDINGS`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L74": {
+    "type": "choice",
+    "instructions": "state.hook line 74: `HookReply.handled(phase.close_action(req, template, args))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L14": {
+    "type": "choice",
+    "instructions": "state.hook line 14: `HookReply.not_applicable()`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L22": {
+    "type": "choice",
+    "instructions": "state.hook line 22: `HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L24": {
+    "type": "choice",
+    "instructions": "state.hook line 24: `HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L26": {
+    "type": "choice",
+    "instructions": "state.hook line 26: `HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L38": {
+    "type": "choice",
+    "instructions": "state.hook line 38: `HookReply.refused(Refusal(ErrorId.STACK_HELD, holder=ledger.assignee))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L40": {
+    "type": "choice",
+    "instructions": "state.hook line 40: `HookReply.refused(Refusal(ErrorId.STACK_NOT_RECORDED, branch=bead.work.branch))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L44": {
+    "type": "choice",
+    "instructions": "state.hook line 44: `HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L52": {
+    "type": "choice",
+    "instructions": "state.hook line 52: `HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=sha, head=head))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L56": {
+    "type": "choice",
+    "instructions": "state.hook line 56: `HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L64": {
+    "type": "choice",
+    "instructions": "state.hook line 64: `HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, head=head))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   },
+   "listed:L68": {
+    "type": "choice",
+    "instructions": "state.hook line 68: `HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=unpoured, sprint=bead.sprint, phase=bead.phase_bead))`. Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+    "criteria": {
+     "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+     "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+    }
+   }
+  }
+ },
+ "reply_text": "{\"answers\":{\"implemented:T-CLOSE-01\":{\"choice\":\"yes\",\"confidence\":0.85},\"implemented:T-CLOSE-02\":{\"choice\":\"no\",\"confidence\":0.9},\"implemented:T-CLOSE-03\":{\"choice\":\"yes\",\"confidence\":0.75},\"implemented:T-CLOSE-04\":{\"choice\":\"yes\",\"confidence\":0.7},\"listed:L14\":{\"choice\":\"yes\",\"confidence\":0.95},\"listed:L22\":{\"choice\":\"yes\",\"confidence\":0.95},\"listed:L24\":{\"choice\":\"yes\",\"confidence\":0.95},\"listed:L26\":{\"choice\":\"yes\",\"confidence\":0.95},\"listed:L28\":{\"choice\":\"yes\",\"confidence\":0.95},\"listed:L32\":{\"choice\":\"yes\",\"confidence\":0.95},\"listed:L38\":{\"choice\":\"no\",\"confidence\":0.9},\"listed:L40\":{\"choice\":\"yes\",\"confidence\":0.9},\"listed:L42\":{\"choice\":\"yes\",\"confidence\":0.95},\"listed:L44\":{\"choice\":\"yes\",\"confidence\":0.9},\"listed:L52\":{\"choice\":\"yes\",\"confidence\":0.9},\"listed:L54\":{\"choice\":\"yes\",\"confidence\":0.95},\"listed:L56\":{\"choice\":\"yes\",\"confidence\":0.9},\"listed:L64\":{\"choice\":\"yes\",\"confidence\":0.9},\"listed:L68\":{\"choice\":\"yes\",\"confidence\":0.9},\"listed:L74\":{\"choice\":\"yes\",\"confidence\":0.85}}}",
+ "answers": {
+  "implemented:T-CLOSE-01": {
+   "choice": "yes",
+   "confidence": 0.85,
+   "probabilities": {
+    "yes": 0.85,
+    "no": 0.0
+   }
+  },
+  "implemented:T-CLOSE-02": {
+   "choice": "no",
+   "confidence": 0.9,
+   "probabilities": {
+    "yes": 0.0,
+    "no": 0.9
+   }
+  },
+  "implemented:T-CLOSE-03": {
+   "choice": "yes",
+   "confidence": 0.75,
+   "probabilities": {
+    "yes": 0.75,
+    "no": 0.0
+   }
+  },
+  "implemented:T-CLOSE-04": {
+   "choice": "yes",
+   "confidence": 0.7,
+   "probabilities": {
+    "yes": 0.7,
+    "no": 0.0
+   }
+  },
+  "listed:L14": {
+   "choice": "yes",
+   "confidence": 0.95,
+   "probabilities": {
+    "yes": 0.95,
+    "no": 0.0
+   }
+  },
+  "listed:L22": {
+   "choice": "yes",
+   "confidence": 0.95,
+   "probabilities": {
+    "yes": 0.95,
+    "no": 0.0
+   }
+  },
+  "listed:L24": {
+   "choice": "yes",
+   "confidence": 0.95,
+   "probabilities": {
+    "yes": 0.95,
+    "no": 0.0
+   }
+  },
+  "listed:L26": {
+   "choice": "yes",
+   "confidence": 0.95,
+   "probabilities": {
+    "yes": 0.95,
+    "no": 0.0
+   }
+  },
+  "listed:L28": {
+   "choice": "yes",
+   "confidence": 0.95,
+   "probabilities": {
+    "yes": 0.95,
+    "no": 0.0
+   }
+  },
+  "listed:L32": {
+   "choice": "yes",
+   "confidence": 0.95,
+   "probabilities": {
+    "yes": 0.95,
+    "no": 0.0
+   }
+  },
+  "listed:L38": {
+   "choice": "no",
+   "confidence": 0.9,
+   "probabilities": {
+    "yes": 0.0,
+    "no": 0.9
+   }
+  },
+  "listed:L40": {
+   "choice": "yes",
+   "confidence": 0.9,
+   "probabilities": {
+    "yes": 0.9,
+    "no": 0.0
+   }
+  },
+  "listed:L42": {
+   "choice": "yes",
+   "confidence": 0.95,
+   "probabilities": {
+    "yes": 0.95,
+    "no": 0.0
+   }
+  },
+  "listed:L44": {
+   "choice": "yes",
+   "confidence": 0.9,
+   "probabilities": {
+    "yes": 0.9,
+    "no": 0.0
+   }
+  },
+  "listed:L52": {
+   "choice": "yes",
+   "confidence": 0.9,
+   "probabilities": {
+    "yes": 0.9,
+    "no": 0.0
+   }
+  },
+  "listed:L54": {
+   "choice": "yes",
+   "confidence": 0.95,
+   "probabilities": {
+    "yes": 0.95,
+    "no": 0.0
+   }
+  },
+  "listed:L56": {
+   "choice": "yes",
+   "confidence": 0.9,
+   "probabilities": {
+    "yes": 0.9,
+    "no": 0.0
+   }
+  },
+  "listed:L64": {
+   "choice": "yes",
+   "confidence": 0.9,
+   "probabilities": {
+    "yes": 0.9,
+    "no": 0.0
+   }
+  },
+  "listed:L68": {
+   "choice": "yes",
+   "confidence": 0.9,
+   "probabilities": {
+    "yes": 0.9,
+    "no": 0.0
+   }
+  },
+  "listed:L74": {
+   "choice": "yes",
+   "confidence": 0.85,
+   "probabilities": {
+    "yes": 0.85,
+    "no": 0.0
+   }
+  }
+ },
+ "input": {
+  "prompt_sha256": "69f7e93a4c7e86947d7818e741a08e46003e656b0bf7d19cf816c01c211ec9c1",
+  "input_tokens": 11712,
+  "prompt_tokens": 11712,
+  "leak": 0,
+  "commands": 0,
+  "equal": true
+ },
+ "followups": [
+  {
+   "question": "For implemented:T-CLOSE-03 and implemented:T-CLOSE-04 you answered yes with lower confidence (0.75 and 0.70) than for T-CLOSE-01. For each of the two rows: list every statement in the QA_PASS or QA_FINDINGS arm (quote the line) that you could not match to that row's hook checks, write, returns, the diagram, the Target layer paragraph, the Facts table, or the Errors table; and list anything in the row that you could not find in the arm. Also say whether anything outside that arm (in particular the WORK_CLOSE arm, its STACK_HELD lines, or the module docstring) affected your answer. Be specific; quote lines.",
+   "answer": "## implemented:T-CLOSE-03 (QA_PASS)\n\n**Statements in the arm I could not match to the row, diagram, Target layer paragraph, Facts, or Errors:**\n\n- `if (target_id := bead.checked_bead or bead.closed_work_blocker()) is None:` The Target layer paragraph gives the order as \"the layer recorded for the QA bead's closed dev/fix blocker, or the lead's `checked_bead` if set.\" That wording reads as the blocker first and `checked_bead` as an override. The arm tests `checked_bead` first. The paragraph is ambiguous enough that I counted this as matched, but the precedence is a real divergence.\n- `ledger.head_of(target.work.branch)`: the row says \"target layer head\", but no helper named `head_of` appears in the spec. I read it as the head of the layer, which the Facts table's \"ledger layers\" entry covers.\n- `if isinstance(target := beads.show(target_id), Refusal)` and `if isinstance(ledger := beads.show(target.stack_bead), Refusal)`: neither refusal is in the diagram branch. I matched both to the Facts lookups plus the general Errors codes (BEAD_NOT_FOUND, CACHE_UNAVAILABLE, lead-owned).\n- `if (head := ledger.head_of(...)) != (sha := verdict.sha)`: if the target's branch has no layer, `head` is `None`, and the refusal reports `head=None`. The row doesn't require the layer to exist, so this is not an extra check. It is a gap: the arm never checks that the target layer exists.\n\n**Statements in the row, diagram, or Target layer paragraph that I could not find in the arm:**\n\n- Stage \"qa, no findings\" and outcome \"completed\": the arm has no check on `verdict.findings` being empty. I am relying on the upstream `Transition.for_close(req.outcome, bead.stage, req.qa_verdict())` to route only findings-free PASS verdicts here. That code is outside the arm and I cannot see it.\n\n**Did anything outside the arm affect the answer?** The upstream `for_close` call and the shared prologue/epilogue (`beads.update`, `close_action`) were needed. I did not use the WORK_CLOSE arm or its STACK_HELD line, and the module docstring's note about the expected answer for STACK_HELD played no part. The QA_PASS arm's prologue is the same as the QA_FINDINGS arm's, but that is shared code within the two rows, not an outside influence.\n\n**Revised answer:** yes still holds, but at about 0.65\u20130.7. The arm's checks, write, and return match the row. The weaknesses are the unverified upstream \"no findings\" routing and the `checked_bead`-first precedence.\n\n## implemented:T-CLOSE-04 (QA_FINDINGS)\n\n**Statements in the arm I could not match:**\n\n- `unpoured = [f for f in verdict.findings if isinstance(poured := beads.show(f.id), Refusal) or not poured.blocks(bead.sprint if f.blocking else bead.phase_bead)]`: the row matches the check (blocking \u2192 sprint, non-blocking \u2192 phase). The diagram's V2 box lists only \"every blocking finding poured and blocking the sprint bead\", so the non-blocking-to-phase check appears in the row and the arm but not in the diagram. The FINDINGS_NOT_POURED Errors text mentions only \"<sprint>\", not the phase bead.\n- `bead.sprint` and `bead.phase_bead`: the Facts table does not name these fields. I matched them to \"bead ... from cache.get(bead)\", since the Facts row lists only some bead fields.\n- `return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=unpoured, ...))`: the refusal carries `unpoured`, which holds finding objects, not ids. The Errors text expects \"Findings <ids>\". This affects the message payload, not a check or write, so I did not count it against the arm.\n- `ids = [f.id for f in verdict.findings]`: the row's \"finding ids\" matches this. The arm sends every finding id, blocking and non-blocking. The row does not say which ids to record, so I counted this as matched.\n\n**Statements in the row that I could not find in the arm:**\n\n- The row's \"hook checks\" cell, which requires that the poured findings exist and block the right beads, is performed. The arm does not check that `verdict.findings` is non-empty. Stage \"qa, findings\" is again relying on upstream routing in `for_close`.\n\n**Did anything outside the arm affect the answer?** Same as T-CLOSE-03: the upstream `for_close` routing and the shared `beads.update` and `close_action` calls. The WORK_CLOSE arm, the STACK_HELD line, and the docstring played no part.\n\n**Revised answer:** yes still holds, around 0.7. The checks, write, and return match. The gaps are the spec's diagram-versus-row mismatch on the phase-bead check, the uncounted `sprint`/`phase_bead` field reads, the refusal payload that carries objects instead of ids, and the reliance on upstream routing for the findings condition."
+  }
+ ]
+}

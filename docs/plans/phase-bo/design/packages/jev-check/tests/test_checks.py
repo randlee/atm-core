@@ -10,6 +10,7 @@ import pytest
 from jev_check import (Backend, Question, JevCheckError, SessionStore, build_request, check_llm, extract_python_branches,
                        extract_table_column, git_show, load_check, payload_bytes, run_check, run_request)
 from jev_check.extractors import GitShow
+from jev_check.llm import api_key
 
 HOOK = '''def hook(t):
     match t:
@@ -210,8 +211,19 @@ def test_api_key_missing_sends_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     http = FakeHttp(1, haiku_message(ONE, 1))
     with pytest.raises(JevCheckError) as err:
-        check_llm(HAIKU, {}, Q1, http)
+        check_llm(HAIKU, {}, Q1, http, lookup=lambda _: "")
     assert err.value.code == "KEY_MISSING" and http.posts == []
+
+
+def test_api_key_env_first_then_keychain(monkeypatch: pytest.MonkeyPatch) -> None:
+    asked: list[str] = []
+    def lookup(service: str) -> str:
+        asked.append(service)
+        return "from-keychain"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "from-env")
+    assert api_key(HAIKU, lookup) == "from-env" and asked == []
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    assert api_key(HAIKU, lookup) == "from-keychain" and asked == ["ANTHROPIC_API_KEY"]
 
 
 # sessions

@@ -6,7 +6,9 @@ tokens on the vendor's count endpoint (same body), so input_tokens - prompt_toke
 import http.client
 import json
 import os
+import subprocess
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.resources import files
 from typing import Any, Protocol, cast
@@ -129,11 +131,30 @@ def parse_count(backend: Backend, raw: bytes) -> int:
     return tokens
 
 
-def complete(backend: Backend, turns: list[Turn], schema: dict[str, Any] | None, http: "Http | None" = None) -> LlmReply:
-    """One message request plus one count request with the same body."""
-    key = os.environ.get(backend.key_env, "").strip()
+def keychain(service: str) -> str:
+    """The macOS Keychain generic password: account $USER, service = the variable name; '' if absent."""
+    service = os.environ.get("ANTHROPIC_KEYCHAIN_SERVICE", service) if service == "ANTHROPIC_API_KEY" else service
+    try:
+        done = subprocess.run(["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s", service, "-w"],
+                              capture_output=True, text=True, timeout=10, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def api_key(backend: Backend, lookup: Callable[[str], str] = keychain) -> str:
+    """Environment first, then the Keychain entry named after the variable. Never printed or logged."""
+    key = os.environ.get(backend.key_env, "").strip() or lookup(backend.key_env)
     if not key:
-        raise JevCheckError("KEY_MISSING", f"{backend.key_env} is missing; no {backend.name} request was sent")
+        raise JevCheckError("KEY_MISSING", f"{backend.key_env} is not in the environment or the Keychain; "
+                            f"no {backend.name} request was sent")
+    return key
+
+
+def complete(backend: Backend, turns: list[Turn], schema: dict[str, Any] | None, http: "Http | None" = None,
+             lookup: Callable[[str], str] = keychain) -> LlmReply:
+    """One message request plus one count request with the same body."""
+    key = api_key(backend, lookup)
     host, path, count_path = ENDPOINTS[backend.name]
     client = http or HttpsPost()
     body = message_body(backend, turns, schema)
@@ -169,10 +190,10 @@ def parse_reply(text: str, questions: dict[str, Question]) -> dict[str, Answer]:
     return out
 
 
-def check_llm(backend: Backend, state: Any, questions: dict[str, Question],
-              http: Http | None = None) -> tuple[dict[str, Answer], LlmReply]:
+def check_llm(backend: Backend, state: Any, questions: dict[str, Question], http: Http | None = None,
+              lookup: Callable[[str], str] = keychain) -> tuple[dict[str, Answer], LlmReply]:
     prompt = payload_bytes(state, questions).decode()
-    reply = complete(backend, [("user", prompt)], answer_schema(questions), http)
+    reply = complete(backend, [("user", prompt)], answer_schema(questions), http, lookup)
     return parse_reply(reply.text, questions), reply
 
 
