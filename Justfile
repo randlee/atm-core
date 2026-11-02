@@ -64,9 +64,13 @@ build:
     cargo build --workspace
     {{python_cmd}} .just/sign_daemon_dev.py
 
-# Run the manifest-defined test suite, a named test selector, or explicit coverage.
-test *selectors:
-    {{python_cmd}} .just/run_tests.py {{selectors}}
+# Run the manifest-defined test suite or a named test selector.
+test *layer:
+    {{seed_python_cmd}} .sc-lint/bootstrap.py test --config sc-lint.toml {{layer}}
+
+# Write tracked coverage reports on supported hosts.
+coverage:
+    {{python_cmd}} scripts/coverage/run.py --write-artifacts
 
 # Validate and plan a bounded adversarial-fuzz campaign (no real execution).
 fuzz *args:

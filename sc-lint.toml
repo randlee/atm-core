@@ -21,7 +21,7 @@ exclude_paths_by_rule = { "SCB-RUNTIME-003" = ["crates/atm/src/commands/internal
 reason = "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. See randlee/sc-lint#82."
 
 [tool.sc-lint.lint_profiles]
-ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "clippy-linux", "clippy-macos", "clippy-native-windows", "clippy-windows", "daemon-signing-coupling", "daemon-singleton", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy", "peer-dial-seam", "pytests", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit", "site-generated", "site-links", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter", "ttl-triage", "version-linux", "version-macos", "version-windows"]
+ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "clippy-linux", "clippy-macos", "clippy-native-windows", "clippy-windows", "daemon-signing-coupling", "daemon-singleton", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy", "peer-dial-seam", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit", "site-generated", "site-links", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter", "ttl-triage", "version-linux", "version-macos", "version-windows"]
 
 [[tool.sc-lint.lint]]
 name = "adr-index"
@@ -156,10 +156,6 @@ name = "peer-dial-seam"
 command = ["just", "_py", ".just/lint_peer_dial_seam.py"]
 
 [[tool.sc-lint.lint]]
-name = "pytests"
-command = ["just", "_py", ".just/run_pytests.py"]
-
-[[tool.sc-lint.lint]]
 name = "read-concurrency-gates"
 command = ["just", "_py", ".just/check_read_concurrency_gates.py"]
 
@@ -261,16 +257,13 @@ name = "cli-surface"
 command = ["cargo", "test", "-p", "agent-team-mail", "--features", "cli-surface-dump", "--test", "cli_surface"]
 
 [[tool.sc-lint.test]]
-name = "coverage"
-command = ["just", "_py", "scripts/coverage/run.py", "--write-artifacts"]
-
-[[tool.sc-lint.test]]
 name = "daemon-signing"
 command = ["just", "_py", ".just/sign_daemon_dev.py"]
+after_all = true
 
 [[tool.sc-lint.test]]
-name = "default"
-command = ["just", "test"]
+name = "herdr"
+command = ["cargo", "test", "-p", "atm-herdr", "--all-features"]
 
 [[tool.sc-lint.test]]
 name = "python"

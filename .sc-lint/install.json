@@ -537,7 +537,6 @@
       "manifests-windows",
       "nudge-taxonomy",
       "peer-dial-seam",
-      "pytests",
       "read-concurrency-gates",
       "runtime-observation-boundary",
       "runtime-stderr",
@@ -782,11 +781,6 @@
       "_py",
       ".just/lint_peer_dial_seam.py"
     ],
-    "pytests": [
-      "just",
-      "_py",
-      ".just/run_pytests.py"
-    ],
     "read-concurrency-gates": [
       "just",
       "_py",
@@ -942,20 +936,20 @@
       "--test",
       "cli_surface"
     ],
-    "coverage": [
-      "just",
-      "_py",
-      "scripts/coverage/run.py",
-      "--write-artifacts"
-    ],
-    "daemon-signing": [
-      "just",
-      "_py",
-      ".just/sign_daemon_dev.py"
-    ],
-    "default": [
-      "just",
-      "test"
+    "daemon-signing": {
+      "after_all": true,
+      "command": [
+        "just",
+        "_py",
+        ".just/sign_daemon_dev.py"
+      ]
+    },
+    "herdr": [
+      "cargo",
+      "test",
+      "-p",
+      "atm-herdr",
+      "--all-features"
     ],
     "python": [
       "just",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 import importlib.util
 import tempfile
@@ -16,7 +17,6 @@ JUST_DIR = SCRIPT.parent
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
-from run_tests import load_test_manifest, selected_test_commands
 
 SPEC = importlib.util.spec_from_file_location("sign_daemon_dev", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
@@ -149,20 +149,13 @@ class SignDaemonDevTests(unittest.TestCase):
 
     def test_manifest_test_recipe_signs_artifacts_after_test_steps(self) -> None:
         justfile = (REPO_ROOT / "Justfile").read_text(encoding="utf-8")
-        manifest = load_test_manifest(REPO_ROOT)
-        selected = selected_test_commands(manifest, [])
-        names = [name for name, _ in selected]
-
-        self.assertEqual(names, ["python", "build", "workspace", "cli-surface", "daemon-signing"])
-        self.assertEqual(
-            manifest["daemon-signing"],
-            ["just", "_py", ".just/sign_daemon_dev.py"],
-        )
-        self.assertEqual(names[-1], "daemon-signing")
-        self.assertIn(
-            "test *selectors:\n    {{python_cmd}} .just/run_tests.py {{selectors}}",
-            justfile,
-        )
+        manifest = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["test"]
+        self.assertEqual(manifest["daemon-signing"], {
+            "command": ["just", "_py", ".just/sign_daemon_dev.py"], "after_all": True,
+        })
+        self.assertNotIn("coverage", manifest)
+        self.assertNotIn("default", manifest)
+        self.assertIn(".sc-lint/bootstrap.py test --config sc-lint.toml", justfile)
 
     def test_benchmark_recipe_uses_the_shipped_binary_runner(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
