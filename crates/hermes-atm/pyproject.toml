@@ -8,7 +8,7 @@ version = "1.6.5"
 description = "Hermes gateway integration for the generic ATM graft receiver"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
-dependencies = ["atm-graft>=1.6,<1.7"]
+dependencies = ["atm-graft==1.6.5"]
 authors = [{ name = "atm-core contributors" }]
 license = { text = "MIT OR Apache-2.0" }
 classifiers = [
