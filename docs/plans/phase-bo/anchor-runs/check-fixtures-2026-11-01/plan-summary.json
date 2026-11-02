@@ -1,0 +1,1340 @@
+{
+  "success": true,
+  "data": {
+    "gate": "plan",
+    "dry_run": false,
+    "fixture": false,
+    "checks": [
+      {
+        "anchor_id": "ANC-001",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The installer gains --github and --azure flags (install.py, test_install_provider_flags) and the chosen provider's command set is merged into the template render context; see the PR diff of install.py.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032514Z-fixture_ANC-001_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-001",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Templates keep hard-coded gh pr commands and the installer has no provider flag.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-001_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-003",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Transition is a StrEnum and every handler uses match with no default arm; pyright strict with reportMatchNotExhaustive=error passes on the hook (pyright output in the PR, test_transition_exhaustive).",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-003_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-003",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Transitions are compared as strings in if/elif chains with a final else that logs unknown.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-003_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-004",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Hook tests build the request and the in-memory cache through shared make_request() and FakeCache helpers in tests/lite/conftest.py; no test repeats that setup inline (diff of tests/lite/test_task_close_hook.py).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-004_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-004",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Each hook test repeats the twelve-line request and fake-cache setup inline.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-004_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-005",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd console, cron and queues keep their argv and read the profile from the phase toml; on a lite phase queues prints the lite columns, cron runs the lite tick and console exits with the typed ProfileMismatch error, all through the same subcommands and arguments as today; their --help output is byte-identical before and after (tests/test_cli_help_unchanged.py).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-005_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-005",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "A new atm-bd lite-console command is added for lite phases.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-005_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-006",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Lite beads validate against the core bead_schema models; no schema file is added under skills/atm-bd-lite.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-006_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-006",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "skills/atm-bd-lite/schemas/lite-dev-bead.schema.json defines a separate lite schema.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-006_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-012",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The three lite task hooks and the lite dev/fix/qa templates sit under skills/atm-bd-lite/scripts and skills/atm-bd-lite/templates.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-012_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-012",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite hook is placed in core/scripts next to the shared modules.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-012_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-014",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "skills/atm-bd-lite/scripts/atm-bd-task-hook.py is a separate file; atm-task-close.py is unchanged.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-014_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-014",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "atm-task-close.py gains an if profile == lite branch that skips sanity.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-014_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-015",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The live lite phase log in bo-7 shows one ATM identity performing dispatch, dev, QA and landing; the lite formula pours only dev and qa beads (atm-bd queues output attached).",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-015_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-015",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite formula pours a sanity bead that a second agent must close before QA can start.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-015_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-016",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "profile.py returns Result[Profile]; main maps Err to exit code 2 and JSON output.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-016_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-016",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "load_provider raises ValueError on an unknown provider and callers catch it.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-016_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-017",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The Transition and ErrorId enums and the Refusal type are defined in crates/atm-bd-types and exposed to Python through its wheel; the profile stays a name read from the phase file.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-017_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-017",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The shared enums are defined in Python dataclasses under core/scripts and no Rust crate exists.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-017_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-018",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd 0.21.1 shipped a Python-only fix: release.yml ran no crate publish job and atm-bd-types stays at 0.2.0 (workflow run log and the crates.io version page).",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-018_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-018",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Every Python release bumps and republishes atm-bd-types at the same version number.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-018_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-019",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd-task-hook.py has one handler section each for dev close, fix close and qa close, selected by the Transition enum (file outline in the PR; test_one_handler_per_transition).",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-019_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-019",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The hook is organized by bead field, with one function per close-vars key that branches on the transition inside.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-019_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-024",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd console --phase bo exits with PROFILE.MISMATCH and dispatches nothing when .atm-bd/phase-bo.toml sets profile = \"lite\"; tests/test_console_refuses_lite.py asserts the exit code and an empty dispatch log.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-024_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-024",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "atm-bd console dispatches the ready beads of a lite phase because the profile check was added only to the cron script.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-024_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-026",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "hook_runner.py and the lite template render call require_profile(phase_file, \"lite\") first and exit with ProfileMismatch on a orchestration phase file; tests/test_lite_profile_gate.py asserts the exit for the runner and for each lite template.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-026_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-026",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite hook takes the profile from a --profile argument and runs its close plan against a orchestration phase file without reading the phase file.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-026_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-027",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The lite cron script, which has the same file name as orchestration's (ANC-032), reads the profile from the phase file and exits with ProfileMismatch on an orchestration phase file. A test runs each profile's tick on the other profile's phase file and asserts ProfileMismatch.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-027_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-027",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite cron script runs its tick on whatever phase file it is given and lists queues for an orchestration phase.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-027_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-028",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The lite profile ships as skills/atm-bd-lite/ with its own SKILL.md (name: atm-bd-lite); test_lite_skill_layout asserts the directory and the skill name.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-028_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-028",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "Lite is a mode flag inside skills/atm-bd-orchestration/SKILL.md; no skills/atm-bd-lite directory exists.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-028_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-030",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "git diff origin/main..HEAD -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/ is empty; orchestration keeps importing its own scripts and none of them imports the shared location.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-030_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-030",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "skills/atm-bd-orchestration/scripts/atm-task-close.py now imports stack_gate from the shared location instead of its own stack_top module.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-030_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-031",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The three lite task hooks, the lite dev/fix/qa assignment templates and the lite cron script are all under skills/atm-bd-lite/ (scripts/ and templates/); find shows none of them in the shared location.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-031_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-031",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite dev-template.xml.j2 is placed in the shared location next to the shared modules.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-031_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-032",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues, the same file name orchestration's queues has; test_subcommand_routing asserts the called path for lite and orchestration phase files for console, cron, queues, show and snapshot.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-032_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-032",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "atm-bd cron runs a new lite-cron entry point with a different file name and argument list for lite phases.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-032_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-034",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "crates/atm-bd-types/atm_bd_types.pyi is generated by stub_gen from the traits; CI regenerates it and fails on any diff.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-034_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-034",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The .pyi stub is hand-written and has drifted from the Rust trait signatures.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-034_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-036",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The shared phase_file.py module is new code written for this phase; git log --follow shows it created in sprint bo-10 with no rename or copy from skills/atm-bd-orchestration/.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-036_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-036",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "shared/stack_top.py is skills/atm-bd-orchestration/scripts/stack_top.py moved with git mv and lightly edited.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-036_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-038",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The Python QaLogSource implementation passes pyright --strict against atm_bd_types.pyi in just lint and CI.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-038_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-038",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The Python implementation is excluded from the pyright include and uses Any for the trait's return types.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-038_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-039",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "At the stack top the atm-bd-orchestration test suite (just test-orchestration at origin/main) passes with no orchestration test file changed.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-039_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-039",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The sprint plans to delete atm-bd-orchestration's bd_cache.py and point atm-bd-orchestration at the new shared module for lite, accepting that atm-bd-orchestration's test suite fails until a later sprint.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-039_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-040",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "shared/phase_file.py (profile reading, no lite-only logic) is in the shared location; skills/atm-bd-lite/ holds only the lite hooks, templates and cron.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-040_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-040",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "A profile-neutral phase-file reader is written inside skills/atm-bd-lite/scripts/.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-040_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-041",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "tests/shared/test_phase_file.py runs read_profile on .atm-bd/phase-bj.toml and the phase-bj bead export, both real orchestration-profile data.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-041_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-041",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The shared module's tests use only a synthetic lite phase file.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-041_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-042",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Every public function and trait impl in the shared location, read_profile included, has a test under tests/shared/ that runs it on a lite-profile phase file fixture.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-042_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-042",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The shared stack gate is tested only against orchestration-profile phase data.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-042_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-044",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "grep of the shared location for \"lite\" and \"orchestration\" is empty; behaviour differences come from the caller's arguments.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-044_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-044",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "shared/stack_gate.py contains \"if profile == \"lite\": skip sanity check\".",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-044_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-045",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Sprint bo-10 adds shared/phase_file.py and skills/atm-bd-lite/scripts/atm-bd-task-hook.py imports it in the same diff.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-045_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-045",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "shared/provider_commands.py lands in bo-9 and no lite code calls it until bo-12.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-045_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-048",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py is the lite task.assign hook and imports no other hook file.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-048_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-048",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "task.assign handling is a branch inside the lite task.close hook file.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-048_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-049",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py is the lite task.start hook and imports no other hook file.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-049_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-049",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "task.start and task.assign share one lite hook file.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-049_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-050",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "skills/atm-bd-lite/scripts/atm-bd-task-hook.py is the lite task.close hook and imports no other hook file.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-050_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-050",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite task.close logic is split between atm-bd-task-hook.py and a qa_close.py helper module.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-050_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-051",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "docs/plans/phase-bo/design/lite-hooks.md has one state-transition diagram section per lite hook file: task.assign, task.start, task.close.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-051_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-051",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "One combined diagram covers all three lite hooks.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-051_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-052",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The task.close diagram has six Transitions rows (T-CLOSE-01..06) and the hook's match statement has six arms, one per row.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-052_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-052",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The diagram has four rows while the hook's match has six arms.",
+        "verdict": "deterministic_only",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": null,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-052_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-053",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The gate's Jev run anchor-runs/hooks/atm-bd-task-hook.json judges T-CLOSE-01..04 each implemented by its own match arm in atm-bd-task-hook.py, no row failing.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-053_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-053",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The committed gate run anchor-runs/hooks/atm-bd-task-hook.json has Jev judging T-CLOSE-02 not implemented by atm-bd-task-hook.py, and the hook is merged with that row failing.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-053_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-054",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The Jev run anchor-runs/hooks/task-close.json judges each of the six match arms in atm-bd-task-hook.py as listed in the task.close diagram.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-054_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-054",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The hook has a match arm for a refused close that the task.close diagram does not list.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-054_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-060",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The lite hooks run no gh command; layer facts (branch, head, pr, base) come from cache.get(stack_bead). grep of skills/atm-bd-lite for gh pr list, gh pr checks, gh run watch and --watch is empty.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-060_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-060",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite QA template tells the agent to wait for CI with gh pr checks --watch.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-060_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-061",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "crates/atm-bd-types/src/lib.rs has `pub struct ProfileName(String)` parsed from the phase file; grep for \"lite\" and \"orchestration\" in the crate is empty.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-061_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-061",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "crates/atm-bd-types/src/lib.rs has `pub enum Profile { Orchestration, Lite }`.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-061_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-062",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "grep of skills/atm-bd-lite for dict[, Any and json.loads outside atm-bd-types parsing is empty, and pyright strict reports no reportUnknown diagnostics; each hook takes HookRequest and returns HookReply.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-062_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-062",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "def hook(env: dict[str, Any]) -> dict[str, str]: task = env[\"request\"][\"task_id\"]",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-062_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-063",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "grep finds no bd subprocess and no BdCli in any skills/atm-bd-lite file or template; hooks reach beads only through BeadStore, the bd_cache_rs adapter.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-063_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-063",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite close hook runs 'bd show' and 'bd update --if-status' through a BdCli subprocess adapter.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-063_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-064",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-064 failure: the close hook has one beads.update call and no beads.create, claim or release.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-064_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-064",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite close hook calls beads.update twice: first to record the layer on the stack bead, then to close the work bead.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-064_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-065",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-065 failure: every stack_bead occurrence in the hook is an argument of beads.show or cache.get.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-065_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-065",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite close hook calls beads.update(BeadPatch.record(stack_bead, layer)) to record the dev layer before closing.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-065_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-066",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The three lite hooks import only json, sys, atm_bd_types and bd_cache_rs; grep for subprocess, BdCli, GitCli, AtmCli, gh and bd in them is empty.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-066_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-066",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite close hook runs subprocess.run([\"gh\", \"pr\", \"view\", branch]) to read the PR head.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-066_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-067",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "grep -n '^bdc\\|^git' on the fenced bash block of skills/atm-bd-lite/templates/dev-template.xml.j2 prints, in order, bdc lock, git rebase, git push, bdc record; the QA template's one fenced block contains bdc pour; and grep -rln 'git rebase\\|git push\\|bdc lock\\|bdc record\\|bdc pour' --include=*.py skills/atm-bd-lite prints nothing.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-067_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-067",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The dev template has no fenced stack block. Instead skills/atm-bd-lite/scripts/atm-bd-lite-stack.py, a Python file, runs bdc lock, git rebase, git push and bdc record for the dev.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-067_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-068",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "grep -w finds every ErrorId member of the atm_bd_types stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, in a hook file or a hooks/*.md Errors table.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-068_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-068",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The stub keeps ErrorId.STACK_CLAIM_LOST although no hook and no hooks/*.md table names it.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-068_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-069",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "The stack bead's assignee is the lock and its layers are the record: the dev template's fenced stack block runs bdc lock (sets the assignee), rebases, pushes, then bdc record appends the layer and releases; no hook or script writes the stack bead.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-069_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-069",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "A cron script appends missing layers to the stack bead without taking the lock.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-069_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-070",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "wc -l reports 78, 64 and 61 lines for the close, start and assign hooks.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-070_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-070",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The bo-10 sprint delivers a 101-line lite close hook file, exceeding the 100-line maximum for a hook file.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-070_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-071",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "git log --format=%ae for intent.md and hooks/ prints only rand@randlee.com; fenix raised the T-CLOSE-04 question to Rand by ATM message.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-071_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-071",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "A commit from fenix edits the Transitions table in hooks/task-close.md to add a STACK_HELD row.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-071_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-072",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Solar asks for a retry arm in the close hook; fenix replies \"Not in task-close.md; file against the spec (ANC-071).\" and the hook is unchanged.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032523Z-fixture_ANC-072_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-072",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "A review asks for a retry path that no hooks/task-close.md row lists; fenix adds a retry arm to the close hook without citing a row.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032523Z-fixture_ANC-072_fail_1.json"
+      },
+      {
+        "anchor_id": "ANC-073",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "Every non-retired phase-bo anchor's check names a command (grep, wc -l, ast, git log or atm-bd-lite-gate.py) or the anchor has a Jev pass/fail fixture pair; ANC-070's check is wc -l.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032523Z-fixture_ANC-073_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-073",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "A new anchor's check reads: Jev judges the hook is reasonable.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032523Z-fixture_ANC-073_fail_1.json"
+      }
+    ],
+    "mismatches": [],
+    "pass": true,
+    "path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures",
+    "run_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures",
+    "runs": [
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032514Z-fixture_ANC-001_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-001_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-003_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-003_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-004_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-004_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-005_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-005_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-006_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-006_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-012_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-012_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-014_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-014_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032515Z-fixture_ANC-015_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-015_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-016_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-016_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-017_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-017_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-018_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-018_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-019_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-019_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-024_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-024_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032516Z-fixture_ANC-026_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-026_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-027_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-027_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-028_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-028_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-030_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-030_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-031_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-031_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-032_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-032_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-034_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032517Z-fixture_ANC-034_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-036_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-036_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-038_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-038_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-039_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-039_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-040_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-040_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032518Z-fixture_ANC-041_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-041_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-042_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-042_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-044_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-044_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-045_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-045_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-048_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-048_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-049_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-049_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-050_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-050_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-051_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-051_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-052_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-052_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-053_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032519Z-fixture_ANC-053_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-054_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-054_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-060_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-060_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-061_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-061_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-062_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-062_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-063_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032520Z-fixture_ANC-063_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-064_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-064_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-065_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-065_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-066_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-066_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-067_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-067_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032521Z-fixture_ANC-068_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-068_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-069_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-069_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-070_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-070_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-071_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032522Z-fixture_ANC-071_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032523Z-fixture_ANC-072_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032523Z-fixture_ANC-072_fail_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032523Z-fixture_ANC-073_pass_1.json",
+      "/private/tmp/claude-501/-Users-randlee-github-atm-core/018bdb58-9109-4f74-a09f-901eb1adcb2c/scratchpad/fx11-plan/fixtures/plan-20261102T032523Z-fixture_ANC-073_fail_1.json"
+    ]
+  },
+  "error": null
+}

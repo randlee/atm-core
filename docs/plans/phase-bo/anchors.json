@@ -1787,14 +1787,14 @@
       "deterministic_check": "skills/atm-bd-lite/SKILL.md exists and names the skill atm-bd-lite",
       "fixtures": {
         "pass": [
-          "The lite profile ships as plugins/atm-bd-orchestration/skills/atm-bd-lite/ with its own SKILL.md (name: atm-bd-lite); test_lite_skill_layout asserts the directory and skill name."
+          "The lite profile ships as skills/atm-bd-lite/ with its own SKILL.md (name: atm-bd-lite); test_lite_skill_layout asserts the directory and the skill name."
         ],
         "fail": [
           "Lite is a mode flag inside skills/atm-bd-orchestration/SKILL.md; no skills/atm-bd-lite directory exists."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1829,6 +1829,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
         }
       ]
     },
@@ -2035,14 +2043,14 @@
       "deterministic_check": "a test runs each subcommand on a lite and a orchestration phase file and asserts the called script path is <profile skill>/scripts/<same file name>",
       "fixtures": {
         "pass": [
-          "atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues; test_subcommand_routing asserts the called path for lite and orchestration phase files for console, cron, queues, show and snapshot."
+          "atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues, the same file name orchestration's queues has; test_subcommand_routing asserts the called path for lite and orchestration phase files for console, cron, queues, show and snapshot."
         ],
         "fail": [
           "atm-bd cron runs a new lite-cron entry point with a different file name and argument list for lite phases."
         ]
       },
       "question_overrides": {},
-      "version": 5,
+      "version": 6,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2084,6 +2092,14 @@
             "deterministic_check",
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
         }
       ]
     },
@@ -2432,11 +2448,11 @@
           "At the stack top the atm-bd-orchestration test suite (just test-orchestration at origin/main) passes with no orchestration test file changed."
         ],
         "fail": [
-          "The phase diff renames a helper that atm-bd-orchestration imports and edits three files under skills/atm-bd-orchestration/tests/ to the new name."
+          "The sprint plans to delete atm-bd-orchestration's bd_cache.py and point atm-bd-orchestration at the new shared module for lite, accepting that atm-bd-orchestration's test suite fails until a later sprint."
         ]
       },
       "question_overrides": {},
-      "version": 5,
+      "version": 6,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2478,6 +2494,14 @@
             "fixtures"
           ],
           "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
         }
       ]
     },
@@ -3239,11 +3263,11 @@
           "The gate's Jev run anchor-runs/hooks/atm-bd-task-hook.json judges T-CLOSE-01..04 each implemented by its own match arm in atm-bd-task-hook.py, no row failing."
         ],
         "fail": [
-          "The gate's Jev run judges T-CLOSE-02 not implemented, because the WORK_CLOSE arm also records the layer on the stack bead, a write its row does not list."
+          "The committed gate run anchor-runs/hooks/atm-bd-task-hook.json has Jev judging T-CLOSE-02 not implemented by atm-bd-task-hook.py, and the hook is merged with that row failing."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3277,6 +3301,14 @@
             "fixtures"
           ],
           "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
         }
       ]
     },
@@ -3905,14 +3937,14 @@
       "deterministic_check": "the dev template under skills/atm-bd-lite/templates/ has exactly one fenced bash block whose command lines match, in order, bdc lock, git rebase, git push, bdc record; the QA template has one fenced bash block containing bdc pour; no .py file under skills/atm-bd-lite runs git rebase, git push or a bdc lock/record/pour",
       "fixtures": {
         "pass": [
-          "The lite dev template has one fenced bash block: bdc lock the stack bead, git rebase onto the top, git push, bdc record the layer and release; the QA template has one fenced block that runs bdc pour per finding."
+          "grep -n '^bdc\\|^git' on the fenced bash block of skills/atm-bd-lite/templates/dev-template.xml.j2 prints, in order, bdc lock, git rebase, git push, bdc record; the QA template's one fenced block contains bdc pour; and grep -rln 'git rebase\\|git push\\|bdc lock\\|bdc record\\|bdc pour' --include=*.py skills/atm-bd-lite prints nothing."
         ],
         "fail": [
           "The dev template has no fenced stack block. Instead skills/atm-bd-lite/scripts/atm-bd-lite-stack.py, a Python file, runs bdc lock, git rebase, git push and bdc record for the dev."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -3945,6 +3977,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
         }
       ]
     },
