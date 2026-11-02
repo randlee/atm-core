@@ -43,6 +43,6 @@ atm-core = { workspace = true, features = ["test-utils"] }
 atm-herdr = { workspace = true, features = ["test-utils"] }
 atm-observability.workspace = true
 atm-runtime-test-support.workspace = true
-noyalib = { version = "0.0.57", features = ["compat-serde-yaml"] }
+noyalib.workspace = true
 tempfile = "3"
 tracing-subscriber.workspace = true

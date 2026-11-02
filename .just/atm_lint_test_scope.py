@@ -1,4 +1,4 @@
-"""ATM's cfg(test-*) extension to sc-lint's Rust test-scope helper."""
+"""Source-only cfg(test-*) bridge; remove when sc-lint#837 handles compound cfg."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -86,6 +86,8 @@ def _classify_atm_test_scope(lines: list[str]) -> list[bool]:
 
 
 def rust_file_test_scope(path: Path, lines: list[str]) -> list[bool]:
-    if any("feature" in line and is_rust_test_cfg_attribute(line) for line in lines):
+    if "src" in path.parts and "tests" not in path.parts and any(
+        "feature" in line and is_rust_test_cfg_attribute(line) for line in lines
+    ):
         return _classify_atm_test_scope(lines)
     return published_rust_file_test_scope(path, lines)

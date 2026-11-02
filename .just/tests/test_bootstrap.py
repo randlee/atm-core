@@ -271,9 +271,12 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertEqual(manifest.sc_compose, "1.7.0")
         self.assertEqual(manifest.wyvern, "0.8.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
-        self.assertEqual(dict(manifest.python_packages)["sc-lint"], "0.8.4")
-        self.assertNotIn("sc-compose", dict(manifest.python_packages))
         requirements = (SCRIPT.parents[1] / "tools" / "bootstrap-requirements.txt").read_text(encoding="utf-8")
+        sc_lint_pin = next(
+            line.partition("==")[2] for line in requirements.splitlines() if line.startswith("sc-lint==")
+        )
+        self.assertEqual(dict(manifest.python_packages)["sc-lint"], sc_lint_pin)
+        self.assertNotIn("sc-compose", dict(manifest.python_packages))
         self.assertNotIn("sc-compose==", requirements)
 
     def test_macos_homebrew_seed_formula_is_derived_from_the_exact_python_pin(self) -> None:

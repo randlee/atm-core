@@ -492,7 +492,7 @@
           "crates/atm-daemon-client/src/lib.rs"
         ]
       },
-      "reason": "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. See randlee/sc-lint#82."
+      "reason": "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. sc-lint 0.8.4 has no item-level runtime allow; retain the narrowest supported whole-file exclusion (randlee/sc-lint#836)."
     }
   },
   "ci": {
