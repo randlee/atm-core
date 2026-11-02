@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "data": {
+    "gate": "plan",
+    "dry_run": false,
+    "fixture": false,
+    "checks": [
+      {
+        "anchor_id": "ANC-068",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "uv run crates/atm-bd-types/scripts/stub_names.py atm_bd_types.pyi skills/atm-bd-lite/scripts docs/hooks core/atm_bd_core prints nothing and exits 0: every class, enum member and method in the stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, is named by a lite hook, a hooks/*.md table or atm-bd-core, and grep -nwiE 'lite|orchestration' on the stub prints nothing.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/plan-gate-2026-11-01-r7/fx-plan/fixtures/plan-20261102T060951Z-fixture_ANC-068_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-068",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The sprint keeps ErrorId.STACK_CLAIM_LOST and BeadStore.claim in the generated stub for possible later use, although no lite hook, no hooks/*.md table and no atm-bd-core module calls them.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/plan-gate-2026-11-01-r7/fx-plan/fixtures/plan-20261102T060951Z-fixture_ANC-068_fail_1.json"
+      }
+    ],
+    "mismatches": [],
+    "pass": true,
+    "path": "docs/plans/phase-bo/anchor-runs/plan-gate-2026-11-01-r7/fx-plan/fixtures",
+    "run_path": "docs/plans/phase-bo/anchor-runs/plan-gate-2026-11-01-r7/fx-plan/fixtures",
+    "runs": [
+      "docs/plans/phase-bo/anchor-runs/plan-gate-2026-11-01-r7/fx-plan/fixtures/plan-20261102T060951Z-fixture_ANC-068_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/plan-gate-2026-11-01-r7/fx-plan/fixtures/plan-20261102T060951Z-fixture_ANC-068_fail_1.json"
+    ]
+  },
+  "error": null
+}

@@ -4076,7 +4076,7 @@
       "id": "ANC-068",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The generated atm_bd_types stub must carry only names used by a lite hook or a hooks/*.md table.",
+      "statement": "The generated atm_bd_types stub must carry only names that lite or atm-bd-core code uses (no dead names) and no profile names.",
       "quote": "ANC-068 Stub carries only used names. Check: every `ErrorId` member, class and method in the generated `.pyi` is referenced by a hook file or a `hooks/*.md` table. Fail fixture: `STACK_CLAIM_LOST` with no caller.",
       "kind": "prohibition",
       "stated_by": "Rand",
@@ -4087,14 +4087,14 @@
       "deterministic_check": "every ErrorId member, class and method name in the generated atm_bd_types .pyi appears (grep -w) in a lite hook file or a hooks/*.md table",
       "fixtures": {
         "pass": [
-          "grep -w finds every ErrorId member of the atm_bd_types stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, in a hook file or a hooks/*.md Errors table."
+          "uv run crates/atm-bd-types/scripts/stub_names.py atm_bd_types.pyi skills/atm-bd-lite/scripts docs/hooks core/atm_bd_core prints nothing and exits 0: every class, enum member and method in the stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, is named by a lite hook, a hooks/*.md table or atm-bd-core, and grep -nwiE 'lite|orchestration' on the stub prints nothing."
         ],
         "fail": [
-          "The stub keeps ErrorId.STACK_CLAIM_LOST although no hook and no hooks/*.md table names it."
+          "The sprint keeps ErrorId.STACK_CLAIM_LOST and BeadStore.claim in the generated stub for possible later use, although no lite hook, no hooks/*.md table and no atm-bd-core module calls them."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 6,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -4134,6 +4134,31 @@
           "event": "locked",
           "status": "locked",
           "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        },
+        {
+          "at": "2026-11-02T06:03:37+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "The generated atm_bd_types stub must carry only names used by a lite hook or a hooks/*.md table.",
+          "reason": "Rand, 2026-11-01: \"the names I didn't want in the crate were 'lite' and 'orchestration'\" ... \"all of the types you listed are general beads, atm, git collector types which are fine in rust\""
+        },
+        {
+          "at": "2026-11-02T06:09:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "fixtures follow the reworded statement (Rand, 2026-11-01)"
+        },
+        {
+          "at": "2026-11-02T06:09:51+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "fixtures follow the reworded statement (Rand, 2026-11-01); fail fixture phrased as a plan"
         }
       ]
     },

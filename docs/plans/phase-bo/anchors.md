@@ -1289,11 +1289,11 @@ Fixtures:
 
 ## ANC-068
 
-Anchor: The generated atm_bd_types stub must carry only names used by a lite hook or a hooks/*.md table.
+Anchor: The generated atm_bd_types stub must carry only names that lite or atm-bd-core code uses (no dead names) and no profile names.
 
 > ANC-068 Stub carries only used names. Check: every `ErrorId` member, class and method in the generated `.pyi` is referenced by a hook file or a `hooks/*.md` table. Fail fixture: `STACK_CLAIM_LOST` with no caller.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 3.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 6.
 
 Summary: stub carries only used names
 
@@ -1302,8 +1302,8 @@ Scope: atm-bd-types and its generated .pyi
 Deterministic check to pair with the development gate: every ErrorId member, class and method name in the generated atm_bd_types .pyi appears (grep -w) in a lite hook file or a hooks/*.md table
 
 Fixtures:
-- pass: grep -w finds every ErrorId member of the atm_bd_types stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, in a hook file or a hooks/*.md Errors table.
-- fail: The stub keeps ErrorId.STACK_CLAIM_LOST although no hook and no hooks/*.md table names it.
+- pass: uv run crates/atm-bd-types/scripts/stub_names.py atm_bd_types.pyi skills/atm-bd-lite/scripts docs/hooks core/atm_bd_core prints nothing and exits 0: every class, enum member and method in the stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, is named by a lite hook, a hooks/*.md table or atm-bd-core, and grep -nwiE 'lite|orchestration' on the stub prints nothing.
+- fail: The sprint keeps ErrorId.STACK_CLAIM_LOST and BeadStore.claim in the generated stub for possible later use, although no lite hook, no hooks/*.md table and no atm-bd-core module calls them.
 
 ## ANC-069
 
