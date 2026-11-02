@@ -253,7 +253,7 @@ fn config_error(path: &Path, detail: impl std::fmt::Display) -> AtmError {
     ))
 }
 
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix trust-root validation verifies POSIX ownership and mode metadata.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix checks ownership and modes; Windows read_protected_file checks Windows security (crates/atm-daemon-bootstrap/src/protected_trust_root/windows.rs).")]
 #[cfg(unix)]
 fn verify_protected_path(path: &Path) -> Result<(), AtmError> {
     use std::os::unix::fs::MetadataExt;
@@ -280,7 +280,7 @@ fn verify_protected_path(path: &Path) -> Result<(), AtmError> {
     )
 }
 
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix trust-root safety checks depend on uid and POSIX mode bits.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix validates uid and mode; Windows verify_security checks the security descriptor (crates/atm-daemon-bootstrap/src/protected_trust_root/windows.rs).")]
 #[cfg(unix)]
 fn verify_unix_metadata(
     path: &Path,

@@ -350,7 +350,7 @@ fn oversized_response(observed_bytes: usize, max_line_bytes: usize) -> HerdrErro
     }
 }
 
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "This adapter connects Herdr endpoints through Tokio UnixStream.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix connects UnixStream; Windows connect_named_pipe opens a named pipe (crates/atm-herdr/src/transport_socket.rs).")]
 #[cfg(unix)]
 async fn connect_unix(
     endpoint: &HerdrEndpoint,
@@ -382,15 +382,17 @@ async fn connect_named_pipe(
             message: "Unix Herdr endpoint selected on a Windows build".to_owned(),
         });
     };
-    retry_pipe_busy(deadline, retry_delay, || {
-        tokio::net::windows::named_pipe::ClientOptions::new().open(name)
-    })
+    retry_pipe_busy(
+        || deadline.remaining(),
+        retry_delay,
+        || tokio::net::windows::named_pipe::ClientOptions::new().open(name),
+    )
     .await
 }
 
 #[cfg(windows)]
 async fn retry_pipe_busy<T>(
-    deadline: RequestDeadline,
+    remaining: impl Fn() -> Option<Duration>,
     retry_delay: Duration,
     mut open: impl FnMut() -> io::Result<T>,
 ) -> Result<T, HerdrError> {
@@ -399,7 +401,7 @@ async fn retry_pipe_busy<T>(
         match open() {
             Ok(client) => return Ok(client),
             Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => {
-                let Some(remaining) = deadline.remaining() else {
+                let Some(remaining) = remaining() else {
                     return Err(HerdrError::Timeout);
                 };
                 tokio::time::sleep(retry_delay.min(remaining)).await;
@@ -856,8 +858,8 @@ mod tests {
     async fn named_pipe_busy_retry_is_covered_with_a_bounded_deadline() {
         let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let observed = Arc::clone(&attempts);
-        let task = tokio::spawn(retry_pipe_busy(
-            RequestDeadline::after(Duration::from_secs(1)),
+        retry_pipe_busy(
+            || Some(Duration::from_secs(1)),
             PIPE_BUSY_RETRY_DELAY,
             move || {
                 if observed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
@@ -866,11 +868,16 @@ mod tests {
                     Ok(())
                 }
             },
-        ));
-        tokio::task::yield_now().await;
-        assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 1);
-        tokio::time::advance(PIPE_BUSY_RETRY_DELAY).await;
-        assert_eq!(task.await.expect("pipe retry task").expect("retry"), ());
+        )
+        .await
+        .expect("retry");
         assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 2);
+        let expired = retry_pipe_busy(
+            || None,
+            PIPE_BUSY_RETRY_DELAY,
+            || Err::<(), _>(io::Error::from_raw_os_error(231)),
+        )
+        .await;
+        assert!(matches!(expired, Err(HerdrError::Timeout)));
     }
 }

@@ -359,7 +359,7 @@ fn validate_existing_scratch_dir(
 /// (`crate::transfer_script::check_script_safety`), and the daemon's
 /// UDS-socket owner check (`atm_http_runtime::unix_socket::is_owned_by`) all
 /// call this one function rather than each inventing their own comparison.
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "POSIX ownership verification reads Unix uid metadata; Windows uses its own scratch-directory policy.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix checks uid; Windows has no equivalent owner check: validate_existing_scratch_dir checks directory type only (crates/atm-core/src/atm_temp.rs).")]
 #[cfg(unix)]
 #[must_use]
 pub fn is_owned_by_uid(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
@@ -373,7 +373,7 @@ pub fn is_owned_by_uid(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
 /// the `ATM_TEMP` scratch root (below) and the transfer-script safety check
 /// (`crate::transfer_script::check_script_safety`), which the daemon's
 /// UDS-socket precedent's narrower write-only `0o022` check does not cover.
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "POSIX mode bits determine shared-host scratch-directory access; Windows has no equivalent mode bits.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix checks mode bits; Windows has no equivalent ACL check: validate_existing_scratch_dir checks directory type only (crates/atm-core/src/atm_temp.rs).")]
 #[cfg(unix)]
 pub(crate) fn has_group_or_world_bits(mode: u32) -> bool {
     mode & 0o077 != 0
@@ -381,7 +381,7 @@ pub(crate) fn has_group_or_world_bits(mode: u32) -> bool {
 
 /// Returns the current process's effective uid. Shared by every ADR-055
 /// owner-uid check (see [`is_owned_by_uid`]).
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "POSIX effective uid identifies the owner for Unix scratch-root checks.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix obtains an effective uid; Windows has no uid counterpart: windows_default_scratch_root uses the per-user temp directory (crates/atm-core/src/atm_temp.rs).")]
 #[cfg(unix)]
 #[must_use]
 pub fn current_uid() -> u32 {
@@ -394,7 +394,7 @@ pub fn current_uid() -> u32 {
 /// without touching the real process uid or `std::env::temp_dir()`.
 /// Compiled on non-Unix test builds too so the naming convention stays
 /// unit-testable on every CI host, not only a real Unix runner.
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix scratch directories include the effective uid; Windows uses its separate per-user temporary directory.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix names the scratch root with a uid; Windows windows_default_scratch_root uses the per-user temp directory (crates/atm-core/src/atm_temp.rs).")]
 #[cfg(any(unix, test))]
 fn unix_default_scratch_root(temp_dir: &Path, uid: u32) -> PathBuf {
     temp_dir.join(format!("atm-{uid}"))
