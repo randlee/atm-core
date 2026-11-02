@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from jev_check import (Backend, Question, JevCheckError, SessionStore, build_request, check_llm, extract_python_branches,
+from jev_check import (Backend, HttpsTransport, Question, JevCheckError, SessionStore, load_config, build_request, check_llm, extract_python_branches,
                        extract_table_column, git_show, load_check, payload_bytes, run_check, run_request)
 from jev_check.extractors import GitShow
 from jev_check.llm import answer_schema, api_key, system_prompt
@@ -270,3 +270,30 @@ def test_unknown_question_type_has_no_answer_schema() -> None:
     with pytest.raises(JevCheckError) as err:
         answer_schema({"q": {"type": "rank", "instructions": "i", "criteria": {"a": "A"}}})
     assert err.value.code == "INPUT_INVALID"
+
+
+@pytest.mark.parametrize("state, questions, code", [
+    ({"code": "x" * 100_000}, Q1, "INPUT_TOO_LARGE"),
+    ({}, {"q": {"type": "choice", "instructions": "i", "criteria": {"yes": "y"}}}, "INPUT_INVALID")])
+def test_llm_input_is_refused_like_jev_and_nothing_is_sent(keys: None, state: Any, questions: dict[str, Question],
+                                                           code: str) -> None:
+    http = FakeHttp(1, haiku_message(ONE, 1))
+    with pytest.raises(JevCheckError) as err:
+        check_llm(HAIKU, state, questions, http)
+    assert err.value.code == code and http.posts == []
+
+
+def test_jev_key_env_first_then_keychain(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = load_config()
+    monkeypatch.setenv("TYPESAFE_API_KEY", "from-env")
+    assert HttpsTransport(config, lookup=lambda _: "from-keychain").key == "from-env"
+    monkeypatch.delenv("TYPESAFE_API_KEY")
+    assert HttpsTransport(config, lookup=lambda s: "from-keychain" if s == "TYPESAFE_API_KEY" else "").key == "from-keychain"
+    with pytest.raises(JevCheckError) as err:
+        HttpsTransport(config, lookup=lambda _: "")
+    assert err.value.code == "KEY_MISSING"
+
+
+def test_default_session_store_follows_config() -> None:
+    store = SessionStore.default()
+    assert store.root == Path(os.path.expanduser("~/.cache/jev-check/sessions")) and store.keep == 7 * 86400

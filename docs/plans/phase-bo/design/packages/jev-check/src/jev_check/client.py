@@ -2,6 +2,7 @@
 import http.client
 import json
 import os
+import subprocess
 import time
 import tomllib
 from collections.abc import Callable
@@ -52,7 +53,7 @@ class JevReply:
 
 
 class JevCheckError(Exception):
-    """code is one of INPUT_TOO_LARGE, INPUT_INVALID, KEY_MISSING, JEV_UNAVAILABLE, RESPONSE_INVALID."""
+    """A typed failure; `code` is the error id (README "Errors" lists every id and when it is raised)."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(f"{code}: {message}")
@@ -66,12 +67,31 @@ def load_config() -> Config:
                   timeout_seconds=float(raw["timeout_seconds"]))
 
 
+def keychain(service: str) -> str:
+    """The macOS Keychain generic password: account $USER, service = the variable name; '' if absent.
+
+    ANTHROPIC_KEYCHAIN_SERVICE renames the service looked up for ANTHROPIC_API_KEY."""
+    service = os.environ.get("ANTHROPIC_KEYCHAIN_SERVICE", service) if service == "ANTHROPIC_API_KEY" else service
+    try:
+        done = subprocess.run(["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s", service, "-w"],
+                              capture_output=True, text=True, timeout=10, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def env_or_keychain(var: str, lookup: Callable[[str], str] = keychain) -> str:
+    """Environment first, then the Keychain entry named after the variable. Never printed or logged."""
+    return os.environ.get(var, "").strip() or lookup(var)
+
+
 class HttpsTransport:
-    def __init__(self, config: Config, key: str | None = None) -> None:
+    def __init__(self, config: Config, key: str | None = None, lookup: Callable[[str], str] = keychain) -> None:
         self.config = config
-        self.key = (key if key is not None else os.environ.get("TYPESAFE_API_KEY", "")).strip()
+        self.key = (key if key is not None else env_or_keychain("TYPESAFE_API_KEY", lookup)).strip()
         if not self.key:
-            raise JevCheckError("KEY_MISSING", "TYPESAFE_API_KEY is missing; no Jev request was sent")
+            raise JevCheckError("KEY_MISSING", "TYPESAFE_API_KEY is not in the environment or the Keychain; "
+                                "no Jev request was sent")
 
     def send(self, body: bytes) -> Response:
         conn = http.client.HTTPSConnection(self.config.host, timeout=self.config.timeout_seconds)

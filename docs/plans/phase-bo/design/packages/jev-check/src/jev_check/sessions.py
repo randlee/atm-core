@@ -2,6 +2,8 @@
 import json
 import os
 import time
+import tomllib
+from importlib.resources import files
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -19,7 +21,9 @@ class SessionStore:
 
     @classmethod
     def default(cls) -> "SessionStore":
-        return cls(Path(os.path.expanduser("~/.cache/jev-check/sessions")))
+        """The store named by jev.toml [sessions]: dir and keep_days."""
+        raw = tomllib.loads(files("jev_check").joinpath("jev.toml").read_text())["sessions"]
+        return cls(Path(os.path.expanduser(str(raw["dir"]))), float(raw["keep_days"]))
 
     def write(self, record: dict[str, Any]) -> str:
         self.root.mkdir(parents=True, exist_ok=True)

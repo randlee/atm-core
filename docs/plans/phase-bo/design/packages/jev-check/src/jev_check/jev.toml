@@ -10,8 +10,9 @@ timeout_seconds = 60
 # and it made no tool calls. Set before any API-direct run was measured.
 leak_tolerance = 0.01
 
-# LLM backends, API-direct: the user message is the payload bytes; no system prompt, no tools;
-# the reply is forced into {choice, confidence} per question by a JSON-schema output format.
+# LLM backends, API-direct: the user message is the payload bytes; no tools. The check request's system prompt
+# carries Jev's answer schema for its questions (llm.system_prompt); follow-ups (ask) have no system prompt.
+# key_env is read from the environment first, then the macOS Keychain service of the same name.
 [haiku]
 model = "claude-haiku-5-5"
 key_env = "ANTHROPIC_API_KEY"
