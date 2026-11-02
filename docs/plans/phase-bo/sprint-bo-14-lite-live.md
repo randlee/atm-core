@@ -74,7 +74,7 @@ Beads are read through beads-cache only, through `bd_cache_rs` in-process (bo-15
      5. `atm task close completed`, which goes through the hook as T-CLOSE-02.
      6. A cron tick assigns the released QA bead (deliverable 1).
      7. QA with findings: the pour block, then close as T-CLOSE-04.
-     8. Lead assigns the fix bead (`queue.ready_work_no_task`, check 4, reports it ready with no task).
+     8. Lead pours the fix bead and its re-review QA bead together, then assigns the fix bead (`queue.ready_work_no_task`, check 4, reports it ready with no task).
      9. Fix: start, stack block, close.
      10. A cron tick assigns the fix's QA bead.
      11. QA PASS (T-CLOSE-03).

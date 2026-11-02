@@ -71,7 +71,7 @@ Source paths are `skills/atm-bd-lite/templates/<file>` (ANC-012). Installed, the
      | edge, non-blocking finding | `bdc dependencies add <phase bead> <finding id> --type blocks` | T-CLOSE-04: "each non-blocking one blocks the phase bead" |
 
      The sprint id is the QA bead's `metadata.work.sprint` (bo-9 `Work.sprint`). The phase bead is the phase file's `root`. Both lookups are pending a question to Rand (Q2).
-   - **Verdict and close**: the report ends with the one fenced block from the `QA_VERDICT` fix text: `{"verdict": "PASS" | "FINDINGS", "sha": <target head>, "findings": [poured ids]}`. The QA closes with the single line `atm task close {{ task_id }} completed --stdin`.
+   - **Verdict and close**: the report ends with the one fenced block from the `QA_VERDICT` fix text: `{"verdict": "PASS" | "FINDINGS", "sha": <target head>, "findings": [{"id": <poured id>, "blocking": true | false}]}`. The QA closes with the single line `atm task close {{ task_id }} completed --stdin`.
 3. **Dispatch** (ANC-026, 055, 060, 067): the "Dispatch" section of `skills/atm-bd-lite/SKILL.md` is one fenced bash block that the lead runs for a dev, fix or QA bead:
    ```bash
    set -euo pipefail
@@ -93,7 +93,7 @@ Source paths are `skills/atm-bd-lite/templates/<file>` (ANC-012). Installed, the
 - [ ] ANC-067: the test extracts the fenced bash blocks from the rendered dev and fix templates. The lines matching `^(bdc|git) ` are exactly four, with tags `# lock`, `# rebase`, `# push`, `# record` in that order: `grep -oE '# (lock|rebase|push|record)$'` prints `# lock`, `# rebase`, `# push`, `# record`. The rendered QA template has one fenced block with a `bdc dependencies add` line and the create step (the #104 marker until it ships). `grep -rlnE 'git rebase|git push|bdc issues update|bdc dependencies add' --include='*.py' --exclude-dir=tests skills/atm-bd-lite` prints nothing.
 - [ ] ANC-069, sequence: `uv run pytest skills/atm-bd-lite/tests/test_templates.py -k stack_block` passes. The test runs the rendered stack block with `bash` against a local bare-repo origin and the shell fakes in `tests/fakes/` (`bdc`, `gh`), which record their argv and return contract envelopes. Asserted:
   - the recorded argv sequence is `bdc issues get <bead>`, `bdc issues update <stack> … --assignee <me> --expected-assignee ""`, `bdc issues get <stack>`, `git` rebase onto the ledger top, push, the github provider's `gh pr view` and `gh pr edit --base <top>` (and, rendered with azure, `az repos pr` with no `gh`), `bdc issues update <stack> … --set-metadata {"layers":[…]} --assignee "" --expected-assignee <me>`;
-  - `atm_bd_types.Stack.decode` of the fake's final stack row gives `layer_for(<branch>) == Layer(base=<top>, branch=<branch>, head=<40-hex HEAD>, pr=<n>)`. This is the fact T-CLOSE-02 checks.
+  - `jq` on the fake's final stack row gives the layer `{"base": <top>, "branch": <branch>, "head": <40-hex HEAD>, "pr": <n>}` under `.data.metadata.layers`. This is the fact T-CLOSE-02 checks.
 - [ ] ANC-069, lock held: the same test with the fake `bdc` answering `# lock` with `PRECONDITION` (exit 3, `unmet.assignee.actual = "other"`). The block exits 3, and the recorded argv has no `git rebase`, no `git push` and no second `bdc issues update`.
 - [ ] ANC-069, first layer: with `layers` absent, `TOP` is the stack bead's `trunk` and the recorded layer's `base` is the trunk (bo-9 `Stack` docstring: "A new stack has a trunk and no layers").
 - [ ] Pour edges: `pytest -k pour_block` runs the rendered pour block against the fake. For one blocking and one non-blocking finding, the recorded argv has `bdc dependencies add <sprint> <qa>-f1 --type blocks` and `bdc dependencies add <phase root> <qa>-f2 --type blocks`. The create assertion is `xfail(strict=True, reason="beads-cache#104")` until #104 ships.
@@ -103,16 +103,9 @@ Source paths are `skills/atm-bd-lite/templates/<file>` (ANC-012). Installed, the
 The draft gate `design/lite-code/atm-bd-lite-gate.py <hook.py> <hooks/spec.md>` parses one hook file with `ast` and one spec. Its deterministic checks are ANC-052 (rows == arms), ANC-064 (writes), ANC-065 (`stack_bead` only read), ANC-066 (no subprocess, CLI adapter, `bd`/`gh`/`git`) and ANC-070 (≤ 100 lines). Its two Jev question sets ask whether every row is implemented (ANC-053) and every arm is listed (ANC-054), both on hook source. **It reads no template.** On a push that touches only `skills/atm-bd-lite/templates/` (brief §B.6), it re-runs those hook checks and nothing else. The template anchors (026, 055, 057, 060, 067, 069) are held by `test_templates.py` in `just test`. A template change that breaks a block's shape fails there, not in the gate. See Q4.
 
 ## Not in this sprint
-Hooks (bo-10). Re-review QA beads after a fix (Q3). Any script that runs the blocks; there is none (ANC-067 fail fixture).
+Hooks (bo-10). Fix and re-review QA beads: the phase lead pours them together (Rand, 2026-11-01), not a template. Any script that runs the blocks; there is none (ANC-067 fail fixture).
 
 ## Validation
 `just lint`, `just test` (includes `uv run pytest skills/atm-bd-lite/tests/test_templates.py`).
 
 ## Open (Rand)
-- Q1: ANC-067's check names `bdc lock` / `bdc record` / `bdc pour`. bdc has none of these. The blocks use `bdc issues update` with the step tags `# lock` / `# record`, and the acceptance greps the tags. Should the check be re-worded to the real verbs, or should beads-cache add named verbs?
-- Q2: T-CLOSE-04 needs the sprint and phase bead ids, but the `hooks/task-close.md` Facts table has no row for them. Proposed: the QA bead's `metadata.work.sprint`, and the phase file `root`. The hook needs the same lookup.
-- Q3: Who pours the re-review QA bead for a fix? "Target layer ... the QA bead's closed dev/fix blocker" implies one exists. Proposed: the pour block also pours one `stage:qa` bead per blocking finding, blocked by the fix bead. That is a second create per finding, so it is not in this sprint until you rule on it.
-- Q4: The brief (§B.6) runs the gate on template pushes, but the gate reads no template. Should bo-12 add the ANC-057/060/067 template checks to the gate, or is `test_templates.py` enough?
-- Q6: `QA_VERDICT`'s block lists finding ids with no blocking/non-blocking flag, and T-CLOSE-04 checks the two differently. Should the block carry `{"id", "blocking"}` per finding?
-- Q7: The installed path is `.claude/skills/atm-bd-lite/` here (ANC-031). The bo-10 doc and `design/jev-check-proposal.md` say `.atm-bd/atm-bd-lite/`. Which one?
-- Q8: There is no `bdc` binary release; it is blocked on randlee/sc-publish#135, and no beads-cache issue tracks a prerelease. bo-14 cannot run either block live without one.

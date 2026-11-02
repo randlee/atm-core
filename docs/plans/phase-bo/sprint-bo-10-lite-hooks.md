@@ -8,14 +8,14 @@ The spec is `hooks/task-assign.md`, `hooks/task-start.md` and `hooks/task-close.
 
 - **bo-12**: the gate `skills/atm-bd-lite/scripts/atm-bd-lite-gate.py <hook.py> <hooks/spec.md> [--out run.json]` (design copy `design/lite-code/atm-bd-lite-gate.py`) and its package `packages/jev-check`. Exit 0 = pass, 1 = a finding or a Jev `no`, 2 = Jev could not be asked (not a pass). The gate parses `Transition.X` match arms, `beads.update/create/claim/release(` call sites, `stack_bead` occurrences and `HookReply.*` sites. So each hook names its store parameter `beads` and its enum `Transition`.
 - **bo-9**: `atm_bd_types` 0.2.0 (the generated stub). The hooks use these names:
-  - `HookRequest`: `parse`, `is_phase_task`, `phase_config_path`, `caller`, `task_id`, `assignee`, `outcome`, `close_report`, `close_reason`, `qa_verdict`.
+  - `HookRequest`: `parse`, `is_phase_task`, `phase`, `phase_config_path`, `caller`, `task_id`, `assignee`, `close_report`, `close_reason`, `qa_pass`, `qa_findings`.
   - `HookReply`: `not_applicable`, `pass_through`, `refused`, `handled`, `to_json`.
   - `Refusal`, carrying a fix text per (ErrorId, hook) that equals the hook's Errors table.
   - `ErrorId`: every code in the three Errors tables, plus `STACK_NOT_RECORDED` and `FINDINGS_NOT_POURED`.
   - `Bead`, `Status`, `Stage`, `Outcome`, `Dependency`, `Work`, `BeadMeta`, `Stack`, `Layer`, `Sha`, `QaPass`/`QaFail`.
   - `BeadStore` with `show` and `update` only, and `CacheStore.for_phase`.
   - `BeadPatch.assign`, `BeadPatch.start(snapshot)` (no base: start does not read the ledger), `BeadPatch.reopen`, `BeadPatch.close` with evidence.
-  - `PhaseFiles`, `PhaseFilesCli`, `PhaseFile` with `lead` and the four close templates (`<refuse>`, `<dev-close>`, `<qa-pass>`, `<qa-findings>`).
+  - `PhaseFiles`, `PhaseFilesCli`, `PhaseFile` with `lead` and the four close templates (`refuse`, `dev_close`, `qa_pass`, `qa_findings`).
   - The `HookAction` that renders `atm task close --template <t> --vars <a>`.
 
   - One transition enum per hook, with exactly that hook's Transitions-table names. For example, `AssignTransition` has ASSIGN_SAME, ASSIGN, ASSIGN_CLOSED and ASSIGN_NOT_READY. Each hook imports its enum `as Transition`. The gate's patterns therefore read `Transition.X`, and pyright's exhaustiveness check covers only that hook's members.
@@ -24,7 +24,7 @@ The spec is `hooks/task-assign.md`, `hooks/task-start.md` and `hooks/task-close.
 - **bo-11**: the data its fenced blocks write. The close hook checks this data and never produces it. Three items:
   - the stack block's ledger layer on the stack bead (branch, head, pr, base), read through `Stack`/`Layer`;
   - the pour block's dependency edges (each finding bead blocks the sprint bead or the phase bead);
-  - the QA report's fenced verdict block `{"verdict", "sha", "findings": [ids]}`.
+  - the QA report's fenced verdict block `{"verdict", "sha", "findings": [{"id", "blocking"}]}`.
 
   The tests build these with fakes, in the shapes bo-11 defines.
 
@@ -45,183 +45,25 @@ The three hooks. Checked 2026-11-01: `pyright` strict with `reportMatchNotExhaus
 
 `skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py`
 
-```python
-"""task.assign: hooks/task-assign.md. One write: the assignee."""
-import sys
-from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli,
-                          Refusal)
-from atm_bd_types import AssignTransition as Transition
-
-
-def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
-    if not req.is_phase_task():
-        return HookReply.not_applicable()
-    if isinstance(phase := phases.load(req.phase_config_path, "lite"), Refusal):
-        return HookReply.refused(phase)
-    if (agent := req.assignee) is None:
-        return HookReply.refused(Refusal(ErrorId.REQUEST_INVALID, field="assignee"))
-    if isinstance(bead := beads.show(req.task_id), Refusal):
-        return HookReply.refused(bead)
-    if req.caller != phase.lead:
-        return HookReply.refused(Refusal(ErrorId.ASSIGN_NOT_LEAD, lead=phase.lead))
-    if bead.open_blockers:
-        return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, ids=bead.open_blockers))
-
-    match Transition.select(bead.status, bead.assignee, agent):
-        case Transition.ASSIGN_SAME:  # T-ASSIGN-01
-            return HookReply.pass_through()
-        case Transition.ASSIGN:  # T-ASSIGN-02
-            patch = BeadPatch.assign(bead, agent)
-        case Transition.ASSIGN_CLOSED:  # T-ASSIGN-03
-            return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead.id))
-        case Transition.ASSIGN_NOT_READY:  # T-ASSIGN-04
-            return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, status=bead.status.name))
-
-    if (failed := beads.update(patch, actor=req.caller)) is not None:
-        return HookReply.refused(failed)
-    return HookReply.pass_through()
-
-
-if __name__ == "__main__":
-    req = HookRequest.parse(sys.stdin.read())
-    if isinstance(req, Refusal):
-        print(HookReply.refused(req).to_json())
-    elif isinstance(store := CacheStore.for_phase(req.phase), Refusal):
-        print(HookReply.refused(store).to_json())
-    else:
-        print(hook(req, store, PhaseFilesCli()).to_json())
-```
+The hook file is `design/lite-code/atm-bd-task-assign-hook.py` (also in `bo-10/skills/atm-bd-lite/scripts/`, with tests). Sprint docs link to code; they do not embed it.
 
 `skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py`
 
-```python
-"""task.start: hooks/task-start.md. One write: in_progress. Does not read the ledger."""
-import sys
-from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli,
-                          Refusal)
-from atm_bd_types import StartTransition as Transition
-
-
-def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
-    if not req.is_phase_task():
-        return HookReply.not_applicable()
-    if isinstance(phase := phases.load(req.phase_config_path, "lite"), Refusal):
-        return HookReply.refused(phase)
-    if isinstance(bead := beads.show(req.task_id), Refusal):
-        return HookReply.refused(bead)
-    if bead.assignee != req.caller:
-        return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead.id, agent=bead.assignee or ""))
-    if bead.open_blockers:
-        return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, ids=bead.open_blockers))
-
-    match Transition.select(bead.status):
-        case Transition.START:  # T-START-01
-            patch = BeadPatch.start(bead)
-        case Transition.START_AGAIN:  # T-START-02
-            return HookReply.pass_through()
-        case Transition.START_CLOSED:  # T-START-03
-            return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead.id))
-        case Transition.START_NOT_READY:  # T-START-04
-            return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, status=bead.status.name))
-
-    if (failed := beads.update(patch, actor=req.caller)) is not None:
-        return HookReply.refused(failed)
-    return HookReply.pass_through()
-
-
-if __name__ == "__main__":
-    req = HookRequest.parse(sys.stdin.read())
-    if isinstance(req, Refusal):
-        print(HookReply.refused(req).to_json())
-    elif isinstance(store := CacheStore.for_phase(req.phase), Refusal):
-        print(HookReply.refused(store).to_json())
-    else:
-        print(hook(req, store, PhaseFilesCli()).to_json())
-```
+The hook file is `design/lite-code/atm-bd-task-start-hook.py` (also in `bo-10/skills/atm-bd-lite/scripts/`, with tests). Sprint docs link to code; they do not embed it.
 
 `skills/atm-bd-lite/scripts/atm-bd-task-hook.py`
 
-```python
-"""task.close: hooks/task-close.md. One write, to the caller's own bead."""
-import sys
-from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookAction, HookReply, HookRequest, PhaseFiles,
-                          PhaseFilesCli, Refusal, Status, Template)
-from atm_bd_types import CloseTransition as Transition
-
-
-def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
-    if not req.is_phase_task():
-        return HookReply.not_applicable()
-    if isinstance(phase := phases.load(req.phase_config_path, "lite"), Refusal):
-        return HookReply.refused(phase)
-    if isinstance(bead := beads.show(req.task_id), Refusal):
-        return HookReply.refused(bead)
-    if bead.assignee != req.caller:
-        return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead.id, agent=bead.assignee or ""))
-    if bead.status != Status.IN_PROGRESS:
-        closed = bead.status == Status.CLOSED
-        return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED if closed else ErrorId.BEAD_NOT_READY, bead=bead.id))
-    if isinstance(transition := Transition.select(req, bead), Refusal):
-        return HookReply.refused(transition)
-
-    match transition:
-        case Transition.GIVE_BACK:  # T-CLOSE-01
-            if not (reason := req.close_reason):
-                return HookReply.refused(Refusal(ErrorId.CLOSE_REASON_EMPTY, bead=bead.id))
-            patch, action = BeadPatch.reopen(bead), HookAction.close(phase.template(Template.REFUSE), reason)
-        case Transition.WORK_CLOSE:  # T-CLOSE-02
-            if not req.close_report:
-                return HookReply.refused(Refusal(ErrorId.CLOSE_REPORT_NOT_INLINE, bead=bead.id))
-            if isinstance(stack := beads.show(bead.stack_bead), Refusal):
-                return HookReply.refused(stack)
-            if (layer := stack.layer_for(bead.branch)) is None:
-                return HookReply.refused(Refusal(ErrorId.STACK_NOT_RECORDED, branch=bead.branch))
-            patch, action = BeadPatch.close(bead, layer), HookAction.close(phase.template(Template.DEV_CLOSE), layer)
-        case Transition.QA_PASS:  # T-CLOSE-03
-            if isinstance(verdict := req.qa_pass(), Refusal):
-                return HookReply.refused(verdict)
-            if isinstance(target := beads.target_layer(bead), Refusal):
-                return HookReply.refused(target)
-            if verdict.sha != target.head:
-                return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, sha=verdict.sha, branch=target.branch, head=target.head))
-            patch, action = BeadPatch.close(bead, verdict), HookAction.close(phase.template(Template.QA_PASS), verdict)
-        case Transition.QA_FINDINGS:  # T-CLOSE-04
-            if isinstance(verdict := req.qa_findings(), Refusal):
-                return HookReply.refused(verdict)
-            if isinstance(target := beads.target_layer(bead), Refusal):
-                return HookReply.refused(target)
-            if verdict.sha != target.head:
-                return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, sha=verdict.sha, branch=target.branch, head=target.head))
-            for finding in verdict.findings:  # each poured finding bead exists and blocks the sprint (blocking) or phase bead
-                if isinstance(poured := beads.show(finding.id), Refusal):
-                    return HookReply.refused(poured)
-                if not poured.blocks(bead.sprint if finding.blocking else bead.phase):
-                    return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=[finding.id], sprint=bead.sprint))
-            patch, action = BeadPatch.close(bead, verdict), HookAction.close(phase.template(Template.QA_FINDINGS), verdict)
-
-    if (failed := beads.update(patch, actor=req.caller)) is not None:
-        return HookReply.refused(failed)
-    return HookReply.handled([action])
-
-
-if __name__ == "__main__":
-    req = HookRequest.parse(sys.stdin.read())
-    if isinstance(req, Refusal):
-        print(HookReply.refused(req).to_json())
-    elif isinstance(store := CacheStore.for_phase(req.phase), Refusal):
-        print(HookReply.refused(store).to_json())
-    else:
-        print(hook(req, store, PhaseFilesCli()).to_json())
-```
+The hook file is `design/lite-code/atm-bd-task-hook.py` (also in `bo-10/skills/atm-bd-lite/scripts/`, with tests). Sprint docs link to code; they do not embed it.
 
 ## Deliverables
 
 1. **`skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py`**. Implements `hooks/task-assign.md` (T-ASSIGN-01..04, its Errors table). Anchors: ANC-048, 003, 016, 026, 056, 058, 062, 063, 064, 065, 066, 070.
-   Acceptance: `uv run skills/atm-bd-lite/scripts/atm-bd-lite-gate.py skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py <plan>/hooks/task-assign.md` exits 0. `<plan>` is atm-core `docs/plans/phase-bo` at the plan commit. The run JSON goes to `anchor-runs/hooks/atm-bd-task-assign-hook.json`.
+   Acceptance: commit, then `uv run skills/atm-bd-lite/scripts/atm-bd-lite-gate.py skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py skills/atm-bd-lite/docs/hooks/task-assign.md --out gate-runs/hooks/atm-bd-task-assign-hook.json` exits 0 (the spec copies are bo-12's pinned byte-exact copies).
 2. **`skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py`**. Implements `hooks/task-start.md` (T-START-01..04, its Errors table). The hook reads only the phase file and the bead. It never reads the stack bead. Anchors: ANC-049, 003, 016, 026, 056, 058, 062, 063, 064, 065, 066, 070.
-   Acceptance: the gate on this file and `<plan>/hooks/task-start.md` exits 0. `grep -n stack skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py` prints nothing.
+   Acceptance: the gate on this file and `skills/atm-bd-lite/docs/hooks/task-start.md` with `--out gate-runs/hooks/atm-bd-task-start-hook.json` exits 0. `grep -n stack skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py` prints nothing.
 3. **`skills/atm-bd-lite/scripts/atm-bd-task-hook.py`** (task.close). Implements `hooks/task-close.md` (T-CLOSE-01..04, its Errors table). The hook makes one write, to the caller's own bead. It reads the stack bead to check the dev's layer, and the poured finding beads to check what they block. It never writes the stack bead, creates a bead or assigns a task. Anchors: ANC-050, 003, 014, 016, 019, 026, 056, 058, 062, 063, 064, 065, 066, 070.
-   Acceptance: the gate on this file and `<plan>/hooks/task-close.md` exits 0. `wc -l skills/atm-bd-lite/scripts/atm-bd-task-hook.py` reports ≤ 100 (ANC-070). No line is dropped from the spec to fit; if the spec cannot fit, the dev stops and asks Rand. `grep -c 'beads.update(' skills/atm-bd-lite/scripts/atm-bd-task-hook.py` prints 1. `git diff --exit-code <bo-10 base> -- skills/atm-bd-orchestration/` prints nothing, so orchestration's `atm-task-close.py` is unchanged and has no lite branch (ANC-014).
+   Acceptance: the gate on this file and `skills/atm-bd-lite/docs/hooks/task-close.md` with `--out gate-runs/hooks/atm-bd-task-hook.json` exits 0. `wc -l skills/atm-bd-lite/scripts/atm-bd-task-hook.py` reports ≤ 100 (ANC-070). No line is dropped from the spec to fit; if the spec cannot fit, the dev stops and asks Rand. `grep -c 'beads.update(' skills/atm-bd-lite/scripts/atm-bd-task-hook.py` prints 1. `git diff --exit-code <bo-10 base> -- skills/atm-bd-orchestration/` prints nothing, so orchestration's `atm-task-close.py` is unchanged and has no lite branch (ANC-014).
+3a. **Registration.** Each hook declares `TIMEOUT_MS` (ATM's module contract). `skills/atm-bd-lite/SKILL.md` section "Start a phase" gives the three commands the lead runs once per phase: `atm hook register task.assign --phase <phase> --module <installed>/scripts/atm-bd-task-assign-hook.py`, the same for `task.start` (`atm-bd-task-start-hook.py`) and `task.close` (`atm-bd-task-hook.py`). Acceptance: `atm hook list --phase <test phase>` after running them shows all three active.
 4. **`skills/atm-bd-lite/tests/fakes.py`**. In-memory `FakeBeads` (implements `BeadStore.show`/`update`) and `FakePhases` (implements `PhaseFiles.load`). Each fake records every lookup and every write in order. A fake can be told to return a given `Refusal` for a given lookup, or `BEAD_RACED` for a write. No sleeps, threads, clocks, bd, dolt, gh, git or daemon. Shared setup (a bead row, a phase file, a request) is built by helpers in `fakes.py`, never inline per test (ANC-004). Acceptance: `uvx pylint --disable=all --enable=duplicate-code --min-similarity-lines=5 skills/atm-bd-lite/tests` reports no duplicate block.
 5. **Transition tests**: one test per Transitions row, listed below. Each test calls `hook()` with fakes and asserts three things exactly: the reply JSON, the list of writes, and the list of lookups. Anchors: ANC-052/053 (behavioural side).
    Acceptance: `uv run pytest skills/atm-bd-lite/tests/test_assign_hook.py skills/atm-bd-lite/tests/test_start_hook.py skills/atm-bd-lite/tests/test_close_hook.py -v` passes and lists every test named below.

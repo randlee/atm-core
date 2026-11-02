@@ -53,16 +53,16 @@ atm-bd-types 0.2.0 does **not** depend on bd-cache-rs in Cargo or `Requires-Dist
    - `find skills/atm-bd-lite -iname '*schema*'` prints nothing (ANC-006).
    - `grep -rnE 'std::process|Command::new|"bd"|BdCli' crates/atm-bd-types/src crates/atm-bd-types/atm_bd_types.pyi` prints nothing (ANC-063).
 
-5. **`PhaseFilesCli.load(path, profile)`** reads `.atm-bd/phase-<x>.toml`: `profile`, `lead` and `[templates]` keys `refuse`, `dev-close`, `qa-pass` and `qa-findings` (task-close.md Facts: "profile, templates | phase file"). An unreadable file or a missing key is `PHASE_UNREADABLE`. A profile that is not the `profile` argument is `PROFILE_MISMATCH`. The crate holds no profile name; the hook passes it. Anchors: ANC-061, ANC-068.
+5. **`PhaseFilesCli.load(path, profile)`** reads `.atm-bd/phase-<x>.toml`: `profile`, `lead` and `[templates]` keys `refuse`, `dev_close`, `qa_pass` and `qa_findings` (underscores, as bo-11's phase file); other keys are ignored (task-close.md Facts: "profile, templates | phase file"). An unreadable file or a missing key is `PHASE_UNREADABLE`. A profile that is not the `profile` argument is `PROFILE_MISMATCH`. The crate holds no profile name; the hook passes it. Anchors: ANC-061, ANC-068.
    Acceptance:
    - `uv run pytest crates/atm-bd-types/tests/python/test_phase_files.py` passes on tmp files covering one good file, a missing file, a missing template key and a profile mismatch.
    - `grep -rniwE 'lite|orchestration|full|profile_name|Profile' crates/atm-bd-types/src crates/atm-bd-types/atm_bd_types.pyi` prints only the `profile: str` parameter and property lines, which the dev lists in the PR (ANC-061).
 
-6. **`HookRequest` and `HookReply`.**
-   - `HookRequest.parse(stdin)` reads the ATM hook envelope. `assignee` and `outcome` return `REQUEST_INVALID` when absent or invalid. `close_report()` returns `CLOSE_REPORT_NOT_INLINE` when empty, and `close_reason()` returns `CLOSE_REASON_EMPTY`.
-   - `qa_verdict()` parses the one fenced JSON block `{"verdict": "PASS" | "FINDINGS", "sha": <40 hex>, "findings": [ids]}` into `QaPass(sha)` or `QaFail(sha, findings)`. A missing block, more than one block, a bad sha, or FINDINGS with an empty list gives `QA_VERDICT`.
-   - `HookAction.close(template, args)` renders `atm task close --template <template> --vars <args>`.
-   - `HookReply.handled(action)`, `pass_through()`, `not_applicable()` and `refused(hook, refusal)` serialize to the reply JSON bo-13 accepts.
+6. **`HookRequest` and `HookReply`: ATM's wire, as atm-core parses it today.**
+   - `HookRequest.parse(stdin)` decodes atm-core `crates/atm-core/src/hook/request.rs` `HookRequest` (schema_version `1.0.0`, hook, team, phase, caller, request, custom). ATM calls a hook only for a phase it is registered in, so `is_phase_task()` is true when `phase` is set. Missing or undecodable fields give `REQUEST_INVALID`.
+   - `qa_pass()` / `qa_findings()` parse the one fenced block `{"verdict": "PASS" | "FINDINGS", "sha": <40 hex>, "findings": [{"id": <bead id>, "blocking": true | false}]}`. A missing block, more than one, a bad sha, or the other verdict gives `QA_VERDICT`.
+   - Replies match atm-core `crates/atm-core/src/hook/reply.rs` `HookReply::parse` exactly: `{"result":"pass-through"}`, `{"result":"not-applicable"}`, `{"result":"refused","message":"<CODE>: <what failed>. <fix>"}`, and `{"result":"handled","atm-action":[{"command":"task.close","request":{...}}]}`.
+   Acceptance: `crates/atm-bd-types/tests/python/test_wire.py` decodes a request JSON captured from `atm` and asserts each reply's bytes equal the fixture in `tests/python/wire/` byte for byte; a Rust test in atm-core is not needed, the fixtures are copied from `reply.rs`'s parse rules.
 
    Anchors: ANC-062.
    Acceptance:
