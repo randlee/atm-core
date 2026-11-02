@@ -39,6 +39,166 @@ This is the shape the gate checks.
 
 So each file has at most one write call site (ANC-064), while each of the four close arms still makes its own write.
 
+## Code
+
+The three hooks, as written and passed through the gate (deterministic checks and Jev) on 2026-11-01. The dev commits these files as they are. Any change to a hook must still pass the gate.
+
+`skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py`
+
+```python
+"""task.assign: hooks/task-assign.md. One write: the assignee."""
+import sys
+from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli,
+                          Refusal)
+from atm_bd_types import AssignTransition as Transition
+
+
+def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
+    if not req.is_phase_task():
+        return HookReply.not_applicable()
+    if isinstance(phase := phases.load(req.phase_config_path(), "lite"), Refusal):
+        return HookReply.refused(phase)
+    if not req.assignee:
+        return HookReply.refused(Refusal(ErrorId.REQUEST_INVALID, field="assignee"))
+    if isinstance(bead := beads.show(req.task_id), Refusal):
+        return HookReply.refused(bead)
+    if req.caller != phase.lead:
+        return HookReply.refused(Refusal(ErrorId.ASSIGN_NOT_LEAD, lead=phase.lead))
+    if bead.open_blockers:
+        return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, ids=bead.open_blockers))
+
+    match Transition.select(bead.status, bead.assignee, req.assignee):
+        case Transition.ASSIGN_SAME:  # T-ASSIGN-01
+            return HookReply.pass_through()
+        case Transition.ASSIGN:  # T-ASSIGN-02
+            patch = BeadPatch.assign(bead, req.assignee)
+        case Transition.ASSIGN_CLOSED:  # T-ASSIGN-03
+            return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead.id))
+        case Transition.ASSIGN_NOT_READY:  # T-ASSIGN-04
+            return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, status=bead.status))
+
+    if (failed := beads.update(patch, actor=req.caller)) is not None:
+        return HookReply.refused(failed)
+    return HookReply.pass_through()
+
+
+if __name__ == "__main__":
+    req = HookRequest.parse(sys.stdin.read())
+    store = req if isinstance(req, Refusal) else CacheStore.for_phase(req.phase)
+    print(HookReply.refused(store).to_json() if isinstance(store, Refusal) else hook(req, store, PhaseFilesCli()).to_json())
+```
+
+`skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py`
+
+```python
+"""task.start: hooks/task-start.md. One write: in_progress. Does not read the ledger."""
+import sys
+from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli,
+                          Refusal)
+from atm_bd_types import StartTransition as Transition
+
+
+def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
+    if not req.is_phase_task():
+        return HookReply.not_applicable()
+    if isinstance(phase := phases.load(req.phase_config_path(), "lite"), Refusal):
+        return HookReply.refused(phase)
+    if isinstance(bead := beads.show(req.task_id), Refusal):
+        return HookReply.refused(bead)
+    if bead.assignee != req.caller:
+        return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead.id, agent=bead.assignee))
+    if bead.open_blockers:
+        return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, ids=bead.open_blockers))
+
+    match Transition.select(bead.status):
+        case Transition.START:  # T-START-01
+            patch = BeadPatch.start(bead)
+        case Transition.START_AGAIN:  # T-START-02
+            return HookReply.pass_through()
+        case Transition.START_CLOSED:  # T-START-03
+            return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead.id))
+        case Transition.START_NOT_READY:  # T-START-04
+            return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, status=bead.status))
+
+    if (failed := beads.update(patch, actor=req.caller)) is not None:
+        return HookReply.refused(failed)
+    return HookReply.pass_through()
+
+
+if __name__ == "__main__":
+    req = HookRequest.parse(sys.stdin.read())
+    store = req if isinstance(req, Refusal) else CacheStore.for_phase(req.phase)
+    print(HookReply.refused(store).to_json() if isinstance(store, Refusal) else hook(req, store, PhaseFilesCli()).to_json())
+```
+
+`skills/atm-bd-lite/scripts/atm-bd-task-hook.py`
+
+```python
+"""task.close: hooks/task-close.md. One write, to the caller's own bead."""
+import sys
+from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookAction, HookReply, HookRequest,
+                          PhaseFiles, PhaseFilesCli, Refusal, Status, Template)
+from atm_bd_types import CloseTransition as Transition
+
+
+def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
+    if not req.is_phase_task():
+        return HookReply.not_applicable()
+    if isinstance(phase := phases.load(req.phase_config_path(), "lite"), Refusal):
+        return HookReply.refused(phase)
+    if isinstance(bead := beads.show(req.task_id), Refusal):
+        return HookReply.refused(bead)
+    if bead.assignee != req.caller:
+        return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead.id, agent=bead.assignee))
+    if bead.status != Status.IN_PROGRESS:
+        return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED if bead.status == Status.CLOSED else ErrorId.BEAD_NOT_READY, bead=bead))
+    if isinstance(transition := Transition.select(req.outcome, bead.stage, req.qa_verdict()), Refusal):
+        return HookReply.refused(transition)
+
+    match transition:
+        case Transition.GIVE_BACK:  # T-CLOSE-01
+            if not (reason := req.close_reason):
+                return HookReply.refused(Refusal(ErrorId.CLOSE_REASON_EMPTY, bead=bead.id))
+            patch, action = BeadPatch.reopen(bead), HookAction.close(phase.template(Template.REFUSE), reason)
+        case Transition.WORK_CLOSE:  # T-CLOSE-02
+            if not req.close_report:
+                return HookReply.refused(Refusal(ErrorId.CLOSE_REPORT_NOT_INLINE, bead=bead.id))
+            if isinstance(stack := beads.show(bead.stack_bead), Refusal):
+                return HookReply.refused(stack)
+            if (layer := stack.layer_for(bead.work.branch)) is None:
+                return HookReply.refused(Refusal(ErrorId.STACK_NOT_RECORDED, branch=bead.work.branch))
+            patch, action = BeadPatch.close(bead, layer), HookAction.close(phase.template(Template.DEV_CLOSE), layer)
+        case Transition.QA_PASS:  # T-CLOSE-03
+            verdict = req.qa_verdict()
+            if isinstance(target := beads.target_layer(bead), Refusal):
+                return HookReply.refused(target)
+            if verdict.sha != target.head:
+                return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, sha=verdict.sha, branch=target.branch, head=target.head))
+            patch, action = BeadPatch.close(bead, verdict), HookAction.close(phase.template(Template.QA_PASS), verdict.sha)
+        case Transition.QA_FINDINGS:  # T-CLOSE-04
+            verdict = req.qa_verdict()
+            if isinstance(target := beads.target_layer(bead), Refusal):
+                return HookReply.refused(target)
+            if verdict.sha != target.head:
+                return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, sha=verdict.sha, branch=target.branch, head=target.head))
+            for finding in verdict.findings:  # each poured finding bead exists and blocks the sprint (blocking) or phase bead
+                if isinstance(poured := beads.show(finding.id), Refusal):
+                    return HookReply.refused(poured)
+                if not poured.blocks(bead.sprint if finding.blocking else bead.phase):
+                    return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=[finding.id], sprint=bead.sprint))
+            patch, action = BeadPatch.close(bead, verdict), HookAction.close(phase.template(Template.QA_FINDINGS), verdict)
+
+    if (failed := beads.update(patch, actor=req.caller)) is not None:
+        return HookReply.refused(failed)
+    return HookReply.handled([action])
+
+
+if __name__ == "__main__":
+    req = HookRequest.parse(sys.stdin.read())
+    store = req if isinstance(req, Refusal) else CacheStore.for_phase(req.phase)
+    print(HookReply.refused(store).to_json() if isinstance(store, Refusal) else hook(req, store, PhaseFilesCli()).to_json())
+```
+
 ## Deliverables
 
 1. **`skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py`**. Implements `hooks/task-assign.md` (T-ASSIGN-01..04, its Errors table). Anchors: ANC-048, 003, 016, 026, 056, 058, 062, 063, 064, 065, 066, 070.
