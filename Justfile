@@ -24,35 +24,13 @@ help:
 bootstrap *args:
     {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
-# Execute a repository Python command through the pinned bootstrap environment.
-# The sc-lint adoption profiles use this private bridge until sc-lint provides
-# a repository-runner setting (randlee/sc-lint#198).
-# Arguments reach Python as given, never re-split by the shell.
-[private]
-[unix]
-[positional-arguments]
-_py *args:
-    {{python_cmd}} "$@"
-
-[private]
-[windows]
-[positional-arguments]
-[script('pwsh', '-NoLogo', '-NonInteractive', '-File')]
-_py *args:
-    {{python_cmd}} @args
-
 # Format the Rust workspace or run the formatting gate.
 fmt mode='check':
     cargo fmt --all {{if mode == "check" { "-- --check" } else { "" }}}
 
-[private]
-_lint-fmt:
-    @just fmt check
-
-
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
-    {{python_cmd}} .just/run_version.py {{mode}}
+    {{python_cmd}} -m sc_lint.run_version {{mode}}
 
 # Patch-bump the workspace, commit it on the current feature/fix branch, and
 # publish the matching prerelease/vX.Y.Z tag. Use --dry-run to inspect the plan.
@@ -64,9 +42,17 @@ build:
     cargo build --workspace
     {{python_cmd}} .just/sign_daemon_dev.py
 
-# Run the manifest-defined test suite, a named test selector, or explicit coverage.
-test *selectors:
-    {{python_cmd}} .just/run_tests.py {{selectors}}
+# Run the manifest-defined test suite or a named test selector.
+test *layer:
+    {{seed_python_cmd}} .sc-lint/bootstrap.py test --config sc-lint.toml {{layer}}
+
+# sc-lint kit default test groups are tracked by randlee/sc-lint#832.
+test-signing:
+    {{python_cmd}} .just/sign_daemon_dev.py
+
+# Write tracked coverage reports on supported hosts.
+coverage:
+    {{python_cmd}} scripts/coverage/run.py --write-artifacts
 
 # Validate and plan a bounded adversarial-fuzz campaign (no real execution).
 fuzz *args:

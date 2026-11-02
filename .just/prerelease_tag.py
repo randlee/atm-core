@@ -15,7 +15,7 @@ import tomllib
 from pathlib import Path
 from typing import Callable
 
-from lint_common import discover_repo_root, load_lint_config
+from sc_lint.lint_common import discover_repo_root, load_lint_config
 
 
 

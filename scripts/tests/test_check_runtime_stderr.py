@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 
-SCRIPT = Path(__file__).parents[1] / "check-runtime-stderr.py"
+SCRIPT = Path(__file__).parents[2] / ".just" / "check_runtime_stderr.py"
 SPEC = importlib.util.spec_from_file_location("check_runtime_stderr", SCRIPT)
 assert SPEC and SPEC.loader
 GATE = importlib.util.module_from_spec(SPEC)

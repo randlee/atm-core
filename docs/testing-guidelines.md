@@ -229,7 +229,7 @@ Coverage reporting is a separate reporting surface.
 
 Rules:
 
-- invoke coverage only through `just test coverage`
+- invoke coverage only through `just coverage`
 - plain `just test` must not implicitly collect coverage
 - coverage reports must use the tracked-latest plus timestamped artifact model
   documented by the Phase Z smoke/coverage planning line

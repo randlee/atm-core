@@ -126,7 +126,7 @@ class PeerPairSmokeTests(unittest.TestCase):
             del duplicate["verification"]["assertions"]["single_record_retained"]
             public_atm = Path(temp) / "atm"
             public_atm.touch()
-            with patch.object(RUNNER.shutil, "which", return_value=str(public_atm)):
+            with patch.dict(RUNNER.os.environ, {"ATM_SMOKE_INSTALL_ROOT": ""}), patch.object(RUNNER.shutil, "which", return_value=str(public_atm)):
                 with self.assertRaisesRegex(RuntimeError, "single_record_retained"):
                     RUNNER.validate(config)
 

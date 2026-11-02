@@ -78,7 +78,7 @@ def collect_findings(repo_root: Path) -> list[str]:
         for match in PATTERN.finditer(text):
             line = text.count("\n", 0, match.start()) + 1
             findings.append(
-                f"{relative_path}:{line}: silent observability emit discard; use emit_or_warn/emit_event_or_warn"
+                f"{relative_path.as_posix()}:{line}: silent observability emit discard; use emit_or_warn/emit_event_or_warn"
             )
     return findings
 

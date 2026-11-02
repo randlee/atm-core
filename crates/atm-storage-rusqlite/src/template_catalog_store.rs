@@ -11,12 +11,14 @@ use atm_storage::{
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::shared_db::{SharedDb, deserialize_json};
+use sc_lint_attributes::sc_lint;
 
 pub(crate) fn template_catalog_store(db: Arc<SharedDb>) -> Arc<dyn TemplateCatalogStore> {
     Arc::new(SqliteTemplateCatalogStore::new(db))
 }
 
 #[derive(Debug)]
+#[sc_lint(boundary.internal_only)]
 struct SqliteTemplateCatalogStore {
     db: Arc<SharedDb>,
 }

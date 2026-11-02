@@ -31,7 +31,7 @@ JUST_DIR = Path(__file__).resolve().parents[1]
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
-from lint_common import resolve_posix_shell
+from shell_support import resolve_posix_shell
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = ROOT / "docs/plans/phase-aq/fixtures/picker-input-v1.json"

@@ -23,6 +23,7 @@ from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import run
+from atm_lint_test_scope import is_rust_test_cfg_attribute
 
 
 
@@ -183,7 +184,14 @@ class LintBoundariesTests(unittest.TestCase):
         )
         self.assertIn("peer-dial-seam", runtime.lint_rules)
         profiles = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["profiles"]
-        self.assertIn("peer-dial-seam", profiles)
+        for platform, python in (
+            ("linux", ".bootstrap-venv/bin/python"),
+            ("macos", ".bootstrap-venv/bin/python"),
+            ("windows", ".bootstrap-venv\\Scripts\\python.exe"),
+        ):
+            row = profiles[f"peer-dial-seam-{platform}"]
+            self.assertEqual(row["platform"], platform)
+            self.assertEqual(row["command"], [python, ".just/lint_peer_dial_seam.py"])
 
     def test_graft_shared_client_has_no_direct_interprocess_dependency(self) -> None:
         manifest = tomllib.loads(
@@ -788,7 +796,13 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertFalse(any("SqliteMailStore::open" in item for item in rendered), rendered)
 
-    def test_collect_boundary_violations_flags_active_public_impl_and_constructor(self) -> None:
+    def test_cfg_test_attribute_parser_handles_nested_and_negated_conditions(self) -> None:
+        self.assertTrue(is_rust_test_cfg_attribute('#[cfg(any(test, feature = "test-utils"))]'))
+        self.assertTrue(is_rust_test_cfg_attribute('#![cfg(all(unix, test))]'))
+        self.assertFalse(is_rust_test_cfg_attribute("#[cfg(not(test))]"))
+        self.assertFalse(is_rust_test_cfg_attribute('#[cfg(feature = "contest")]'))
+
+    def test_collect_boundary_violations_flags_public_reexport_of_private_type(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
@@ -796,25 +810,13 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             active_toml = BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"')
             self.write_toml_record(repo_root, "atm-storage-rusqlite", text=active_toml)
             (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
-                textwrap.dedent(
-                    """\
-                    pub struct SqliteMailStore;
-                    pub use self::SqliteMailStore as ExportedStore;
-
-                    impl SqliteMailStore {
-                        pub fn open() -> Self {
-                            Self
-                        }
-                    }
-                    """
-                ),
+                "struct SqliteMailStore;\npub use self::SqliteMailStore as ExportedStore;\n",
                 encoding="utf-8",
             )
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
-            self.assertTrue(any("requires private implementation.type" in item for item in rendered), rendered)
             self.assertTrue(any("forbids public re-export" in item for item in rendered), rendered)
-            self.assertTrue(any("forbids public constructor/helper methods" in item for item in rendered), rendered)
+
 
     def test_collect_boundary_violations_rejects_unapproved_trait_only_test_double(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

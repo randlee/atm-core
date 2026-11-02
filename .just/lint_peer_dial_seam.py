@@ -23,14 +23,14 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from lint_common import build_report
-from lint_common import discover_repo_root
-from lint_common import is_code_line
-from lint_common import iter_workspace_rust_files
-from lint_common import monotonic_now
-from lint_common import print_report
-from lint_common import rust_file_test_scope
-from lint_common import workspace_crate_section_lines
+from sc_lint.lint_common import build_report
+from sc_lint.lint_common import discover_repo_root
+from sc_lint.lint_common import is_code_line
+from sc_lint.lint_common import iter_workspace_rust_files
+from sc_lint.lint_common import monotonic_now
+from sc_lint.lint_common import print_report
+from atm_lint_test_scope import rust_file_test_scope
+from sc_lint.lint_common import workspace_crate_section_lines
 
 LINT_NAME = "peer-dial-seam"
 SEAM = "crates/atm-http-runtime/src/peer_dial.rs"

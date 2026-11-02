@@ -23,7 +23,7 @@ JUST_DIR = Path(__file__).resolve().parents[1]
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
-from lint_common import discover_repo_root
+from sc_lint.lint_common import discover_repo_root
 
 
 def scripts_root() -> Path:

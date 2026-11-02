@@ -132,7 +132,7 @@ person's head instead of in the templates.
     `sc-lint lint function-length`,
     `scripts/check-nudge-taxonomy.py`, `.just/check_read_concurrency_gates.py`,
     `just lint identities`, `just lint adr-index`, and `just lint manifests`
-    (the three `run_lint.py` targets also cover doc-only pushes). *Why:* BA.3
+    (the three named lint targets also cover doc-only pushes). *Why:* BA.3
     froze green on nine gates and went red in CI on the tenth (identity
     literals).
 15. **Freeze the trunk while the stack lands.** After the final sync,

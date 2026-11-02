@@ -1836,7 +1836,7 @@ Command architecture:
   - runs the clean-room happy-path lane
 - `just smoke thorough`
   - runs the full CLI/checklist lane
-- `just test coverage`
+- `just coverage`
   - runs coverage reporting only and must remain separate from plain
     `just test`
 

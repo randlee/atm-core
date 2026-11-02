@@ -53,7 +53,7 @@ class EcosystemPinTests(unittest.TestCase):
             self.assertEqual(dependencies[package], "=0.33.1")
         self.assertNotIn("sc-observability-otlp", dependencies)
 
-    @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0")
+    @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.8.0")
     @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version")
     @mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value=None)
     def test_missing_wyvern_is_a_distinct_actionable_blocker(
@@ -110,7 +110,7 @@ class EcosystemPinTests(unittest.TestCase):
 
     @mock.patch.object(VALIDATE_RELEASE, "run_ecosystem_command", return_value=False)
     @mock.patch.object(VALIDATE_RELEASE, "maybe_file_dep_currency_issue", return_value="https://example.test/issue/2")
-    @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0")
+    @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.8.0")
     @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version")
     @mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/tool")
     def test_failed_latest_wyvern_probe_pins_back_and_records_evidence(
@@ -189,7 +189,7 @@ class EcosystemPinTests(unittest.TestCase):
             self.assertIn("https://example.test/issue/2", evidence_text)
             self.assertTrue(any("pinned back to 0.5.0" in finding.summary for finding in findings))
 
-    @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0")
+    @mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.8.0")
     @mock.patch.object(VALIDATE_RELEASE, "latest_registry_version")
     @mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/wyvern")
     def test_healthy_latest_does_not_rewrite_pins(
@@ -259,7 +259,7 @@ class EcosystemPinTests(unittest.TestCase):
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (
                 mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", side_effect=lambda _root, dependency: latest_registry[dependency]),
-                mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0"),
+                mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.8.0"),
                 mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/tool"),
                 mock.patch.object(
                     VALIDATE_RELEASE,
@@ -347,13 +347,13 @@ class EcosystemPinTests(unittest.TestCase):
                 shutil.copy2(REPO_ROOT / relative_path, destination)
             mismatched = root / VALIDATE_RELEASE.WYVERN_PIN_FILES[1]
             mismatched.write_text(
-                mismatched.read_text(encoding="utf-8").replace("0.6.0", "0.4.0"),
+                mismatched.read_text(encoding="utf-8").replace("0.8.0", "0.4.0"),
                 encoding="utf-8",
             )
             findings: list[VALIDATE_RELEASE.Finding] = []
             with (
                 mock.patch.object(VALIDATE_RELEASE, "latest_registry_version", return_value="1.4.1"),
-                mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.6.0"),
+                mock.patch.object(VALIDATE_RELEASE, "latest_wyvern_version", return_value="0.8.0"),
                 mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/wyvern"),
             ):
                 VALIDATE_RELEASE.validate_ecosystem_currency(root, findings, dry_run=True)

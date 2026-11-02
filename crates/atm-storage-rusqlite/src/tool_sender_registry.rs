@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::shared_db::SharedDb;
+use sc_lint_attributes::sc_lint;
 
 /// One installer public key and the sender names it may operate.
 ///
@@ -121,6 +122,7 @@ impl ToolSenderRegistryConfig {
     }
 }
 
+#[sc_lint(boundary.internal_only)]
 struct SqliteToolSenderRegistry {
     db: Arc<SharedDb>,
     config: Option<ToolSenderRegistryConfig>,

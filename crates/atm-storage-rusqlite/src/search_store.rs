@@ -15,6 +15,7 @@ use serde_json::Value;
 
 use crate::shared_db::{SharedDb, SharedDbTarget, sqlite_error};
 use crate::sql_filters::{SqlFilters, compile_sql_filters};
+use sc_lint_attributes::sc_lint;
 
 pub(crate) fn search_store(db: Arc<SharedDb>) -> Arc<dyn MessageSearchStore> {
     Arc::new(SqliteMessageSearchStore::new(db))
@@ -25,6 +26,7 @@ pub(crate) fn async_search_store(db: Arc<SharedDb>) -> Arc<dyn AsyncMessageSearc
 }
 
 #[derive(Debug)]
+#[sc_lint(boundary.internal_only)]
 struct SqliteMessageSearchStore {
     db: Arc<SharedDb>,
 }

@@ -22,8 +22,8 @@ JUST_DIR = Path(__file__).resolve().parents[1]
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
-from lint_common import discover_repo_root
-from lint_common import workspace_manifest_paths
+from sc_lint.lint_common import discover_repo_root
+from sc_lint.lint_common import workspace_manifest_paths
 import prerelease_tag
 from prerelease_tag import patch_bump
 from prerelease_tag import workspace_version
@@ -733,9 +733,19 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             self.configure_fixture_git(repo, env)
             for command in (["git", "add", "."], ["git", "commit", "-qm", "fixture"]):
                 self.run_fixture(command, cwd=repo, env=env, check=True)
-            python_command = "python" if os.name == "nt" else "python3"
+            if os.name == "nt":
+                python_command = f'& "{sys.executable}"'
+            else:
+                python_command = shlex.quote(sys.executable)
             result = self.run_fixture(
-                ["just", "--set", "python_cmd", python_command, "prerelease-tag", "--dry-run"],
+                [
+                    "just",
+                    "--set",
+                    "python_cmd",
+                    python_command,
+                    "prerelease-tag",
+                    "--dry-run",
+                ],
                 cwd=repo,
                 env=env,
                 text=True,

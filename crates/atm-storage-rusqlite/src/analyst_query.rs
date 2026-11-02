@@ -8,6 +8,7 @@ use crate::shared_db::{SharedDbTarget, record_opened_connection};
 use atm_storage::{AnalystQueryRow, AnalystQueryStore, AnalystQueryValue, AtmError};
 use rusqlite::hooks::{AuthAction, AuthContext, Authorization};
 use rusqlite::{Connection, OpenFlags, params_from_iter, types::Value};
+use sc_lint_attributes::sc_lint;
 
 #[cfg(feature = "test-support")]
 use atm_storage::roles::{ROLE_QUALITY_MANAGER, ROLE_TEAM_LEAD, TEAM_ATM_DEV};
@@ -185,6 +186,7 @@ pub fn create_an12_workflow_query_fixture_for_test(path: impl AsRef<Path>) -> Re
         .map_err(sql_error)
 }
 
+#[sc_lint(boundary.internal_only)]
 struct SqliteAnalystQueryStore {
     path: PathBuf,
 }

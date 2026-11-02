@@ -74,7 +74,6 @@ The current `Justfile` exposes:
 - `just lint identities`
 - `just lint lines`
 - `just lint spell`
-- `just lint pytests`
 - `just view`
 - `just view boundaries`
 - `just view modules`
@@ -94,7 +93,7 @@ Current behavior:
   elsewhere.
 - `just test` reads named commands from `.sc-lint/install.json`, runs the ordinary
   test steps, and excludes coverage. `just test <selector>` runs selected steps;
-  `just test coverage` writes the host's tracked coverage report on macOS/Windows
+  `just coverage` writes the host's tracked coverage report on macOS/Windows
   and exits with a clear error on Linux.
 - `just version` reports the current workspace version state.
 - `just version latest` reports recommended direct dependency upgrades per workspace member.
@@ -109,10 +108,9 @@ The lint entrypoint is the kit's `just lint` (`.sc-lint/bootstrap.py lint`); its
 step list is the `profiles` object in `.sc-lint/install.json`, rendered into
 `sc-lint.toml` by `plugins/sc-lint/install.py`.
 
-The test entrypoint is `.just/run_tests.py`; its command manifest is the `test`
-object in `.sc-lint/install.json`. The `default` entry preserves the consumer-facing
-`just test` command, named entries define each test step, and `coverage` remains an
-explicit opt-in selector.
+The test entrypoint is the kit's `just test` (`.sc-lint/bootstrap.py test`);
+its test rows are rendered from `.sc-lint/install.json`. Coverage is a separate
+opt-in recipe.
 
 Lint execution model:
 
@@ -128,8 +126,9 @@ Lint execution model:
   plain `sc-lint.toml` steps that call the kit's managed interpreter directly
   (`.sc-lint/venv/bin/python -m sc_lint.<helper>`, the invocation sc-lint
   documents), one platform-tagged step per OS because the interpreter path
-  differs on Windows. Clippy uses host-aware steps with `env_paths` to select
-  the bootstrap interpreter for PyO3.
+  differs on Windows. Repository-owned Python script rows use per-OS
+  `.bootstrap-venv` interpreters; Clippy uses host-aware steps with `env_paths`
+  to select the bootstrap interpreter for PyO3.
 
 ### Current custom Python lint tools
 
@@ -144,8 +143,9 @@ Lint execution model:
   - are the published reusable analyzers enabled from `.sc-lint/install.json`
   - use per-rule, documented exceptions where an upstream analyzer gap remains
 - `.just/lint_boundaries.py`
-  - parses crate-local boundary records from `docs/*/boundaries.md`
-  - validates schema and enforces current boundary rules
+  - enforces ATM-specific boundary records and checks that are not reusable
+    analyzer policy; the published `sc-lint` analyzer owns boundary schema
+    validation
 - the published `sc_lint.lint_manifests` runner
   - enforces Cargo manifest policy beyond Cargo/Clippy defaults
 - the published `sc_lint.lint_cargo_deny` runner
@@ -307,8 +307,8 @@ The implemented command surface is:
 - `just lint`
 - `just lint <tool>`
 - `just lint ci [host|all]`
-- `just test [selector...]`
-- `just test coverage`
+- `just test [selector]`
+- `just coverage`
 - `just view`
 - `just view <tool>`
 

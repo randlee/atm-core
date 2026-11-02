@@ -11,7 +11,7 @@ import re
 import sys
 import tomllib
 
-from lint_common import build_report, discover_repo_root, monotonic_now, print_report
+from sc_lint.lint_common import build_report, discover_repo_root, monotonic_now, print_report
 
 
 LINT_NAME = "hermes-atm-boundary"

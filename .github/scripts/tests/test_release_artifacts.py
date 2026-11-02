@@ -1013,8 +1013,6 @@ def test_no_single_repo_concerns_leak_into_kit_workflows_actions_or_scripts() ->
     """Extend the anti-leakage guard to every vendored workflow, action, and script."""
     forbidden = ("sc-compose", "sc_compose", "randlee")
     allowlist = {
-        # Deliberate shared ecosystem pin: setup-sc-lint's default repository.
-        "actions/setup-sc-lint/action.yml": {"randlee"},
         # The pinned renderer wheel is the sc-compose PyPI package by design.
         "scripts/bootstrap_sc_compose.py": {"sc-compose", "sc_compose"},
         # Composite action invokes the shared bootstrapper by path.
@@ -1038,12 +1036,10 @@ def test_no_single_repo_concerns_leak_into_kit_workflows_actions_or_scripts() ->
         "setup-lint-toolchain",
         "setup-python-release-build",
         "setup-renderer",
-        "setup-sc-lint",
         "verify-published-release",
     )
     kit_scripts = (
         "bootstrap_sc_compose.py",
-        "setup_sc_lint_source.py",
         "release_artifacts.py",
         "release_manifest.py",
         "release_registry.py",
@@ -1090,19 +1086,11 @@ def test_hygiene_single_sources_pins_paths_and_publish_time_validations(tmp_path
     python_action_text = (
         repo_root() / ".github" / "actions" / "setup-python-release-build" / "action.yml"
     ).read_text(encoding="utf-8")
-    sc_lint_action_text = (
-        repo_root() / ".github" / "actions" / "setup-sc-lint" / "action.yml"
-    ).read_text(encoding="utf-8")
 
     # Item 1: the Rust toolchain pin is single-sourced through build-plan.
     for text in (release_text, preflight_text, crates_text, python_action_text):
         assert "1.94.1" not in text
         assert "rust_toolchain" in text
-
-    # Item 2: the sc-lint repository slug is an input with a documented pin.
-    assert "SC_LINT_REPOSITORY" in sc_lint_action_text
-    assert 'default: "randlee/sc-lint"' in sc_lint_action_text
-    assert "https://github.com/randlee" not in sc_lint_action_text
 
     # Item 5: release.yml reads the manifest path from its env everywhere.
     assert release_text.count("release/publish-artifacts.toml") == 1

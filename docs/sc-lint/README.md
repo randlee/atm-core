@@ -2,7 +2,7 @@
 
 This folder preserves the design and planning history for `sc-lint`.
 
-> **Current status (2026-10-26):** ATM uses the published `sc-lint` v0.8.0
+> **Current status (2026-11-01):** ATM uses the published `sc-lint` tools
 > tools. The former in-tree `sc-lint-boundary` and `sc-lint-directives`
 > implementations were removed during the v0.8.0 adoption; they are not
 > vendored in this workspace. Current ATM integration and rule policy are
@@ -82,15 +82,14 @@ Historical scaffold status (before published `sc-lint`):
       - JSON
       - Turtle
 
-Current repository integration (published `sc-lint` v0.8.0):
+Current repository integration:
 
-- `just lint` uses the repository's parallel lint runner and the published
-  analyzers configured in `sc-lint.toml`.
-- CI and release validation use `just lint ci all` for the cross-platform lint
-  steps.
+- `just lint` runs the kit's configured lint profiles and published analyzers.
+- The kit's `ci` profile selects the cross-platform lint steps, including the
+  Windows-target Clippy check on Linux and macOS hosts.
 - Current boundary and portability rules, including failure policy, are
   declared under `[tool.sc-lint.analyzers.*]` in `sc-lint.toml`. The required
-  published tool version is `0.8.0` in `.sc-lint/install.json`.
+  published tool version is pinned in `.sc-lint/install.json`.
 - No current workspace default-policy file exists at the former in-tree
   `config/defaults.toml` path; use the published tool configuration above.
 

@@ -54,8 +54,8 @@ follow-on work, not part of AQ5.
 
 ## Optional Wyvern
 
-The exact pin is the `WYVERN_PIN` constant in each pipeline script (`0.6.0`,
-the latest `randlee/wyvern` release observed on 2026-09-02). The optional
+The exact pin is the `WYVERN_PIN` constant in each pipeline script (`0.8.0`,
+the latest `randlee/wyvern` release observed on 2026-11-02). The optional
 binary must be on `PATH`, satisfy the bounded `--version` probe, and find
 the vendored `pick-member.html` asset (`scripts/send-to/pick-member.html`,
 kept in sync with [`randlee/wyvern#140`](https://github.com/randlee/wyvern/pull/140)).

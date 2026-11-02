@@ -178,7 +178,6 @@
             "peer-tls",
             "rustix",
             "sc-lint-attributes",
-            "sc-observability-log",
             "serde",
             "serde_json",
             "serial_test",
@@ -326,6 +325,7 @@
             "chrono",
             "ring",
             "rusqlite",
+            "sc-lint-attributes",
             "serde",
             "serde_json",
             "sha2",
@@ -508,66 +508,133 @@
   },
   "lint_profiles": {
     "ci": [
-      "adr-index",
+      "adr-index-linux",
+      "adr-index-macos",
+      "adr-index-windows",
       "arch-gates",
-      "atm-graft-python-boundary",
-      "boundaries",
+      "atm-graft-python-boundary-linux",
+      "atm-graft-python-boundary-macos",
+      "atm-graft-python-boundary-windows",
+      "boundaries-linux",
+      "boundaries-macos",
+      "boundaries-windows",
       "clippy-linux",
       "clippy-macos",
       "clippy-native-windows",
       "clippy-windows",
-      "daemon-signing-coupling",
-      "daemon-singleton",
+      "clippy-windows-macos",
+      "daemon-signing-coupling-linux",
+      "daemon-signing-coupling-macos",
+      "daemon-signing-coupling-windows",
+      "daemon-singleton-linux",
+      "daemon-singleton-macos",
+      "daemon-singleton-windows",
       "deny-linux",
       "deny-macos",
       "deny-windows",
-      "env-var-boundary",
-      "fixed-sleep",
+      "env-var-boundary-linux",
+      "env-var-boundary-macos",
+      "env-var-boundary-windows",
+      "fixed-sleep-linux",
+      "fixed-sleep-macos",
+      "fixed-sleep-windows",
       "fmt",
       "function-length",
-      "hermes-adapter",
-      "hermes-atm-boundary",
+      "hermes-adapter-linux",
+      "hermes-adapter-macos",
+      "hermes-adapter-windows",
+      "hermes-atm-boundary-linux",
+      "hermes-atm-boundary-macos",
+      "hermes-atm-boundary-windows",
       "identities",
-      "kit-drift",
-      "legacy-mailbox-paths",
-      "legacy-transport-removal",
+      "kit-drift-linux",
+      "kit-drift-macos",
+      "kit-drift-windows",
+      "legacy-mailbox-paths-linux",
+      "legacy-mailbox-paths-macos",
+      "legacy-mailbox-paths-windows",
+      "legacy-transport-removal-linux",
+      "legacy-transport-removal-macos",
+      "legacy-transport-removal-windows",
       "lines",
       "manifests-linux",
       "manifests-macos",
       "manifests-windows",
-      "nudge-taxonomy",
-      "peer-dial-seam",
-      "pytests",
-      "read-concurrency-gates",
-      "runtime-observation-boundary",
-      "runtime-stderr",
-      "same-host-portability",
+      "nudge-taxonomy-linux",
+      "nudge-taxonomy-macos",
+      "nudge-taxonomy-windows",
+      "peer-dial-seam-linux",
+      "peer-dial-seam-macos",
+      "peer-dial-seam-windows",
+      "read-concurrency-gates-linux",
+      "read-concurrency-gates-macos",
+      "read-concurrency-gates-windows",
+      "runtime-observation-boundary-linux",
+      "runtime-observation-boundary-macos",
+      "runtime-observation-boundary-windows",
+      "runtime-stderr-linux",
+      "runtime-stderr-macos",
+      "runtime-stderr-windows",
+      "same-host-portability-linux",
+      "same-host-portability-macos",
+      "same-host-portability-windows",
       "sc-boundary",
       "sc-portability",
       "sc-runtime",
       "shear-linux",
       "shear-macos",
       "shear-windows",
-      "silent-emit",
-      "site-generated",
-      "site-links",
+      "silent-emit-linux",
+      "silent-emit-macos",
+      "silent-emit-windows",
+      "site-generated-linux",
+      "site-generated-macos",
+      "site-generated-windows",
+      "site-links-linux",
+      "site-links-macos",
+      "site-links-windows",
       "spell-linux",
       "spell-macos",
       "spell-windows",
-      "template-frontmatter",
-      "ttl-triage",
+      "template-frontmatter-linux",
+      "template-frontmatter-macos",
+      "template-frontmatter-windows",
+      "ttl-triage-linux",
+      "ttl-triage-macos",
+      "ttl-triage-windows",
       "version-linux",
       "version-macos",
       "version-windows"
+    ],
+    "python-tests": [
+      "python-tests-linux",
+      "python-tests-macos",
+      "python-tests-windows"
     ]
   },
   "minimum_version": "0.8.4",
   "profiles": {
-    "adr-index": [
-      "just",
-      "_py",
-      ".just/check_adr_index.py"
-    ],
+    "adr-index-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_adr_index.py"
+      ],
+      "platform": "linux"
+    },
+    "adr-index-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_adr_index.py"
+      ],
+      "platform": "macos"
+    },
+    "adr-index-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_adr_index.py"
+      ],
+      "platform": "windows"
+    },
     "arch-gates": [
       "cargo",
       "test",
@@ -575,16 +642,48 @@
       "atm-architecture",
       "--quiet"
     ],
-    "atm-graft-python-boundary": [
-      "just",
-      "_py",
-      ".just/lint_atm_graft_python_boundary.py"
-    ],
-    "boundaries": [
-      "just",
-      "_py",
-      ".just/lint_boundaries.py"
-    ],
+    "atm-graft-python-boundary-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_atm_graft_python_boundary.py"
+      ],
+      "platform": "linux"
+    },
+    "atm-graft-python-boundary-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_atm_graft_python_boundary.py"
+      ],
+      "platform": "macos"
+    },
+    "atm-graft-python-boundary-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/lint_atm_graft_python_boundary.py"
+      ],
+      "platform": "windows"
+    },
+    "boundaries-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_boundaries.py"
+      ],
+      "platform": "linux"
+    },
+    "boundaries-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_boundaries.py"
+      ],
+      "platform": "macos"
+    },
+    "boundaries-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/lint_boundaries.py"
+      ],
+      "platform": "windows"
+    },
     "clippy-linux": {
       "command": [
         "cargo",
@@ -647,16 +746,65 @@
       "platform": "windows",
       "target": "x86_64-pc-windows-msvc"
     },
-    "daemon-signing-coupling": [
-      "just",
-      "_py",
-      ".just/lint_daemon_signing_coupling.py"
-    ],
-    "daemon-singleton": [
-      "just",
-      "_py",
-      "scripts/lint_daemon_singleton.py"
-    ],
+    "clippy-windows-macos": {
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "env_paths": {
+        "PYO3_PYTHON": ".bootstrap-venv/bin/python"
+      },
+      "host": "macos",
+      "platform": "windows",
+      "target": "x86_64-pc-windows-msvc"
+    },
+    "daemon-signing-coupling-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_daemon_signing_coupling.py"
+      ],
+      "platform": "linux"
+    },
+    "daemon-signing-coupling-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_daemon_signing_coupling.py"
+      ],
+      "platform": "macos"
+    },
+    "daemon-signing-coupling-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/lint_daemon_signing_coupling.py"
+      ],
+      "platform": "windows"
+    },
+    "daemon-singleton-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/lint_daemon_singleton.py"
+      ],
+      "platform": "linux"
+    },
+    "daemon-singleton-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/lint_daemon_singleton.py"
+      ],
+      "platform": "macos"
+    },
+    "daemon-singleton-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        "scripts/lint_daemon_singleton.py"
+      ],
+      "platform": "windows"
+    },
     "deny-linux": {
       "command": [
         ".sc-lint/venv/bin/python",
@@ -681,68 +829,205 @@
       ],
       "platform": "windows"
     },
-    "env-var-boundary": [
-      "just",
-      "_py",
-      ".just/check_env_var_boundary.py"
-    ],
-    "fixed-sleep": [
-      "just",
-      "_py",
-      ".just/check_fixed_sleep_hygiene.py"
-    ],
+    "env-var-boundary-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_env_var_boundary.py"
+      ],
+      "platform": "linux"
+    },
+    "env-var-boundary-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_env_var_boundary.py"
+      ],
+      "platform": "macos"
+    },
+    "env-var-boundary-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_env_var_boundary.py"
+      ],
+      "platform": "windows"
+    },
+    "fixed-sleep-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_fixed_sleep_hygiene.py"
+      ],
+      "platform": "linux"
+    },
+    "fixed-sleep-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_fixed_sleep_hygiene.py"
+      ],
+      "platform": "macos"
+    },
+    "fixed-sleep-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_fixed_sleep_hygiene.py"
+      ],
+      "platform": "windows"
+    },
     "fmt": [
-      "just",
+      "cargo",
       "fmt",
-      "check"
+      "--all",
+      "--check"
     ],
     "function-length": [
       "sc-lint",
       "lint",
       "function-length"
     ],
-    "hermes-adapter": [
-      "just",
-      "_py",
-      ".just/lint_hermes_adapter.py"
-    ],
-    "hermes-atm-boundary": [
-      "just",
-      "_py",
-      ".just/lint_hermes_atm_boundary.py"
-    ],
+    "hermes-adapter-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_hermes_adapter.py"
+      ],
+      "platform": "linux"
+    },
+    "hermes-adapter-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_hermes_adapter.py"
+      ],
+      "platform": "macos"
+    },
+    "hermes-adapter-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/lint_hermes_adapter.py"
+      ],
+      "platform": "windows"
+    },
+    "hermes-atm-boundary-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_hermes_atm_boundary.py"
+      ],
+      "platform": "linux"
+    },
+    "hermes-atm-boundary-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_hermes_atm_boundary.py"
+      ],
+      "platform": "macos"
+    },
+    "hermes-atm-boundary-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/lint_hermes_atm_boundary.py"
+      ],
+      "platform": "windows"
+    },
     "identities": [
       "sc-lint",
       "lint",
       "identity-literals"
     ],
-    "kit-drift": [
-      "just",
-      "_py",
-      "plugins/sc-lint/install.py",
-      ".",
-      "--dry-run"
-    ],
-    "legacy-mailbox-paths": [
-      "just",
-      "_py",
-      "scripts/check-legacy-mailbox-paths.py"
-    ],
-    "legacy-transport-removal": [
-      "just",
-      "_py",
-      "scripts/phase-am/check_legacy_transport_removal.py",
-      "--category",
-      "raw-framing",
-      "--category",
-      "peer-ingress",
-      "--category",
-      "resend-replay",
-      "--category",
-      "direct-sqlite",
-      "--category",
-      "dead-daemon-dispatch"
-    ],
+    "kit-drift-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "plugins/sc-lint/install.py",
+        ".",
+        "--dry-run"
+      ],
+      "platform": "linux"
+    },
+    "kit-drift-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "plugins/sc-lint/install.py",
+        ".",
+        "--dry-run"
+      ],
+      "platform": "macos"
+    },
+    "kit-drift-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        "plugins/sc-lint/install.py",
+        ".",
+        "--dry-run"
+      ],
+      "platform": "windows"
+    },
+    "legacy-mailbox-paths-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/check-legacy-mailbox-paths.py"
+      ],
+      "platform": "linux"
+    },
+    "legacy-mailbox-paths-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/check-legacy-mailbox-paths.py"
+      ],
+      "platform": "macos"
+    },
+    "legacy-mailbox-paths-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        "scripts/check-legacy-mailbox-paths.py"
+      ],
+      "platform": "windows"
+    },
+    "legacy-transport-removal-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/phase-am/check_legacy_transport_removal.py",
+        "--category",
+        "raw-framing",
+        "--category",
+        "peer-ingress",
+        "--category",
+        "resend-replay",
+        "--category",
+        "direct-sqlite",
+        "--category",
+        "dead-daemon-dispatch"
+      ],
+      "platform": "linux"
+    },
+    "legacy-transport-removal-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/phase-am/check_legacy_transport_removal.py",
+        "--category",
+        "raw-framing",
+        "--category",
+        "peer-ingress",
+        "--category",
+        "resend-replay",
+        "--category",
+        "direct-sqlite",
+        "--category",
+        "dead-daemon-dispatch"
+      ],
+      "platform": "macos"
+    },
+    "legacy-transport-removal-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        "scripts/phase-am/check_legacy_transport_removal.py",
+        "--category",
+        "raw-framing",
+        "--category",
+        "peer-ingress",
+        "--category",
+        "resend-replay",
+        "--category",
+        "direct-sqlite",
+        "--category",
+        "dead-daemon-dispatch"
+      ],
+      "platform": "windows"
+    },
     "lines": [
       "sc-lint",
       "lint",
@@ -772,41 +1057,153 @@
       ],
       "platform": "windows"
     },
-    "nudge-taxonomy": [
-      "just",
-      "_py",
-      "scripts/check-nudge-taxonomy.py"
-    ],
-    "peer-dial-seam": [
-      "just",
-      "_py",
-      ".just/lint_peer_dial_seam.py"
-    ],
-    "pytests": [
-      "just",
-      "_py",
-      ".just/run_pytests.py"
-    ],
-    "read-concurrency-gates": [
-      "just",
-      "_py",
-      ".just/check_read_concurrency_gates.py"
-    ],
-    "runtime-observation-boundary": [
-      "just",
-      "_py",
-      ".just/check_runtime_observation_boundary.py"
-    ],
-    "runtime-stderr": [
-      "just",
-      "_py",
-      "scripts/check-runtime-stderr.py"
-    ],
-    "same-host-portability": [
-      "just",
-      "_py",
-      ".just/lint_same_host_portability.py"
-    ],
+    "nudge-taxonomy-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/check-nudge-taxonomy.py"
+      ],
+      "platform": "linux"
+    },
+    "nudge-taxonomy-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/check-nudge-taxonomy.py"
+      ],
+      "platform": "macos"
+    },
+    "nudge-taxonomy-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        "scripts/check-nudge-taxonomy.py"
+      ],
+      "platform": "windows"
+    },
+    "peer-dial-seam-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_peer_dial_seam.py"
+      ],
+      "platform": "linux"
+    },
+    "peer-dial-seam-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_peer_dial_seam.py"
+      ],
+      "platform": "macos"
+    },
+    "peer-dial-seam-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/lint_peer_dial_seam.py"
+      ],
+      "platform": "windows"
+    },
+    "python-tests-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/run_pytests.py"
+      ],
+      "platform": "linux"
+    },
+    "python-tests-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/run_pytests.py"
+      ],
+      "platform": "macos"
+    },
+    "python-tests-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/run_pytests.py"
+      ],
+      "platform": "windows"
+    },
+    "read-concurrency-gates-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_read_concurrency_gates.py"
+      ],
+      "platform": "linux"
+    },
+    "read-concurrency-gates-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_read_concurrency_gates.py"
+      ],
+      "platform": "macos"
+    },
+    "read-concurrency-gates-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_read_concurrency_gates.py"
+      ],
+      "platform": "windows"
+    },
+    "runtime-observation-boundary-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_runtime_observation_boundary.py"
+      ],
+      "platform": "linux"
+    },
+    "runtime-observation-boundary-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_runtime_observation_boundary.py"
+      ],
+      "platform": "macos"
+    },
+    "runtime-observation-boundary-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_runtime_observation_boundary.py"
+      ],
+      "platform": "windows"
+    },
+    "runtime-stderr-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_runtime_stderr.py"
+      ],
+      "platform": "linux"
+    },
+    "runtime-stderr-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_runtime_stderr.py"
+      ],
+      "platform": "macos"
+    },
+    "runtime-stderr-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_runtime_stderr.py"
+      ],
+      "platform": "windows"
+    },
+    "same-host-portability-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_same_host_portability.py"
+      ],
+      "platform": "linux"
+    },
+    "same-host-portability-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_same_host_portability.py"
+      ],
+      "platform": "macos"
+    },
+    "same-host-portability-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/lint_same_host_portability.py"
+      ],
+      "platform": "windows"
+    },
     "sc-boundary": [
       "sc-lint",
       "lint",
@@ -852,21 +1249,69 @@
       ],
       "platform": "windows"
     },
-    "silent-emit": [
-      "just",
-      "_py",
-      "scripts/check-silent-emit.py"
-    ],
-    "site-generated": [
-      "just",
-      "_py",
-      ".just/check_site_generated.py"
-    ],
-    "site-links": [
-      "just",
-      "_py",
-      ".just/check_site_links.py"
-    ],
+    "silent-emit-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/check-silent-emit.py"
+      ],
+      "platform": "linux"
+    },
+    "silent-emit-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        "scripts/check-silent-emit.py"
+      ],
+      "platform": "macos"
+    },
+    "silent-emit-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        "scripts/check-silent-emit.py"
+      ],
+      "platform": "windows"
+    },
+    "site-generated-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_site_generated.py"
+      ],
+      "platform": "linux"
+    },
+    "site-generated-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_site_generated.py"
+      ],
+      "platform": "macos"
+    },
+    "site-generated-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_site_generated.py"
+      ],
+      "platform": "windows"
+    },
+    "site-links-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_site_links.py"
+      ],
+      "platform": "linux"
+    },
+    "site-links-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_site_links.py"
+      ],
+      "platform": "macos"
+    },
+    "site-links-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_site_links.py"
+      ],
+      "platform": "windows"
+    },
     "spell-linux": {
       "command": [
         ".sc-lint/venv/bin/python",
@@ -891,16 +1336,48 @@
       ],
       "platform": "windows"
     },
-    "template-frontmatter": [
-      "just",
-      "_py",
-      ".just/check_template_frontmatter.py"
-    ],
-    "ttl-triage": [
-      "just",
-      "_py",
-      ".just/lint_ttl_triage_consistency.py"
-    ],
+    "template-frontmatter-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_template_frontmatter.py"
+      ],
+      "platform": "linux"
+    },
+    "template-frontmatter-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_template_frontmatter.py"
+      ],
+      "platform": "macos"
+    },
+    "template-frontmatter-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_template_frontmatter.py"
+      ],
+      "platform": "windows"
+    },
+    "ttl-triage-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_ttl_triage_consistency.py"
+      ],
+      "platform": "linux"
+    },
+    "ttl-triage-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/lint_ttl_triage_consistency.py"
+      ],
+      "platform": "macos"
+    },
+    "ttl-triage-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/lint_ttl_triage_consistency.py"
+      ],
+      "platform": "windows"
+    },
     "version-linux": {
       "command": [
         ".sc-lint/venv/bin/python",
@@ -942,25 +1419,17 @@
       "--test",
       "cli_surface"
     ],
-    "coverage": [
-      "just",
-      "_py",
-      "scripts/coverage/run.py",
-      "--write-artifacts"
-    ],
-    "daemon-signing": [
-      "just",
-      "_py",
-      ".just/sign_daemon_dev.py"
-    ],
-    "default": [
-      "just",
-      "test"
+    "herdr": [
+      "cargo",
+      "test",
+      "-p",
+      "atm-herdr",
+      "--all-features"
     ],
     "python": [
       "just",
-      "_py",
-      ".just/run_pytests.py"
+      "lint",
+      "python-tests"
     ],
     "workspace": [
       "cargo",
@@ -968,6 +1437,14 @@
       "--workspace",
       "--exclude",
       "atm-daemon"
+    ]
+  },
+  "tools": {
+    "cargo": {
+      "cargo-xwin": "0.18.4"
+    },
+    "rustup_targets": [
+      "x86_64-pc-windows-msvc"
     ]
   }
 }

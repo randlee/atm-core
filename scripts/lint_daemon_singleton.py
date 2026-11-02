@@ -15,7 +15,7 @@ JUST_DIR = Path(__file__).resolve().parents[1] / ".just"
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
-from lint_common import build_report, discover_repo_root, monotonic_now, print_report
+from sc_lint.lint_common import build_report, discover_repo_root, monotonic_now, print_report
 
 
 LINT_NAME = "daemon-singleton"
