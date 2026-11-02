@@ -92,7 +92,13 @@ def haiku_message(text: str, input_tokens: int, extra: list[dict[str, Any]] | No
 
 
 Q1: dict[str, Question] = {"q": {"type": "choice", "instructions": "i", "criteria": {"yes": "y", "no": "n"}}}
-ONE = '{"answers": {"q": {"choice": "no", "confidence": 0.7}}}'
+def reply_of(choices: dict[str, str]) -> str:
+    return json.dumps({"answers": [{"question": k, "choice": c, "confidence": 0.7, "probabilities": [
+        {"criterion": "yes", "p": 0.3 if c == "no" else 0.7}, {"criterion": "no", "p": 0.7 if c == "no" else 0.3}]}
+        for k, c in choices.items()]})
+
+
+ONE = reply_of({"q": "no"})
 
 
 @pytest.fixture()
@@ -161,11 +167,13 @@ def test_request_is_one_question_per_row_and_branch(repo: tuple[Path, str]) -> N
 def test_haiku_request_is_the_payload_alone(keys: None) -> None:
     http = FakeHttp(100, haiku_message(ONE, 100))
     answers, reply = check_llm(HAIKU, {"s": 1}, Q1, http)
-    assert answers == {"q": {"choice": "no", "confidence": 0.7, "probabilities": {"yes": 0.0, "no": 0.7}}}
+    assert answers == {"q": {"choice": "no", "confidence": 0.7, "probabilities": {"yes": 0.3, "no": 0.7}}}
     (h1, p1, count), (h2, p2, body) = http.posts
     assert (h1, p1, h2, p2) == ("api.anthropic.com", "/v1/messages/count_tokens", "api.anthropic.com", "/v1/messages")
     assert body["messages"] == [{"role": "user", "content": payload_bytes({"s": 1}, Q1).decode()}]
     assert set(body) == {"model", "max_tokens", "messages", "output_config"}  # no system, no tools
+    item = body["output_config"]["format"]["schema"]["properties"]["answers"]["items"]
+    assert item["required"] == ["question", "choice", "confidence", "probabilities"]
     assert count == {k: v for k, v in body.items() if k != "max_tokens"}
     assert (reply.input_tokens, reply.prompt_tokens, reply.commands) == (100, 100, 0)
 
@@ -200,7 +208,9 @@ def test_equal_input_record(keys: None, input_tokens: int, extra: list[dict[str,
     assert result.input.prompt_sha256 == hashlib.sha256(payload_bytes({"s": 1}, Q1)).hexdigest()
 
 
-@pytest.mark.parametrize("reply", ["not json", '{"answers": {}}', '{"answers": {"q": {"choice": "maybe", "confidence": 1}}}'])
+@pytest.mark.parametrize("reply", [
+    "not json", '{"answers": []}', reply_of({"q": "maybe"}), reply_of({"q": "no", "x": "no"}),
+    '{"answers": [{"question": "q", "choice": "no", "confidence": 1, "probabilities": [{"criterion": "no", "p": 1}]}]}'])
 def test_llm_bad_reply_is_typed(keys: None, reply: str) -> None:
     with pytest.raises(JevCheckError) as err:
         check_llm(HAIKU, {}, Q1, FakeHttp(1, haiku_message(reply, 1)))
@@ -231,9 +241,8 @@ def test_run_writes_session_and_ask_continues_it(keys: None, repo: tuple[Path, s
     root, rev = repo
     now = [1000.0]
     store = SessionStore(tmp_path / "sessions", clock=lambda: now[0])
-    reply = json.dumps({"answers": {k: {"choice": "yes", "confidence": 0.5} for k in
-                                    ["implemented:T-1", "implemented:T-2", "listed:hook.py:3", "listed:hook.py:4",
-                                     "listed:hook.py:5"]}})
+    reply = reply_of({k: "yes" for k in ["implemented:T-1", "implemented:T-2", "listed:hook.py:3", "listed:hook.py:4",
+                                         "listed:hook.py:5"]})
     result = run_check(load_check(root / "check.toml"), rev, "haiku", show=shower(root),
                        http=FakeHttp(10, haiku_message(reply, 10)), store=store)
     assert result.backend == "haiku" and result.model == "claude-haiku-5-5" and result.rev == rev

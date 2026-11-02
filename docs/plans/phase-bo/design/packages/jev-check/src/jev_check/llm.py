@@ -1,6 +1,7 @@
 """Haiku and Luna, API-direct: the user message is the payload bytes Jev gets; no system prompt, no tools.
 
-The reply shape is forced with the vendor's JSON-schema output format. Each run also counts the request's
+The vendor's JSON-schema output format forces a list of {question, choice, confidence, probabilities per
+criterion}; parse_reply maps it to Jev's answer shape and checks ids and criteria. All numbers are the model's own. Each run also counts the request's
 tokens on the vendor's count endpoint (same body), so input_tokens - prompt_tokens shows anything added.
 """
 import http.client
@@ -49,13 +50,14 @@ def load_backend(name: str) -> Backend:
     return Backend(name, str(section.get("model")), str(section.get("key_env")))
 
 
-def answer_schema(questions: dict[str, Question]) -> dict[str, Any]:
-    def answer(criteria: dict[str, str]) -> dict[str, Any]:
-        return {"type": "object", "additionalProperties": False, "required": ["choice", "confidence"],
-                "properties": {"choice": {"type": "string", "enum": sorted(criteria)}, "confidence": {"type": "number"}}}
-    return {"type": "object", "additionalProperties": False, "required": ["answers"], "properties": {"answers": {
-        "type": "object", "additionalProperties": False, "required": sorted(questions),
-        "properties": {k: answer(q["criteria"]) for k, q in sorted(questions.items())}}}}
+def obj(**props: Any) -> dict[str, Any]:
+    return {"type": "object", "additionalProperties": False, "required": list(props), "properties": props}
+
+
+# One fixed schema for every request: a per-question schema exceeds the vendors' grammar limit.
+ANSWER_SCHEMA = obj(answers={"type": "array", "items": obj(
+    question={"type": "string"}, choice={"type": "string"}, confidence={"type": "number"},
+    probabilities={"type": "array", "items": obj(criterion={"type": "string"}, p={"type": "number"})})})
 
 
 def message_body(backend: Backend, turns: list[Turn], schema: dict[str, Any] | None) -> dict[str, Any]:
@@ -171,29 +173,33 @@ def complete(backend: Backend, turns: list[Turn], schema: dict[str, Any] | None,
 
 
 def parse_reply(text: str, questions: dict[str, Question]) -> dict[str, Answer]:
+    """The model's answer list -> Jev's answer shape; ids, choices and criteria checked against the questions."""
     try:
         value = as_object(json.loads(text))
     except ValueError:
         raise JevCheckError("RESPONSE_INVALID", "LLM reply is not JSON") from None
-    answers = as_object(value.get("answers")) if value is not None else None
-    if answers is None or set(answers) != set(questions):
-        raise JevCheckError("RESPONSE_INVALID", "LLM answer ids differ from the question ids")
+    items = [as_object(i) for i in as_list(value.get("answers") if value is not None else None)]
     out: dict[str, Answer] = {}
-    for key, item in answers.items():
-        a = as_object(item)
-        choice = a.get("choice") if a is not None else None
-        if a is None or not isinstance(choice, str) or choice not in questions[key]["criteria"]:
-            raise JevCheckError("RESPONSE_INVALID", f"LLM answer {key} is not one of its criteria")
-        conf = as_probability(a.get("confidence"))
-        out[key] = {"choice": choice, "confidence": conf,
-                    "probabilities": {c: (conf if c == choice else 0.0) for c in questions[key]["criteria"]}}
+    for a in items:
+        key = a.get("question") if a is not None else None
+        if a is None or not isinstance(key, str) or key not in questions or key in out:
+            raise JevCheckError("RESPONSE_INVALID", f"LLM answer for {key!r} is unknown or repeated")
+        criteria = questions[key]["criteria"]
+        choice = a.get("choice")
+        probs = {p.get("criterion"): p.get("p") for p in map(as_object, as_list(a.get("probabilities"))) if p is not None}
+        if not isinstance(choice, str) or choice not in criteria or set(probs) != set(criteria):
+            raise JevCheckError("RESPONSE_INVALID", f"LLM answer {key} needs a criterion choice and a probability per criterion")
+        out[key] = {"choice": choice, "confidence": as_probability(a.get("confidence")),
+                    "probabilities": {c: as_probability(probs[c]) for c in criteria}}
+    if set(out) != set(questions):
+        raise JevCheckError("RESPONSE_INVALID", "LLM answer ids differ from the question ids")
     return out
 
 
 def check_llm(backend: Backend, state: Any, questions: dict[str, Question], http: Http | None = None,
               lookup: Callable[[str], str] = keychain) -> tuple[dict[str, Answer], LlmReply]:
     prompt = payload_bytes(state, questions).decode()
-    reply = complete(backend, [("user", prompt)], answer_schema(questions), http, lookup)
+    reply = complete(backend, [("user", prompt)], ANSWER_SCHEMA, http, lookup)
     return parse_reply(reply.text, questions), reply
 
 
