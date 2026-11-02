@@ -3654,7 +3654,7 @@
       "deterministic_check": "atm-bd-lite-gate.py (ast): per hook file in skills/atm-bd-lite/scripts/atm-bd-task-*.py, count of beads.update(/beads.create(/beads.claim(/beads.release( call sites <= 1 and create/claim/release count == 0",
       "fixtures": {
         "pass": [
-          "The lite close hook has exactly one beads-cache write: one beads.update call that closes the work bead. The file has no beads.create, beads.claim or beads.release call."
+          "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-064 failure: the lite close hook has one beads.update call, which closes the work bead, and no beads.create, beads.claim or beads.release call."
         ],
         "fail": [
           "The lite close hook calls beads.update twice: first to record the layer on the stack bead, then to close the work bead."
@@ -3712,7 +3712,7 @@
       "deterministic_check": "atm-bd-lite-gate.py (ast): every stack_bead occurrence in skills/atm-bd-lite/scripts/atm-bd-task-*.py is an argument of beads.show( or cache.get(",
       "fixtures": {
         "pass": [
-          "The lite close hook reads the ledger with cache.get(bead.stack_bead) and checks it holds a layer for work.branch; it passes stack_bead to no write."
+          "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-065 failure: every stack_bead occurrence in the lite close hook is an argument of beads.show or cache.get, so no write receives the stack bead."
         ],
         "fail": [
           "The lite close hook calls beads.update(BeadPatch.record(stack_bead, layer)) to record the dev layer before closing."
@@ -3880,7 +3880,7 @@
       "deterministic_check": "every ErrorId member, class and method name in the generated atm_bd_types .pyi appears (grep -w) in a lite hook file or a hooks/*.md table",
       "fixtures": {
         "pass": [
-          "Every ErrorId member in the atm_bd_types stub, including FINDINGS_NOT_POURED and STACK_NOT_RECORDED, appears in a hooks/*.md Errors table or a hook file."
+          "grep -w finds every ErrorId member, class and method name of the generated atm_bd_types stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, in a lite hook file or a hooks/*.md table."
         ],
         "fail": [
           "The stub keeps ErrorId.STACK_CLAIM_LOST although no hook and no hooks/*.md table names it."
