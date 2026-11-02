@@ -645,8 +645,10 @@ fn assert_herdr_rendered_default(
     else {
         panic!("expected Herdr target");
     };
+    assert_eq!(dispatch.event.sender_team, dispatch.event.recipient_team);
+    assert!(dispatch.event.sender_host.is_none());
     let expected = atm_core::send::default_template(expected_kind)
-        .replace("{{from}}", &dispatch.event.source_address().to_string())
+        .replace("{{from}}", dispatch.event.sender.as_str())
         .replace("{{message_id}}", &dispatch.event.message_id.to_string())
         .replace("{{description}}", &dispatch.event.description)
         .replace(

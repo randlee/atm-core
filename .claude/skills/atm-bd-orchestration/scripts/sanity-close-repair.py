@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# ///
 """Resume a durable bead-repair obligation outside the daemon hook budget."""
 # Maintenance and design tracking:
 # Canonical issue: https://github.com/randlee/atm-bd-orchestration/issues/557

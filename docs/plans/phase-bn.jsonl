@@ -1,0 +1,4 @@
+{"sprint":"bn-1"}
+{"sprint":"bn-2","depends_on":["bn-1"]}
+{"sprint":"bn-3","depends_on":["bn-1"]}
+{"sprint":"bn-4","depends_on":["bn-1"]}

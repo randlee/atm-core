@@ -1,0 +1,63 @@
+{
+ "E1r": {
+  "questions": {
+   "single_constraint": {
+    "criteria": {
+     "no": "At least two independently enforceable duties are joined in the statement.",
+     "unclear": "The statement leaves independence of its duties ambiguous.",
+     "yes": "All details enforce the same invariant and would be evaluated together."
+    },
+    "instructions": "Is anchor.statement one invariant applied to a subject, trigger, and possibly several output surfaces? Do not count the number of nouns or listed artifacts; count independently enforceable duties.",
+    "type": "choice"
+   },
+   "observable": {
+    "criteria": {
+     "no": "It supplies only a subjective quality, undefined shorthand, or an approval with no observable record.",
+     "unclear": "Some evidence is named, but the observation needed to settle compliance remains ambiguous.",
+     "yes": "It names evidence or behavior that can be inspected with a determinate outcome."
+    },
+    "instructions": "Does anchor.statement define a checkable behavior or artifact without relying on an undefined label or an approval that has no identified record? Judge only whether the stated outcome can be observed.",
+    "type": "choice"
+   },
+   "faithful": {
+    "type": "choice",
+    "instructions": "Is anchor.statement a faithful formal requirement derived from anchor.quote? Anything the statement adds must be something a reasonable reader of the quote would already assume, such as must for an informal directive, stdout for printed output, the standard container of a named format, the precise name of the quote's subject, or a concrete example value standing in for something the quote describes. It is unfaithful only when it adds something a reader would have to choose, such as an algorithm, key strength, count, trigger, or outcome. One directive in a compound quote may become one anchor. Do not penalize vagueness here.",
+    "criteria": {
+     "no": "The statement adds at least one choice the quote leaves open, such as an algorithm, strength, count, trigger, or outcome.",
+     "unclear": "It cannot be decided whether an added element is assumed by the quote or a new choice.",
+     "yes": "Every added element is one a reasonable reader of the quote would already assume; nothing the quote leaves open was decided."
+    }
+   },
+   "scoped": {
+    "criteria": {
+     "no": "No work area or applicability set is identifiable.",
+     "unclear": "An area is named but its applicability cannot be determined.",
+     "yes": "A reviewer can identify the work area where this anchor applies, including an explicit all-items set."
+    },
+    "instructions": "Do anchor.statement and anchor.scope identify the governed activity, component, artifact, or explicit global set, independent of whether the requirement itself is vague or otherwise defective?",
+    "type": "choice"
+   },
+   "self_contained": {
+    "criteria": {
+     "no": "At least one decisive term is an undefined quality or private label, or compliance depends on an approval with no identified record.",
+     "unclear": "A possible outside-context dependency exists but the statement does not show whether it is decisive.",
+     "yes": "None of those outside-context dependencies is needed; ordinary technical terms, concrete prohibitions, lists, and explicit input/action/outcome conditions are sufficient."
+    },
+    "instructions": "Is anchor.statement independently understandable and applicable without any of these disqualifiers: an undefined subjective quality (for example robust), private shorthand, or a human approval that has no identified recorded artifact? Ignore grammar, bundling, fidelity, and scope.",
+    "type": "choice"
+   }
+  },
+  "digest": "e68e8944def4729811098cd671d2265fde8585a66059f32639cb3b813f87b202",
+  "per_role_sha256": {
+   "single_constraint": "1c952b1de59a041543a81405da20ceb2c760bac10ecd9b1ac5030d141a383882",
+   "observable": "670484c0dccea63ef7095679dee1b08e66339900f7af2cd587fddd5b0c802202",
+   "faithful": "c285477d6e55cfbd03132068a58a1e3955a4da213f628a806dc7270617e8639b",
+   "scoped": "964e2736ea1cbdee3d9675921e9ec42a04363c680d785aee4e7e5ee71c8b74bc",
+   "self_contained": "3778f649f0743d2b865be79c045838f23063757d749765e4079573d2775ee0f8"
+  },
+  "derived_from": "B0",
+  "changed_roles": [
+   "faithful"
+  ]
+ }
+}

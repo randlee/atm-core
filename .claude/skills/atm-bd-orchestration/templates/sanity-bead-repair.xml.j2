@@ -11,7 +11,7 @@ metadata:
   <failure><![CDATA[{{ failure | tojson | cdata_escape }}]]></failure>
   <workflow><![CDATA[
 Run atm task start {{ task_id }} "Retry deferred sanity bead operations".
-Run python3 {{ repair_script }} --journal {{ journal }} --key {{ key }} --phase {{ phase }} --team {{ team }} --original-task {{ original_task }} --lead {{ phase_lead }}.
+Run {{ repair_script }} --journal {{ journal }} --key {{ key }} --phase {{ phase }} --team {{ team }} --original-task {{ original_task }} --lead {{ phase_lead }}.
 The runner reads current state, skips successful operations, and completes required dev closure or failure notification. On error diagnose the named command, notify the phase lead, and retry after the cause clears; keep this repair task open until successful. Do not run a busy retry loop, compile code, bypass a dependency, or force-close a bead.
 Only after runner success: atm task close {{ task_id }} completed "Deferred sanity bead operations verified complete".
 ]]></workflow>

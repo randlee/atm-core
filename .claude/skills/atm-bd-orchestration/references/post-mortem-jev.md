@@ -88,9 +88,9 @@ call nor a high percentage of clear answers substitutes for that reconciliation.
 From the repository root, use `.claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py`:
 
 ```bash
-python3 .claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py prepare --repo . --manifest finding.json --out packet.json
-python3 .claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py run --phase phase-d --run-id <run-id> --output-dir .sc/qa-logs packet.json
-python3 .claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py summary .sc/qa-logs/post-mortem-jev-phase-d.jsonl
+.claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py prepare --repo . --manifest finding.json --out packet.json
+.claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py run --phase phase-d --run-id <run-id> --output-dir .sc/qa-logs packet.json
+.claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py summary .sc/qa-logs/post-mortem-jev-phase-d.jsonl
 ```
 
 A manifest supplies `finding_id`, `phase`, `integration_sha`, `finding_text`,

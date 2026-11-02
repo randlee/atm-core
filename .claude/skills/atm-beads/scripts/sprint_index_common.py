@@ -1,3 +1,4 @@
+# pyright: strict
 """Shared process helpers, the phase file `.atm-bd/<phase>.toml` and the plan file.
 
 `<phase>` is `phase-<x>`. The tracked `.atm-bd/phase-<x>.toml` names the
@@ -23,9 +24,10 @@ import re
 import subprocess
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import NotRequired, TypeAlias, TypeGuard, TypedDict
 
 import repo_config
+from operation_models import BeadRecord
 
 PHASE = re.compile(r"[a-z0-9]+")
 SPRINT_NAME = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
@@ -44,19 +46,96 @@ DEFAULT_TEMPLATES = {
 }
 PLAN_KEYS = frozenset({"sprint", "depends_on"})
 
+JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+JsonObject: TypeAlias = dict[str, JsonValue]
 
-def run_json(repo: Path, *args: str) -> Any:
+
+class PlanRow(TypedDict):
+    sprint: str
+    depends_on: list[str]
+
+
+class PhaseTemplates(TypedDict):
+    dev: str
+    fix: str
+    sanity: str
+    qa: str
+    plan_review: str
+    review: str
+    dev_fix: NotRequired[str]
+
+
+class PhaseConfig(TypedDict):
+    plan: str
+    root: str
+    integration_branch: str
+    lead: str
+    templates: PhaseTemplates
+    code_checkout: NotRequired[str]
+
+
+class IndexSprint(TypedDict):
+    sprint_bead_id: str
+    dev_bead_id: str
+    sanity_bead_id: str
+    depends_on_sanity_bead_ids: list[str]
+
+
+class NormalizedIndex(TypedDict):
+    root_bead_id: str
+    sprints: list[IndexSprint]
+
+
+def is_object_list(value: object) -> TypeGuard[list[object]]:
+    return isinstance(value, list)
+
+
+def is_object_mapping(value: object) -> TypeGuard[dict[object, object]]:
+    return isinstance(value, dict)
+
+
+def is_json_value(value: object) -> TypeGuard[JsonValue]:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return True
+    if is_object_list(value):
+        return all(is_json_value(item) for item in value)
+    if is_object_mapping(value):
+        for key, item in value.items():
+            if not isinstance(key, str) or not is_json_value(item):
+                return False
+        return True
+    return False
+
+
+def is_json_object(value: object) -> TypeGuard[JsonObject]:
+    if not is_object_mapping(value):
+        return False
+    for key, item in value.items():
+        if not isinstance(key, str) or not is_json_value(item):
+            return False
+    return True
+
+
+def string_list(value: object) -> TypeGuard[list[str]]:
+    return is_object_list(value) and all(isinstance(item, str) for item in value)
+
+
+def run_json(repo: Path, *args: str) -> JsonValue:
     result = subprocess.run(list(args), cwd=repo, capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError(f"{' '.join(args)} failed: {result.stderr.strip() or result.stdout.strip()}")
     try:
-        return json.loads(result.stdout)
+        value: object = json.loads(result.stdout)
+        if not is_json_value(value):
+            raise RuntimeError(f"{' '.join(args)} returned a non-JSON value")
+        return value
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"{' '.join(args)} returned invalid JSON: {exc}") from exc
 
 
-def phase_id(root: str, record: dict) -> str:
-    phase = (record.get("metadata") or {}).get("phase")
+def phase_id(root: str, record: BeadRecord) -> str:
+    metadata = record.get("metadata")
+    phase = metadata.get("phase") if metadata else None
     if not phase:
         match = re.search(r"-phase-([a-z0-9]+)$", root)
         phase = match.group(1) if match else None
@@ -72,40 +151,68 @@ def phase_of_root(root: str) -> str:
     return match.group(1)
 
 
+def required_config_string(values: dict[str, object], key: str) -> str:
+    value = values[key]
+    if not isinstance(value, str):
+        raise RuntimeError(f"phase config {key} must be a string")
+    return value
+
+
 def phase_config_path(repo: Path, phase: str) -> Path:
     if not PHASE.fullmatch(phase):
         raise RuntimeError(f"invalid phase: {phase}")
     return Path(repo) / PHASE_DIR / f"phase-{phase}.toml"
 
 
-def validate_phase_config(repo: Path, phase: str, data: dict[str, Any]) -> dict[str, Any]:
+def validate_phase_config(repo: Path, phase: str, raw_data: object) -> PhaseConfig:
     """Validate the complete tracked phase settings."""
     path = phase_config_path(repo, phase)
-    problems = []
+    if not is_object_mapping(raw_data):
+        raise RuntimeError(f"{path}: expected a table at the top level")
+    data: dict[str, object] = {}
+    for key, value in raw_data.items():
+        if not isinstance(key, str):
+            raise RuntimeError(f"{path}: expected string keys in the top-level table")
+        data[key] = value
+    problems: list[str] = []
     for key in PHASE_KEYS:
-        if not isinstance(data.get(key), str) or not data[key].strip():
+        value = data.get(key)
+        if not isinstance(value, str) or not value.strip():
             problems.append(f"{key}: required nonempty string")
     unknown = set(data) - set(PHASE_KEYS) - {"lead", "templates", "code_checkout"}
     if unknown:
         problems.append(f"unknown key(s): {', '.join(sorted(unknown))}")
-    if "code_checkout" in data and (not isinstance(data["code_checkout"], str) or not data["code_checkout"].strip()
-                                     or Path(data["code_checkout"]).is_absolute()):
+    code_checkout = data.get("code_checkout")
+    if "code_checkout" in data and (
+        not isinstance(code_checkout, str)
+        or not code_checkout.strip()
+        or Path(code_checkout).is_absolute()
+    ):
         problems.append("code_checkout: optional repository-relative path to the code repository")
-    if not isinstance(data.get("lead"), str) or not data["lead"].strip():
+    lead = data.get("lead")
+    if not isinstance(lead, str) or not lead.strip():
         problems.append("lead: required nonempty string")
     templates = data.get("templates")
     if templates is None:
         problems.append("templates: required table with keys " + ", ".join(DEFAULT_TEMPLATES))
     if templates is not None:
-        if not isinstance(templates, dict):
+        if not is_object_mapping(templates):
             problems.append("templates: expected a table with keys " + ", ".join(DEFAULT_TEMPLATES))
             templates = None
-    if isinstance(templates, dict):
-        extra = set(templates) - set(DEFAULT_TEMPLATES) - {"dev_fix"}
+    template_values: dict[str, object] = {}
+    if is_object_mapping(templates):
+        if any(not isinstance(key, str) for key in templates):
+            problems.append("templates: expected string keys")
+            templates = None
+    if is_object_mapping(templates):
+        template_values = {key: value for key, value in templates.items() if isinstance(key, str)}
+        extra = set(template_values) - set(DEFAULT_TEMPLATES) - {"dev_fix"}
         if extra:
             problems.append(f"templates: unknown key(s): {', '.join(sorted(extra))}")
+        if "dev_fix" in template_values and not isinstance(template_values["dev_fix"], str):
+            problems.append("templates.dev_fix: expected a repository-relative template path")
         for key in DEFAULT_TEMPLATES:
-            value = templates.get(key)
+            value = template_values.get(key)
             if not isinstance(value, str) or not value.strip():
                 problems.append(f"templates.{key}: required nonempty repository-relative path")
                 continue
@@ -122,12 +229,34 @@ def validate_phase_config(repo: Path, phase: str, data: dict[str, Any]) -> dict[
                 problems.append(f"templates.{key}: {value!r} cannot be read: {exc}")
     if problems:
         raise RuntimeError(f"{path}: " + "; ".join(problems))
-    if not re.fullmatch(rf".+-phase-{re.escape(phase)}", data["root"]):
-        raise RuntimeError(f"{path}: root {data['root']} is not a root of phase {phase}")
-    return dict(data)
+    root = data.get("root")
+    if not isinstance(root, str):
+        raise RuntimeError(f"{path}: root must be a nonempty phase root")
+    if not re.fullmatch(rf".+-phase-{re.escape(phase)}", root):
+        raise RuntimeError(f"{path}: root {root} is not a root of phase {phase}")
+    typed_templates: PhaseTemplates = {
+        "dev": required_config_string(template_values, "dev"),
+        "fix": required_config_string(template_values, "fix"),
+        "sanity": required_config_string(template_values, "sanity"),
+        "qa": required_config_string(template_values, "qa"),
+        "plan_review": required_config_string(template_values, "plan_review"),
+        "review": required_config_string(template_values, "review"),
+    }
+    if "dev_fix" in template_values:
+        typed_templates["dev_fix"] = required_config_string(template_values, "dev_fix")
+    result: PhaseConfig = {
+        "plan": required_config_string(data, "plan"),
+        "root": root,
+        "integration_branch": required_config_string(data, "integration_branch"),
+        "lead": required_config_string(data, "lead"),
+        "templates": typed_templates,
+    }
+    if "code_checkout" in data:
+        result["code_checkout"] = required_config_string(data, "code_checkout")
+    return result
 
 
-def load_phase_config(repo: Path, phase: str) -> dict[str, Any]:
+def load_phase_config(repo: Path, phase: str) -> PhaseConfig:
     """Read and validate the complete phase settings."""
     path = phase_config_path(repo, phase)
     try:
@@ -143,7 +272,8 @@ def phase_path(repo: Path, phase: str) -> Path:
     """`<plans_dir>/phase-<phase>.jsonl`; plans_dir comes from the repository configuration."""
     if not PHASE.fullmatch(phase):
         raise RuntimeError(f"invalid phase: {phase}")
-    return Path(repo) / repo_config.load(repo)["plans_dir"] / f"phase-{phase}.jsonl"
+    plans_dir = repo_config.load(repo)["plans_dir"]
+    return Path(repo) / plans_dir / f"phase-{phase}.jsonl"
 
 
 def bead_prefix(root: str | None, start: Path) -> str:
@@ -154,7 +284,7 @@ def bead_prefix(root: str | None, start: Path) -> str:
         if not match:
             raise RuntimeError(f"root bead id {root!r} is not <prefix>-phase-<phase>")
         return match.group(1)
-    return str(repo_config.load(repo_config.repo_root(start))["bead_prefix"])
+    return repo_config.load(repo_config.repo_root(start))["bead_prefix"]
 
 
 def sprint_bead_id(prefix: str, sprint: str) -> str:
@@ -166,9 +296,16 @@ def group_id(container: str, step: str) -> str:
     return f"{container}.{GROUP_REF}-{step}"
 
 
-def parse_plan(text: str, where: str = "plan") -> tuple[list[dict], list[str]]:
+REQUIRED_KEYS = frozenset({"root_bead_id", "sprints"})
+# Phase facts that are not in beads (user ruling 2026-09-26); membership rows stay exactly as before.
+OPTIONAL_KEYS = frozenset({"integration_branch", "review_artifacts", "policy"})
+POLICY_KEYS = frozenset({"human_gates", "waivers"})
+WAIVABLE_CHECKS = frozenset({"reopened_after_pass", "started_before_blocker", "pass_without_qa"})
+
+
+def parse_plan(text: str, where: str = "plan") -> tuple[list[PlanRow], list[str]]:
     """The plan file's rows and every schema problem in it ("<where>:<line>: <problem>")."""
-    rows: list[dict] = []
+    rows: list[PlanRow] = []
     problems: list[str] = []
     seen: set[str] = set()
     for number, line in enumerate(text.splitlines(), 1):
@@ -176,20 +313,22 @@ def parse_plan(text: str, where: str = "plan") -> tuple[list[dict], list[str]]:
             continue
         at = f"{where}:{number}"
         try:
-            value = json.loads(line)
+            value: object = json.loads(line)
         except json.JSONDecodeError as exc:
             problems.append(f"{at}: not JSON: {exc}")
             continue
-        if not isinstance(value, dict) or "sprint" not in value or set(value) - PLAN_KEYS:
+        if not is_json_object(value) or "sprint" not in value or set(value) - PLAN_KEYS:
             problems.append(at + ': each line is {"sprint": "<name>"} with an optional "depends_on" list, nothing else')
             continue
-        sprint, depends_on = value["sprint"], value.get("depends_on", [])
+        sprint = value.get("sprint")
         if not isinstance(sprint, str) or not SPRINT_NAME.fullmatch(sprint):
             problems.append(f"{at}: sprint {sprint!r} is not a lowercase a-z0-9- name")
             continue
-        if not isinstance(depends_on, list) or not all(isinstance(d, str) and d for d in depends_on):
+        depends_value = value.get("depends_on", [])
+        if not string_list(depends_value) or not all(dep for dep in depends_value):
             problems.append(f"{at}: {sprint}: depends_on must be a list of sprint names")
             continue
+        depends_on = depends_value
         if sprint in seen:
             problems.append(f"{at}: sprint {sprint} is listed twice")
             continue
@@ -208,23 +347,23 @@ def parse_plan(text: str, where: str = "plan") -> tuple[list[dict], list[str]]:
     return rows, problems
 
 
-def normalized(rows: list[dict], root: str) -> dict:
+def normalized(rows: list[PlanRow], root: str) -> NormalizedIndex:
     """The in-memory view consumers read: per sprint its container, poured dev and sanity ids and the
     sanity ids of its predecessors."""
     prefix = bead_prefix(root, Path("."))
     sanity = {r["sprint"]: group_id(sprint_bead_id(prefix, r["sprint"]), "sanity") for r in rows}
-    out = []
+    out: list[IndexSprint] = []
     for row in rows:
         container = sprint_bead_id(prefix, row["sprint"])
         out.append({"sprint_bead_id": container, "dev_bead_id": group_id(container, "dev"),
                     "sanity_bead_id": sanity[row["sprint"]],
                     "depends_on_sanity_bead_ids": [sanity[d] for d in row["depends_on"]]})
-    result = {"root_bead_id": root, "sprints": out}
+    result: NormalizedIndex = {"root_bead_id": root, "sprints": out}
     validate_index(result)
     return result
 
 
-def load_phase_plan(path: Path, root: str | None = None) -> dict:
+def load_phase_plan(path: Path, root: str | None = None) -> NormalizedIndex:
     """Parse a plan file (`<plans_dir>/phase-<x>.jsonl`) and return the normalized view; any schema problem raises."""
     path = Path(path)
     rows, problems = parse_plan(path.read_text(encoding="utf-8"), str(path))
@@ -238,16 +377,21 @@ def load_phase_plan(path: Path, root: str | None = None) -> dict:
     return normalized(rows, root)
 
 
-def index_bead_pairs(index: dict) -> dict[str, str]:
+def index_bead_pairs(raw_index: object) -> dict[str, str]:
     """dev bead id -> sanity bead id, validated."""
+    if not is_json_object(raw_index):
+        raise RuntimeError("phase index must be a JSON object")
+    index = raw_index
     pairs: dict[str, str] = {}
     rows = index.get("sprints")
-    if not isinstance(rows, list):
+    if not is_object_list(rows):
         raise RuntimeError("sprint index must contain a sprints array")
+    parsed_rows: list[JsonObject] = []
     for row in rows:
         allowed = {"sprint_bead_id", "dev_bead_id", "sanity_bead_id", "depends_on_sanity_bead_ids"}
-        if not isinstance(row, dict) or not {"dev_bead_id", "sanity_bead_id"} <= set(row) or set(row) - allowed:
+        if not is_json_object(row) or not {"dev_bead_id", "sanity_bead_id"} <= set(row) or set(row) - allowed:
             raise RuntimeError("each normalized sprint item must contain dev_bead_id, sanity_bead_id, and optional sprint_bead_id, depends_on_sanity_bead_ids")
+        parsed_rows.append(row)
         dev, gate = row.get("dev_bead_id"), row.get("sanity_bead_id")
         if not isinstance(dev, str) or not dev:
             raise RuntimeError("dev_bead_id must be a nonempty bead ID")
@@ -255,38 +399,52 @@ def index_bead_pairs(index: dict) -> dict[str, str]:
             raise RuntimeError(f"{dev}: missing or invalid sanity_bead_id")
         if dev in pairs or gate in pairs.values():
             raise RuntimeError(f"{dev}: duplicate dev or sanity bead in sprint index")
-        deps = row.get("depends_on_sanity_bead_ids", [])
-        if not isinstance(deps, list) or not all(isinstance(dep, str) and dep for dep in deps):
+        deps_value = row.get("depends_on_sanity_bead_ids", [])
+        if not string_list(deps_value) or not all(dep for dep in deps_value):
             raise RuntimeError(f"{dev}: depends_on_sanity_bead_ids must be a list of bead IDs")
+        deps = deps_value
         if len(set(deps)) != len(deps) or gate in deps:
             raise RuntimeError(f"{dev}: invalid duplicate or self sanity dependency")
         pairs[dev] = gate
     if set(pairs) & set(pairs.values()):
         raise RuntimeError("a sanity bead cannot also be a sprint dev bead")
     known_sanity = set(pairs.values())
-    for row in rows:
-        for dep in row.get("depends_on_sanity_bead_ids", []):
+    for row in parsed_rows:
+        deps_value = row.get("depends_on_sanity_bead_ids", [])
+        if not string_list(deps_value):
+            raise RuntimeError(f"{row['dev_bead_id']}: depends_on_sanity_bead_ids must be a list of bead IDs")
+        for dep in deps_value:
             if dep not in known_sanity:
                 raise RuntimeError(f"{row['dev_bead_id']}: dependency {dep} is not a listed sprint sanity bead")
     return pairs
 
 
-def sprint_beads(index: dict) -> dict[str, str]:
+def sprint_beads(raw_index: object) -> dict[str, str]:
     """dev bead id -> its sprint container id (the dev id itself for an index without containers)."""
-    return {row["dev_bead_id"]: row.get("sprint_bead_id", row["dev_bead_id"]) for row in index["sprints"]}
+    if not is_json_object(raw_index):
+        raise RuntimeError("phase index must be a JSON object")
+    rows = raw_index.get("sprints")
+    if not is_object_list(rows):
+        raise RuntimeError("sprint index must contain a sprints array")
+    result: dict[str, str] = {}
+    for raw_row in rows:
+        if not is_json_object(raw_row) or "dev_bead_id" not in raw_row:
+            raise RuntimeError("each normalized sprint item must contain dev_bead_id")
+        dev = raw_row.get("dev_bead_id")
+        if not isinstance(dev, str):
+            raise RuntimeError("dev_bead_id must be a nonempty bead ID")
+        container = raw_row.get("sprint_bead_id", dev)
+        if not isinstance(container, str):
+            raise RuntimeError(f"{dev}: sprint_bead_id must be a string")
+        result[dev] = container
+    return result
 
 
-REQUIRED_KEYS = frozenset({"root_bead_id", "sprints"})
-# Phase facts that are not in beads (user ruling 2026-09-26); membership rows stay exactly as before.
-OPTIONAL_KEYS = frozenset({"integration_branch", "review_artifacts", "policy"})
-POLICY_KEYS = frozenset({"human_gates", "waivers"})
-WAIVABLE_CHECKS = frozenset({"reopened_after_pass", "started_before_blocker", "pass_without_qa"})
-
-
-def validate_index(index: Any) -> None:
+def validate_index(raw_index: object) -> None:
     """Enforce the document contract: membership rows plus declared phase facts, nothing else."""
-    if not isinstance(index, dict) or not REQUIRED_KEYS <= set(index):
+    if not is_json_object(raw_index) or not REQUIRED_KEYS <= set(raw_index):
         raise RuntimeError("phase index must contain root_bead_id and sprints")
+    index = raw_index
     unknown = set(index) - REQUIRED_KEYS - OPTIONAL_KEYS
     if unknown:
         raise RuntimeError("phase index may contain only root_bead_id and sprints plus the declared phase facts "
@@ -295,23 +453,28 @@ def validate_index(index: Any) -> None:
     if branch is not None and (not isinstance(branch, str) or not branch):
         raise RuntimeError("integration_branch must be a nonempty branch name")
     artifacts = index.get("review_artifacts")
-    if artifacts is not None and (not isinstance(artifacts, list) or not all(isinstance(a, str) and a for a in artifacts)):
+    if artifacts is not None and (not string_list(artifacts) or not all(artifact for artifact in artifacts)):
         raise RuntimeError("review_artifacts must be a list of repository paths")
     policy = index.get("policy")
     if policy is not None:
-        if not isinstance(policy, dict) or set(policy) - POLICY_KEYS:
+        if not is_json_object(policy) or set(policy) - POLICY_KEYS:
             raise RuntimeError(f"policy may only contain {', '.join(sorted(POLICY_KEYS))}")
         gates = policy.get("human_gates")
-        if gates is not None and (not isinstance(gates, list) or not all(isinstance(g, str) and g for g in gates)):
+        if gates is not None and (not string_list(gates) or not all(gate for gate in gates)):
             raise RuntimeError("policy.human_gates must be a list of gate bead IDs")
         waivers = policy.get("waivers")
         if waivers is not None:
-            if not isinstance(waivers, list):
+            if not is_object_list(waivers):
                 raise RuntimeError("policy.waivers must be a list of {bead, check, reason} objects")
             for w in waivers:
-                if not isinstance(w, dict) or set(w) != {"bead", "check", "reason"} or not all(isinstance(w[k], str) and w[k] for k in w):
+                if not is_json_object(w) or set(w) != {"bead", "check", "reason"}:
                     raise RuntimeError("each policy.waivers entry has exactly bead, check and reason, all nonempty strings")
-                if w["check"] not in WAIVABLE_CHECKS:
+                waiver_bead = w.get("bead")
+                waiver_check = w.get("check")
+                waiver_reason = w.get("reason")
+                if not all(isinstance(value, str) and value for value in (waiver_bead, waiver_check, waiver_reason)):
+                    raise RuntimeError("each policy.waivers entry has exactly bead, check and reason, all nonempty strings")
+                if not isinstance(waiver_check, str) or waiver_check not in WAIVABLE_CHECKS:
                     raise RuntimeError(f"policy.waivers check must be one of {', '.join(sorted(WAIVABLE_CHECKS))}")
     root = index["root_bead_id"]
     if not isinstance(root, str) or not root:

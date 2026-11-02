@@ -7,7 +7,7 @@ Register once per repository (ADR-069), from the beads repository root:
 
 Each tick drains pending writes, then syncs every phase whose `.atm-bd/phase-<x>.toml`
 root bead is open (`custom.phases`, a list, limits this to the named phases). Every escalated write, and each new sync failure cause, is sent
-once to that phase's `lead` through `atm send --team tool`; a backend outage is sent once to every active
+once to that phase's `lead` through `atm send --team tool` as `atm-bd@tool`; a backend outage is sent once to every active
 phase's lead, not as per-phase sync failures (bd_cache.UNREACHABLE); an undeliverable
 escalation stays unannounced and is retried next tick. The schedule stops when no
 phase is active and the journal holds no pending or unannounced entries.
@@ -66,7 +66,9 @@ def active_phases(cache, configured):
 
 
 def send(team, lead, body):
-    env = {**os.environ, "ATM_IDENTITY": "cron", "ATM_TEAM": "tool"}
+    # atm-bd@tool is the installer's notification member; cron@tool is atm's daemon-owned scheduler principal and
+    # refuses ordinary sends.
+    env = {**os.environ, "ATM_IDENTITY": "atm-bd", "ATM_TEAM": "tool"}
     result = subprocess.run([ATM, "send", f"{lead}@{team}", "--team", "tool", "--stdin", "--json"], input=body,
                             capture_output=True, text=True, check=False, timeout=10, env=env)
     return result.returncode == 0, (result.stderr or result.stdout).strip()[-300:]

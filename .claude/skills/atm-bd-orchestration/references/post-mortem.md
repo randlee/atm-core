@@ -91,7 +91,7 @@ In `review-complete.md.j2`, set `integration_commit` to the same full SHA as
   prevention action with owner and target artifact, or `no_systemic_followup`.
   Do not manufacture a lint, ADR, or new process for every family.
 
-Before the close, run `python3 .claude/skills/atm-bd-orchestration/scripts/check-review-completion.py <vars.json>`.
+Before the close, run `.claude/skills/atm-bd-orchestration/scripts/check-review-completion.py <vars.json>`.
 It rejects inconsistent verdicts, PASS with blocking/important code findings,
 SHA mismatches and count totals; it does not
 prove the prose evidence is true. The reviewer remains responsible for that.

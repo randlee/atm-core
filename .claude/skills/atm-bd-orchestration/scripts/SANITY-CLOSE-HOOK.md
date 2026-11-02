@@ -34,7 +34,12 @@ atm hook register task.close --phase <x> --cwd . \
 use default processing without querying bd. Bead labels additionally verify the
 role for those agents.
 
-Disable with `atm hook disable --phase bk task.close`. Registration is local daemon state, not a commit or deployment.
+Disable with `atm hook disable --phase <x> task.close`. Registration is local daemon state, not a commit or deployment.
+
+A dev or fix close (`atm-task-close.py`) reads `atm hook list --phase <x> --json` as the lead before it
+dispatches sanity: an active `task.close` row for this module whose `sanity_agents` names the dev-sanity
+member sets `sanity_close_mode: daemon` in the assignment; otherwise it is `legacy`. A failed read refuses
+the close before anything is written.
 
 ## Inputs and actions
 

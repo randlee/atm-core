@@ -10,7 +10,7 @@ Save the reconciled IDs as a JSON array in `finding-ids.json`. From the reposito
 root, collect the original bead records at the assigned integration commit:
 
 ```bash
-python3 .claude/skills/atm-bd-orchestration/scripts/post_mortem_context.py --inventory finding-ids.json --repo . --commit <full-integration-sha> --out <run-directory>
+.claude/skills/atm-bd-orchestration/scripts/post_mortem_context.py --inventory finding-ids.json --repo . --commit <full-integration-sha> --out <run-directory>
 ```
 
 The source repository passed as `--repo` must contain the pinned SHA locally;
@@ -69,8 +69,8 @@ checks coverage before invoking JEV. Workers do not file findings.
 ## Prepare packets, evaluate, investigate
 
 ```bash
-python3 .claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py prepare --repo . --manifest <manifest.json> --out <packet.json>
-python3 .claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py run --phase phase-d --run-id <run-id> --output-dir .sc/qa-logs <packet.json>
+.claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py prepare --repo . --manifest <manifest.json> --out <packet.json>
+.claude/skills/atm-bd-orchestration/scripts/post_mortem_jev.py run --phase phase-d --run-id <run-id> --output-dir .sc/qa-logs <packet.json>
 ```
 
 `prepare` extracts the selected source from Git and rejects invalid ranges or

@@ -1,6 +1,6 @@
 ---
 name: sprint-group
-version: 4.2.0
+version: 4.3.0
 description: Beads formula for the dev, sanity and QA tasks of one sprint, attached under its sprint container. bead-groups supplies every variable.
 format: toml
 required_variables:
@@ -22,6 +22,7 @@ required_variables:
   - lint_command
   - policy_path
   - max_sanity_rounds
+  - reviewers_round1
 ---
 {#
 sc-compose beads formula (sc-compose/beads/v1, ADR-0021): the dev, sanity and
@@ -44,6 +45,7 @@ repository configuration and sprint-group.relations.json):
   max_sanity_rounds
                  the close fields (close_fields.POURED) every step carries, so
                  its close reads no other bead; max_sanity_rounds is bare
+  reviewers_round1  the QA step's reviewer list, from the repository configuration
   edge_option    E1: "C" sanity needs dev (poured `blocks`; the default),
                  "B" no sanity -> dev edge in the pour (bead-groups adds
                  `validates`), "A" only dev is poured
@@ -157,4 +159,5 @@ phase_feature = "{{{ phase_feature }}}"
 lint_command = "{{{ lint_command }}}"
 policy_path = "{{{ policy_path }}}"
 max_sanity_rounds = {{{ max_sanity_rounds }}}
+reviewers_round1 = [{% for r in reviewers_round1 %}"{{{ r }}}"{% if not loop.last %}, {% endif %}{% endfor %}]
 {% endif %}

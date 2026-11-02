@@ -406,6 +406,28 @@ class SanitySplit(unittest.TestCase):
         self.assertEqual(texts[1], "Document it: ```rust 1. not a deliverable ```")
         self.assertEqual(texts[2], "Tests.")
 
+    def test_external_evidence_is_appended_to_every_assignment(self):
+        comment = {"kind": "pr_comment", "repo": "o/r", "comment_id": 7}
+        later = self.root / "later.json"
+        later.write_text(json.dumps({"kind": "pr_body", "repo": "o/r", "pr": 3}))
+        out = self.run_split(bead("## Deliverables\n1. One.\n2. Two.\n"), None, None, "sprint/x", "develop", "--split-only",
+                             "--external-evidence", json.dumps(comment), "--external-evidence", str(later))
+        self.assertEqual(out.returncode, 0, out.stderr)
+        assignments = json.loads(out.stdout)["assignments"]
+        self.assertEqual(len(assignments), 2)
+        for item in assignments:
+            self.assertEqual(item["assignment"]["external_evidence"][-2:],
+                             [comment, {"kind": "pr_body", "repo": "o/r", "pr": 3}])
+
+    def test_malformed_external_evidence_exits_1_naming_the_entry(self):
+        for value in ('{"kind":"pr_comment","repo":"o/r"}', '{"kind":', str(self.root / "missing.json")):
+            with self.subTest(value=value):
+                out = self.run_split(bead("## Deliverables\n1. One.\n"), None, None, "sprint/x", "develop", "--split-only",
+                                     "--external-evidence", value)
+                self.assertEqual(out.returncode, 1)
+                self.assertIn("--external-evidence", out.stderr)
+                self.assertIn(value, out.stderr)
+
     def test_fences_hide_headings_and_shorter_fences(self):
         cases = {
             "heading inside a fence": (
@@ -522,8 +544,9 @@ class SanitySplit(unittest.TestCase):
         manifest = json.loads(own.stdout)
         self.assertEqual(manifest["changed_files"], ["crates/types/src/retry.rs", "crates/types/src/retry_tests.rs"])
         self.assertEqual(manifest["files_outside_owned_paths"], [])
+        slug = f"{self.repo.origin.parent.name}/{self.repo.origin.stem}"  # origin's owner/repo, never gh's {owner}/{repo} placeholder
         for item in manifest["assignments"]:  # the checked PR's body
-            self.assertEqual(item["assignment"]["external_evidence"], [{"kind": "pr_body", "repo": "{owner}/{repo}", "pr": 3}])
+            self.assertEqual(item["assignment"]["external_evidence"], [{"kind": "pr_body", "repo": slug, "pr": 3}])
         self.assertEqual(stale.returncode, 4, stale.stderr)  # the checked PR goes last and must be at the pinned sha
         self.assertEqual(missing.returncode, 3, missing.stderr)
         self.assertIn("layer PR(s) 9 not in", missing.stderr)

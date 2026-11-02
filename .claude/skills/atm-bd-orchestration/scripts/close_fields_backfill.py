@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# ///
 """Stamp the close fields (close_fields.POURED) on a phase's open task beads (#557).
 
     close_fields_backfill.py --phase <x> [--apply] [--actor <identity>]
@@ -34,7 +38,7 @@ import sprint_index_common  # noqa: E402
 from stack_top import stack_bead_id  # noqa: E402
 
 CARRIED = ("phase", "sprint", "sprint_bead", "stack", "branch", "worktree", "pr_target")
-STAGE = {**close_fields.ROLE_BY_STAGE, "stage:finding": "fix"}
+STAGE = close_fields.ROLE_BY_STAGE
 
 
 def stage_role(row: dict) -> str | None:

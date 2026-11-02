@@ -54,11 +54,12 @@ rather than reaching an agent:
    <scratch>/plan.jsonl`. Pour every sprint's group:
    `.claude/skills/atm-bd-orchestration/scripts/bead-groups --phase <x>`.
    Right away, create the plan-review bead
-   (`atm-bd-orchestration` "Plan Gate", step 1). Commit the plan file and the
-   phase file and push them to the root bead's `integration_branch`. Then run
+   (`atm-bd-orchestration` "Plan Gate", step 1). Run
    `.claude/skills/sprint-review/scripts/sprint-review --root <root>`, which
-   writes `<plans_dir>/phase-<x>/phase-<x>-dag.html` locally; it never commits
-   or pushes. No viewer opens without `--view`. Then run `validate-plan --phase <x>`
+   writes `<plans_dir>/phase-<x>/phase-<x>-dag.html` from the plan file in the
+   working tree; the script never commits or pushes. Commit the plan file, the
+   phase file and the DAG together and push them to the root bead's
+   `integration_branch`, then open a PR from the `integration_branch` to the repository trunk the phase lands on, carrying the plan file, the phase file and the DAG, before plan review. No viewer opens without `--view`. Then run `validate-plan --phase <x>`
    on the imported beads; without `--index` it reads the plan file from
    that integration branch.
 
@@ -128,7 +129,9 @@ Hierarchy:
   poured `fix ← sanity ← qa` group per blocking finding. Important and minor
   findings are plain finding beads under the phase or feature bead.
 
-`phase-<x>-dag.html` is written locally; it is never committed or pushed.
+`phase-<x>-dag.html` is committed with the plan file and the phase file; when
+the plan changes, re-run `sprint-review` and commit the DAG with the plan file
+change, which updates the plan PR. The script itself never commits or pushes.
 `--view` only controls optional background viewing in Wyvern.
 
 ## Phase Root

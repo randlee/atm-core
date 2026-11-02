@@ -1,0 +1,7 @@
+{"sprint":"bo-1"}
+{"sprint":"bo-2","depends_on":["bo-1"]}
+{"sprint":"bo-3","depends_on":["bo-2"]}
+{"sprint":"bo-4","depends_on":["bo-2"]}
+{"sprint":"bo-5","depends_on":["bo-4"]}
+{"sprint":"bo-6","depends_on":["bo-2"]}
+{"sprint":"bo-7","depends_on":["bo-3","bo-5","bo-6"]}

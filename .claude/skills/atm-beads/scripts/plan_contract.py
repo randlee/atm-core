@@ -1,3 +1,4 @@
+# pyright: strict
 """Frozen phase-contract constants shared by validate-plan, the orchestration templates and the dispatch view.
 
 This module is the layer-1 interface. Every consumer imports these names;

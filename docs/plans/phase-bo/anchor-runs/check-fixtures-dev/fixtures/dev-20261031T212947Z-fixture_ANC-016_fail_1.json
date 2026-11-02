@@ -1,0 +1,113 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261031T212947Z-fixture_ANC-016_fail_1",
+  "gate": "dev",
+  "created_at": "2026-10-31T21:29:47+00:00",
+  "anchors_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/ae4c4073-991a-428e-a239-d8a12fdb63c3/scratchpad/tuning/anchors.rebuilt.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-016:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 76,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "New or rewritten Python code in the phase must return Result<T,Err> values instead of throwing exceptions.",
+      "quote": "use pyright, return Result<T,Err> (no throwing)",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep raise in the files created by the phase finds only programmer-error guards; every public function returns Ok or Err",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.53,
+          "probabilities": {
+            "yes": 0.69,
+            "no": 0.05,
+            "unclear": 0.26
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.96,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.97,
+            "unclear": 0.02
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.53,
+      "explanation": "The delivered work went against this anchor.",
+      "usage": {
+        "input_tokens": 1184,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 76,
+      "item_shortened": false,
+      "request_bytes": 3753
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-016"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

@@ -1,6 +1,6 @@
 ---
 name: atm-beads
-version: 0.19.0
+version: 0.19.12
 description: Plans written as beads. Use when writing, validating or importing a phase plan into beads, or when pairing an ATM task with its bead (claim, start, close).
 requires:
   cli:
@@ -64,9 +64,10 @@ Read only the one the current job needs.
 
 Every phase plan must include the plan file `<plans_dir>/phase-<x>.jsonl` and the
 tracked phase file `.atm-bd/phase-<x>.toml` (format: `resources/planning.md`
-"Phase definition"), committed and pushed on the phase root's `integration_branch`
-before plan review. `.claude/skills/sprint-review/scripts/sprint-review --root <root>` writes
-`<plans_dir>/phase-<x>/phase-<x>-dag.html` locally (never commits or pushes) without a
+"Phase definition") and the phase DAG `<plans_dir>/phase-<x>/phase-<x>-dag.html`,
+committed together and pushed on the phase root's `integration_branch` before
+plan review. `.claude/skills/sprint-review/scripts/sprint-review --root <root>` writes
+the DAG (the script never commits or pushes; the planner commits it) without a
 viewer; `--view` optionally opens Wyvern in the background. `plans_dir` and
 the other repository values come from the repository configuration
 (`atm-bd-orchestration` SKILL.md, "Repository configuration").
@@ -85,7 +86,7 @@ before the first dispatch. Run it from the repository root:
 What it checks is listed once, in the header of
 [`.claude/skills/atm-beads/scripts/validate-plan`](scripts/validate-plan). The bead models are pydantic,
 in `.claude/skills/atm-beads/scripts/bead_schema.py`; `schemas/*.schema.json` are exported from them
-(`python3 .claude/skills/atm-beads/scripts/bead_schema.py export schemas`) and published. Exit 0 means valid, 5 lists
+(`.claude/skills/atm-beads/scripts/bead_schema.py export schemas`) and published. Exit 0 means valid, 5 lists
 the problems, and 2 means it could not run (the reason is on stderr, including
 `bd doctor`'s own stderr). Report problems to the lead; never edit the script,
 the plan or the graph to make it pass.

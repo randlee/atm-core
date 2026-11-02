@@ -103,14 +103,18 @@ class AssignmentGateTests(unittest.TestCase):
                     return delegate(argv, **kwargs)
 
                 stderr, stdout = io.StringIO(), io.StringIO()
-                with patch.object(gates, "COMMAND_TIMEOUT", 7), patch.object(gates, "VALIDATE_PLAN_TIMEOUT", 7), redirect_stderr(stderr), redirect_stdout(stdout):
+                # main() resolves the deadline per run from ATM_BD_GATE_TIMEOUT_S; validate-plan keeps its 300 s floor.
+                with patch.dict(os.environ, {"ATM_BD_GATE_TIMEOUT_S": "7"}), patch.object(gates, "COMMAND_TIMEOUT", gates.COMMAND_TIMEOUT), \
+                        patch.object(gates, "VALIDATE_PLAN_TIMEOUT", gates.VALIDATE_PLAN_TIMEOUT), redirect_stderr(stderr), redirect_stdout(stdout):
                     exit_code = gates.main(["dev", "--root", "atm-phase-d", "--bead", "bead",
                                             "--pr-target", "target", "--identity", "terra"], runner)
+                limit = gates.MIN_VALIDATE_PLAN_TIMEOUT if timed_out[0] == gates.VALIDATE_PLAN else 7
                 self.assertEqual((exit_code, stdout.getvalue().strip()), (2, "GATE_CANNOT_RUN"))
                 self.assertIn(timed_out[0], stderr.getvalue())
-                self.assertIn("7s", stderr.getvalue())
+                self.assertIn(f"timed out after {limit}s", stderr.getvalue())
                 self.assertIn("retry once, or raise ATM_BD_GATE_TIMEOUT_S", stderr.getvalue())
-                self.assertTrue(seen and all(timeout == 7 for timeout in seen))
+                self.assertTrue(seen and set(seen) <= {7, gates.MIN_VALIDATE_PLAN_TIMEOUT})
+                self.assertIn(7 if timed_out[0] != gates.VALIDATE_PLAN else gates.MIN_VALIDATE_PLAN_TIMEOUT, seen)
 
     def test_invalid_timeout_env_is_gate_cannot_run_not_a_traceback(self):
         for bad in ("abc", "0", "-3"):
@@ -171,6 +175,17 @@ class AssignmentGateTests(unittest.TestCase):
                "metadata": {"difficulty": "normal", "sprint_bead": "container"}}])),
                ("bd", "show", "container", "--json"): (0, dumped([{"metadata": {"pr_target": "other"}}]))}
         self.assertEqual(gates.evaluate(ns("dev"), dev_runner(fix)), "READY")  # a fix layer's target is set at dispatch
+
+    def test_dev_rerun_after_the_callers_own_claim(self):
+        unlisted, show = ("bd", "ready", "-n", "0", "--json"), ("bd", "show", "bead", "--json")
+        def dep(status, kind="blocks"): return {"id": "other", "status": status, "dependency_type": kind}
+        for assignee, deps, expected in (("terra", [], "READY"), ("someone-else", [], "NOT_READY"),
+                                         ("terra", [dep("open")], "NOT_READY"), ("terra", [dep("closed")], "READY"),
+                                         ("terra", [dep("open", "parent-child")], "READY")):
+            runner = dev_runner({unlisted: (0, "[]"), show: (0, dumped([{"status": "in_progress", "assignee": assignee,
+                                 "dependencies": deps, "metadata": {"difficulty": "normal", "pr_target": "target"}}]))})
+            with self.subTest(assignee=assignee, deps=deps):
+                self.assertEqual(gates.evaluate(ns("dev"), runner), expected)
 
     def test_dev_gate_runs_validate_plan_in_primary_and_git_in_worktree(self):
         runner = dev_runner({("git", "-C", "/wt", "merge-base", "--is-ancestor", "origin/target", "HEAD"): (0, "")})
@@ -313,15 +328,82 @@ class AssignmentGateTests(unittest.TestCase):
     def test_a_lower_bound_whose_branch_is_gone_holds_only_when_its_pr_merged(self):
         gone = {("git", "merge-base", "--is-ancestor", "origin/planned", "origin/target"): (128, ""),
                 ("git", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/planned"): (1, "")}
-        merged = ("gh", "pr", "list", "--head", "planned", "--state", "merged", "--json", "mergeCommit")
+        merged = ("gh", "api", "repos/{owner}/{repo}/pulls?state=closed&head={owner}:planned&per_page=100")
         in_base = ("git", "merge-base", "--is-ancestor", "m1", "origin/target")
-        listed = {**gone, merged: (0, dumped([{"mergeCommit": {"oid": "old"}}, {"mergeCommit": {"oid": "m1"}}])),
+        listed = {**gone, merged: (0, dumped([{"merged_at": "2026-01-01T00:00:00Z", "merge_commit_sha": "old"},
+                                              {"merged_at": "2026-01-02T00:00:00Z", "merge_commit_sha": "m1"}])),
                   ("git", "merge-base", "--is-ancestor", "old", "origin/target"): (1, "")}
-        self.assertTrue(gates.descends(FakeRunner({**listed, in_base: (0, "")}), "planned", "target"))
+        runner = FakeRunner({**listed, in_base: (0, "")})
+        self.assertTrue(gates.descends(runner, "planned", "target"))
+        self.assertFalse([argv for _, argv in runner.calls if argv[:3] == ("gh", "pr", "list")])
         for responses in ({**listed, in_base: (1, "")}, {**gone, merged: (0, "[]")}):
             with self.subTest(responses=responses):
                 with self.assertRaises(RuntimeError):
                     gates.descends(FakeRunner(responses), "planned", "target")
+
+    def test_a_closed_unmerged_pr_of_a_gone_lower_bound_is_ignored(self):
+        merged = ("gh", "api", "repos/{owner}/{repo}/pulls?state=closed&head={owner}:planned&per_page=100")
+        runner = FakeRunner({
+            ("git", "merge-base", "--is-ancestor", "origin/planned", "origin/target"): (128, ""),
+            ("git", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/planned"): (1, ""),
+            merged: (0, dumped([{"merged_at": None, "merge_commit_sha": "closed-unmerged"}])),
+            ("git", "merge-base", "--is-ancestor", "closed-unmerged", "origin/target"): (0, ""),
+        })
+        with self.assertRaises(RuntimeError):
+            gates.descends(runner, "planned", "target")
+        self.assertNotIn(("git", "merge-base", "--is-ancestor", "closed-unmerged", "origin/target"),
+                         [argv for _, argv in runner.calls])
+
+    def test_gate_timeout_comes_from_yaml_and_the_env_overrides_it(self):
+        self.assertEqual(gates.command_timeout({}, 600), 600)
+        self.assertEqual(gates.command_timeout({}, None), 180)
+        self.assertEqual(gates.command_timeout({"ATM_BD_GATE_TIMEOUT_S": "45"}, 600), 45)
+        for bad in (0, -5, True, "ninety", 1.5):
+            with self.subTest(value=bad), self.assertRaises(ValueError) as caught:
+                gates.command_timeout({}, bad)
+            self.assertIn("gate_timeout_s=", str(caught.exception))
+
+    def test_repo_timeout_reads_the_repository_yaml_file(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(gates.repo_timeout({}, root), 180)  # no configuration file
+            config = root / ".claude/project/atm-bd-orchestration.yaml"
+            config.parent.mkdir(parents=True)
+            config.write_text("gate_timeout_s: 777\n")
+            self.assertEqual(gates.repo_timeout({}, root), 777)
+            self.assertEqual(gates.repo_timeout({"ATM_BD_GATE_TIMEOUT_S": "45"}, root), 45)
+            config.write_text("gate_timeout_s: soon\n")
+            with self.assertRaises(ValueError) as caught:
+                gates.repo_timeout({}, root)
+            self.assertIn("gate_timeout_s must be a positive integer", str(caught.exception))
+            self.assertIn(str(config), str(caught.exception))
+            self.assertEqual(gates.repo_timeout({"ATM_BD_GATE_TIMEOUT_S": "45"}, root), 45)
+
+    def test_main_applies_a_yaml_timeout_written_after_import(self):
+        import tempfile
+        import command_timeout
+        env = {k: v for k, v in os.environ.items() if k != "ATM_BD_GATE_TIMEOUT_S"}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(command_timeout, "REPO_ROOT", Path(tmp)), \
+                patch.dict(os.environ, env, clear=True), patch.object(gates, "COMMAND_TIMEOUT", gates.COMMAND_TIMEOUT), \
+                patch.object(gates, "VALIDATE_PLAN_TIMEOUT", gates.VALIDATE_PLAN_TIMEOUT):
+            config = Path(tmp) / ".claude/project/atm-bd-orchestration.yaml"
+            config.parent.mkdir(parents=True)
+            for configured, validate in ((777, 777), (200, 300)):
+                with self.subTest(gate_timeout_s=configured):
+                    config.write_text(f"gate_timeout_s: {configured}\n")
+                    timeouts = []
+
+                    def runner(argv, **kwargs):
+                        timeouts.append((argv[0], kwargs["timeout"]))
+                        return subprocess.CompletedProcess(argv, 0, dumped([{"id": "stack"}]), "")
+
+                    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                        gates.main(["dev", "--root", "r", "--bead", "b", "--pr-target", "t"], runner)
+                    self.assertIn((gates.VALIDATE_PLAN, validate), timeouts)
+                    others = [limit for name, limit in timeouts if name != gates.VALIDATE_PLAN]
+                    self.assertTrue(others)
+                    self.assertEqual(set(others), {configured})
 
     def stack_top(self, responses, target="integrate"):
         output = io.StringIO()

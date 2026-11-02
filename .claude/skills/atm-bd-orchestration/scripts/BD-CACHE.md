@@ -76,7 +76,7 @@ scales with it.
 | Operation | Measured | Target (Rust) |
 |---|---|---|
 | In-process cached `get` | 0.017 ms median, 0.14 ms max (load 7-10) | < 1 ms |
-| New-process CLI `get` (`python3 bd_cache.py get`) | 129 ms median (load 7-10); 80 ms (load 3.5) | < 50 ms |
+| New-process CLI `get` (`./bd_cache.py get`) | 129 ms median (load 7-10); 80 ms (load 3.5) | < 50 ms |
 | Hook process start + import (`sanity_task_close_hook`, imports pydantic) | 70-80 ms (load 3.5) | Rust binary: no interpreter or pydantic cost |
 | `bd list --id <one bead>` | 160-180 ms (load 3.5); `bd show` 134 ms median, 254 ms max (load 7-10) | n/a (backend) |
 | First full sync, one 810-bead phase | 0.42 s (`bd version` + `bd schema` + one `bd list`) | — |
@@ -338,7 +338,8 @@ announced per phase; any other sync failure whose cause differs from
 outage not yet announced is sent once to every active phase's lead (every
 configured lead when none is known active), then marked; every escalated entry with no
 `announced_at` is sent to its phase's lead with the `resolve` command, then
-marked. Messages go through `atm send <lead>@<team> --team tool` as `cron`.
+marked. Messages go through `atm send <lead>@<team> --team tool` as `atm-bd@tool`
+(the installer's member; `cron@tool` is atm's daemon-owned scheduler principal and refuses ordinary sends).
 Any message not delivered (or an entry whose phase has no lead) makes the
 reply `refused` with the list, and is retried next tick; otherwise
 `pass-through`. Missing `custom.team` is refused.

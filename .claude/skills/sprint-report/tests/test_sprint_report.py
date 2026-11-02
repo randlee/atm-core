@@ -77,7 +77,7 @@ class SprintReportTests(unittest.TestCase):
             subprocess.run(['git', 'init', '-q'], cwd=repo, check=True)
             helper_dir = repo / '.claude/skills/atm-beads/scripts'
             helper_dir.mkdir(parents=True)
-            for name in ('phase-index-path', 'sprint_index_common.py', 'repo_config.py'):
+            for name in ('phase-index-path', 'sprint_index_common.py', 'operation_models.py', 'repo_config.py'):
                 shutil.copy2(skills / 'atm-beads/scripts' / name, helper_dir / name)
             config = repo / '.claude/project/atm-bd-orchestration.yaml'
             config.parent.mkdir(parents=True)
@@ -91,7 +91,7 @@ class SprintReportTests(unittest.TestCase):
             bin_dir = repo / 'bin'
             bin_dir.mkdir()
             bd = bin_dir / 'bd'
-            bd.write_text('#!/bin/sh\nprintf \'[{"id":"atm-phase-x","metadata":{}}]\\n\'\n')
+            bd.write_text('#!/bin/sh\nprintf \'[{"id":"atm-phase-x","status":"open","metadata":{}}]\\n\'\n')
             bd.chmod(0o755)
             old_cwd = Path.cwd()
             try:
@@ -154,12 +154,12 @@ class SprintReportTests(unittest.TestCase):
         self.assertEqual(set(index['sprints'][1]), {'dev_bead_id', 'sanity_bead_id'})
 
     def test_historical_sanity_count_counts_only_completed_runs(self):
-        events = {'events': [{'event': event} for event in (
+        events = [{'event': event} for event in (
             'assigned', 'started', 'completed', 'reopened', 'started',
             'completed', 'reopened', 'started', 'completed', 'refused'
-        )]}
+        )]
         self.assertEqual(report.completed_sanity_runs(events), 3)
-        self.assertEqual(report.completed_sanity_runs({'events': []}), 0)
+        self.assertEqual(report.completed_sanity_runs([]), 0)
 
     def test_sanity_iterations_use_cumulative_completion_not_line_count(self):
         with tempfile.TemporaryDirectory() as directory:

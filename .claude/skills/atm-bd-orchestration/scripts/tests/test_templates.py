@@ -302,7 +302,8 @@ class TemplateContractTests(unittest.TestCase):
     def test_sc_sanity_jev_hands_the_client_an_assignment_it_accepts(self):
         import importlib.util
         text = (ROOT.parents[1] / "agents" / "sc-sanity-jev.md").read_text()
-        self.assertIn("python3 .claude/skills/atm-bd-orchestration/scripts/jev_client.py --assignment <file>", text)
+        self.assertIn(".claude/skills/atm-bd-orchestration/scripts/jev_client.py --assignment <file>", text)
+        self.assertNotIn("python3 ", text)
         self.assertIn("On a client API_FAILURE, return that result unchanged, with no retry and no context edit.", text)
         self.assertNotIn("rebuild `context` and rerun", text)
         self.assertNotIn("--request", text)
@@ -898,7 +899,19 @@ def test_hook_repair_template_uses_installed_runner_path():
     values = _example("sanity-bead-repair-vars.json")
     result = _render("sanity-bead-repair.xml.j2", values)
     assert result.returncode == 0, result.stderr
-    assert "python3 " + values["repair_script"] in result.stdout
+    assert "Run " + values["repair_script"] in result.stdout
+    assert "python3" not in result.stdout
     for flag, field in (("--phase", "phase"), ("--team", "team"), ("--original-task", "original_task"), ("--lead", "phase_lead")):
         assert f"{flag} {values[field]}" in result.stdout
     assert "/.claude/skills/atm-bd-orchestration/scripts/" not in result.stdout
+
+
+def test_shipped_dev_and_fix_assignments_carry_no_host_build_policy():
+    # Repository build policy (cargo parallelism, host sharing) belongs in the consumer's policy_path, not in the
+    # templates every installing repository receives.
+    for template, example in (("dev-template.xml.j2", "dev-template-vars.json"),
+                              ("fix-assignment.xml.j2", "fix-assignment-vars.json")):
+        result = _render(template, _example(example))
+        assert result.returncode == 0, result.stderr
+        assert "CARGO_BUILD_JOBS" not in result.stdout, template
+        assert "devs share this host" not in result.stdout, template

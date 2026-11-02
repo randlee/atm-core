@@ -1,0 +1,113 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261031T212945Z-fixture_ANC-009_fail_1",
+  "gate": "dev",
+  "created_at": "2026-10-31T21:29:45+00:00",
+  "anchors_path": "/private/tmp/claude-501/-Users-randlee-github-atm-core/ae4c4073-991a-428e-a239-d8a12fdb63c3/scratchpad/tuning/anchors.rebuilt.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-009:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 69,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The stack check must verify stacking by comparing only the PR base and the stack top branch, using no other stack record.",
+      "quote": "This is something we should address at ATM BD lite phase buy only checking the base and top of work trees, not using the GH stack sub command",
+      "stated_by": "Rand",
+      "stated_at": "2026-10-31",
+      "context": "planning session 2026-10-27..31 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "stack_gate.py calls git merge-base and reads the PR base ref and no other stack source",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.96,
+          "probabilities": {
+            "yes": 0.97,
+            "no": 0.02,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "unclear",
+          "confidence": 0.24,
+          "probabilities": {
+            "yes": 0.12,
+            "no": 0.39,
+            "unclear": 0.49
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.64,
+          "probabilities": {
+            "yes": 0.76,
+            "no": 0.16,
+            "unclear": 0.08
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.24,
+      "explanation": "The delivered work went against this anchor.",
+      "usage": {
+        "input_tokens": 1183,
+        "output_tokens": 153
+      },
+      "attempts": 1,
+      "item_chars_sent": 69,
+      "item_shortened": false,
+      "request_bytes": 3756
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-009"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}
