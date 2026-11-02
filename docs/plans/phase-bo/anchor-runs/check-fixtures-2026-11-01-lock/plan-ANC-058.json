@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "data": {
+    "gate": "plan",
+    "dry_run": false,
+    "fixture": false,
+    "checks": [
+      {
+        "anchor_id": "ANC-058",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "uv run pytest skills/atm-bd-lite/tests/test_errors.py passes: for every Errors row, a failed lookup makes the hook return HookReply.refused with that row's fix command, and no test supplies stored state.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-058/fixtures/plan-20261102T032745Z-fixture_ANC-058_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-058",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "When the PR lookup fails, the lite close hook uses the PR number saved at dispatch time instead.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-058/fixtures/plan-20261102T032745Z-fixture_ANC-058_fail_1.json"
+      }
+    ],
+    "mismatches": [],
+    "pass": true,
+    "path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-058/fixtures",
+    "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-058/fixtures",
+    "runs": [
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-058/fixtures/plan-20261102T032745Z-fixture_ANC-058_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-058/fixtures/plan-20261102T032745Z-fixture_ANC-058_fail_1.json"
+    ]
+  },
+  "error": null
+}

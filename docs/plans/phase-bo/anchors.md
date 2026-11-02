@@ -25,7 +25,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-017 | locked | Fundamental types in one Rust crate | 2026-10-31 |
 | ANC-018 | locked | Python fixes release without the crate | 2026-10-31 |
 | ANC-019 | locked | Hook organized by transition type | 2026-10-31 |
-| ANC-020 | locked | Shared types live in atm-bd-core | 2026-10-31 |
+| ANC-020 | retired | Shared types live in atm-bd-core | 2026-10-31 |
 | ANC-021 | retired | Stacking works on Azure Git repos | 2026-10-31 |
 | ANC-022 | retired | pyright covers every plugin and console script | 2026-10-31 |
 | ANC-023 | retired | Profile comes from the phase file; hook, templates, cron and console align on it | 2026-10-31 |
@@ -69,16 +69,17 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-061 | locked | No profile names hard-coded in atm-bd-types | 2026-11-01 |
 | ANC-062 | locked | No dicts or Any in lite code; use atm-bd-types | 2026-11-01 |
 | ANC-063 | locked | lite beads access only via beads-cache | 2026-11-01 |
-| ANC-064 | proposed | one beads-cache write per hook | 2026-11-01 |
-| ANC-065 | proposed | hooks only read the ledger | 2026-11-01 |
-| ANC-066 | proposed | no subprocess in a hook | 2026-11-01 |
-| ANC-067 | proposed | stack and pour are template blocks | 2026-11-01 |
-| ANC-068 | proposed | stub carries only used names | 2026-11-01 |
-| ANC-069 | proposed | stack bead is the atomic ledger | 2026-11-01 |
-| ANC-070 | proposed | hook file <= 100 lines | 2026-11-01 |
-| ANC-071 | proposed | only Rand commits the spec | 2026-11-01 |
-| ANC-072 | proposed | review findings bind to the spec | 2026-11-01 |
-| ANC-073 | proposed | anchor checks are mechanical | 2026-11-01 |
+| ANC-064 | locked | one beads-cache write per hook | 2026-11-01 |
+| ANC-065 | locked | hooks only read the ledger | 2026-11-01 |
+| ANC-066 | locked | no subprocess in a hook | 2026-11-01 |
+| ANC-067 | locked | stack and pour are template blocks | 2026-11-01 |
+| ANC-068 | locked | stub carries only used names | 2026-11-01 |
+| ANC-069 | locked | stack bead is the atomic ledger | 2026-11-01 |
+| ANC-070 | locked | hook file <= 100 lines | 2026-11-01 |
+| ANC-071 | locked | only Rand commits the spec | 2026-11-01 |
+| ANC-072 | locked | review findings bind to the spec | 2026-11-01 |
+| ANC-073 | locked | anchor checks are mechanical | 2026-11-01 |
+| ANC-074 | locked |  | 2026-11-01 |
 
 ## ANC-001
 
@@ -434,7 +435,7 @@ Anchor: Types shared between all profiles must be defined in atm-bd-core.
 
 > This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.
 
-Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: locked. Version 7.
+Said by Rand, planning session 2026-10-27..31 (fenix), 2026-10-31. Status: retired. Version 8.
 
 Summary: Shared types live in atm-bd-core
 
@@ -578,7 +579,7 @@ Anchor: atm-bd-lite must be its own skill in the skills/atm-bd-lite/ directory.
 
 > Lite is separate.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 4.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 5.
 
 Summary: atm-bd-lite is its own skill directory
 
@@ -587,7 +588,7 @@ Scope: adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestrat
 Deterministic check to pair with the development gate: skills/atm-bd-lite/SKILL.md exists and names the skill atm-bd-lite
 
 Fixtures:
-- pass: The lite profile ships as plugins/atm-bd-orchestration/skills/atm-bd-lite/ with its own SKILL.md (name: atm-bd-lite); test_lite_skill_layout asserts the directory and skill name.
+- pass: The lite profile ships as skills/atm-bd-lite/ with its own SKILL.md (name: atm-bd-lite); test_lite_skill_layout asserts the directory and the skill name.
 - fail: Lite is a mode flag inside skills/atm-bd-orchestration/SKILL.md; no skills/atm-bd-lite directory exists.
 
 ## ANC-029
@@ -628,7 +629,7 @@ Anchor: Each profile's task hooks, task-assignment templates and cron script mus
 
 > The profile-specific parts (the hooks, the templates and the cron script) live in each profile's own skill
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 4.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 6.
 
 Summary: Profile hooks, templates and cron live in the profile's skill
 
@@ -637,7 +638,7 @@ Scope: adds or moves a task hook, a task-assignment template or a cron script
 Deterministic check to pair with the development gate: find shows every lite hook, template and cron script under skills/atm-bd-lite/; none in the shared location
 
 Fixtures:
-- pass: The three lite task hooks and the lite dev/fix/qa assignment templates are all under skills/atm-bd-lite/ (scripts/ and templates/); find shows none of them in the shared location.
+- pass: The three lite task hooks, the lite dev/fix/qa assignment templates and the lite cron script are all under skills/atm-bd-lite/ (scripts/ and templates/); find shows none of them in the shared location.
 - fail: The lite dev-template.xml.j2 is placed in the shared location next to the shared modules.
 
 ## ANC-032
@@ -646,7 +647,7 @@ Anchor: Each atm-bd subcommand must run the script with the same file name from 
 
 > and the atm-bd commands just call the profile's scripts by the same name.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 5.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 6.
 
 Summary: atm-bd commands call the profile's same-named script
 
@@ -655,7 +656,7 @@ Scope: adds or changes how an atm-bd subcommand selects or calls profile code
 Deterministic check to pair with the development gate: a test runs each subcommand on a lite and a orchestration phase file and asserts the called script path is <profile skill>/scripts/<same file name>
 
 Fixtures:
-- pass: atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues; test_subcommand_routing asserts the called path for lite and orchestration phase files for console, cron, queues, show and snapshot.
+- pass: atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues, the same file name orchestration's queues has; test_subcommand_routing asserts the called path for lite and orchestration phase files for console, cron, queues, show and snapshot.
 - fail: atm-bd cron runs a new lite-cron entry point with a different file name and argument list for lite phases.
 
 ## ANC-033
@@ -768,7 +769,7 @@ Anchor: No change made for atm-bd-lite may break atm-bd-orchestration.
 
 > Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: locked. Version 4.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand clarified "Lite is separate"; follow-up: "shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today", 2026-11-01. Status: locked. Version 6.
 
 Summary: Lite work does not break atm-bd-orchestration
 
@@ -778,7 +779,7 @@ Deterministic check to pair with the development gate: the atm-bd-orchestration 
 
 Fixtures:
 - pass: At the stack top the atm-bd-orchestration test suite (just test-orchestration at origin/main) passes with no orchestration test file changed.
-- fail: Lite work renames an orchestration helper and edits three orchestration tests to match the new name.
+- fail: The sprint plans to delete atm-bd-orchestration's bd_cache.py and point atm-bd-orchestration at the new shared module for lite, accepting that atm-bd-orchestration's test suite fails until a later sprint.
 
 ## ANC-040
 
@@ -822,7 +823,7 @@ Anchor: Every public function and trait implementation in the shared location mu
 
 > How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 4.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover, 2026-11-01. Status: locked. Version 5.
 
 Summary: Shared code is tested on lite-profile inputs
 
@@ -831,7 +832,7 @@ Scope: adds or changes code in the shared location or atm-bd-types
 Deterministic check to pair with the development gate: test inventory: every public item in the shared location is exercised by a test whose fixture is a lite-profile phase file
 
 Fixtures:
-- pass: tests/shared/test_phase_file.py also runs read_profile on a lite-profile phase file fixture.
+- pass: Every public function and trait impl in the shared location, read_profile included, has a test under tests/shared/ that runs it on a lite-profile phase file fixture.
 - fail: The shared stack gate is tested only against orchestration-profile phase data.
 
 ## ANC-043
@@ -1020,7 +1021,7 @@ Anchor: Jev must judge every Transitions-table row of a lite hook's diagram as i
 
 > I one one file for atm-bd-lite task close and jev verifies 100% matches the design.
 
-Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 3.
+Said by Rand, Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); "all three" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev, 2026-11-01. Status: locked. Version 5.
 
 Summary: Jev: every diagram row is implemented
 
@@ -1029,8 +1030,8 @@ Scope: adds or changes a lite task hook file or its state-transition diagram
 Deterministic check to pair with the development gate: the per-hook Jev verification run reports pass for every diagram row; the run JSON is committed under anchor-runs/
 
 Fixtures:
-- pass: The Jev run anchor-runs/hooks/task-close.json judges T-CLOSE-01..06 each implemented by atm-bd-task-hook.py, no row failing.
-- fail: Jev reports T-CLOSE-04 (QA FAIL pours findings) as not implemented in the hook code.
+- pass: The gate's Jev run anchor-runs/hooks/atm-bd-task-hook.json judges T-CLOSE-01..04 each implemented by its own match arm in atm-bd-task-hook.py, no row failing.
+- fail: The committed gate run anchor-runs/hooks/atm-bd-task-hook.json has Jev judging T-CLOSE-02 not implemented by atm-bd-task-hook.py, and the hook is merged with that row failing.
 
 ## ANC-054
 
@@ -1056,7 +1057,7 @@ Anchor: The lite profile must not write or read a close-vars file or any other p
 
 > that is what I wanted done in the first place.
 
-Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 1.
+Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 2.
 
 Summary: Lite has no close-vars or state file
 
@@ -1064,13 +1065,17 @@ Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/
 
 Deterministic check to pair with the development gate: grep of skills/atm-bd-lite for close-vars, close_vars and file writes outside the shared runner is empty; no lite template asks for a vars file
 
+Fixtures:
+- pass: grep -rn 'close-vars\|close_vars' skills/atm-bd-lite prints nothing, and grep of the lite hooks and templates for open(, write_text and read_text finds no per-task state file.
+- fail: The lite dev template has the dev copy close-vars.json and fill in its commit and PR, and the lite close hook reads that file.
+
 ## ANC-056
 
 Anchor: The lite hooks must look up every fact other than the task id at hook time from bd, git, the provider, the phase file or the ATM request.
 
 > that is what I wanted done in the first place.
 
-Said by Rand, phase-bo restart 2 (2026-11-01, fenix-brief.md §A): the facts each hook looks up are the Facts tables of hooks/task-assign.md, task-start.md and task-close.md: phase file, cache.get(bead), cache.get(stack_bead), cache.get(id) per poured finding, and the ATM request. Reads go through beads-cache (ANC-063); no bd show, no provider or git lookup. An unlookupable fact makes the hook refuse with the fix from the Errors table. Original statement from Rand on "how do we avoid: no close-vars file"., 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo restart 2 (2026-11-01, fenix-brief.md §A): the facts each hook looks up are the Facts tables of hooks/task-assign.md, task-start.md and task-close.md: phase file, cache.get(bead), cache.get(stack_bead), cache.get(id) per poured finding, and the ATM request. Reads go through beads-cache (ANC-063); no bd show, no provider or git lookup. An unlookupable fact makes the hook refuse with the fix from the Errors table. Original statement from Rand on "how do we avoid: no close-vars file"., 2026-11-01. Status: locked. Version 3.
 
 Summary: Lite hooks look up facts at hook time
 
@@ -1078,13 +1083,17 @@ Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/
 
 Deterministic check to pair with the development gate: each hooks/*.md has a Facts table whose every row is phase file, cache.get(...) or ATM request; the gate (ANC-066) finds no subprocess, bd or gh in the hook files
 
+Fixtures:
+- pass: uv run pytest skills/atm-bd-lite/tests/test_hook_facts.py passes: each hook is given only the task id in its ATM request plus fakes for beads-cache, git, the provider and the phase file, and looks up every other fact from them.
+- fail: The lite close hook reads the PR number and branch head from a JSON file the dispatch template wrote at assignment.
+
 ## ANC-057
 
 Anchor: A lite dev or fix closes its task with one atm task close command carrying its report as the close message.
 
 > that is what I wanted done in the first place.
 
-Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 1.
+Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 2.
 
 Summary: Lite dev close is one atm task close
 
@@ -1092,13 +1101,17 @@ Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/
 
 Deterministic check to pair with the development gate: the lite dev and fix templates contain exactly one close instruction, atm task close <bead id> completed with the report via --stdin
 
+Fixtures:
+- pass: grep -c 'atm task close' prints 1 for each lite dev and fix template, that command sends the report with --stdin, and grep finds no 'atm send' or 'atm ack' in them.
+- fail: The lite dev closes its task with atm task close and then sends its report to the lead in a second atm send.
+
 ## ANC-058
 
 Anchor: When a lite hook cannot look up a fact, it must refuse with the exact command that fixes it, never fall back to stored state.
 
 > that is what I wanted done in the first place.
 
-Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 1.
+Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 2.
 
 Summary: Missing fact means refuse with the fix
 
@@ -1106,19 +1119,27 @@ Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/
 
 Deterministic check to pair with the development gate: every Errors-table row of the lite hook diagrams names a fix command; a test removes each lookup's data and asserts the refused reply text
 
+Fixtures:
+- pass: uv run pytest skills/atm-bd-lite/tests/test_errors.py passes: for every Errors row, a failed lookup makes the hook return HookReply.refused with that row's fix command, and no test supplies stored state.
+- fail: When the PR lookup fails, the lite close hook uses the PR number saved at dispatch time instead.
+
 ## ANC-059
 
 Anchor: The lite profile must have no repair, backfill or legacy-compatibility script.
 
 > that is what I wanted done in the first place.
 
-Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 1.
+Said by Rand, phase-bo restart 2026-11-01 (fenix). Rand asked "how do we avoid: no close-vars file"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote., 2026-11-01. Status: locked. Version 2.
 
 Summary: Lite has no repair or backfill scripts
 
 Scope: adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure
 
 Deterministic check to pair with the development gate: find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' is empty
+
+Fixtures:
+- pass: find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' prints nothing.
+- fail: skills/atm-bd-lite/scripts/backfill-close-vars.py rebuilds close-vars files for tasks dispatched before lite existed.
 
 ## ANC-060
 
@@ -1162,7 +1183,7 @@ Anchor: atm-bd-lite code must not pass or hold hook input, bead data, phase-file
 
 > why are we passing a dictionary into the task-start hook call. that is red-flag #1 | a dictionary is a great way to get around pyright and using rust traits/types we defined in crate
 
-Said by Rand, phase-bo replan 2026-11-01 (fenix); first hook drafts took dict[str, Any] envelopes, 2026-11-01. Status: locked. Version 1.
+Said by Rand, phase-bo replan 2026-11-01 (fenix); first hook drafts took dict[str, Any] envelopes, 2026-11-01. Status: locked. Version 2.
 
 Summary: No dicts or Any in lite code; use atm-bd-types
 
@@ -1171,7 +1192,7 @@ Scope: adds or changes atm-bd-lite code
 Deterministic check to pair with the development gate: grep of skills/atm-bd-lite for 'dict[', 'Any', 'json.loads' outside atm-bd-types parsing is empty; pyright strict reports no reportUnknown* diagnostics
 
 Fixtures:
-- pass: def hook(req: HookRequest) -> HookReply: ... bead = Bead.show(req.task_id)
+- pass: grep of skills/atm-bd-lite for dict[, Any and json.loads outside atm-bd-types parsing is empty, and pyright strict reports no reportUnknown diagnostics; each hook takes HookRequest and returns HookReply.
 - fail: def hook(env: dict[str, Any]) -> dict[str, str]: task = env["request"]["task_id"]
 
 ## ANC-063
@@ -1180,7 +1201,7 @@ Anchor: Every atm-bd-lite hook, script and agent step must read and write beads 
 
 > we have found 20-30 second timeout is not enough ... that is why we designed bd cache which you forgot is a mandatory requirement
 
-Said by Rand, Rand 2026-11-01, phase bo replan, after the lite plan was found to call bd (BdCli) inside 2.5 s hooks; locked on Rand's 'lock it', 2026-11-01. Status: locked. Version 2.
+Said by Rand, Rand 2026-11-01, phase bo replan, after the lite plan was found to call bd (BdCli) inside 2.5 s hooks; locked on Rand's 'lock it', 2026-11-01. Status: locked. Version 3.
 
 Summary: lite beads access only via beads-cache
 
@@ -1189,7 +1210,7 @@ Scope: any lite hook, script, template step or adapter that reads or writes bead
 Deterministic check to pair with the development gate: no bd subprocess call and no BdCli in any lite file or template; BeadStore is the bd_cache_rs adapter
 
 Fixtures:
-- pass: The lite close hook reads the bead with cache.get from bd_cache_rs and closes it with cache.write(bead, 'close', ...); no bd process is started.
+- pass: grep finds no bd subprocess and no BdCli in any skills/atm-bd-lite file or template; hooks reach beads only through BeadStore, the bd_cache_rs adapter.
 - fail: The lite close hook runs 'bd show' and 'bd update --if-status' through a BdCli subprocess adapter.
 
 ## ANC-064
@@ -1198,7 +1219,7 @@ Anchor: A lite hook must make at most one beads-cache write and must never creat
 
 > ANC-064 Gate, not sequence. A lite hook makes at most one beads-cache write. Check: count of `beads.update(`/`beads.create(`/`beads.claim(`/`beads.release(` call sites per hook file ≤ 1, and `create`/`claim`/`release` count = 0. Fail fixture: a close hook that calls `beads.update` twice (record layer, then close).
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 4.
 
 Summary: one beads-cache write per hook
 
@@ -1207,7 +1228,7 @@ Scope: any lite hook file
 Deterministic check to pair with the development gate: atm-bd-lite-gate.py (ast): per hook file in skills/atm-bd-lite/scripts/atm-bd-task-*.py, count of beads.update(/beads.create(/beads.claim(/beads.release( call sites <= 1 and create/claim/release count == 0
 
 Fixtures:
-- pass: The lite close hook calls beads.update once, closing the bead with the layer evidence; it has no beads.create, beads.claim or beads.release call.
+- pass: The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-064 failure: the close hook has one beads.update call and no beads.create, claim or release.
 - fail: The lite close hook calls beads.update twice: first to record the layer on the stack bead, then to close the work bead.
 
 ## ANC-065
@@ -1216,7 +1237,7 @@ Anchor: A lite hook must never write the stack bead (the ledger).
 
 > ANC-065 Hooks never write the ledger. Check: no hook file passes a stack bead to a write; grep for `stack_bead` in a hook file appears only as an argument to `beads.show(` / `cache.get(`. Fail fixture: `BeadPatch.record(stack_bead, …)` in any hook.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 3.
 
 Summary: hooks only read the ledger
 
@@ -1225,7 +1246,7 @@ Scope: any lite hook file
 Deterministic check to pair with the development gate: atm-bd-lite-gate.py (ast): every stack_bead occurrence in skills/atm-bd-lite/scripts/atm-bd-task-*.py is an argument of beads.show( or cache.get(
 
 Fixtures:
-- pass: The lite close hook reads the ledger with cache.get(bead.stack_bead) and checks it holds a layer for work.branch; it passes stack_bead to no write.
+- pass: The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-065 failure: every stack_bead occurrence in the hook is an argument of beads.show or cache.get.
 - fail: The lite close hook calls beads.update(BeadPatch.record(stack_bead, layer)) to record the dev layer before closing.
 
 ## ANC-066
@@ -1234,7 +1255,7 @@ Anchor: A lite hook must not run a subprocess or use the BdCli, GitCli or AtmCli
 
 > ANC-066 No subprocess in a hook. Check: grep for `subprocess`, `BdCli`, `GitCli`, `AtmCli`, `gh `, `bd ` in `skills/atm-bd-lite/scripts/atm-bd-task-*.py` is empty. Fail fixture: any of them.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 2.
 
 Summary: no subprocess in a hook
 
@@ -1252,7 +1273,7 @@ Anchor: Every multi-step procedure a lite agent must run (stack, pour) must be a
 
 > ANC-067 Sequences live in templates. Every multi-step procedure an agent must run (stack, pour) is a fenced bash block in a template under `skills/atm-bd-lite/templates/`. Check: the dev template contains one block whose lines are, in order, bdc lock, git rebase, git push, bdc record; the QA template contains one block with bdc pour. Fail fixture: a Python file that performs those steps.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 4.
 
 Summary: stack and pour are template blocks
 
@@ -1261,8 +1282,8 @@ Scope: lite templates and any lite script that sequences agent steps
 Deterministic check to pair with the development gate: the dev template under skills/atm-bd-lite/templates/ has exactly one fenced bash block whose command lines match, in order, bdc lock, git rebase, git push, bdc record; the QA template has one fenced bash block containing bdc pour; no .py file under skills/atm-bd-lite runs git rebase, git push or a bdc lock/record/pour
 
 Fixtures:
-- pass: The lite dev template has one fenced bash block: bdc lock the stack bead, git rebase onto the top, git push, bdc record the layer and release; the QA template has one fenced block that runs bdc pour per finding.
-- fail: skills/atm-bd-lite/scripts/atm-bd-lite-stack.py takes the stack lock, rebases, pushes and records the layer for the dev.
+- pass: grep -n '^bdc\|^git' on the fenced bash block of skills/atm-bd-lite/templates/dev-template.xml.j2 prints, in order, bdc lock, git rebase, git push, bdc record; the QA template's one fenced block contains bdc pour; and grep -rln 'git rebase\|git push\|bdc lock\|bdc record\|bdc pour' --include=*.py skills/atm-bd-lite prints nothing.
+- fail: The dev template has no fenced stack block. Instead skills/atm-bd-lite/scripts/atm-bd-lite-stack.py, a Python file, runs bdc lock, git rebase, git push and bdc record for the dev.
 
 ## ANC-068
 
@@ -1270,7 +1291,7 @@ Anchor: The generated atm_bd_types stub must carry only names used by a lite hoo
 
 > ANC-068 Stub carries only used names. Check: every `ErrorId` member, class and method in the generated `.pyi` is referenced by a hook file or a `hooks/*.md` table. Fail fixture: `STACK_CLAIM_LOST` with no caller.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 3.
 
 Summary: stub carries only used names
 
@@ -1279,7 +1300,7 @@ Scope: atm-bd-types and its generated .pyi
 Deterministic check to pair with the development gate: every ErrorId member, class and method name in the generated atm_bd_types .pyi appears (grep -w) in a lite hook file or a hooks/*.md table
 
 Fixtures:
-- pass: Every ErrorId member in the atm_bd_types stub, including FINDINGS_NOT_POURED and STACK_NOT_RECORDED, appears in a hooks/*.md Errors table or a hook file.
+- pass: grep -w finds every ErrorId member of the atm_bd_types stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, in a hook file or a hooks/*.md Errors table.
 - fail: The stub keeps ErrorId.STACK_CLAIM_LOST although no hook and no hooks/*.md table names it.
 
 ## ANC-069
@@ -1288,7 +1309,7 @@ Anchor: The stack bead must be the ledger: its assignee is the lock, its layers 
 
 > ANC-069 Stack bead is the ledger. Its assignee is the lock; its layers are the record; only the fenced stack block writes it, through bdc, under the lock. Check: ANC-065 plus the ANC-067 block shape.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 3.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 3.
 
 Summary: stack bead is the atomic ledger
 
@@ -1306,7 +1327,7 @@ Anchor: Each lite hook file must be at most 100 lines, including header and docs
 
 > ANC-070 Line ceiling. Each hook file ≤ 100 lines including header and docstring. Check: `wc -l`. Fail fixture: 101 lines. This is the cheapest creep detector there is; a stack claim does not fit.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 4.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 4.
 
 Summary: hook file <= 100 lines
 
@@ -1324,7 +1345,7 @@ Anchor: docs/plans/phase-bo/intent.md and docs/plans/phase-bo/hooks/*.md must ch
 
 > ANC-071 Spec is owned. `intent.md` and `hooks/*.md` change only in a commit authored by Rand. Check: `git log --format=%ae -- docs/plans/phase-bo/intent.md docs/plans/phase-bo/hooks/` shows only rand@randlee.com. Fail fixture: a commit from fenix editing a Transitions table. If fenix or a reviewer thinks the spec is wrong, the output is a question to Rand, never an edit.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 2.
 
 Summary: only Rand commits the spec
 
@@ -1342,7 +1363,7 @@ Anchor: A review finding that would add a write, an arm, a subprocess or a guard
 
 > ANC-072 Review findings bind to the spec, not the code. A review finding that would add a write, an arm, a subprocess or a guard to a hook is out of scope unless it cites the `hooks/*.md` row it implements. The reply template is one line: "Not in <hook>.md; file against the spec (ANC-071)." Check: ANC-064/065/066/070 fail any such change regardless of what the review said. Fail fixture: solar round asks for a retry path; fenix adds an arm; gate fails on rows ≠ arms.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 3.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 3.
 
 Summary: review findings bind to the spec
 
@@ -1360,7 +1381,7 @@ Anchor: Every phase-bo anchor check must name a command (grep, wc, ast, pyright,
 
 > ANC-073 Every anchor check is mechanical. A new anchor whose check is prose ("is simple", "is maintainable") is rejected by plan-anchor. Check: each anchor's `check` names a command (grep, wc, ast, pyright, the gate) or a Jev fixture pair. Fail fixture: "Jev judges the hook is reasonable."
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: proposed. Version 3.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 3.
 
 Summary: anchor checks are mechanical
 
@@ -1371,3 +1392,19 @@ Deterministic check to pair with the development gate: for every non-retired anc
 Fixtures:
 - pass: Every non-retired phase-bo anchor's check names a command (grep, wc -l, ast, git log or atm-bd-lite-gate.py) or the anchor has a Jev pass/fail fixture pair; ANC-070's check is wc -l.
 - fail: A new anchor's check reads: Jev judges the hook is reasonable.
+
+## ANC-074
+
+Anchor: The lite cron script must assign each QA task that bdc ready reports as ready and unassigned.
+
+> wait, lite will have cron. / yes, initial cron script will assign 'bdc ready' qa tasks and run a set of checks similar to atm-bd-orchestration
+
+Said by Rand, phase-bo fixture report rulings, 2026-11-01 (fenix). Withdraws ruling A for ANC-031 and the brief's 'no cron dispatching QA'. The second half, 'a set of checks similar to atm-bd-orchestration', needs the checks named before it can be an anchor., 2026-11-01. Status: locked. Version 2.
+
+Scope: adds or changes the lite cron script or lite QA assignment
+
+Deterministic check to pair with the development gate: test of skills/atm-bd-lite/scripts cron: with fakes where bdc ready returns ready QA beads, one atm task assign is issued per ready unassigned QA bead and none for an assigned one
+
+Fixtures:
+- pass: uv run pytest skills/atm-bd-lite/tests/test_cron.py passes: given a bdc ready listing with one ready unassigned QA task and one ready QA task already assigned, the cron script runs atm task assign for the unassigned one only, and prints the command it ran.
+- fail: The lite cron script lists ready QA tasks in its report to the lead, and the lead assigns each one by hand.

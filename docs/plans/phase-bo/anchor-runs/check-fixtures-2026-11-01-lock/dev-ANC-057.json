@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "data": {
+    "gate": "dev",
+    "dry_run": false,
+    "fixture": false,
+    "checks": [
+      {
+        "anchor_id": "ANC-057",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "grep -c 'atm task close' prints 1 for each lite dev and fix template, that command sends the report with --stdin, and grep finds no 'atm send' or 'atm ack' in them.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-057/fixtures/dev-20261102T032747Z-fixture_ANC-057_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-057",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite dev closes its task with atm task close and then sends its report to the lead in a second atm send.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-057/fixtures/dev-20261102T032747Z-fixture_ANC-057_fail_1.json"
+      }
+    ],
+    "mismatches": [],
+    "pass": true,
+    "path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-057/fixtures",
+    "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-057/fixtures",
+    "runs": [
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-057/fixtures/dev-20261102T032747Z-fixture_ANC-057_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-057/fixtures/dev-20261102T032747Z-fixture_ANC-057_fail_1.json"
+    ]
+  },
+  "error": null
+}

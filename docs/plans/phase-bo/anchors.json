@@ -3377,11 +3377,15 @@
       "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
       "deterministic_check": "grep of skills/atm-bd-lite for close-vars, close_vars and file writes outside the shared runner is empty; no lite template asks for a vars file",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "grep -rn 'close-vars\\|close_vars' skills/atm-bd-lite prints nothing, and grep of the lite hooks and templates for open(, write_text and read_text finds no per-task state file."
+        ],
+        "fail": [
+          "The lite dev template has the dev copy close-vars.json and fill in its commit and PR, and the lite close hook reads that file."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3394,6 +3398,14 @@
           "at": "2026-11-01T19:25:25+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
         }
       ]
     },
@@ -3411,11 +3423,15 @@
       "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
       "deterministic_check": "each hooks/*.md has a Facts table whose every row is phase file, cache.get(...) or ATM request; the gate (ANC-066) finds no subprocess, bd or gh in the hook files",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "uv run pytest skills/atm-bd-lite/tests/test_hook_facts.py passes: each hook is given only the task id in its ATM request plus fakes for beads-cache, git, the provider and the phase file, and looks up every other fact from them."
+        ],
+        "fail": [
+          "The lite close hook reads the PR number and branch head from a JSON file the dispatch template wrote at assignment."
+        ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3436,6 +3452,14 @@
             "context"
           ],
           "reason": "restart 2: context named bd show / gh pr view in the hook (fenix-brief.md §A)"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
         }
       ]
     },
@@ -3453,11 +3477,15 @@
       "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
       "deterministic_check": "the lite dev and fix templates contain exactly one close instruction, atm task close <bead id> completed with the report via --stdin",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "grep -c 'atm task close' prints 1 for each lite dev and fix template, that command sends the report with --stdin, and grep finds no 'atm send' or 'atm ack' in them."
+        ],
+        "fail": [
+          "The lite dev closes its task with atm task close and then sends its report to the lead in a second atm send."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3470,6 +3498,14 @@
           "at": "2026-11-01T19:25:25+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
         }
       ]
     },
@@ -3487,11 +3523,15 @@
       "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
       "deterministic_check": "every Errors-table row of the lite hook diagrams names a fix command; a test removes each lookup's data and asserts the refused reply text",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "uv run pytest skills/atm-bd-lite/tests/test_errors.py passes: for every Errors row, a failed lookup makes the hook return HookReply.refused with that row's fix command, and no test supplies stored state."
+        ],
+        "fail": [
+          "When the PR lookup fails, the lite close hook uses the PR number saved at dispatch time instead."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3504,6 +3544,14 @@
           "at": "2026-11-01T19:25:25+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
         }
       ]
     },
@@ -3521,11 +3569,15 @@
       "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
       "deterministic_check": "find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' is empty",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' prints nothing."
+        ],
+        "fail": [
+          "skills/atm-bd-lite/scripts/backfill-close-vars.py rebuilds close-vars files for tasks dispatched before lite existed."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3538,6 +3590,14 @@
           "at": "2026-11-01T19:25:25+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
         }
       ]
     },
@@ -3761,7 +3821,7 @@
       },
       "question_overrides": {},
       "version": 4,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3801,6 +3861,12 @@
             "fixtures"
           ],
           "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -3827,7 +3893,7 @@
       },
       "question_overrides": {},
       "version": 3,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3860,6 +3926,12 @@
             "fixtures"
           ],
           "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -3886,7 +3958,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3919,6 +3991,12 @@
             "deterministic_check"
           ],
           "reason": "Rand: ANC-066 is an ast check on imports/calls, not a regex over docstrings"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -3945,7 +4023,7 @@
       },
       "question_overrides": {},
       "version": 4,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -3985,6 +4063,12 @@
             "fixtures"
           ],
           "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -4011,7 +4095,7 @@
       },
       "question_overrides": {},
       "version": 3,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4044,6 +4128,12 @@
             "fixtures"
           ],
           "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -4070,7 +4160,7 @@
       },
       "question_overrides": {},
       "version": 3,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4102,6 +4192,12 @@
           "event": "status",
           "status": "proposed",
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -4128,7 +4224,7 @@
       },
       "question_overrides": {},
       "version": 4,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4167,6 +4263,12 @@
           "event": "status",
           "status": "proposed",
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -4193,7 +4295,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4218,6 +4320,12 @@
           "event": "status",
           "status": "proposed",
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -4244,7 +4352,7 @@
       },
       "question_overrides": {},
       "version": 3,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4276,6 +4384,12 @@
           "event": "status",
           "status": "proposed",
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -4302,7 +4416,7 @@
       },
       "question_overrides": {},
       "version": 3,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4334,6 +4448,12 @@
           "event": "status",
           "status": "proposed",
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     },
@@ -4351,12 +4471,16 @@
       "scope": "adds or changes the lite cron script or lite QA assignment",
       "deterministic_check": "test of skills/atm-bd-lite/scripts cron: with fakes where bdc ready returns ready QA beads, one atm task assign is issued per ready unassigned QA bead and none for an assigned one",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "uv run pytest skills/atm-bd-lite/tests/test_cron.py passes: given a bdc ready listing with one ready unassigned QA task and one ready QA task already assigned, the cron script runs atm task assign for the unassigned one only, and prints the command it ran."
+        ],
+        "fail": [
+          "The lite cron script lists ready QA tasks in its report to the lead, and the lead assigns each one by hand."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
-      "status": "proposed",
+      "version": 2,
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4368,6 +4492,20 @@
           "at": "2026-11-02T03:03:34+00:00",
           "event": "created",
           "status": "proposed"
+        },
+        {
+          "at": "2026-11-02T03:27:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     }
