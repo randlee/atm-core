@@ -22,7 +22,7 @@ io_forbidden = ["process_spawn", "socket_io"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime-test-support"]
-allowed_dependencies = ["async-trait", "atm-storage", "base64", "chrono", "ring", "rusqlite", "serde", "serde_json", "sha2", "tokio", "tracing"]
+allowed_dependencies = ["async-trait", "atm-storage", "base64", "chrono", "ring", "rusqlite", "sc-lint-attributes", "serde", "serde_json", "sha2", "tokio", "tracing"]
 allowed_dev_dependencies = ["atm-storage", "serde", "serde_json", "tempfile", "tracing-subscriber"]
 forbidden_edges = ["atm-storage-rusqlite -> atm-core", "atm-storage-rusqlite -> atm-runtime"]
 

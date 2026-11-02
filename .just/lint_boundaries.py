@@ -8,17 +8,17 @@ import argparse
 import re
 import sys
 
-from lint_common import build_report
-from lint_common import discover_repo_root
-from lint_common import is_comment_line
-from lint_common import is_rust_test_cfg_attribute
-from lint_common import load_lint_config
-from lint_common import monotonic_now
-from lint_common import print_report
-from lint_common import render_table
-from lint_common import rust_file_test_scope
-from lint_common import workspace_crate_section_lines
-from lint_common import workspace_manifest_paths
+from sc_lint.lint_common import build_report
+from sc_lint.lint_common import discover_repo_root
+from sc_lint.lint_common import is_comment_line
+from sc_lint.lint_common import load_lint_config
+from sc_lint.lint_common import monotonic_now
+from sc_lint.lint_common import print_report
+from sc_lint.lint_common import render_table
+from atm_lint_test_scope import is_rust_test_cfg_attribute, rust_file_test_scope
+from sc_lint.lint_common import workspace_crate_section_lines
+from sc_lint.lint_common import workspace_manifest_paths
+
 
 
 LINT_NAME = "boundaries"
@@ -37,9 +37,7 @@ ATM_REQUIRED_BOUNDARY_FIELDS = (
 ATM_EXTENSION_PATH = ("extensions", "atm")
 RUST_PATH_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-PUBLIC_TYPE_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|type)\s+{name}\b"
 PUBLIC_REEXPORT_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+use\b.*\b{name}\b"
-PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b")
 MOD_BLOCK_OPEN_RE = re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{")
 MOD_FILE_DECL_RE = re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;$")
 
@@ -389,7 +387,6 @@ class BoundaryRecord:
     implementation_type: str | None
     implementation_module: str | None
     implementation_visibility: str
-    implementation_constructor: str
     composition_roots: tuple[str, ...]
     io_owns: tuple[str, ...]
     io_forbidden: tuple[str, ...]
@@ -953,39 +950,6 @@ def validate_identifier(value: str, *, field_name: str) -> str | None:
     return None
 
 
-def decode_string_list(
-    data: dict[str, object],
-    path: tuple[str, ...],
-    undecodable: list[str],
-    *,
-    optional: bool = False,
-) -> list[str]:
-    value = nested_get(data, path)
-    if value is None and optional:
-        return []
-    rendered = as_string_list(value)
-    if rendered is None:
-        undecodable.append(".".join(path))
-        return []
-    return rendered
-
-
-def decode_string(
-    data: dict[str, object],
-    path: tuple[str, ...],
-    undecodable: list[str],
-    *,
-    optional: bool = False,
-) -> str | None:
-    value = nested_get(data, path)
-    if value is None and optional:
-        return None
-    rendered = as_string(value)
-    if rendered is None:
-        undecodable.append(".".join(path))
-    return rendered
-
-
 def build_boundary_record(
     *,
     data: dict[str, object],
@@ -994,29 +958,34 @@ def build_boundary_record(
 ) -> tuple[BoundaryRecord | None, list[BoundaryViolation]]:
     base_location = f"{source_path.as_posix()}:{start_line}"
     errors = validate_atm_required_fields(data)
-    # Fields the published loader requires. A record that does not decode is
-    # reported once, pointing at the published loader for the schema error.
-    undecodable: list[str] = []
 
-    boundary_id = decode_string(data, ("boundary_id",), undecodable)
-    owner_package = decode_string(data, ("owner_package",), undecodable)
-    owner_crate_path = decode_string(data, ("owner_crate_path",), undecodable)
-    name = decode_string(data, ("name",), undecodable)
-    public_trait = decode_string(data, ("public", "trait"), undecodable, optional=True)
-    public_facade = decode_string(data, ("public", "facade"), undecodable, optional=True)
-    implementation_type = decode_string(data, ("implementation", "type"), undecodable, optional=True)
-    implementation_module = decode_string(data, ("implementation", "module"), undecodable, optional=True)
-    implementation_visibility = decode_string(data, ("implementation", "visibility"), undecodable)
-    implementation_constructor = decode_string(
-        data, ("implementation", "constructor"), undecodable, optional=True
-    )
-    references_scope = decode_string(data, ("references", "scope"), undecodable)
-    status_state = decode_string(data, ("status", "state"), undecodable)
+    # The published boundary analyzer owns the generic record schema. Decode
+    # its fields permissively here only because the ATM-specific checks below
+    # need their values; malformed generic fields are reported by sc-lint.
+    def string(path: tuple[str, ...], default: str = "") -> str:
+        value = as_string(nested_get(data, path))
+        return value if value is not None else default
 
-    composition_roots = decode_string_list(data, ("composition", "roots"), undecodable)
+    def string_list(path: tuple[str, ...]) -> list[str]:
+        value = as_string_list(nested_get(data, path))
+        return value if value is not None else []
+
+    boundary_id = string(("boundary_id",), "unknown-boundary")
+    owner_package = string(("owner_package",))
+    owner_crate_path = string(("owner_crate_path",))
+    name = string(("name",))
+    public_trait = string(("public", "trait"), "") or None
+    public_facade = string(("public", "facade"), "") or None
+    implementation_type = string(("implementation", "type"), "") or None
+    implementation_module = string(("implementation", "module"), "") or None
+    implementation_visibility = string(("implementation", "visibility"), "unknown")
+    references_scope = string(("references", "scope"), "outside_owner_crate")
+    status_state = string(("status", "state"), "unknown")
+    composition_roots = string_list(("composition", "roots"))
+
     io_owns: list[str] = []
     io_forbidden: list[str] = []
-    for path, target in ((("ownership", "io_owns"), io_owns), (("ownership", "io_forbidden"), io_forbidden)):
+    for path, target in ((('ownership', 'io_owns'), io_owns), (('ownership', 'io_forbidden'), io_forbidden)):
         value = nested_get(data, path)
         if value is None:
             continue
@@ -1025,38 +994,15 @@ def build_boundary_record(
             errors.append(f"{'.'.join(path)} must be a list of strings")
         else:
             target.extend(rendered)
-    allowed_dependents = decode_string_list(data, ("dependencies", "allowed_dependents"), undecodable)
-    allowed_dependencies = decode_string_list(data, ("dependencies", "allowed_dependencies"), undecodable)
-    allowed_dev_dependencies = decode_string_list(
-        data, ("dependencies", "allowed_dev_dependencies"), undecodable, optional=True
-    )
-    forbidden_edges = decode_string_list(data, ("dependencies", "forbidden_edges"), undecodable)
-    forbidden_references = decode_string_list(data, ("references", "forbidden"), undecodable)
-    allowed_test_double_paths = decode_string_list(
-        data, ("testing", "allowed_test_double_paths"), undecodable
-    )
-    forbidden_test_bypasses = decode_string_list(
-        data, ("testing", "forbidden_test_bypasses"), undecodable
-    )
-    lint_rules = decode_string_list(data, ("enforcement", "lint_rules"), undecodable)
-    review_gates = decode_string_list(data, ("enforcement", "review_gates"), undecodable)
-
-    if undecodable:
-        identifier = boundary_id or name or "unknown-boundary"
-        return None, [
-            BoundaryViolation(
-                base_location,
-                f"[{identifier}] record does not decode ({', '.join(undecodable)}); "
-                "`sc-lint lint sc-boundary` reports the schema error",
-            )
-        ]
-    assert boundary_id is not None
-    assert owner_package is not None
-    assert owner_crate_path is not None
-    assert name is not None
-    assert implementation_visibility is not None
-    assert references_scope is not None
-    assert status_state is not None
+    allowed_dependents = string_list(("dependencies", "allowed_dependents"))
+    allowed_dependencies = string_list(("dependencies", "allowed_dependencies"))
+    allowed_dev_dependencies = string_list(("dependencies", "allowed_dev_dependencies"))
+    forbidden_edges = string_list(("dependencies", "forbidden_edges"))
+    forbidden_references = string_list(("references", "forbidden"))
+    allowed_test_double_paths = string_list(("testing", "allowed_test_double_paths"))
+    forbidden_test_bypasses = string_list(("testing", "forbidden_test_bypasses"))
+    lint_rules = string_list(("enforcement", "lint_rules"))
+    review_gates = string_list(("enforcement", "review_gates"))
 
     # atm policy: every boundary names the lint rules and review gates that
     # enforce it, and those names resolve to registered runners.
@@ -1126,7 +1072,6 @@ def build_boundary_record(
         implementation_type=implementation_type,
         implementation_module=implementation_module,
         implementation_visibility=implementation_visibility,
-        implementation_constructor=implementation_constructor or "none",
         composition_roots=tuple(composition_roots),
         io_owns=tuple(io_owns),
         io_forbidden=tuple(io_forbidden),
@@ -1157,15 +1102,9 @@ def parse_boundary_records(repo_root: Path) -> tuple[list[BoundaryRecord], list[
         rel_toml = toml_path.relative_to(repo_root)
         try:
             data = tomllib_load(toml_path)
-        except Exception as error:
-            # The published loader owns TOML syntax; report once so the
-            # record is never skipped silently here.
-            violations.append(
-                BoundaryViolation(
-                    rel_toml.as_posix(),
-                    f"boundary TOML does not parse ({error}); `sc-lint lint sc-boundary` reports the schema error",
-                )
-            )
+        except (OSError, tomllib.TOMLDecodeError):
+            # The published loader owns TOML syntax and fails before this ATM
+            # extension scanner is relevant.
             continue
         record, record_errors = build_boundary_record(
             data=data,
@@ -1625,66 +1564,22 @@ def collect_test_bypass_violations(repo_root: Path, records: list[BoundaryRecord
     return violations
 
 
-def find_public_type_violations(record: BoundaryRecord, source_path: Path, repo_root: Path) -> list[BoundaryViolation]:
-    if record.implementation_type is None:
-        return []
-    pattern = re.compile(PUBLIC_TYPE_TEMPLATE.format(name=re.escape(record.implementation_type)))
-    rel_source = source_path.relative_to(repo_root).as_posix()
-    violations: list[BoundaryViolation] = []
-    for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
-        if pattern.search(line):
-            violations.append(
-                BoundaryViolation(
-                    f"{rel_source}:{line_number}",
-                    f"{record.boundary_id} requires private implementation.type {record.implementation_type!r}",
-                )
-            )
-    return violations
-
-
-def find_public_reexport_violations(record: BoundaryRecord, source_path: Path, repo_root: Path) -> list[BoundaryViolation]:
+def find_public_reexport_violations(
+    record: BoundaryRecord, source_path: Path, repo_root: Path
+) -> list[BoundaryViolation]:
+    """Catch public `use` exports, which sc-lint 0.8.4 does not model."""
     if record.implementation_type is None:
         return []
     pattern = re.compile(PUBLIC_REEXPORT_TEMPLATE.format(name=re.escape(record.implementation_type)))
     rel_source = source_path.relative_to(repo_root).as_posix()
-    violations: list[BoundaryViolation] = []
-    for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
-        if pattern.search(line):
-            violations.append(
-                BoundaryViolation(
-                    f"{rel_source}:{line_number}",
-                    f"{record.boundary_id} forbids public re-export of {record.implementation_type!r}",
-                )
-            )
-    return violations
-
-
-def find_public_constructor_violations(record: BoundaryRecord, source_path: Path, repo_root: Path) -> list[BoundaryViolation]:
-    if record.implementation_type is None:
-        return []
-    lines = source_path.read_text(encoding="utf-8").splitlines()
-    rel_source = source_path.relative_to(repo_root).as_posix()
-    violations: list[BoundaryViolation] = []
-    inside_impl = False
-    brace_depth = 0
-    impl_pattern = re.compile(rf"\bimpl(?:<[^>]+>)?(?:\s+[A-Za-z0-9_:<>, ]+)?\s+{re.escape(record.implementation_type)}\b")
-    for line_number, line in enumerate(lines, start=1):
-        if not inside_impl and impl_pattern.search(line):
-            inside_impl = True
-            brace_depth = line.count("{") - line.count("}")
-        elif inside_impl:
-            brace_depth += line.count("{") - line.count("}")
-            if PUBLIC_FUNCTION_RE.search(line):
-                violations.append(
-                    BoundaryViolation(
-                        f"{rel_source}:{line_number}",
-                        f"{record.boundary_id} forbids public constructor/helper methods on {record.implementation_type!r}",
-                    )
-                )
-            if brace_depth <= 0:
-                inside_impl = False
-                brace_depth = 0
-    return violations
+    return [
+        BoundaryViolation(
+            f"{rel_source}:{line_number}",
+            f"{record.boundary_id} forbids public re-export of {record.implementation_type!r}",
+        )
+        for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1)
+        if pattern.search(line)
+    ]
 
 
 def source_module_path(info: ManifestInfo, source_path: Path) -> str:
@@ -2084,6 +1979,8 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
         has_test_double_allowlist = bool(record.allowed_test_double_paths)
         source_files = source_files_for_crate(owner_info)
         for source_path in source_files:
+            if record.implementation_visibility == "private":
+                violations.extend(find_public_reexport_violations(record, source_path, repo_root))
             if is_trait_only_with_allowlist:
                 violations.extend(
                     find_trait_only_test_double_violations(
@@ -2091,11 +1988,6 @@ def collect_active_implementation_violations(repo_root: Path, records: list[Boun
                     )
                 )
                 continue
-            if record.implementation_visibility == "private":
-                violations.extend(find_public_type_violations(record, source_path, repo_root))
-                violations.extend(find_public_reexport_violations(record, source_path, repo_root))
-            if record.implementation_constructor == "private":
-                violations.extend(find_public_constructor_violations(record, source_path, repo_root))
         if has_test_double_allowlist:
             # A sealed trait's test doubles are not confined to the owner
             # crate's own `src/`: any workspace crate may implement the trait
@@ -2445,8 +2337,14 @@ def collect_scb_observability_otel_violations(
     return violations
 
 
-def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
-    records, parse_violations = parse_boundary_records(repo_root)
+def collect_boundary_violations(
+    repo_root: Path,
+    *,
+    records: list[BoundaryRecord] | None = None,
+    parse_violations: list[BoundaryViolation] | None = None,
+) -> list[BoundaryViolation]:
+    if records is None or parse_violations is None:
+        records, parse_violations = parse_boundary_records(repo_root)
     violations: list[BoundaryViolation] = []
     violations.extend(parse_violations)
     violations.extend(collect_reference_violations(repo_root, records))
@@ -2641,82 +2539,9 @@ def run(repo_root: Path) -> int:
     started_at = datetime.now(timezone.utc)
     started_monotonic = monotonic_now()
     records, parse_violations = parse_boundary_records(repo_root)
-    violations = parse_violations.copy()
-    violations.extend(collect_reference_violations(repo_root, records))
-    violations.extend(collect_test_bypass_violations(repo_root, records))
-    violations.extend(collect_active_implementation_violations(repo_root, records))
-    violations.extend(collect_telemetry_sink_implementation_violations(repo_root, records))
-    violations.extend(collect_io_forbidden_source_violations(repo_root, records))
-    violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
-    violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
-    violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))
-    violations.extend(collect_scb_singleton_rule_violations(repo_root, rust_sources(repo_root)))
-    fixture_path = repo_root / SCB_CONFIG_FIXTURE_PATH
-    if not fixture_path.exists():
-        violations.append(
-            BoundaryViolation(
-                SCB_CONFIG_FIXTURE_PATH.as_posix(),
-                "missing required SCB-CONFIG known-bad fixture",
-            )
-        )
-    else:
-        fixture_violations = collect_scb_config_rule_violations(repo_root, [fixture_path])
-        fixture_failure = scb_config_fixture_violation(
-            fixture_violations,
-            {"SCB-CONFIG-001", "SCB-CONFIG-002", "SCB-CONFIG-003"},
-        )
-        if fixture_failure is not None:
-            violations.append(fixture_failure)
-    retained_fixture_path = repo_root / SCB_RETAINED_FIXTURE_PATH
-    if not retained_fixture_path.exists():
-        violations.append(
-            BoundaryViolation(
-                SCB_RETAINED_FIXTURE_PATH.as_posix(),
-                "missing required SCB-RETAINED known-bad fixture",
-            )
-        )
-    else:
-        fixture_violations = collect_scb_retained_rule_violations(repo_root, [retained_fixture_path])
-        fixture_failure = scb_retained_fixture_violation(
-            fixture_violations,
-            {"SCB-RETAINED-001"},
-        )
-        if fixture_failure is not None:
-            violations.append(fixture_failure)
-    workspace_fixture_path = repo_root / SCB_WORKSPACE_FIXTURE_PATH
-    if not workspace_fixture_path.exists():
-        violations.append(
-            BoundaryViolation(
-                SCB_WORKSPACE_FIXTURE_PATH.as_posix(),
-                "missing required SCB-WORKSPACE known-bad fixture",
-            )
-        )
-    else:
-        fixture_violations = collect_scb_workspace_rule_violations(repo_root, [workspace_fixture_path])
-        fixture_failure = scb_workspace_fixture_violation(
-            fixture_violations,
-            {"SCB-WORKSPACE-001"},
-        )
-        if fixture_failure is not None:
-            violations.append(fixture_failure)
-    singleton_fixture_path = repo_root / SCB_SINGLETON_FIXTURE_PATH
-    if not singleton_fixture_path.exists():
-        violations.append(
-            BoundaryViolation(
-                SCB_SINGLETON_FIXTURE_PATH.as_posix(),
-                "missing required SCB-SINGLETON known-bad fixture",
-            )
-        )
-    else:
-        fixture_violations = collect_scb_singleton_rule_violations(repo_root, [singleton_fixture_path])
-        fixture_failure = scb_singleton_fixture_violation(
-            fixture_violations,
-            {"SCB-SINGLETON-001"},
-        )
-        if fixture_failure is not None:
-            violations.append(fixture_failure)
-    violations = dedupe_violations(violations)
-
+    violations = collect_boundary_violations(
+        repo_root, records=records, parse_violations=parse_violations
+    )
     duration_seconds = monotonic_now() - started_monotonic
     findings = [violation.render() for violation in violations]
     transcript_lines = workspace_crate_section_lines(repo_root)

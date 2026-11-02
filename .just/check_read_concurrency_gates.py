@@ -14,7 +14,7 @@ import argparse
 import re
 import sys
 
-from lint_common import discover_repo_root
+from sc_lint.lint_common import discover_repo_root
 from rust_source import extract_fn_body
 
 

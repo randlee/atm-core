@@ -8,8 +8,8 @@ import sys
 
 from lint_boundaries import collect_boundary_violations
 from lint_boundaries import parse_boundary_records
-from lint_common import discover_repo_root
-from lint_common import render_table
+from sc_lint.lint_common import discover_repo_root
+from sc_lint.lint_common import render_table
 from view_common import relative_artifact_path
 from view_common import reset_view_dir
 from view_common import write_json

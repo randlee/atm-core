@@ -9,11 +9,11 @@ import subprocess
 import sys
 import time
 
-from lint_common import discover_repo_root
-from lint_common import format_duration
-from lint_common import make_log_path
-from lint_common import relative_log_path
-from lint_common import write_log
+from sc_lint.lint_common import discover_repo_root
+from sc_lint.lint_common import format_duration
+from sc_lint.lint_common import make_log_path
+from sc_lint.lint_common import relative_log_path
+from sc_lint.lint_common import write_log
 from build_view_site import build_site
 
 

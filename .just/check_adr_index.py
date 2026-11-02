@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import sys
 
-from lint_common import discover_repo_root
+from sc_lint.lint_common import discover_repo_root
 
 
 ADR_ENTRY = re.compile(r"^\s*- \[ADR-(\d{3})\s+— .+\]\(\./(ADR-\d{3}-[^)]+\.md)\)\s*$")

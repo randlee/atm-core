@@ -17,7 +17,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
 
 from scripts.sc_compose_render import render_file as render_wheel_file
 
-from lint_common import discover_repo_root
+from sc_lint.lint_common import discover_repo_root
 from view_common import VIEW_ROOT
 from view_common import relative_artifact_path
 from view_common import write_json

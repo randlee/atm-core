@@ -9,10 +9,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
-from lint_common import build_report
-from lint_common import discover_repo_root
-from lint_common import monotonic_now
-from lint_common import print_report
+from sc_lint.lint_common import build_report
+from sc_lint.lint_common import discover_repo_root
+from sc_lint.lint_common import monotonic_now
+from sc_lint.lint_common import print_report
 
 
 LINT_NAME = "hermes-adapter"

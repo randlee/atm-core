@@ -9,7 +9,7 @@ import re
 import subprocess
 import sys
 
-from lint_common import discover_repo_root
+from sc_lint.lint_common import discover_repo_root
 
 
 # sc-compose 1.7.0 reports these Jinja keywords as undeclared tokens
