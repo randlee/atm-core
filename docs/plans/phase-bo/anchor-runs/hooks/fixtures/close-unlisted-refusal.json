@@ -1,6 +1,6 @@
 {
-  "hook": "design/lite-code/gate-fixtures/close-unlisted-refusal.py",
-  "spec": "hooks/task-close.md",
+  "hook": "gate-fixtures/close-unlisted-refusal.py",
+  "spec": "../../hooks/task-close.md",
   "lines": 80,
   "rows": [
     [
@@ -149,98 +149,98 @@
     "answers": {
       "implemented:T-CLOSE-01": {
         "choice": "yes",
-        "confidence": 0.76,
+        "confidence": 0.84,
         "probabilities": {
-          "no": 0.12,
-          "yes": 0.88
+          "no": 0.08,
+          "yes": 0.92
         }
       },
       "implemented:T-CLOSE-02": {
         "choice": "no",
-        "confidence": 0.8,
+        "confidence": 0.82,
         "probabilities": {
-          "no": 0.9,
-          "yes": 0.1
+          "no": 0.91,
+          "yes": 0.09
         }
       },
       "implemented:T-CLOSE-03": {
         "choice": "yes",
-        "confidence": 0.32,
+        "confidence": 0.46,
         "probabilities": {
-          "no": 0.34,
-          "yes": 0.66
+          "no": 0.27,
+          "yes": 0.73
         }
       },
       "implemented:T-CLOSE-04": {
         "choice": "yes",
-        "confidence": 0.3,
+        "confidence": 0.52,
         "probabilities": {
-          "no": 0.35,
-          "yes": 0.65
+          "no": 0.24,
+          "yes": 0.76
         }
       },
       "listed:L10": {
         "choice": "yes",
-        "confidence": 0.94,
+        "confidence": 0.96,
         "probabilities": {
-          "no": 0.03,
-          "yes": 0.97
+          "no": 0.02,
+          "yes": 0.98
         }
       },
       "listed:L18": {
         "choice": "yes",
-        "confidence": 0.98,
+        "confidence": 1.0,
         "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
+          "no": 0.0,
+          "yes": 1.0
         }
       },
       "listed:L20": {
         "choice": "yes",
-        "confidence": 0.98,
+        "confidence": 1.0,
         "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
+          "no": 0.0,
+          "yes": 1.0
         }
       },
       "listed:L22": {
         "choice": "yes",
-        "confidence": 0.98,
+        "confidence": 1.0,
         "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
+          "no": 0.0,
+          "yes": 1.0
         }
       },
       "listed:L24": {
         "choice": "yes",
-        "confidence": 0.98,
+        "confidence": 1.0,
         "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
+          "no": 0.0,
+          "yes": 1.0
         }
       },
       "listed:L28": {
         "choice": "yes",
-        "confidence": 0.98,
+        "confidence": 1.0,
         "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
+          "no": 0.0,
+          "yes": 1.0
         }
       },
       "listed:L34": {
         "choice": "no",
-        "confidence": 1.0,
+        "confidence": 0.98,
         "probabilities": {
-          "no": 1.0,
-          "yes": 0.0
+          "no": 0.99,
+          "yes": 0.01
         }
       },
       "listed:L36": {
         "choice": "yes",
-        "confidence": 0.98,
+        "confidence": 1.0,
         "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
+          "no": 0.0,
+          "yes": 1.0
         }
       },
       "listed:L38": {
@@ -253,18 +253,18 @@
       },
       "listed:L40": {
         "choice": "yes",
-        "confidence": 1.0,
+        "confidence": 0.98,
         "probabilities": {
-          "no": 0.0,
-          "yes": 1.0
+          "no": 0.01,
+          "yes": 0.99
         }
       },
       "listed:L48": {
         "choice": "yes",
-        "confidence": 1.0,
+        "confidence": 0.98,
         "probabilities": {
-          "no": 0.0,
-          "yes": 1.0
+          "no": 0.01,
+          "yes": 0.99
         }
       },
       "listed:L50": {
@@ -285,10 +285,10 @@
       },
       "listed:L60": {
         "choice": "yes",
-        "confidence": 1.0,
+        "confidence": 0.98,
         "probabilities": {
-          "no": 0.0,
-          "yes": 1.0
+          "no": 0.01,
+          "yes": 0.99
         }
       },
       "listed:L64": {
@@ -301,10 +301,10 @@
       },
       "listed:L70": {
         "choice": "yes",
-        "confidence": 0.88,
+        "confidence": 0.9,
         "probabilities": {
-          "no": 0.06,
-          "yes": 0.94
+          "no": 0.05,
+          "yes": 0.95
         }
       }
     },
@@ -313,8 +313,8 @@
       "add a row for L34 `HookReply.refused(Refusal(ErrorId.STACK_HELD, holder=ledger.assignee))`, or remove the branch"
     ],
     "input": {
-      "prompt_sha256": "ca0f7610431522a4dce11e2d2de45169e6308e58726a58cdcec250667e74ea32",
-      "input_tokens": 6045,
+      "prompt_sha256": "af7348cba626867b5093ae5bbc7d32df3334ce162134854e1364e3a5a32b138c",
+      "input_tokens": 6549,
       "prompt_tokens": null,
       "leak": null,
       "commands": 0,

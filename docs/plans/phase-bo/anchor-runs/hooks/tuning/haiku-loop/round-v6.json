@@ -1,0 +1,1339 @@
+{
+ "questions": "anchor-runs/hooks/tuning/haiku-loop/questions-v6.json",
+ "repeats": 3,
+ "fixtures": {
+  "close-extra-write": {
+   "haiku_session": "aec0bf98-5497-42cf-a976-58ae2f70a1f1",
+   "haiku_input": {
+    "prompt_sha256": "cfc84c706867d28e6e4e157cfc0a960f9796310cbd5c5f37fa189d4cd705973a",
+    "input_tokens": 15249,
+    "prompt_tokens": 15249,
+    "leak": 0,
+    "commands": 0,
+    "equal": true
+   },
+   "jev_sessions": [
+    "48169941-255e-4590-94a3-edf0e3b697c1",
+    "779c1e69-e434-46f1-994f-816035cd00ee",
+    "3aa8a291-84d2-4f9c-b56d-ba4848852618"
+   ],
+   "ok": "19/19",
+   "cells": {
+    "implemented:T-CLOSE-01": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.82
+      ],
+      [
+       "yes",
+       0.86
+      ],
+      [
+       "yes",
+       0.8
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.4
+     ],
+     "ok": true
+    },
+    "implemented:T-CLOSE-02": {
+     "expected": "no",
+     "jev": [
+      [
+       "no",
+       0.78
+      ],
+      [
+       "no",
+       0.48
+      ],
+      [
+       "no",
+       0.62
+      ]
+     ],
+     "haiku": [
+      "no",
+      0.7
+     ],
+     "ok": true
+    },
+    "implemented:T-CLOSE-03": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.78
+      ],
+      [
+       "yes",
+       0.78
+      ],
+      [
+       "yes",
+       0.74
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.4
+     ],
+     "ok": true
+    },
+    "implemented:T-CLOSE-04": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.74
+      ],
+      [
+       "yes",
+       0.7
+      ],
+      [
+       "yes",
+       0.7
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.3
+     ],
+     "ok": true
+    },
+    "listed:L24": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L28": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L37": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       0.98
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L49": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L69": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.88
+      ],
+      [
+       "yes",
+       0.86
+      ],
+      [
+       "yes",
+       0.86
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.8
+     ],
+     "ok": true
+    },
+    "listed:L10": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.96
+      ],
+      [
+       "yes",
+       0.96
+      ],
+      [
+       "yes",
+       0.94
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L18": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L20": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L22": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L34": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L39": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L47": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L51": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L59": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L63": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    }
+   }
+  },
+  "close-unlisted-refusal": {
+   "haiku_session": "e6916e2c-0f72-433a-95e5-258b6e836cb5",
+   "haiku_input": {
+    "prompt_sha256": "af7348cba626867b5093ae5bbc7d32df3334ce162134854e1364e3a5a32b138c",
+    "input_tokens": 15769,
+    "prompt_tokens": 15769,
+    "leak": 0,
+    "commands": 0,
+    "equal": true
+   },
+   "jev_sessions": [
+    "e3002260-7baf-405f-a154-0fd78ed4be33",
+    "a606b9fe-f6e3-413e-b141-a39492aafe4a",
+    "3aed1dd7-8d55-4ba5-b474-ed460381093e"
+   ],
+   "ok": "20/20",
+   "cells": {
+    "implemented:T-CLOSE-01": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.76
+      ],
+      [
+       "yes",
+       0.8
+      ],
+      [
+       "yes",
+       0.72
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.4
+     ],
+     "ok": true
+    },
+    "implemented:T-CLOSE-02": {
+     "expected": "no",
+     "jev": [
+      [
+       "no",
+       0.8
+      ],
+      [
+       "no",
+       0.78
+      ],
+      [
+       "no",
+       0.84
+      ]
+     ],
+     "haiku": [
+      "no",
+      0.7
+     ],
+     "ok": true
+    },
+    "implemented:T-CLOSE-03": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.38
+      ],
+      [
+       "yes",
+       0.38
+      ],
+      [
+       "yes",
+       0.44
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.4
+     ],
+     "ok": true
+    },
+    "implemented:T-CLOSE-04": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.36
+      ],
+      [
+       "yes",
+       0.5
+      ],
+      [
+       "yes",
+       0.42
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.44
+     ],
+     "ok": true
+    },
+    "listed:L24": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L28": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       0.98
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L38": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L50": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L70": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.9
+      ],
+      [
+       "yes",
+       0.88
+      ],
+      [
+       "yes",
+       0.88
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L10": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.94
+      ],
+      [
+       "yes",
+       0.96
+      ],
+      [
+       "yes",
+       0.96
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L18": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       0.98
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L20": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L22": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L34": {
+     "expected": "no",
+     "jev": [
+      [
+       "no",
+       0.98
+      ],
+      [
+       "no",
+       0.98
+      ],
+      [
+       "no",
+       0.98
+      ]
+     ],
+     "haiku": [
+      "no",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L36": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L40": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L48": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       0.98
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L52": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       0.98
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L60": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    },
+    "listed:L64": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.9
+     ],
+     "ok": true
+    }
+   }
+  },
+  "close-clean": {
+   "haiku_session": "b0277ee7-70a6-4684-841e-c5a82eb14397",
+   "haiku_input": {
+    "prompt_sha256": "55876cc78543cce62c5fa1ef035f50d34dbefd0ac8c08e8624365839921867a0",
+    "input_tokens": 15218,
+    "prompt_tokens": 15218,
+    "leak": 0,
+    "commands": 0,
+    "equal": true
+   },
+   "jev_sessions": [
+    "1cd32955-a783-43be-8f9f-b34453761dea",
+    "1e79ab33-4454-422f-afc0-73c84d95639a",
+    "5e1688ce-9089-4e5f-a96e-99b6396328d0"
+   ],
+   "ok": "19/19",
+   "cells": {
+    "implemented:T-CLOSE-01": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.88
+      ],
+      [
+       "yes",
+       0.78
+      ],
+      [
+       "yes",
+       0.84
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.6
+     ],
+     "ok": true
+    },
+    "implemented:T-CLOSE-02": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.6
+      ],
+      [
+       "yes",
+       0.64
+      ],
+      [
+       "yes",
+       0.68
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.7
+     ],
+     "ok": true
+    },
+    "implemented:T-CLOSE-03": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.68
+      ],
+      [
+       "yes",
+       0.7
+      ],
+      [
+       "yes",
+       0.66
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.44
+     ],
+     "ok": true
+    },
+    "implemented:T-CLOSE-04": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.76
+      ],
+      [
+       "yes",
+       0.72
+      ],
+      [
+       "yes",
+       0.72
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.44
+     ],
+     "ok": true
+    },
+    "listed:L24": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L28": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       0.98
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L36": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L48": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L68": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.88
+      ],
+      [
+       "yes",
+       0.9
+      ],
+      [
+       "yes",
+       0.86
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L10": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       0.96
+      ],
+      [
+       "yes",
+       0.96
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L18": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       0.98
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L20": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L22": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L34": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L38": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L46": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L50": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L58": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    },
+    "listed:L62": {
+     "expected": "yes",
+     "jev": [
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ],
+      [
+       "yes",
+       1.0
+      ]
+     ],
+     "haiku": [
+      "yes",
+      0.94
+     ],
+     "ok": true
+    }
+   }
+  }
+ }
+}

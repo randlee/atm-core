@@ -7,8 +7,13 @@
  },
  "close-unlisted-refusal": {
   "expected_no": [
+   "implemented:T-CLOSE-02",
    "listed:L34"
   ],
-  "deviation": "GATE FIXTURE, not bo-10 code. ANC-054 question set, expected listed = no for the STACK_HELD refusal. A task.close hook shaped to pass the gate's deterministic checks (four Transition arms, one beads.update, stack_bead only read, no subprocess, <= 100 lines). Its WORK_CLOSE arm refuses with STACK_HELD when the ledger is locked by another agent: a refusal that is neither a row nor an Errors entry of hooks/task-close.md."
+  "deviation": "GATE FIXTURE, not bo-10 code. ANC-054 question set, expected listed = no for the STACK_HELD refusal. A task.close hook shaped to pass the gate's deterministic checks (four Transition arms, one beads.update, stack_bead only read, no subprocess, <= 100 lines). Its WORK_CLOSE arm refuses with STACK_HELD when the ledger is locked by another agent: a refusal that is neither a row nor an Errors entry of hooks/task-close.md. The same refusal is a check of its own in the WORK_CLOSE arm, so implemented:T-CLOSE-02 = no as well (the question's 'adds no unlisted check')."
+ },
+ "close-clean": {
+  "expected_no": [],
+  "deviation": "GATE FIXTURE, control. close-unlisted-refusal.py without the STACK_HELD lines: no deviation from hooks/task-close.md, so every question is expected yes. Guards against tuning questions so strict that a conforming hook fails."
  }
 }

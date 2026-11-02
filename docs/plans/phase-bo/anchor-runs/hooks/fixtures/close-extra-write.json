@@ -1,6 +1,6 @@
 {
-  "hook": "design/lite-code/gate-fixtures/close-extra-write.py",
-  "spec": "hooks/task-close.md",
+  "hook": "gate-fixtures/close-extra-write.py",
+  "spec": "../../hooks/task-close.md",
   "lines": 79,
   "rows": [
     [
@@ -145,34 +145,34 @@
     "answers": {
       "implemented:T-CLOSE-01": {
         "choice": "yes",
-        "confidence": 0.84,
+        "confidence": 0.82,
         "probabilities": {
-          "no": 0.08,
-          "yes": 0.92
+          "no": 0.09,
+          "yes": 0.91
         }
       },
       "implemented:T-CLOSE-02": {
         "choice": "no",
-        "confidence": 0.12,
+        "confidence": 0.36,
         "probabilities": {
-          "no": 0.56,
-          "yes": 0.44
+          "no": 0.68,
+          "yes": 0.32
         }
       },
       "implemented:T-CLOSE-03": {
         "choice": "yes",
-        "confidence": 0.58,
+        "confidence": 0.82,
         "probabilities": {
-          "no": 0.21,
-          "yes": 0.79
+          "no": 0.09,
+          "yes": 0.91
         }
       },
       "implemented:T-CLOSE-04": {
         "choice": "yes",
-        "confidence": 0.58,
+        "confidence": 0.8,
         "probabilities": {
-          "no": 0.21,
-          "yes": 0.79
+          "no": 0.1,
+          "yes": 0.9
         }
       },
       "listed:L10": {
@@ -300,8 +300,8 @@
       "implement T-CLOSE-02"
     ],
     "input": {
-      "prompt_sha256": "dcec650a8b7b8da0c30ea3ca021f431e9f93f5635bff91e407694527dcad2666",
-      "input_tokens": 5882,
+      "prompt_sha256": "cfc84c706867d28e6e4e157cfc0a960f9796310cbd5c5f37fa189d4cd705973a",
+      "input_tokens": 6386,
       "prompt_tokens": null,
       "leak": null,
       "commands": 0,
