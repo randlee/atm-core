@@ -331,3 +331,62 @@ a Rust port that serves the gate needs an equivalent (for example `run --state <
 | session store from config | `test_default_session_store_follows_config` |
 
 Run: `uv run --with pytest pytest -q tests` and `uv run --with pytest --with pyright pyright src tests scripts`.
+
+## For the Rust CLI: requested features
+
+Not in the Python package today; each is something the tuning work on 2026-11-01 needed and did by hand.
+
+1. **Caller-built requests.** `run --state <file.json> --questions <file.json> --check-id <id>`: the
+   equivalent of `run_request`. The lite gate builds its own state and questions; without this it must
+   link the library.
+2. **Dry run.** `request --backend <b> ...` prints the exact body (and, for Haiku/Luna, the count body and
+   system prompt) and `prompt_sha256`, sends nothing, needs no key. Answers "what exactly did Haiku see?".
+3. **Several backends in one run.** `run --backend jev,haiku,luna` sends the same payload to each and prints
+   one row per question with every backend's choice and confidence, the agreement count, and each
+   backend's `input` record. Agreement is reported only when every side is `equal`. A missing key on one
+   LLM backend is reported per backend, not fatal. (Today: an uncommitted `tune-eq.py` script.)
+4. **Disagreement cue.** In that output, mark questions where choices differ or Jev's confidence is below a
+   threshold given on the command line, with the session id to `ask`. These are the questions worth asking
+   Haiku about; the threshold is a display option, never a gate.
+5. **Session commands.** `sessions list` (id, check, backend, rev, age) and `sessions show <id>` (request,
+   answers, follow-ups). Today the JSON files are read by hand.
+6. **`ask --json`.** `{"session_id", "question", "answer"}` on stdout for scripted follow-ups.
+7. **Local key source** for Haiku/Luna (third after env and key vault): source to be confirmed.
+8. **Luna live check.** The count endpoint `/v1/responses/input_tokens` is unverified; confirm it with a
+   real key before relying on Luna's `equal`.
+
+## For the Rust CLI: areas to tighten
+
+Gaps in the Python code a port should close rather than copy.
+
+1. **Canonical bytes.** The payload is sorted-key compact JSON with non-ASCII kept. Use an ordered map
+   (`BTreeMap`/`serde_json` without `preserve_order`) for the payload, but keep question insertion order for
+   the answer schema's `enum` and `probabilities` (Python dicts preserve it). Float formatting differs
+   between Python `repr` and Rust; state from check.toml is strings only, but caller-built state with
+   floats will hash differently. Add a cross-implementation fixture: one request, its exact bytes and
+   sha256, checked by both.
+2. **python-branches without Python.** The extractor's text is `ast.unparse` output, which a Rust parser
+   (tree-sitter-python, ruff's parser) will not reproduce byte for byte, so `prompt_sha256` would differ
+   from the Python version. Either define the text as the original source slice of the arm/return (and
+   change the Python version to match), or accept that hashes differ across implementations.
+3. **Jev probabilities.** `parse_answers` accepts any probability keys. Require exactly the question's
+   criteria, as the LLM path does.
+4. **Truncated or refused LLM replies.** `stop_reason` (Anthropic) / `status` (OpenAI) is not read; a reply
+   cut at `max_tokens` surfaces as "not JSON". Check it and raise `RESPONSE_INVALID` naming the stop reason.
+5. **No busy retry for Haiku/Luna.** Jev retries 429/502/529 with `Retry-After`; the LLM backends fail at
+   once. Share one retry policy (Anthropic also returns 529 when overloaded).
+6. **Session ids.** `ask --session <id>` joins the id into a path unchecked. Accept only a UUID.
+   Session files hold the full state (source code); create them `0600`.
+7. **Session expiry.** Pruning uses file mtime, reading uses `created_at`. Use `created_at` for both.
+8. **Repo root.** `git show <rev>:<path>` paths are repo-relative but the command runs in the current
+   directory. Resolve paths against `git rev-parse --show-toplevel`, or require running there and say so
+   in the error.
+9. **Markdown tables.** `table-column` splits on every `|`, so an escaped `\|` in a cell breaks the row.
+   Split on unescaped pipes.
+10. **Error ids as an enum.** Every `JevCheckError` code above becomes one enum variant with its fix text,
+    so CLI errors stay typed (`{"error", "message"}` on stderr, exit 2) and nothing new appears ad hoc.
+11. **Reply validation leniency.** Extra keys inside an answer are ignored and probabilities are not checked
+    to sum to 1 or to match the stated confidence. Keep accepting them, but record a `consistent` flag per
+    answer so a malformed but parseable reply is visible.
+12. **Pinned versions in one place.** `anthropic-version` and `max_tokens` are constants in code, the
+    models are in `jev.toml`. Put all vendor pins in the config file.
