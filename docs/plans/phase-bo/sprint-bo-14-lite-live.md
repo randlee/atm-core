@@ -39,7 +39,7 @@ Beads are read through beads-cache only, through `bd_cache_rs` in-process (bo-15
 3. **Lite installer** (ANC-001, ANC-028, ANC-031, ANC-012)
    - `atm-bd skill --lite [--github | --azure] [--dest REPO] [--codex]` runs `skills/atm-bd-lite/scripts/install.py`. It installs `skills/atm-bd-lite/` (with `policy.toml` and `templates/cron-report.md.j2`) to `.claude/skills/atm-bd-lite/` (or `.codex/`). `atm_bd_core` is not installed separately: it ships inside the `atm-bd` wheel (bo-15 deliverable 8).
    - The installer runs the step that puts bd_cache_rs into the `atm-bd` tool environment: `uv tool install --force atm-bd --with <wheel URL for this platform>`, and prints the command it ran. On a platform with no wheel it stops with `CACHE_UNAVAILABLE` naming the platform. Acceptance: the installer test, with `uv` faked, asserts that exact argv for macOS arm64 and linux x86_64 and the typed refusal for another platform.
-   - The installer renders the chosen provider's command set with sc-compose into `skills/atm-bd-lite/templates/provider-commands.toml.j2`, from which bo-15's provider collector takes the provider. It also renders every provider placeholder in bo-11's templates; today those templates hard-code `gh pr view`/`gh pr create`/`gh pr edit` and have no placeholder (Questions).
+   - The installer renders the chosen provider's command set with sc-compose into `skills/atm-bd-lite/templates/provider-commands.toml.j2`, from which bo-15's provider collector takes the provider. It also fills bo-11's `provider.*` placeholders from the selected `providers/<provider>.toml`.
    - The lite install writes nothing under `skills/atm-bd-orchestration/`, and the orchestration install writes nothing under `skills/atm-bd-lite/`.
    - `skills/atm-bd-lite/SKILL.md` (`name: atm-bd-lite`) gets an "Install" section and a "Cron" section. bo-11 owns the "Dispatch" section. Together they cover:
      - install;
@@ -48,7 +48,7 @@ Beads are read through beads-cache only, through `bd_cache_rs` in-process (bo-15
      - assign → start → stack block → close.
    - Acceptance: `uv run pytest skills/atm-bd-lite/tests/test_install.py` passes:
      - the installed `.claude/skills/atm-bd-lite/policy.toml` loads with bo-15's `policy.load` and no error;
-     - `--azure` renders `provider-commands.toml` with `az repos pr` and no `gh pr`, and `--github` renders the reverse. The dev template is in the anchor's check too, so this part of ANC-001 waits on the provider-placeholder question;
+     - `--azure` renders `provider-commands.toml` with `az repos pr` and no `gh pr`, and `--github` renders the reverse. The dev template is in the anchor's check too;
      - `SKILL.md` names `atm-bd-lite`;
      - after a lite install, `find .claude/skills/atm-bd-orchestration` is empty;
      - an `--orchestration` install into a temp repo gives the same tree, byte for byte, as at the phase base.

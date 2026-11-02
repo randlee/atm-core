@@ -627,17 +627,17 @@ Fixtures:
 
 ## ANC-031
 
-Anchor: Each profile's task hooks, task-assignment templates and cron script must be inside that profile's own skill directory.
+Anchor: Each profile's task hooks, task-assignment templates and cron policy must be inside that profile's own skill directory.
 
 > The profile-specific parts (the hooks, the templates and the cron script) live in each profile's own skill
 
-Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 6.
+Said by Rand, phase-bo replan session 2026-11-01 (fenix); Rand approved the wording ("yes on anchors"); Jev rubric not run: JEV.HTTP 402, 2026-11-01. Status: locked. Version 7.
 
 Summary: Profile hooks, templates and cron live in the profile's skill
 
-Scope: adds or moves a task hook, a task-assignment template or a cron script
+Scope: adds or moves a task hook, a task-assignment template or a cron policy
 
-Deterministic check to pair with the development gate: find shows every lite hook, template and cron script under skills/atm-bd-lite/; none in the shared location
+Deterministic check to pair with the development gate: find shows every lite hook, template and policy.toml under skills/atm-bd-lite/; none in the shared location
 
 Fixtures:
 - pass: The three lite task hooks, the lite dev/fix/qa assignment templates and the lite cron script are all under skills/atm-bd-lite/ (scripts/ and templates/); find shows none of them in the shared location.
@@ -1275,13 +1275,13 @@ Anchor: Every multi-step procedure a lite agent must run (stack, pour) must be a
 
 > ANC-067 Sequences live in templates. Every multi-step procedure an agent must run (stack, pour) is a fenced bash block in a template under `skills/atm-bd-lite/templates/`. Check: the dev template contains one block whose lines are, in order, bdc lock, git rebase, git push, bdc record; the QA template contains one block with bdc pour. Fail fixture: a Python file that performs those steps.
 
-Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 4.
+Said by Rand, phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written, 2026-11-01. Status: locked. Version 5.
 
 Summary: stack and pour are template blocks
 
 Scope: lite templates and any lite script that sequences agent steps
 
-Deterministic check to pair with the development gate: the dev template under skills/atm-bd-lite/templates/ has exactly one fenced bash block whose command lines match, in order, bdc lock, git rebase, git push, bdc record; the QA template has one fenced bash block containing bdc pour; no .py file under skills/atm-bd-lite runs git rebase, git push or a bdc lock/record/pour
+Deterministic check to pair with the development gate: the dev template under skills/atm-bd-lite/templates/ has exactly one fenced bash block whose step lines, tagged in order # lock, # rebase, # push, # record, are a bdc update, git rebase, git push and a bdc update; the QA template has one fenced bash block whose # pour lines are bdc commands; bdc commands use bdc's names, which track bd's subcommands where possible; no .py file under skills/atm-bd-lite runs git rebase, git push or a bdc write
 
 Fixtures:
 - pass: grep -n '^bdc\|^git' on the fenced bash block of skills/atm-bd-lite/templates/dev-template.xml.j2 prints, in order, bdc lock, git rebase, git push, bdc record; the QA template's one fenced block contains bdc pour; and grep -rln 'git rebase\|git push\|bdc lock\|bdc record\|bdc pour' --include=*.py skills/atm-bd-lite prints nothing.
@@ -1397,15 +1397,15 @@ Fixtures:
 
 ## ANC-074
 
-Anchor: The lite cron script must assign each QA task that bdc ready reports as ready and unassigned.
+Anchor: The lite cron policy must assign each QA task that bdc ready reports as ready and unassigned.
 
 > wait, lite will have cron. / yes, initial cron script will assign 'bdc ready' qa tasks and run a set of checks similar to atm-bd-orchestration
 
-Said by Rand, phase-bo fixture report rulings, 2026-11-01 (fenix). Withdraws ruling A for ANC-031 and the brief's 'no cron dispatching QA'. The second half, 'a set of checks similar to atm-bd-orchestration', needs the checks named before it can be an anchor., 2026-11-01. Status: locked. Version 2.
+Said by Rand, phase-bo fixture report rulings, 2026-11-01 (fenix). Withdraws ruling A for ANC-031 and the brief's 'no cron dispatching QA'. The second half, 'a set of checks similar to atm-bd-orchestration', needs the checks named before it can be an anchor., 2026-11-01. Status: locked. Version 3.
 
-Scope: adds or changes the lite cron script or lite QA assignment
+Scope: adds or changes the lite cron policy or lite QA assignment
 
-Deterministic check to pair with the development gate: test of skills/atm-bd-lite/scripts cron: with fakes where bdc ready returns ready QA beads, one atm task assign is issued per ready unassigned QA bead and none for an assigned one
+Deterministic check to pair with the development gate: test of the lite cron policy (atm-bd cron --phase <x>): with fakes where bdc ready returns ready QA beads, one atm task assign is issued per ready unassigned QA bead and none for an assigned one
 
 Fixtures:
 - pass: uv run pytest skills/atm-bd-lite/tests/test_cron.py passes: given a bdc ready listing with one ready unassigned QA task and one ready QA task already assigned, the cron script runs atm task assign for the unassigned one only, and prints the command it ran.
