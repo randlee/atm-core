@@ -1,7 +1,7 @@
 {
   "hook": "design/lite-code/gate-fixtures/close-extra-write.py",
   "spec": "hooks/task-close.md",
-  "lines": 83,
+  "lines": 79,
   "rows": [
     [
       "T-CLOSE-01",
@@ -24,117 +24,117 @@
     "arms": [
       [
         "Transition.GIVE_BACK",
-        28
+        24
       ],
       [
         "Transition.WORK_CLOSE",
-        32
+        28
       ],
       [
         "Transition.QA_PASS",
-        41
+        37
       ],
       [
         "Transition.QA_FINDINGS",
-        53
+        49
       ]
     ],
     "transition_arms": [
       [
         "Transition.GIVE_BACK",
-        28
+        24
       ],
       [
         "Transition.WORK_CLOSE",
-        32
+        28
       ],
       [
         "Transition.QA_PASS",
-        41
+        37
       ],
       [
         "Transition.QA_FINDINGS",
-        53
+        49
       ]
     ],
     "beads_calls": [
       [
         "show",
-        17
+        13
       ],
       [
         "update",
-        71
+        67
       ],
       [
         "show",
-        35
+        31
       ],
       [
         "show",
-        44
+        40
       ],
       [
         "show",
-        46
+        42
       ],
       [
         "show",
-        56
+        52
       ],
       [
         "show",
-        58
+        54
       ],
       [
         "show",
-        64
+        60
       ]
     ],
     "replies": [
       [
         "HookReply.handled(phase.close_action(req, template, args))",
-        73
+        69
       ],
       [
         "HookReply.not_applicable()",
-        14
+        10
       ],
       [
         "HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))",
-        22
+        18
       ],
       [
         "HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead))",
-        24
+        20
       ],
       [
         "HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))",
-        26
+        22
       ],
       [
         "HookReply.refused(Refusal(ErrorId.STACK_NOT_RECORDED, branch=bead.work.branch))",
-        38
+        34
       ],
       [
         "HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))",
-        43
+        39
       ],
       [
         "HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=sha, head=head))",
-        51
+        47
       ],
       [
         "HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))",
-        55
+        51
       ],
       [
         "HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, head=head))",
-        63
+        59
       ],
       [
-        "HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=unpoured, sprint=bead.sprint, phase=bead.phase_bead))",
-        67
+        "HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=[f.id for f in unpoured], sprint=bead.sprint, phase=bead.phase_bead))",
+        63
       ]
     ],
     "stack_bead_writes": [],
@@ -145,109 +145,37 @@
     "answers": {
       "implemented:T-CLOSE-01": {
         "choice": "yes",
-        "confidence": 0.94,
+        "confidence": 0.84,
         "probabilities": {
-          "no": 0.03,
-          "yes": 0.97
+          "no": 0.08,
+          "yes": 0.92
         }
       },
       "implemented:T-CLOSE-02": {
         "choice": "no",
-        "confidence": 1.0,
+        "confidence": 0.12,
         "probabilities": {
-          "no": 1.0,
-          "yes": 0.0
+          "no": 0.56,
+          "yes": 0.44
         }
       },
       "implemented:T-CLOSE-03": {
         "choice": "yes",
-        "confidence": 0.68,
+        "confidence": 0.58,
         "probabilities": {
-          "no": 0.16,
-          "yes": 0.84
+          "no": 0.21,
+          "yes": 0.79
         }
       },
       "implemented:T-CLOSE-04": {
         "choice": "yes",
-        "confidence": 0.8,
+        "confidence": 0.58,
         "probabilities": {
-          "no": 0.1,
-          "yes": 0.9
+          "no": 0.21,
+          "yes": 0.79
         }
       },
-      "listed:L14": {
-        "choice": "yes",
-        "confidence": 0.86,
-        "probabilities": {
-          "no": 0.07,
-          "yes": 0.93
-        }
-      },
-      "listed:L22": {
-        "choice": "yes",
-        "confidence": 0.98,
-        "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
-        }
-      },
-      "listed:L24": {
-        "choice": "yes",
-        "confidence": 0.98,
-        "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
-        }
-      },
-      "listed:L26": {
-        "choice": "yes",
-        "confidence": 0.98,
-        "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
-        }
-      },
-      "listed:L28": {
-        "choice": "yes",
-        "confidence": 1.0,
-        "probabilities": {
-          "no": 0.0,
-          "yes": 1.0
-        }
-      },
-      "listed:L32": {
-        "choice": "yes",
-        "confidence": 0.98,
-        "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
-        }
-      },
-      "listed:L38": {
-        "choice": "yes",
-        "confidence": 0.98,
-        "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
-        }
-      },
-      "listed:L41": {
-        "choice": "yes",
-        "confidence": 0.98,
-        "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
-        }
-      },
-      "listed:L43": {
-        "choice": "yes",
-        "confidence": 0.98,
-        "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
-        }
-      },
-      "listed:L51": {
+      "listed:L10": {
         "choice": "yes",
         "confidence": 0.96,
         "probabilities": {
@@ -255,7 +183,7 @@
           "yes": 0.98
         }
       },
-      "listed:L53": {
+      "listed:L18": {
         "choice": "yes",
         "confidence": 1.0,
         "probabilities": {
@@ -263,42 +191,122 @@
           "yes": 1.0
         }
       },
-      "listed:L55": {
+      "listed:L20": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L22": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L24": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L28": {
         "choice": "yes",
         "confidence": 0.98,
         "probabilities": {
           "no": 0.01,
           "yes": 0.99
+        }
+      },
+      "listed:L34": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L37": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L39": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L47": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L49": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L51": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L59": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
         }
       },
       "listed:L63": {
         "choice": "yes",
-        "confidence": 0.98,
+        "confidence": 1.0,
         "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
+          "no": 0.0,
+          "yes": 1.0
         }
       },
-      "listed:L67": {
+      "listed:L69": {
         "choice": "yes",
-        "confidence": 0.98,
+        "confidence": 0.86,
         "probabilities": {
-          "no": 0.01,
-          "yes": 0.99
-        }
-      },
-      "listed:L73": {
-        "choice": "yes",
-        "confidence": 0.68,
-        "probabilities": {
-          "no": 0.16,
-          "yes": 0.84
+          "no": 0.07,
+          "yes": 0.93
         }
       }
     },
     "findings": [
       "implement T-CLOSE-02"
     ],
+    "input": {
+      "prompt_sha256": "dcec650a8b7b8da0c30ea3ca021f431e9f93f5635bff91e407694527dcad2666",
+      "input_tokens": 5882,
+      "prompt_tokens": null,
+      "leak": null,
+      "commands": 0,
+      "equal": true
+    },
     "no": [
       "implemented:T-CLOSE-02"
     ]

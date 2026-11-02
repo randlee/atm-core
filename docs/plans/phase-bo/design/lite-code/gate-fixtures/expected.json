@@ -1,0 +1,14 @@
+{
+ "close-extra-write": {
+  "expected_no": [
+   "implemented:T-CLOSE-02"
+  ],
+  "deviation": "GATE FIXTURE, not bo-10 code. ANC-053 question set, expected row:T-CLOSE-02 = no. A task.close hook shaped to pass the gate's deterministic checks (four Transition arms, one beads.update, stack_bead only read, no subprocess, <= 100 lines). Its WORK_CLOSE arm also records the layer on the ledger inside the one write: an additional write that hooks/task-close.md T-CLOSE-02 does not list."
+ },
+ "close-unlisted-refusal": {
+  "expected_no": [
+   "listed:L34"
+  ],
+  "deviation": "GATE FIXTURE, not bo-10 code. ANC-054 question set, expected listed = no for the STACK_HELD refusal. A task.close hook shaped to pass the gate's deterministic checks (four Transition arms, one beads.update, stack_bead only read, no subprocess, <= 100 lines). Its WORK_CLOSE arm refuses with STACK_HELD when the ledger is locked by another agent: a refusal that is neither a row nor an Errors entry of hooks/task-close.md."
+ }
+}

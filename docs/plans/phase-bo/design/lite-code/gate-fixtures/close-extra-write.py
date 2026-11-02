@@ -1,8 +1,4 @@
-"""GATE FIXTURE, not bo-10 code. ANC-053 question set, expected row:T-CLOSE-02 = no.
-
-A task.close hook shaped to pass the gate's deterministic checks (four Transition arms, one beads.update,
-stack_bead only read, no subprocess, <= 100 lines). Its WORK_CLOSE arm also records the layer on the
-ledger inside the one write: an additional write that hooks/task-close.md T-CLOSE-02 does not list.
+"""Lite task.close hook (hooks/task-close.md).
 """
 import sys
 from atm_bd_types import (BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli,
@@ -64,7 +60,7 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
             unpoured = [f for f in verdict.findings if isinstance(poured := beads.show(f.id), Refusal)
                         or not poured.blocks(bead.sprint if f.blocking else bead.phase_bead)]
             if unpoured:
-                return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=unpoured, sprint=bead.sprint,
+                return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=[f.id for f in unpoured], sprint=bead.sprint,
                                                  phase=bead.phase_bead))
             ids = [f.id for f in verdict.findings]
             patch, template, args = BeadPatch.close(bead, evidence=(verdict.sha, ids)), Template.QA_FINDINGS, (verdict.sha, ids)
