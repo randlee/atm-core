@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import importlib.util
 import os
 import re
 import shutil
@@ -292,7 +293,26 @@ def regenerate_cli_reference(repo_root: Path) -> dict[Path, str]:
     }
 
 
-def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Path, str]) -> None:
+def version_check_python(repo_root: Path) -> Path:
+    if importlib.util.find_spec("sc_lint") is not None:
+        return Path(sys.executable)
+    return repo_root / ".sc-lint" / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def verify_version_sync(repo_root: Path, python: Path) -> None:
+    try:
+        result = subprocess.run(
+            [str(python), "-m", "sc_lint.check_version_sync", "--root", str(repo_root)],
+            cwd=repo_root, text=True, capture_output=True, check=False,
+        )
+    except OSError as error:
+        raise SystemExit(f"version sync check could not start: {error}") from error
+    if result.returncode:
+        detail = (result.stderr or result.stdout).strip()
+        raise SystemExit(f"version sync check failed: {detail}")
+
+
+def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Path, str], python: Path) -> None:
     for manifest_path, text in manifest_updates.items():
         if manifest_path.suffix != ".toml":
             continue
@@ -346,6 +366,7 @@ def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Pat
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
             raise SystemExit(f"release version validation failed: {detail}")
+    verify_version_sync(repo_root, python)
 
 
 def candidate_changes(repo_root: Path, old: str, new: str) -> dict[Path, str]:
@@ -356,7 +377,7 @@ def candidate_changes(repo_root: Path, old: str, new: str) -> dict[Path, str]:
         lockfile = update_lockfile(candidate)
         candidate_updates[candidate / "Cargo.lock"] = lockfile
         candidate_updates.update(regenerate_cli_reference(candidate))
-        validate_candidate(candidate, new, candidate_updates)
+        validate_candidate(candidate, new, candidate_updates, version_check_python(repo_root))
         return {
             repo_root / path.relative_to(candidate): text
             for path, text in candidate_updates.items()
@@ -451,6 +472,7 @@ def execute(repo_root: Path, *, dry_run: bool) -> int:
     new = patch_bump(old)
     tag = f"prerelease/v{new}"
     require_available_tag(repo_root, tag)
+    verify_version_sync(repo_root, version_check_python(repo_root))
 
     if dry_run:
         describe_plan(branch, old, new)

@@ -534,6 +534,40 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertEqual(patch_bump("1.4.5"), "1.4.6")
         self.assertEqual(patch_bump("9.99.0"), "9.99.1")
 
+    def test_version_drift_refuses_publish_and_dry_run(self) -> None:
+        python = prerelease_tag.version_check_python(discover_repo_root())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "crates/example").mkdir(parents=True)
+            (root / ".just").mkdir()
+            (root / ".winget").mkdir()
+            (root / "Cargo.toml").write_text('[workspace]\nmembers=["crates/example"]\n[workspace.package]\nversion="1.2.3"\n', encoding="utf-8")
+            (root / "crates/example/Cargo.toml").write_text('[package]\nname="example"\nversion.workspace=true\nedition="2024"\n', encoding="utf-8")
+            (root / ".just/lint-config.toml").write_text('[version_sync.winget]\nenabled=true\nmanifest_glob=".winget/*.yaml"\n', encoding="utf-8")
+            (root / ".winget/example.yaml").write_text('PackageVersion: 0.0.1\nManifestVersion: 1.2.3\nInstallerUrl: https://example.invalid/1.2.3/file\n', encoding="utf-8")
+            for dry_run in (True, False):
+                with (self.subTest(dry_run=dry_run),
+                      mock.patch.object(prerelease_tag, "current_branch", return_value="fixture"),
+                      mock.patch.object(prerelease_tag, "require_clean_tree"),
+                      mock.patch.object(prerelease_tag, "require_available_tag"),
+                      mock.patch.object(prerelease_tag, "version_check_python", return_value=python),
+                      mock.patch.object(prerelease_tag, "candidate_changes") as candidate,
+                      mock.patch.object(prerelease_tag, "git") as git):
+                    with self.assertRaisesRegex(SystemExit, "winget.package_version"):
+                        prerelease_tag.execute(root, dry_run=dry_run)
+                    candidate.assert_not_called()
+                    git.assert_not_called()
+
+    def test_candidate_validation_checks_published_version_sync(self) -> None:
+        success = subprocess.CompletedProcess(args=[], returncode=0, stdout='{"workspace_toml":"Cargo.toml"}', stderr="")
+        failed = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="winget.package_version drift")
+        with (tempfile.TemporaryDirectory() as directory,
+              mock.patch.object(prerelease_tag.subprocess, "run", side_effect=[success, success, success, failed]) as run):
+            root = Path(directory)
+            with self.assertRaisesRegex(SystemExit, "winget.package_version drift"):
+                prerelease_tag.validate_candidate(root, "1.2.3", {}, Path("python"))
+            self.assertEqual(run.call_args.args[0], ["python", "-m", "sc_lint.check_version_sync", "--root", str(root)])
+
     def test_prerelease_tag_dry_run_rejects_remote_tag_collision(self) -> None:
         with self.fixture_repo(branch="fixture") as (repo, _env):
             with (

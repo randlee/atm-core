@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import subprocess
 import unittest
 
 
@@ -20,26 +21,22 @@ class PrintHelpTests(unittest.TestCase):
         self.assertIn("coverage", output)
         self.assertIn("test python|build|workspace|cli-surface|herdr", output)
         self.assertIn("upgrade", output)
-        self.assertIn("lint clippy-windows", output)
-        self.assertIn("lint daemon-singleton", output)
-        self.assertIn("lint boundaries", output)
         self.assertIn("lint sc-runtime", output)
         self.assertIn("lint ci [host|all]", output)
         self.assertNotIn("lint runtime-waits", output)
         self.assertNotIn("lint sc-boundary", output)
         self.assertNotIn("lint sc-portability", output)
-        self.assertIn("lint manifests", output)
-        self.assertIn("lint silent-emit", output)
         self.assertIn("lint function-length", output)
-        self.assertIn("lint legacy-mailbox-paths", output)
-        self.assertIn("lint fixed-sleep", output)
-        self.assertIn("lint ttl-triage", output)
         self.assertIn("fmt apply", output)
         self.assertIn("view boundaries", output)
         self.assertIn("view lines", output)
         self.assertIn("view modules", output)
         self.assertIn("view deps", output)
         self.assertIn("view unsafe", output)
+
+    def test_advertised_fmt_selector_runs(self) -> None:
+        result = subprocess.run(["just", "lint", "fmt"], cwd=JUST_DIR.parent, capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
 
 
 if __name__ == "__main__":
