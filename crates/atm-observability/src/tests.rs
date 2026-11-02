@@ -4,8 +4,9 @@ use tempfile::TempDir;
 
 use super::{
     ATM_LOG_LEVEL_ENV, AtmObservabilityHealthState, CANONICAL_LOG_FILE_NAME, RetainedCommandEvent,
-    RetainedLogLevel, RetainedLogOffer, RetainedLogPolicy, RetainedLogger, build_retained_logger,
-    logger_level_override_from, parse_logger_level, prepare_retained_log,
+    RetainedLogLevel, RetainedLogOffer, RetainedLogPolicy, RetainedLogger,
+    backend_retained_log_policy, build_retained_logger, logger_level_override_from,
+    parse_logger_level, prepare_retained_log,
 };
 use sc_observability::LoggerConfig;
 use sc_observability_types::{LogQuery, ServiceName};
@@ -26,35 +27,43 @@ fn prepares_the_active_log_file() {
 fn retained_log_pruning_uses_controlled_file_times() {
     let tempdir = TempDir::new().expect("tempdir");
     let active_log_path = tempdir.path().join(CANONICAL_LOG_FILE_NAME);
-    let stale_rotated_log_path = tempdir.path().join(format!("{CANONICAL_LOG_FILE_NAME}.1"));
+    let recent_rotated_log_path = tempdir.path().join(format!("{CANONICAL_LOG_FILE_NAME}.1"));
+    let stale_rotated_log_path = tempdir.path().join(format!("{CANONICAL_LOG_FILE_NAME}.2"));
     std::fs::write(&active_log_path, "active\n").expect("active log");
+    std::fs::write(&recent_rotated_log_path, "recent\n").expect("recent rotated log");
     std::fs::write(&stale_rotated_log_path, "stale\n").expect("rotated log");
+    std::fs::File::open(&recent_rotated_log_path)
+        .expect("open recent rotated log")
+        .set_modified(std::time::SystemTime::now() - Duration::from_secs(10))
+        .expect("set controlled recent modification time");
     std::fs::File::open(&stale_rotated_log_path)
         .expect("open rotated log")
         .set_modified(std::time::SystemTime::UNIX_EPOCH)
         .expect("set controlled modification time");
 
-    // `JsonlFileSink::open` performs the same maintenance pass as the logger
-    // worker, without depending on its cadence or scheduling.
-    let policy = sc_observability::RetainedLogPolicy {
-        rotation_max_bytes: sc_observability::ByteCount::from_bytes(4096),
-        rotation_max_files: sc_observability_types::FileCount::from_usize(5),
-        retention_max_age: sc_observability::RetentionMaxAge::from_duration(Duration::from_secs(
-            60,
-        )),
-        maintenance_cadence: sc_observability::MaintenanceCadence::new(Duration::from_secs(60)),
-        writer_shutdown_timeout: sc_observability::WriterShutdownTimeout::new(Duration::from_secs(
-            1,
-        )),
+    let atm_policy = RetainedLogPolicy {
+        rotation_max_bytes: 4096,
+        rotation_max_files: 5,
+        retention_max_age: Duration::from_secs(60),
+        maintenance_cadence: Duration::from_secs(60),
+        writer_shutdown_timeout: Duration::from_secs(1),
         maintenance_max_work_per_pass: Some(5),
     };
+    let backend_policy = backend_retained_log_policy(atm_policy);
 
-    let _sink = sc_observability::JsonlFileSink::open(active_log_path, policy)
+    // `JsonlFileSink::open` performs the same maintenance pass as the logger
+    // worker, without depending on its cadence or scheduling. The ATM mapping
+    // must preserve the age: a zero-age mutation would prune the recent file.
+    let _sink = sc_observability::JsonlFileSink::open(active_log_path, backend_policy)
         .expect("synchronous retained-log maintenance");
 
     assert!(
         !stale_rotated_log_path.exists(),
         "maintenance must remove a rotated file older than the retention age"
+    );
+    assert!(
+        recent_rotated_log_path.exists(),
+        "maintenance must retain a recent rotated file under the ATM retention age"
     );
 }
 

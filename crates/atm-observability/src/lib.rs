@@ -293,24 +293,7 @@ pub fn build_routed_retained_logger(
         logger_root_for_log_dir(log_dir)?,
     );
     config.level = level_override.map_or(sc_observability_types::LevelFilter::Info, backend_level);
-    config.retained_log_policy = sc_observability::RetainedLogPolicy {
-        rotation_max_bytes: sc_observability::ByteCount::from_bytes(
-            retained_log_policy.rotation_max_bytes,
-        ),
-        rotation_max_files: sc_observability_types::FileCount::from_usize(
-            retained_log_policy.rotation_max_files,
-        ),
-        retention_max_age: sc_observability::RetentionMaxAge::from_duration(
-            retained_log_policy.retention_max_age,
-        ),
-        maintenance_cadence: sc_observability::MaintenanceCadence::new(
-            retained_log_policy.maintenance_cadence,
-        ),
-        writer_shutdown_timeout: sc_observability::WriterShutdownTimeout::new(
-            retained_log_policy.writer_shutdown_timeout,
-        ),
-        maintenance_max_work_per_pass: retained_log_policy.maintenance_max_work_per_pass,
-    };
+    config.retained_log_policy = backend_retained_log_policy(retained_log_policy);
     config.enable_console_sink = false;
     config.enable_file_sink = destination != atm_core::LogDestination::Otel;
     // The native logger applies this once before fan-out, including direct
@@ -345,6 +328,23 @@ pub fn build_routed_retained_logger(
         .build()
         .map(|logger| RetainedLogger(std::sync::Arc::new(logger)))
         .map_err(map_retained_logger_error)
+}
+
+fn backend_retained_log_policy(policy: RetainedLogPolicy) -> sc_observability::RetainedLogPolicy {
+    sc_observability::RetainedLogPolicy {
+        rotation_max_bytes: sc_observability::ByteCount::from_bytes(policy.rotation_max_bytes),
+        rotation_max_files: sc_observability_types::FileCount::from_usize(
+            policy.rotation_max_files,
+        ),
+        retention_max_age: sc_observability::RetentionMaxAge::from_duration(
+            policy.retention_max_age,
+        ),
+        maintenance_cadence: sc_observability::MaintenanceCadence::new(policy.maintenance_cadence),
+        writer_shutdown_timeout: sc_observability::WriterShutdownTimeout::new(
+            policy.writer_shutdown_timeout,
+        ),
+        maintenance_max_work_per_pass: policy.maintenance_max_work_per_pass,
+    }
 }
 
 fn map_retained_logger_error(source: impl std::fmt::Display) -> AtmError {
