@@ -16,7 +16,7 @@ Source paths are `skills/atm-bd-lite/templates/<file>` (ANC-012). Installed, the
 - **bo-10**: none. bo-10's close hook reads the phase-file template keys this sprint defines (deliverable 5). That is a dependency of bo-10 on bo-11, not the other way round.
 
 ## bdc verbs the blocks use (beads-cache `develop` @ `5196acd`, contract `docs/bd-cache-cli/contract.md` 0.2.0)
-The `bdc` contract has no `lock`, `record` or `pour` subcommand. Each step maps onto a real verb, as follows:
+`bdc` is beads-cache's CLI: every `bdc` command reads or writes through the same beads-cache journal as bd_cache_rs, so the blocks touch beads only through beads-cache and never run `bd` (ANC-063). Acceptance: `grep -nE '(^|[ ;|&(])bd ' skills/atm-bd-lite/templates/* skills/atm-bd-lite/SKILL.md` prints nothing. The `bdc` contract has no `lock`, `record` or `pour` subcommand. Each step maps onto a real verb, as follows:
 
 | block step | bdc command | beads-cache behaviour | exists today |
 |---|---|---|---|

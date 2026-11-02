@@ -4,7 +4,7 @@ Repo: atm-bd-orchestration. Branch `sprint/bo-12-jev-check-gate`. One dev. Owned
 
 Lands BEFORE bo-10: bo-10's PR base is this branch's head, because bo-10 consumes `atm-bd-lite-gate.py` and the `lite-gate` CI job (fenix-brief.md §B, "Ordering"). bo-12 consumes nothing from bo-9..11: jev-check imports nothing from atm-bd, and the gate reads hooks with `ast` only.
 
-Spec: `design/jev-check-proposal.md` (every deliverable, untrimmed) and fenix-brief.md §B. Behaviour reference: `design/packages/jev-check/README.md`; its "Parity checklist" is acceptance. The prototype (`design/packages/jev-check/`, 37 tests; `design/lite-code/atm-bd-lite-gate.py`, `gate-questions.json` v6, `gate-fixtures/`) is moved into place by this sprint, not rewritten. The old `jev_client.py` is not copied or imported.
+Spec: `design/jev-check-proposal.md` (every deliverable, untrimmed) and fenix-brief.md §B. Behaviour reference: `design/packages/jev-check/README.md`; its "Parity checklist" is acceptance. The prototype (`design/packages/jev-check/`, 37 tests; `design/lite-code/atm-bd-lite-gate.py`, `gate-questions.json` v6, `gate-fixtures/`) is moved into place by this sprint, not rewritten. That prototype was newly written in phase bo inside atm-core's plan directory; nothing in it, and nothing this sprint adds, is moved or copied out of atm-bd-orchestration (ANC-036). The old `jev_client.py` is not copied or imported. Acceptance: `git log --follow --name-status --format= -- packages/jev-check skills/atm-bd-lite/scripts/atm-bd-lite-gate.py` shows only `A` entries, no `R`/`C` from a `skills/atm-bd-orchestration/` path.
 
 ## Paths
 
