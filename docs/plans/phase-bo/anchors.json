@@ -1251,8 +1251,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 7,
-      "status": "locked",
+      "version": 8,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1310,6 +1310,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand, 2026-11-01: fixture report rulings: statement names atm-bd-core; shared types are in crates/atm-bd-types per ANC-017, and the profile rule is ANC-061."
         }
       ]
     },
@@ -1950,14 +1956,14 @@
       "deterministic_check": "find shows every lite hook, template and cron script under skills/atm-bd-lite/; none in the shared location",
       "fixtures": {
         "pass": [
-          "The three lite task hooks and the lite dev/fix/qa assignment templates are all under skills/atm-bd-lite/ (scripts/ and templates/); find shows none of them in the shared location."
+          "The three lite task hooks, the lite dev/fix/qa assignment templates and the lite cron script are all under skills/atm-bd-lite/ (scripts/ and templates/); find shows none of them in the shared location."
         ],
         "fail": [
           "The lite dev-template.xml.j2 is placed in the shared location next to the shared modules."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 6,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1990,6 +1996,27 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check"
+          ],
+          "previous_statement": "Each profile's task hooks, task-assignment templates and cron script must be inside that profile's own skill directory.",
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:01:35+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "Each profile's task hooks and task-assignment templates must be inside that profile's own skill directory.",
+          "reason": "Rand, 2026-11-01: \"wait, lite will have cron.\" Ruling A for ANC-031 withdrawn; statement and check restored; pass fixture names the cron script (fixture report option 1)."
         }
       ]
     },
@@ -2405,11 +2432,11 @@
           "At the stack top the atm-bd-orchestration test suite (just test-orchestration at origin/main) passes with no orchestration test file changed."
         ],
         "fail": [
-          "Lite work renames an orchestration helper and edits three orchestration tests to match the new name."
+          "The phase diff renames a helper that atm-bd-orchestration imports and edits three files under skills/atm-bd-orchestration/tests/ to the new name."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2443,6 +2470,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
         }
       ]
     },
@@ -2589,14 +2624,14 @@
       "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a lite-profile phase file",
       "fixtures": {
         "pass": [
-          "tests/shared/test_phase_file.py also runs read_profile on a lite-profile phase file fixture."
+          "Every public function and trait impl in the shared location, read_profile included, has a test under tests/shared/ that runs it on a lite-profile phase file fixture."
         ],
         "fail": [
           "The shared stack gate is tested only against orchestration-profile phase data."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2629,6 +2664,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
         }
       ]
     },
@@ -3193,14 +3236,14 @@
       "deterministic_check": "the per-hook Jev verification run reports pass for every diagram row; the run JSON is committed under anchor-runs/",
       "fixtures": {
         "pass": [
-          "The Jev run anchor-runs/hooks/task-close.json judges T-CLOSE-01..06 each implemented by atm-bd-task-hook.py, no row failing."
+          "The gate's Jev run anchor-runs/hooks/atm-bd-task-hook.json judges T-CLOSE-01..04 each implemented by its own match arm in atm-bd-task-hook.py, no row failing."
         ],
         "fail": [
-          "Jev reports T-CLOSE-04 (QA FAIL pours findings) as not implemented in the hook code."
+          "The gate's Jev run judges T-CLOSE-02 not implemented, because the WORK_CLOSE arm also records the layer on the stack bead, a write its row does not list."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3226,6 +3269,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
         }
       ]
     },
@@ -3571,14 +3622,14 @@
       "deterministic_check": "grep of skills/atm-bd-lite for 'dict[', 'Any', 'json.loads' outside atm-bd-types parsing is empty; pyright strict reports no reportUnknown* diagnostics",
       "fixtures": {
         "pass": [
-          "def hook(req: HookRequest) -> HookReply: ... bead = Bead.show(req.task_id)"
+          "grep of skills/atm-bd-lite for dict[, Any and json.loads outside atm-bd-types parsing is empty, and pyright strict reports no reportUnknown diagnostics; each hook takes HookRequest and returns HookReply."
         ],
         "fail": [
           "def hook(env: dict[str, Any]) -> dict[str, str]: task = env[\"request\"][\"task_id\"]"
         ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3591,6 +3642,14 @@
           "at": "2026-11-01T19:48:10+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
         }
       ]
     },
@@ -3609,14 +3668,14 @@
       "deterministic_check": "no bd subprocess call and no BdCli in any lite file or template; BeadStore is the bd_cache_rs adapter",
       "fixtures": {
         "pass": [
-          "The lite close hook reads the bead with cache.get from bd_cache_rs and closes it with cache.write(bead, 'close', ...); no bd process is started."
+          "grep finds no bd subprocess and no BdCli in any skills/atm-bd-lite file or template; hooks reach beads only through BeadStore, the bd_cache_rs adapter."
         ],
         "fail": [
           "The lite close hook runs 'bd show' and 'bd update --if-status' through a BdCli subprocess adapter."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -3636,6 +3695,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
         }
       ]
     },
@@ -3654,14 +3721,14 @@
       "deterministic_check": "atm-bd-lite-gate.py (ast): per hook file in skills/atm-bd-lite/scripts/atm-bd-task-*.py, count of beads.update(/beads.create(/beads.claim(/beads.release( call sites <= 1 and create/claim/release count == 0",
       "fixtures": {
         "pass": [
-          "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-064 failure: the lite close hook has one beads.update call, which closes the work bead, and no beads.create, beads.claim or beads.release call."
+          "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-064 failure: the close hook has one beads.update call and no beads.create, claim or release."
         ],
         "fail": [
           "The lite close hook calls beads.update twice: first to record the layer on the stack bead, then to close the work bead."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -3694,6 +3761,14 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
         }
       ]
     },
@@ -3712,14 +3787,14 @@
       "deterministic_check": "atm-bd-lite-gate.py (ast): every stack_bead occurrence in skills/atm-bd-lite/scripts/atm-bd-task-*.py is an argument of beads.show( or cache.get(",
       "fixtures": {
         "pass": [
-          "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-065 failure: every stack_bead occurrence in the lite close hook is an argument of beads.show or cache.get, so no write receives the stack bead."
+          "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-065 failure: every stack_bead occurrence in the hook is an argument of beads.show or cache.get."
         ],
         "fail": [
           "The lite close hook calls beads.update(BeadPatch.record(stack_bead, layer)) to record the dev layer before closing."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -3745,6 +3820,14 @@
           "event": "status",
           "status": "proposed",
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
         }
       ]
     },
@@ -3880,14 +3963,14 @@
       "deterministic_check": "every ErrorId member, class and method name in the generated atm_bd_types .pyi appears (grep -w) in a lite hook file or a hooks/*.md table",
       "fixtures": {
         "pass": [
-          "grep -w finds every ErrorId member, class and method name of the generated atm_bd_types stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, in a lite hook file or a hooks/*.md table."
+          "grep -w finds every ErrorId member of the atm_bd_types stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, in a hook file or a hooks/*.md Errors table."
         ],
         "fail": [
           "The stub keeps ErrorId.STACK_CLAIM_LOST although no hook and no hooks/*.md table names it."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "proposed",
       "promoted_to": null,
       "beads": {
@@ -3913,6 +3996,14 @@
           "event": "status",
           "status": "proposed",
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
         }
       ]
     },
