@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
 from typing import Callable
 
@@ -71,14 +70,6 @@ def replace_winget_field_values(
 def replace_version_occurrences(value: str, old_version: str, new_version: str) -> str:
     pattern = re.compile(rf"(?<![0-9.]){re.escape(old_version)}(?![0-9.])")
     return pattern.sub(new_version, value)
-
-
-def validate_workspace_version(repo_root: Path) -> str:
-    cargo_toml = tomllib.loads(read_text(repo_root / "Cargo.toml"))
-    workspace_version = cargo_toml.get("workspace", {}).get("package", {}).get("version")
-    if not workspace_version:
-        fail("workspace version missing from Cargo.toml")
-    return workspace_version
 
 
 def sync_winget_manifests(
