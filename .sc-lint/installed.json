@@ -8,7 +8,7 @@
     ".sc-lint/bootstrap.py": "5e26b4ab0d8fafbe856a94089d3b575b10164258776c4c5c828fecd9802a76db",
     ".sc-lint/install.json": "7f6816ef8fa175d2a2c093c8ebf619795e0cbbde17f2dd13e03416194dc6bc7d",
     ".sc-lint/justfile": "278736352fe79ac0a5ac71e45b532ca89133d3fe818ddc5d520e7d91b82f8da5",
-    "Justfile": "f2eceb1991a74edc320c895f4894b063910c5bdf9cf2e208d55e833c86bc2c0c",
+    "Justfile": "173b8ada1d78cede8b5899d2a034732bf95a3470162d62344377a84cf6184583",
     "README.sc-lint.md": "c2df414597671cc47cb278fb6160d2800545f270e34e68fd043d8565f2124524",
     "plugins/sc-lint/.claude-plugin/plugin.json": "a24e7d3a9ff9f42daabe6ef178e8c2778fd9abd846e6ab0f0fb931dcf82e3246",
     "plugins/sc-lint/.claude/agents/sc-lint-adopter.md": "1245a654e6bb85683fee318db1a2f411fca955bf6b7f68c94a2e390738d03ee0",

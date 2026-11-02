@@ -184,9 +184,9 @@ class LintBoundariesTests(unittest.TestCase):
         self.assertIn("peer-dial-seam", runtime.lint_rules)
         profiles = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["profiles"]
         for platform, python in (
-            ("linux", ".sc-lint/venv/bin/python"),
-            ("macos", ".sc-lint/venv/bin/python"),
-            ("windows", ".sc-lint\\venv\\Scripts\\python.exe"),
+            ("linux", ".bootstrap-venv/bin/python"),
+            ("macos", ".bootstrap-venv/bin/python"),
+            ("windows", ".bootstrap-venv\\Scripts\\python.exe"),
         ):
             row = profiles[f"peer-dial-seam-{platform}"]
             self.assertEqual(row["platform"], platform)

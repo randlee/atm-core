@@ -159,9 +159,6 @@ jobs:
       - name: Set up sc-lint
         run: just setup
 
-      - name: Install sc-lint Python dependencies
-        run: just setup-sc-lint-python
-
       - name: Verify pinned ecosystem tools
         shell: bash
         run: |

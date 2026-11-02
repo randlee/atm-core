@@ -24,10 +24,6 @@ help:
 bootstrap *args:
     {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
-# Install the shared lint/test Python dependencies in sc-lint's Python environment.
-setup-sc-lint-python:
-    {{seed_python_cmd}} .just/setup_sc_lint_python.py
-
 # Format the Rust workspace or run the formatting gate.
 fmt mode='check':
     cargo fmt --all {{if mode == "check" { "-- --check" } else { "" }}}

@@ -539,15 +539,15 @@ class BootstrapTests(IsolatedHomeTests):
             justfile,
         )
 
-    def test_sc_lint_clippy_profiles_select_host_and_sc_lint_python(self) -> None:
+    def test_sc_lint_clippy_profiles_select_host_and_bootstrap_python(self) -> None:
         root = SCRIPT.parents[1]
         install = json.loads((root / ".sc-lint" / "install.json").read_text(encoding="utf-8"))
         profiles = install["profiles"]
         command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
         for name, platform, python in (
-            ("clippy-linux", "linux", ".sc-lint/venv/bin/python"),
-            ("clippy-macos", "macos", ".sc-lint/venv/bin/python"),
-            ("clippy-native-windows", "windows", ".sc-lint/venv/Scripts/python.exe"),
+            ("clippy-linux", "linux", ".bootstrap-venv/bin/python"),
+            ("clippy-macos", "macos", ".bootstrap-venv/bin/python"),
+            ("clippy-native-windows", "windows", ".bootstrap-venv/Scripts/python.exe"),
         ):
             self.assertEqual(profiles[name], {"command": command, "platform": platform, "env_paths": {"PYO3_PYTHON": python}})
         for host in ("linux", "macos"):
@@ -559,7 +559,7 @@ class BootstrapTests(IsolatedHomeTests):
                     "platform": "windows",
                     "target": "x86_64-pc-windows-msvc",
                     "host": host,
-                    "env_paths": {"PYO3_PYTHON": ".sc-lint/venv/bin/python"},
+                    "env_paths": {"PYO3_PYTHON": ".bootstrap-venv/bin/python"},
                 },
             )
         self.assertIn("clippy-windows-macos", install["lint_profiles"]["ci"])
