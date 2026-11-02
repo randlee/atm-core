@@ -23,6 +23,42 @@ fn prepares_the_active_log_file() {
 }
 
 #[test]
+fn retained_log_pruning_uses_controlled_file_times() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let active_log_path = tempdir.path().join(CANONICAL_LOG_FILE_NAME);
+    let stale_rotated_log_path = tempdir.path().join(format!("{CANONICAL_LOG_FILE_NAME}.1"));
+    std::fs::write(&active_log_path, "active\n").expect("active log");
+    std::fs::write(&stale_rotated_log_path, "stale\n").expect("rotated log");
+    std::fs::File::open(&stale_rotated_log_path)
+        .expect("open rotated log")
+        .set_modified(std::time::SystemTime::UNIX_EPOCH)
+        .expect("set controlled modification time");
+
+    // `JsonlFileSink::open` performs the same maintenance pass as the logger
+    // worker, without depending on its cadence or scheduling.
+    let policy = sc_observability::RetainedLogPolicy {
+        rotation_max_bytes: sc_observability::ByteCount::from_bytes(4096),
+        rotation_max_files: sc_observability_types::FileCount::from_usize(5),
+        retention_max_age: sc_observability::RetentionMaxAge::from_duration(Duration::from_secs(
+            60,
+        )),
+        maintenance_cadence: sc_observability::MaintenanceCadence::new(Duration::from_secs(60)),
+        writer_shutdown_timeout: sc_observability::WriterShutdownTimeout::new(Duration::from_secs(
+            1,
+        )),
+        maintenance_max_work_per_pass: Some(5),
+    };
+
+    let _sink = sc_observability::JsonlFileSink::open(active_log_path, policy)
+        .expect("synchronous retained-log maintenance");
+
+    assert!(
+        !stale_rotated_log_path.exists(),
+        "maintenance must remove a rotated file older than the retention age"
+    );
+}
+
+#[test]
 fn retained_logger_bootstrap_error_preserves_historical_json_without_cause() {
     let daemon_error = super::map_retained_logger_error("synthetic initialization failure");
     let historical = AtmError::observability_bootstrap(
