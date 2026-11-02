@@ -515,10 +515,10 @@ class BootstrapTests(IsolatedHomeTests):
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         self.assertNotIn("SC_LINT_INSTALL_DIR: ${{ runner.temp }}", workflow)
         self.assertEqual(workflow.count("- name: Configure platform cache directories"), 1)
-        self.assertEqual(workflow.count("os.environ['RUNNER_TEMP']"), 1)
-        self.assertEqual(workflow.count("os.environ['GITHUB_ENV']"), 1)
-        self.assertEqual(workflow.count("${{ env.SC_LINT_INSTALL_DIR }}"), 1)
         just_lint = workflow.split("\n  fmt:", 1)[0]
+        self.assertEqual(just_lint.count("os.environ['RUNNER_TEMP']"), 1)
+        self.assertEqual(just_lint.count("os.environ['GITHUB_ENV']"), 1)
+        self.assertEqual(just_lint.count("${{ env.SC_LINT_INSTALL_DIR }}"), 1)
         self.assertIn("xwin = cache_root / 'xwin'", just_lint)
         self.assertIn("'XWIN_CACHE_DIR=' + str(xwin)", just_lint)
         cache_step = "- name: Cache xwin SDK\n        if: runner.os != 'Windows'\n        uses: actions/cache@v4"

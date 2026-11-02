@@ -46,6 +46,10 @@ build:
 test *layer:
     {{seed_python_cmd}} .sc-lint/bootstrap.py test --config sc-lint.toml {{layer}}
 
+# sc-lint kit default test groups are tracked by randlee/sc-lint#832.
+test-signing:
+    {{python_cmd}} .just/sign_daemon_dev.py
+
 # Write tracked coverage reports on supported hosts.
 coverage:
     {{python_cmd}} scripts/coverage/run.py --write-artifacts

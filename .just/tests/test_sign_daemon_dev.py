@@ -147,12 +147,11 @@ class SignDaemonDevTests(unittest.TestCase):
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn("build:\n    cargo build --workspace\n    {{python_cmd}} .just/sign_daemon_dev.py", justfile)
 
-    def test_manifest_test_recipe_signs_artifacts_after_test_steps(self) -> None:
+    def test_signing_is_explicit_and_not_in_default_test_manifest(self) -> None:
         justfile = (REPO_ROOT / "Justfile").read_text(encoding="utf-8")
         manifest = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["test"]
-        self.assertEqual(manifest["daemon-signing"], {
-            "command": ["just", "lint", "daemon-signing-tests"], "after_all": True,
-        })
+        self.assertNotIn("daemon-signing", manifest)
+        self.assertIn("test-signing:\n    {{python_cmd}} .just/sign_daemon_dev.py", justfile)
         self.assertEqual(manifest["python"], ["just", "lint", "python-tests"])
         self.assertNotIn("coverage", manifest)
         self.assertNotIn("default", manifest)

@@ -606,11 +606,6 @@
       "version-macos",
       "version-windows"
     ],
-    "daemon-signing-tests": [
-      "daemon-signing-tests-linux",
-      "daemon-signing-tests-macos",
-      "daemon-signing-tests-windows"
-    ],
     "python-tests": [
       "python-tests-linux",
       "python-tests-macos",
@@ -786,27 +781,6 @@
       "command": [
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_daemon_signing_coupling.py"
-      ],
-      "platform": "windows"
-    },
-    "daemon-signing-tests-linux": {
-      "command": [
-        ".bootstrap-venv/bin/python",
-        ".just/sign_daemon_dev.py"
-      ],
-      "platform": "linux"
-    },
-    "daemon-signing-tests-macos": {
-      "command": [
-        ".bootstrap-venv/bin/python",
-        ".just/sign_daemon_dev.py"
-      ],
-      "platform": "macos"
-    },
-    "daemon-signing-tests-windows": {
-      "command": [
-        ".bootstrap-venv\\Scripts\\python.exe",
-        ".just/sign_daemon_dev.py"
       ],
       "platform": "windows"
     },
@@ -1445,14 +1419,6 @@
       "--test",
       "cli_surface"
     ],
-    "daemon-signing": {
-      "after_all": true,
-      "command": [
-        "just",
-        "lint",
-        "daemon-signing-tests"
-      ]
-    },
     "herdr": [
       "cargo",
       "test",
