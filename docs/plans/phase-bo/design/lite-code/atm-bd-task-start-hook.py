@@ -3,50 +3,45 @@
 # requires-python = ">=3.11"
 # dependencies = ["atm-bd-types==0.2.0"]
 # ///
-"""atm-bd-lite task.start hook: the assignee starts an unblocked bead; its base is the stack top at start (the trunk
-for a new stack), recorded on the bead. No claim: the dev claims the stack only when its work is complete."""
+"""task.start: hooks/task-start.md. One write: in_progress. Does not read the ledger."""
 import sys
-
-from atm_bd_types import CacheStore, BeadPatch, BeadStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli, Refusal, Stack, Status
-
-PROFILE = "lite"  # hook policy: this file serves phases whose phase file says profile = "lite" (ANC-026, ANC-061)
+from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli,
+                          Refusal)
+from atm_bd_types import StartTransition as Transition
 
 
 def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
     if not req.is_phase_task():
         return HookReply.not_applicable()
-    if isinstance(phase := phases.load(req.phase_config_path(), PROFILE), Refusal):
+    if isinstance(phase := phases.load(req.phase_config_path, "lite"), Refusal):
         return HookReply.refused(phase)
     if isinstance(bead := beads.show(req.task_id), Refusal):
         return HookReply.refused(bead)
-    if not bead.assigned_to(req.caller):
-        return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))
-    if bead.open_blockers():
-        return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))
-    match bead.status:
-        case Status.OPEN:  # the work's base is the stack top now; no claim (the dev claims only at completion)
-            if isinstance(work := bead.work(), Refusal):
-                return HookReply.refused(work)
-            if isinstance(stack_id := bead.stack_bead(), Refusal):
-                return HookReply.refused(stack_id)
-            if isinstance(stack_bead := beads.show(stack_id), Refusal):
-                return HookReply.refused(stack_bead)
-            if isinstance(stack := Stack.decode(stack_bead), Refusal):
-                return HookReply.refused(stack)
-            return HookReply.from_result(beads.update(BeadPatch.start(bead, base=stack.top(excluding=work.branch)), actor=req.caller))
-        case Status.IN_PROGRESS:
+    if bead.assignee != req.caller:
+        return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead.id, agent=bead.assignee or ""))
+    if bead.open_blockers:
+        return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, ids=bead.open_blockers))
+
+    match Transition.select(bead.status):
+        case Transition.START:  # T-START-01
+            patch = BeadPatch.start(bead)
+        case Transition.START_AGAIN:  # T-START-02
             return HookReply.pass_through()
-        case Status.CLOSED:
-            return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead, phase=phase))
-        case Status.BLOCKED | Status.DEFERRED:
-            return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))
+        case Transition.START_CLOSED:  # T-START-03
+            return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead.id))
+        case Transition.START_NOT_READY:  # T-START-04
+            return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, status=bead.status.name))
+
+    if (failed := beads.update(patch, actor=req.caller)) is not None:
+        return HookReply.refused(failed)
+    return HookReply.pass_through()
 
 
 if __name__ == "__main__":
     req = HookRequest.parse(sys.stdin.read())
     if isinstance(req, Refusal):
         print(HookReply.refused(req).to_json())
-    elif isinstance(beads := CacheStore.for_phase(req.phase), Refusal):
-        print(HookReply.refused(beads).to_json())
+    elif isinstance(store := CacheStore.for_phase(req.phase), Refusal):
+        print(HookReply.refused(store).to_json())
     else:
-        print(hook(req, beads, PhaseFilesCli()).to_json())
+        print(hook(req, store, PhaseFilesCli()).to_json())

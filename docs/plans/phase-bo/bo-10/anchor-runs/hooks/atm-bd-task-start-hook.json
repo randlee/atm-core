@@ -1,0 +1,239 @@
+{
+  "hook": "bo-10/skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py",
+  "spec": "hooks/task-start.md",
+  "lines": 47,
+  "rows": [
+    [
+      "T-START-01",
+      "START"
+    ],
+    [
+      "T-START-02",
+      "START_AGAIN"
+    ],
+    [
+      "T-START-03",
+      "START_CLOSED"
+    ],
+    [
+      "T-START-04",
+      "START_NOT_READY"
+    ]
+  ],
+  "facts": {
+    "arms": [
+      [
+        "Transition.START",
+        26
+      ],
+      [
+        "Transition.START_AGAIN",
+        28
+      ],
+      [
+        "Transition.START_CLOSED",
+        30
+      ],
+      [
+        "Transition.START_NOT_READY",
+        32
+      ]
+    ],
+    "transition_arms": [
+      [
+        "Transition.START",
+        26
+      ],
+      [
+        "Transition.START_AGAIN",
+        28
+      ],
+      [
+        "Transition.START_CLOSED",
+        30
+      ],
+      [
+        "Transition.START_NOT_READY",
+        32
+      ]
+    ],
+    "beads_calls": [
+      [
+        "show",
+        18
+      ],
+      [
+        "update",
+        35
+      ]
+    ],
+    "replies": [
+      [
+        "HookReply.pass_through()",
+        37
+      ],
+      [
+        "HookReply.not_applicable()",
+        15
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead.id, agent=bead.assignee or ''))",
+        21
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, ids=bead.open_blockers))",
+        23
+      ],
+      [
+        "HookReply.pass_through()",
+        29
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead.id))",
+        31
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id, status=bead.status.name))",
+        33
+      ]
+    ],
+    "stack_bead_writes": [],
+    "subprocess_sites": []
+  },
+  "deterministic_failures": [],
+  "jev": {
+    "answers": {
+      "implemented:T-START-01": {
+        "choice": "yes",
+        "confidence": 0.78,
+        "probabilities": {
+          "no": 0.11,
+          "yes": 0.89
+        }
+      },
+      "implemented:T-START-02": {
+        "choice": "yes",
+        "confidence": 0.92,
+        "probabilities": {
+          "no": 0.04,
+          "yes": 0.96
+        }
+      },
+      "implemented:T-START-03": {
+        "choice": "yes",
+        "confidence": 0.88,
+        "probabilities": {
+          "no": 0.06,
+          "yes": 0.94
+        }
+      },
+      "implemented:T-START-04": {
+        "choice": "yes",
+        "confidence": 0.86,
+        "probabilities": {
+          "no": 0.07,
+          "yes": 0.93
+        }
+      },
+      "listed:L15": {
+        "choice": "yes",
+        "confidence": 0.92,
+        "probabilities": {
+          "no": 0.04,
+          "yes": 0.96
+        }
+      },
+      "listed:L21": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "probabilities": {
+          "no": 0.01,
+          "yes": 0.99
+        }
+      },
+      "listed:L23": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "probabilities": {
+          "no": 0.01,
+          "yes": 0.99
+        }
+      },
+      "listed:L26": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "probabilities": {
+          "no": 0.01,
+          "yes": 0.99
+        }
+      },
+      "listed:L28": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L29": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "probabilities": {
+          "no": 0.01,
+          "yes": 0.99
+        }
+      },
+      "listed:L30": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L31": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L32": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L33": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L37": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "probabilities": {
+          "no": 0.01,
+          "yes": 0.99
+        }
+      }
+    },
+    "findings": [],
+    "input": {
+      "prompt_sha256": "f558bd44968051cfaa0704ad5195c6334942e08fe8b8006b2742c9d27249c1ce",
+      "input_tokens": 4433,
+      "prompt_tokens": null,
+      "leak": null,
+      "commands": 0,
+      "equal": true
+    },
+    "no": []
+  },
+  "pass": true
+}

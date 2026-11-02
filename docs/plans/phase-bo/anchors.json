@@ -4665,6 +4665,120 @@
           "reason": "Rand, 2026-11-01: \"ok, approved.\" (collector/decision design, profile selection, orchestration unchanged)"
         }
       ]
+    },
+    {
+      "id": "ANC-077",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Total Python under skills/atm-bd-lite/ (hooks, cron policy, decision layer; excluding tests) must not exceed 600 lines.",
+      "quote": "atm-bd-orchestration is just a little bit more complicated than atm-bd-lite (one more agent in start/close hook) and it is over 5k lines of python.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, 2026-11-01 evening (Claude session with Rand); proposed, awaiting Rand lock",
+      "summary": "lite stays small (total lines)",
+      "scope": "any Python file under skills/atm-bd-lite/",
+      "deterministic_check": "find skills/atm-bd-lite -name '*.py' -not -path '*/tests/*' | xargs wc -l | tail -1 reports <= 600 (run by atm-bd-lite-gate.py)",
+      "fixtures": {
+        "pass": [
+          "Three hooks at 49/47/75 lines plus a 180-line cron policy: 351 lines."
+        ],
+        "fail": [
+          "A dogfooding fix adds a 300-line helper module under skills/atm-bd-lite/scripts/: 651 lines."
+        ]
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-02T06:46:16+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-078",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A lite hook must import only from atm_bd_types, and every method the stub exposes to a hook returns data or a typed Refusal, never a verdict about what the hook should do.",
+      "quote": "the gate reads one file; a decision hidden in a helper is invisible to it",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, 2026-11-01 evening (Claude session with Rand); proposed, awaiting Rand lock",
+      "summary": "hooks import facts, not decisions",
+      "scope": "any lite hook file; the atm_bd_types stub",
+      "deterministic_check": "ast on each hook file: the only imported module is atm_bd_types (run by atm-bd-lite-gate.py); the stub's public methods on Bead, HookRequest, PhaseFile and BeadStore are reviewed at bo-9 against this rule and frozen by ANC-034's regeneration diff",
+      "fixtures": {
+        "pass": [
+          "Bead.layer_for(branch) -> Layer | None; HookRequest.qa_pass() -> QaPass | Refusal; CloseTransition.select(req, bead) -> CloseTransition | Refusal."
+        ],
+        "fail": [
+          "A hook imports from scripts/lite_helpers.py; or the stub adds Bead.should_close() -> bool."
+        ]
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-02T06:46:16+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
+    },
+    {
+      "id": "ANC-079",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A dogfooding fix task for lite must begin with a classification block (template bug / decision-row bug / spec bug / hook bug) with evidence; only 'hook bug' may change a hook file, and only citing the hooks/*.md row it corrects.",
+      "quote": "when bug fixes land the agents just start writing spaghetti code to fix the issues. that is what I want stopped.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, 2026-11-01 evening (Claude session with Rand); proposed, awaiting Rand lock",
+      "summary": "every bug fix is classified before it is written",
+      "scope": "any lite fix task; any PR touching skills/atm-bd-lite/scripts/",
+      "deterministic_check": "the lite fix task template (bo-11) requires the classification block; the lead refuses to assign a fix task without it; a PR that changes a hook file and whose body has no 'row: T-' citation fails atm-bd-lite-gate.py",
+      "fixtures": {
+        "pass": [
+          "Classification: template bug. Evidence: the stack block's rebase step omits --onto; no hook refused wrongly. The fix lands in the dev template; no hook file changes."
+        ],
+        "fail": [
+          "A fix PR edits atm-bd-task-hook.py with no classification block and no row cited."
+        ]
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-02T06:46:16+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
     }
   ]
 }
