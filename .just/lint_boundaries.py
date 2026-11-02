@@ -1567,7 +1567,7 @@ def collect_test_bypass_violations(repo_root: Path, records: list[BoundaryRecord
 def find_public_reexport_violations(
     record: BoundaryRecord, source_path: Path, repo_root: Path
 ) -> list[BoundaryViolation]:
-    """Catch public `use` exports, which sc-lint 0.8.4 does not model."""
+    """Catch public `use` exports, which sc-lint does not model."""
     if record.implementation_type is None:
         return []
     pattern = re.compile(PUBLIC_REEXPORT_TEMPLATE.format(name=re.escape(record.implementation_type)))

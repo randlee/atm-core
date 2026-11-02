@@ -1,19 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-import sys
 import tempfile
 import unittest
 
 
-JUST_DIR = Path(__file__).resolve().parents[1]
-if str(JUST_DIR) not in sys.path:
-    sys.path.insert(0, str(JUST_DIR))
-
-from view_common import relative_artifact_path
-from view_common import reset_view_dir
-from view_common import write_json
-from view_common import write_text
+from sc_lint.view_common import relative_artifact_path
+from sc_lint.view_common import reset_view_dir
+from sc_lint.view_common import write_json
+from sc_lint.view_common import write_text
 
 
 class ViewCommonTests(unittest.TestCase):

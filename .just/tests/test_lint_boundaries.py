@@ -23,7 +23,6 @@ from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import run
-from atm_lint_test_scope import is_rust_test_cfg_attribute
 
 
 
@@ -795,12 +794,6 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertFalse(any("SqliteMailStore::open" in item for item in rendered), rendered)
-
-    def test_cfg_test_attribute_parser_handles_nested_and_negated_conditions(self) -> None:
-        self.assertTrue(is_rust_test_cfg_attribute('#[cfg(any(test, feature = "test-utils"))]'))
-        self.assertTrue(is_rust_test_cfg_attribute('#![cfg(all(unix, test))]'))
-        self.assertFalse(is_rust_test_cfg_attribute("#[cfg(not(test))]"))
-        self.assertFalse(is_rust_test_cfg_attribute('#[cfg(feature = "contest")]'))
 
     def test_collect_boundary_violations_flags_public_reexport_of_private_type(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

@@ -10,10 +10,10 @@ from lint_boundaries import collect_boundary_violations
 from lint_boundaries import parse_boundary_records
 from sc_lint.lint_common import discover_repo_root
 from sc_lint.lint_common import render_table
-from view_common import relative_artifact_path
-from view_common import reset_view_dir
-from view_common import write_json
-from view_common import write_text
+from sc_lint.view_common import relative_artifact_path
+from sc_lint.view_common import reset_view_dir
+from sc_lint.view_common import write_json
+from sc_lint.view_common import write_text
 
 
 def boundary_doc_rows(repo_root: Path, records) -> list[dict[str, str]]:

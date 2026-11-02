@@ -327,6 +327,10 @@ def validate_lint(root: Path, findings: list[Finding]) -> None:
         "lint passed",
         failure_summary,
     )
+    python_cmd = (["just", "test", "python"] if shutil.which("just") is not None else
+                  ["python3", ".sc-lint/bootstrap.py", "test", "--config", "sc-lint.toml", "python"])
+    completed = run_capture(python_cmd, cwd=root)
+    append_completed_findings(findings, "lint-python-tests", completed, "Python tests passed", "Python tests failed")
 
 
 def validate_cli_surface(root: Path, findings: list[Finding]) -> None:

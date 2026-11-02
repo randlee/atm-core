@@ -12,7 +12,7 @@ RUNTIME_PATHS = (
     ".github/workflows/",
     ".github/scripts/",
 )
-RUNTIME_FILES = {"Cargo.toml", "Cargo.lock", "build.rs", "Justfile"}
+RUNTIME_FILES = {"Cargo.toml", "Cargo.lock", "build.rs", "Justfile", "sc-lint.toml"}
 
 
 def requires_runtime(changed_paths: Iterable[str]) -> bool:
@@ -21,6 +21,8 @@ def requires_runtime(changed_paths: Iterable[str]) -> bool:
         path in RUNTIME_FILES
         or path.startswith("rust-toolchain")
         or path.startswith(RUNTIME_PATHS)
+        or path.startswith(".sc-lint/")
+        or (path.endswith(".py") and path.startswith((".just/", "scripts/")))
         for path in changed_paths
     )
 

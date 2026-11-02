@@ -599,7 +599,157 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::DaemonObservability;
+    use super::{
+        ATM_SERVICE_NAME, DaemonObservability, Export, ExportSelection, LoggerLifecycle,
+        RETAINED_LOG_ROTATION_MAX_BYTES, build_routed_retained_logger, retained_log_policy,
+    };
+
+    #[derive(Clone, Debug, Default)]
+    struct CapturingLogExporter(Arc<std::sync::Mutex<Vec<String>>>);
+
+    impl opentelemetry_sdk::logs::LogExporter for CapturingLogExporter {
+        fn export(
+            &self,
+            batch: opentelemetry_sdk::logs::LogBatch<'_>,
+        ) -> impl std::future::Future<Output = opentelemetry_sdk::error::OTelSdkResult> + Send
+        {
+            let records = Arc::clone(&self.0);
+            async move {
+                let mut records = records.lock().expect("capture lock");
+                records.extend(batch.iter().map(|(record, _)| format!("{record:?}")));
+                Ok(())
+            }
+        }
+    }
+
+    fn routed_observability(
+        tempdir: &TempDir,
+        destination: atm_core::LogDestination,
+        exporter: &CapturingLogExporter,
+    ) -> (
+        DaemonObservability,
+        opentelemetry_sdk::logs::SdkLoggerProvider,
+    ) {
+        use opentelemetry::logs::LoggerProvider as _;
+        use opentelemetry_sdk::logs::{SdkLoggerProvider, SimpleLogProcessor};
+
+        let provider = SdkLoggerProvider::builder()
+            .with_log_processor(SimpleLogProcessor::new(exporter.clone()))
+            .build();
+        let logger = provider.logger(ATM_SERVICE_NAME);
+        let log_dir = tempdir.path().join("logs");
+        let retained_logger = build_routed_retained_logger(
+            ATM_SERVICE_NAME,
+            &log_dir,
+            retained_log_policy(RETAINED_LOG_ROTATION_MAX_BYTES),
+            Some(atm_observability::RetainedLogLevel::Warn),
+            destination,
+            Some(logger),
+        )
+        .expect("routed retained logger");
+        let export = Export::new(
+            ExportSelection::Configured {
+                endpoint: "in-memory".to_owned(),
+            },
+            Arc::default(),
+            None,
+        );
+        (
+            DaemonObservability {
+                logger: Arc::new(std::sync::Mutex::new(LoggerLifecycle(Arc::new(
+                    retained_logger,
+                )))),
+                active_log_path: log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME),
+                export: Arc::new(export),
+            },
+            provider,
+        )
+    }
+
+    #[test]
+    fn daemon_log_destinations_filter_secrets_and_thresholds() {
+        use tracing_subscriber::layer::SubscriberExt as _;
+
+        for destination in [
+            atm_core::LogDestination::File,
+            atm_core::LogDestination::Both,
+        ] {
+            let tempdir = TempDir::new().expect("tempdir");
+            let exporter = CapturingLogExporter::default();
+            let (observability, _provider) = routed_observability(&tempdir, destination, &exporter);
+            let retained_logger = Arc::clone(&observability.logger.lock().expect("logger lock").0);
+            let dispatch = tracing::Dispatch::new(
+                tracing_subscriber::registry()
+                    .with(atm_observability::TracingBridgeLayer::new(retained_logger)),
+            );
+            let subscriber = tracing::dispatcher::set_default(&dispatch);
+            tracing::warn!(
+                target: "atm_daemon_bootstrap::observability_test_allowed",
+                token = "observability-test-secret",
+                "routed warning"
+            );
+            tracing::debug!(
+                target: "atm_daemon_bootstrap::observability_test_below_threshold",
+                "below threshold"
+            );
+            observability
+                .logger
+                .lock()
+                .expect("logger lock")
+                .0
+                .flush()
+                .expect("flush routed logs");
+            drop(subscriber);
+            drop(dispatch);
+
+            let records = exporter.0.lock().expect("capture lock").clone();
+            if destination == atm_core::LogDestination::File {
+                assert!(
+                    records.is_empty(),
+                    "file-only must not export logs: {records:#?}"
+                );
+            } else {
+                assert_eq!(
+                    records.len(),
+                    1,
+                    "only the warning is exported: {records:#?}"
+                );
+                let exported = records.join("\n");
+                assert!(
+                    exported.contains("observability_test_allowed"),
+                    "{exported}"
+                );
+                assert!(
+                    !exported.contains("observability_test_below_threshold"),
+                    "{exported}"
+                );
+                assert!(
+                    !exported.contains("observability-test-secret"),
+                    "{exported}"
+                );
+            }
+
+            let file =
+                std::fs::read_to_string(&observability.active_log_path).expect("retained JSONL");
+            assert_eq!(
+                file.lines().count(),
+                1,
+                "only the warning is retained: {file}"
+            );
+            assert!(file.contains("observability_test_allowed"), "{file}");
+            assert!(
+                !file.contains("observability_test_below_threshold"),
+                "{file}"
+            );
+            assert!(!file.contains("observability-test-secret"), "{file}");
+            observability
+                .logger
+                .lock()
+                .expect("logger lock")
+                .0
+                .shutdown_shared();
+        }
+    }
 
     #[tokio::test]
     #[serial]

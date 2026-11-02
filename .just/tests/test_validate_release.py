@@ -145,6 +145,15 @@ class ValidateReleaseContractTests(unittest.TestCase):
         self.assertTrue(findings[0].blocks)
         self.assertEqual(findings[0].detail, "ATM_SEND_TO_NOTIFIER")
 
+    @mock.patch.object(VALIDATE_RELEASE.shutil, "which", return_value="/usr/bin/just")
+    @mock.patch.object(VALIDATE_RELEASE, "run_capture")
+    def test_lint_validation_runs_manifest_python_tests(self, run_capture: mock.Mock, _which: mock.Mock) -> None:
+        run_capture.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        findings: list[VALIDATE_RELEASE.Finding] = []
+        VALIDATE_RELEASE.validate_lint(self.root, findings)
+        self.assertEqual([call.args[0] for call in run_capture.call_args_list], [["just", "lint", "ci", "all"], ["just", "test", "python"]])
+        self.assertFalse(any(f.blocks for f in findings))
+
     @mock.patch.object(VALIDATE_RELEASE, "run_capture")
     def test_validate_cli_surface_uses_the_feature_gated_contract(self, run_capture: mock.Mock) -> None:
         run_capture.return_value = subprocess.CompletedProcess(

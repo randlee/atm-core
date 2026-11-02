@@ -22,6 +22,14 @@ class AtmLintTestScopeTests(unittest.TestCase):
         ]
         self.assertEqual(rust_file_test_scope(Path("crates/x/src/lib.rs"), lines), [False, True, True, False])
 
+    def test_tests_directory_with_feature_cfg_remains_all_test_scope(self) -> None:
+        lines = [
+            '#[cfg(feature = "test-utils")]',
+            "fn feature_fixture() {}",
+            "fn test_body() { std::thread::sleep(Duration::from_millis(1)); }",
+        ]
+        self.assertEqual(rust_file_test_scope(Path("crates/x/tests/a.rs"), lines), [True, True, True])
+
     def test_negated_test_cfg_is_not_a_test_scope(self) -> None:
         self.assertFalse(is_rust_test_cfg_attribute("#[cfg(not(test))]"))
         self.assertFalse(is_rust_test_cfg_attribute('#[cfg(feature = "contest")]'))
