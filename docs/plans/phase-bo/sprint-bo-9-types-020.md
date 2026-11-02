@@ -1,55 +1,119 @@
-# Sprint bo-9: atm-bd-types 0.2.0, the lite hook contract
+# Sprint bo-9: atm-bd-types 0.2.0, only the names the lite hooks use
 
-Repo: atm-bd-orchestration. Branch `sprint/bo-9-types-020`, stacked on `sprint/bo-8-stack-repair`. Owned path: `crates/atm-bd-types/`.
+Repo: atm-bd-orchestration. Branch `sprint/bo-9-types-020`, cut from `integrate/phase-bo`. One dev.
+
+> **NOT APPROVED.** The stub below is a draft. Rand has not approved it. Do not dispatch it until he does.
+
+Paths: `skills/atm-bd-lite/` means `plugins/atm-bd-orchestration/skills/atm-bd-lite/`. `<plan>` means atm-core `docs/plans/phase-bo` at the plan commit.
+
+Owned paths: `Cargo.toml` (new root workspace, one member), `crates/atm-bd-types/`, and `skills/atm-bd-lite/pyrightconfig.json`.
 
 ## Goal
-> **NOT APPROVED.** The contract stub below is fenix's draft. Rand has not approved it. It must not be dispatched until Rand approves it.
 
-The Rust crate behind every name the lite hooks import. Its Python surface is `design/lite-code/typings/atm_bd_types/__init__.pyi` (draft).
+atm-bd-types 0.2.0 is the Rust crate behind every name the three lite hooks import, exposed through an abi3 wheel. The spec is `<plan>/hooks/task-assign.md`, `task-start.md` and `task-close.md` (Rand-owned, ANC-071). The crate carries the names those specs and the bo-10 hooks use, and nothing else (ANC-068). The 0.1.1 surface and the old draft stub are not carried forward. That rules out `CloseVars`, `Profile`, `Provider*`, `STACK_HELD`, `STACK_CLAIM_LOST`, `BeadPatch.record`, `NewBead`, any claim, release or create on the store, `TaskAssign`, `Tasks`, `AtmCli`, `CronCommand` and `CronReply`.
+
+## Consumes
+
+- `.github/workflows/crate-release.yml` from atm-bd-orchestration `main` (6be13c68). This is the `workflow_dispatch` job with an independent `version` input. It runs the wheels, then crates.io, then PyPI. `integrate/phase-bo` is an ancestor of `main` and lacks this file. Before bo-9 is cut, the lead fast-forwards `integrate/phase-bo` to `main`.
+- bd-cache-rs 0.1.0, the GitHub release assets of `randlee/beads-cache` at `prerelease/v0.1.0`. There are two abi3 wheels: macOS arm64 and manylinux x86_64. The package is not on PyPI, and the beads-cache Rust crate is not on crates.io. The API comes from the beads-cache README: `Cache(repo, scopes=[...])`, `get(id)`, and `write(id, op, args, precondition, idempotency_key, actor)` with ops close and update.
+
+## Delivery of bd_cache_rs
+
+atm-bd-types 0.2.0 does **not** depend on bd-cache-rs, either in Cargo or in the wheel's `Requires-Dist`. A URL dependency would make PyPI reject the upload. `CacheStore` imports `bd_cache_rs` at call time through pyo3 (`py.import("bd_cache_rs")`). If the import fails, the result is `CACHE_UNAVAILABLE`, with a message naming the wheel. The bo-10 hook scripts declare both packages in their PEP 723 header. They pin bd-cache-rs with `[tool.uv.sources]`, one URL entry per platform marker for the two release assets. Platforms that have no bd-cache-rs wheel get `CACHE_UNAVAILABLE`. That covers Intel macOS, Linux arm64 and Windows.
 
 ## Deliverables
-1. Every enum, value type, write spec, request/reply type and trait in `atm_bd_types.pyi`, in Rust, exposed through the abi3 wheel. The generated stub equals `design/lite-code/typings/atm_bd_types/__init__.pyi` apart from formatting.
-2. `ErrorId`: one variant per name in the stub. Each variant has a crate-const message template and fix template; `Refusal` construction is typed per variant (the stub's overloads).
-3. No profile names or literals anywhere in the crate (ANC-061). The profile is a string read from the phase file.
-4. The real adapters. Beads go through beads-cache only, never `bd` (ANC-063: Rand, "we have found 20-30 second timeout is not enough ... that is why we designed bd cache which you forgot is a mandatory requirement"):
-   - `CacheStore.for_phase(phase)`: opens `bd_cache_rs.Cache(<repo root>, scopes=[phase])`. The bd-cache-rs 0.1.0 wheel is pinned to the published GitHub release asset `randlee/beads-cache` `prerelease/v0.1.0` (macOS arm64 and Linux x86_64 abi3 wheels; it is not on PyPI yet). A failure to open is `CACHE_UNAVAILABLE`.
-   - `CacheStore.show`: `cache.get`; a missing bead is `BEAD_NOT_FOUND`.
-   - `CacheStore.ready`: `cache.ready(phase)`, filtered by the stage label, in its order.
-   - `CacheStore.update(BeadPatch)`: one `cache.write` (op `close` or `update`) with the patch's status/assignee precondition and an idempotency key. `BD_CACHE.PRECONDITION` maps to `BEAD_RACED`, and for `BeadPatch.record` to `STACK_CLAIM_LOST`.
-   - `CacheStore.claim`: `cache.write` update assignee = holder, precondition assignee = "". If another agent holds it, the result is `STACK_HELD`, naming the holder.
-   - `CacheStore.release`: `cache.write` update assignee = "", precondition assignee = holder.
-   - `CacheStore.create`: **BLOCKED**. beads-cache has no `create` op (randlee/beads-cache#104) (its ops are close, update and dep_add). It waits on Rand's decision (bo-10 T-CLOSE-07).
-   - `AtmCli.assign`: `atm task assign` as the TaskAssign's actor (cron's path).
-   - `PhaseFilesCli`: reads `.atm-bd/phase-<x>.toml`. Unreadable is `PHASE_UNREADABLE`; any other profile is `PROFILE_MISMATCH`.
-   - `HookRequest.layer_block()`: the one fenced JSON block `{"layer": {branch, head, pr, base}}` in the close report. Missing or invalid is `LAYER_BLOCK_MISSING`.
-5. `AtmCli` takes a timeout: a timeout is `COMMAND_TIMEOUT` and any other failure is `COMMAND_FAILED`, each carrying the argv and stderr. No bd process is started anywhere.
 
-## Acceptance
-- [ ] Pyright strict on `design/lite-code/` against the generated stub: 0 errors.
-- [ ] Each `CacheStore` method is asserted exactly: its `cache.write` op, args, precondition and idempotency key, against a fake `bd_cache_rs` handle. No bd or dolt is run.
-- [ ] The grep for `bd ` subprocess calls and for `BdCli` in the crate, the stub and the lite scripts is empty (ANC-063).
-- [ ] `BeadPatch.record` is ONE `cache.write` update that sets the layers metadata and assignee "", with the precondition assignee = holder. A precondition failure maps to `STACK_CLAIM_LOST`.
-- [ ] `Stack.decode`: a missing `trunk` is `BEAD_FIELD_MISSING`; absent or empty layers are a new stack whose `top()` is the trunk.
-- [ ] `Stack.layer_for(branch)` returns the recorded layer, and `Stack.position(branch)` its index, 0 for the first.
-- [ ] `BeadStore.ready(phase, stage)` is one `cache.ready(phase)` filtered by the stage label, in its order.
-- [ ] `BeadPatch.start(snapshot, base)` is ONE guarded update setting in_progress and `meta.work.base`.
-- [ ] `AtmCli.assign` is one `atm task assign <recipient> --task-id <id> --template <path>` run as the actor. A QA assign carries the review layer's branch, head and PR as vars.
-- [ ] `HookRequest.layer_block()`: a report with one valid block parses into `Layer`; no block, two blocks or a missing key each give `LAYER_BLOCK_MISSING`.
-- [ ] `Sha`: `str()` is the full 40 hex digits; `short()` appears only in titles.
-- [ ] The grep for `lite`, `orchestration` or `Full` used as a profile in the crate and the stub is empty (ANC-061).
-- [ ] atm-bd-types 0.2.0 is published to crates.io and PyPI.
+1. **The stub surface.** `crates/atm-bd-types/atm_bd_types.pyi` is generated by `cargo run --features python --bin stub_gen` and is never hand-edited. Its names are exactly the names in the Contract section below, which is everything bo-10's Consumes list names. Each hook's transitions are their own enum: `AssignTransition`, `StartTransition` and `CloseTransition`, with exactly the names in that hook's Transitions table. Each hook imports its enum `as Transition`, so the bo-12 gate counts `Transition.X` arms and pyright's exhaustiveness check covers one hook. `Status.BLOCKED` and `Status.DEFERRED` both select the single `*_NOT_READY` member of `AssignTransition` and `StartTransition` (T-ASSIGN-04, T-START-04). That selection is done by the hook (bo-10), not by the crate. Anchors: ANC-017, 034, 068.
+   Acceptance:
+   - `cd crates/atm-bd-types && cargo run --features python --bin stub_gen && git diff --exit-code atm_bd_types.pyi` exits 0 (ANC-034).
+   - `grep -rnE '^\s*class (Status|Stage|ErrorId|AssignTransition|StartTransition|CloseTransition)\b' skills/atm-bd-lite` prints nothing, and `grep -nE 'enum (ErrorId|AssignTransition|StartTransition|CloseTransition)\b' crates/atm-bd-types/src/*.rs` prints 4 lines (ANC-017).
+   - The `BeadStore` and `PhaseFiles` Protocol blocks in the stub are emitted by `stub_gen` from the Rust traits. Deleting a trait method in `src/` and regenerating changes the stub. The dev shows this once in the PR description with the two `git diff` outputs.
+
+2. **`crates/atm-bd-types/scripts/stub_names.py <stub.pyi> <file>...`** (stdlib only, ANC-068). It uses `ast` to list every class, enum member, method and property in the stub, skipping dunders. For `.md` files it reads only table rows (lines starting with `|`); for `.py` files it reads the whole file. It prints each stub name with no `\b<name>\b` match, one per line, and exits 1 if it printed anything. Anchors: ANC-068.
+   Acceptance:
+   - `uv run pytest crates/atm-bd-types/tests/python/test_stub_names.py` passes with two tests. The fail fixture is the generated stub with `STACK_CLAIM_LOST = ...` added to `ErrorId`: the script prints `ErrorId.STACK_CLAIM_LOST` and exits 1. The pass fixture is a two-class stub plus a `.py` file that names every member: the script prints nothing and exits 0.
+   - At bo-9's head, `python3 crates/atm-bd-types/scripts/stub_names.py crates/atm-bd-types/atm_bd_types.pyi <plan>/hooks/*.md | grep -E '^(ErrorId|AssignTransition|StartTransition|CloseTransition)\.'` prints nothing: every error code and transition is in a spec table.
+   - The full check runs at the bo-10 head, where the hooks exist. `python3 crates/atm-bd-types/scripts/stub_names.py crates/atm-bd-types/atm_bd_types.pyi <plan>/hooks/*.md skills/atm-bd-lite/scripts/atm-bd-task-*.py` prints nothing and exits 0. If it names a symbol there, that symbol is removed from the crate in a layer on top. It is not added to a hook.
+
+3. **`ErrorId`, owners and fix texts keyed by (ErrorId, Hook).** `ErrorId` has 17 members, exactly the codes in the three Errors tables. That set includes `STACK_NOT_RECORDED` and `FINDINGS_NOT_POURED`. The same code has different fix text in different hooks. For example, `BEAD_CLOSED` reads "Nothing to assign." in one table, "Nothing to start." in another and "is already closed." in the third. So the crate holds one const table per `Hook` (`TASK_ASSIGN`, `TASK_START`, `TASK_CLOSE`), copied from that hook's Errors table: owner (dev, qa or lead) and fix template, keyed by `ErrorId`. `Refusal.message` is one message per `ErrorId` (the `<what failed>` text). `HookReply.refused(hook, refusal)` renders code, message, owner and fix for that hook. Anchors: ANC-058 (data side), ANC-061.
+   Acceptance: `cargo test -p atm-bd-types fix_table` passes. It has one test per Errors-table cell (hook × code). Each test asserts the owner and the fix template character for character against the table text, with placeholders written `{bead}`, `{ids}`, `{status}`, `{lead}`, `{agent}`, `{branch}`, `{sha}`, `{head}`, `{sprint}`, `{outcome}` and `{what failed}`. The run reports 32 `fix_table` tests passed, one per (hook, code) pair with grouped rows expanded: assign has 3 + 6, start has 3 + 5, close has 9 + 6.
+
+4. **The beads-cache adapter `CacheStore`.** Beads are read and written through `bd_cache_rs` only. No process is started (ANC-063). Anchors: ANC-006, 063.
+   - `CacheStore.for_phase(phase)` opens `bd_cache_rs.Cache(<repo root>, scopes=[phase])`. An import or open failure is `CACHE_UNAVAILABLE`.
+   - `show(id)` calls `cache.get(id)` and decodes the row into `Bead`: status, stage label, assignee, parent, blocking dependencies with their status, the beads it blocks, `BeadMeta`, and the stack bead's `layers`. A missing bead is `BEAD_NOT_FOUND`.
+   - `update(patch, actor)` makes one `cache.write`. The precondition is the snapshot's status and assignee, and `BD_CACHE.PRECONDITION` maps to `BEAD_RACED`. `cache.write` requires an idempotency key, so the adapter derives one from op, bead id and snapshot. Hooks never see the key. The ops are:
+     - `assign`: op `update`, `assignee=agent`.
+     - `start`: op `update`, `status=in_progress`.
+     - `reopen`: op `update`, `status=open`, `assignee=""`, with the reason as a note.
+     - `close`: op `close`. The reason is the rendered evidence: a layer `branch head pr base`, a sha, or a sha plus finding ids.
+
+   Acceptance:
+   - `uv run pytest crates/atm-bd-types/tests/python/test_cache_store.py` passes. The test puts a fake `bd_cache_rs` module on `sys.path` and asserts, for each of the four patches, the exact `write` call: id, op, args, precondition and actor. Two more tests check the error paths: the fake raising a precondition error gives `ErrorId.BEAD_RACED`, and removing the fake module gives `CACHE_UNAVAILABLE`. No bd, dolt or daemon runs.
+   - The same test file decodes two committed rows: `tests/python/rows/orchestration-*.json`, captured with `bdc --repo <atm-core> issues show <id>` from an orchestration phase (dev, qa and stack beads), and `rows/lite-*.json` in the same keys. Both decode with the same `show` code path (ANC-006: one schema).
+   - `find skills/atm-bd-lite -iname '*schema*'` prints nothing (ANC-006).
+   - `grep -rnE 'std::process|Command::new|"bd"|BdCli' crates/atm-bd-types/src crates/atm-bd-types/atm_bd_types.pyi` prints nothing (ANC-063).
+
+5. **`PhaseFilesCli.load(path, profile)`** reads `.atm-bd/phase-<x>.toml`: `profile`, `lead` and `[templates]` keys `refuse`, `dev-close`, `qa-pass` and `qa-findings` (task-close.md Facts: "profile, templates | phase file"). An unreadable file or a missing key is `PHASE_UNREADABLE`. A profile that is not the `profile` argument is `PROFILE_MISMATCH`. The crate holds no profile name; the hook passes it (ANC-061). Anchors: ANC-061.
+   Acceptance:
+   - `uv run pytest crates/atm-bd-types/tests/python/test_phase_files.py` passes on tmp files covering one good file, a missing file, a missing template key and a profile mismatch.
+   - `grep -rniwE 'lite|orchestration|full|profile_name|Profile' crates/atm-bd-types/src crates/atm-bd-types/atm_bd_types.pyi` prints only the `profile: str` parameter and property lines, which the dev lists in the PR (ANC-061).
+
+6. **`HookRequest` and `HookReply`.**
+   - `HookRequest.parse(stdin)` reads the ATM hook envelope. `assignee` and `outcome` return `REQUEST_INVALID` when absent or invalid. `close_report()` returns `CLOSE_REPORT_NOT_INLINE` when empty, and `close_reason()` returns `CLOSE_REASON_EMPTY`.
+   - `qa_verdict()` parses the one fenced JSON block `{"verdict": "PASS" | "FINDINGS", "sha": <40 hex>, "findings": [ids]}` into `QaPass(sha)` or `QaFail(sha, findings)`. A missing block, more than one block, a bad sha, or FINDINGS with an empty list gives `QA_VERDICT`.
+   - `HookAction.close(template, args)` renders `atm task close --template <template> --args <args>`.
+   - `HookReply.handled(action)`, `pass_through()`, `not_applicable()` and `refused(hook, refusal)` serialize to the reply JSON that bo-13 accepts.
+
+   Anchors: ANC-062.
+   Acceptance:
+   - `cargo test -p atm-bd-types request reply` passes. One test per parse error above. One test per `HookAction.close` args form (Layer, QaPass, QaFail, reason) asserts the exact argv string.
+   - `grep -nE 'dict\[|\bAny\b|-> object' crates/atm-bd-types/atm_bd_types.pyi` prints nothing (ANC-062).
+
+7. **Pyright strict against the generated stub** (ANC-038).
+   - `skills/atm-bd-lite/pyrightconfig.json` sets `typeCheckingMode: "strict"`, `reportMatchNotExhaustive: "error"`, `pythonVersion: "3.11"` and `stubPath` pointing at the generated stub (`../../../../crates/atm-bd-types`). bo-10 runs `npx pyright -p skills/atm-bd-lite` on the hooks and the fakes that implement `BeadStore` and `PhaseFiles`.
+   - `crates/atm-bd-types/pyrightconfig.json` uses the same settings over `tests/python/`. Those tests include `store: BeadStore = CacheStore.for_phase(...)` (after narrowing) and `phases: PhaseFiles = PhaseFilesCli()`, so the stub's classes are checked against its Protocols.
+
+   Acceptance:
+   - `npx pyright -p crates/atm-bd-types` reports `0 errors`.
+   - `npx pyright -p skills/atm-bd-lite` reports `0 errors` at bo-9's head. There are no hook files yet; bo-10 re-runs it with the hooks.
+
+8. **Release 0.2.0.** `Cargo.toml` and `pyproject.toml` of the crate say `0.2.0`. The release runs `crate-release.yml` with `version=0.2.0`. Python-only fixes to the lite skill ship through `release.yml`, which has no crate leg, so they need no crate publish (ANC-018). bo-9 keeps it that way: the version is independent, and the skill's release version does not lockstep with the crate version. Anchors: ANC-018.
+   Acceptance:
+   - `grep -nE 'crate-release|cargo publish|atm-bd-types' .github/workflows/release.yml` prints nothing.
+   - `grep -A4 '^on:' .github/workflows/crate-release.yml` shows only `workflow_dispatch`.
+   - `unzip -p dist/atm_bd_types-0.2.0-*.whl '*.dist-info/METADATA' | grep -c '^Requires-Dist'` prints 0.
+   - After the release, `curl -s https://pypi.org/pypi/atm-bd-types/json | jq -r '.releases|keys[]'` includes `0.2.0`, and `curl -s -A x https://crates.io/api/v1/crates/atm-bd-types | jq -r '.versions[].num'` includes `0.2.0`.
+
+## Anchors → deliverables
+
+| anchor | deliverable |
+|---|---|
+| ANC-006 | 4 |
+| ANC-017 | 1 |
+| ANC-018 | 8 |
+| ANC-034 | 1 |
+| ANC-038 | 7 (the implementations themselves are bo-10's fakes) |
+| ANC-058 | 3 (fix-text data; bo-10 asserts the rendered text) |
+| ANC-061 | 3, 5 |
+| ANC-062 | 6 |
+| ANC-063 | 4 |
+| ANC-068 | 1, 2 (full pass at the bo-10 head) |
 
 ## Validation
-`cargo test -p atm-bd-types`; `cargo clippy -p atm-bd-types -- -D warnings`; stub regeneration followed by `git diff --exit-code`; `npx pyright -p design/lite-code`.
 
-## Contract
+- `cargo test -p atm-bd-types --features python`
+- `cargo clippy -p atm-bd-types --features python -- -D warnings`
+- The stub regeneration plus `git diff --exit-code` (deliverable 1)
+- `uv run pytest crates/atm-bd-types/tests/python`
+- `npx pyright -p crates/atm-bd-types`
+- `npx pyright -p skills/atm-bd-lite`
+
+## Contract (draft stub, signatures only)
+
 ```python
-# Draft of the atm-bd-types 0.2.0 Python surface (generated from the Rust crate by pyo3_stub_gen).
-# Every type is a Rust struct/enum/trait; Python sees only these. No dicts cross this boundary.
+# atm-bd-types 0.2.0 Python surface, generated from the Rust crate by pyo3_stub_gen. No dicts cross it.
 import enum
 import typing
-
-# ---------- identifiers and enums ----------
 
 class Status(enum.Enum):
     OPEN = ...
@@ -59,7 +123,6 @@ class Status(enum.Enum):
     CLOSED = ...
 
 class Stage(enum.Enum):
-    r"""Schema stage (shared by all profiles); label encoding is central serialization."""
     DEV = ...
     FIX = ...
     QA = ...
@@ -69,121 +132,117 @@ class Outcome(enum.Enum):
     REFUSED = ...
     CANCELLED = ...
 
+class Hook(enum.Enum):
+    r"""Which Errors table renders a refusal's owner and fix."""
+    TASK_ASSIGN = ...
+    TASK_START = ...
+    TASK_CLOSE = ...
+
+class AssignTransition(enum.Enum):
+    r"""hooks/task-assign.md Transitions. BLOCKED and DEFERRED both select ASSIGN_NOT_READY."""
+    ASSIGN_SAME = ...
+    ASSIGN = ...
+    ASSIGN_CLOSED = ...
+    ASSIGN_NOT_READY = ...
+
+class StartTransition(enum.Enum):
+    r"""hooks/task-start.md Transitions. BLOCKED and DEFERRED both select START_NOT_READY."""
+    START = ...
+    START_AGAIN = ...
+    START_CLOSED = ...
+    START_NOT_READY = ...
+
+class CloseTransition(enum.Enum):
+    r"""hooks/task-close.md Transitions."""
+    GIVE_BACK = ...
+    WORK_CLOSE = ...
+    QA_PASS = ...
+    QA_FINDINGS = ...
+
 class Template(enum.Enum):
-    r"""A [templates] key of the phase file."""
-    DEV = ...
-    FIX = ...
-    QA = ...
+    r"""The four close templates, phase file [templates] refuse / dev-close / qa-pass / qa-findings."""
+    REFUSE = ...
+    DEV_CLOSE = ...
+    QA_PASS = ...
+    QA_FINDINGS = ...
 
 class ErrorId(enum.Enum):
-    r"""Every refusal. Message and fix templates are crate consts; `code` is e.g. "TASK.NOT_ASSIGNEE"."""
     REQUEST_INVALID = ...
     PHASE_UNREADABLE = ...
     PROFILE_MISMATCH = ...
-    BEAD_NOT_FOUND = ...
-    BEAD_STAGE_MISSING = ...
-    BEAD_STAGE_AMBIGUOUS = ...
-    BEAD_FIELD_MISSING = ...
-    BEAD_CLOSED = ...
-    BEAD_NOT_READY = ...
-    BEAD_RACED = ...
-    BEAD_EXISTS = ...
-    STACK_HELD = ...
     CACHE_UNAVAILABLE = ...
-    STACK_CLAIM_LOST = ...
-    TASK_NOT_ASSIGNEE = ...
+    BEAD_NOT_FOUND = ...
+    BEAD_NOT_READY = ...
+    BEAD_CLOSED = ...
+    BEAD_RACED = ...
     ASSIGN_NOT_LEAD = ...
+    TASK_NOT_ASSIGNEE = ...
     CLOSE_REASON_EMPTY = ...
     CLOSE_REPORT_NOT_INLINE = ...
-    LAYER_BLOCK_MISSING = ...
-    STACK_NOT_STACKED = ...
+    STACK_NOT_RECORDED = ...
     QA_VERDICT = ...
     QA_NOT_ON_STACK = ...
     QA_NOTHING_TO_REVIEW = ...
-    COMMAND_FAILED = ...
-    COMMAND_TIMEOUT = ...
-    @property
-    def code(self) -> str: ...
-
-# ---------- facts (all constructible, so fakes build them without dicts) ----------
+    FINDINGS_NOT_POURED = ...
 
 @typing.final
 class Sha:
-    r"""A full 40-hex commit id; str() is always the full lowercase hex."""
+    r"""A full 40-hex commit id; str() is the full lowercase hex."""
     @staticmethod
     def parse(hex: str) -> Sha | Refusal: ...
     def __str__(self) -> str: ...
-    def short(self) -> str:
-        r"""First 12 hex digits, for human-facing text only."""
     def __eq__(self, other: object) -> bool: ...
     def __hash__(self) -> int: ...
 
 @typing.final
 class Dependency:
-    def __new__(cls, id: str, blocks: bool, status: Status) -> Dependency: ...
+    def __new__(cls, id: str, status: Status) -> Dependency: ...
     @property
     def id(self) -> str: ...
-    @property
-    def blocks(self) -> bool: ...
     @property
     def status(self) -> Status: ...
 
 @typing.final
 class Work:
-    def __new__(cls, branch: str, worktree: str, sprint: str, base: str | None = None) -> Work: ...
-    @property
-    def base(self) -> str | None:
-        r"""The stack top when the work started (set by task.start); the dev cuts or rebases its worktree from it."""
+    def __new__(cls, branch: str) -> Work: ...
     @property
     def branch(self) -> str: ...
+
+@typing.final
+class BeadMeta:
+    def __new__(cls, *, work: Work | None = None, stack_bead: str | None = None,
+                checked_bead: str | None = None) -> BeadMeta: ...
     @property
-    def worktree(self) -> str: ...
-    def sibling(self, branch: str) -> Work:
-        r"""Same sprint, `branch`, worktree beside this one."""
+    def work(self) -> Work | None: ...
     @property
-    def sprint(self) -> str: ...
+    def stack_bead(self) -> str | None: ...
+    @property
+    def checked_bead(self) -> str | None: ...
 
 @typing.final
 class Layer:
-    r"""One work branch on the stack, recorded on the stack bead by the dev under the stack lease."""
-    def __new__(cls, base: str, branch: str, head: Sha, pr: int) -> Layer: ...
-    @property
-    def base(self) -> str: ...
+    r"""One ledger layer, written by the bo-11 stack block; the hooks only read it."""
+    def __new__(cls, *, branch: str, head: Sha, pr: int, base: str) -> Layer: ...
     @property
     def branch(self) -> str: ...
     @property
     def head(self) -> Sha: ...
     @property
     def pr(self) -> int: ...
-
-@typing.final
-class BeadMeta:
-    r"""Typed bead metadata (schema keys are central serialization, same for every profile)."""
-    def __new__(cls, *, work: Work | None = None, stack_bead: str | None = None, qa_bead: str | None = None,
-                checked_bead: str | None = None, reviewed: Sha | None = None) -> BeadMeta: ...
     @property
-    def work(self) -> Work | None: ...
-    @property
-    def qa_bead(self) -> str | None: ...
-    @property
-    def checked_bead(self) -> str | None: ...
-    @property
-    def reviewed(self) -> Sha | None:
-        r"""On a fix bead: the top head whose QA FAIL created it (its create-once identity)."""
-    @property
-    def stack_bead(self) -> str | None: ...
+    def base(self) -> str: ...
 
 @typing.final
 class Bead:
-    def __new__(cls, id: str, status: Status, stages: list[Stage], assignee: str | None,
-                dependencies: list[Dependency], meta: BeadMeta, parent: str | None = None) -> Bead: ...
+    def __new__(cls, *, id: str, status: Status, stage: Stage | None, assignee: str | None,
+                parent: str | None, blockers: list[Dependency], blocks: list[str],
+                meta: BeadMeta, layers: list[Layer] = ...) -> Bead: ...
     @property
     def id(self) -> str: ...
     @property
     def status(self) -> Status: ...
     @property
-    def stage(self) -> Stage | Refusal:
-        r"""The one stage; BEAD_STAGE_MISSING (none) or BEAD_STAGE_AMBIGUOUS (several, listed in context)."""
+    def stage(self) -> Stage | None: ...
     @property
     def assignee(self) -> str | None: ...
     @property
@@ -191,37 +250,16 @@ class Bead:
     @property
     def meta(self) -> BeadMeta: ...
     def assigned_to(self, agent: str) -> bool: ...
-    def owner(self) -> str | Refusal: ...
-    def open_blockers(self, ignoring: str | None = None) -> list[Dependency]: ...
-    def blockers(self) -> list[Dependency]:
-        r"""Every bead blocking this one, open or closed."""
+    def blockers(self) -> list[Dependency]: ...
+    def open_blockers(self) -> list[Dependency]: ...
     def blocks(self, bead_id: str) -> bool: ...
-    # required-metadata accessors: absent key -> BEAD_FIELD_MISSING naming the key
-    def work(self) -> Work | Refusal: ...
-    def qa_bead(self) -> str | Refusal: ...
-    def checked_bead(self) -> str | Refusal: ...
-    def reviewed(self) -> Sha | Refusal:
-        r"""The verdict sha recorded on this bead (a closed QA bead, or a fix bead); BEAD_FIELD_MISSING when absent."""
-    def stack_bead(self) -> str | Refusal: ...
 
 @typing.final
 class Stack:
-    r"""The stack bead's metadata (central schema, same as orchestration): `trunk` and the ordered `layers`.
-    A new stack has a trunk and no layers: its top is the trunk, so the first layer's base (and its PR's
-    base) is the trunk; later layers stack on the previous layer's branch."""
+    r"""The stack bead's layers (the ledger), read-only."""
     @staticmethod
-    def decode(stack_bead: Bead) -> Stack | Refusal:
-        r"""BEAD_FIELD_MISSING when `trunk` is absent; an absent or empty `layers` is a new stack, not an error."""
-    @property
-    def trunk(self) -> str: ...
-    def top(self, excluding: str) -> str:
-        r"""Branch of the last layer other than `excluding`; the trunk for a new stack (or when only `excluding` is on it)."""
-
+    def decode(stack_bead: Bead) -> Stack: ...
     def layer_for(self, branch: str) -> Layer | None: ...
-    def position(self, branch: str) -> int | None:
-        r"""0 for the first layer; None when `branch` is not on the stack."""
-    def with_layer(self, layer: Layer) -> Stack:
-        r"""Appends `layer`, or replaces the layer of the same branch."""
 
 @typing.final
 class QaPass:
@@ -232,97 +270,44 @@ class QaPass:
 
 @typing.final
 class QaFail:
-    __match_args__ = ("sha", "report")
-    def __new__(cls, sha: Sha, report: str) -> QaFail: ...
+    r"""A FINDINGS verdict: the reviewed sha and the poured finding ids listed in the report."""
+    __match_args__ = ("sha", "findings")
+    def __new__(cls, sha: Sha, findings: list[str]) -> QaFail: ...
     @property
     def sha(self) -> Sha: ...
     @property
-    def report(self) -> str:
-        r"""The whole QA report; it becomes the fix bead's description."""
-
-@typing.final
-class TemplateRef:
-    def __new__(cls, path: str) -> TemplateRef: ...
-    @property
-    def path(self) -> str: ...
-
-@typing.final
-class Provider(enum.Enum):
-    GITHUB = ...
-    AZURE = ...
-
-@typing.final
-class Templates:
-    r"""All three assignment templates; none optional."""
-    def __new__(cls, *, dev: TemplateRef, fix: TemplateRef, qa: TemplateRef) -> Templates: ...
-
-@typing.final
-class ProviderConfig:
-    r"""Validated `provider` of the phase file."""
-    def __new__(cls, provider: Provider) -> ProviderConfig: ...
-    @property
-    def provider(self) -> Provider: ...
+    def findings(self) -> list[str]: ...
 
 @typing.final
 class PhaseFile:
-    def __new__(cls, *, profile: str, lead: str, qa_member: str, integration_branch: str,
-                provider: ProviderConfig, templates: Templates) -> PhaseFile: ...
+    def __new__(cls, *, profile: str, lead: str, refuse: str, dev_close: str,
+                qa_pass: str, qa_findings: str) -> PhaseFile: ...
     @property
     def profile(self) -> str: ...
     @property
     def lead(self) -> str: ...
-    @property
-    def qa_member(self) -> str: ...
-    @property
-    def integration_branch(self) -> str: ...
-    @property
-    def provider(self) -> ProviderConfig: ...
-    def template(self, which: Template) -> TemplateRef:
-        r"""Infallible: Templates has no optional member."""
-
-# ---------- writes: generic, typed specs built by the hook ----------
+    def template(self, which: Template) -> str: ...
 
 @typing.final
 class BeadPatch:
-    r"""A change guarded by the snapshot it was decided on: the store applies it only if the bead's
-    status and assignee still equal the snapshot's (cache precondition on status / assignee), else BEAD_RACED."""
-    @staticmethod
-    def start(snapshot: Bead, base: str) -> BeadPatch:
-        r"""Status IN_PROGRESS and meta.work.base = `base`, guarded by the snapshot."""
+    r"""One guarded write: applied only if status and assignee still equal the snapshot's, else BEAD_RACED."""
     @staticmethod
     def assign(snapshot: Bead, agent: str) -> BeadPatch: ...
     @staticmethod
-    def reopen(snapshot: Bead, reason: str) -> BeadPatch:
-        r"""Status OPEN, assignee '' (with `reason` as a note) in one update guarded by the snapshot: the bead is
-        ready to be assigned again, to any dev."""
+    def start(snapshot: Bead) -> BeadPatch: ...
     @staticmethod
-    def close(snapshot: Bead, reason: str, *, reviewed: Sha | None = None) -> BeadPatch:
-        r"""Status CLOSED (+ the verdict sha) in one guarded cache write: of two racing closes one gets BEAD_RACED."""
+    def reopen(snapshot: Bead, reason: str) -> BeadPatch: ...
     @staticmethod
-    def record(stack_bead: Bead, stack: Stack, holder: str) -> BeadPatch:
-        r"""Writes the stack's layers AND releases the claim (assignee '', status open) in one cache write guarded by
-        --if-assignee <holder>: a released or reclaimed stack bead is STACK_CLAIM_LOST and nothing is written."""
-
-@typing.final
-class NewBead:
-    r"""A bead to create; its labels are the phase label plus `stage` (central schema serialization).
-    `id` is supplied by the caller, so create is create-once: an existing id is BEAD_EXISTS."""
-    def __new__(cls, *, id: str, title: str, description: str, parent: str, phase: str, stage: Stage, assignee: str,
-                meta: BeadMeta, blocks: str) -> NewBead: ...
-    @property
-    def id(self) -> str: ...
-    def made(self, existing: Bead) -> bool:
-        r"""Creation identity only: parent, stage, assignee, meta.work, meta.stack_bead, meta.qa_bead, meta.reviewed and the blocks
-        edge. Fields a bead gains later (status, meta.layer) are not compared, so a CLOSED fix still matches."""
-
-# ---------- request, actions, reply ----------
+    def close(snapshot: Bead, evidence: Layer | QaPass | QaFail) -> BeadPatch: ...
 
 @typing.final
 class HookRequest:
     @staticmethod
     def parse(stdin: str) -> HookRequest | Refusal: ...
+    def is_phase_task(self) -> bool: ...
     @property
     def phase(self) -> str: ...
+    def phase_config_path(self) -> str: ...
     @property
     def caller(self) -> str: ...
     @property
@@ -331,57 +316,40 @@ class HookRequest:
     def assignee(self) -> str | Refusal: ...
     @property
     def outcome(self) -> Outcome | Refusal: ...
-    def is_phase_task(self) -> bool: ...
-    def phase_config_path(self) -> str: ...
-    def close_reason(self) -> str | Refusal: ...
     def close_report(self) -> str | Refusal: ...
-    def layer_block(self) -> Layer | Refusal:
-        r"""The one fenced JSON block {"layer": {branch, head, pr, base}} in the close report: LAYER_BLOCK_MISSING."""
+    def close_reason(self) -> str | Refusal: ...
     def qa_verdict(self) -> QaPass | QaFail | Refusal: ...
 
 @typing.final
-class TaskAssign:
-    r"""A task.assign action: explicit actor, recipient, task and template; the daemon still authorizes the actor."""
-    def __new__(cls, *, task: str, recipient: str, actor: str, template: TemplateRef, review: Layer | None = None) -> TaskAssign:
-        r"""`review`: for a QA task, the layer to review, rendered into the template vars (branch, head, PR)."""
+class Refusal:
+    @property
+    def id(self) -> ErrorId: ...
+    @property
+    def message(self) -> str:
+        r"""The <what failed> text: one template per ErrorId."""
+    @typing.overload
+    def __new__(cls, id: typing.Literal[ErrorId.ASSIGN_NOT_LEAD], *, phase: PhaseFile) -> Refusal: ...
+    @typing.overload
+    def __new__(cls, id: typing.Literal[ErrorId.BEAD_NOT_READY, ErrorId.BEAD_CLOSED, ErrorId.TASK_NOT_ASSIGNEE,
+                                        ErrorId.QA_NOTHING_TO_REVIEW, ErrorId.BEAD_RACED], *, bead: Bead) -> Refusal: ...
+    @typing.overload
+    def __new__(cls, id: typing.Literal[ErrorId.STACK_NOT_RECORDED], *, branch: str) -> Refusal: ...
+    @typing.overload
+    def __new__(cls, id: typing.Literal[ErrorId.QA_NOT_ON_STACK], *, sha: Sha, layer: Layer) -> Refusal: ...
+    @typing.overload
+    def __new__(cls, id: typing.Literal[ErrorId.FINDINGS_NOT_POURED], *, findings: list[str], sprint: str) -> Refusal: ...
+    @typing.overload
+    def __new__(cls, id: typing.Literal[ErrorId.BEAD_NOT_FOUND], *, bead_id: str) -> Refusal: ...
+    @typing.overload
+    def __new__(cls, id: typing.Literal[ErrorId.PHASE_UNREADABLE, ErrorId.PROFILE_MISMATCH], *, path: str) -> Refusal: ...
+    @typing.overload
+    def __new__(cls, id: typing.Literal[ErrorId.CACHE_UNAVAILABLE], *, phase: str) -> Refusal: ...
 
 @typing.final
 class HookAction:
     @staticmethod
-    def assign(req: HookRequest, assign: TaskAssign) -> HookAction: ...
-    @staticmethod
-    def original(req: HookRequest) -> HookAction: ...
-
-@typing.final
-class Refusal:
-    r"""Typed end to end: to_json emits the structured refused reply (code, message, fix, context)
-    that the atm-core typed-wire sprint adds to hook/reply.rs, and the daemon logs it unflattened."""
-    @property
-    def id(self) -> ErrorId: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.TASK_NOT_ASSIGNEE], *, bead: Bead, caller: str) -> Refusal: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.ASSIGN_NOT_LEAD], *, bead: Bead, phase: PhaseFile) -> Refusal: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.BEAD_NOT_READY], *, bead: Bead) -> Refusal: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.BEAD_CLOSED], *, bead: Bead, phase: PhaseFile) -> Refusal: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.STACK_NOT_STACKED], *, layer: Layer, top: str) -> Refusal: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.QA_NOT_ON_STACK], *, reviewed: Sha, checked: str) -> Refusal: ...
-    @typing.overload
-    def __new__(cls, id: typing.Literal[ErrorId.QA_NOTHING_TO_REVIEW], *, bead: Bead) -> Refusal: ...
-
-    # adapter failures, for the real adapters and for fakes
-    @staticmethod
-    def command_failed(argv: list[str], code: int, stderr: str) -> Refusal: ...
-    @staticmethod
-    def timeout(argv: list[str]) -> Refusal: ...
-    @staticmethod
-    def raced(snapshot: Bead) -> Refusal: ...
-    @staticmethod
-    def not_found(bead_id: str) -> Refusal: ...
+    def close(template: str, args: Layer | QaPass | QaFail | str) -> HookAction:
+        r"""atm task close --template <template> --args <args>; str is the give-back reason."""
 
 @typing.final
 class HookReply:
@@ -390,80 +358,36 @@ class HookReply:
     @staticmethod
     def pass_through() -> HookReply: ...
     @staticmethod
-    def refused(refusal: Refusal) -> HookReply: ...
+    def refused(hook: Hook, refusal: Refusal) -> HookReply:
+        r"""Code, message, and the owner and fix from `hook`'s Errors table."""
     @staticmethod
-    def from_result(refusal: Refusal | None) -> HookReply: ...
-    @staticmethod
-    def handled(actions: list[HookAction]) -> HookReply: ...
+    def handled(action: HookAction) -> HookReply: ...
     def to_json(self) -> str: ...
 
-# ---------- general traits (no profile, stage-routing or naming policy); Cli = real adapters ----------
-
 class BeadStore(typing.Protocol):
-    r"""Beads through beads-cache only (ANC-063): reads from the cache file, writes journaled with a precondition."""
-    def show(self, bead_id: str) -> Bead | Refusal:
-        r"""cache.get."""
-    def ready(self, phase: str, stage: Stage) -> list[Bead] | Refusal:
-        r"""cache.ready for the phase, filtered by stage, in its order."""
-    def claim(self, bead_id: str, holder: str) -> Bead | Refusal:
-        r"""cache.write update assignee=holder, precondition assignee="": STACK_HELD naming the holder."""
-    def release(self, bead_id: str, holder: str) -> Refusal | None:
-        r"""cache.write update assignee="", precondition assignee=holder."""
-    def create(self, new: NewBead, actor: str) -> Refusal | None:
-        r"""BLOCKED: beads-cache has no create op (randlee/beads-cache#104) (ops: close, update, dep_add). See bo-12 T-CLOSE-06."""
-    def update(self, patch: BeadPatch, actor: str) -> Refusal | None:
-        r"""cache.write (close or update) with the patch's precondition and idempotency key."""
+    r"""Beads through beads-cache only (ANC-063)."""
+    def show(self, bead_id: str) -> Bead | Refusal: ...
+    def update(self, patch: BeadPatch, actor: str) -> Refusal | None: ...
 
 class PhaseFiles(typing.Protocol):
-    def load(self, path: str, profile: str) -> PhaseFile | Refusal:
-        r"""PHASE_UNREADABLE, or PROFILE_MISMATCH when the file's profile is not `profile`."""
-
-class Tasks(typing.Protocol):
-    def assign(self, assign: TaskAssign) -> Refusal | None:
-        r"""`atm task assign` as the assign's actor (cron's path; hooks return HookAction.assign instead)."""
+    def load(self, path: str, profile: str) -> PhaseFile | Refusal: ...
 
 @typing.final
 class CacheStore(BeadStore):
-    r"""The bd_cache_rs adapter (beads-cache PyO3 wheel). Never starts a bd process on a hook path."""
     @staticmethod
-    def for_phase(phase: str) -> CacheStore | Refusal:
-        r"""bd_cache_rs.Cache(<repo root>, scopes=[phase]); CACHE_UNAVAILABLE when it cannot open."""
+    def for_phase(phase: str) -> CacheStore | Refusal: ...
     def show(self, bead_id: str) -> Bead | Refusal: ...
-    def ready(self, phase: str, stage: Stage) -> list[Bead] | Refusal: ...
-    def claim(self, bead_id: str, holder: str) -> Bead | Refusal: ...
-    def release(self, bead_id: str, holder: str) -> Refusal | None: ...
-    def create(self, new: NewBead, actor: str) -> Refusal | None: ...
     def update(self, patch: BeadPatch, actor: str) -> Refusal | None: ...
 
 @typing.final
 class PhaseFilesCli(PhaseFiles):
     def __new__(cls) -> PhaseFilesCli: ...
     def load(self, path: str, profile: str) -> PhaseFile | Refusal: ...
-
-
-@typing.final
-class AtmCli(Tasks):
-    def __new__(cls, timeout_seconds: float) -> AtmCli: ...
-    def assign(self, assign: TaskAssign) -> Refusal | None: ...
-
-# ---------- lite cron (atm-bd-lite-cron.py) ----------
-
-@typing.final
-class CronCommand:
-    @staticmethod
-    def parse(argv: list[str]) -> CronCommand | Refusal:
-        r"""--phase P."""
-    @property
-    def phase(self) -> str: ...
-    def phase_config_path(self) -> str: ...
-
-@typing.final
-class CronReply:
-    r"""JSON on stdout: each assign with its result (None = assigned, else the typed refusal)."""
-    @staticmethod
-    def assigned(results: list[tuple[TaskAssign, Refusal | None]]) -> CronReply: ...
-    @staticmethod
-    def refused(refusal: Refusal) -> CronReply: ...
-    def to_json(self) -> str: ...
-
 ```
+
+## Not in bo-9
+
+- The hooks and their fakes (bo-10).
+- The stack and pour blocks (bo-11). They run `bdc` and `git` in bash and use no atm-bd-types name.
+- The cron script (bo-14). See the question below.
+- The typed refusal on the wire (bo-13).

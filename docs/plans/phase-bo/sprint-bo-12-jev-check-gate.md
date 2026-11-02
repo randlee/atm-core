@@ -1,0 +1,76 @@
+# Sprint bo-12: jev-check, and the lite gate that calls it
+
+Repo: atm-bd-orchestration. Branch `sprint/bo-12-jev-check-gate`. One dev. Owned paths: `packages/jev-check/`, `plugins/atm-bd-orchestration/skills/atm-bd-lite/{scripts/atm-bd-lite-gate.py,jev-checks/,docs/hooks/,tests/}`, `.github/workflows/lite-gate.yml`, the `justfile` recipes named below.
+
+Lands BEFORE bo-10: bo-10's PR base is this branch's head, because bo-10 consumes `atm-bd-lite-gate.py` and the `lite-gate` CI job (fenix-brief.md §B, "Ordering"). bo-12 consumes nothing from bo-9..11: jev-check imports nothing from atm-bd, and the gate reads hooks with `ast` only.
+
+Spec: `design/jev-check-proposal.md` (every deliverable, untrimmed) and fenix-brief.md §B. Behaviour reference: `design/packages/jev-check/README.md`; its "Parity checklist" is acceptance. The prototype (`design/packages/jev-check/`, 37 tests; `design/lite-code/atm-bd-lite-gate.py`, `gate-questions.json` v6, `gate-fixtures/`) is moved into place by this sprint, not rewritten. The old `jev_client.py` is not copied or imported.
+
+## Paths
+
+`L` = `plugins/atm-bd-orchestration/skills/atm-bd-lite/` (lite's own skill, ANC-012/028/031). `install.py`'s manifest is generated from the skills tree, so every file under `L` installs to `.claude/skills/atm-bd-lite/<same relative path>`.
+
+| file | source in this plan | path in atm-bd | installed path |
+|---|---|---|---|
+| jev-check package | `design/packages/jev-check/` | `packages/jev-check/` | none (repo package; not in the skills tree) |
+| lite gate | `design/lite-code/atm-bd-lite-gate.py` | `L/scripts/atm-bd-lite-gate.py` | `.claude/skills/atm-bd-lite/scripts/atm-bd-lite-gate.py` (not runnable there until jev-check is published; see Open items) |
+| check configs | new | `L/jev-checks/task-{assign,start,close}.toml` | `.claude/skills/atm-bd-lite/jev-checks/` |
+| question set | `design/lite-code/gate-questions.json` (v6) | `L/jev-checks/gate-questions.json` | `.claude/skills/atm-bd-lite/jev-checks/` |
+| pinned specs | atm-core `docs/plans/phase-bo/hooks/task-*.md` @ `4a3ae1ebcf59eb8ad59b62406830af74826b1d95` | `L/docs/hooks/task-{assign,start,close}.md` + `L/docs/hooks/atm-core-rev` | `.claude/skills/atm-bd-lite/docs/hooks/` |
+| gate fixtures | `design/lite-code/gate-fixtures/*` | `L/tests/gate-fixtures/` | installed with tests, unused |
+| r-restart-1 close hook | atm-core `design/lite-code/atm-bd-task-hook.py` @ `5126f0619e66681895775576bf456c0d285e0b18` | `L/tests/gate-fixtures/r-restart-1-close.py` | as above |
+| gate tests | `design/lite-code/tests/test_gate_findings.py` | `L/tests/test_lite_gate.py` | as above |
+
+The proposal's `.atm-bd/atm-bd-lite/...` paths, `stack.toml`, "bo-15" and "four checks" are superseded by this table (three hooks, three checks). The proposal's caller name `atm-bd-lite-conformance.py` is `atm-bd-lite-gate.py` (brief §B).
+
+**Where the Jev inputs come from (one source).** The Jev request is built by jev-check from the check TOML: the `table-column` extractor gives the Transitions rows (`implemented:<row id>`), the `python-branches` extractor gives every `case` arm and every return that constructs `Refusal(...)` (`listed:<path>:<line>`), `file` gives the hook and spec text. The gate does not build state or questions itself (the prototype's `facts()`/`table()`/`questions()` for the request are removed). The gate keeps its own `ast` pass only for facts no extractor provides: `beads.*(` call sites, `stack_bead` uses, subprocess/adapter sites, line count. Rows and arms for ANC-052 come from the same two extractors. Forwarded refusals (`refused(<Refusal value>)`) are not sites, since they construct no `Refusal(`.
+
+## Deliverables
+
+### jev-check (proposal deliverables 1–5)
+
+1. **Package in place.** `packages/jev-check/` with its own `pyproject.toml`, `src/jev_check/`, `scripts/jev-check.py`, `typings/`, tests; no dependency on atm-bd, atm-bd-types or `atm_bd_shared`, no atm-bd vocabulary. Accept: `cd packages/jev-check && uv run --with pytest pytest -q tests` reports ≥ 37 passed, 0 failed; `grep -rnE "atm_bd|atm-bd|bead" packages/jev-check/src packages/jev-check/scripts` prints nothing.
+2. **Check config** (proposal 1). One TOML per check; unknown key, unknown source kind, missing/extra source key are `CONFIG_INVALID`; one check = ONE request; a template expands once per subject; over the cap is `INPUT_TOO_LARGE`, never split. Accept: `test_config_load_errors`, `test_question_set_expands_one_question_per_subject`, `test_question_set_rejects_other_schema` pass.
+3. **Extractors** (proposal 2): `file`, `table-column`, `python-branches`, each via `git show <rev>:<path>`; empty extraction is `EXTRACTION_EMPTY`. `python-branches` lists a return whose `Refusal(` is nested (`return HookReply.refused(Refusal(ErrorId.X, …))`). Accept: `test_missing_input_at_rev`, `test_python_branches_lists_arms_and_refusals` (fixture includes the nested form), `test_table_column_rows` (fixture heading `## Transitions (one row per match arm)`), `test_empty_extraction_is_typed` pass.
+4. **Jev request, byte-exact, one per check.** Accept: `test_one_check_is_one_request_byte_exact`, `test_payload_bytes_are_the_jev_request_without_the_model`, `test_request_is_one_question_per_row_and_branch` pass; a new test `test_task_close_gate_request_is_byte_exact` builds the request from `L/jev-checks/task-close.toml` over `L/tests/gate-fixtures/close-clean.py` and `L/docs/hooks/task-close.md`, sends it on a fake transport, and asserts the fake received exactly one body equal to a committed bytes fixture `L/tests/gate-fixtures/task-close-request.json`.
+5. **INPUT_TOO_LARGE sends nothing**, on every backend. Accept: `test_oversized_input_is_refused_and_nothing_is_sent` and `test_llm_input_is_refused_like_jev_and_nothing_is_sent` pass, each asserting the fake transport recorded zero sends.
+6. **Haiku and Luna backends, API-direct** (proposal 3): one HTTPS request each (plus the token count), no SDK or tools; the system prompt is the README's `system_prompt(schema)` carrying `answer_schema(questions)`, Jev's per-question `{choice, confidence, probabilities}` shape; the schema is not sent as a structured-output format; reply validated, else `RESPONSE_INVALID`. Accept: `test_haiku_request_is_the_payload_alone`, `test_luna_request_is_the_payload_alone`, `test_unknown_question_type_has_no_answer_schema`, `test_llm_bad_reply_is_typed`, `test_equal_input_record` pass, all on fake `Http`, no network, no sleeps.
+7. **Keys: environment, then macOS Keychain, for every backend** (`TYPESAFE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`; Keychain service = variable name, account = `$USER`). None found is `KEY_MISSING` and nothing is sent; keys never appear in output, sessions or errors. Accept: `test_api_key_env_first_then_keychain`, `test_jev_key_env_first_then_keychain`, `test_api_key_missing_sends_nothing` pass.
+8. **Jev transport**: busy-only retry (429/502/529, 4 sends, same body, `Retry-After` clamped [0, 30]), every other failure `JEV_UNAVAILABLE`; answer ids must match questions. Retry waits go through an injectable sleep so tests never sleep. Accept: `test_busy_is_retried_with_the_same_body`, `test_non_busy_error_is_not_retried`, `test_busy_attempts_exhausted`, `test_answer_ids_must_match_questions` pass.
+9. **Typed result** (proposal 4): `JevCheckResult {check_id, rev, backend, model, session_id, answers, input}`, owned by jev-check. Accept: `uv run --with pyright pyright src tests scripts` in `packages/jev-check` reports `0 errors` (strict, from `pyproject.toml`).
+10. **Sessions and `ask`** (proposal 5): every run stored at `~/.cache/jev-check/sessions/<uuid4>.json`, pruned after 7 days; `jev-check ask --session <id> "<q>"` continues a Haiku/Luna session with no system prompt and appends the follow-up; missing/expired/Jev session are `SESSION_NOT_FOUND`/`SESSION_EXPIRED`/`SESSION_NOT_ASKABLE`. Accept: `test_run_writes_session_and_ask_continues_it`, `test_default_session_store_follows_config` pass, plus one new test per session error id.
+11. **README** moved to `packages/jev-check/README.md`; its Parity checklist names only tests that exist. Accept: every test name in the checklist is found by `uv run --with pytest pytest --collect-only -q tests` in `packages/jev-check`.
+
+### The lite gate (proposal 6, brief §B)
+
+12. **Gate CLI.** `L/scripts/atm-bd-lite-gate.py <hook.py> <spec.md> --out <run.json> [--rev <rev>]`. `--out` is required (no default into atm-core's `anchor-runs/`). The check TOML is `L/jev-checks/<spec stem>.toml`; the gate replaces its hook and spec input paths with the arguments, and reads both the deterministic and the Jev inputs at `--rev` (default `HEAD`). Exit 0 pass; 1 on a deterministic failure or any `no`; 2 when Jev cannot be asked (`jev_error` in the run JSON). uv header: `jev-check = { path = "../../../../../packages/jev-check" }`. Accept: `uv run L/scripts/atm-bd-lite-gate.py` with no arguments prints the usage on stderr and exits 2.
+13. **Deterministic checks, before Jev, no request sent on failure.** ANC-052 Transitions rows == Transition `case` arms; ANC-064 `beads.update|create|claim|release(` sites ≤ 1 and create/claim/release = 0; ANC-065 every `stack_bead` is inside `beads.show(`/`cache.get(`; ANC-066 no `subprocess` import, no `BdCli`/`GitCli`/`AtmCli`, no `os.system/popen/exec*/spawn*`, no call whose first argument starts with `gh`, `bd` or `git`; ANC-070 ≤ 100 lines. Accept: `L/tests/test_lite_gate.py` has one test per check with a minimal failing source, each asserting the failure text and that the fake transport recorded zero sends; `uv run --with pytest pytest -q L/tests` passes.
+14. **One Jev request, two question sets** (ANC-053/054): `implemented:<row>` per Transitions row, `listed:<path>:<line>` per arm and refusal site, from the check TOML through `run_request`; result mapped to findings: `implemented = no` → "implement <row>"; `listed = no` → "add a row for <site>, or remove the branch". Accept: `test_one_no_row_and_one_unlisted_branch_map_to_exactly_two_findings` (rekeyed to `listed:<path>:<line>`) passes; a test on a fake transport asserts one request per gate run.
+15. **Fixture acceptance.** `L/tests/gate-fixtures/expected.json` keys move from `listed:L34` to `listed:<fixture path>:34`; the expected `no` sets do not change. If a live run disagrees, that is a question-set finding for fenix to tune against the approved fixtures, never an edit to `expected.json`. `just lite-gate-fixtures` runs, from the repo root:
+    - `uv run L/scripts/atm-bd-lite-gate.py L/tests/gate-fixtures/close-clean.py L/docs/hooks/task-close.md --out gate-runs/fixtures/close-clean.json`: exit 0, `"pass": true`.
+    - `... close-extra-write.py ...`: exit 1, `jev_no` = `["implemented:T-CLOSE-02"]`.
+    - `... close-unlisted-refusal.py ...`: exit 1, `jev_no` = `["implemented:T-CLOSE-02", "listed:<path>:34"]`.
+    - `... r-restart-1-close.py ...`: exit 1, `deterministic_failures` names ANC-052, ANC-064, ANC-065 and ANC-070, `jev` null (no request sent).
+    The recipe compares each run to `expected.json` and exits nonzero on any difference. Accept: `just lite-gate-fixtures` exits 0; the four run JSONs are attached to the PR as the CI artifact.
+16. **Hooks under the gate.** `just lite-gate` runs the gate on each `L/scripts/atm-bd-task-*.py` present against its pinned spec (`atm-bd-task-assign-hook.py` → `task-assign.md`, `atm-bd-task-start-hook.py` → `task-start.md`, `atm-bd-task-hook.py` → `task-close.md`, the file each spec's H1 names), writing `gate-runs/hooks/<hook stem>.json`. A hook file with no spec mapping fails. Before bo-10 there are no hook files and the recipe runs only the fixtures. Accept: `just lite-gate` exits 0 at the bo-12 head.
+17. **Pinned specs.** `L/docs/hooks/task-*.md` are byte copies of atm-core `docs/plans/phase-bo/hooks/` at the sha in `L/docs/hooks/atm-core-rev`; no other edits (ANC-071). Accept: the CI step checks out `randlee/atm-core` at that sha and `cmp` reports no difference for each of the three files.
+18. **ANC-071 check.** In the same CI checkout: `git -C atm-core log --format=%ae <atm-core-rev> -- docs/plans/phase-bo/intent.md docs/plans/phase-bo/hooks/ | sort -u` must print only Rand's address; any other author fails the job. Accept: the step's output at the bo-12 head. Today it prints `randlee@users.noreply.github.com`, not the anchor's `rand@randlee.com`; this step cannot pass until Rand answers Question 2.
+19. **CI wiring** (brief §B.6, ANC-072). `.github/workflows/lite-gate.yml`, job `lite-gate`, on `push` and `pull_request` with `paths`: `plugins/atm-bd-orchestration/skills/atm-bd-lite/scripts/**`, `.../templates/**`, `.../jev-checks/**`, `.../docs/hooks/**`, `packages/jev-check/**`, `.github/workflows/lite-gate.yml`. Steps: deliverables 17 and 18, `just lite-gate`, `just lite-gate-fixtures`, upload `gate-runs/` as artifact `lite-gate-<sha>`. Secret: `TYPESAFE_API_KEY`. `just test` gains the jev-check and `L/tests` pytest runs, and `just lint` gains pyright strict over `packages/jev-check` and `L/scripts/atm-bd-lite-gate.py`; the existing `tests` workflow runs both. Accept: the PR shows a `lite-gate` run that is green and a `tests` run that is green, at the PR head.
+20. **Exit-2 policy ("Jev cannot be asked").** The job fails; there is no retry in the workflow beyond jev-check's busy-only retry (deliverable 8), and no rerun-to-green loop. The manual rerun is written as a comment block at the top of `lite-gate.yml`: the lead checks the logged `jev_error`, runs `gh run rerun <run-id> --failed` once, and on a second exit 2 reports a TypeSafe outage to Rand; exit 1 is never rerun. Accept: `grep -n "gh run rerun" .github/workflows/lite-gate.yml` prints the comment line.
+
+### Live evidence (not a test)
+
+21. One live Jev run of `task-close.toml` against the bo-12 head (proposal acceptance, last item): `uv run packages/jev-check/scripts/jev-check.py run L/jev-checks/task-close.toml --backend jev`, output attached to the PR. Plus one Haiku run of the same check with `ask` on any question whose choice differs from Jev's; output attached.
+
+## Anchors
+
+ANC-052 → 13, 16; ANC-053 → 14, 15; ANC-054 → 14, 15; ANC-064/065/066/070 → 13, 15; ANC-071 → 17, 18; ANC-072 → 16, 19 (the gate fails any review-driven hook change regardless of the review); ANC-012/028/031 → Paths; ANC-030/039 → no file under `skills/atm-bd-orchestration/` changes (accept: `git diff --name-only origin/main...HEAD -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/` prints nothing). ANC-073's check is over atm-core `anchors.json` and is plan-anchor's, not this sprint's; this doc follows it (every acceptance names a command).
+
+## Open items (named, not passes)
+
+- **Luna is unverified live.** No OpenAI key yet; the Luna backend is tested on a fake transport only and `/v1/responses/input_tokens` is unconfirmed. Deliverable 21 runs Jev and Haiku only.
+- **Installed gate.** The installed copy under `.claude/skills/atm-bd-lite/scripts/` cannot resolve its jev-check path source until jev-check is published (see Questions).
+- **ANC-071 address** (deliverable 18) blocks the `lite-gate` job until answered.
+
+## Validation
+`just lint`, `just test`, `just lite-gate`, `just lite-gate-fixtures`.
