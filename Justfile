@@ -8,12 +8,8 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 # Windows seed separately; Unix continues to use the 3.14.7 contract.
 seed_python_cmd := if os_family() == "windows" { "py -3.12" } else { "env PATH=\"$PATH:/opt/homebrew/bin\" python3.14" }
 # Keep the bootstrap venv first in PATH as well as executing its Python
-# directly. The path is absolute so helpers remain pinned after changing cwd;
-# PyO3 additionally receives its interpreter explicitly.
+# directly. The path is absolute so helpers remain pinned after changing cwd.
 python_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; & \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" \"$PWD/.bootstrap-venv/bin/python\"" }
-# sc-lint delegates clippy to cargo, so its process must receive the bootstrap
-# interpreter PyO3 uses. Delete when randlee/sc-lint#198 ships.
-sc_lint_clippy_prefix := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; $env:PYO3_PYTHON = \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"; &" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" PYO3_PYTHON=\"$PWD/.bootstrap-venv/bin/python\"" }
 
 # Show the curated repo task help.
 default: help
@@ -53,12 +49,6 @@ fmt mode='check':
 _lint-fmt:
     @just fmt check
 
-# Preserve PyO3's pinned interpreter while the adoption kit runs its published
-# `sc-lint clippy` profiles through the resolved binary. Delete when
-# randlee/sc-lint#198 ships.
-[private]
-_sc-lint-clippy target binary=env_var_or_default("SC_LINT_BIN", ""):
-    {{sc_lint_clippy_prefix}} "{{binary}}" clippy {{target}}
 
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':

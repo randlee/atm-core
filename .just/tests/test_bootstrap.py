@@ -556,7 +556,6 @@ class BootstrapTests(IsolatedHomeTests):
     def test_just_recipes_propagate_the_bootstrap_python_to_children(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn("$PWD/.bootstrap-venv/bin:$PATH", justfile)
-        self.assertIn("PYO3_PYTHON", justfile)
         self.assertIn(
             "test-admission-capacity:\n"
             "    {{python_cmd}} -m unittest scripts/smoke/test_run_admission_capacity.py",
@@ -567,17 +566,15 @@ class BootstrapTests(IsolatedHomeTests):
         root = SCRIPT.parents[1]
         install = json.loads((root / ".sc-lint" / "install.json").read_text(encoding="utf-8"))
         profiles = install["profiles"]
-        self.assertEqual(profiles["clippy"], ["just", "_sc-lint-clippy", "native"])
-        # Windows-target Clippy runs through cargo xwin on the Linux CI leg only; the
-        # Windows leg's native Clippy already targets x86_64-pc-windows-msvc and the
-        # kit's host scope keeps it out of a developer's `just lint` on other hosts.
-        self.assertEqual(profiles["clippy-windows"], {"command": ["just", "_sc-lint-clippy", "xwin"], "platform": "linux"})
-        # `just lint ci all` runs the `ci` profile: every declared step, in declaration order.
+        command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+        for name, platform, python in (
+            ("clippy-linux", "linux", ".bootstrap-venv/bin/python"),
+            ("clippy-macos", "macos", ".bootstrap-venv/bin/python"),
+            ("clippy-native-windows", "windows", ".bootstrap-venv/Scripts/python.exe"),
+        ):
+            self.assertEqual(profiles[name], {"command": command, "platform": platform, "env_paths": {"PYO3_PYTHON": python}})
+        self.assertEqual(profiles["clippy-windows"], {"command": command, "platform": "windows", "target": "x86_64-pc-windows-msvc", "host": "linux", "env_paths": {"PYO3_PYTHON": ".bootstrap-venv/bin/python"}})
         self.assertEqual(install["lint_profiles"], {"ci": list(profiles)})
-        justfile = (root / "Justfile").read_text(encoding="utf-8")
-        self.assertIn("PYO3_PYTHON", justfile)
-        self.assertIn("sc-lint clippy", justfile)
-        self.assertIn("Delete when randlee/sc-lint#198 ships.", justfile)
 
     def test_ci_uses_bootstrap_python_and_requirements_for_all_pydantic_consumers(self) -> None:
         workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")

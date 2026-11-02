@@ -21,7 +21,7 @@ exclude_paths_by_rule = { "SCB-RUNTIME-003" = ["crates/atm/src/commands/internal
 reason = "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. See randlee/sc-lint#82."
 
 [tool.sc-lint.lint_profiles]
-ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "clippy", "clippy-windows", "daemon-signing-coupling", "daemon-singleton", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy", "peer-dial-seam", "pytests", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit", "site-generated", "site-links", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter", "ttl-triage", "version-linux", "version-macos", "version-python-pins", "version-windows"]
+ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "clippy-linux", "clippy-macos", "clippy-native-windows", "clippy-windows", "daemon-signing-coupling", "daemon-singleton", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy", "peer-dial-seam", "pytests", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit", "site-generated", "site-links", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter", "ttl-triage", "version-linux", "version-macos", "version-python-pins", "version-windows"]
 
 [[tool.sc-lint.lint]]
 name = "adr-index"
@@ -40,13 +40,30 @@ name = "boundaries"
 command = ["just", "_py", ".just/lint_boundaries.py"]
 
 [[tool.sc-lint.lint]]
-name = "clippy"
-command = ["just", "_sc-lint-clippy", "native"]
+name = "clippy-linux"
+command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+platform = "linux"
+env_paths = { "PYO3_PYTHON" = ".bootstrap-venv/bin/python" }
+
+[[tool.sc-lint.lint]]
+name = "clippy-macos"
+command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+platform = "macos"
+env_paths = { "PYO3_PYTHON" = ".bootstrap-venv/bin/python" }
+
+[[tool.sc-lint.lint]]
+name = "clippy-native-windows"
+command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+platform = "windows"
+env_paths = { "PYO3_PYTHON" = ".bootstrap-venv/Scripts/python.exe" }
 
 [[tool.sc-lint.lint]]
 name = "clippy-windows"
-command = ["just", "_sc-lint-clippy", "xwin"]
-platform = "linux"
+command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+platform = "windows"
+target = "x86_64-pc-windows-msvc"
+host = "linux"
+env_paths = { "PYO3_PYTHON" = ".bootstrap-venv/bin/python" }
 
 [[tool.sc-lint.lint]]
 name = "daemon-signing-coupling"
