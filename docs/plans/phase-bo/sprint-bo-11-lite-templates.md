@@ -112,7 +112,6 @@ Hooks (bo-10). Re-review QA beads after a fix (Q3). Any script that runs the blo
 - Q2: T-CLOSE-04 needs the sprint and phase bead ids, but the `hooks/task-close.md` Facts table has no row for them. Proposed: the QA bead's `metadata.work.sprint`, and the phase file `root`. The hook needs the same lookup.
 - Q3: Who pours the re-review QA bead for a fix? "Target layer ... the QA bead's closed dev/fix blocker" implies one exists. Proposed: the pour block also pours one `stage:qa` bead per blocking finding, blocked by the fix bead. That is a second create per finding, so it is not in this sprint until you rule on it.
 - Q4: The brief (§B.6) runs the gate on template pushes, but the gate reads no template. Should bo-12 add the ANC-057/060/067 template checks to the gate, or is `test_templates.py` enough?
-- Q5: The spec's replies say `atm task close --template <t> --args …`, but the CLI flag is `--vars <json>`.
 - Q6: `QA_VERDICT`'s block lists finding ids with no blocking/non-blocking flag, and T-CLOSE-04 checks the two differently. Should the block carry `{"id", "blocking"}` per finding?
 - Q7: The installed path is `.claude/skills/atm-bd-lite/` here (ANC-031). The bo-10 doc and `design/jev-check-proposal.md` say `.atm-bd/atm-bd-lite/`. Which one?
 - Q8: There is no `bdc` binary release; it is blocked on randlee/sc-publish#135, and no beads-cache issue tracks a prerelease. bo-14 cannot run either block live without one.

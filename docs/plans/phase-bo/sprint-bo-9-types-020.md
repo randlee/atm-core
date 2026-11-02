@@ -61,7 +61,7 @@ atm-bd-types 0.2.0 does **not** depend on bd-cache-rs in Cargo or `Requires-Dist
 6. **`HookRequest` and `HookReply`.**
    - `HookRequest.parse(stdin)` reads the ATM hook envelope. `assignee` and `outcome` return `REQUEST_INVALID` when absent or invalid. `close_report()` returns `CLOSE_REPORT_NOT_INLINE` when empty, and `close_reason()` returns `CLOSE_REASON_EMPTY`.
    - `qa_verdict()` parses the one fenced JSON block `{"verdict": "PASS" | "FINDINGS", "sha": <40 hex>, "findings": [ids]}` into `QaPass(sha)` or `QaFail(sha, findings)`. A missing block, more than one block, a bad sha, or FINDINGS with an empty list gives `QA_VERDICT`.
-   - `HookAction.close(template, args)` renders `atm task close --template <template> --args <args>`.
+   - `HookAction.close(template, args)` renders `atm task close --template <template> --vars <args>`.
    - `HookReply.handled(action)`, `pass_through()`, `not_applicable()` and `refused(hook, refusal)` serialize to the reply JSON bo-13 accepts.
 
    Anchors: ANC-062.
@@ -349,7 +349,7 @@ class Refusal:
 class HookAction:
     @staticmethod
     def close(template: str, args: Layer | QaPass | QaFail | str) -> HookAction:
-        r"""atm task close --template <template> --args <args>; str is the give-back reason."""
+        r"""atm task close --template <template> --vars <args>; str is the give-back reason."""
 
 @typing.final
 class HookReply:

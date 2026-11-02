@@ -16,7 +16,7 @@ The spec is `hooks/task-assign.md`, `hooks/task-start.md` and `hooks/task-close.
   - `BeadStore` with `show` and `update` only, and `CacheStore.for_phase`.
   - `BeadPatch.assign`, `BeadPatch.start(snapshot)` (no base: start does not read the ledger), `BeadPatch.reopen`, `BeadPatch.close` with evidence.
   - `PhaseFiles`, `PhaseFilesCli`, `PhaseFile` with `lead` and the four close templates (`<refuse>`, `<dev-close>`, `<qa-pass>`, `<qa-findings>`).
-  - The `HookAction` that renders `atm task close --template <t> --args <a>`.
+  - The `HookAction` that renders `atm task close --template <t> --vars <a>`.
 
   - One transition enum per hook, with exactly that hook's Transitions-table names. For example, `AssignTransition` has ASSIGN_SAME, ASSIGN, ASSIGN_CLOSED and ASSIGN_NOT_READY. Each hook imports its enum `as Transition`. The gate's patterns therefore read `Transition.X`, and pyright's exhaustiveness check covers only that hook's members.
 
@@ -102,20 +102,20 @@ So each file has at most one write call site (ANC-064), while each of the four c
 **task.close** (`test_close_hook.py`)
 | row | test | asserts |
 |---|---|---|
-| T-CLOSE-01 GIVE_BACK | `test_t_close_01_give_back[refused,cancelled × dev,fix,qa]` | one `BeadPatch.reopen` (open, assignee ''), handled `atm task close --template <refuse> --args <reason>` |
+| T-CLOSE-01 GIVE_BACK | `test_t_close_01_give_back[refused,cancelled × dev,fix,qa]` | one `BeadPatch.reopen` (open, assignee ''), handled `atm task close --template <refuse> --vars <reason>` |
 | T-CLOSE-01 reason empty | `test_t_close_01_reason_empty` | refused `CLOSE_REASON_EMPTY`, no write |
 | T-CLOSE-01 caller check | `test_t_close_01_not_assignee` | refused `TASK_NOT_ASSIGNEE`, no write |
 | T-CLOSE-01 status check | `test_t_close_01_not_in_progress[open,blocked,deferred]` → `BEAD_NOT_READY`; `test_t_close_01_closed` → `BEAD_CLOSED` | no write |
 | T-CLOSE-01 race | `test_t_close_01_raced` | refused `BEAD_RACED` |
-| T-CLOSE-02 WORK_CLOSE | `test_t_close_02_work_close[dev,fix]` | lookups: bead, `cache.get(stack_bead)`. One `BeadPatch.close` on the work bead with evidence = the ledger layer (branch, head, pr, base). Handled `--template <dev-close> --args <layer>`. No write names the stack bead |
+| T-CLOSE-02 WORK_CLOSE | `test_t_close_02_work_close[dev,fix]` | lookups: bead, `cache.get(stack_bead)`. One `BeadPatch.close` on the work bead with evidence = the ledger layer (branch, head, pr, base). Handled `--template <dev-close> --vars <layer>`. No write names the stack bead |
 | T-CLOSE-02 report missing | `test_t_close_02_report_missing` | refused `CLOSE_REPORT_NOT_INLINE`, no write |
 | T-CLOSE-02 not on ledger | `test_t_close_02_stack_not_recorded` | the ledger has no layer for `work.branch` → refused `STACK_NOT_RECORDED`, no write |
-| T-CLOSE-03 QA_PASS | `test_t_close_03_qa_pass_blocker_layer` | verdict sha == the head of the closed dev/fix blocker's layer → one `BeadPatch.close` with sha, handled `--template <qa-pass> --args <sha>` |
+| T-CLOSE-03 QA_PASS | `test_t_close_03_qa_pass_blocker_layer` | verdict sha == the head of the closed dev/fix blocker's layer → one `BeadPatch.close` with sha, handled `--template <qa-pass> --vars <sha>` |
 | T-CLOSE-03 checked_bead | `test_t_close_03_qa_pass_checked_bead` | the target is the layer of `checked_bead` when it is set |
 | T-CLOSE-03 sha mismatch | `test_t_close_03_not_on_stack` | refused `QA_NOT_ON_STACK`, no write |
 | T-CLOSE-03 no target | `test_t_close_03_nothing_to_review` | refused `QA_NOTHING_TO_REVIEW`, no write |
 | T-CLOSE-03 verdict invalid | `test_t_close_03_verdict_invalid` | refused `QA_VERDICT`, no write |
-| T-CLOSE-04 QA_FINDINGS | `test_t_close_04_findings_poured` | lookups: bead, stack bead, `cache.get(id)` per listed finding. Every finding blocks its bead → one `BeadPatch.close` with sha + ids, handled `--template <qa-findings> --args <sha>, <ids>`. No create |
+| T-CLOSE-04 QA_FINDINGS | `test_t_close_04_findings_poured` | lookups: bead, stack bead, `cache.get(id)` per listed finding. Every finding blocks its bead → one `BeadPatch.close` with sha + ids, handled `--template <qa-findings> --vars <sha>, <ids>`. No create |
 | T-CLOSE-04 not poured | `test_t_close_04_finding_missing` | a listed id is not in the cache → refused `FINDINGS_NOT_POURED` naming it, no write |
 | T-CLOSE-04 wrong blocker | `test_t_close_04_finding_blocks_nothing` | a finding blocks neither the sprint bead nor the phase bead → refused `FINDINGS_NOT_POURED`, no write |
 | T-CLOSE-04 sha mismatch | `test_t_close_04_not_on_stack` | refused `QA_NOT_ON_STACK`, no write |
