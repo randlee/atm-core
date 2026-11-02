@@ -1,0 +1,24 @@
+{
+  "schema": "plan-anchoring/questions/1",
+  "gate": "atm-bd-lite-gate",
+  "version": 4,
+  "notes": "Question templates for atm-bd-lite-gate.py, expanded once per subject. state.hook is the hook source; state.spec is its hooks/*.md. implemented = ANC-053 (one per Transitions row); listed = ANC-054 (one per match arm and HookReply site; the diagram counts, Rand 2026-11-01).",
+  "questions": {
+    "implemented": {
+      "type": "choice",
+      "instructions": "{subject} Judge only the match arm of state.hook whose Transition case is this row's transition, together with the shared code before and after the match that it relies on for this row's checks and write. Do not count anything in other transition arms against this row. Read the row with its branch of state.spec's diagram and the Errors entries that branch names. Does that arm perform every check in the row's 'hook checks' cell and its diagram branch, make the row's write, and add no unlisted check or write of its own? Lookups named in the Facts table, and refusals for checks the diagram branch lists, are not additional.",
+      "criteria": {
+        "yes": "the row's arm, with the shared code it relies on, performs every listed check and the listed write, and adds nothing of its own",
+        "no": "no arm matches the row's transition, or the row's arm misses a listed check or the listed write, or it adds a check or write of its own that neither the row nor the diagram branch lists"
+      }
+    },
+    "listed": {
+      "type": "choice",
+      "instructions": "{subject} Is this arm or reply listed in state.spec: in its diagram, a Transitions row, or an Errors entry?",
+      "criteria": {
+        "yes": "the diagram, a Transitions row or an Errors entry of state.spec covers it",
+        "no": "neither the diagram nor a Transitions row nor an Errors entry of state.spec covers it"
+      }
+    }
+  }
+}

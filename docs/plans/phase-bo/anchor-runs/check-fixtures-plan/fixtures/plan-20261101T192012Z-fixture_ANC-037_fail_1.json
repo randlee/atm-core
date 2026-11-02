@@ -1,0 +1,105 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T192012Z-fixture_ANC-037_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T19:20:12+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-037:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 56,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-037",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Console data source implementations must share no code with each other apart from the atm-bd-types shared types.",
+      "quote": "console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-033)",
+      "anchor_version": 3,
+      "deterministic_check": "each source module imports no other source module; each source has its own fixture-input test",
+      "kind": "prohibition",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.64,
+          "probabilities": {
+            "yes": 0.76,
+            "no": 0.13,
+            "unclear": 0.11
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.56,
+          "probabilities": {
+            "yes": 0.15,
+            "no": 0.71,
+            "unclear": 0.14
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.02,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.64,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 998,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 56,
+      "item_shortened": false,
+      "request_bytes": 2984
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-037"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

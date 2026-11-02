@@ -1,0 +1,113 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261101T192018Z-fixture_ANC-054_fail_1",
+  "gate": "dev",
+  "created_at": "2026-11-01T19:20:18+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-054:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 87,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-054",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Jev must judge every match arm in a lite hook's code as listed in that hook's state-transition diagram, with no arm unlisted.",
+      "quote": "I one one file for atm-bd-lite task close and jev verifies 100% matches the design.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+      "anchor_version": 3,
+      "deterministic_check": "the per-hook Jev verification run reports every match arm as listed; the run JSON is committed under anchor-runs/",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The delivered work went against this anchor.",
+      "usage": {
+        "input_tokens": 1195,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 87,
+      "item_shortened": false,
+      "request_bytes": 3800
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-054"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

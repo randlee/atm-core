@@ -1,0 +1,2189 @@
+{
+ "ANC-028": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-028",
+     "statement": "atm-bd-lite must be its own skill in the skills/atm-bd-lite/ directory.",
+     "quote": "Lite is separate.",
+     "scope": "adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestration/",
+     "verdict": "inconclusive",
+     "failing": [
+      "faithful"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.91,
+       "probabilities": {
+        "no": 0.06,
+        "unclear": 0.0,
+        "yes": 0.94
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.86,
+       "probabilities": {
+        "no": 0.03,
+        "unclear": 0.06,
+        "yes": 0.91
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.38,
+       "probabilities": {
+        "no": 0.59,
+        "unclear": 0.12,
+        "yes": 0.29
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.97,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.02,
+        "yes": 0.98
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.73,
+       "probabilities": {
+        "no": 0.12,
+        "unclear": 0.06,
+        "yes": 0.82
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.94,
+       "probabilities": {
+        "no": 0.04,
+        "unclear": 0.0,
+        "yes": 0.96
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.88,
+       "probabilities": {
+        "no": 0.03,
+        "unclear": 0.05,
+        "yes": 0.92
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.37,
+       "probabilities": {
+        "no": 0.58,
+        "unclear": 0.15,
+        "yes": 0.27
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.97,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.02,
+        "yes": 0.98
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.61,
+       "probabilities": {
+        "no": 0.17,
+        "unclear": 0.09,
+        "yes": 0.74
+       }
+      }
+     },
+     "attempts": 2,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "faithful"
+      ],
+      "low_confidence": [
+       "faithful"
+      ],
+      "unstable": [],
+      "initial_disagreements": [],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.91,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.86,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "no",
+        "confidence": 0.37,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.97,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "yes",
+        "confidence": 0.61,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-028"
+   ],
+   "pass": false
+  },
+  "error": null
+ },
+ "ANC-029": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-029",
+     "statement": "Code used by more than one profile must be placed in the shared location.",
+     "quote": "The shared code is new code, placed in the shared location.",
+     "scope": "adds code to the shared location or to atm-bd-types",
+     "verdict": "inconclusive",
+     "failing": [
+      "faithful",
+      "observable",
+      "self_contained"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.97,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.01,
+        "yes": 0.98
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.28,
+       "probabilities": {
+        "no": 0.14,
+        "unclear": 0.34,
+        "yes": 0.52
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.88,
+       "probabilities": {
+        "no": 0.92,
+        "unclear": 0.02,
+        "yes": 0.06
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.92,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.04,
+        "yes": 0.95
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.55,
+       "probabilities": {
+        "no": 0.05,
+        "unclear": 0.25,
+        "yes": 0.7
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.97,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.01,
+        "yes": 0.98
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.37,
+       "probabilities": {
+        "no": 0.11,
+        "unclear": 0.31,
+        "yes": 0.58
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.89,
+       "probabilities": {
+        "no": 0.93,
+        "unclear": 0.02,
+        "yes": 0.05
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.89,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.06,
+        "yes": 0.93
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.58,
+       "probabilities": {
+        "no": 0.07,
+        "unclear": 0.21,
+        "yes": 0.72
+       }
+      }
+     },
+     "attempts": 2,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "faithful",
+       "observable",
+       "self_contained"
+      ],
+      "low_confidence": [
+       "observable",
+       "self_contained"
+      ],
+      "unstable": [],
+      "initial_disagreements": [],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.97,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.28,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "no",
+        "confidence": 0.88,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.89,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "yes",
+        "confidence": 0.55,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-029"
+   ],
+   "pass": false
+  },
+  "error": null
+ },
+ "ANC-030": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-030",
+     "statement": "atm-bd-orchestration skill files must not be changed to use the shared code.",
+     "quote": "atm-bd-orchestration doesn't change to use it.",
+     "scope": "touches any file under skills/atm-bd-orchestration/",
+     "verdict": "inconclusive",
+     "failing": [
+      "observable",
+      "self_contained"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.0,
+        "yes": 0.99
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.46,
+       "probabilities": {
+        "no": 0.12,
+        "unclear": 0.24,
+        "yes": 0.64
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.72,
+       "probabilities": {
+        "no": 0.17,
+        "unclear": 0.02,
+        "yes": 0.81
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.09,
+       "probabilities": {
+        "no": 0.39,
+        "unclear": 0.36,
+        "yes": 0.25
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.0,
+        "yes": 0.99
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.4,
+       "probabilities": {
+        "no": 0.15,
+        "unclear": 0.25,
+        "yes": 0.6
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.72,
+       "probabilities": {
+        "no": 0.17,
+        "unclear": 0.02,
+        "yes": 0.81
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "unclear",
+       "confidence": 0.1,
+       "probabilities": {
+        "no": 0.35,
+        "unclear": 0.4,
+        "yes": 0.25
+       }
+      }
+     },
+     "answers_third": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.0,
+        "yes": 0.99
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.48,
+       "probabilities": {
+        "no": 0.14,
+        "unclear": 0.21,
+        "yes": 0.65
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.72,
+       "probabilities": {
+        "no": 0.17,
+        "unclear": 0.02,
+        "yes": 0.81
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "unclear",
+       "confidence": 0.11,
+       "probabilities": {
+        "no": 0.3,
+        "unclear": 0.41,
+        "yes": 0.29
+       }
+      }
+     },
+     "attempts": 3,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "observable",
+       "self_contained"
+      ],
+      "low_confidence": [
+       "observable",
+       "self_contained"
+      ],
+      "unstable": [],
+      "initial_disagreements": [
+       "self_contained"
+      ],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.4,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "yes",
+        "confidence": 0.72,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": null,
+        "confidence": null,
+        "matching_calls": []
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-030"
+   ],
+   "pass": false
+  },
+  "error": null
+ },
+ "ANC-031": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-031",
+     "statement": "Each profile's task hooks, task-assignment templates and cron script must be inside that profile's own skill directory.",
+     "quote": "The profile-specific parts (the hooks, the templates and the cron script) live in each profile's own skill",
+     "scope": "adds or moves a task hook, a task-assignment template or a cron script",
+     "verdict": "testable",
+     "failing": [],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.86,
+       "probabilities": {
+        "no": 0.09,
+        "unclear": 0.0,
+        "yes": 0.91
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.79,
+       "probabilities": {
+        "no": 0.02,
+        "unclear": 0.12,
+        "yes": 0.86
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.76,
+       "probabilities": {
+        "no": 0.15,
+        "unclear": 0.01,
+        "yes": 0.84
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.97,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.01,
+        "yes": 0.98
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.66,
+       "probabilities": {
+        "no": 0.06,
+        "unclear": 0.17,
+        "yes": 0.77
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.85,
+       "probabilities": {
+        "no": 0.1,
+        "unclear": 0.0,
+        "yes": 0.9
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.83,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.1,
+        "yes": 0.89
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.74,
+       "probabilities": {
+        "no": 0.15,
+        "unclear": 0.02,
+        "yes": 0.83
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.96,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.02,
+        "yes": 0.97
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.64,
+       "probabilities": {
+        "no": 0.07,
+        "unclear": 0.17,
+        "yes": 0.76
+       }
+      }
+     },
+     "attempts": 2,
+     "confirmations": {
+      "verdict": "testable",
+      "failing": [],
+      "low_confidence": [],
+      "unstable": [],
+      "initial_disagreements": [],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.85,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.79,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "yes",
+        "confidence": 0.74,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.96,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "yes",
+        "confidence": 0.64,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [],
+   "pass": true
+  },
+  "error": null
+ },
+ "ANC-032": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-032",
+     "statement": "Each atm-bd subcommand must run the script with the same file name from the skill of the profile set in the phase file.",
+     "quote": "and the atm-bd commands just call the profile's scripts by the same name.",
+     "scope": "adds or changes how an atm-bd subcommand selects or calls profile code",
+     "verdict": "inconclusive",
+     "failing": [
+      "observable",
+      "faithful",
+      "self_contained"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.8,
+       "probabilities": {
+        "no": 0.12,
+        "unclear": 0.01,
+        "yes": 0.87
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.56,
+       "probabilities": {
+        "no": 0.11,
+        "unclear": 0.18,
+        "yes": 0.71
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.31,
+       "probabilities": {
+        "no": 0.42,
+        "unclear": 0.04,
+        "yes": 0.54
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.1,
+       "probabilities": {
+        "no": 0.27,
+        "unclear": 0.33,
+        "yes": 0.4
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.8,
+       "probabilities": {
+        "no": 0.12,
+        "unclear": 0.01,
+        "yes": 0.87
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.55,
+       "probabilities": {
+        "no": 0.09,
+        "unclear": 0.21,
+        "yes": 0.7
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.37,
+       "probabilities": {
+        "no": 0.36,
+        "unclear": 0.06,
+        "yes": 0.58
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.09,
+       "probabilities": {
+        "no": 0.25,
+        "unclear": 0.36,
+        "yes": 0.39
+       }
+      }
+     },
+     "attempts": 2,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "observable",
+       "faithful",
+       "self_contained"
+      ],
+      "low_confidence": [
+       "observable",
+       "faithful",
+       "self_contained"
+      ],
+      "unstable": [],
+      "initial_disagreements": [],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.8,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.55,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "yes",
+        "confidence": 0.31,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "yes",
+        "confidence": 0.09,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-032"
+   ],
+   "pass": false
+  },
+  "error": null
+ },
+ "ANC-033": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-033",
+     "statement": "Each console data source (sanity-log, qa-log, pr-log and any later source) must be its own Rust trait in atm-bd-types.",
+     "quote": "console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code. | a protocol can not be consumed by rust.  a trait can be consumed by both.",
+     "scope": "adds or changes an atm-bd console data source",
+     "verdict": "inconclusive",
+     "failing": [
+      "faithful"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.76,
+       "probabilities": {
+        "no": 0.15,
+        "unclear": 0.01,
+        "yes": 0.84
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.92,
+       "probabilities": {
+        "no": 0.02,
+        "unclear": 0.03,
+        "yes": 0.95
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.25,
+       "probabilities": {
+        "no": 0.48,
+        "unclear": 0.02,
+        "yes": 0.5
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 1.0,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.0,
+        "yes": 1.0
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.86,
+       "probabilities": {
+        "no": 0.06,
+        "unclear": 0.03,
+        "yes": 0.91
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.72,
+       "probabilities": {
+        "no": 0.18,
+        "unclear": 0.01,
+        "yes": 0.81
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.94,
+       "probabilities": {
+        "no": 0.02,
+        "unclear": 0.02,
+        "yes": 0.96
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.31,
+       "probabilities": {
+        "no": 0.44,
+        "unclear": 0.02,
+        "yes": 0.54
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 1.0,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.0,
+        "yes": 1.0
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.86,
+       "probabilities": {
+        "no": 0.05,
+        "unclear": 0.04,
+        "yes": 0.91
+       }
+      }
+     },
+     "attempts": 2,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "faithful"
+      ],
+      "low_confidence": [
+       "faithful"
+      ],
+      "unstable": [],
+      "initial_disagreements": [],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.72,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.92,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "yes",
+        "confidence": 0.25,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "yes",
+        "confidence": 0.86,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-033"
+   ],
+   "pass": false
+  },
+  "error": null
+ },
+ "ANC-034": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-034",
+     "statement": "Every atm-bd-types trait must ship a .pyi stub generated from the trait.",
+     "quote": "approved ` .pyi stub `",
+     "scope": "adds or changes an atm-bd-types trait or a Python implementation of one",
+     "verdict": "inconclusive",
+     "failing": [
+      "observable",
+      "faithful",
+      "self_contained"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.85,
+       "probabilities": {
+        "no": 0.09,
+        "unclear": 0.01,
+        "yes": 0.9
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.4,
+       "probabilities": {
+        "no": 0.3,
+        "unclear": 0.1,
+        "yes": 0.6
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.42,
+       "probabilities": {
+        "no": 0.61,
+        "unclear": 0.15,
+        "yes": 0.24
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.33,
+       "probabilities": {
+        "no": 0.55,
+        "unclear": 0.04,
+        "yes": 0.41
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.92,
+       "probabilities": {
+        "no": 0.04,
+        "unclear": 0.01,
+        "yes": 0.95
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.44,
+       "probabilities": {
+        "no": 0.27,
+        "unclear": 0.1,
+        "yes": 0.63
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.43,
+       "probabilities": {
+        "no": 0.62,
+        "unclear": 0.18,
+        "yes": 0.2
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 1.0,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.0,
+        "yes": 1.0
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.34,
+       "probabilities": {
+        "no": 0.56,
+        "unclear": 0.02,
+        "yes": 0.42
+       }
+      }
+     },
+     "attempts": 2,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "observable",
+       "faithful",
+       "self_contained"
+      ],
+      "low_confidence": [
+       "observable",
+       "faithful",
+       "self_contained"
+      ],
+      "unstable": [],
+      "initial_disagreements": [],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.85,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.4,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "no",
+        "confidence": 0.42,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "no",
+        "confidence": 0.33,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-034"
+   ],
+   "pass": false
+  },
+  "error": null
+ },
+ "ANC-035": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-035",
+     "statement": "atm-bd-lite must share no files with the atm-bd-orchestration skill.",
+     "quote": "Lite is separate.",
+     "scope": "adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestration/",
+     "verdict": "inconclusive",
+     "failing": [
+      "faithful"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.0,
+        "yes": 0.99
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.85,
+       "probabilities": {
+        "no": 0.06,
+        "unclear": 0.04,
+        "yes": 0.9
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.67,
+       "probabilities": {
+        "no": 0.78,
+        "unclear": 0.1,
+        "yes": 0.12
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.94,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.03,
+        "yes": 0.96
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.67,
+       "probabilities": {
+        "no": 0.17,
+        "unclear": 0.05,
+        "yes": 0.78
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.0,
+        "yes": 0.99
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.91,
+       "probabilities": {
+        "no": 0.04,
+        "unclear": 0.02,
+        "yes": 0.94
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.55,
+       "probabilities": {
+        "no": 0.7,
+        "unclear": 0.08,
+        "yes": 0.22
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.97,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.01,
+        "yes": 0.98
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.7,
+       "probabilities": {
+        "no": 0.16,
+        "unclear": 0.04,
+        "yes": 0.8
+       }
+      }
+     },
+     "attempts": 2,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "faithful"
+      ],
+      "low_confidence": [
+       "faithful"
+      ],
+      "unstable": [],
+      "initial_disagreements": [],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.85,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "no",
+        "confidence": 0.55,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.94,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "yes",
+        "confidence": 0.67,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-035"
+   ],
+   "pass": false
+  },
+  "error": null
+ },
+ "ANC-036": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-036",
+     "statement": "Code in the shared location must be newly written, not moved or copied out of atm-bd-orchestration.",
+     "quote": "The shared code is new code, placed in the shared location.",
+     "scope": "adds code to the shared location or to atm-bd-types",
+     "verdict": "inconclusive",
+     "failing": [
+      "faithful"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.67,
+       "probabilities": {
+        "no": 0.21,
+        "unclear": 0.01,
+        "yes": 0.78
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.76,
+       "probabilities": {
+        "no": 0.06,
+        "unclear": 0.1,
+        "yes": 0.84
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.62,
+       "probabilities": {
+        "no": 0.75,
+        "unclear": 0.05,
+        "yes": 0.2
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.92,
+       "probabilities": {
+        "no": 0.03,
+        "unclear": 0.02,
+        "yes": 0.95
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.68,
+       "probabilities": {
+        "no": 0.2,
+        "unclear": 0.01,
+        "yes": 0.79
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.79,
+       "probabilities": {
+        "no": 0.06,
+        "unclear": 0.08,
+        "yes": 0.86
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.53,
+       "probabilities": {
+        "no": 0.69,
+        "unclear": 0.03,
+        "yes": 0.28
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.96,
+       "probabilities": {
+        "no": 0.02,
+        "unclear": 0.01,
+        "yes": 0.97
+       }
+      }
+     },
+     "attempts": 2,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "faithful"
+      ],
+      "low_confidence": [
+       "faithful"
+      ],
+      "unstable": [],
+      "initial_disagreements": [],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.67,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.76,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "no",
+        "confidence": 0.53,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "yes",
+        "confidence": 0.92,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-036"
+   ],
+   "pass": false
+  },
+  "error": null
+ },
+ "ANC-037": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-037",
+     "statement": "Console data source implementations must share no code with each other apart from the atm-bd-types shared types.",
+     "quote": "console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code.",
+     "scope": "adds or changes an atm-bd console data source",
+     "verdict": "inconclusive",
+     "failing": [
+      "faithful"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.83,
+       "probabilities": {
+        "no": 0.1,
+        "unclear": 0.01,
+        "yes": 0.89
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.77,
+       "probabilities": {
+        "no": 0.06,
+        "unclear": 0.09,
+        "yes": 0.85
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.25,
+       "probabilities": {
+        "no": 0.5,
+        "unclear": 0.04,
+        "yes": 0.46
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.64,
+       "probabilities": {
+        "no": 0.2,
+        "unclear": 0.04,
+        "yes": 0.76
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.86,
+       "probabilities": {
+        "no": 0.08,
+        "unclear": 0.01,
+        "yes": 0.91
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.76,
+       "probabilities": {
+        "no": 0.06,
+        "unclear": 0.1,
+        "yes": 0.84
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.25,
+       "probabilities": {
+        "no": 0.5,
+        "unclear": 0.06,
+        "yes": 0.44
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.7,
+       "probabilities": {
+        "no": 0.16,
+        "unclear": 0.04,
+        "yes": 0.8
+       }
+      }
+     },
+     "attempts": 2,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "faithful"
+      ],
+      "low_confidence": [
+       "faithful"
+      ],
+      "unstable": [],
+      "initial_disagreements": [],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.83,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": "yes",
+        "confidence": 0.76,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "faithful": {
+        "choice": "no",
+        "confidence": 0.25,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "yes",
+        "confidence": 0.64,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-037"
+   ],
+   "pass": false
+  },
+  "error": null
+ },
+ "ANC-038": {
+  "success": true,
+  "data": {
+   "threshold": 0.6,
+   "dry_run": false,
+   "fixture": false,
+   "path": "docs/plans/phase-bo/anchors.json",
+   "anchors": [
+    {
+     "id": "ANC-038",
+     "statement": "Every Python implementation of an atm-bd-types trait must pass pyright strict against the trait's .pyi stub.",
+     "quote": "approved ` .pyi stub `",
+     "scope": "adds or changes a Python implementation of an atm-bd-types trait",
+     "verdict": "inconclusive",
+     "failing": [
+      "faithful",
+      "observable",
+      "self_contained"
+     ],
+     "answers": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.0,
+        "yes": 0.99
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.3,
+       "probabilities": {
+        "no": 0.34,
+        "unclear": 0.13,
+        "yes": 0.53
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.68,
+       "probabilities": {
+        "no": 0.79,
+        "unclear": 0.08,
+        "yes": 0.13
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.56,
+       "probabilities": {
+        "no": 0.71,
+        "unclear": 0.04,
+        "yes": 0.25
+       }
+      }
+     },
+     "lint": {
+      "warnings": [],
+      "errors": []
+     },
+     "answers_second": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.97,
+       "probabilities": {
+        "no": 0.02,
+        "unclear": 0.0,
+        "yes": 0.98
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.16,
+       "probabilities": {
+        "no": 0.44,
+        "unclear": 0.16,
+        "yes": 0.4
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.66,
+       "probabilities": {
+        "no": 0.77,
+        "unclear": 0.08,
+        "yes": 0.15
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.67,
+       "probabilities": {
+        "no": 0.78,
+        "unclear": 0.03,
+        "yes": 0.19
+       }
+      }
+     },
+     "answers_third": {
+      "single_constraint": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.01,
+        "unclear": 0.0,
+        "yes": 0.99
+       }
+      },
+      "observable": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.18,
+       "probabilities": {
+        "no": 0.45,
+        "unclear": 0.17,
+        "yes": 0.38
+       }
+      },
+      "faithful": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.7,
+       "probabilities": {
+        "no": 0.8,
+        "unclear": 0.06,
+        "yes": 0.14
+       }
+      },
+      "scoped": {
+       "type": "choice",
+       "choice": "yes",
+       "confidence": 0.98,
+       "probabilities": {
+        "no": 0.0,
+        "unclear": 0.01,
+        "yes": 0.99
+       }
+      },
+      "self_contained": {
+       "type": "choice",
+       "choice": "no",
+       "confidence": 0.68,
+       "probabilities": {
+        "no": 0.79,
+        "unclear": 0.03,
+        "yes": 0.18
+       }
+      }
+     },
+     "attempts": 3,
+     "confirmations": {
+      "verdict": "inconclusive",
+      "failing": [
+       "faithful",
+       "observable",
+       "self_contained"
+      ],
+      "low_confidence": [
+       "observable",
+       "self_contained"
+      ],
+      "unstable": [],
+      "initial_disagreements": [
+       "observable"
+      ],
+      "resolved": {
+       "single_constraint": {
+        "choice": "yes",
+        "confidence": 0.97,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "observable": {
+        "choice": null,
+        "confidence": null,
+        "matching_calls": []
+       },
+       "faithful": {
+        "choice": "no",
+        "confidence": 0.66,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "scoped": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "matching_calls": [
+         1,
+         2
+        ]
+       },
+       "self_contained": {
+        "choice": "no",
+        "confidence": 0.56,
+        "matching_calls": [
+         1,
+         2
+        ]
+       }
+      }
+     }
+    }
+   ],
+   "needs_work": [
+    "ANC-038"
+   ],
+   "pass": false
+  },
+  "error": null
+ }
+}

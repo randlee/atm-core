@@ -1,0 +1,111 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261101T192015Z-fixture_ANC-046_pass_1",
+  "gate": "dev",
+  "created_at": "2026-11-01T19:20:15+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-046:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 193,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-046",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each shared-location module's design must list the atm-bd-orchestration behaviors it must meet, each citing the orchestration file and function that implements it today.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed \"items 1-4 are correct\" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set",
+      "anchor_version": 3,
+      "deterministic_check": "each shared module has a requirements table in the phase design docs; every cited orchestration path and function exists at the phase base",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.94,
+            "no": 0.04,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive was followed and evidenced.",
+      "usage": {
+        "input_tokens": 1227,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 193,
+      "item_shortened": false,
+      "request_bytes": 3964
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

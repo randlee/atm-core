@@ -1,0 +1,105 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T192015Z-fixture_ANC-046_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T19:20:15+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-046:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 104,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-046",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each shared-location module's design must list the atm-bd-orchestration behaviors it must meet, each citing the orchestration file and function that implements it today.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed \"items 1-4 are correct\" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by full-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set",
+      "anchor_version": 3,
+      "deterministic_check": "each shared module has a requirements table in the phase design docs; every cited orchestration path and function exists at the phase base",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.01,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.55,
+          "probabilities": {
+            "yes": 0.08,
+            "no": 0.7,
+            "unclear": 0.22
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.77,
+          "probabilities": {
+            "yes": 0.85,
+            "no": 0.13,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.55,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1026,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 104,
+      "item_shortened": false,
+      "request_bytes": 3127
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-046"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

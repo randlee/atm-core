@@ -1,0 +1,111 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261101T192012Z-fixture_ANC-034_pass_1",
+  "gate": "dev",
+  "created_at": "2026-11-01T19:20:12+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-034:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 119,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-034",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every atm-bd-types trait must ship a .pyi stub generated from the trait.",
+      "quote": "approved ` .pyi stub `",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "anchor_version": 4,
+      "deterministic_check": "regenerating the stubs produces no diff",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.0,
+            "unclear": 0.02
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.85,
+          "probabilities": {
+            "yes": 0.9,
+            "no": 0.03,
+            "unclear": 0.07
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.03,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.85,
+      "explanation": "The directive was followed and evidenced.",
+      "usage": {
+        "input_tokens": 1200,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 119,
+      "item_shortened": false,
+      "request_bytes": 3781
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 1
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

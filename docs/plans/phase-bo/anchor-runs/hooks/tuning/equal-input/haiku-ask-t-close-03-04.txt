@@ -1,0 +1,33 @@
+## implemented:T-CLOSE-03 (QA_PASS)
+
+**Statements in the arm I could not match to the row, diagram, Target layer paragraph, Facts, or Errors:**
+
+- `if (target_id := bead.checked_bead or bead.closed_work_blocker()) is None:` The Target layer paragraph gives the order as "the layer recorded for the QA bead's closed dev/fix blocker, or the lead's `checked_bead` if set." That wording reads as the blocker first and `checked_bead` as an override. The arm tests `checked_bead` first. The paragraph is ambiguous enough that I counted this as matched, but the precedence is a real divergence.
+- `ledger.head_of(target.work.branch)`: the row says "target layer head", but no helper named `head_of` appears in the spec. I read it as the head of the layer, which the Facts table's "ledger layers" entry covers.
+- `if isinstance(target := beads.show(target_id), Refusal)` and `if isinstance(ledger := beads.show(target.stack_bead), Refusal)`: neither refusal is in the diagram branch. I matched both to the Facts lookups plus the general Errors codes (BEAD_NOT_FOUND, CACHE_UNAVAILABLE, lead-owned).
+- `if (head := ledger.head_of(...)) != (sha := verdict.sha)`: if the target's branch has no layer, `head` is `None`, and the refusal reports `head=None`. The row doesn't require the layer to exist, so this is not an extra check. It is a gap: the arm never checks that the target layer exists.
+
+**Statements in the row, diagram, or Target layer paragraph that I could not find in the arm:**
+
+- Stage "qa, no findings" and outcome "completed": the arm has no check on `verdict.findings` being empty. I am relying on the upstream `Transition.for_close(req.outcome, bead.stage, req.qa_verdict())` to route only findings-free PASS verdicts here. That code is outside the arm and I cannot see it.
+
+**Did anything outside the arm affect the answer?** The upstream `for_close` call and the shared prologue/epilogue (`beads.update`, `close_action`) were needed. I did not use the WORK_CLOSE arm or its STACK_HELD line, and the module docstring's note about the expected answer for STACK_HELD played no part. The QA_PASS arm's prologue is the same as the QA_FINDINGS arm's, but that is shared code within the two rows, not an outside influence.
+
+**Revised answer:** yes still holds, but at about 0.65–0.7. The arm's checks, write, and return match the row. The weaknesses are the unverified upstream "no findings" routing and the `checked_bead`-first precedence.
+
+## implemented:T-CLOSE-04 (QA_FINDINGS)
+
+**Statements in the arm I could not match:**
+
+- `unpoured = [f for f in verdict.findings if isinstance(poured := beads.show(f.id), Refusal) or not poured.blocks(bead.sprint if f.blocking else bead.phase_bead)]`: the row matches the check (blocking → sprint, non-blocking → phase). The diagram's V2 box lists only "every blocking finding poured and blocking the sprint bead", so the non-blocking-to-phase check appears in the row and the arm but not in the diagram. The FINDINGS_NOT_POURED Errors text mentions only "<sprint>", not the phase bead.
+- `bead.sprint` and `bead.phase_bead`: the Facts table does not name these fields. I matched them to "bead ... from cache.get(bead)", since the Facts row lists only some bead fields.
+- `return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=unpoured, ...))`: the refusal carries `unpoured`, which holds finding objects, not ids. The Errors text expects "Findings <ids>". This affects the message payload, not a check or write, so I did not count it against the arm.
+- `ids = [f.id for f in verdict.findings]`: the row's "finding ids" matches this. The arm sends every finding id, blocking and non-blocking. The row does not say which ids to record, so I counted this as matched.
+
+**Statements in the row that I could not find in the arm:**
+
+- The row's "hook checks" cell, which requires that the poured findings exist and block the right beads, is performed. The arm does not check that `verdict.findings` is non-empty. Stage "qa, findings" is again relying on upstream routing in `for_close`.
+
+**Did anything outside the arm affect the answer?** Same as T-CLOSE-03: the upstream `for_close` routing and the shared `beads.update` and `close_action` calls. The WORK_CLOSE arm, the STACK_HELD line, and the docstring played no part.
+
+**Revised answer:** yes still holds, around 0.7. The checks, write, and return match. The gaps are the spec's diagram-versus-row mismatch on the phase-bead check, the uncounted `sprint`/`phase_bead` field reads, the refusal payload that carries objects instead of ids, and the reliance on upstream routing for the findings condition.

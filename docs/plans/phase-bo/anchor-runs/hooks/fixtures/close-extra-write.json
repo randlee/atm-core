@@ -1,0 +1,315 @@
+{
+  "hook": "gate-fixtures/close-extra-write.py",
+  "spec": "../../hooks/task-close.md",
+  "lines": 79,
+  "rows": [
+    [
+      "T-CLOSE-01",
+      "GIVE_BACK"
+    ],
+    [
+      "T-CLOSE-02",
+      "WORK_CLOSE"
+    ],
+    [
+      "T-CLOSE-03",
+      "QA_PASS"
+    ],
+    [
+      "T-CLOSE-04",
+      "QA_FINDINGS"
+    ]
+  ],
+  "facts": {
+    "arms": [
+      [
+        "Transition.GIVE_BACK",
+        24
+      ],
+      [
+        "Transition.WORK_CLOSE",
+        28
+      ],
+      [
+        "Transition.QA_PASS",
+        37
+      ],
+      [
+        "Transition.QA_FINDINGS",
+        49
+      ]
+    ],
+    "transition_arms": [
+      [
+        "Transition.GIVE_BACK",
+        24
+      ],
+      [
+        "Transition.WORK_CLOSE",
+        28
+      ],
+      [
+        "Transition.QA_PASS",
+        37
+      ],
+      [
+        "Transition.QA_FINDINGS",
+        49
+      ]
+    ],
+    "beads_calls": [
+      [
+        "show",
+        13
+      ],
+      [
+        "update",
+        67
+      ],
+      [
+        "show",
+        31
+      ],
+      [
+        "show",
+        40
+      ],
+      [
+        "show",
+        42
+      ],
+      [
+        "show",
+        52
+      ],
+      [
+        "show",
+        54
+      ],
+      [
+        "show",
+        60
+      ]
+    ],
+    "replies": [
+      [
+        "HookReply.handled(phase.close_action(req, template, args))",
+        69
+      ],
+      [
+        "HookReply.not_applicable()",
+        10
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))",
+        18
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead))",
+        20
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead))",
+        22
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.STACK_NOT_RECORDED, branch=bead.work.branch))",
+        34
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))",
+        39
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=sha, head=head))",
+        47
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.QA_NOTHING_TO_REVIEW, bead=bead))",
+        51
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, head=head))",
+        59
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=[f.id for f in unpoured], sprint=bead.sprint, phase=bead.phase_bead))",
+        63
+      ]
+    ],
+    "stack_bead_writes": [],
+    "subprocess_sites": []
+  },
+  "deterministic_failures": [],
+  "jev": {
+    "answers": {
+      "implemented:T-CLOSE-01": {
+        "choice": "yes",
+        "confidence": 0.82,
+        "probabilities": {
+          "no": 0.09,
+          "yes": 0.91
+        }
+      },
+      "implemented:T-CLOSE-02": {
+        "choice": "no",
+        "confidence": 0.36,
+        "probabilities": {
+          "no": 0.68,
+          "yes": 0.32
+        }
+      },
+      "implemented:T-CLOSE-03": {
+        "choice": "yes",
+        "confidence": 0.82,
+        "probabilities": {
+          "no": 0.09,
+          "yes": 0.91
+        }
+      },
+      "implemented:T-CLOSE-04": {
+        "choice": "yes",
+        "confidence": 0.8,
+        "probabilities": {
+          "no": 0.1,
+          "yes": 0.9
+        }
+      },
+      "listed:L10": {
+        "choice": "yes",
+        "confidence": 0.96,
+        "probabilities": {
+          "no": 0.02,
+          "yes": 0.98
+        }
+      },
+      "listed:L18": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L20": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L22": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L24": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L28": {
+        "choice": "yes",
+        "confidence": 0.98,
+        "probabilities": {
+          "no": 0.01,
+          "yes": 0.99
+        }
+      },
+      "listed:L34": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L37": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L39": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L47": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L49": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L51": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L59": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L63": {
+        "choice": "yes",
+        "confidence": 1.0,
+        "probabilities": {
+          "no": 0.0,
+          "yes": 1.0
+        }
+      },
+      "listed:L69": {
+        "choice": "yes",
+        "confidence": 0.86,
+        "probabilities": {
+          "no": 0.07,
+          "yes": 0.93
+        }
+      }
+    },
+    "findings": [
+      "implement T-CLOSE-02"
+    ],
+    "input": {
+      "prompt_sha256": "cfc84c706867d28e6e4e157cfc0a960f9796310cbd5c5f37fa189d4cd705973a",
+      "input_tokens": 6386,
+      "prompt_tokens": null,
+      "leak": null,
+      "commands": 0,
+      "equal": true
+    },
+    "no": [
+      "implemented:T-CLOSE-02"
+    ]
+  },
+  "pass": false
+}

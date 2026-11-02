@@ -1,0 +1,183 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261102T033805Z-bo-12",
+  "gate": "plan",
+  "created_at": "2026-11-02T03:38:05+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "bo-12",
+    "title": "",
+    "source": "docs/plans/phase-bo/sprint-bo-12-jev-check-gate.md",
+    "chars": 15619,
+    "truncated": false,
+    "chars_before_reduction": 15619,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-036",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Code in the shared location must be newly written, not moved or copied out of atm-bd-orchestration.",
+      "quote": "The shared code is new code, placed in the shared location.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-029)",
+      "anchor_version": 3,
+      "deterministic_check": "git log --follow on every shared-location file shows no rename or copy from a skills/atm-bd-orchestration/ path",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.76,
+          "probabilities": {
+            "yes": 0.84,
+            "no": 0.15,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.49,
+          "probabilities": {
+            "yes": 0.33,
+            "no": 0.66,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.49,
+      "explanation": "Jev was not confident (min confidence 0.49); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 5671,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "no",
+          "confidence": 0.49
+        }
+      ],
+      "attempts": 1,
+      "item_chars_sent": 15619,
+      "item_shortened": false,
+      "request_bytes": 18737
+    },
+    {
+      "anchor_id": "ANC-063",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every atm-bd-lite hook, script and agent step must read and write beads only through beads-cache (bd_cache_rs) and must never run bd directly.",
+      "quote": "we have found 20-30 second timeout is not enough ... that is why we designed bd cache which you forgot is a mandatory requirement",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01, phase bo replan, after the lite plan was found to call bd (BdCli) inside 2.5 s hooks; locked on Rand's 'lock it'",
+      "anchor_version": 3,
+      "deterministic_check": "no bd subprocess call and no BdCli in any lite file or template; BeadStore is the bd_cache_rs adapter",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.05,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.31,
+          "probabilities": {
+            "yes": 0.54,
+            "no": 0.41,
+            "unclear": 0.05
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.64,
+          "probabilities": {
+            "yes": 0.22,
+            "no": 0.76,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.64,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 5683,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 15619,
+      "item_shortened": false,
+      "request_bytes": 18803
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1,
+      "satisfied": 1
+    },
+    "failing": [
+      "ANC-036"
+    ],
+    "leaning_counts": {
+      "satisfied": 2
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

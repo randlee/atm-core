@@ -1,0 +1,124 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261101T192014Z-fixture_ANC-042_pass_1",
+  "gate": "dev",
+  "created_at": "2026-11-01T19:20:14+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-042:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 92,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-042",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every public function and trait implementation in the shared location must have a test that runs it on lite-profile inputs.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+      "anchor_version": 3,
+      "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a lite-profile phase file",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.6,
+          "probabilities": {
+            "yes": 0.73,
+            "no": 0.23,
+            "unclear": 0.04
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.43,
+          "probabilities": {
+            "yes": 0.62,
+            "no": 0.1,
+            "unclear": 0.28
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.98,
+            "unclear": 0.01
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.88,
+          "probabilities": {
+            "yes": 0.92,
+            "no": 0.03,
+            "unclear": 0.05
+          }
+        }
+      },
+      "min_confidence": 0.43,
+      "explanation": "Jev was not confident (min confidence 0.43); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 1187,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "implemented",
+          "choice": "yes",
+          "confidence": 0.43
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 92,
+      "item_shortened": false,
+      "request_bytes": 3793
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-042"
+    ],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

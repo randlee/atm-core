@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "data": {
+    "gate": "plan",
+    "dry_run": false,
+    "fixture": false,
+    "checks": [
+      {
+        "anchor_id": "ANC-059",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' prints nothing.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-059/fixtures/plan-20261102T032745Z-fixture_ANC-059_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-059",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "skills/atm-bd-lite/scripts/backfill-close-vars.py rebuilds close-vars files for tasks dispatched before lite existed.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-059/fixtures/plan-20261102T032746Z-fixture_ANC-059_fail_1.json"
+      }
+    ],
+    "mismatches": [],
+    "pass": true,
+    "path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-059/fixtures",
+    "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-059/fixtures",
+    "runs": [
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-059/fixtures/plan-20261102T032745Z-fixture_ANC-059_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/plan-ANC-059/fixtures/plan-20261102T032746Z-fixture_ANC-059_fail_1.json"
+    ]
+  },
+  "error": null
+}

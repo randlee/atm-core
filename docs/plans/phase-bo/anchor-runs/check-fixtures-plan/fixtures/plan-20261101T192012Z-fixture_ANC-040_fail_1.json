@@ -1,0 +1,63 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261101T192012Z-fixture_ANC-040_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-01T19:20:12+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-040:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 82,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": null,
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-040",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite code that is not specific to the lite profile must be placed in the shared location, not in skills/atm-bd-lite/.",
+      "quote": "Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand clarified \"Lite is separate\"; follow-up: \"shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today\"",
+      "anchor_version": 4,
+      "deterministic_check": "no module under a profile skill is imported by another profile's skill",
+      "kind": "structural",
+      "leaning": null,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 82,
+      "item_shortened": false
+    }
+  ],
+  "summary": {
+    "counts": {
+      "deterministic_only": 1
+    },
+    "failing": [],
+    "leaning_counts": {},
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

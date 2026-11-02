@@ -1,0 +1,3483 @@
+{
+  "success": true,
+  "data": {
+    "schema": "plan-anchoring/run/1",
+    "run_id": "plan-20261102T033720Z-bo-10",
+    "gate": "plan",
+    "created_at": "2026-11-02T03:37:20+00:00",
+    "anchors_path": "docs/plans/phase-bo/anchors.json",
+    "plan": "phase-bo",
+    "item": {
+      "id": "bo-10",
+      "title": "",
+      "source": "docs/plans/phase-bo/sprint-bo-10-lite-hooks.md",
+      "chars": 19587,
+      "truncated": false,
+      "chars_before_reduction": 19587,
+      "code_reduced": {
+        "blocks": 0,
+        "lines": 0
+      }
+    },
+    "model_requested": "jev-latest",
+    "model_answered": "jev-1.14.0",
+    "threshold": 0.6,
+    "max_request_bytes": 24000,
+    "min_item_chars": 2000,
+    "dry_run": false,
+    "fixture": false,
+    "results": [
+      {
+        "anchor_id": "ANC-004",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Test code written in the phase must implement its repeated patterns through common helper methods instead of repeating them inline.",
+        "quote": "test code is fine, but should be written efficiently w/ repeated patterns using common methods.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 5,
+        "deterministic_check": "no setup or assertion block of five or more identical lines appears in two test functions of the touched test files",
+        "kind": "directive",
+        "leaning": "not_addressed",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_addressed",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.92,
+            "probabilities": {
+              "yes": 0.95,
+              "no": 0.05,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.91,
+            "probabilities": {
+              "yes": 0.04,
+              "no": 0.94,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.88,
+            "probabilities": {
+              "yes": 0.06,
+              "no": 0.92,
+              "unclear": 0.02
+            }
+          }
+        },
+        "min_confidence": 0.88,
+        "explanation": "This bead does not carry the directive forward.",
+        "usage": {
+          "input_tokens": 7245,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22835
+      },
+      {
+        "anchor_id": "ANC-005",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a orchestration phase.",
+        "quote": "We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 7,
+        "deterministic_check": "the --help output of atm-bd console, cron and queues is byte-identical before and after the phase",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "unstable": true,
+        "answers_second": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.53,
+            "probabilities": {
+              "yes": 0.3,
+              "no": 0.69,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.94,
+            "probabilities": {
+              "yes": 0.02,
+              "no": 0.96,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.76,
+            "probabilities": {
+              "yes": 0.14,
+              "no": 0.84,
+              "unclear": 0.02
+            }
+          }
+        },
+        "verdict_first": "not_applicable",
+        "verdict_second": "underspecified",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.61,
+            "probabilities": {
+              "yes": 0.25,
+              "no": 0.74,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.96,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.97,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.86,
+            "probabilities": {
+              "yes": 0.08,
+              "no": 0.91,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.53,
+        "explanation": "Jev was not confident (min confidence 0.53); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7268,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "second",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "no",
+            "confidence": 0.53
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22873
+      },
+      {
+        "anchor_id": "ANC-006",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "All profiles must use the same schema.",
+        "quote": "This would mean that there would need to be atm-bd-core types that are shared between all profiles and I expect we would want the same schema, although atm-bd-lite would allow some mandetory schema items to be 'undefined' i.e. sanity.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 3,
+        "deterministic_check": "no schema file exists under skills/atm-bd-lite and lite beads validate against the core bead_schema models",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.56,
+            "probabilities": {
+              "yes": 0.28,
+              "no": 0.71,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.67,
+            "probabilities": {
+              "yes": 0.17,
+              "no": 0.78,
+              "unclear": 0.05
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.94,
+            "probabilities": {
+              "yes": 0.03,
+              "no": 0.96,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.56,
+        "explanation": "Jev was not confident (min confidence 0.56); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7233,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "no",
+            "confidence": 0.56
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22756
+      },
+      {
+        "anchor_id": "ANC-015",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite profile's orchestration must be runnable by a single agent.",
+        "quote": "it will be a much simpler orchestration that could be run by a single agent or small team.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 4,
+        "deterministic_check": "the bo-7 live lite phase log shows one ATM identity performing dispatch, dev, QA and landing",
+        "kind": "directive",
+        "leaning": "not_addressed",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "unstable": true,
+        "answers_second": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.67,
+            "probabilities": {
+              "yes": 0.78,
+              "no": 0.2,
+              "unclear": 0.02
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.6,
+            "probabilities": {
+              "yes": 0.24,
+              "no": 0.73,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.79,
+            "probabilities": {
+              "yes": 0.09,
+              "no": 0.86,
+              "unclear": 0.05
+            }
+          }
+        },
+        "verdict_first": "underspecified",
+        "verdict_second": "not_addressed",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.79,
+            "probabilities": {
+              "yes": 0.86,
+              "no": 0.13,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.56,
+            "probabilities": {
+              "yes": 0.26,
+              "no": 0.71,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.82,
+            "probabilities": {
+              "yes": 0.09,
+              "no": 0.88,
+              "unclear": 0.03
+            }
+          }
+        },
+        "min_confidence": 0.56,
+        "explanation": "Jev was not confident (min confidence 0.56); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7239,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "compliance",
+            "question_id": "addressed",
+            "choice": "no",
+            "confidence": 0.56
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22783
+      },
+      {
+        "anchor_id": "ANC-024",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The console never dispatches work for a phase whose phase file sets the lite profile.",
+        "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-31 (fenix), ANC-005 note",
+        "anchor_version": 3,
+        "deterministic_check": "a test runs atm-bd console against a phase file with profile lite and asserts a refusal exit with no dispatch",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.48,
+            "probabilities": {
+              "yes": 0.65,
+              "no": 0.34,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.19,
+            "probabilities": {
+              "yes": 0.46,
+              "no": 0.39,
+              "unclear": 0.15
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.72,
+            "probabilities": {
+              "yes": 0.17,
+              "no": 0.81,
+              "unclear": 0.02
+            }
+          }
+        },
+        "min_confidence": 0.48,
+        "explanation": "Jev was not confident (min confidence 0.48); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7241,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "yes",
+            "confidence": 0.48
+          }
+        ],
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22788
+      },
+      {
+        "anchor_id": "ANC-030",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd-orchestration skill files must not be changed to use the shared code.",
+        "quote": "atm-bd-orchestration doesn't change to use it.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+        "anchor_version": 4,
+        "deterministic_check": "git diff --name-only <phase base>..<phase top> -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/ is empty",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.6,
+            "probabilities": {
+              "yes": 0.73,
+              "no": 0.26,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.38,
+            "probabilities": {
+              "yes": 0.59,
+              "no": 0.39,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.58,
+            "probabilities": {
+              "yes": 0.27,
+              "no": 0.72,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.58,
+        "explanation": "Jev was not confident (min confidence 0.58); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7245,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "conflict",
+            "question_id": "contradicted",
+            "choice": "no",
+            "confidence": 0.58
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22779
+      },
+      {
+        "anchor_id": "ANC-032",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Each atm-bd subcommand must run the script with the same file name from the skill of the profile set in the phase file.",
+        "quote": "and the atm-bd commands just call the profile's scripts by the same name.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+        "anchor_version": 6,
+        "deterministic_check": "a test runs each subcommand on a lite and a orchestration phase file and asserts the called script path is <profile skill>/scripts/<same file name>",
+        "kind": "directive",
+        "leaning": "not_addressed",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.38,
+            "probabilities": {
+              "yes": 0.59,
+              "no": 0.39,
+              "unclear": 0.02
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.77,
+            "probabilities": {
+              "yes": 0.09,
+              "no": 0.85,
+              "unclear": 0.06
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.62,
+            "probabilities": {
+              "yes": 0.22,
+              "no": 0.75,
+              "unclear": 0.03
+            }
+          }
+        },
+        "min_confidence": 0.38,
+        "explanation": "Jev was not confident (min confidence 0.38); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7256,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "yes",
+            "confidence": 0.38
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22841
+      },
+      {
+        "anchor_id": "ANC-034",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Every atm-bd-types trait must ship a .pyi stub generated from the trait.",
+        "quote": "approved ` .pyi stub `",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+        "anchor_version": 4,
+        "deterministic_check": "regenerating the stubs produces no diff",
+        "kind": "directive",
+        "leaning": "not_addressed",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.31,
+            "probabilities": {
+              "yes": 0.54,
+              "no": 0.46,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.76,
+            "probabilities": {
+              "yes": 0.07,
+              "no": 0.84,
+              "unclear": 0.09
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.91,
+            "probabilities": {
+              "yes": 0.05,
+              "no": 0.94,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.31,
+        "explanation": "Jev was not confident (min confidence 0.31); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7245,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "yes",
+            "confidence": 0.31
+          }
+        ],
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22795
+      },
+      {
+        "anchor_id": "ANC-036",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Code in the shared location must be newly written, not moved or copied out of atm-bd-orchestration.",
+        "quote": "The shared code is new code, placed in the shared location.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-029)",
+        "anchor_version": 3,
+        "deterministic_check": "git log --follow on every shared-location file shows no rename or copy from a skills/atm-bd-orchestration/ path",
+        "kind": "prohibition",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.49,
+            "probabilities": {
+              "yes": 0.33,
+              "no": 0.66,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.72,
+            "probabilities": {
+              "yes": 0.17,
+              "no": 0.81,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.92,
+            "probabilities": {
+              "yes": 0.04,
+              "no": 0.95,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.49,
+        "explanation": "Jev was not confident (min confidence 0.49); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7247,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "no",
+            "confidence": 0.49
+          }
+        ],
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22802
+      },
+      {
+        "anchor_id": "ANC-041",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Every public function and trait implementation in the shared location must have a test that runs it on orchestration-profile inputs: a real orchestration-profile phase file and bead data from a orchestration phase.",
+        "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+        "anchor_version": 5,
+        "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a orchestration-profile phase file and orchestration-phase bead data",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.35,
+            "probabilities": {
+              "yes": 0.57,
+              "no": 0.41,
+              "unclear": 0.02
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.24,
+            "probabilities": {
+              "yes": 0.49,
+              "no": 0.48,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.64,
+            "probabilities": {
+              "yes": 0.22,
+              "no": 0.76,
+              "unclear": 0.02
+            }
+          }
+        },
+        "min_confidence": 0.24,
+        "explanation": "Jev was not confident (min confidence 0.24); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7267,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "yes",
+            "confidence": 0.35
+          },
+          {
+            "ask": "first",
+            "role": "compliance",
+            "question_id": "addressed",
+            "choice": "yes",
+            "confidence": 0.24
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22925
+      },
+      {
+        "anchor_id": "ANC-042",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Every public function and trait implementation in the shared location must have a test that runs it on lite-profile inputs.",
+        "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+        "anchor_version": 5,
+        "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a lite-profile phase file",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.34,
+            "probabilities": {
+              "yes": 0.43,
+              "no": 0.56,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.46,
+            "probabilities": {
+              "yes": 0.34,
+              "no": 0.64,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.82,
+            "probabilities": {
+              "yes": 0.11,
+              "no": 0.88,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.34,
+        "explanation": "Jev was not confident (min confidence 0.34); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7247,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "no",
+            "confidence": 0.34
+          },
+          {
+            "ask": "first",
+            "role": "compliance",
+            "question_id": "addressed",
+            "choice": "no",
+            "confidence": 0.46
+          }
+        ],
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22834
+      },
+      {
+        "anchor_id": "ANC-044",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Code in the shared location must not branch on, or hard-code, either profile.",
+        "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+        "anchor_version": 4,
+        "deterministic_check": "grep of the shared location for profile literals (lite, orchestration, \"lite\", \"orchestration\") and branches on the profile is empty",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "unstable": true,
+        "answers_second": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.53,
+            "probabilities": {
+              "yes": 0.69,
+              "no": 0.29,
+              "unclear": 0.02
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.46,
+            "probabilities": {
+              "yes": 0.64,
+              "no": 0.33,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.79,
+            "probabilities": {
+              "yes": 0.13,
+              "no": 0.86,
+              "unclear": 0.01
+            }
+          }
+        },
+        "verdict_first": "satisfied",
+        "verdict_second": "underspecified",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.67,
+            "probabilities": {
+              "yes": 0.78,
+              "no": 0.2,
+              "unclear": 0.02
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.52,
+            "probabilities": {
+              "yes": 0.68,
+              "no": 0.3,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.79,
+            "probabilities": {
+              "yes": 0.13,
+              "no": 0.86,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.53,
+        "explanation": "Jev was not confident (min confidence 0.53); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7242,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "second",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "yes",
+            "confidence": 0.53
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22788
+      },
+      {
+        "anchor_id": "ANC-045",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd-lite must call each shared-location module in the same sprint that adds the module.",
+        "quote": "I don't think you understand the concept of writing 'shared' modules without cutting over and using them immediately.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed \"items 1-4 are correct\" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by orchestration-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set",
+        "anchor_version": 3,
+        "deterministic_check": "every module added to the shared location in a sprint's diff is imported by atm-bd-lite code in that same diff",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.58,
+            "probabilities": {
+              "yes": 0.28,
+              "no": 0.72,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.35,
+            "probabilities": {
+              "yes": 0.36,
+              "no": 0.57,
+              "unclear": 0.07
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.92,
+            "probabilities": {
+              "yes": 0.05,
+              "no": 0.95,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.35,
+        "explanation": "Jev was not confident (min confidence 0.35); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7249,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "no",
+            "confidence": 0.58
+          },
+          {
+            "ask": "first",
+            "role": "compliance",
+            "question_id": "addressed",
+            "choice": "no",
+            "confidence": 0.35
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22825
+      },
+      {
+        "anchor_id": "ANC-057",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "A lite dev or fix closes its task with one atm task close command carrying its report as the close message.",
+        "quote": "that is what I wanted done in the first place.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+        "anchor_version": 2,
+        "deterministic_check": "the lite dev and fix templates contain exactly one close instruction, atm task close <bead id> completed with the report via --stdin",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "unstable": true,
+        "answers_second": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.73,
+            "probabilities": {
+              "yes": 0.82,
+              "no": 0.17,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.66,
+            "probabilities": {
+              "yes": 0.77,
+              "no": 0.2,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.85,
+            "probabilities": {
+              "yes": 0.09,
+              "no": 0.9,
+              "unclear": 0.01
+            }
+          }
+        },
+        "verdict_first": "underspecified",
+        "verdict_second": "satisfied",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.74,
+            "probabilities": {
+              "yes": 0.83,
+              "no": 0.16,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.58,
+            "probabilities": {
+              "yes": 0.72,
+              "no": 0.24,
+              "unclear": 0.04
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.77,
+            "probabilities": {
+              "yes": 0.13,
+              "no": 0.85,
+              "unclear": 0.02
+            }
+          }
+        },
+        "min_confidence": 0.58,
+        "explanation": "Jev was not confident (min confidence 0.58); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7255,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "compliance",
+            "question_id": "addressed",
+            "choice": "yes",
+            "confidence": 0.58
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22854
+      },
+      {
+        "anchor_id": "ANC-059",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite profile must have no repair, backfill or legacy-compatibility script.",
+        "quote": "that is what I wanted done in the first place.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+        "anchor_version": 2,
+        "deterministic_check": "find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' is empty",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "unstable": true,
+        "answers_second": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.53,
+            "probabilities": {
+              "yes": 0.69,
+              "no": 0.3,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.28,
+            "probabilities": {
+              "yes": 0.52,
+              "no": 0.45,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.83,
+            "probabilities": {
+              "yes": 0.1,
+              "no": 0.89,
+              "unclear": 0.01
+            }
+          }
+        },
+        "verdict_first": "satisfied",
+        "verdict_second": "underspecified",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.7,
+            "probabilities": {
+              "yes": 0.8,
+              "no": 0.19,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.25,
+            "probabilities": {
+              "yes": 0.47,
+              "no": 0.5,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.85,
+            "probabilities": {
+              "yes": 0.09,
+              "no": 0.9,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.53,
+        "explanation": "Jev was not confident (min confidence 0.53); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7251,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "second",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "yes",
+            "confidence": 0.53
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22825
+      },
+      {
+        "anchor_id": "ANC-061",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd-types must not define profile names: no profile enum and no profile string literals; a profile is a name read from the phase file.",
+        "quote": "the profile names should not be hardcoded in the crate | we can create as many profiles as we want.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); atm-bd-types 0.1.1 has enum Profile {Full, Lite}, which this rules out",
+        "anchor_version": 1,
+        "deterministic_check": "grep of crates/atm-bd-types and its generated .pyi for an enum or literal named lite, orchestration or full used as a profile is empty",
+        "kind": "prohibition",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.44,
+            "probabilities": {
+              "yes": 0.36,
+              "no": 0.63,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.46,
+            "probabilities": {
+              "yes": 0.3,
+              "no": 0.64,
+              "unclear": 0.06
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.96,
+            "probabilities": {
+              "yes": 0.03,
+              "no": 0.97,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.44,
+        "explanation": "Jev was not confident (min confidence 0.44); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7251,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "no",
+            "confidence": 0.44
+          }
+        ],
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22825
+      },
+      {
+        "anchor_id": "ANC-067",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Every multi-step procedure a lite agent must run (stack, pour) must be a fenced bash block in a template under skills/atm-bd-lite/templates/.",
+        "quote": "ANC-067 Sequences live in templates. Every multi-step procedure an agent must run (stack, pour) is a fenced bash block in a template under `skills/atm-bd-lite/templates/`. Check: the dev template contains one block whose lines are, in order, bdc lock, git rebase, git push, bdc record; the QA template contains one block with bdc pour. Fail fixture: a Python file that performs those steps.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 4,
+        "deterministic_check": "the dev template under skills/atm-bd-lite/templates/ has exactly one fenced bash block whose command lines match, in order, bdc lock, git rebase, git push, bdc record; the QA template has one fenced bash block containing bdc pour; no .py file under skills/atm-bd-lite runs git rebase, git push or a bdc lock/record/pour",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.37,
+            "probabilities": {
+              "yes": 0.41,
+              "no": 0.58,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.53,
+            "probabilities": {
+              "yes": 0.24,
+              "no": 0.69,
+              "unclear": 0.07
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.88,
+            "probabilities": {
+              "yes": 0.06,
+              "no": 0.92,
+              "unclear": 0.02
+            }
+          }
+        },
+        "min_confidence": 0.37,
+        "explanation": "Jev was not confident (min confidence 0.37); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7254,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "no",
+            "confidence": 0.37
+          },
+          {
+            "ask": "first",
+            "role": "compliance",
+            "question_id": "addressed",
+            "choice": "no",
+            "confidence": 0.53
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22854
+      },
+      {
+        "anchor_id": "ANC-069",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The stack bead must be the ledger: its assignee is the lock, its layers are the record, and only the fenced stack block writes it, through bdc, under the lock.",
+        "quote": "ANC-069 Stack bead is the ledger. Its assignee is the lock; its layers are the record; only the fenced stack block writes it, through bdc, under the lock. Check: ANC-065 plus the ANC-067 block shape.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 3,
+        "deterministic_check": "the ANC-065 gate check passes on every lite hook and the ANC-067 dev-template block check passes",
+        "kind": "directive",
+        "leaning": "not_addressed",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.92,
+            "probabilities": {
+              "yes": 0.95,
+              "no": 0.05,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.25,
+            "probabilities": {
+              "yes": 0.39,
+              "no": 0.5,
+              "unclear": 0.11
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.85,
+            "probabilities": {
+              "yes": 0.1,
+              "no": 0.9,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.25,
+        "explanation": "Jev was not confident (min confidence 0.25); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7258,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "compliance",
+            "question_id": "addressed",
+            "choice": "no",
+            "confidence": 0.25
+          }
+        ],
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22855
+      },
+      {
+        "anchor_id": "ANC-073",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Every phase-bo anchor check must name a command (grep, wc, ast, pyright, the gate) or a Jev fixture pair.",
+        "quote": "ANC-073 Every anchor check is mechanical. A new anchor whose check is prose (\"is simple\", \"is maintainable\") is rejected by plan-anchor. Check: each anchor's `check` names a command (grep, wc, ast, pyright, the gate) or a Jev fixture pair. Fail fixture: \"Jev judges the hook is reasonable.\"",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 3,
+        "deterministic_check": "for every non-retired anchor in anchors.json, deterministic_check names grep, wc, ast, pyright, git, a test, or atm-bd-lite-gate.py, or the anchor has at least one pass and one fail fixture",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "unstable": true,
+        "answers_second": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.55,
+            "probabilities": {
+              "yes": 0.7,
+              "no": 0.28,
+              "unclear": 0.02
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.34,
+            "probabilities": {
+              "yes": 0.56,
+              "no": 0.42,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.79,
+            "probabilities": {
+              "yes": 0.11,
+              "no": 0.86,
+              "unclear": 0.03
+            }
+          }
+        },
+        "verdict_first": "satisfied",
+        "verdict_second": "underspecified",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.64,
+            "probabilities": {
+              "yes": 0.76,
+              "no": 0.22,
+              "unclear": 0.02
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.28,
+            "probabilities": {
+              "yes": 0.52,
+              "no": 0.46,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.82,
+            "probabilities": {
+              "yes": 0.09,
+              "no": 0.88,
+              "unclear": 0.03
+            }
+          }
+        },
+        "min_confidence": 0.55,
+        "explanation": "Jev was not confident (min confidence 0.55); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7255,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "second",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "yes",
+            "confidence": 0.55
+          }
+        ],
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22809
+      },
+      {
+        "anchor_id": "ANC-074",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite cron script must assign each QA task that bdc ready reports as ready and unassigned.",
+        "quote": "wait, lite will have cron. / yes, initial cron script will assign 'bdc ready' qa tasks and run a set of checks similar to atm-bd-orchestration",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo fixture report rulings, 2026-11-01 (fenix). Withdraws ruling A for ANC-031 and the brief's 'no cron dispatching QA'. The second half, 'a set of checks similar to atm-bd-orchestration', needs the checks named before it can be an anchor.",
+        "anchor_version": 2,
+        "deterministic_check": "test of skills/atm-bd-lite/scripts cron: with fakes where bdc ready returns ready QA beads, one atm task assign is issued per ready unassigned QA bead and none for an assigned one",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "underspecified",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.4,
+            "probabilities": {
+              "yes": 0.39,
+              "no": 0.6,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.91,
+            "probabilities": {
+              "yes": 0.02,
+              "no": 0.94,
+              "unclear": 0.04
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.76,
+            "probabilities": {
+              "yes": 0.15,
+              "no": 0.84,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.4,
+        "explanation": "Jev was not confident (min confidence 0.40); the anchor or the bead may be underspecified.",
+        "usage": {
+          "input_tokens": 7244,
+          "output_tokens": 117
+        },
+        "low_questions": [
+          {
+            "ask": "first",
+            "role": "relevance",
+            "question_id": "relevant",
+            "choice": "no",
+            "confidence": 0.4
+          }
+        ],
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22803
+      },
+      {
+        "anchor_id": "ANC-016",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "New or rewritten Python code in the phase must return Result<T,Err> values instead of throwing exceptions.",
+        "quote": "use pyright, return Result<T,Err> (no throwing)",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 3,
+        "deterministic_check": "grep raise in the files created by the phase finds only programmer-error guards; every public function returns Ok or Err",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.96,
+            "probabilities": {
+              "yes": 0.97,
+              "no": 0.03,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.97,
+            "probabilities": {
+              "yes": 0.02,
+              "no": 0.98,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.96,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7246,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22810
+      },
+      {
+        "anchor_id": "ANC-026",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite task hook and the lite dispatch templates must take the profile from the phase file and refuse to run or render when it is not lite.",
+        "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal \"complete phase-bo plan with qa + anc all passing and start Bo sprints\"",
+        "anchor_version": 3,
+        "deterministic_check": "a test runs the hook runner and renders each lite template against a orchestration phase file and asserts the ProfileMismatch exit",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.77,
+            "probabilities": {
+              "yes": 0.85,
+              "no": 0.14,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.86,
+            "probabilities": {
+              "yes": 0.91,
+              "no": 0.08,
+              "unclear": 0.01
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.8,
+            "probabilities": {
+              "yes": 0.1,
+              "no": 0.87,
+              "unclear": 0.03
+            }
+          }
+        },
+        "min_confidence": 0.77,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7257,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22871
+      },
+      {
+        "anchor_id": "ANC-038",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Every Python implementation of an atm-bd-types trait must pass pyright strict against the trait's .pyi stub.",
+        "quote": "approved ` .pyi stub `",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-034)",
+        "anchor_version": 3,
+        "deterministic_check": "pyright --strict on the Python implementations passes",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.62,
+            "probabilities": {
+              "yes": 0.75,
+              "no": 0.23,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.89,
+            "probabilities": {
+              "yes": 0.06,
+              "no": 0.93,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.62,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7249,
+          "output_tokens": 117
+        },
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22824
+      },
+      {
+        "anchor_id": "ANC-039",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "No change made for atm-bd-lite may break atm-bd-orchestration.",
+        "quote": "Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand clarified \"Lite is separate\"; follow-up: \"shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today\"",
+        "anchor_version": 6,
+        "deterministic_check": "the atm-bd-orchestration test suite passes at the phase top, and git diff <phase base>..<phase top> shows no atm-bd-orchestration test file changed",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.83,
+            "probabilities": {
+              "yes": 0.89,
+              "no": 0.1,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.24,
+            "probabilities": {
+              "yes": 0.49,
+              "no": 0.48,
+              "unclear": 0.03
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.79,
+            "probabilities": {
+              "yes": 0.13,
+              "no": 0.86,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.79,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7252,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22802
+      },
+      {
+        "anchor_id": "ANC-053",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Jev must judge every Transitions-table row of a lite hook's diagram as implemented by that hook's code, with no row failing.",
+        "quote": "I one one file for atm-bd-lite task close and jev verifies 100% matches the design.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+        "anchor_version": 5,
+        "deterministic_check": "the per-hook Jev verification run reports pass for every diagram row; the run JSON is committed under anchor-runs/",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.94,
+            "probabilities": {
+              "yes": 0.96,
+              "no": 0.03,
+              "unclear": 0.01
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.97,
+            "probabilities": {
+              "yes": 0.02,
+              "no": 0.98,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.94,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7255,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22845
+      },
+      {
+        "anchor_id": "ANC-054",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Jev must judge every match arm in a lite hook's code as listed in that hook's state-transition diagram, with no arm unlisted.",
+        "quote": "I one one file for atm-bd-lite task close and jev verifies 100% matches the design.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+        "anchor_version": 3,
+        "deterministic_check": "the per-hook Jev verification run reports every match arm as listed; the run JSON is committed under anchor-runs/",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.61,
+            "probabilities": {
+              "yes": 0.74,
+              "no": 0.24,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.91,
+            "probabilities": {
+              "yes": 0.05,
+              "no": 0.94,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.61,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7254,
+          "output_tokens": 117
+        },
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22846
+      },
+      {
+        "anchor_id": "ANC-055",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite profile must not write or read a close-vars file or any other per-task state file.",
+        "quote": "that is what I wanted done in the first place.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+        "anchor_version": 2,
+        "deterministic_check": "grep of skills/atm-bd-lite for close-vars, close_vars and file writes outside the shared runner is empty; no lite template asks for a vars file",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.98,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7253,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22838
+      },
+      {
+        "anchor_id": "ANC-056",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite hooks must look up every fact other than the task id at hook time from bd, git, the provider, the phase file or the ATM request.",
+        "quote": "that is what I wanted done in the first place.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2 (2026-11-01, fenix-brief.md §A): the facts each hook looks up are the Facts tables of hooks/task-assign.md, task-start.md and task-close.md: phase file, cache.get(bead), cache.get(stack_bead), cache.get(id) per poured finding, and the ATM request. Reads go through beads-cache (ANC-063); no bd show, no provider or git lookup. An unlookupable fact makes the hook refuse with the fix from the Errors table. Original statement from Rand on \"how do we avoid: no close-vars file\".",
+        "anchor_version": 3,
+        "deterministic_check": "each hooks/*.md has a Facts table whose every row is phase file, cache.get(...) or ATM request; the gate (ANC-066) finds no subprocess, bd or gh in the hook files",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.68,
+            "probabilities": {
+              "yes": 0.79,
+              "no": 0.19,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.68,
+            "probabilities": {
+              "yes": 0.2,
+              "no": 0.79,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.68,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7265,
+          "output_tokens": 117
+        },
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22884
+      },
+      {
+        "anchor_id": "ANC-058",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "When a lite hook cannot look up a fact, it must refuse with the exact command that fixes it, never fall back to stored state.",
+        "quote": "that is what I wanted done in the first place.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+        "anchor_version": 2,
+        "deterministic_check": "every Errors-table row of the lite hook diagrams names a fix command; a test removes each lookup's data and asserts the refused reply text",
+        "kind": "directive",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.82,
+            "probabilities": {
+              "yes": 0.88,
+              "no": 0.1,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.92,
+            "probabilities": {
+              "yes": 0.05,
+              "no": 0.95,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.82,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7261,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22872
+      },
+      {
+        "anchor_id": "ANC-060",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd-lite scripts, hooks and templates must not invoke gh pr list, gh pr checks, gh run watch or any gh command with --watch.",
+        "quote": "make a anc which prohibits prohibited git/gh calls (which burn a lot of tokens)",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2 (2026-11-01, fenix-brief.md §A). The host gh wrapper (~/.local/bin/gh) blocks gh pr list, gh pr checks, gh run watch and any --watch flag because they poll and drain the shared GitHub rate limit. Lite hooks run no gh command at all (ANC-066); layer facts come from the stack bead.",
+        "anchor_version": 4,
+        "deterministic_check": "grep -rnE 'gh pr list|gh pr checks|gh run watch|--watch' skills/atm-bd-lite is empty",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.85,
+            "probabilities": {
+              "yes": 0.9,
+              "no": 0.1,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.85,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7258,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22845
+      },
+      {
+        "anchor_id": "ANC-062",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd-lite code must not pass or hold hook input, bead data, phase-file data or replies as dict, Any or untyped JSON; it uses the atm-bd-types types and traits.",
+        "quote": "why are we passing a dictionary into the task-start hook call. that is red-flag #1 | a dictionary is a great way to get around pyright and using rust traits/types we defined in crate",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan 2026-11-01 (fenix); first hook drafts took dict[str, Any] envelopes",
+        "anchor_version": 2,
+        "deterministic_check": "grep of skills/atm-bd-lite for 'dict[', 'Any', 'json.loads' outside atm-bd-types parsing is empty; pyright strict reports no reportUnknown* diagnostics",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.97,
+            "probabilities": {
+              "yes": 0.02,
+              "no": 0.98,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.97,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7261,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22845
+      },
+      {
+        "anchor_id": "ANC-063",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Every atm-bd-lite hook, script and agent step must read and write beads only through beads-cache (bd_cache_rs) and must never run bd directly.",
+        "quote": "we have found 20-30 second timeout is not enough ... that is why we designed bd cache which you forgot is a mandatory requirement",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "Rand 2026-11-01, phase bo replan, after the lite plan was found to call bd (BdCli) inside 2.5 s hooks; locked on Rand's 'lock it'",
+        "anchor_version": 3,
+        "deterministic_check": "no bd subprocess call and no BdCli in any lite file or template; BeadStore is the bd_cache_rs adapter",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.96,
+            "probabilities": {
+              "yes": 0.97,
+              "no": 0.03,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.86,
+            "probabilities": {
+              "yes": 0.09,
+              "no": 0.91,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.86,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7259,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22868
+      },
+      {
+        "anchor_id": "ANC-064",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "A lite hook must make at most one beads-cache write and must never create, claim or release a bead.",
+        "quote": "ANC-064 Gate, not sequence. A lite hook makes at most one beads-cache write. Check: count of `beads.update(`/`beads.create(`/`beads.claim(`/`beads.release(` call sites per hook file ≤ 1, and `create`/`claim`/`release` count = 0. Fail fixture: a close hook that calls `beads.update` twice (record layer, then close).",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 4,
+        "deterministic_check": "atm-bd-lite-gate.py (ast): per hook file in skills/atm-bd-lite/scripts/atm-bd-task-*.py, count of beads.update(/beads.create(/beads.claim(/beads.release( call sites <= 1 and create/claim/release count == 0",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.68,
+            "probabilities": {
+              "yes": 0.2,
+              "no": 0.79,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.68,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7238,
+          "output_tokens": 117
+        },
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22769
+      },
+      {
+        "anchor_id": "ANC-065",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "A lite hook must never write the stack bead (the ledger).",
+        "quote": "ANC-065 Hooks never write the ledger. Check: no hook file passes a stack bead to a write; grep for `stack_bead` in a hook file appears only as an argument to `beads.show(` / `cache.get(`. Fail fixture: `BeadPatch.record(stack_bead, …)` in any hook.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 3,
+        "deterministic_check": "atm-bd-lite-gate.py (ast): every stack_bead occurrence in skills/atm-bd-lite/scripts/atm-bd-task-*.py is an argument of beads.show( or cache.get(",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.97,
+            "probabilities": {
+              "yes": 0.02,
+              "no": 0.98,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.97,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7229,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22727
+      },
+      {
+        "anchor_id": "ANC-066",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "A lite hook must not run a subprocess or use the BdCli, GitCli or AtmCli adapters, bd or gh.",
+        "quote": "ANC-066 No subprocess in a hook. Check: grep for `subprocess`, `BdCli`, `GitCli`, `AtmCli`, `gh `, `bd ` in `skills/atm-bd-lite/scripts/atm-bd-task-*.py` is empty. Fail fixture: any of them.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 2,
+        "deterministic_check": "atm-bd-lite-gate.py (ast) on skills/atm-bd-lite/scripts/atm-bd-task-*.py: no import of subprocess; no reference to BdCli, GitCli or AtmCli; no call to os.system/os.popen/os.exec*/os.spawn*; no call whose first argument is a list or string starting with gh, bd or git",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.91,
+            "probabilities": {
+              "yes": 0.06,
+              "no": 0.94,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.91,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7242,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22762
+      },
+      {
+        "anchor_id": "ANC-068",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The generated atm_bd_types stub must carry only names used by a lite hook or a hooks/*.md table.",
+        "quote": "ANC-068 Stub carries only used names. Check: every `ErrorId` member, class and method in the generated `.pyi` is referenced by a hook file or a `hooks/*.md` table. Fail fixture: `STACK_CLAIM_LOST` with no caller.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 3,
+        "deterministic_check": "every ErrorId member, class and method name in the generated atm_bd_types .pyi appears (grep -w) in a lite hook file or a hooks/*.md table",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.92,
+            "probabilities": {
+              "yes": 0.95,
+              "no": 0.05,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.58,
+            "probabilities": {
+              "yes": 0.72,
+              "no": 0.26,
+              "unclear": 0.02
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.77,
+            "probabilities": {
+              "yes": 0.14,
+              "no": 0.85,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.77,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7244,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22783
+      },
+      {
+        "anchor_id": "ANC-070",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Each lite hook file must be at most 100 lines, including header and docstring.",
+        "quote": "ANC-070 Line ceiling. Each hook file ≤ 100 lines including header and docstring. Check: `wc -l`. Fail fixture: 101 lines. This is the cheapest creep detector there is; a stack claim does not fit.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 4,
+        "deterministic_check": "wc -l skills/atm-bd-lite/scripts/atm-bd-task-*.py reports <= 100 for each file (run by atm-bd-lite-gate.py)",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.97,
+            "probabilities": {
+              "yes": 0.02,
+              "no": 0.98,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.97,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7237,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22748
+      },
+      {
+        "anchor_id": "ANC-071",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "docs/plans/phase-bo/intent.md and docs/plans/phase-bo/hooks/*.md must change only in commits authored by Rand.",
+        "quote": "ANC-071 Spec is owned. `intent.md` and `hooks/*.md` change only in a commit authored by Rand. Check: `git log --format=%ae -- docs/plans/phase-bo/intent.md docs/plans/phase-bo/hooks/` shows only rand@randlee.com. Fail fixture: a commit from fenix editing a Transitions table. If fenix or a reviewer thinks the spec is wrong, the output is a question to Rand, never an edit.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 2,
+        "deterministic_check": "git log --format=%ae -- docs/plans/phase-bo/intent.md docs/plans/phase-bo/hooks/ | sort -u prints only rand@randlee.com",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.66,
+            "probabilities": {
+              "yes": 0.77,
+              "no": 0.22,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.25,
+            "probabilities": {
+              "yes": 0.5,
+              "no": 0.45,
+              "unclear": 0.05
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.88,
+            "probabilities": {
+              "yes": 0.07,
+              "no": 0.92,
+              "unclear": 0.01
+            }
+          }
+        },
+        "min_confidence": 0.66,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7258,
+          "output_tokens": 117
+        },
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22822
+      },
+      {
+        "anchor_id": "ANC-072",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "A review finding that would add a write, an arm, a subprocess or a guard to a lite hook must be out of scope unless it cites the hooks/*.md row it implements.",
+        "quote": "ANC-072 Review findings bind to the spec, not the code. A review finding that would add a write, an arm, a subprocess or a guard to a hook is out of scope unless it cites the `hooks/*.md` row it implements. The reply template is one line: \"Not in <hook>.md; file against the spec (ANC-071).\" Check: ANC-064/065/066/070 fail any such change regardless of what the review said. Fail fixture: solar round asks for a retry path; fenix adds an arm; gate fails on rows ≠ arms.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+        "anchor_version": 3,
+        "deterministic_check": "atm-bd-lite-gate.py exits 0 on the changed hook (rows == arms, writes <= 1, ANC-065/066 greps, <= 100 lines, both Jev question sets)",
+        "kind": "prohibition",
+        "leaning": "satisfied",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "satisfied",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 1.0,
+              "no": 0.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "yes",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.99,
+              "no": 0.01,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.97,
+            "probabilities": {
+              "yes": 0.02,
+              "no": 0.98,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.97,
+        "explanation": "The directive is carried forward.",
+        "usage": {
+          "input_tokens": 7257,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22849
+      },
+      {
+        "anchor_id": "ANC-001",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The installer must accept --github and --azure flags that select the provider commands rendered into the sc-compose templates.",
+        "quote": "could we add --github and --azure flags which inject the proper commands into sc-compose j2 templates?",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 4,
+        "deterministic_check": "atm-bd skill --azure renders a dispatch template containing 'az repos pr' and no 'gh pr'",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 1.0,
+            "probabilities": {
+              "yes": 0.0,
+              "no": 1.0,
+              "unclear": 0.0
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.98,
+            "probabilities": {
+              "yes": 0.01,
+              "no": 0.99,
+              "unclear": 0.0
+            }
+          }
+        },
+        "min_confidence": 0.98,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 7252,
+          "output_tokens": 117
+        },
+        "attempts": 1,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22873
+      },
+      {
+        "anchor_id": "ANC-027",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Each atm-bd cron tick must take the profile from the phase file and refuse to run when it is not the tick's own profile.",
+        "quote": "the lite/orchestration flag is set in phase toml/json file.  You can’t run console for lite if agents are orchestrating.  This is critically important.  hooks/templates/cron/console must all align.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal \"complete phase-bo plan with qa + anc all passing and start Bo sprints\"",
+        "anchor_version": 4,
+        "deterministic_check": "a test runs the orchestration tick on a lite phase file and the lite tick on a orchestration phase file and asserts the ProfileMismatch exit for both",
+        "kind": "directive",
+        "leaning": "not_applicable",
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "near_threshold": true,
+        "confirmed": true,
+        "verdict": "not_applicable",
+        "answers": {
+          "relevant": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.68,
+            "probabilities": {
+              "yes": 0.2,
+              "no": 0.79,
+              "unclear": 0.01
+            }
+          },
+          "addressed": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.56,
+            "probabilities": {
+              "yes": 0.25,
+              "no": 0.71,
+              "unclear": 0.04
+            }
+          },
+          "contradicted": {
+            "type": "choice",
+            "choice": "no",
+            "confidence": 0.76,
+            "probabilities": {
+              "yes": 0.14,
+              "no": 0.84,
+              "unclear": 0.02
+            }
+          }
+        },
+        "min_confidence": 0.56,
+        "explanation": "The anchor does not govern this bead.",
+        "usage": {
+          "input_tokens": 7252,
+          "output_tokens": 117
+        },
+        "attempts": 2,
+        "item_chars_sent": 19587,
+        "item_shortened": false,
+        "request_bytes": 22822
+      },
+      {
+        "anchor_id": "ANC-003",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Transitions in the lite hook must be enum members with exhaustive checks, so that an unhandled member is a static error.",
+        "quote": "The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 4,
+        "deterministic_check": "pyright strict with reportMatchNotExhaustive=error passes on the hook and a test removing one match arm makes it fail",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-012",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; orchestration-only ones live relative to the atm-bd-orchestration skill.",
+        "quote": "i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 5,
+        "deterministic_check": "every file under skills/atm-bd-lite/scripts and templates is imported or rendered only by lite; core/ holds nothing lite-only",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-014",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The atm-bd-lite skill must have its own task-hook Python file, separate from the atm-bd-orchestration skill's atm-task-close.py.",
+        "quote": "the atm-bd-lite would have a completely different atm-task-hook python file.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 4,
+        "deterministic_check": "skills/atm-bd-lite/scripts contains a hook file and the orchestration profile's atm-task-close.py has no lite branch",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-017",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The fundamental atm-bd types must be defined in one Rust crate.",
+        "quote": "I am fine w/ you building a rust crate w/ the fundamental types if it can easily be distributed.",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 4,
+        "deterministic_check": "crates/atm-bd-types defines Transition and ErrorId (no Profile type, ANC-061) and grep finds no class Transition or class ErrorId under skills/atm-bd-lite",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-018",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "A quick Python-only fix of atm-bd must release without a crate publish step.",
+        "quote": "I am hopeful we won't be changing the atm-bd crate too often so we don't need a complicated publish process for quick python fixes",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 4,
+        "deterministic_check": "release.yml for a Python-only tag runs no crate publish job",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-019",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite task-hook file must be organized by transition type: one handler section per transition (dev close, fix close, QA close).",
+        "quote": "The business logic is to be in a single small python file which is organized by transition type and enums w/ exhaustive checks (that will compile error if not handled)",
+        "stated_by": "Rand",
+        "stated_at": "2026-10-31",
+        "context": "planning session 2026-10-27..31 (fenix)",
+        "anchor_version": 4,
+        "deterministic_check": "the hook file has one handler per Transition member and no handler serves two transitions",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-028",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd-lite must be its own skill in the skills/atm-bd-lite/ directory.",
+        "quote": "Lite is separate.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+        "anchor_version": 5,
+        "deterministic_check": "skills/atm-bd-lite/SKILL.md exists and names the skill atm-bd-lite",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-031",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Each profile's task hooks, task-assignment templates and cron script must be inside that profile's own skill directory.",
+        "quote": "The profile-specific parts (the hooks, the templates and the cron script) live in each profile's own skill",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+        "anchor_version": 6,
+        "deterministic_check": "find shows every lite hook, template and cron script under skills/atm-bd-lite/; none in the shared location",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-040",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "atm-bd-lite code that is not specific to the lite profile must be placed in the shared location, not in skills/atm-bd-lite/.",
+        "quote": "Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "phase-bo replan session 2026-11-01 (fenix); Rand clarified \"Lite is separate\"; follow-up: \"shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today\"",
+        "anchor_version": 4,
+        "deterministic_check": "no module under a profile skill is imported by another profile's skill",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-048",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite task.assign hook must be its own Python file under skills/atm-bd-lite/scripts/.",
+        "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+        "anchor_version": 3,
+        "deterministic_check": "skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.assign hook, and it imports no other hook file",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-049",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite task.start hook must be its own Python file under skills/atm-bd-lite/scripts/.",
+        "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+        "anchor_version": 3,
+        "deterministic_check": "skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.start hook, and it imports no other hook file",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-050",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "The lite task.close hook must be its own Python file under skills/atm-bd-lite/scripts/.",
+        "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+        "anchor_version": 3,
+        "deterministic_check": "skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.close hook, and it imports no other hook file",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-051",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "Each lite task hook file must have its own state-transition diagram in the phase design docs.",
+        "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+        "anchor_version": 3,
+        "deterministic_check": "the lite hooks design doc has one diagram section per hook file, named after the hook",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      },
+      {
+        "anchor_id": "ANC-052",
+        "source_type": "ANC",
+        "source_ref": null,
+        "statement": "A lite hook's state-transition diagram must have one Transitions-table row per match arm in that hook's code.",
+        "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+        "stated_by": "Rand",
+        "stated_at": "2026-11-01",
+        "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+        "anchor_version": 3,
+        "deterministic_check": "count of Transitions-table rows equals count of match arms in the hook file",
+        "kind": "structural",
+        "leaning": null,
+        "question_set": {
+          "gate": "plan",
+          "version": 1,
+          "overridden": false
+        },
+        "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+        "verdict": "deterministic_only",
+        "answers": null,
+        "min_confidence": null,
+        "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+        "attempts": 0,
+        "item_chars_sent": 19587,
+        "item_shortened": false
+      }
+    ],
+    "summary": {
+      "counts": {
+        "not_addressed": 1,
+        "underspecified": 19,
+        "satisfied": 19,
+        "not_applicable": 2,
+        "deterministic_only": 14
+      },
+      "failing": [
+        "ANC-004",
+        "ANC-005",
+        "ANC-006",
+        "ANC-015",
+        "ANC-024",
+        "ANC-030",
+        "ANC-032",
+        "ANC-034",
+        "ANC-036",
+        "ANC-041",
+        "ANC-042",
+        "ANC-044",
+        "ANC-045",
+        "ANC-057",
+        "ANC-059",
+        "ANC-061",
+        "ANC-067",
+        "ANC-069",
+        "ANC-073",
+        "ANC-074"
+      ],
+      "leaning_counts": {
+        "not_addressed": 5,
+        "not_applicable": 10,
+        "satisfied": 26
+      },
+      "unstable": [
+        "ANC-005",
+        "ANC-015",
+        "ANC-044",
+        "ANC-057",
+        "ANC-059",
+        "ANC-073"
+      ],
+      "errors": [],
+      "excluded": [],
+      "shortened": [],
+      "pass": false
+    },
+    "path": "docs/plans/phase-bo/anchor-runs/plan-gate-2026-11-01/plan-20261102T033720Z-bo-10.json",
+    "run_path": "docs/plans/phase-bo/anchor-runs/plan-gate-2026-11-01/plan-20261102T033720Z-bo-10.json"
+  },
+  "error": null
+}

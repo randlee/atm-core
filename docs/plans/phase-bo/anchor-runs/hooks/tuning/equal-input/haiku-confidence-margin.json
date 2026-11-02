@@ -1,0 +1,455 @@
+{
+ "questions": "design/lite-code/gate-questions.json",
+ "close-extra-write": {
+  "missing": {
+   "luna": "KEY_MISSING"
+  },
+  "input": {
+   "jev": {
+    "prompt_sha256": "dcec650a8b7b8da0c30ea3ca021f431e9f93f5635bff91e407694527dcad2666",
+    "input_tokens": 5882,
+    "prompt_tokens": null,
+    "leak": null,
+    "commands": 0,
+    "equal": true
+   },
+   "haiku": {
+    "prompt_sha256": "dcec650a8b7b8da0c30ea3ca021f431e9f93f5635bff91e407694527dcad2666",
+    "input_tokens": 14589,
+    "prompt_tokens": 14589,
+    "leak": 0,
+    "commands": 0,
+    "equal": true
+   }
+  },
+  "sessions": {
+   "jev": "4ec16396-873e-4453-b1b3-bc2ed210613d",
+   "haiku": "3c91c864-5f97-434c-8cf7-f34ef1bac563"
+  },
+  "equal": true,
+  "agreement": "19/19",
+  "rows": {
+   "implemented:T-CLOSE-01": {
+    "jev": [
+     "yes",
+     0.76
+    ],
+    "haiku": [
+     "yes",
+     0.8
+    ]
+   },
+   "implemented:T-CLOSE-02": {
+    "jev": [
+     "no",
+     0.02
+    ],
+    "haiku": [
+     "no",
+     0.8
+    ]
+   },
+   "implemented:T-CLOSE-03": {
+    "jev": [
+     "yes",
+     0.4
+    ],
+    "haiku": [
+     "yes",
+     0.8
+    ]
+   },
+   "implemented:T-CLOSE-04": {
+    "jev": [
+     "yes",
+     0.5
+    ],
+    "haiku": [
+     "yes",
+     0.7
+    ]
+   },
+   "listed:L24": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L28": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L37": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L49": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L69": {
+    "jev": [
+     "yes",
+     0.84
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L10": {
+    "jev": [
+     "yes",
+     0.96
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L18": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L20": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L22": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L34": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L39": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L47": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L51": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L59": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   },
+   "listed:L63": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.94
+    ]
+   }
+  }
+ },
+ "close-unlisted-refusal": {
+  "missing": {
+   "luna": "KEY_MISSING"
+  },
+  "input": {
+   "jev": {
+    "prompt_sha256": "ca0f7610431522a4dce11e2d2de45169e6308e58726a58cdcec250667e74ea32",
+    "input_tokens": 6045,
+    "prompt_tokens": null,
+    "leak": null,
+    "commands": 0,
+    "equal": true
+   },
+   "haiku": {
+    "prompt_sha256": "ca0f7610431522a4dce11e2d2de45169e6308e58726a58cdcec250667e74ea32",
+    "input_tokens": 15109,
+    "prompt_tokens": 15109,
+    "leak": 0,
+    "commands": 0,
+    "equal": true
+   }
+  },
+  "sessions": {
+   "jev": "259b6b47-51ca-498a-8be8-e1b8b2cdd3c6",
+   "haiku": "eeaf19d2-1aee-42aa-91f9-51ce175f25b8"
+  },
+  "equal": true,
+  "agreement": "20/20",
+  "rows": {
+   "implemented:T-CLOSE-01": {
+    "jev": [
+     "yes",
+     0.74
+    ],
+    "haiku": [
+     "yes",
+     0.7
+    ]
+   },
+   "implemented:T-CLOSE-02": {
+    "jev": [
+     "no",
+     0.82
+    ],
+    "haiku": [
+     "no",
+     0.8
+    ]
+   },
+   "implemented:T-CLOSE-03": {
+    "jev": [
+     "yes",
+     0.24
+    ],
+    "haiku": [
+     "yes",
+     0.7
+    ]
+   },
+   "implemented:T-CLOSE-04": {
+    "jev": [
+     "yes",
+     0.26
+    ],
+    "haiku": [
+     "yes",
+     0.6
+    ]
+   },
+   "listed:L24": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L28": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L38": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L50": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L70": {
+    "jev": [
+     "yes",
+     0.84
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L10": {
+    "jev": [
+     "yes",
+     0.96
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L18": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L20": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L22": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L34": {
+    "jev": [
+     "no",
+     0.98
+    ],
+    "haiku": [
+     "no",
+     0.8
+    ]
+   },
+   "listed:L36": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L40": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L48": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L52": {
+    "jev": [
+     "yes",
+     1.0
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L60": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   },
+   "listed:L64": {
+    "jev": [
+     "yes",
+     0.98
+    ],
+    "haiku": [
+     "yes",
+     0.9
+    ]
+   }
+  }
+ }
+}

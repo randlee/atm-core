@@ -1,0 +1,222 @@
+{
+ "close-extra-write": {
+  "session": "50c3a6ca-8429-45b0-9e28-b7798e2d141f",
+  "rows": {
+   "implemented:T-CLOSE-01": [
+    "yes",
+    0.58,
+    "yes",
+    0.8
+   ],
+   "implemented:T-CLOSE-02": [
+    "no",
+    0.96,
+    "no",
+    0.9
+   ],
+   "implemented:T-CLOSE-03": [
+    "yes",
+    0.08,
+    "yes",
+    0.8
+   ],
+   "implemented:T-CLOSE-04": [
+    "no",
+    0.12,
+    "yes",
+    0.75
+   ],
+   "listed:L28": [
+    "yes",
+    1.0,
+    "yes",
+    0.9
+   ],
+   "listed:L32": [
+    "yes",
+    0.98,
+    "yes",
+    0.9
+   ],
+   "listed:L41": [
+    "yes",
+    1.0,
+    "yes",
+    0.9
+   ],
+   "listed:L51": [
+    "yes",
+    1.0,
+    "yes",
+    0.9
+   ],
+   "listed:L67": [
+    "yes",
+    0.68,
+    "yes",
+    0.7
+   ],
+   "listed:L14": [
+    "yes",
+    0.9,
+    "no",
+    0.7
+   ],
+   "listed:L22": [
+    "yes",
+    0.98,
+    "yes",
+    0.85
+   ],
+   "listed:L24": [
+    "yes",
+    0.98,
+    "yes",
+    0.85
+   ],
+   "listed:L26": [
+    "yes",
+    0.98,
+    "yes",
+    0.85
+   ],
+   "listed:L38": [
+    "yes",
+    1.0,
+    "yes",
+    0.85
+   ],
+   "listed:L49": [
+    "yes",
+    0.96,
+    "yes",
+    0.85
+   ],
+   "listed:L59": [
+    "yes",
+    0.98,
+    "yes",
+    0.85
+   ],
+   "listed:L63": [
+    "yes",
+    0.98,
+    "yes",
+    0.85
+   ]
+  }
+ },
+ "close-unlisted-refusal": {
+  "session": "054249ad-2614-4eb0-bbc9-e45828db8266",
+  "rows": {
+   "implemented:T-CLOSE-01": [
+    "yes",
+    0.42,
+    "yes",
+    0.9
+   ],
+   "implemented:T-CLOSE-02": [
+    "no",
+    0.74,
+    "no",
+    0.9
+   ],
+   "implemented:T-CLOSE-03": [
+    "no",
+    0.26,
+    "yes",
+    0.85
+   ],
+   "implemented:T-CLOSE-04": [
+    "no",
+    0.48,
+    "yes",
+    0.85
+   ],
+   "listed:L28": [
+    "yes",
+    0.98,
+    "yes",
+    0.9
+   ],
+   "listed:L32": [
+    "yes",
+    0.62,
+    "yes",
+    0.9
+   ],
+   "listed:L42": [
+    "yes",
+    0.98,
+    "yes",
+    0.9
+   ],
+   "listed:L52": [
+    "yes",
+    0.98,
+    "yes",
+    0.9
+   ],
+   "listed:L68": [
+    "yes",
+    0.64,
+    "yes",
+    0.9
+   ],
+   "listed:L14": [
+    "yes",
+    0.84,
+    "yes",
+    0.9
+   ],
+   "listed:L22": [
+    "yes",
+    0.92,
+    "yes",
+    0.9
+   ],
+   "listed:L24": [
+    "yes",
+    0.96,
+    "yes",
+    0.9
+   ],
+   "listed:L26": [
+    "yes",
+    0.96,
+    "yes",
+    0.9
+   ],
+   "listed:L38": [
+    "no",
+    1.0,
+    "no",
+    0.9
+   ],
+   "listed:L40": [
+    "yes",
+    0.94,
+    "yes",
+    0.9
+   ],
+   "listed:L50": [
+    "yes",
+    0.92,
+    "yes",
+    0.9
+   ],
+   "listed:L60": [
+    "yes",
+    0.94,
+    "yes",
+    0.9
+   ],
+   "listed:L64": [
+    "yes",
+    0.94,
+    "yes",
+    0.9
+   ]
+  }
+ }
+}

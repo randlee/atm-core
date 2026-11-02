@@ -1,0 +1,129 @@
+{
+  "hook": "design/lite-code/atm-bd-task-hook.py",
+  "spec": "hooks/task-close.md",
+  "lines": 115,
+  "rows": [
+    [
+      "T-CLOSE-01",
+      "GIVE_BACK"
+    ],
+    [
+      "T-CLOSE-02",
+      "WORK_CLOSE"
+    ],
+    [
+      "T-CLOSE-03",
+      "QA_PASS"
+    ],
+    [
+      "T-CLOSE-04",
+      "QA_FINDINGS"
+    ]
+  ],
+  "facts": {
+    "arms": [
+      [
+        "Outcome.REFUSED | Outcome.CANCELLED",
+        36
+      ],
+      [
+        "Outcome.COMPLETED",
+        40
+      ],
+      [
+        "QaPass()",
+        87
+      ],
+      [
+        "QaFail(report=report)",
+        90
+      ],
+      [
+        "Stage.DEV | Stage.FIX",
+        48
+      ],
+      [
+        "Stage.QA",
+        50
+      ]
+    ],
+    "transition_arms": [],
+    "beads_calls": [
+      [
+        "show",
+        31
+      ],
+      [
+        "claim",
+        59
+      ],
+      [
+        "update",
+        67
+      ],
+      [
+        "update",
+        70
+      ],
+      [
+        "update",
+        39
+      ],
+      [
+        "release",
+        64
+      ],
+      [
+        "update",
+        89
+      ],
+      [
+        "create",
+        102
+      ]
+    ],
+    "replies": [
+      [
+        "HookReply.handled([HookAction.assign(req, a) for a in assigns] + [HookAction.original(req)])",
+        75
+      ],
+      [
+        "HookReply.not_applicable()",
+        28
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.STACK_NOT_STACKED, layer=layer, top=top))",
+        66
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, reviewed=verdict.sha, checked=layer.branch))",
+        85
+      ],
+      [
+        "HookReply.handled([HookAction.assign(req, assign), HookAction.original(req)])",
+        105
+      ],
+      [
+        "HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead, caller=req.caller))",
+        42
+      ]
+    ],
+    "stack_bead_writes": [
+      59,
+      60,
+      57,
+      61,
+      67,
+      93
+    ],
+    "subprocess_sites": []
+  },
+  "deterministic_failures": [
+    "ANC-052 rows != arms: spec rows ['GIVE_BACK', 'QA_FINDINGS', 'QA_PASS', 'WORK_CLOSE'], Transition arms []",
+    "ANC-064 writes: [('claim', 59), ('update', 67), ('update', 70), ('update', 39), ('release', 64), ('update', 89), ('create', 102)] (at most one beads.update; no create/claim/release)",
+    "ANC-065 stack_bead used outside beads.show(/cache.get( at lines [59, 60, 57, 61, 67, 93]",
+    "ANC-070 115 lines > 100"
+  ],
+  "jev": null,
+  "pass": false
+}

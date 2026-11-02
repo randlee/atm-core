@@ -83,8 +83,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "locked",
+      "version": 4,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -109,6 +109,12 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T22:57:01+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "describes the bo-1..7 design; conflicts with ANC-063 and intent.md restart 2 (fenix-brief.md §A)"
         }
       ]
     },
@@ -185,14 +191,14 @@
       "deterministic_check": "no setup or assertion block of five or more identical lines appears in two test functions of the touched test files",
       "fixtures": {
         "pass": [
-          "Tests build hooks through the shared make_close_vars() and run_hook() helpers in tests/lite/conftest.py; no test repeats that setup inline (diff of tests/lite/test_hook.py)."
+          "Hook tests build the request and the in-memory cache through shared make_request() and FakeCache helpers in tests/lite/conftest.py; no test repeats that setup inline (diff of tests/lite/test_task_close_hook.py)."
         ],
         "fail": [
-          "Each test repeats the twelve-line close-vars setup and subprocess stub inline."
+          "Each hook test repeats the twelve-line request and fake-cache setup inline."
         ]
       },
       "question_overrides": {},
-      "version": 4,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -225,6 +231,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -232,7 +245,7 @@
       "id": "ANC-005",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a full phase.",
+      "statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a orchestration phase.",
       "quote": "We should use the same tool interfaces for atm-bd cron, atm-bd console, atm-bd queues (and others I may have missed).",
       "kind": "directive",
       "stated_by": "Rand",
@@ -250,7 +263,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 6,
+      "version": 7,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -297,6 +310,14 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "atm-bd cron, atm-bd console and atm-bd queues must be invoked with the same subcommands and arguments for a lite phase as for a full phase."
         }
       ]
     },
@@ -363,7 +384,7 @@
       "context": "planning session 2026-10-27..31 (fenix)",
       "summary": "Lite leaves sanity schema items undefined",
       "scope": "adds or changes bead_schema, close_fields or close vars",
-      "deterministic_check": "a lite close-vars file without any sanity key validates, and a full close-vars file without them is rejected",
+      "deterministic_check": "a lite close-vars file without any sanity key validates, and a orchestration close-vars file without them is rejected",
       "fixtures": {
         "pass": [
           "sanity_bead and max_sanity_rounds are NotRequired in CloseFields (core/scripts/close_fields.py) and a lite close-vars file without them validates (test_lite_close_vars_without_sanity)."
@@ -373,8 +394,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 4,
-      "status": "locked",
+      "version": 6,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -406,6 +427,19 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:57:01+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "describes the bo-1..7 design; conflicts with ANC-063 and intent.md restart 2 (fenix-brief.md §A)"
         }
       ]
     },
@@ -431,8 +465,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 6,
-      "status": "locked",
+      "version": 7,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -482,6 +516,12 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T22:57:01+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "describes the bo-1..7 design; conflicts with ANC-063 and intent.md restart 2 (fenix-brief.md §A)"
         }
       ]
     },
@@ -507,8 +547,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 4,
-      "status": "locked",
+      "version": 5,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -547,6 +587,12 @@
           "item": "atm-bo-2",
           "reason": "bo-2 only declares the StackGateResult type and the StackGate Protocol; the PR-base-versus-stack-top comparison is implemented and judged in bo-4, which satisfies ANC-009.",
           "replaced": false
+        },
+        {
+          "at": "2026-11-01T22:57:01+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "describes the bo-1..7 design; conflicts with ANC-063 and intent.md restart 2 (fenix-brief.md §A)"
         }
       ],
       "exclude": [
@@ -578,8 +624,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 4,
-      "status": "locked",
+      "version": 5,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -611,6 +657,12 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "describes the bo-1..7 design; conflicts with ANC-063 and intent.md restart 2 (fenix-brief.md §A)"
         }
       ]
     },
@@ -618,7 +670,7 @@
       "id": "ANC-011",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "All beads of a phase must carry the same profile value (lite or full) as the phase file.",
+      "statement": "All beads of a phase must carry the same profile value (lite or orchestration) as the phase file.",
       "quote": "2) never mix profiles in the same phase.",
       "kind": "prohibition",
       "stated_by": "Rand",
@@ -632,12 +684,12 @@
           "validate-plan rejects a lite phase that contains a stage:dev-sanity bead with exit 5 (test_validate_plan_mixed_profiles; run log in the PR)."
         ],
         "fail": [
-          "A phase mixes lite sprints and full sprints by setting the profile per sprint bead."
+          "A phase mixes lite sprints and orchestration sprints by setting the profile per sprint bead."
         ]
       },
       "question_overrides": {},
-      "version": 4,
-      "status": "locked",
+      "version": 6,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -669,6 +721,21 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "fixtures"
+          ],
+          "previous_statement": "All beads of a phase must carry the same profile value (lite or full) as the phase file."
+        },
+        {
+          "at": "2026-11-01T19:35:50+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: \"you can remove the problematic anchors\". Stamping a profile on every bead is stored state and would change orchestration beads; the profile is read from the phase file (ANC-026, ANC-061)."
         }
       ]
     },
@@ -676,7 +743,7 @@
       "id": "ANC-012",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; full-only ones live relative to the atm-bd-orchestration skill.",
+      "statement": "Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; orchestration-only ones live relative to the atm-bd-orchestration skill.",
       "quote": "i would expect the atm-bd-lite only scripts to be in skills/atm-bd-lite/scripts/  and templates in atm-bd-lite/templates/ w/ corresponding atm-bd-orchestration scripts/stemplates located relative to the skill.",
       "kind": "structural",
       "stated_by": "Rand",
@@ -687,14 +754,14 @@
       "deterministic_check": "every file under skills/atm-bd-lite/scripts and templates is imported or rendered only by lite; core/ holds nothing lite-only",
       "fixtures": {
         "pass": [
-          "atm-bd-task-hook.py, lite_cron.py and the lite dev/fix/qa templates sit under skills/atm-bd-lite/scripts and skills/atm-bd-lite/templates."
+          "The three lite task hooks and the lite dev/fix/qa templates sit under skills/atm-bd-lite/scripts and skills/atm-bd-lite/templates."
         ],
         "fail": [
           "The lite hook is placed in core/scripts next to the shared modules."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 5,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -720,6 +787,21 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "Lite-only scripts must live in skills/atm-bd-lite/scripts and lite-only templates in skills/atm-bd-lite/templates; full-only ones live relative to the atm-bd-orchestration skill."
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -745,8 +827,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "locked",
+      "version": 5,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -771,6 +853,24 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:35:50+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: \"you can remove the problematic anchors\". Removing the .claude/.codex/.agents duplicates changes atm-bd-orchestration (conflicts with ANC-030, ANC-039)."
+        },
+        {
+          "at": "2026-11-01T19:40:22+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand 2026-11-01: \"that is reasonable\" (fenix: retiring ANC-013/020 was wrong; atm-bd-core is the shared location; bo-1 erred only by moving orchestration code into it)"
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "describes the bo-1..7 design; conflicts with ANC-063 and intent.md restart 2 (fenix-brief.md §A); also conflicts with ANC-030/ANC-039: removing the copies under .claude/.codex/.agents changes how atm-bd-orchestration is installed, and restart 2 has no shared script module (shared types ship in atm-bd-types, ANC-017/020)"
         }
       ]
     },
@@ -786,7 +886,7 @@
       "context": "planning session 2026-10-27..31 (fenix)",
       "summary": "Lite has its own task hook file",
       "scope": "adds or changes a task-close hook, or selects a hook by profile",
-      "deterministic_check": "skills/atm-bd-lite/scripts contains a hook file and the full profile's atm-task-close.py has no lite branch",
+      "deterministic_check": "skills/atm-bd-lite/scripts contains a hook file and the orchestration profile's atm-task-close.py has no lite branch",
       "fixtures": {
         "pass": [
           "skills/atm-bd-lite/scripts/atm-bd-task-hook.py is a separate file; atm-task-close.py is unchanged."
@@ -796,7 +896,7 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -822,6 +922,13 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check"
+          ]
         }
       ]
     },
@@ -959,17 +1066,17 @@
       "context": "planning session 2026-10-27..31 (fenix)",
       "summary": "Fundamental types in one Rust crate",
       "scope": "adds or changes shared enums, error types, provider or stack-gate types, or their distribution",
-      "deterministic_check": "crates/atm-bd-types defines Profile, Provider, Transition and Error and no Python module redefines them",
+      "deterministic_check": "crates/atm-bd-types defines Transition and ErrorId (no Profile type, ANC-061) and grep finds no class Transition or class ErrorId under skills/atm-bd-lite",
       "fixtures": {
         "pass": [
-          "The Profile, Provider and Transition enums and the Error type are defined in crates/atm-bd-types and exposed to Python through its wheel."
+          "The Transition and ErrorId enums and the Refusal type are defined in crates/atm-bd-types and exposed to Python through its wheel; the profile stays a name read from the phase file."
         ],
         "fail": [
           "The shared enums are defined in Python dataclasses under core/scripts and no Rust crate exists."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -995,6 +1102,14 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
         }
       ]
     },
@@ -1129,15 +1244,15 @@
       "deterministic_check": "no module under skills/atm-bd-lite or skills/atm-bd-orchestration defines a type imported by another skill or by core",
       "fixtures": {
         "pass": [
-          "Profile, Provider and Transition are defined once in atm-bd-core (crates/atm-bd-types, re-exported by core/scripts) and imported by both profile hooks; grep finds no second definition (PR diff)."
+          "Transition and ErrorId are defined once in crates/atm-bd-types and imported by the three lite hooks; grep finds no second definition (PR diff)."
         ],
         "fail": [
-          "skills/atm-bd-lite/scripts/types.py defines its own Transition enum copied from the full profile."
+          "skills/atm-bd-lite/scripts/types.py defines its own Transition enum copied from the orchestration profile."
         ]
       },
       "question_overrides": {},
-      "version": 4,
-      "status": "locked",
+      "version": 8,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1169,6 +1284,38 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:35:50+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: \"you can remove the problematic anchors\". atm-bd-core was the bo-1 layer being removed; shared types live in the atm-bd-types crate (ANC-017)."
+        },
+        {
+          "at": "2026-11-01T19:40:22+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand 2026-11-01: \"that is reasonable\" (fenix: retiring ANC-013/020 was wrong; atm-bd-core is the shared location; bo-1 erred only by moving orchestration code into it)"
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand, 2026-11-01: fixture report rulings: statement names atm-bd-core; shared types are in crates/atm-bd-types per ANC-017, and the profile rule is ANC-061."
         }
       ]
     },
@@ -1194,8 +1341,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 5,
-      "status": "locked",
+      "version": 6,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1234,6 +1381,12 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "describes the bo-1..7 design; conflicts with ANC-063 and intent.md restart 2 (fenix-brief.md §A)"
         }
       ]
     },
@@ -1259,8 +1412,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 9,
-      "status": "locked",
+      "version": 10,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1332,6 +1485,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T19:35:50+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: \"you can remove the problematic anchors\". Bringing every orchestration file under pyright edits orchestration (ANC-030, ANC-039); lite pyright strict is ANC-038."
         }
       ]
     },
@@ -1465,8 +1624,8 @@
         ]
       },
       "question_overrides": {},
-      "version": 3,
-      "status": "locked",
+      "version": 4,
+      "status": "retired",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -1491,6 +1650,12 @@
           "event": "locked",
           "by": "Rand",
           "reason": "Rand, 2026-10-31: \"lock\""
+        },
+        {
+          "at": "2026-11-01T19:35:50+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: \"you can remove the problematic anchors\". gh stack prompts conflict with the git-only stack check (ANC-008, ANC-009, ANC-021) and burn GraphQL budget."
         }
       ]
     },
@@ -1506,17 +1671,17 @@
       "context": "planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal \"complete phase-bo plan with qa + anc all passing and start Bo sprints\"",
       "summary": "Lite hook and templates refuse a non-lite phase file",
       "scope": "adds or changes the lite task hook, its runner, or the lite dispatch templates",
-      "deterministic_check": "a test runs the hook runner and renders each lite template against a full phase file and asserts the ProfileMismatch exit",
+      "deterministic_check": "a test runs the hook runner and renders each lite template against a orchestration phase file and asserts the ProfileMismatch exit",
       "fixtures": {
         "pass": [
-          "hook_runner.py and the lite template render call require_profile(phase_file, Profile.LITE) first and exit with ProfileMismatch on a full phase file; tests/test_lite_profile_gate.py asserts the exit for the runner and for each lite template."
+          "hook_runner.py and the lite template render call require_profile(phase_file, \"lite\") first and exit with ProfileMismatch on a orchestration phase file; tests/test_lite_profile_gate.py asserts the exit for the runner and for each lite template."
         ],
         "fail": [
-          "The lite hook takes the profile from a --profile argument and runs its close plan against a full phase file without reading the phase file."
+          "The lite hook takes the profile from a --profile argument and runs its close plan against a orchestration phase file without reading the phase file."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1534,6 +1699,14 @@
           "at": "2026-11-01T00:34:20+00:00",
           "event": "updated",
           "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
             "fixtures"
           ]
         }
@@ -1551,17 +1724,17 @@
       "context": "planning session 2026-10-31 (fenix), ANC-005 note; split of ANC-023 under Rand goal \"complete phase-bo plan with qa + anc all passing and start Bo sprints\"",
       "summary": "Cron ticks refuse the other profile's phase file",
       "scope": "adds or changes atm-bd cron or a profile cron tick",
-      "deterministic_check": "a test runs the full tick on a lite phase file and the lite tick on a full phase file and asserts the ProfileMismatch exit for both",
+      "deterministic_check": "a test runs the orchestration tick on a lite phase file and the lite tick on a orchestration phase file and asserts the ProfileMismatch exit for both",
       "fixtures": {
         "pass": [
-          "atm-bd cron reads the profile with read_profile; the full tick calls require_profile(phase_file, Profile.FULL) and lite_cron.py Profile.LITE; tests/test_cron_profile_gate.py runs each tick on the other profile's phase file and asserts ProfileMismatch."
+          "The lite cron script, which has the same file name as orchestration's (ANC-032), reads the profile from the phase file and exits with ProfileMismatch on an orchestration phase file. A test runs each profile's tick on the other profile's phase file and asserts ProfileMismatch."
         ],
         "fail": [
-          "lite_cron.py runs its tick on whatever phase file it is given and lists queues for a full phase."
+          "The lite cron script runs its tick on whatever phase file it is given and lists queues for an orchestration phase."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -1581,6 +1754,2758 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-01T19:32:05+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-028",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite must be its own skill in the skills/atm-bd-lite/ directory.",
+      "quote": "Lite is separate.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "atm-bd-lite is its own skill directory",
+      "scope": "adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestration/",
+      "deterministic_check": "skills/atm-bd-lite/SKILL.md exists and names the skill atm-bd-lite",
+      "fixtures": {
+        "pass": [
+          "The lite profile ships as skills/atm-bd-lite/ with its own SKILL.md (name: atm-bd-lite); test_lite_skill_layout asserts the directory and the skill name."
+        ],
+        "fail": [
+          "Lite is a mode flag inside skills/atm-bd-orchestration/SKILL.md; no skills/atm-bd-lite directory exists."
+        ]
+      },
+      "question_overrides": {},
+      "version": 5,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:14+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T18:57:11+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check"
+          ],
+          "previous_statement": "atm-bd-lite must be its own skill in its own directory (skills/atm-bd-lite/) and must share no files with the atm-bd-orchestration skill."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
+        }
+      ]
+    },
+    {
+      "id": "ANC-029",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Code used by more than one profile must be placed in the shared location.",
+      "quote": "The shared code is new code, placed in the shared location.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "Shared code is in the shared location",
+      "scope": "adds code to the shared location or to atm-bd-types",
+      "deterministic_check": "no module under a profile skill is imported by another profile's skill",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:14+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T18:57:11+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check"
+          ],
+          "previous_statement": "Code used by more than one profile must be newly written for that purpose and placed in the shared location; it must not be code moved or extracted out of atm-bd-orchestration."
+        },
+        {
+          "at": "2026-11-01T18:59:58+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-040",
+          "reason": "same requirement, now carried by Rand's explicit quote 'lite code is divided into lite specific and shared code'"
+        }
+      ]
+    },
+    {
+      "id": "ANC-030",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-orchestration skill files must not be changed to use the shared code.",
+      "quote": "atm-bd-orchestration doesn't change to use it.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "atm-bd-orchestration is not changed to use shared code",
+      "scope": "touches any file under skills/atm-bd-orchestration/",
+      "deterministic_check": "git diff --name-only <phase base>..<phase top> -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/ is empty",
+      "fixtures": {
+        "pass": [
+          "git diff origin/main..HEAD -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/ is empty; orchestration keeps importing its own scripts and none of them imports the shared location."
+        ],
+        "fail": [
+          "skills/atm-bd-orchestration/scripts/atm-task-close.py now imports stack_gate from the shared location instead of its own stack_top module."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T18:57:12+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "atm-bd-orchestration skill files must not be modified, moved or deleted to make them use the shared code."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-031",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each profile's task hooks, task-assignment templates and cron script must be inside that profile's own skill directory.",
+      "quote": "The profile-specific parts (the hooks, the templates and the cron script) live in each profile's own skill",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "Profile hooks, templates and cron live in the profile's skill",
+      "scope": "adds or moves a task hook, a task-assignment template or a cron script",
+      "deterministic_check": "find shows every lite hook, template and cron script under skills/atm-bd-lite/; none in the shared location",
+      "fixtures": {
+        "pass": [
+          "The three lite task hooks, the lite dev/fix/qa assignment templates and the lite cron script are all under skills/atm-bd-lite/ (scripts/ and templates/); find shows none of them in the shared location."
+        ],
+        "fail": [
+          "The lite dev-template.xml.j2 is placed in the shared location next to the shared modules."
+        ]
+      },
+      "question_overrides": {},
+      "version": 6,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check"
+          ],
+          "previous_statement": "Each profile's task hooks, task-assignment templates and cron script must be inside that profile's own skill directory.",
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:01:35+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "Each profile's task hooks and task-assignment templates must be inside that profile's own skill directory.",
+          "reason": "Rand, 2026-11-01: \"wait, lite will have cron.\" Ruling A for ANC-031 withdrawn; statement and check restored; pass fixture names the cron script (fixture report option 1)."
+        }
+      ]
+    },
+    {
+      "id": "ANC-032",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each atm-bd subcommand must run the script with the same file name from the skill of the profile set in the phase file.",
+      "quote": "and the atm-bd commands just call the profile's scripts by the same name.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "atm-bd commands call the profile's same-named script",
+      "scope": "adds or changes how an atm-bd subcommand selects or calls profile code",
+      "deterministic_check": "a test runs each subcommand on a lite and a orchestration phase file and asserts the called script path is <profile skill>/scripts/<same file name>",
+      "fixtures": {
+        "pass": [
+          "atm-bd queues reads profile=lite from .atm-bd/phase-x.toml and runs skills/atm-bd-lite/scripts/queues, the same file name orchestration's queues has; test_subcommand_routing asserts the called path for lite and orchestration phase files for console, cron, queues, show and snapshot."
+        ],
+        "fail": [
+          "atm-bd cron runs a new lite-cron entry point with a different file name and argument list for lite phases."
+        ]
+      },
+      "question_overrides": {},
+      "version": 6,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T18:57:12+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "atm-bd console, cron, queues, show and snapshot must be the same command for every profile, and each must run the script with the same file name from the skill of the profile set in the phase file."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
+        }
+      ]
+    },
+    {
+      "id": "ANC-033",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each console data source (sanity-log, qa-log, pr-log and any later source) must be its own Rust trait in atm-bd-types.",
+      "quote": "console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code. | a protocol can not be consumed by rust.  a trait can be consumed by both.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "Each console data source is its own Rust trait",
+      "scope": "adds or changes an atm-bd console data source",
+      "deterministic_check": "atm-bd-types defines one trait per console data source",
+      "fixtures": {
+        "pass": [
+          "atm-bd-types defines trait SanityLogSource, trait QaLogSource and trait PrLogSource in src/console_sources.rs, one trait per console data source."
+        ],
+        "fail": [
+          "All console data sources implement one generic DataSource trait with a source-kind enum argument."
+        ]
+      },
+      "question_overrides": {},
+      "version": 5,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T18:57:12+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check"
+          ],
+          "previous_statement": "Each console data source (sanity-log, qa-log, pr-log and any later source) must be its own Rust trait in atm-bd-types, implemented in its own file, sharing no code with any other source except the shared types."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:35:50+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: \"you can remove the problematic anchors\". Rewriting the console data sources as traits changes the console orchestration runs on; the lite hooks need none of it."
+        }
+      ]
+    },
+    {
+      "id": "ANC-034",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every atm-bd-types trait must ship a .pyi stub generated from the trait.",
+      "quote": "approved ` .pyi stub `",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand approved the wording (\"yes on anchors\"); Jev rubric not run: JEV.HTTP 402",
+      "summary": "Every trait ships a generated .pyi stub",
+      "scope": "adds or changes an atm-bd-types trait or a Python implementation of one",
+      "deterministic_check": "regenerating the stubs produces no diff",
+      "fixtures": {
+        "pass": [
+          "crates/atm-bd-types/atm_bd_types.pyi is generated by stub_gen from the traits; CI regenerates it and fails on any diff."
+        ],
+        "fail": [
+          "The .pyi stub is hand-written and has drifted from the Rust trait signatures."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:34:15+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T18:57:12+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary",
+            "deterministic_check"
+          ],
+          "previous_statement": "Every atm-bd-types trait must ship a .pyi stub generated from the trait, and every Python implementation of the trait must pass pyright strict against that stub."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:56+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-035",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite must share no files with the atm-bd-orchestration skill.",
+      "quote": "Lite is separate.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-028)",
+      "summary": "atm-bd-lite shares no files with atm-bd-orchestration",
+      "scope": "adds or moves files under skills/atm-bd-lite/ or skills/atm-bd-orchestration/",
+      "deterministic_check": "no path under skills/atm-bd-lite/ is a symlink into skills/atm-bd-orchestration/, and grep of skills/atm-bd-lite for atm-bd-orchestration paths is empty",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:57:11+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T18:59:58+00:00",
+          "event": "retired",
+          "replaced_by": "ANC-039",
+          "reason": "Rand clarified 'Lite is separate' means no breaking changes to orchestration, not 'shares no files'"
+        }
+      ]
+    },
+    {
+      "id": "ANC-036",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Code in the shared location must be newly written, not moved or copied out of atm-bd-orchestration.",
+      "quote": "The shared code is new code, placed in the shared location.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-029)",
+      "summary": "Shared code is newly written",
+      "scope": "adds code to the shared location or to atm-bd-types",
+      "deterministic_check": "git log --follow on every shared-location file shows no rename or copy from a skills/atm-bd-orchestration/ path",
+      "fixtures": {
+        "pass": [
+          "The shared phase_file.py module is new code written for this phase; git log --follow shows it created in sprint bo-10 with no rename or copy from skills/atm-bd-orchestration/."
+        ],
+        "fail": [
+          "shared/stack_top.py is skills/atm-bd-orchestration/scripts/stack_top.py moved with git mv and lightly edited."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:57:12+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-037",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Console data source implementations must share no code with each other apart from the atm-bd-types shared types.",
+      "quote": "console data must have separate traits per source.  i.e. separate from the work today, I want things like sanity-log, qa-log, pr-log to be absolutely independent code.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-033)",
+      "summary": "Console data sources share no code",
+      "scope": "adds or changes an atm-bd console data source",
+      "deterministic_check": "each source module imports no other source module; each source has its own fixture-input test",
+      "fixtures": {
+        "pass": [
+          "shared/sources/qa_log.py and shared/sources/pr_log.py import only atm_bd_types and the standard library; neither imports the other."
+        ],
+        "fail": [
+          "pr_log.py imports the line parser helper from qa_log.py."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:57:12+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:35:50+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: \"you can remove the problematic anchors\". Depends on ANC-033."
+        }
+      ]
+    },
+    {
+      "id": "ANC-038",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every Python implementation of an atm-bd-types trait must pass pyright strict against the trait's .pyi stub.",
+      "quote": "approved ` .pyi stub `",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); split from a compound anchor at Rand direction \"separate anchors for single requirement per anchor\" (from ANC-034)",
+      "summary": "Python trait implementations pass pyright strict",
+      "scope": "adds or changes a Python implementation of an atm-bd-types trait",
+      "deterministic_check": "pyright --strict on the Python implementations passes",
+      "fixtures": {
+        "pass": [
+          "The Python QaLogSource implementation passes pyright --strict against atm_bd_types.pyi in just lint and CI."
+        ],
+        "fail": [
+          "The Python implementation is excluded from the pyright include and uses Any for the trait's return types."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:57:12+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-039",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "No change made for atm-bd-lite may break atm-bd-orchestration.",
+      "quote": "Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand clarified \"Lite is separate\"; follow-up: \"shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today\"",
+      "summary": "Lite work does not break atm-bd-orchestration",
+      "scope": "touches any file under skills/atm-bd-orchestration/, atm-bd-types or the shared location",
+      "deterministic_check": "the atm-bd-orchestration test suite passes at the phase top, and git diff <phase base>..<phase top> shows no atm-bd-orchestration test file changed",
+      "fixtures": {
+        "pass": [
+          "At the stack top the atm-bd-orchestration test suite (just test-orchestration at origin/main) passes with no orchestration test file changed."
+        ],
+        "fail": [
+          "The sprint plans to delete atm-bd-orchestration's bd_cache.py and point atm-bd-orchestration at the new shared module for lite, accepting that atm-bd-orchestration's test suite fails until a later sprint."
+        ]
+      },
+      "question_overrides": {},
+      "version": 6,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:59:50+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:00:06+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "No change made for atm-bd-lite may break atm-bd-orchestration: the atm-bd-orchestration tests pass with no test file edited."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
+        }
+      ]
+    },
+    {
+      "id": "ANC-040",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite code that is not specific to the lite profile must be placed in the shared location, not in skills/atm-bd-lite/.",
+      "quote": "Lite code is separate (i.e. no breaking changed to orchestration), lite code is divided into lite specific and shared code.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand clarified \"Lite is separate\"; follow-up: \"shared code is not used by atm-bd-orchestration yet, it would be a breaking change to refactor today\"",
+      "summary": "Non-lite-specific code goes in the shared location",
+      "scope": "adds code to the shared location, atm-bd-types or a profile skill",
+      "deterministic_check": "no module under a profile skill is imported by another profile's skill",
+      "fixtures": {
+        "pass": [
+          "shared/phase_file.py (profile reading, no lite-only logic) is in the shared location; skills/atm-bd-lite/ holds only the lite hooks, templates and cron."
+        ],
+        "fail": [
+          "A profile-neutral phase-file reader is written inside skills/atm-bd-lite/scripts/."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T18:59:50+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:01:26+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "summary"
+          ],
+          "previous_statement": "Code used by more than one profile must be placed in the shared location, not in a profile's skill directory."
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-041",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every public function and trait implementation in the shared location must have a test that runs it on orchestration-profile inputs: a real orchestration-profile phase file and bead data from a orchestration phase.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+      "summary": "Shared code is tested on orchestration-profile inputs",
+      "scope": "adds or changes code in the shared location or atm-bd-types",
+      "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a orchestration-profile phase file and orchestration-phase bead data",
+      "fixtures": {
+        "pass": [
+          "tests/shared/test_phase_file.py runs read_profile on .atm-bd/phase-bj.toml and the phase-bj bead export, both real orchestration-profile data."
+        ],
+        "fail": [
+          "The shared module's tests use only a synthetic lite phase file."
+        ]
+      },
+      "question_overrides": {},
+      "version": 5,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:01:25+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "Every public function and trait implementation in the shared location must have a test that runs it on full-profile inputs: a real full-profile phase file and bead data from a full phase."
+        },
+        {
+          "at": "2026-11-01T19:32:13+00:00",
+          "event": "updated",
+          "fields": [
+            "summary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-042",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every public function and trait implementation in the shared location must have a test that runs it on lite-profile inputs.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+      "summary": "Shared code is tested on lite-profile inputs",
+      "scope": "adds or changes code in the shared location or atm-bd-types",
+      "deterministic_check": "test inventory: every public item in the shared location is exercised by a test whose fixture is a lite-profile phase file",
+      "fixtures": {
+        "pass": [
+          "Every public function and trait impl in the shared location, read_profile included, has a test under tests/shared/ that runs it on a lite-profile phase file fixture."
+        ],
+        "fail": [
+          "The shared stack gate is tested only against orchestration-profile phase data."
+        ]
+      },
+      "question_overrides": {},
+      "version": 5,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:01:26+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        }
+      ]
+    },
+    {
+      "id": "ANC-043",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same orchestration-profile inputs.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+      "summary": "Shared code matches orchestration's output",
+      "scope": "adds or changes code in the shared location or atm-bd-types",
+      "deterministic_check": "each shared item with an orchestration counterpart has a comparison test that calls the unmodified orchestration code and the shared code on the same orchestration-profile input and asserts equal output",
+      "fixtures": {
+        "pass": [
+          "test_phase_file_parity calls the unmodified orchestration phase-config reader and shared read_phase on the same orchestration-profile file and asserts equal output."
+        ],
+        "fail": [
+          "The shared reader re-implements the orchestration behaviour and no test compares the two outputs."
+        ]
+      },
+      "question_overrides": {},
+      "version": 5,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:01:26+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "deterministic_check",
+            "fixtures"
+          ],
+          "previous_statement": "Where atm-bd-orchestration already implements the same behavior, a test must show the shared code gives the same output as the orchestration implementation on the same full-profile inputs."
+        },
+        {
+          "at": "2026-11-01T19:35:07+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: orchestration may never cut over to shared code and may be abandoned once lite works; fenix proposed retiring parity and orchestration-behaviour design anchors, keeping ANC-041; Rand: \"proceed\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-044",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Code in the shared location must not branch on, or hard-code, either profile.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it. | If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed the four-anchor proposal for proving shared code works for the full profile before cutover",
+      "summary": "Shared code has no profile-specific logic",
+      "scope": "adds or changes code in the shared location or atm-bd-types",
+      "deterministic_check": "grep of the shared location for profile literals (lite, orchestration, \"lite\", \"orchestration\") and branches on the profile is empty",
+      "fixtures": {
+        "pass": [
+          "grep of the shared location for \"lite\" and \"orchestration\" is empty; behaviour differences come from the caller's arguments."
+        ],
+        "fail": [
+          "shared/stack_gate.py contains \"if profile == \"lite\": skip sanity check\"."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:01:26+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:32:06+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-045",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite must call each shared-location module in the same sprint that adds the module.",
+      "quote": "I don't think you understand the concept of writing 'shared' modules without cutting over and using them immediately.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed \"items 1-4 are correct\" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by orchestration-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set",
+      "summary": "Lite uses shared code in the sprint that adds it",
+      "scope": "adds or changes code, design or an interface in the shared location or atm-bd-types",
+      "deterministic_check": "every module added to the shared location in a sprint's diff is imported by atm-bd-lite code in that same diff",
+      "fixtures": {
+        "pass": [
+          "Sprint bo-10 adds shared/phase_file.py and skills/atm-bd-lite/scripts/atm-bd-task-hook.py imports it in the same diff."
+        ],
+        "fail": [
+          "shared/provider_commands.py lands in bo-9 and no lite code calls it until bo-12."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:04:42+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-046",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each shared-location module's design must list the atm-bd-orchestration behaviors it must meet, each citing the orchestration file and function that implements it today.",
+      "quote": "How the fuck do we write code that lands in a folder called 'shared' and is designed w/ shared requirements w/out actually sharing it.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed \"items 1-4 are correct\" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by orchestration-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set",
+      "summary": "Shared module design lists orchestration requirements",
+      "scope": "adds or changes code, design or an interface in the shared location or atm-bd-types",
+      "deterministic_check": "each shared module has a requirements table in the phase design docs; every cited orchestration path and function exists at the phase base",
+      "fixtures": {
+        "pass": [
+          "The design section for shared/stack_gate.py lists the orchestration behaviours it must meet, each citing skills/atm-bd-orchestration/scripts/stack_top.py and the function implementing it today."
+        ],
+        "fail": [
+          "The shared stack gate design describes only what lite needs and names no orchestration file or function."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:04:43+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:35:07+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: orchestration may never cut over to shared code and may be abandoned once lite works; fenix proposed retiring parity and orchestration-behaviour design anchors, keeping ANC-041; Rand: \"proceed\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-047",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each shared-location interface (Rust trait or .pyi stub) must support every atm-bd-orchestration behavior listed in that module's requirements.",
+      "quote": "If you don't do this, you will not have shared code that works WHEN we cut over and use it.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); Rand confirmed \"items 1-4 are correct\" for: (1) shared/ is new code, lite uses it immediately, orchestration stays untouched and cuts over later; (2) shared modules are designed now to orchestration requirements as well as lite, from an inventory of what orchestration code does today; (3) proven by orchestration-profile tests and output parity with unchanged orchestration code; (4) anchors come from that requirement set",
+      "summary": "Shared interfaces support every listed orchestration behavior",
+      "scope": "adds or changes code, design or an interface in the shared location or atm-bd-types",
+      "deterministic_check": "every row of each shared module's orchestration requirements table maps to an ANC-043 output-parity test",
+      "fixtures": {
+        "pass": [
+          "Each row of the stack gate's orchestration requirements table has a same-output test; the StackGate trait signature covers all rows including the not-pushed case."
+        ],
+        "fail": [
+          "The StackGate trait omits the not-pushed result that orchestration's stack check returns today."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "retired",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:04:43+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:15:17+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"ok, now lock and start anchor-tuning these anchors against the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T19:35:07+00:00",
+          "event": "retired",
+          "replaced_by": null,
+          "reason": "Rand 2026-11-01: orchestration may never cut over to shared code and may be abandoned once lite works; fenix proposed retiring parity and orchestration-behaviour design anchors, keeping ANC-041; Rand: \"proceed\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-048",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite task.assign hook must be its own Python file under skills/atm-bd-lite/scripts/.",
+      "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+      "summary": "Lite task.assign hook is its own file",
+      "scope": "adds, moves or changes a lite task hook file",
+      "deterministic_check": "skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.assign hook, and it imports no other hook file",
+      "fixtures": {
+        "pass": [
+          "skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py is the lite task.assign hook and imports no other hook file."
+        ],
+        "fail": [
+          "task.assign handling is a branch inside the lite task.close hook file."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:13:44+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:57+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-049",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite task.start hook must be its own Python file under skills/atm-bd-lite/scripts/.",
+      "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+      "summary": "Lite task.start hook is its own file",
+      "scope": "adds, moves or changes a lite task hook file",
+      "deterministic_check": "skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.start hook, and it imports no other hook file",
+      "fixtures": {
+        "pass": [
+          "skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py is the lite task.start hook and imports no other hook file."
+        ],
+        "fail": [
+          "task.start and task.assign share one lite hook file."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:13:44+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-050",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite task.close hook must be its own Python file under skills/atm-bd-lite/scripts/.",
+      "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+      "summary": "Lite task.close hook is its own file",
+      "scope": "adds, moves or changes a lite task hook file",
+      "deterministic_check": "skills/atm-bd-lite/scripts/ holds exactly one file registered as the task.close hook, and it imports no other hook file",
+      "fixtures": {
+        "pass": [
+          "skills/atm-bd-lite/scripts/atm-bd-task-hook.py is the lite task.close hook and imports no other hook file."
+        ],
+        "fail": [
+          "The lite task.close logic is split between atm-bd-task-hook.py and a qa_close.py helper module."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:13:44+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-051",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each lite task hook file must have its own state-transition diagram in the phase design docs.",
+      "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+      "summary": "Each lite hook has its own state-transition diagram",
+      "scope": "adds or changes a lite task hook file or its state-transition diagram",
+      "deterministic_check": "the lite hooks design doc has one diagram section per hook file, named after the hook",
+      "fixtures": {
+        "pass": [
+          "docs/plans/phase-bo/design/lite-hooks.md has one state-transition diagram section per lite hook file: task.assign, task.start, task.close."
+        ],
+        "fail": [
+          "One combined diagram covers all three lite hooks."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:13:44+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-052",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A lite hook's state-transition diagram must have one Transitions-table row per match arm in that hook's code.",
+      "quote": "I want all three to be independent files and independently tested by jev against the state transition diagrams.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+      "summary": "One diagram row per hook match arm",
+      "scope": "adds or changes a lite task hook file or its state-transition diagram",
+      "deterministic_check": "count of Transitions-table rows equals count of match arms in the hook file",
+      "fixtures": {
+        "pass": [
+          "The task.close diagram has six Transitions rows (T-CLOSE-01..06) and the hook's match statement has six arms, one per row."
+        ],
+        "fail": [
+          "The diagram has four rows while the hook's match has six arms."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:13:44+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-053",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Jev must judge every Transitions-table row of a lite hook's diagram as implemented by that hook's code, with no row failing.",
+      "quote": "I one one file for atm-bd-lite task close and jev verifies 100% matches the design.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+      "summary": "Jev: every diagram row is implemented",
+      "scope": "adds or changes a lite task hook file or its state-transition diagram",
+      "deterministic_check": "the per-hook Jev verification run reports pass for every diagram row; the run JSON is committed under anchor-runs/",
+      "fixtures": {
+        "pass": [
+          "The gate's Jev run anchor-runs/hooks/atm-bd-task-hook.json judges T-CLOSE-01..04 each implemented by its own match arm in atm-bd-task-hook.py, no row failing."
+        ],
+        "fail": [
+          "The committed gate run anchor-runs/hooks/atm-bd-task-hook.json has Jev judging T-CLOSE-02 not implemented by atm-bd-task-hook.py, and the hook is merged with that row failing."
+        ]
+      },
+      "question_overrides": {},
+      "version": 5,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:13:44+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
+        }
+      ]
+    },
+    {
+      "id": "ANC-054",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Jev must judge every match arm in a lite hook's code as listed in that hook's state-transition diagram, with no arm unlisted.",
+      "quote": "I one one file for atm-bd-lite task close and jev verifies 100% matches the design.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01 (phase bo, after the lite hook was found to plan nonexistent commands); \"all three\" = the ATM task hooks task.assign, task.start, task.close (ADR-068); recorded 2026-11-01 replan session at Rand asking for anchors that verify written code against the diagrams with Jev",
+      "summary": "Jev: every code arm is in the diagram",
+      "scope": "adds or changes a lite task hook file or its state-transition diagram",
+      "deterministic_check": "the per-hook Jev verification run reports every match arm as listed; the run JSON is committed under anchor-runs/",
+      "fixtures": {
+        "pass": [
+          "The Jev run anchor-runs/hooks/task-close.json judges each of the six match arms in atm-bd-task-hook.py as listed in the task.close diagram."
+        ],
+        "fail": [
+          "The hook has a match arm for a refused close that the task.close diagram does not list."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:13:44+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-01T19:14:24+00:00",
+          "event": "locked",
+          "by": "Rand",
+          "reason": "Rand, 2026-11-01: \"they are not proposed, they are to be in the plan\""
+        },
+        {
+          "at": "2026-11-01T19:19:58+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-055",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite profile must not write or read a close-vars file or any other per-task state file.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+      "summary": "Lite has no close-vars or state file",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "grep of skills/atm-bd-lite for close-vars, close_vars and file writes outside the shared runner is empty; no lite template asks for a vars file",
+      "fixtures": {
+        "pass": [
+          "grep -rn 'close-vars\\|close_vars' skills/atm-bd-lite prints nothing, and grep of the lite hooks and templates for open(, write_text and read_text finds no per-task state file."
+        ],
+        "fail": [
+          "The lite dev template has the dev copy close-vars.json and fill in its commit and PR, and the lite close hook reads that file."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
+        }
+      ]
+    },
+    {
+      "id": "ANC-056",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite hooks must look up every fact other than the task id at hook time from bd, git, the provider, the phase file or the ATM request.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2 (2026-11-01, fenix-brief.md §A): the facts each hook looks up are the Facts tables of hooks/task-assign.md, task-start.md and task-close.md: phase file, cache.get(bead), cache.get(stack_bead), cache.get(id) per poured finding, and the ATM request. Reads go through beads-cache (ANC-063); no bd show, no provider or git lookup. An unlookupable fact makes the hook refuse with the fix from the Errors table. Original statement from Rand on \"how do we avoid: no close-vars file\".",
+      "summary": "Lite hooks look up facts at hook time",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "each hooks/*.md has a Facts table whose every row is phase file, cache.get(...) or ATM request; the gate (ANC-066) finds no subprocess, bd or gh in the hook files",
+      "fixtures": {
+        "pass": [
+          "uv run pytest skills/atm-bd-lite/tests/test_hook_facts.py passes: each hook is given only the task id in its ATM request plus fakes for beads-cache, git, the provider and the phase file, and looks up every other fact from them."
+        ],
+        "fail": [
+          "The lite close hook reads the PR number and branch head from a JSON file the dispatch template wrote at assignment."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:57:10+00:00",
+          "event": "updated",
+          "fields": [
+            "context"
+          ],
+          "reason": "restart 2: context named bd show / gh pr view in the hook (fenix-brief.md §A)"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
+        }
+      ]
+    },
+    {
+      "id": "ANC-057",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A lite dev or fix closes its task with one atm task close command carrying its report as the close message.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+      "summary": "Lite dev close is one atm task close",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "the lite dev and fix templates contain exactly one close instruction, atm task close <bead id> completed with the report via --stdin",
+      "fixtures": {
+        "pass": [
+          "grep -c 'atm task close' prints 1 for each lite dev and fix template, that command sends the report with --stdin, and grep finds no 'atm send' or 'atm ack' in them."
+        ],
+        "fail": [
+          "The lite dev closes its task with atm task close and then sends its report to the lead in a second atm send."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
+        }
+      ]
+    },
+    {
+      "id": "ANC-058",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "When a lite hook cannot look up a fact, it must refuse with the exact command that fixes it, never fall back to stored state.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+      "summary": "Missing fact means refuse with the fix",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "every Errors-table row of the lite hook diagrams names a fix command; a test removes each lookup's data and asserts the refused reply text",
+      "fixtures": {
+        "pass": [
+          "uv run pytest skills/atm-bd-lite/tests/test_errors.py passes: for every Errors row, a failed lookup makes the hook return HookReply.refused with that row's fix command, and no test supplies stored state."
+        ],
+        "fail": [
+          "When the PR lookup fails, the lite close hook uses the PR number saved at dispatch time instead."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
+        }
+      ]
+    },
+    {
+      "id": "ANC-059",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite profile must have no repair, backfill or legacy-compatibility script.",
+      "quote": "that is what I wanted done in the first place.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2026-11-01 (fenix). Rand asked \"how do we avoid: no close-vars file\"; fenix answered: the task id is the bead id; every other fact is looked up at hook time from the bead (bd show), the provider by head branch (PR number, head, base), git/the stack bead (stack top), the phase file (profile), and the ATM task close request (outcome, report); the dev close is one atm task close command; an unlookupable fact makes the hook refuse with the exact fix command, never fall back to stored state. Rand replied with the quote.",
+      "summary": "Lite has no repair or backfill scripts",
+      "scope": "adds or changes a lite task hook, lite dispatch template or the lite dev/fix/QA close procedure",
+      "deterministic_check": "find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' is empty",
+      "fixtures": {
+        "pass": [
+          "find skills/atm-bd-lite -name '*repair*' -o -name '*backfill*' -o -name '*legacy*' prints nothing."
+        ],
+        "fail": [
+          "skills/atm-bd-lite/scripts/backfill-close-vars.py rebuilds close-vars files for tasks dispatched before lite existed."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:25:25+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:27:30+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
+        }
+      ]
+    },
+    {
+      "id": "ANC-060",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite scripts, hooks and templates must not invoke gh pr list, gh pr checks, gh run watch or any gh command with --watch.",
+      "quote": "make a anc which prohibits prohibited git/gh calls (which burn a lot of tokens)",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2 (2026-11-01, fenix-brief.md §A). The host gh wrapper (~/.local/bin/gh) blocks gh pr list, gh pr checks, gh run watch and any --watch flag because they poll and drain the shared GitHub rate limit. Lite hooks run no gh command at all (ANC-066); layer facts come from the stack bead.",
+      "summary": "Lite never calls wrapper-blocked gh commands",
+      "scope": "adds or changes a lite script, hook, template or test that runs gh",
+      "deterministic_check": "grep -rnE 'gh pr list|gh pr checks|gh run watch|--watch' skills/atm-bd-lite is empty",
+      "fixtures": {
+        "pass": [
+          "The lite hooks run no gh command; layer facts (branch, head, pr, base) come from cache.get(stack_bead). grep of skills/atm-bd-lite for gh pr list, gh pr checks, gh run watch and --watch is empty."
+        ],
+        "fail": [
+          "The lite QA template tells the agent to wait for CI with gh pr checks --watch."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:27:21+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T19:27:21+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:57:02+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:57:10+00:00",
+          "event": "updated",
+          "fields": [
+            "context"
+          ],
+          "reason": "restart 2: context named bd show / gh pr view in the hook (fenix-brief.md §A)"
+        }
+      ]
+    },
+    {
+      "id": "ANC-061",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-types must not define profile names: no profile enum and no profile string literals; a profile is a name read from the phase file.",
+      "quote": "the profile names should not be hardcoded in the crate | we can create as many profiles as we want.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan session 2026-11-01 (fenix); atm-bd-types 0.1.1 has enum Profile {Full, Lite}, which this rules out",
+      "summary": "No profile names hard-coded in atm-bd-types",
+      "scope": "adds or changes code in atm-bd-types",
+      "deterministic_check": "grep of crates/atm-bd-types and its generated .pyi for an enum or literal named lite, orchestration or full used as a profile is empty",
+      "fixtures": {
+        "pass": [
+          "crates/atm-bd-types/src/lib.rs has `pub struct ProfileName(String)` parsed from the phase file; grep for \"lite\" and \"orchestration\" in the crate is empty."
+        ],
+        "fail": [
+          "crates/atm-bd-types/src/lib.rs has `pub enum Profile { Orchestration, Lite }`."
+        ]
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:33:43+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-062",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-lite code must not pass or hold hook input, bead data, phase-file data or replies as dict, Any or untyped JSON; it uses the atm-bd-types types and traits.",
+      "quote": "why are we passing a dictionary into the task-start hook call. that is red-flag #1 | a dictionary is a great way to get around pyright and using rust traits/types we defined in crate",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan 2026-11-01 (fenix); first hook drafts took dict[str, Any] envelopes",
+      "summary": "No dicts or Any in lite code; use atm-bd-types",
+      "scope": "adds or changes atm-bd-lite code",
+      "deterministic_check": "grep of skills/atm-bd-lite for 'dict[', 'Any', 'json.loads' outside atm-bd-types parsing is empty; pyright strict reports no reportUnknown* diagnostics",
+      "fixtures": {
+        "pass": [
+          "grep of skills/atm-bd-lite for dict[, Any and json.loads outside atm-bd-types parsing is empty, and pyright strict reports no reportUnknown diagnostics; each hook takes HookRequest and returns HookReply."
+        ],
+        "fail": [
+          "def hook(env: dict[str, Any]) -> dict[str, str]: task = env[\"request\"][\"task_id\"]"
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T19:48:10+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        }
+      ]
+    },
+    {
+      "id": "ANC-063",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every atm-bd-lite hook, script and agent step must read and write beads only through beads-cache (bd_cache_rs) and must never run bd directly.",
+      "quote": "we have found 20-30 second timeout is not enough ... that is why we designed bd cache which you forgot is a mandatory requirement",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "Rand 2026-11-01, phase bo replan, after the lite plan was found to call bd (BdCli) inside 2.5 s hooks; locked on Rand's 'lock it'",
+      "summary": "lite beads access only via beads-cache",
+      "scope": "any lite hook, script, template step or adapter that reads or writes beads",
+      "deterministic_check": "no bd subprocess call and no BdCli in any lite file or template; BeadStore is the bd_cache_rs adapter",
+      "fixtures": {
+        "pass": [
+          "grep finds no bd subprocess and no BdCli in any skills/atm-bd-lite file or template; hooks reach beads only through BeadStore, the bd_cache_rs adapter."
+        ],
+        "fail": [
+          "The lite close hook runs 'bd show' and 'bd update --if-status' through a BdCli subprocess adapter."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T21:49:19+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T21:49:23+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:01:24+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        }
+      ]
+    },
+    {
+      "id": "ANC-064",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A lite hook must make at most one beads-cache write and must never create, claim or release a bead.",
+      "quote": "ANC-064 Gate, not sequence. A lite hook makes at most one beads-cache write. Check: count of `beads.update(`/`beads.create(`/`beads.claim(`/`beads.release(` call sites per hook file ≤ 1, and `create`/`claim`/`release` count = 0. Fail fixture: a close hook that calls `beads.update` twice (record layer, then close).",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "one beads-cache write per hook",
+      "scope": "any lite hook file",
+      "deterministic_check": "atm-bd-lite-gate.py (ast): per hook file in skills/atm-bd-lite/scripts/atm-bd-task-*.py, count of beads.update(/beads.create(/beads.claim(/beads.release( call sites <= 1 and create/claim/release count == 0",
+      "fixtures": {
+        "pass": [
+          "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-064 failure: the close hook has one beads.update call and no beads.create, claim or release."
+        ],
+        "fail": [
+          "The lite close hook calls beads.update twice: first to record the layer on the stack bead, then to close the work bead."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:57:47+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:57:59+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-01T23:58:28+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-065",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A lite hook must never write the stack bead (the ledger).",
+      "quote": "ANC-065 Hooks never write the ledger. Check: no hook file passes a stack bead to a write; grep for `stack_bead` in a hook file appears only as an argument to `beads.show(` / `cache.get(`. Fail fixture: `BeadPatch.record(stack_bead, …)` in any hook.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "hooks only read the ledger",
+      "scope": "any lite hook file",
+      "deterministic_check": "atm-bd-lite-gate.py (ast): every stack_bead occurrence in skills/atm-bd-lite/scripts/atm-bd-task-*.py is an argument of beads.show( or cache.get(",
+      "fixtures": {
+        "pass": [
+          "The gate run anchor-runs/hooks/fixtures/close-clean.json reports no ANC-065 failure: every stack_bead occurrence in the hook is an argument of beads.show or cache.get."
+        ],
+        "fail": [
+          "The lite close hook calls beads.update(BeadPatch.record(stack_bead, layer)) to record the dev layer before closing."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-066",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A lite hook must not run a subprocess or use the BdCli, GitCli or AtmCli adapters, bd or gh.",
+      "quote": "ANC-066 No subprocess in a hook. Check: grep for `subprocess`, `BdCli`, `GitCli`, `AtmCli`, `gh `, `bd ` in `skills/atm-bd-lite/scripts/atm-bd-task-*.py` is empty. Fail fixture: any of them.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "no subprocess in a hook",
+      "scope": "any lite hook file",
+      "deterministic_check": "atm-bd-lite-gate.py (ast) on skills/atm-bd-lite/scripts/atm-bd-task-*.py: no import of subprocess; no reference to BdCli, GitCli or AtmCli; no call to os.system/os.popen/os.exec*/os.spawn*; no call whose first argument is a list or string starting with gh, bd or git",
+      "fixtures": {
+        "pass": [
+          "The three lite hooks import only json, sys, atm_bd_types and bd_cache_rs; grep for subprocess, BdCli, GitCli, AtmCli, gh and bd in them is empty."
+        ],
+        "fail": [
+          "The lite close hook runs subprocess.run([\"gh\", \"pr\", \"view\", branch]) to read the PR head."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check"
+          ],
+          "reason": "Rand: ANC-066 is an ast check on imports/calls, not a regex over docstrings"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-067",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every multi-step procedure a lite agent must run (stack, pour) must be a fenced bash block in a template under skills/atm-bd-lite/templates/.",
+      "quote": "ANC-067 Sequences live in templates. Every multi-step procedure an agent must run (stack, pour) is a fenced bash block in a template under `skills/atm-bd-lite/templates/`. Check: the dev template contains one block whose lines are, in order, bdc lock, git rebase, git push, bdc record; the QA template contains one block with bdc pour. Fail fixture: a Python file that performs those steps.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "stack and pour are template blocks",
+      "scope": "lite templates and any lite script that sequences agent steps",
+      "deterministic_check": "the dev template under skills/atm-bd-lite/templates/ has exactly one fenced bash block whose command lines match, in order, bdc lock, git rebase, git push, bdc record; the QA template has one fenced bash block containing bdc pour; no .py file under skills/atm-bd-lite runs git rebase, git push or a bdc lock/record/pour",
+      "fixtures": {
+        "pass": [
+          "grep -n '^bdc\\|^git' on the fenced bash block of skills/atm-bd-lite/templates/dev-template.xml.j2 prints, in order, bdc lock, git rebase, git push, bdc record; the QA template's one fenced block contains bdc pour; and grep -rln 'git rebase\\|git push\\|bdc lock\\|bdc record\\|bdc pour' --include=*.py skills/atm-bd-lite prints nothing."
+        ],
+        "fail": [
+          "The dev template has no fenced stack block. Instead skills/atm-bd-lite/scripts/atm-bd-lite-stack.py, a Python file, runs bdc lock, git rebase, git push and bdc record for the dev."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-01T23:58:29+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-02T03:25:14+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings (follow-up \"why do you keep stopping\"); each text landed 3/3 per gate before apply"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-068",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The generated atm_bd_types stub must carry only names used by a lite hook or a hooks/*.md table.",
+      "quote": "ANC-068 Stub carries only used names. Check: every `ErrorId` member, class and method in the generated `.pyi` is referenced by a hook file or a `hooks/*.md` table. Fail fixture: `STACK_CLAIM_LOST` with no caller.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "stub carries only used names",
+      "scope": "atm-bd-types and its generated .pyi",
+      "deterministic_check": "every ErrorId member, class and method name in the generated atm_bd_types .pyi appears (grep -w) in a lite hook file or a hooks/*.md table",
+      "fixtures": {
+        "pass": [
+          "grep -w finds every ErrorId member of the atm_bd_types stub, FINDINGS_NOT_POURED and STACK_NOT_RECORDED included, in a hook file or a hooks/*.md Errors table."
+        ],
+        "fail": [
+          "The stub keeps ErrorId.STACK_CLAIM_LOST although no hook and no hooks/*.md table names it."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:01:25+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: fixture report rulings"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-069",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The stack bead must be the ledger: its assignee is the lock, its layers are the record, and only the fenced stack block writes it, through bdc, under the lock.",
+      "quote": "ANC-069 Stack bead is the ledger. Its assignee is the lock; its layers are the record; only the fenced stack block writes it, through bdc, under the lock. Check: ANC-065 plus the ANC-067 block shape.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "stack bead is the atomic ledger",
+      "scope": "anything that reads or writes the stack bead",
+      "deterministic_check": "the ANC-065 gate check passes on every lite hook and the ANC-067 dev-template block check passes",
+      "fixtures": {
+        "pass": [
+          "The stack bead's assignee is the lock and its layers are the record: the dev template's fenced stack block runs bdc lock (sets the assignee), rebases, pushes, then bdc record appends the layer and releases; no hook or script writes the stack bead."
+        ],
+        "fail": [
+          "A cron script appends missing layers to the stack bead without taking the lock."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:58:27+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-070",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each lite hook file must be at most 100 lines, including header and docstring.",
+      "quote": "ANC-070 Line ceiling. Each hook file ≤ 100 lines including header and docstring. Check: `wc -l`. Fail fixture: 101 lines. This is the cheapest creep detector there is; a stack claim does not fit.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "hook file <= 100 lines",
+      "scope": "any lite hook file",
+      "deterministic_check": "wc -l skills/atm-bd-lite/scripts/atm-bd-task-*.py reports <= 100 for each file (run by atm-bd-lite-gate.py)",
+      "fixtures": {
+        "pass": [
+          "wc -l reports 78, 64 and 61 lines for the close, start and assign hooks."
+        ],
+        "fail": [
+          "The bo-10 sprint delivers a 101-line lite close hook file, exceeding the 100-line maximum for a hook file."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:58:27+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:58:37+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-071",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "docs/plans/phase-bo/intent.md and docs/plans/phase-bo/hooks/*.md must change only in commits authored by Rand.",
+      "quote": "ANC-071 Spec is owned. `intent.md` and `hooks/*.md` change only in a commit authored by Rand. Check: `git log --format=%ae -- docs/plans/phase-bo/intent.md docs/plans/phase-bo/hooks/` shows only rand@randlee.com. Fail fixture: a commit from fenix editing a Transitions table. If fenix or a reviewer thinks the spec is wrong, the output is a question to Rand, never an edit.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "only Rand commits the spec",
+      "scope": "docs/plans/phase-bo/intent.md and docs/plans/phase-bo/hooks/",
+      "deterministic_check": "git log --format=%ae -- docs/plans/phase-bo/intent.md docs/plans/phase-bo/hooks/ | sort -u prints only rand@randlee.com",
+      "fixtures": {
+        "pass": [
+          "git log --format=%ae for intent.md and hooks/ prints only rand@randlee.com; fenix raised the T-CLOSE-04 question to Rand by ATM message."
+        ],
+        "fail": [
+          "A commit from fenix edits the Transitions table in hooks/task-close.md to add a STACK_HELD row."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:58:00+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-072",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A review finding that would add a write, an arm, a subprocess or a guard to a lite hook must be out of scope unless it cites the hooks/*.md row it implements.",
+      "quote": "ANC-072 Review findings bind to the spec, not the code. A review finding that would add a write, an arm, a subprocess or a guard to a hook is out of scope unless it cites the `hooks/*.md` row it implements. The reply template is one line: \"Not in <hook>.md; file against the spec (ANC-071).\" Check: ANC-064/065/066/070 fail any such change regardless of what the review said. Fail fixture: solar round asks for a retry path; fenix adds an arm; gate fails on rows ≠ arms.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "review findings bind to the spec",
+      "scope": "any review-driven change to a lite hook",
+      "deterministic_check": "atm-bd-lite-gate.py exits 0 on the changed hook (rows == arms, writes <= 1, ANC-065/066 greps, <= 100 lines, both Jev question sets)",
+      "fixtures": {
+        "pass": [
+          "Solar asks for a retry arm in the close hook; fenix replies \"Not in task-close.md; file against the spec (ANC-071).\" and the hook is unchanged."
+        ],
+        "fail": [
+          "A review asks for a retry path that no hooks/task-close.md row lists; fenix adds a retry arm to the close hook without citing a row."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:58:01+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:58:01+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:58:28+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-073",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every phase-bo anchor check must name a command (grep, wc, ast, pyright, the gate) or a Jev fixture pair.",
+      "quote": "ANC-073 Every anchor check is mechanical. A new anchor whose check is prose (\"is simple\", \"is maintainable\") is rejected by plan-anchor. Check: each anchor's `check` names a command (grep, wc, ast, pyright, the gate) or a Jev fixture pair. Fail fixture: \"Jev judges the hook is reasonable.\"",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo restart 2, docs/plans/phase-bo/fenix-brief.md (written by Rand 2026-11-01); added by fenix exactly as written",
+      "summary": "anchor checks are mechanical",
+      "scope": "any anchor added to docs/plans/phase-bo/anchors.json",
+      "deterministic_check": "for every non-retired anchor in anchors.json, deterministic_check names grep, wc, ast, pyright, git, a test, or atm-bd-lite-gate.py, or the anchor has at least one pass and one fail fixture",
+      "fixtures": {
+        "pass": [
+          "Every non-retired phase-bo anchor's check names a command (grep, wc -l, ast, git log or atm-bd-lite-gate.py) or the anchor has a Jev pass/fail fixture pair; ANC-070's check is wc -l."
+        ],
+        "fail": [
+          "A new anchor's check reads: Jev judges the hook is reasonable."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-01T22:58:01+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-01T22:58:01+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T22:58:28+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-01T23:18:14+00:00",
+          "event": "status",
+          "status": "proposed",
+          "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
+        }
+      ]
+    },
+    {
+      "id": "ANC-074",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite cron script must assign each QA task that bdc ready reports as ready and unassigned.",
+      "quote": "wait, lite will have cron. / yes, initial cron script will assign 'bdc ready' qa tasks and run a set of checks similar to atm-bd-orchestration",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo fixture report rulings, 2026-11-01 (fenix). Withdraws ruling A for ANC-031 and the brief's 'no cron dispatching QA'. The second half, 'a set of checks similar to atm-bd-orchestration', needs the checks named before it can be an anchor.",
+      "summary": "",
+      "scope": "adds or changes the lite cron script or lite QA assignment",
+      "deterministic_check": "test of skills/atm-bd-lite/scripts cron: with fakes where bdc ready returns ready QA beads, one atm task assign is issued per ready unassigned QA bead and none for an assigned one",
+      "fixtures": {
+        "pass": [
+          "uv run pytest skills/atm-bd-lite/tests/test_cron.py passes: given a bdc ready listing with one ready unassigned QA task and one ready QA task already assigned, the cron script runs atm task assign for the unassigned one only, and prints the command it ran."
+        ],
+        "fail": [
+          "The lite cron script lists ready QA tasks in its report to the lead, and the lead assigns each one by hand."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-02T03:03:34+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-02T03:27:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ],
+          "reason": "Rand, 2026-11-01: lock remaining anchors (fixtures from anchor-fixture-proposals.md)"
+        },
+        {
+          "at": "2026-11-02T03:27:37+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
     }

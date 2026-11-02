@@ -1,0 +1,44 @@
+{
+  "success": true,
+  "data": {
+    "gate": "dev",
+    "dry_run": false,
+    "fixture": false,
+    "checks": [
+      {
+        "anchor_id": "ANC-074",
+        "kind": "pass",
+        "index": 1,
+        "sentence": "uv run pytest skills/atm-bd-lite/tests/test_cron.py passes: given a bdc ready listing with one ready unassigned QA task and one ready QA task already assigned, the cron script runs atm task assign for the unassigned one only, and prints the command it ran.",
+        "verdict": "satisfied",
+        "expected": [
+          "satisfied"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-074/fixtures/dev-20261102T032748Z-fixture_ANC-074_pass_1.json"
+      },
+      {
+        "anchor_id": "ANC-074",
+        "kind": "fail",
+        "index": 1,
+        "sentence": "The lite cron script lists ready QA tasks in its report to the lead, and the lead assigns each one by hand.",
+        "verdict": "contradicted",
+        "expected": [
+          "not_addressed",
+          "contradicted"
+        ],
+        "expected_ok": true,
+        "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-074/fixtures/dev-20261102T032748Z-fixture_ANC-074_fail_1.json"
+      }
+    ],
+    "mismatches": [],
+    "pass": true,
+    "path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-074/fixtures",
+    "run_path": "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-074/fixtures",
+    "runs": [
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-074/fixtures/dev-20261102T032748Z-fixture_ANC-074_pass_1.json",
+      "docs/plans/phase-bo/anchor-runs/check-fixtures-2026-11-01-lock/dev-ANC-074/fixtures/dev-20261102T032748Z-fixture_ANC-074_fail_1.json"
+    ]
+  },
+  "error": null
+}

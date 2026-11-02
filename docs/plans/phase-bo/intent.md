@@ -1,27 +1,33 @@
-# Intent - phase-bo
+# Intent — phase-bo (restart 2)
 
-Written 2026-10-31 by fenix. One page at most. This is the "why" that frames every anchor beneath it; Jev questions are judged against anchors, not against this document, so keep it short and let the anchors carry the testable facts.
+Rewritten 2026-11-01 by Rand with Claude. One page. Jev judges against `anchors.json`; this page is the why.
 
-## What this plan is for
+## The rule everything else follows from
 
-atm-bd-orchestration runs a full phase pipeline: dev, dev-sanity (Jev + LLM), stack link, QA, fix rounds, landing. That pipeline is right for a large agent team and wrong for a single agent or a small team, where the sanity stage and its ~10k lines of code and tests are overhead with no consumer. Rand wants an `atm-bd-lite` profile: the same bead state model and schema, the same tool interfaces (`atm-bd console`, `atm-bd cron`, `atm-bd queues`), but a much simpler dev -> QA transition driven by its own small task-close hook, written as one Python file organized by transition type with exhaustive enum checks.
+**Python is for gates. Sequences are for agents.**
 
-Two coupled problems ride along. First, the package duplicates its scripts and templates into `.claude/`, `.codex/` and `.agents/` on install; the profiles need one shared `atm-bd-core` layer at a common point (`.atm-bd/scripts`, `.atm-bd/templates`) with only the profile-specific hook, assignment templates, cron and formulas living under each profile skill. Second, stacking depends on the `gh stack` extension and the GitHub stacks API, so the pipeline cannot run against Azure Git repos. Rand ruled that both profiles check stacking by comparing the PR base with the stack top (git only, blocking the dev/fix close), never through the `gh stack` subcommand; agent prompts keep using `gh stack` when the provider is GitHub, with `gh stack view --json` as the stack view (Rand, 2026-10-31); and that provider-specific commands (`gh` vs `az repos`) are injected into the sc-compose templates by an installer flag (`--github` / `--azure`).
+A lite hook checks facts and makes at most one beads-cache write. Anything that is "do A, then B, then C, and any step can fail" is not Python: it is a fenced bash block in the agent's task template, and the agent runs it, reads the error when a step fails, and reruns. This is the only way lite stays small. atm-bd-orchestration is 3–5k lines of Python for one more state than lite has because every hardening pass moved one more sequence into Python. phase-bo r1–r14 did the same thing in a week. Plan hardening must not do it again; ANC-064..067 make that mechanical.
 
-## What success looks like
+## What lite is
 
-- A phase file declares `profile = "lite"` and a single agent runs a lite phase end to end from GitHub release assets: dev bead dispatched, dev task closed by the lite hook (stack check -> bd close -> link layer -> QA assigned), QA closed, the stack landed, with `atm-bd cron` and `atm-bd queues` showing the phase correctly and `atm-bd console` refusing it (the console never runs a lite phase).
-- Shared types, schema, render helpers and tool entry points live in `atm-bd-core` and are installed once to `.atm-bd/scripts` and `.atm-bd/templates`; profile skills carry only their own hook, templates, cron tick and formulas.
-- The stack gate of neither profile calls `gh stack` or the GitHub stacks API; it is `git merge-base` plus the PR base ref. GitHub prompts still use `gh stack link` and `gh stack view --json` through the provider ops; the Azure provider renders the same templates with `az repos` commands and stack-bead equivalents.
-- The full profile (`atm-bd-orchestration`) keeps its behaviour and its tests green on the new layout.
+Same bead state model, schema and `atm-bd` commands as orchestration; dev → QA, no sanity stage; one agent can run a phase. Orchestration is untouched (ANC-039). Shared code is new code in the shared location, used by lite the sprint it lands (ANC-040, ANC-045).
 
-## What is deliberately out of scope
+## The stack bead is an atomic ledger
 
-- Redesigning the full profile's sanity pipeline or its close hook (phase bm scope).
-- Running a live Azure phase: no Azure repo exists in this environment, so Azure acceptance is render-level and unit-level only.
-- The TUI modularity work and the `quick_fix` flow.
-- Mixing profiles inside one phase (ruled out by Rand).
+Its assignee is the lock: one agent at a time rebases, pushes and records. Its layers are the record. The dev takes the lock, rebases onto the top, pushes, records its layer and releases, in one fenced block in the dev template, through `bdc` (beads-cache) and `git`. No script, no hook writes the ledger. Hooks only read it.
 
-## Anchors
+## The close contract
 
-Anchors for this plan live in `anchors.json` (record of truth) and are rendered to `anchors.md`. Requirements and ADRs that govern this plan are listed there too, under their own IDs.
+Dev, on success: finish the work; run the stack block; `atm task close completed` with the report.
+Hook: check the report is present and the ledger holds the dev's layer; close the bead with that evidence; return `atm task close --template <close-template> --args <evidence>`.
+
+Dev, on refusal: `atm task close refused` with a reason. Hook: reopen the bead (open, unassigned); return `atm task close --template <refuse-template> --args <reason>`.
+
+QA, on pass: `atm task close completed` with the verdict. Hook: verdict sha is the target layer's head; close with that evidence.
+QA, with findings: pour each finding through `bdc` in a fenced block (blocking findings block the sprint bead; non-blocking block the phase bead), then close with the report listing the poured ids. Hook: every blocking finding has its poured bead blocking the sprint; close. The QA bead cannot close until blocking findings are poured.
+
+The QA bead is blocked by its dev bead. When the dev bead closes the QA bead is released and is assigned by the existing `atm task assign` path. The close hook does not assign anything.
+
+## Out of scope
+
+Changing orchestration. A jev-check package. A stack script. Retry or recovery doctrine (ATM does not die). Creating beads from a hook. Any hook writing the ledger.

@@ -1,0 +1,116 @@
+{
+ "U": {
+  "implemented:T-CLOSE-01": [
+   "yes",
+   0.44
+  ],
+  "implemented:T-CLOSE-02": [
+   "no",
+   0.78
+  ],
+  "implemented:T-CLOSE-03": [
+   "yes",
+   0.42
+  ],
+  "implemented:T-CLOSE-04": [
+   "yes",
+   0.2
+  ],
+  "input": 6128
+ },
+ "U-neutral-doc": {
+  "implemented:T-CLOSE-01": [
+   "yes",
+   0.8
+  ],
+  "implemented:T-CLOSE-02": [
+   "no",
+   0.78
+  ],
+  "implemented:T-CLOSE-03": [
+   "yes",
+   0.28
+  ],
+  "implemented:T-CLOSE-04": [
+   "yes",
+   0.22
+  ],
+  "input": 6033
+ },
+ "U-no-held": {
+  "implemented:T-CLOSE-01": [
+   "yes",
+   0.68
+  ],
+  "implemented:T-CLOSE-02": [
+   "yes",
+   0.34
+  ],
+  "implemented:T-CLOSE-03": [
+   "yes",
+   0.44
+  ],
+  "implemented:T-CLOSE-04": [
+   "yes",
+   0.44
+  ],
+  "input": 5949
+ },
+ "U-neutral-doc-no-held": {
+  "implemented:T-CLOSE-01": [
+   "yes",
+   0.8
+  ],
+  "implemented:T-CLOSE-02": [
+   "yes",
+   0.56
+  ],
+  "implemented:T-CLOSE-03": [
+   "yes",
+   0.52
+  ],
+  "implemented:T-CLOSE-04": [
+   "yes",
+   0.62
+  ],
+  "input": 5854
+ },
+ "E": {
+  "implemented:T-CLOSE-01": [
+   "yes",
+   0.94
+  ],
+  "implemented:T-CLOSE-02": [
+   "no",
+   0.98
+  ],
+  "implemented:T-CLOSE-03": [
+   "yes",
+   0.8
+  ],
+  "implemented:T-CLOSE-04": [
+   "yes",
+   0.74
+  ],
+  "input": 5964
+ },
+ "E-neutral-doc": {
+  "implemented:T-CLOSE-01": [
+   "yes",
+   0.78
+  ],
+  "implemented:T-CLOSE-02": [
+   "no",
+   0.2
+  ],
+  "implemented:T-CLOSE-03": [
+   "yes",
+   0.44
+  ],
+  "implemented:T-CLOSE-04": [
+   "yes",
+   0.52
+  ],
+  "input": 5870
+ }
+}
