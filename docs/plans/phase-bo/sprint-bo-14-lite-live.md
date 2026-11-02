@@ -1,102 +1,45 @@
-# Sprint bo-14: lite cron, lite install, one live lite phase
+# Sprint bo-14: lite cron through `atm-bd cron`, lite install, one live lite phase
 
-Repo: atm-bd-orchestration. Branch `sprint/bo-14-lite-live`, cut from the top of the phase-bo stack once it holds bo-9..bo-12 and bo-15. One dev; the live run (deliverable 8) is run by one agent (ANC-015).
+Repo: atm-bd-orchestration. Branch `sprint/bo-14-lite-live`, cut from the top of the phase-bo stack once it holds bo-9..bo-12 and bo-15. One dev; the live run (deliverable 6) is run by one agent (ANC-015).
 
 Paths below are relative to `plugins/atm-bd-orchestration/` unless they start with `apps/` or `.atm-bd/`. The lite skill is `skills/atm-bd-lite/` (ANC-028).
 
 ## Dependencies (the artifact each one supplies)
-- **bo-9**: `atm-bd-types` 0.2.0. Cron uses `CacheStore.for_phase` and `CacheStore.show` (the bd_cache_rs adapter), plus `Bead`, `Stack`, `Status` and `ErrorId.PROFILE_MISMATCH`.
-- **bo-15**: the `PhaseProfile` trait and its out-of-process adapter. `atm-bd cron --phase <x>` on a lite phase file calls `PhaseProfile.cron`, which `ScriptProfile` implements by running `.claude/skills/atm-bd-lite/scripts/cron --phase <x> [--dry-run]` and decoding its stdout as `CronOutput` (`view: PhaseView`, `actions: [ViewAction(at, kind, to, bead, text, outcome)]`, `<console>/profile_view.py`). Cron also uses the `core/` package bo-15 creates and its `atm_bd_core.phase_rows.read(cache, phase)` (the `Cache.list` and `Cache.ready` listing), `phase_view.view(...)`, `queue_rows.classify(...)`, and the fakes in `core/tests/conftest.py`.
+- **bo-9**: `atm-bd-types` 0.2.0 and the bd-cache-rs 0.1.0 wheel pin (the two release-asset URLs). The hooks the live run calls use them; cron does not import atm-bd-types.
+- **bo-15**: lite cron is `atm-bd cron --phase <x>` on a lite phase file, routed by `<console>/profile.py: route` to `<console>/policy_route.py`, which runs `atm_bd_core.tick.tick(policy, phase_file, ports, now, execute_actions=True, dry_run=...)` with the policy `policy.load` reads from `.claude/skills/atm-bd-lite/policy.toml`. bo-14 uses: the rule ids of the lite rule set (`qa.assign_ready`, checks 1-9 as `queue.*`/`stack.*`), the `Assign`/`Notify` actions and `execute`'s outcomes `sent`/`failed <kind>`/`dry_run`, the cron output line shape `{at, kind, to, bead, text, outcome}`, `skills/atm-bd-lite/policy.toml` and `templates/cron-report.md.j2`, the typed errors `CACHE_UNAVAILABLE` and `PROFILE_MISMATCH`, and `FakeRunner`, `FakeCache`, `make_phase_file` in `core/tests/conftest.py`.
 - **bo-10**: the three installed hooks `atm-bd-task-assign-hook.py`, `atm-bd-task-start-hook.py` and `atm-bd-task-hook.py`. The live run calls them.
-- **bo-11**: the dev template's stack block and the QA template's pour block. Cron also uses the dispatch variable contract `{task_id, phase, profile}` (bo-11 deliverable 3) and the phase-file keys `profile` and `[templates].qa` (bo-11 deliverable 5).
+- **bo-11**: the dev template's stack block and the QA template's pour block. `qa.assign_ready` uses the dispatch variable contract `{task_id, phase, profile}` (bo-11 deliverable 3) and the phase-file keys `profile` and `[templates].qa` (bo-11 deliverable 5).
 - **bo-12**: `skills/atm-bd-lite/scripts/atm-bd-lite-gate.py` must exit 0 on the three bo-10 hooks at the bo-14 top.
 - **bo-13** (atm-core): `log_run` records `{code, message, fix, context}` and the actions of every hook reply. The live run reads those records with `atm log filter`. The atm-core release that carries bo-13 must be installed on the run host.
 - **randlee/beads-cache#104**: a beads-cache release with the pour/create op, pinned by bo-9. The pour block in the run's findings round needs it.
-- **A released `bdc` binary** (bo-11 Q8, blocked on randlee/sc-publish#135). The stack and pour blocks run `bdc` live, so deliverable 8 cannot start until one is installed on the run host. Deliverables 1-7 and 9 do not need it: cron reads through the released `bd_cache_rs` wheel.
+- **A released `bdc` binary** (bo-11 Q8, blocked on randlee/sc-publish#135). The stack and pour blocks run `bdc` live, so deliverable 6 cannot start until one is installed on the run host. Deliverables 1-5 and 7 do not need it: cron reads beads through the released `bd_cache_rs` wheel in-process (bo-15).
 
-## How cron reads beads
-Rand said "reads through bdc". ANC-063 says beads go only through beads-cache (bd_cache_rs). Both name beads-cache, which has two front ends: the `bdc` CLI, whose contract is on beads-cache `develop` but which has no released binary, and the bd_cache_rs library (released wheel, pinned by bo-9). Cron uses the library through bo-15's `phase_rows.read` (`Cache.list`, `Cache.ready`) and bo-9's `CacheStore.show`. It runs no `bd` and no `bdc` subprocess. This satisfies both statements and does not wait on a `bdc` binary release. Its only subprocesses are `atm`, `git` and the provider CLI, and it is not a hook, so ANC-066 does not apply to it.
+## Lite cron
+There is no lite cron script. Lite cron is `atm-bd cron --phase <x>`, the same command and arguments as orchestration's (ANC-005), running bo-15's collectors, the lite policy's rules and `execute`. bo-14 adds no routing, no rule and no `atm_bd_core` module. What bo-14 adds is the installed lite skill (its `policy.toml` included), the crontab line, the tests that drive `atm-bd cron` on a lite phase through the installed policy file, and the live run.
 
-## Cron is the lite `PhaseProfile.cron` (ANC-075, ANC-032)
-- bo-15 routes every subcommand through `PhaseProfile`, selected by the phase file's profile. On a lite phase file `atm-bd cron --phase <x>` runs `skills/atm-bd-lite/scripts/cron` through `ScriptProfile.cron`; on any other phase file it runs orchestration's in-process tick unchanged. bo-14 adds no routing.
-- The script is named after the trait method, `cron`, a uv script with no extension like bo-15's `queues` and `snapshot`. ANC-032's wording for this is bo-15 Q1.
-- Its stdout is one `CronOutput` JSON object. The console prints each action as today's cron JSON line (`at`, `kind`, `to`, `bead`, `text`, `outcome`), so a lite and an orchestration cron tick print the same line shape.
-
-## Shared location
-The shared location is the `atm-bd-core` package at `core/atm_bd_core/`, following Rand's 2026-11-01 note "atm-bd-core is the shared location" (the `atm-bd-shared` package is retired, and bo-1's `core/` held code moved out of orchestration, which ANC-036 forbids). bo-15 creates the package. The lite installer installs it to `.atm-bd/core/`, and each lite script's uv header names it as a path source. bo-14 adds two modules there: `cron_checks.py` and `cron_facts.py`. Both are newly written; nothing is copied from orchestration. This definition needs Rand's confirmation (bo-15 Q2).
+Beads are read through beads-cache only, through `bd_cache_rs` in-process (bo-15 collector); no `bd` and no `bdc` process (ANC-063). Cron's subprocesses are `atm`, `git` and the provider CLI, all in bo-15's collectors and executor.
 
 ## Deliverables
 
-1. **QA assignment in cron** (ANC-074, ANC-040, ANC-045)
-   - `atm_bd_core/cron_checks.py::qa_to_assign(ready)` returns the QA beads in a `CacheStore.ready` listing that have no assignee.
-   - For each one, `cron` runs `atm task assign <qa_member> --as <lead> --task-id <bead> --template <templates.qa> --vars <json>`.
-     - `lead`, `qa_member` and `templates.qa` come from the phase file.
-     - `vars` is `{"task_id": <bead>, "phase": <x>, "profile": "lite"}`, the whole bo-11 dispatch contract.
-   - Each assign is one `ViewAction` (`kind = "assign"`, its outcome `sent` or `failed <kind>`) in the `CronOutput` the script prints. With `--dry-run` cron runs no assign and reports outcome `dry_run`.
-   - If the phase file has no `qa_member`, cron refuses with the fix `add qa_member = "<agent>" to .atm-bd/phase-<x>.toml` and assigns nothing.
-   - Cron takes no automatic action other than this assignment.
-   - Acceptance: `uv run pytest skills/atm-bd-lite/tests/test_cron.py` passes. The fake ready listing has one unassigned and one assigned ready QA bead. The test asserts exactly one assign argv, for the unassigned bead, and one matching `assign` action in the printed `CronOutput`.
+1. **`atm-bd cron` on a lite phase assigns ready QA** (ANC-074, ANC-005, ANC-027, ANC-031)
+   - `skills/atm-bd-lite/tests/test_cron.py` drives `atm_bd_console.cli.main(["cron", "--phase", "x"])` on a temp repo holding a lite phase file and the lite skill as `atm-bd skill --lite` installs it (deliverable 3), with bo-15's `FakeRunner` and `FakeCache` and a fixed `now`.
+   - Acceptance: `uv run pytest skills/atm-bd-lite/tests/test_cron.py` passes. Cases:
+     - a READY listing with one unassigned and one assigned `stage:qa` bead gives exactly one `atm task assign <qa_member> --as <lead> --task-id <bead> --template <templates.qa> --vars {"task_id":…,"phase":"x","profile":"lite"}` argv, for the unassigned bead, and one printed `assign` line with outcome `sent`;
+     - `--dry-run` gives no assign or send argv and the same lines with outcome `dry_run`;
+     - only already-reported keys (the fake `atm search` returns them) gives no `atm send`; one new key gives exactly one `atm send <lead> --as <lead> --template .claude/skills/atm-bd-lite/templates/cron-report.md.j2 --vars -`;
+     - a phase file with no `qa_member` gives one report line with the fix `add qa_member = "<agent>" to .atm-bd/phase-x.toml` and no assign argv;
+     - a phase file with `profile = "orchestration"` never reaches the policy (orchestration's `runner.step` fake is called instead); the installed `policy.toml` edited to `profile = "other"` gives `PROFILE_MISMATCH`, exit 3, no argv (ANC-027);
+     - the test runs from an unrelated working directory.
+   - Acceptance: `test ! -e skills/atm-bd-lite/scripts/cron && echo none` prints `none`; `grep -rn "atm-bd cron --phase" skills/atm-bd-lite/SKILL.md` prints the crontab line.
 
-2. **Checks 1-9 as pure shared functions** (ANC-040, ANC-044, ANC-016, ANC-062)
-   - Each check is one function in `atm_bd_core/cron_checks.py`.
-   - Each function takes typed facts and returns a list of `CronItem(key, text)`.
-   - The current time and all thresholds are arguments. A function reads no clock, file, network or subprocess.
-   - The checks:
-     1. ATM task open but bead closed.
-     2. Stalled task: 3 or more reminder events since its last start.
-     3. Bead claimed (assigned or in_progress) with no open ATM task.
-     4. Ready dev or fix bead with no task. Notify only.
-     5. Sprint bead with every child closed.
-     6. Stack layer ancestry: each layer's head descends from the layer below's head.
-     7. Stack-bead lock held too long: the stack bead's assignee has been set longer than the threshold.
-     8. CI failing on the top layer's head. The item is keyed `ci-red:<head>`, so each head is reported once.
-     9. Stack issues:
-        - a layer branch missing on the remote;
-        - a PR base that is not the branch of the layer below (the trunk for layer 1);
-        - a layer recorded above a layer whose head has a prior `ci-red` report.
-   - `new_items(items, prior_keys)` keeps only items whose key was not already reported.
-   - Acceptance: `uv run pytest core/tests/test_cron_checks.py` passes. Each check has one firing case and one quiet case built from fixed inputs. Check 7 takes a fixed `now`. No test sleeps, uses threads or reads the clock.
+2. **Cron takes no other action** (ANC-074, ANC-024)
+   - Acceptance: `grep -c '^id = "qa.assign_ready"' skills/atm-bd-lite/policy.toml` prints `1`.
+   - Acceptance: `uv run pytest skills/atm-bd-lite/tests/test_cron.py -k only_qa_assigns` passes: every rule in the installed `policy.toml`, run on bo-15's lite fixture facts, gives `Assign` actions only from `qa.assign_ready`.
 
-3. **Fact readers** (ANC-040, ANC-060, ANC-063)
-   - `atm_bd_core/cron_facts.py` turns command output into the typed facts the checks take. Every reader takes a command-runner parameter.
-   - The commands, by fact:
-
-     | Fact | Command |
-     |---|---|
-     | Open tasks | `atm task list --all --json --as <lead>` |
-     | Reminder count | `atm task events <id> --json` |
-     | Ancestry | `git merge-base --is-ancestor <below> <above>`, after one `git fetch origin <layer branches>` per tick |
-     | Remote branches | one `git ls-remote --heads origin <branches>` |
-     | Top CI | exactly one provider check-runs read per tick: `gh api repos/<owner>/<repo>/commits/<head>/check-runs` (GitHub) or `az pipelines runs list --branch <branch> --top 1 -o json` (Azure) |
-     | PR base | one provider PR read per layer: `gh api repos/<owner>/<repo>/pulls/<n> --jq .base.ref` or `az repos pr show --id <n> --query targetRefName -o tsv` |
-     | Prior reports | `atm search "<key>" --type lite-cron-report --from <lead>` |
-
-   - ANC-060 bans `gh pr list`, `gh pr checks`, `gh run watch` and any `--watch`. `gh api .../check-runs` is not on that list, so check 8 uses it.
-   - Beads come only from `CacheStore`.
-   - Acceptance: `uv run pytest core/tests/test_cron_facts.py` passes. A fake runner returns recorded outputs for each command. The test asserts the parsed facts and the exact argv list, including exactly one check-runs argv per tick.
-   - Acceptance: `grep -rnE 'gh pr list|gh pr checks|gh run watch|--watch|BdCli|"bd"' core/atm_bd_core skills/atm-bd-lite` prints nothing.
-
-4. **The `cron` script, lite implementation of `PhaseProfile.cron`** (ANC-027, ANC-031, ANC-032, ANC-045, ANC-074, ANC-075)
-   - `skills/atm-bd-lite/scripts/cron --phase <x> [--dry-run]` reads `.atm-bd/phase-<x>.toml`.
-   - If the profile is not `lite`, it prints `PROFILE_MISMATCH` with the fix text and exits 3. It assigns and sends nothing. A phase file with no `profile` key counts as not lite.
-   - Otherwise it does three things and prints one `CronOutput` (bo-15) whose `view` comes from bo-15's `phase_view.view`:
-     - reads the facts (deliverable 3);
-     - assigns QA (deliverable 1);
-     - runs checks 1-9 and sends at most one ATM message to the lead, and only when `new_items` is non-empty. The message body is rendered from `skills/atm-bd-lite/templates/lite-cron-report.md.j2` and lists every new key verbatim, so later ticks can find it with `atm search`. The send is one `ViewAction` with `kind = "send"`.
-   - No state file is written.
-   - `PROFILE = "lite"` appears only in the lite scripts (`cron`, and bo-15's `queues` and `snapshot`). The shared modules hold no profile literal.
-   - Acceptance: `uv run pytest skills/atm-bd-lite/tests/test_cron.py` passes and covers four cases:
-     - an orchestration phase file (no `profile`) gives `PROFILE_MISMATCH`, exit 3, and no argv run;
-     - a tick with only already-reported keys sends nothing;
-     - a tick with one new item sends exactly one `atm send`;
-     - `--dry-run` runs no `atm task assign` and no `atm send`, reports each planned assign with outcome `dry_run`, and its stdout on the bo-15 lite fixture equals bo-15's contract fixture `apps/atm-bd-console/tests/fixtures/profile/cron-lite.json`;
-     - the script runs from an unrelated working directory.
-
-5. **Lite installer** (ANC-001, ANC-028, ANC-031, ANC-012)
-   - `atm-bd skill --lite [--github | --azure] [--dest REPO] [--codex]` runs `skills/atm-bd-lite/scripts/install.py`. It installs:
-     - `skills/atm-bd-lite/` to `.claude/skills/atm-bd-lite/` (or `.codex/`);
-     - `core/atm_bd_core/` to `.atm-bd/core/`.
-   - The installer renders the chosen provider's command set with sc-compose into `skills/atm-bd-lite/templates/provider-commands.toml.j2`, which cron reads. It also renders every provider placeholder in bo-11's templates; today those templates hard-code `gh pr view`/`gh pr create`/`gh pr edit` and have no placeholder (Questions).
+3. **Lite installer** (ANC-001, ANC-028, ANC-031, ANC-012)
+   - `atm-bd skill --lite [--github | --azure] [--dest REPO] [--codex]` runs `skills/atm-bd-lite/scripts/install.py`. It installs `skills/atm-bd-lite/` (with `policy.toml` and `templates/cron-report.md.j2`) to `.claude/skills/atm-bd-lite/` (or `.codex/`). `atm_bd_core` is not installed separately: it ships inside the `atm-bd` wheel (bo-15 deliverable 8).
+   - The installer runs the step that puts bd_cache_rs into the `atm-bd` tool environment: `uv tool install --force atm-bd --with <wheel URL for this platform>`, and prints the command it ran. On a platform with no wheel it stops with `CACHE_UNAVAILABLE` naming the platform. Acceptance: the installer test, with `uv` faked, asserts that exact argv for macOS arm64 and linux x86_64 and the typed refusal for another platform.
+   - The installer renders the chosen provider's command set with sc-compose into `skills/atm-bd-lite/templates/provider-commands.toml.j2`, from which bo-15's provider collector takes the provider. It also renders every provider placeholder in bo-11's templates; today those templates hard-code `gh pr view`/`gh pr create`/`gh pr edit` and have no placeholder (Questions).
    - The lite install writes nothing under `skills/atm-bd-orchestration/`, and the orchestration install writes nothing under `skills/atm-bd-lite/`.
    - `skills/atm-bd-lite/SKILL.md` (`name: atm-bd-lite`) gets an "Install" section and a "Cron" section. bo-11 owns the "Dispatch" section. Together they cover:
      - install;
@@ -104,29 +47,25 @@ The shared location is the `atm-bd-core` package at `core/atm_bd_core/`, followi
      - add the crontab line `atm-bd cron --phase <x>`;
      - assign → start → stack block → close.
    - Acceptance: `uv run pytest skills/atm-bd-lite/tests/test_install.py` passes:
+     - the installed `.claude/skills/atm-bd-lite/policy.toml` loads with bo-15's `policy.load` and no error;
      - `--azure` renders `provider-commands.toml` with `az repos pr` and no `gh pr`, and `--github` renders the reverse. The dev template is in the anchor's check too, so this part of ANC-001 waits on the provider-placeholder question;
      - `SKILL.md` names `atm-bd-lite`;
      - after a lite install, `find .claude/skills/atm-bd-orchestration` is empty;
      - an `--orchestration` install into a temp repo gives the same tree, byte for byte, as at the phase base.
 
-6. **Orchestration not broken, not changed** (ANC-030, ANC-039, ANC-036)
+4. **Orchestration not broken, not changed** (ANC-030, ANC-039, ANC-036)
    - Acceptance: `git diff --name-only <phase base>..HEAD -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/` prints nothing.
    - Acceptance: `git diff --diff-filter=MD --name-only <phase base>..HEAD -- plugins/atm-bd-orchestration/tests apps/atm-bd-console/tests '*/tests/test_*'` prints nothing. Tests are only added, never modified or deleted.
    - Acceptance: `just test` passes at the bo-14 top. That run includes orchestration's whole suite: console pytest, `.github/scripts/tests`, the `gen_manifest.py --check` and the plugin pytest. `<phase base>` is the commit the phase-bo stack was cut from, recorded in the PR body.
    - Acceptance: `git log --follow --name-status --format= -- core/atm_bd_core/` shows only `A` entries, no `R`/`C` from a `skills/atm-bd-orchestration/` path.
 
-7. **Shared-code proof on both profiles** (ANC-041, ANC-042, ANC-044, ANC-045, ANC-004)
-   - Every public function in `cron_checks.py` and `cron_facts.py` has two test runs:
-     - **Orchestration inputs**: a byte copy of atm-core's `.atm-bd/phase-bk.toml` and `docs/plans/phase-bk.jsonl`, with the source commit in the fixture's header file.
-     - **Lite inputs**: a lite phase file fixture.
-   - Fakes (`FakeBeads`, `FakeRunner`, `make_phase`) live once in `core/tests/conftest.py` and `skills/atm-bd-lite/tests/conftest.py`. No test repeats their setup inline.
-   - Acceptance: `uv run pytest core/tests -q` passes, and a test inventory (`core/tests/test_inventory.py`, created by bo-15) asserts that every public name in `atm_bd_core` is called by at least one orchestration-input test and one lite-input test.
-   - Acceptance: `grep -rnE "lite|orchestration" core/atm_bd_core` prints nothing.
-   - Acceptance: `git diff --name-only <phase base>..HEAD -- core/atm_bd_core` lists only modules imported by a lite script (`cron`, `queues`, `snapshot`).
+5. **No shared code added here** (ANC-036, ANC-040, ANC-041, ANC-042, ANC-044, ANC-045)
+   - bo-14 adds no module to `core/atm_bd_core/`; the shared layer is bo-15's.
+   - Acceptance: `git diff --name-only --diff-filter=A <bo-15 top>..HEAD -- core/atm_bd_core` prints nothing, and `uv run --project core pytest -q core/tests` (bo-15's inventory included) passes at the bo-14 top.
 
-8. **One live lite phase, end to end** (ANC-015, ANC-074, ANC-018)
+6. **One live lite phase, end to end** (ANC-015, ANC-074, ANC-018)
    - **Release.** Release atm-bd as a Python-only version carrying bo-9..bo-14, and install it from the release assets (`atm-bd skill --lite --github`). `gh run view <release run> --json jobs --jq '.jobs[].name'` lists no crate publish job (ANC-018).
-   - **Setup.** In a phase file with `profile = "lite"`, one ATM identity is `lead` and `qa_member`. A crontab runs `atm-bd cron --phase <x>`. The phase has one sprint whose dev bead is a real open atm-bd-orchestration issue.
+   - **Setup.** In a phase file with `profile = "lite"`, one ATM identity is `lead` and `qa_member`. A crontab runs `atm-bd cron --phase <x>` (the same line as an orchestration phase). The phase has one sprint whose dev bead is a real open atm-bd-orchestration issue.
    - **Sequence:**
      1. Lead `atm task assign` (dev).
      2. `atm task start`.
@@ -135,7 +74,7 @@ The shared location is the `atm-bd-core` package at `core/atm_bd_core/`, followi
      5. `atm task close completed`, which goes through the hook as T-CLOSE-02.
      6. A cron tick assigns the released QA bead (deliverable 1).
      7. QA with findings: the pour block, then close as T-CLOSE-04.
-     8. Lead assigns the fix bead (cron check 4 reports it ready with no task).
+     8. Lead assigns the fix bead (`queue.ready_work_no_task`, check 4, reports it ready with no task).
      9. Fix: start, stack block, close.
      10. A cron tick assigns the fix's QA bead.
      11. QA PASS (T-CLOSE-03).
@@ -152,10 +91,10 @@ The shared location is the `atm-bd-core` package at `core/atm_bd_core/`, followi
    - Acceptance (ANC-074): the QA tasks are assigned by cron. The events show the actor `<lead>` at the cron tick's time, and no hand assign of a QA bead appears.
    - Acceptance (bo-13): the `atm log filter` record for the refused close carries `code = STACK_NOT_RECORDED` (or the refusal that actually happened), a non-empty `message` and the `fix` text from `hooks/task-close.md`. Every other hook result of the run also has a record.
 
-9. **No repair scripts** (ANC-059)
+7. **No repair scripts** (ANC-059)
     - Acceptance: `find skills/atm-bd-lite core -name '*repair*' -o -name '*backfill*' -o -name '*legacy*'` prints nothing.
 
 ## Validation
 - `just lint` and `just test` in atm-bd-orchestration.
-- `uv run pyright --project skills/atm-bd-lite` and `uv run pyright --project core` (strict) report 0 errors.
+- `uv run pyright --project skills/atm-bd-lite` (strict) reports 0 errors.
 - The bo-12 gate exits 0 on the three hooks.

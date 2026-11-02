@@ -1,139 +1,183 @@
-# Sprint bo-15: one PhaseProfile trait for queues, cron, console, show and snapshot
+# Sprint bo-15: collectors, rules and policies; every console subcommand on a lite phase
 
-Repo: atm-bd-orchestration. Branch `sprint/bo-15-console-profile-traits`, cut from `integrate/phase-bo`; it consumes nothing from bo-9..bo-12 and develops in parallel with them, then rebases onto the stack top in order. One dev.
+Repo: atm-bd-orchestration. Branch `sprint/bo-15-collect-decide`, cut from `integrate/phase-bo`. Consumes nothing from bo-9..bo-12; rebases onto the stack top in order. One dev.
 
-Paths below are relative to `plugins/atm-bd-orchestration/` unless they start with `apps/` or `.atm-bd/`. The console app is `apps/atm-bd-console/src/atm_bd_console/` (`<console>` below); its tests are `apps/atm-bd-console/tests/`.
+Paths are relative to `plugins/atm-bd-orchestration/` unless they start with `core/`, `apps/` or `.atm-bd/`. `<console>` is `apps/atm-bd-console/src/atm_bd_console/`; its tests are `apps/atm-bd-console/tests/`. `<phase base>`: the commit the stack was cut from (PR body).
 
-Rand, 2026-11-01 (ANC-075, proposed): "I would expect all the cli subcommands and tui would be working to traits that both skills would need to implement".
+Design: Rand 2026-11-01, ANC-075 and ANC-076 (proposed). The layer is new code in `core/atm_bd_core/`, nothing moved or copied (ANC-036); lite uses it now; it is designed to orchestration's requirements (read from `<console>/runner.py`, `dispatch.py`, `queues.py`, `model.py` at `main` 8714a372); orchestration cuts over later. Open questions: `questions-bo-15.md`.
 
-## What the subcommands call today (atm-bd-orchestration `origin/main` 1b5d219e)
+## Shape
 
-| Subcommand | Calls, in `<console>/cli.py` | Profile-specific? |
-|---|---|---|
-| `queues` | `queues.main(args, repo_root=)` → `queues.build` (runs `bd list`, `bd ready`, `atm task list`) → `render` or `cron` (the `--json` diff against a state file); labels from the module constant `QUEUES` | `build` and the labels |
-| `show` | `load_snapshot(repo_root, "atm-phase-<x>")` → `render.dashboard` / `render.status_bar` | no: reads `snapshot.json` in the console's `Snapshot` schema |
-| `snapshot` | `load_config` → `atm_bd.repo_config` + `which bd/atm/git` → `acquire_lock` → `runner.step(config(dry_run), state, md_table, store)` | the preflight and the step |
-| `cron` | the same as `snapshot` without forced dry run, then prints `result.reported`, the GitHub quota line and the errors as JSON lines; `--md-table` prints `status_table.markdown` | the preflight and the step |
-| `console` | `load_config` → preflight → `app.run(config, None, INITIAL_STATE, _notification_startup_error(config), runner_step=runner.step)`; the TUI calls `runner_step(config, state, force, store, closed)` each tick and renders the `StepResult`'s `Snapshot` | the preflight, the startup check and the step |
-
-`runner.step` reads beads with `bd`, runs `model.tick`, and dispatches (`atm task assign`, `atm send`) unless `config.dry_run`. That dispatch is orchestration's only. `load_config`, the lock, the `Snapshot` codec, `render`, `status_table` and the TUI widgets are profile-neutral.
-
-## The trait
-
-`<console>/profile.py` defines one Protocol, `PhaseProfile`, with the five calls above that differ by profile:
-
-```python
-class PhaseProfile(Protocol):
-    def preflight(self, config: Config) -> str | None: ...          # None, or the exact line cli prints before exit 3
-    def startup_error(self, config: Config) -> Error | None: ...     # shown in the TUI header
-    def queue_report(self, args: argparse.Namespace, repo_root: Path, now: datetime | None) -> dict[str, Any]: ...
-    def step(self, config: Config, state: State, force_github: bool, store: StateStore,
-             closed: ClosedBeads | None = None) -> StepResult: ...    # console tick and snapshot; writes snapshot.json
-    def cron(self, config: Config, state: State, force_github: bool, store: StateStore) -> StepResult: ...
+```
+phase file --profile--> route (console/profile.py, the one place)
+  orchestration / no profile --> today's code, unchanged
+  any other profile ---------> skills/atm-bd-<profile>/policy.toml
+                                 |  load + validate (typed error at load)
+                                 v
+  collect(needs of the policy's rules)  -> PhaseFacts       [I/O: atm, git, beads, provider]
+  decide(facts, policy)                 -> Decision          [pure]
+  view(facts, decision)                 -> PhaseView         [pure]
+  execute(decision.actions)             -> outcomes          [I/O: cron only]
 ```
 
-and `select(repo_root: Path, phase: str) -> Result[PhaseProfile]`, the one place a profile is chosen.
+## Package `core/atm_bd_core/` (new)
 
-The Protocol lives in the console, not in `core/atm_bd_core/`: every method takes or returns console types (`Config`, `State`, `StateStore`, `StepResult`, `Snapshot`). Putting it in core would make core import the console, or move those types out of orchestration code into core, which ANC-036 forbids. `core/atm_bd_core/` stays the shared location for profile-neutral code the lite implementation calls (deliverable 6). See Questions.
+| Module | Contents |
+|---|---|
+| `facts.py` | `FactKind`; one frozen dataclass per kind; `PhaseFacts(phase, now, phase_file, <optional field per kind>, errors)`. |
+| `collect/atm.py` | `TASKS` (`atm task list --all --json --as <lead>`), `TASK_EVENTS` (`atm task events <id> --json`, reminders since last start), `REPORTED_KEYS` (`atm search --type atm-bd-cron-report --as <lead>`). |
+| `collect/git.py` | `REMOTE_BRANCHES` (one `git ls-remote --heads origin <layer branches>`), `ANCESTRY` (one `git fetch origin <layer branches>` unless `--no-fetch`, then `git merge-base --is-ancestor <below> <above>` per adjacent layer pair). |
+| `collect/beads.py` | `BEADS` (`Cache.list(phase)`, plus `Cache.get` for unlisted open-task ids), `READY` (`Cache.ready(phase)`), `STACK` (the `stage:stack` row: assignee, since, `trunk`, `layers`). |
+| `collect/provider.py` | `TOP_CHECKS` (exactly one read per tick: `gh api repos/<o>/<r>/commits/<head>/check-runs`, or `az pipelines runs list --branch <b> --top 1 -o json`), `PR_BASES` (one read per layer PR: `gh api repos/<o>/<r>/pulls/<n> --jq .base.ref`, or `az repos pr show --id <n> --query targetRefName -o tsv`). ANC-060 limits. Provider comes from the installed skill's `provider-commands.toml` (bo-14), default `github`. |
+| `collect/__init__.py` | `collect(needs: frozenset[FactKind], ports: Ports, phase_file, now) -> PhaseFacts`. Runs only the readers for `needs`; a failed read gives `None` plus `CollectError(kind, argv, message, fix)`. `Ports` = command runner + beads cache. |
+| `decide/rule.py` | `Rule(id, needs, params, decide)`; `params` is a frozen dataclass (the schema); `decide(facts, params) -> tuple[Action, ...]`. Actions `Assign(key, to, bead_id, template, vars)`, `Report(key, queue, bead_id, text)`; `key` dedupes. |
+| `decide/queues.py`, `decide/stack.py`, `decide/assign.py` | Plain functions; explicit `RULES` tuple per module; no import-time registration. |
+| `decide/policy.py` | `TABLE` (`id -> Rule`) from the `RULES` tuples; `load(text, extra_rules, collectors) -> Result[Policy(profile, rules, notify_template, needs)]`. |
+| `decide/run.py` | `decide(facts, policy) -> Decision(actions, rows)`. Rules in file order; a rule missing a needed fact is skipped with one `Report("facts-unavailable:<kind>")`. Reports whose key is in `reported_keys` stay view rows; the rest fold into at most one `Notify(to=<lead>, keys)`. |
+| `view.py` | `view(facts, decision) -> PhaseView`. |
+| `execute.py` | `execute(actions, runner, lead, dry_run) -> tuple[Outcome, ...]`. `Assign` runs `atm task assign <to> --as <lead> --task-id <bead> --template <t> --vars <json>`; `Notify`: `atm send <lead> --as <lead> --template <notify_template> --vars -` (keys as JSON on stdin). Outcome `sent`, `failed <kind>`, `dry_run`. No retry. |
+| `tick.py` | `tick(policy, phase_file, ports, now, *, execute_actions: bool, dry_run: bool) -> TickResult(facts, decision, view, outcomes)` |
 
-`show` needs no method: both profiles' `step` write `snapshot.json` through the same `StateStore`, and `show` renders it.
+Public functions return `Result` (ANC-016); collectors decode rows into `facts.py` types, no dict/`Any` (ANC-062); no module names a profile (ANC-044).
 
-Dispatch is not a trait method. It is a capability inside orchestration's `runner.step`. The lite implementation has no dispatch code, so `console` on a lite phase cannot dispatch (ANC-024). The lite cron's QA assign (ANC-074) is reached only through `cron`, never through `step`.
+### Beads and packaging (ANC-063, ANC-018, ANC-039)
+Beads are read in-process through `bd_cache_rs.Cache(<repo>, scopes=[<phase>])` `list`/`ready`/`get` (in the `prerelease/v0.1.0` wheel); no `bd` or `bdc` process (`bdc` has no released binary). bd-cache-rs is not on PyPI, so neither `atm-bd` nor `atm_bd_core` declares it. Lite-only code is imported only on the lite path: `cli.py` imports `policy_route` in the `PolicyRoute` branch, only `policy_route`/`policy_view` import `atm_bd_core`, and only the beads read imports `bd_cache_rs`. A failed import is `CACHE_UNAVAILABLE` with the fix `uv tool install --force atm-bd --with <wheel URL>` (URLs: one constant). `atm_bd_core` ships inside the `atm-bd` wheel (hatch `force-include`); `core/pyproject.toml` is for tests and pyright only.
 
-## Implementations
+## Policies
 
-- **Orchestration: `<console>/orchestration_profile.py`, `OrchestrationProfile`.** It wraps today's code unchanged:
-  - `queue_report` = `queues.build(...) | {"kinds": queues.QUEUES}`;
-  - `step` and `cron` = `runner.step` with today's arguments;
-  - `preflight` = today's `atm_bd.repo_config` check and `which bd/atm/git` loop with today's message text;
-  - `startup_error` = `cli._notification_startup_error`.
+A policy is data: `skills/<skill>/policy.toml`, rule ids in order with params. This sprint adds the lite one:
 
-  Every function the existing tests monkeypatch (`runner.step`, `atm_bd.repo_config`, `atm_bd.phase_file`, `shutil.which`, `config_source.load_config`, `cli._notification_startup_error`, `cli.load_snapshot`, `cli.acquire_lock`, `cli.now`) is looked up at call time through the same module attribute, so those patches still take effect. `cli.load_snapshot` and `cli.acquire_lock` stay in `cli.py`. Nothing under `skills/atm-bd-orchestration/` changes (ANC-030): the console app is not in that skill.
-- **Out of process: `<console>/script_profile.py`, `ScriptProfile(profile)`.** Profile-neutral; it never names a profile. It runs `<repo>/.claude/skills/atm-bd-<profile>/scripts/<name>` (or `.codex/skills/...` when that exists instead) through `command.run`, with the phase as `--phase <x>`, and decodes stdout:
-  - `queue_report` runs `queues` (passing `--all` and `--stack` when given) and returns its JSON object;
-  - `step` runs `snapshot`, decodes `PhaseView`, builds the `Snapshot` with `profile_view.snapshot` (deliverable 3), writes it with `store.write_snapshot` and returns `StepResult(snapshot, state)`; it never runs `cron` and writes no `state.json`;
-  - `cron` runs `cron` (plus `--dry-run` when set), decodes `CronOutput`, and returns `StepResult(snapshot, state, reported=<its actions as Action>)`; it writes no file;
-  - `preflight` returns a line when a script is missing (fix: install the profile's skill with `atm-bd skill`) or `atm`, `git` or `uv` is not on PATH; `startup_error` returns None.
-  - A script exit outside 0 becomes the step's error (`CommandFailed` with the script's stderr), shown like any other tick error.
-- **Lite: `skills/atm-bd-lite/scripts/queues`, `snapshot`** (this sprint) **and `cron`** (bo-14). uv scripts with no extension, like orchestration's `bead-queues`. Each reads `.atm-bd/phase-<x>.toml`, refuses with `PROFILE_MISMATCH` and exit 3 unless `profile = "lite"`, reads beads only through `bd_cache_rs.Cache` (ANC-063) and tasks with `atm task list --all --json --as <lead>`, and prints one JSON object. Everything that is not the profile check, argv and the lite queue labels is in `core/atm_bd_core/` (ANC-040).
+```toml
+profile = "lite"
+notify_template = "templates/cron-report.md.j2"
+[[rules]]
+id = "queue.task_stalled"
+params = { stall_reminders = 3 }
+# ... every lite rule below
+[[rules]]
+id = "qa.assign_ready"
+params = { member_key = "qa_member", template_key = "qa" }
+```
 
-**Selection** (`profile.select`): read the `profile` key of `.atm-bd/phase-<x>.toml` with `tomllib`. No file, a file that does not parse, no `profile` key, or `profile = "orchestration"` selects `OrchestrationProfile`, which then reports any phase-file error exactly as today. Any other value selects `ScriptProfile(<value>)`. `"orchestration"` is the only profile literal in the console and it appears only in `profile.py`; the console never names `lite`. `queues --root <id>` selects by the phase suffix of the root id.
+`skills/atm-bd-lite/templates/cron-report.md.j2` (front matter `type: atm-bd-cron-report`, variable `keys`) lists new keys verbatim for `REPORTED_KEYS`; cron keeps no state file.
 
-## Contract types (`<console>/profile_view.py`)
+A skill-only rule lives in `skills/<skill>/rules.py` (`RULES`), named by `[skill_rules] module = "rules.py"`; the console loads it with `skill_loader.load_skill` and passes it as `extra_rules`. Lite has none today.
 
-Decoded with the existing `codec.from_json`; frozen dataclasses:
-- `ViewBead(id, title, stage, status, assignee, parent, ready, blocked_by, branch, layer, updated_at, closed_at)`.
-- `ViewTask(task_id, assignee, state, reminder_count, assigned_at)`.
-- `ViewQueueRow(queue, id, stage, status, assignee, since, detail)`.
-- `PhaseView(schema, phase, root_id, root_closed, lead, generated_at, beads, tasks, kinds, queues)`; `kinds` is the `(key, label, next actor)` list, `queues` maps a key to its rows.
-- `ViewAction(at, kind, to, bead, text, outcome)`; `kind` is `assign` or `send`.
-- `CronOutput(view: PhaseView, actions: tuple[ViewAction, ...])`.
+`policy.load` validates before any read: unknown id (`POLICY_UNKNOWN_RULE`), a needed kind with no collector (`POLICY_NO_COLLECTOR`), params not decoding into the rule's dataclass (`POLICY_BAD_PARAMS`, field and type), `profile` not the phase file's (`PROFILE_MISMATCH`, ANC-027). Each names the rule id; exit 3, never mid-tick.
 
-`profile_view.snapshot(view, config) -> Snapshot` builds the dashboard from a `PhaseView`: sprints from `stage:sprint` beads and their dev, qa and fix children; one `Section` per non-empty queue except `in_flight` and `not_ready`; `phase_data` as a `Phase` of those sprints and steps; the mermaid graph from sprint `blocked_by` edges; `gh` mode `off`. Fields with no lite fact are None, False, `""` or `()`. The TUI's sanity and quality tabs get `None` (not read) and show their placeholders.
+Extending: a design = a policy file; a decision = a rule + a fixed-facts test; a fact = a `FactKind` + a collector field.
 
-The JSON contract fixtures are `apps/atm-bd-console/tests/fixtures/profile/view-lite.json` (a `PhaseView`) and `cron-lite.json` (a `CronOutput` of a `--dry-run` tick on the same fixture phase). The lite `snapshot` test (this sprint) and the lite `cron` test (bo-14) assert their output equals those files; the console tests decode them. A change on either side fails one of them.
+### Lite rule set (built in this sprint)
+
+| Rule id | needs | Action | Orchestration source |
+|---|---|---|---|
+| `queue.in_flight` | TASKS, BEADS | view row only (quiet) | `queues.py` in_flight |
+| `queue.task_bead_closed` (check 1) | TASKS, BEADS | Report `task-bead-closed:<id>` | task_bead_closed |
+| `queue.task_stalled` (check 2) | TASKS, TASK_EVENTS | Report `stalled:<id>`; param `stall_reminders` | task_stalled, `STALL_REMINDERS` |
+| `queue.claimed_no_task` (check 3) | BEADS, TASKS | Report `claimed-no-task:<id>` | claimed_no_task |
+| `queue.ready_work_no_task` (check 4) | BEADS, READY, TASKS | Report `ready-no-task:<id>` (dev/fix) | needs_dev, needs_fix |
+| `queue.container_closable` (check 5) | BEADS | Report `closable:<id>` | container_closable |
+| `queue.not_ready`, `queue.ready_other` | BEADS, READY | view rows only (quiet) | not_ready, ready_other |
+| `stack.ancestry` (check 6) | STACK, ANCESTRY | Report `not-ancestor:<below>:<above>` | `_local_issues` |
+| `stack.lock_held` (check 7) | STACK | Report `stack-lock:<assignee>:<since>`; param `max_minutes` | - |
+| `stack.top_ci_red` (check 8) | STACK, TOP_CHECKS | Report `ci-red:<head>` | `model._problems` top_ci |
+| `stack.layer_issues` (check 9) | STACK, REMOTE_BRANCHES, PR_BASES, REPORTED_KEYS | Report `missing-branch:<b>`, `pr-base:<n>:<base>`, `above-red:<b>` | `_view_issues`, merge `HEAD_NOT_PUSHED` |
+| `qa.assign_ready` (ANC-074) | READY, TASKS | Assign `assign:<id>` per unassigned `stage:qa` bead in READY with no open task; member/template from phase-file keys named by params; vars `{task_id, phase, profile}`. Missing key: Report `config:<key>` with fix `add <key> = "..." to .atm-bd/phase-<x>.toml` | `dispatch.candidates` (QA half) |
+
+Lite policy = these rules; no sanity rule (ANC-076).
+
+### Orchestration rules the cutover adds (not built)
+Lite list plus `sanity.dispatch` (incl. reopened sanity after FAIL), `queue.needs_sanity`, `queue.needs_dev_fix`, `queue.needs_plan_review`, `queue.finding_fix`, `queue.minor_backlog`, `dispatch.gates` (origin branch, worktree, merge), roster recipient fallback, `pr.missing`, `merge.conflict`, `collision`, `state.unknown`, `github.unavailable`, `phase.stopped`. New facts: `WORKTREES`, `MERGES`, `MEMBERS`, `OPEN_PRS`, `STACK_MEMBERSHIP`. Batched 10-minute notices need `state.json` cycle state: a cutover decision.
+
+## View model and the TUI
+`PhaseView`: `phase, root_id, root_closed, lead, generated_at, sprints: tuple[ViewSprint(id, title, status, depends_on, steps: tuple[ViewStep(bead_id, stage, status, assignee, ready)])], tasks: tuple[ViewTask(task_id, assignee, state, reminders, since)], rows: tuple[ViewRow(queue, key, bead_id, text, since)], actions: tuple[ViewAction(kind, to, bead_id, key, outcome)], top_ci: str | None, errors`.
+
+`<console>/policy_view.py: snapshot(view, config) -> Snapshot` maps it onto today's `Snapshot`; `render`, `status_table`, `app.py` unchanged:
+
+| `Snapshot` field | from |
+|---|---|
+| `phase_data` | `Phase(root_id, label, title, closed, sprints, steps, ())`; stage -> `StepKind` |
+| `sprints`, `mermaid` | `SprintView`/`StepView` per `ViewSprint`; edges from `depends_on` |
+| `sections` | `Section` per non-quiet queue; `SectionRow(bead_id, age_s, text, None)` |
+| `problems` | each non-quiet `ViewRow` as `Problem(key, bead_id, lead, text, since)` |
+| `sent` | `actions` as `Action`; outcome `planned` on `console`/`snapshot` |
+| `agents`, `task_data` | `AgentView` per assignee with an open task; `Task` per `ViewTask` |
+| `top_ci`, `gh` | `top_ci`; `gh` mode `off` when `TOP_CHECKS` was not collected |
+| `errors` | `CollectError`s as console `Error`s |
+| everything else (incl. sanity/quality tabs) | `None`, `False`, `""`, `()` |
+
+## Console routing (ANC-005, ANC-024, ANC-027, ANC-030, ANC-039, ANC-075)
+- `<console>/profile.py: route(repo_root, phase) -> Today | PolicyRoute(profile)`. No file, parse error, no `profile` key or `"orchestration"` -> `Today` (today's code, today's errors); any other value -> `PolicyRoute`. `"orchestration"` appears only here; the console never names `lite`. `queues --root` routes by the id's phase suffix.
+- `<console>/monitor.py: PhaseMonitor` Protocol with `queues(args)`, `snapshot(args)`, `step(...)` (the console tick, `runner.step`'s signature) and `cron(args)`; `show` needs no method (it renders `snapshot.json`). Both profiles implement it: `TodayMonitor` delegates to today's code unchanged, `PolicyMonitor` runs the new layer. `cli.py` calls `route` once, then only `PhaseMonitor` methods; the parser is unchanged.
+- `<console>/policy_route.py` runs the five subcommands for a `PolicyRoute`. Not `load_config` (it requires orchestration templates); `policy_route.config` builds `Config` from the phase file's `lead`, `root`, `integration_branch` and `console.toml` `interval`.
+
+| Subcommand | Lite path | Writes | Executes actions |
+|---|---|---|---|
+| `queues` | `tick(execute_actions=False)`; rows by queue in `queues.render` layout; `--json`: non-quiet rows as one object | nothing | no |
+| `snapshot` | `tick(execute_actions=False)` under `acquire_lock`; `store.write_snapshot(policy_view.snapshot(...))` | `snapshot.json` | no |
+| `show` | unchanged: renders `snapshot.json` | nothing | no |
+| `console` | `app.run(config, None, INITIAL_STATE, None, runner_step=policy_route.step)`; `step` has `runner.step`'s signature, `execute_actions=False`, state unchanged | `snapshot.json` | no (ANC-024) |
+| `cron` | `tick(execute_actions=True, dry_run=--dry-run)` under `acquire_lock`; one line per outcome `{at, kind, to, bead, text, outcome}`, one `error` line per `CollectError`; `--md-table` prints `status_table.markdown`, executes nothing | nothing (questions Q3) | yes: `Assign`, `Notify` |
+
+Same arguments for both profiles (ANC-005). Lite honours `--phase`, `--dry-run`, `--md-table`, `--interval`, `--no-fetch`, `--github off`, `--all`; any other option given prints one stderr line `<option>: not used by profile <profile>`.
 
 ## Deliverables
 
-1. **`PhaseProfile` and `select`** (ANC-075, ANC-005, ANC-044, ANC-061)
-   - `<console>/profile.py` as above.
-   - Acceptance: `cd apps/atm-bd-console && uv run --frozen pytest -q tests/test_profile_traits.py -k select` passes. Cases: no phase file, no `profile` key and `profile = "orchestration"` give `OrchestrationProfile`; `profile = "lite"` gives `ScriptProfile` whose script paths are under `.claude/skills/atm-bd-lite/scripts/`; a TOML parse error gives `OrchestrationProfile`.
-   - Acceptance: `uv run pyright` (strict, the console's config) reports 0 errors on a test module that assigns `OrchestrationProfile()` and `ScriptProfile("lite")` to `PhaseProfile` variables.
-   - Acceptance: in `<console>`, `grep -nwiE 'lite' cli.py queues.py profile.py orchestration_profile.py script_profile.py profile_view.py` prints nothing, and `grep -nw '"orchestration"' cli.py queues.py orchestration_profile.py script_profile.py profile_view.py` prints nothing (only `profile.py` names it; `skill.py`, the installer front end, is out of this check).
-   - Acceptance: `git diff --name-only <phase base>..HEAD -- crates/atm-bd-types` prints nothing (ANC-061: no profile names in types).
+1. **Facts and collectors** (ANC-076, ANC-063, ANC-060, ANC-040, ANC-041, ANC-042, ANC-016)
+   - `core/atm_bd_core/facts.py`, `collect/{__init__,atm,git,beads,provider}.py` as above.
+   - Fakes once in `core/tests/conftest.py`: `FakeRunner`, `FakeCache`, `make_phase_file` (ANC-004).
+   - Fixtures: orchestration = byte copies of atm-core `.atm-bd/phase-bk.toml` and `docs/plans/phase-bk.jsonl` at `develop` 5debb6db0 (in `fixtures/orchestration/SOURCE`), in the `Cache.list` envelope; lite = `fixtures/lite/phase-lite.toml` plus rows with a three-layer stack bead.
+   - Acceptance: `uv run --project core pytest -q core/tests/test_collect.py` passes. Per collector, both fixture sets: decoded facts, exact argv, exactly one check-runs argv per tick, no fetch argv with `no_fetch=True`, `collect({READY})` makes one `ready` call and no argv, a failed read gives `None` + one `CollectError`, and without `bd_cache_rs` the beads collector returns `CACHE_UNAVAILABLE` whose fix names `uv tool install --force atm-bd --with`.
+   - Acceptance: `grep -rnE 'gh pr list|gh pr checks|gh run watch|--watch|BdCli|"bd"|"bdc"' core/atm_bd_core` prints nothing.
 
-2. **`OrchestrationProfile`, behavior identical** (ANC-030, ANC-039)
-   - `<console>/orchestration_profile.py` as above. `queues.render` and `queues.cron` read labels from `report["kinds"]` instead of the module constant; for an orchestration report that list is `QUEUES`, so their output is unchanged.
-   - Acceptance: `cd apps/atm-bd-console && uv run --frozen pytest -q` passes with every pre-sprint test file unchanged: `git diff --diff-filter=MD --name-only <phase base>..HEAD -- apps/atm-bd-console/tests` prints nothing.
-   - Acceptance: `uv run --frozen pytest -q tests/test_cli_help_unchanged.py` passes: the `--help` text of `atm-bd`, `queues`, `console`, `cron`, `show` and `snapshot` equals the text captured at the phase base, committed in `tests/fixtures/help/` with that base's hash in the file header.
-   - Acceptance: `git diff --name-only <phase base>..HEAD -- plugins/atm-bd-orchestration/skills/atm-bd-orchestration/` prints nothing.
+2. **Rules, policy loading, decide** (ANC-076, ANC-074, ANC-040, ANC-041, ANC-042, ANC-044, ANC-016)
+   - `decide/{rule,queues,stack,assign,policy,run}.py`; `skills/atm-bd-lite/policy.toml`; `skills/atm-bd-lite/templates/cron-report.md.j2`.
+   - Acceptance: `uv run --project core pytest -q core/tests/test_decide.py` passes. Each lite rule has a firing and a quiet case on a fixed `PhaseFacts` value (no runner, cache or clock fake; fixed `now`), and also runs on the orchestration fixture facts. Among them: `qa.assign_ready` on a READY listing with one unassigned and one assigned `stage:qa` bead gives exactly one `Assign` for the unassigned bead with vars `{task_id, phase, profile}`; `stack.top_ci_red` with the key already in `reported_keys` gives a view row and no `Notify`; a tick with one new key gives exactly one `Notify`; a rule whose needed fact is `None` gives one `facts-unavailable:<kind>` report and is not called.
+   - Acceptance: `uv run --project core pytest -q core/tests/test_policy.py` passes: the lite `policy.toml` loads; one invalid fixture per check (`unknown-rule`, `no-collector`, `bad-params`, `profile-mismatch`) gives its typed error naming the rule id; a fixture skill dir with `rules.py` exporting `RULES` loads through `extra_rules`; `import atm_bd_core.decide.queues` twice leaves `TABLE` unchanged (no import-time registration).
+   - Acceptance: `grep -rnE 'subprocess|bd_cache_rs|open\(|requests|http' core/atm_bd_core/decide core/atm_bd_core/view.py` prints nothing (ANC-076).
+   - Acceptance: `grep -rnwiE 'lite|orchestration|sanity' core/atm_bd_core` prints nothing (ANC-044; the orchestration rules are not built).
 
-3. **`ScriptProfile` and the contract types** (ANC-032, ANC-040, ANC-044, ANC-075)
-   - `<console>/script_profile.py` and `<console>/profile_view.py` as above. `ScriptProfile` takes a `runner` parameter (default `command.run`) and a `now` parameter.
-   - Acceptance: `uv run --frozen pytest -q tests/test_profile_traits.py -k script` passes on a fake runner. It asserts the exact argv for each method (`<skill>/scripts/queues --phase x --all`, `.../snapshot --phase x`, `.../cron --phase x --dry-run`), that `step` writes `snapshot.json` and no `state.json`, that `cron` writes nothing, and that a script exiting 3 becomes one `CommandFailed` tick error carrying the script's stderr line.
-   - Acceptance: `uv run --frozen pytest -q tests/test_profile_view.py` passes: `cron-lite.json` decodes to a `CronOutput` whose actions map to `Action`s with `kind`, `to`, `bead_ids` and `outcome` preserved; `view-lite.json` decodes to a `PhaseView`, and `profile_view.snapshot` gives a `Snapshot` whose sprints, steps and sections match the fixture's beads and queues, and whose `phase_data` is not None.
+3. **View, executor, tick** (ANC-076, ANC-074, ANC-024)
+   - `view.py`, `execute.py`, `tick.py` as above.
+   - Acceptance: `uv run --project core pytest -q core/tests/test_execute.py core/tests/test_tick.py` passes on `FakeRunner`/`FakeCache`: `execute`: exact assign/send argv and stdin; outcomes `sent`, `failed <kind>`, `dry_run` (no argv); `tick(execute_actions=False)` records no `atm task assign` and no `atm send` argv; `tick` on each fixture set gives a `PhaseView` equal to `fixtures/<set>/view.json`.
+   - Acceptance: `grep -rln 'subprocess\|runner(' core/atm_bd_core | sort` prints only `core/atm_bd_core/collect/*.py` and `core/atm_bd_core/execute.py`.
 
-4. **`cli.py` routes every subcommand through the trait** (ANC-005, ANC-024, ANC-027, ANC-075)
-   - `queues`: `queues.main(args, repo_root=, build=profile.queue_report)`; `queues.main` gains a keyword `build` that defaults to `queues.build`.
-   - `snapshot`, `cron --md-table`: `profile.step`. `cron`: `profile.cron`. `console`: `app.run(..., profile.startup_error(config), runner_step=profile.step)`. `preflight` replaces the inline `repo_config` and `which` checks. `show` is unchanged.
-   - The parser is unchanged: no argument is added or removed. Every subcommand takes the same arguments for both profiles (ANC-005). An option a profile does not use (`--github*`, `--interval`, `--no-fetch` for lite) is accepted, and the console writes one stderr line naming it and the profile (`--github: not used by profile lite`); it is never dropped silently. Acceptance: the parametrized test passes the identical argv to both profiles, and for lite asserts that stderr line for each unused option given.
-   - ANC-027: `select` is the cron tick's profile check on the console side; the orchestration tick is unreachable for a phase file naming another profile, and each lite script re-checks `profile` itself.
-   - Acceptance: `uv run --frozen pytest -q tests/test_profile_traits.py -k "subcommand"` passes. It is parametrized over the 5 subcommands × 2 profiles with one argv list per subcommand, the same for both profiles. Orchestration runs on the existing `tests/fixtures/beads/repo/` fixture with `runner.step` and the `bd`/`atm` runner faked as `test_cli.py` and `test_queues.py` already do, and asserts `runner.step` / `queues.build` received today's arguments. Lite runs on `tests/fixtures/profile/repo-lite/` (a phase file with `profile = "lite"`) with `ScriptProfile`'s runner faked. Each case asserts its exit code and stdout: `queues` prints the lite labels, `snapshot` then `show` prints a dashboard naming the fixture's sprint and bead ids with exit 0, `cron` prints one JSON line per `CronOutput` action, `console` is deliverable 5.
-   - Acceptance (ANC-024): the lite `console` and `snapshot` cases assert the fake runner saw no argv containing `cron`, `task assign` or `send`.
+4. **Shared-location proof** (ANC-036, ANC-041, ANC-042, ANC-045)
+   - `core/tests/test_inventory.py` asserts every public name in `atm_bd_core` (`__all__`) is called by a test on each fixture set.
+   - Acceptance: `uv run --project core pytest -q core/tests` passes.
+   - Acceptance: `git log --follow --name-status --format= -- core/atm_bd_core/` shows only `A` entries.
+   - Acceptance (ANC-004): `uvx pylint --disable=all --enable=duplicate-code --min-similarity-lines=5 core/tests apps/atm-bd-console/tests/test_policy_route.py` reports no duplicate block.
+   - Acceptance (ANC-045): `uv run --frozen pytest -q tests/test_policy_route.py -k modules` (console) passes: running `cron` on the lite fixture repo imports every module under `atm_bd_core` (checked against `sys.modules`).
 
-5. **The TUI renders a lite phase** (ANC-075, ANC-024)
-   - Acceptance: `uv run --frozen pytest -q tests/test_profile_traits.py -k tui` passes. It runs `ConsoleApp` with `ScriptProfile("lite").step` bound to a fake runner returning `view-lite.json`, under `app.run_test()` as `test_app.py` does, presses `r` once and then `q`. It asserts the status text contains the fixture's sprint ids and the step bead ids, the Dispatch panel lists the fixture's non-quiet queue rows, no tick error is shown, and the runner's argv list is only `snapshot` calls. No sleep and no wall clock: `now` is fixed.
+5. **Routing and the five subcommands on a lite phase** (ANC-075, ANC-005, ANC-024, ANC-027)
+   - `<console>/profile.py`, `<console>/policy_route.py`, `<console>/policy_view.py`; `cli.py` calls `route` once.
+   - Acceptance: `cd apps/atm-bd-console && uv run --frozen pytest -q tests/test_policy_route.py` passes. Cases:
+     - `route`: no phase file, no `profile` key, `profile = "orchestration"` and a TOML parse error give a `TodayMonitor`; `profile = "lite"` gives `PolicyMonitor("lite")`; pyright strict confirms both satisfy `PhaseMonitor`, and `grep -nE 'TodayMonitor|PolicyMonitor|queues\.main|runner\.step' cli.py` prints only the `route` import line (ANC-075).
+     - 5 subcommands x lite, on `tests/fixtures/policy/repo-lite/` (lite phase file + installed `policy.toml`), core fakes, fixed `now`, argv identical to `test_cli.py`'s orchestration argv: `queues` exit 0 with lite labels and bead ids; `snapshot` then `show` prints the fixture's sprint and step ids, exit 0; `cron` prints one `assign` line (the unassigned ready QA bead) and one `send` line; `cron --dry-run` the same with `dry_run` and no assign/send argv; `console` is deliverable 6.
+     - ANC-024: for `queues`, `snapshot`, `console` and `show`, the runner saw no argv containing `task assign` or `send`.
+     - ANC-005: each unused option given prints its one `not used by profile lite` stderr line.
+     - ANC-027: a `policy.toml` whose `profile` differs from the phase file's gives `PROFILE_MISMATCH`, exit 3, and no runner or cache call.
+   - Acceptance: in `<console>`, `grep -nwi 'lite' cli.py profile.py policy_route.py policy_view.py` prints nothing, and `grep -lnw '"orchestration"' cli.py policy_route.py policy_view.py` prints nothing.
 
-6. **Shared lite-usable code in `core/atm_bd_core/`** (ANC-036, ANC-040, ANC-041, ANC-042, ANC-044, ANC-045, ANC-063)
-   - This sprint creates the `atm-bd-core` package (`core/pyproject.toml`, `core/atm_bd_core/`, `core/tests/`), the shared location bo-14 names. All of it is newly written.
-   - `phase_rows.py`: `beads(listed, ready) -> tuple[PhaseBead, ...]` decodes the dicts `bd_cache_rs.Cache.list(phase)` and `Cache.ready(phase)` return; `tasks(task_list_json) -> tuple[PhaseTask, ...]` decodes `atm task list --all --json`; `read(cache, phase)` makes exactly those two cache calls.
-   - `queue_rows.py`: `classify(beads, tasks, now, stall_reminders) -> dict[str, list[QueueRow]]`, by the schema's stage labels and statuses only: in flight, task open but bead closed, stalled (reminders ≥ the argument), claimed with no task, ready dev / fix / qa with no task, sprint with every child closed, other ready, not ready.
-   - `phase_view.py`: `view(phase, lead, beads, tasks, kinds, queues, now) -> dict` gives the `PhaseView` JSON object.
-   - Fakes `FakeCache`, `FakeRunner` and `make_phase` live once in `core/tests/conftest.py`.
-   - Acceptance: `uv run pytest core/tests -q` passes. Each public function runs on orchestration inputs (a byte copy of atm-core `.atm-bd/phase-bk.toml` and `docs/plans/phase-bk.jsonl`, rows wrapped in the `Cache.list` envelope, source commit in the fixture header) and on lite inputs (`tests/fixtures/phase-lite.toml` plus lite rows). `core/tests/test_inventory.py` asserts every public name in `atm_bd_core` is called by at least one test of each kind.
-   - Acceptance: `grep -rnwiE 'lite|orchestration' core/atm_bd_core` prints nothing (ANC-044).
-   - Acceptance: `git log --follow --name-status --format= -- core/atm_bd_core/` shows only `A` entries (ANC-036).
+6. **The TUI renders a lite phase** (ANC-075, ANC-024)
+   - Acceptance: `uv run --frozen pytest -q tests/test_policy_route.py -k tui` passes. `ConsoleApp` with `policy_route.step` on the lite fixture under `app.run_test()`, `r` then `q`: status text has the sprint and step ids, Dispatch panel the non-quiet rows, the QA assign shows `planned`, no tick error, no assign/send argv. No sleep, no wall clock.
 
-7. **Lite `queues` and `snapshot` scripts** (ANC-012, ANC-024, ANC-031, ANC-032, ANC-040, ANC-045, ANC-063)
-   - `skills/atm-bd-lite/scripts/queues --phase <x> [--all] [--stack]` prints the queue report: `schema`, `generated_at`, `root`, `integration_branch`, `stack`, `queues`, and `kinds` with the lite labels (QA is "Dev closed -> QA ready; cron assigns", no sanity rows). `--stack` sets `stack` to "stack checks run in atm-bd cron (checks 6 and 9)".
-   - `skills/atm-bd-lite/scripts/snapshot --phase <x>` prints the `PhaseView` object.
-   - The PEP 723 header pins bd-cache-rs 0.1.0 by per-platform URL (`[tool.uv.sources]`, the bo-9 pin) and names `atm-bd-core` as a path source (installed to `.atm-bd/core/` by bo-14).
-   - Neither script assigns, sends or writes a file.
-   - Acceptance: `uv run pytest skills/atm-bd-lite/tests/test_queues_script.py skills/atm-bd-lite/tests/test_snapshot_script.py` passes with a fake `bd_cache_rs` on `sys.path` and a fake runner. Cases: lite phase file gives exit 0 and the expected JSON (`snapshot` output equals `view-lite.json` byte for byte); a phase file with no `profile` key gives `PROFILE_MISMATCH`, exit 3 and no cache call; the script runs from an unrelated working directory.
-   - Acceptance: `python3 -c "import ast,sys; [print(f, n.name) for f in sys.argv[1:] for n in ast.parse(open(f).read()).body if isinstance(n,(ast.FunctionDef,ast.ClassDef)) and n.name!='main']" skills/atm-bd-lite/scripts/queues skills/atm-bd-lite/scripts/snapshot` prints nothing: everything but `main` comes from `atm_bd_core` (ANC-040).
-   - Acceptance: `grep -nE 'atm_bd_core\.(phase_rows|queue_rows|phase_view)|from atm_bd_core import' skills/atm-bd-lite/scripts/queues skills/atm-bd-lite/scripts/snapshot` names all three modules (ANC-045).
-   - Acceptance: `grep -rnE '"bd"|BdCli|bdc|task assign|"send"' skills/atm-bd-lite/scripts/queues skills/atm-bd-lite/scripts/snapshot core/atm_bd_core` prints nothing (ANC-063, ANC-024).
+7. **Orchestration unchanged** (ANC-030, ANC-039)
+   - Acceptance: `cd apps/atm-bd-console && uv run --frozen pytest -q` passes, and `git diff --diff-filter=MD --name-only <phase base>..HEAD -- apps/atm-bd-console/tests` prints nothing.
+   - Acceptance: `uv run --frozen pytest -q tests/test_cli_help_unchanged.py` passes: `--help` of `atm-bd` and its five subcommands equals the `<phase base>` capture in `tests/fixtures/help/` (hash in header).
+   - Acceptance: `git diff --name-only <phase base>..HEAD -- skills/atm-bd-orchestration/ <console>/runner.py <console>/model.py <console>/dispatch.py <console>/queues.py <console>/app.py <console>/render.py` prints nothing.
+   - Acceptance: `uv run --frozen pytest -q tests/test_policy_route.py -k orchestration_untouched` passes: each subcommand on `tests/fixtures/beads/repo/` calls `runner.step`/`queues.build` with today's arguments, leaving no `atm_bd_core` or `bd_cache_rs` in `sys.modules`.
+   - Acceptance: in an environment without bd-cache-rs (`uv run --frozen python -c 'import bd_cache_rs'` exits 1), `cd apps/atm-bd-console && uv run --frozen pytest -q` and `just test`'s plugin and `.github/scripts/tests` suites pass, and `git diff --diff-filter=MD --name-only <phase base>..HEAD -- apps/atm-bd-console/tests tests '.github/scripts/tests'` prints nothing.
+   - Acceptance: in that same environment, `atm-bd cron --phase <x>` on the lite fixture repo exits 3 with one `CACHE_UNAVAILABLE` line naming the fix.
+
+8. **Packaging** (ANC-018, ANC-063)
+   - `apps/atm-bd-console/pyproject.toml`: hatch `force-include` of `core/atm_bd_core`; no bd-cache-rs dependency.
+   - Acceptance: `uv build apps/atm-bd-console && unzip -l dist/atm_bd-*.whl | grep -c 'atm_bd_core/'` prints a nonzero count, and `unzip -p dist/atm_bd-*.whl '*/METADATA' | grep -ci 'bd-cache-rs'` prints `0`.
 
 ## Not in bo-15
-- The lite `cron` script, its QA assign and checks 1-9 (bo-14; it implements `PhaseProfile.cron` through `ScriptProfile` and prints `CronOutput`).
-- The lite installer (bo-14).
-- Any change to `skills/atm-bd-orchestration/`, to `runner.py`, `model.py` or `app.py`.
+- Later phase: the orchestration policy, rules and facts, the cutover, and deleting the old console logic. The cutover needs a parity run on real orchestration phase data (new layer vs today's console, same ticks) before that deletion.
+- The lite installer and the live run (bo-14).
 
 ## Validation
 - `just lint` and `just test` in atm-bd-orchestration.
-- `uv run pyright --project core` and `uv run pyright --project skills/atm-bd-lite` (strict) report 0 errors.
-
-## Questions for Rand
-- Q1 (ANC-032): "Each atm-bd subcommand must run the script with the same file name from the skill of the profile set in the phase file" does not fit the trait design. Orchestration has no per-subcommand scripts (its `queues` is in-process `queues.build`; its skill script is `bead-queues`), and ANC-030 forbids adding any. `console` and `snapshot` share one lite script, and `show` runs none. Proposed rewording: "Each atm-bd subcommand calls the PhaseProfile implementation selected by the phase file's profile; a profile implemented outside the console supplies each trait method as a script named after the method (queues, snapshot, cron) in its own skill's scripts/ directory."
-- Q2 (shared location): the `PhaseProfile` Protocol is in the console app, because its methods take console types; `core/atm_bd_core/` holds only the profile-neutral functions the lite scripts call. Is that the split you want, or should the Protocol move to core with neutral types of its own (more code, no behavior gain)?
-- Q3 (lite cron and `show`): lite cron writes no file (2026-11-01 ruling), so `show` on a lite phase reflects the last `console` or `snapshot` tick, not the last cron tick. Should lite cron also write `snapshot.json`? It would be a dashboard cache, not cron state.
+- `uv run pyright --project core` (strict) reports 0 errors.
