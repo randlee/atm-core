@@ -10,7 +10,7 @@ import pytest
 from jev_check import (Backend, Question, JevCheckError, SessionStore, build_request, check_llm, extract_python_branches,
                        extract_table_column, git_show, load_check, payload_bytes, run_check, run_request)
 from jev_check.extractors import GitShow
-from jev_check.llm import api_key
+from jev_check.llm import answer_schema, api_key, system_prompt
 
 HOOK = '''def hook(t):
     match t:
@@ -93,9 +93,8 @@ def haiku_message(text: str, input_tokens: int, extra: list[dict[str, Any]] | No
 
 Q1: dict[str, Question] = {"q": {"type": "choice", "instructions": "i", "criteria": {"yes": "y", "no": "n"}}}
 def reply_of(choices: dict[str, str]) -> str:
-    return json.dumps({"answers": [{"question": k, "choice": c, "confidence": 0.7, "probabilities": [
-        {"criterion": "yes", "p": 0.3 if c == "no" else 0.7}, {"criterion": "no", "p": 0.7 if c == "no" else 0.3}]}
-        for k, c in choices.items()]})
+    return json.dumps({"answers": {k: {"choice": c, "confidence": 0.7, "probabilities": {
+        "yes": 0.3 if c == "no" else 0.7, "no": 0.7 if c == "no" else 0.3}} for k, c in choices.items()}})
 
 
 ONE = reply_of({"q": "no"})
@@ -171,9 +170,12 @@ def test_haiku_request_is_the_payload_alone(keys: None) -> None:
     (h1, p1, count), (h2, p2, body) = http.posts
     assert (h1, p1, h2, p2) == ("api.anthropic.com", "/v1/messages/count_tokens", "api.anthropic.com", "/v1/messages")
     assert body["messages"] == [{"role": "user", "content": payload_bytes({"s": 1}, Q1).decode()}]
-    assert set(body) == {"model", "max_tokens", "messages", "output_config"}  # no system, no tools
-    item = body["output_config"]["format"]["schema"]["properties"]["answers"]["items"]
-    assert item["required"] == ["question", "choice", "confidence", "probabilities"]
+    assert set(body) == {"model", "max_tokens", "messages", "system"}  # no tools, no output_config
+    assert body["system"] == system_prompt(answer_schema(Q1))
+    q = answer_schema(Q1)["properties"]["answers"]["properties"]["q"]
+    assert q["required"] == ["choice", "confidence", "probabilities"]
+    assert q["properties"]["choice"]["enum"] == list(Q1["q"]["criteria"])
+    assert q["properties"]["probabilities"]["required"] == list(Q1["q"]["criteria"])
     assert count == {k: v for k, v in body.items() if k != "max_tokens"}
     assert (reply.input_tokens, reply.prompt_tokens, reply.commands) == (100, 100, 0)
 
@@ -187,7 +189,8 @@ def test_luna_request_is_the_payload_alone(keys: None) -> None:
     (_, p1, count), (_, p2, body) = http.posts
     assert (p1, p2) == ("/v1/responses/input_tokens", "/v1/responses")
     assert body["input"] == [{"role": "user", "content": payload_bytes({"s": 1}, Q1).decode()}]
-    assert set(body) == {"model", "input", "text"} and count == body
+    assert set(body) == {"model", "input", "instructions"} and count == body
+    assert body["instructions"] == system_prompt(answer_schema(Q1))
     assert (reply.input_tokens, reply.prompt_tokens, reply.commands) == (50, 50, 0)
 
 
@@ -210,7 +213,7 @@ def test_equal_input_record(keys: None, input_tokens: int, extra: list[dict[str,
 
 @pytest.mark.parametrize("reply", [
     "not json", '{"answers": []}', reply_of({"q": "maybe"}), reply_of({"q": "no", "x": "no"}),
-    '{"answers": [{"question": "q", "choice": "no", "confidence": 1, "probabilities": [{"criterion": "no", "p": 1}]}]}'])
+    '{"answers": {"q": {"choice": "no", "confidence": 1, "probabilities": {"no": 1}}}}'])
 def test_llm_bad_reply_is_typed(keys: None, reply: str) -> None:
     with pytest.raises(JevCheckError) as err:
         check_llm(HAIKU, {}, Q1, FakeHttp(1, haiku_message(reply, 1)))
@@ -261,3 +264,9 @@ def test_run_writes_session_and_ask_continues_it(keys: None, repo: tuple[Path, s
     with pytest.raises(JevCheckError) as err:
         store.read(result.session_id)
     assert err.value.code == "SESSION_EXPIRED"
+
+
+def test_unknown_question_type_has_no_answer_schema() -> None:
+    with pytest.raises(JevCheckError) as err:
+        answer_schema({"q": {"type": "rank", "instructions": "i", "criteria": {"a": "A"}}})
+    assert err.value.code == "INPUT_INVALID"
