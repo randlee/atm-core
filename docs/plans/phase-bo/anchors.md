@@ -80,8 +80,8 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-072 | locked | review findings bind to the spec | 2026-11-01 |
 | ANC-073 | locked | anchor checks are mechanical | 2026-11-01 |
 | ANC-074 | locked |  | 2026-11-01 |
-| ANC-075 | proposed |  | 2026-11-01 |
-| ANC-076 | proposed |  | 2026-11-01 |
+| ANC-075 | locked |  | 2026-11-01 |
+| ANC-076 | locked |  | 2026-11-01 |
 
 ## ANC-001
 
@@ -1417,7 +1417,7 @@ Anchor: The atm-bd queues, cron, console (TUI), show and snapshot subcommands mu
 
 > we will need to make queues, cron and console work w/ both.  not sure what show and snapshot are, but those likely need to handle both as well.  I would expect all the cli subcommands and tui would be working to traits that both skills would need to implement
 
-Said by Rand, phase-bo replan 2026-11-01 (fenix): Rand's ruling on the ANC-005/ANC-032 vs ANC-030 conflict, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan 2026-11-01 (fenix): Rand's ruling on the ANC-005/ANC-032 vs ANC-030 conflict, 2026-11-01. Status: locked. Version 2.
 
 Deterministic check to pair with the development gate: uv run pytest apps/atm-bd-console/tests/test_profile_traits.py passes: each of queues, cron, console, show and snapshot runs on a lite and an orchestration phase fixture through the trait
 
@@ -1431,7 +1431,7 @@ Anchor: The atm-bd monitoring code for lite must be two separate layers in atm-b
 
 > there are a set of collectors.  atm collectors, git collectors, bd collectors.  they collect info then there is business logic layer w/ simple decision making logic based on the collectors.  this decision making logic would be slightly different for atm-bd-lite (there are no sanity agents).  everything else is pretty much the same. | the problem is spagetti code which mixes concerns. | it is the same regardless of what you are monitoring.
 
-Said by Rand, phase-bo replan 2026-11-01 (fenix): console profile design; existing console logic is not refactored, the layer is newly written (ANC-036) and orchestration cuts over later, 2026-11-01. Status: proposed. Version 2.
+Said by Rand, phase-bo replan 2026-11-01 (fenix): console profile design; existing console logic is not refactored, the layer is newly written (ANC-036) and orchestration cuts over later, 2026-11-01. Status: locked. Version 2.
 
 Deterministic check to pair with the development gate: grep -rnE 'subprocess|bd_cache_rs|open\(|requests|http' core/atm_bd_core/decide prints nothing; uv run pytest core/tests/test_decide.py passes on fixed facts values with no fakes of I/O
 

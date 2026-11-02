@@ -4532,7 +4532,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4551,6 +4551,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T05:05:07+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"ok, approved.\" (collector/decision design, profile selection, orchestration unchanged)"
         }
       ]
     },
@@ -4577,7 +4583,7 @@
       },
       "question_overrides": {},
       "version": 2,
-      "status": "proposed",
+      "status": "locked",
       "promoted_to": null,
       "beads": {
         "anchor": null,
@@ -4596,6 +4602,12 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-02T05:05:07+00:00",
+          "event": "locked",
+          "status": "locked",
+          "reason": "Rand, 2026-11-01: \"ok, approved.\" (collector/decision design, profile selection, orchestration unchanged)"
         }
       ]
     }
