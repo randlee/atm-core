@@ -26,7 +26,7 @@ path = "src/bin/atm-daemon-benchmark.rs"
 required-features = ["benchmark-harness"]
 
 [dependencies]
-sc-lint-attributes = "0.8.3"
+sc-lint-attributes = { workspace = true }
 async-trait.workspace = true
 atm-core.workspace = true
 atm-cron.workspace = true
