@@ -81,3 +81,5 @@ repository's pinned Rust and Python baselines. The current exception is
 `cargo-modules` `0.26.0` (upstream `0.27.0` requires Rust `1.95.0`), while this
 repository deliberately pins Rust `1.94.1`. Compatibility exceptions must be
 documented here and re-evaluated whenever the seed Rust version changes.
+
+Lint and manifest Python rows run from `.sc-lint/venv`. After `just setup`, run `just setup-sc-lint-python` to install the repository helper dependencies and supported sc-compose wheel into that environment. CI performs both commands before linting.

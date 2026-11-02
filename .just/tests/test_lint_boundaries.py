@@ -183,7 +183,14 @@ class LintBoundariesTests(unittest.TestCase):
         )
         self.assertIn("peer-dial-seam", runtime.lint_rules)
         profiles = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["profiles"]
-        self.assertIn("peer-dial-seam", profiles)
+        for platform, python in (
+            ("linux", ".sc-lint/venv/bin/python"),
+            ("macos", ".sc-lint/venv/bin/python"),
+            ("windows", ".sc-lint\\venv\\Scripts\\python.exe"),
+        ):
+            row = profiles[f"peer-dial-seam-{platform}"]
+            self.assertEqual(row["platform"], platform)
+            self.assertEqual(row["command"], [python, ".just/lint_peer_dial_seam.py"])
 
     def test_graft_shared_client_has_no_direct_interprocess_dependency(self) -> None:
         manifest = tomllib.loads(

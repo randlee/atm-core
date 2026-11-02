@@ -21,23 +21,56 @@ exclude_paths_by_rule = { "SCB-RUNTIME-003" = ["crates/atm/src/commands/internal
 reason = "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. See randlee/sc-lint#82."
 
 [tool.sc-lint.lint_profiles]
-ci = ["adr-index", "arch-gates", "atm-graft-python-boundary", "boundaries", "clippy-linux", "clippy-macos", "clippy-native-windows", "clippy-windows", "clippy-windows-macos", "daemon-signing-coupling", "daemon-singleton", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary", "fixed-sleep", "fmt", "function-length", "hermes-adapter", "hermes-atm-boundary", "identities", "kit-drift", "legacy-mailbox-paths", "legacy-transport-removal", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy", "peer-dial-seam", "read-concurrency-gates", "runtime-observation-boundary", "runtime-stderr", "same-host-portability", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit", "site-generated", "site-links", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter", "ttl-triage", "version-linux", "version-macos", "version-windows"]
+ci = ["adr-index-linux", "adr-index-macos", "adr-index-windows", "arch-gates", "atm-graft-python-boundary-linux", "atm-graft-python-boundary-macos", "atm-graft-python-boundary-windows", "boundaries-linux", "boundaries-macos", "boundaries-windows", "clippy-linux", "clippy-macos", "clippy-native-windows", "clippy-windows", "clippy-windows-macos", "daemon-signing-coupling-linux", "daemon-signing-coupling-macos", "daemon-signing-coupling-windows", "daemon-singleton-linux", "daemon-singleton-macos", "daemon-singleton-windows", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary-linux", "env-var-boundary-macos", "env-var-boundary-windows", "fixed-sleep-linux", "fixed-sleep-macos", "fixed-sleep-windows", "fmt", "function-length", "hermes-adapter-linux", "hermes-adapter-macos", "hermes-adapter-windows", "hermes-atm-boundary-linux", "hermes-atm-boundary-macos", "hermes-atm-boundary-windows", "identities", "kit-drift-linux", "kit-drift-macos", "kit-drift-windows", "legacy-mailbox-paths-linux", "legacy-mailbox-paths-macos", "legacy-mailbox-paths-windows", "legacy-transport-removal-linux", "legacy-transport-removal-macos", "legacy-transport-removal-windows", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy-linux", "nudge-taxonomy-macos", "nudge-taxonomy-windows", "peer-dial-seam-linux", "peer-dial-seam-macos", "peer-dial-seam-windows", "read-concurrency-gates-linux", "read-concurrency-gates-macos", "read-concurrency-gates-windows", "runtime-observation-boundary-linux", "runtime-observation-boundary-macos", "runtime-observation-boundary-windows", "runtime-stderr-linux", "runtime-stderr-macos", "runtime-stderr-windows", "same-host-portability-linux", "same-host-portability-macos", "same-host-portability-windows", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit-linux", "silent-emit-macos", "silent-emit-windows", "site-generated-linux", "site-generated-macos", "site-generated-windows", "site-links-linux", "site-links-macos", "site-links-windows", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter-linux", "template-frontmatter-macos", "template-frontmatter-windows", "ttl-triage-linux", "ttl-triage-macos", "ttl-triage-windows", "version-linux", "version-macos", "version-windows"]
 
 [[tool.sc-lint.lint]]
-name = "adr-index"
-command = ["just", "_py", ".just/check_adr_index.py"]
+name = "adr-index-linux"
+command = [".bootstrap-venv/bin/python", ".just/check_adr_index.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "adr-index-macos"
+command = [".bootstrap-venv/bin/python", ".just/check_adr_index.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "adr-index-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_adr_index.py"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "arch-gates"
 command = ["cargo", "test", "-p", "atm-architecture", "--quiet"]
 
 [[tool.sc-lint.lint]]
-name = "atm-graft-python-boundary"
-command = ["just", "_py", ".just/lint_atm_graft_python_boundary.py"]
+name = "atm-graft-python-boundary-linux"
+command = [".bootstrap-venv/bin/python", ".just/lint_atm_graft_python_boundary.py"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
-name = "boundaries"
-command = ["just", "_py", ".just/lint_boundaries.py"]
+name = "atm-graft-python-boundary-macos"
+command = [".bootstrap-venv/bin/python", ".just/lint_atm_graft_python_boundary.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "atm-graft-python-boundary-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_atm_graft_python_boundary.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "boundaries-linux"
+command = [".bootstrap-venv/bin/python", ".just/lint_boundaries.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "boundaries-macos"
+command = [".bootstrap-venv/bin/python", ".just/lint_boundaries.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "boundaries-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_boundaries.py"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "clippy-linux"
@@ -74,12 +107,34 @@ host = "macos"
 env_paths = { "PYO3_PYTHON" = ".bootstrap-venv/bin/python" }
 
 [[tool.sc-lint.lint]]
-name = "daemon-signing-coupling"
-command = ["just", "_py", ".just/lint_daemon_signing_coupling.py"]
+name = "daemon-signing-coupling-linux"
+command = [".bootstrap-venv/bin/python", ".just/lint_daemon_signing_coupling.py"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
-name = "daemon-singleton"
-command = ["just", "_py", "scripts/lint_daemon_singleton.py"]
+name = "daemon-signing-coupling-macos"
+command = [".bootstrap-venv/bin/python", ".just/lint_daemon_signing_coupling.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "daemon-signing-coupling-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_daemon_signing_coupling.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "daemon-singleton-linux"
+command = [".bootstrap-venv/bin/python", "scripts/lint_daemon_singleton.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "daemon-singleton-macos"
+command = [".bootstrap-venv/bin/python", "scripts/lint_daemon_singleton.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "daemon-singleton-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", "scripts/lint_daemon_singleton.py"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "deny-linux"
@@ -97,12 +152,34 @@ command = [".sc-lint\\venv\\Scripts\\python.exe", "-m", "sc_lint.lint_cargo_deny
 platform = "windows"
 
 [[tool.sc-lint.lint]]
-name = "env-var-boundary"
-command = ["just", "_py", ".just/check_env_var_boundary.py"]
+name = "env-var-boundary-linux"
+command = [".bootstrap-venv/bin/python", ".just/check_env_var_boundary.py"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
-name = "fixed-sleep"
-command = ["just", "_py", ".just/check_fixed_sleep_hygiene.py"]
+name = "env-var-boundary-macos"
+command = [".bootstrap-venv/bin/python", ".just/check_env_var_boundary.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "env-var-boundary-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_env_var_boundary.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "fixed-sleep-linux"
+command = [".bootstrap-venv/bin/python", ".just/check_fixed_sleep_hygiene.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "fixed-sleep-macos"
+command = [".bootstrap-venv/bin/python", ".just/check_fixed_sleep_hygiene.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "fixed-sleep-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_fixed_sleep_hygiene.py"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "fmt"
@@ -113,28 +190,83 @@ name = "function-length"
 command = ["sc-lint", "lint", "function-length"]
 
 [[tool.sc-lint.lint]]
-name = "hermes-adapter"
-command = ["just", "_py", ".just/lint_hermes_adapter.py"]
+name = "hermes-adapter-linux"
+command = [".bootstrap-venv/bin/python", ".just/lint_hermes_adapter.py"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
-name = "hermes-atm-boundary"
-command = ["just", "_py", ".just/lint_hermes_atm_boundary.py"]
+name = "hermes-adapter-macos"
+command = [".bootstrap-venv/bin/python", ".just/lint_hermes_adapter.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "hermes-adapter-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_hermes_adapter.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "hermes-atm-boundary-linux"
+command = [".bootstrap-venv/bin/python", ".just/lint_hermes_atm_boundary.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "hermes-atm-boundary-macos"
+command = [".bootstrap-venv/bin/python", ".just/lint_hermes_atm_boundary.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "hermes-atm-boundary-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_hermes_atm_boundary.py"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "identities"
 command = ["sc-lint", "lint", "identity-literals"]
 
 [[tool.sc-lint.lint]]
-name = "kit-drift"
-command = ["just", "_py", "plugins/sc-lint/install.py", ".", "--dry-run"]
+name = "kit-drift-linux"
+command = [".bootstrap-venv/bin/python", "plugins/sc-lint/install.py", ".", "--dry-run"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
-name = "legacy-mailbox-paths"
-command = ["just", "_py", "scripts/check-legacy-mailbox-paths.py"]
+name = "kit-drift-macos"
+command = [".bootstrap-venv/bin/python", "plugins/sc-lint/install.py", ".", "--dry-run"]
+platform = "macos"
 
 [[tool.sc-lint.lint]]
-name = "legacy-transport-removal"
-command = ["just", "_py", "scripts/phase-am/check_legacy_transport_removal.py", "--category", "raw-framing", "--category", "peer-ingress", "--category", "resend-replay", "--category", "direct-sqlite", "--category", "dead-daemon-dispatch"]
+name = "kit-drift-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", "plugins/sc-lint/install.py", ".", "--dry-run"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "legacy-mailbox-paths-linux"
+command = [".bootstrap-venv/bin/python", "scripts/check-legacy-mailbox-paths.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "legacy-mailbox-paths-macos"
+command = [".bootstrap-venv/bin/python", "scripts/check-legacy-mailbox-paths.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "legacy-mailbox-paths-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", "scripts/check-legacy-mailbox-paths.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "legacy-transport-removal-linux"
+command = [".bootstrap-venv/bin/python", "scripts/phase-am/check_legacy_transport_removal.py", "--category", "raw-framing", "--category", "peer-ingress", "--category", "resend-replay", "--category", "direct-sqlite", "--category", "dead-daemon-dispatch"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "legacy-transport-removal-macos"
+command = [".bootstrap-venv/bin/python", "scripts/phase-am/check_legacy_transport_removal.py", "--category", "raw-framing", "--category", "peer-ingress", "--category", "resend-replay", "--category", "direct-sqlite", "--category", "dead-daemon-dispatch"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "legacy-transport-removal-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", "scripts/phase-am/check_legacy_transport_removal.py", "--category", "raw-framing", "--category", "peer-ingress", "--category", "resend-replay", "--category", "direct-sqlite", "--category", "dead-daemon-dispatch"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "lines"
@@ -156,28 +288,94 @@ command = [".sc-lint\\venv\\Scripts\\python.exe", "-m", "sc_lint.lint_manifests"
 platform = "windows"
 
 [[tool.sc-lint.lint]]
-name = "nudge-taxonomy"
-command = ["just", "_py", "scripts/check-nudge-taxonomy.py"]
+name = "nudge-taxonomy-linux"
+command = [".bootstrap-venv/bin/python", "scripts/check-nudge-taxonomy.py"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
-name = "peer-dial-seam"
-command = ["just", "_py", ".just/lint_peer_dial_seam.py"]
+name = "nudge-taxonomy-macos"
+command = [".bootstrap-venv/bin/python", "scripts/check-nudge-taxonomy.py"]
+platform = "macos"
 
 [[tool.sc-lint.lint]]
-name = "read-concurrency-gates"
-command = ["just", "_py", ".just/check_read_concurrency_gates.py"]
+name = "nudge-taxonomy-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", "scripts/check-nudge-taxonomy.py"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
-name = "runtime-observation-boundary"
-command = ["just", "_py", ".just/check_runtime_observation_boundary.py"]
+name = "peer-dial-seam-linux"
+command = [".bootstrap-venv/bin/python", ".just/lint_peer_dial_seam.py"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
-name = "runtime-stderr"
-command = ["just", "_py", "scripts/check-runtime-stderr.py"]
+name = "peer-dial-seam-macos"
+command = [".bootstrap-venv/bin/python", ".just/lint_peer_dial_seam.py"]
+platform = "macos"
 
 [[tool.sc-lint.lint]]
-name = "same-host-portability"
-command = ["just", "_py", ".just/lint_same_host_portability.py"]
+name = "peer-dial-seam-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_peer_dial_seam.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "read-concurrency-gates-linux"
+command = [".bootstrap-venv/bin/python", ".just/check_read_concurrency_gates.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "read-concurrency-gates-macos"
+command = [".bootstrap-venv/bin/python", ".just/check_read_concurrency_gates.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "read-concurrency-gates-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_read_concurrency_gates.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "runtime-observation-boundary-linux"
+command = [".bootstrap-venv/bin/python", ".just/check_runtime_observation_boundary.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "runtime-observation-boundary-macos"
+command = [".bootstrap-venv/bin/python", ".just/check_runtime_observation_boundary.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "runtime-observation-boundary-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_runtime_observation_boundary.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "runtime-stderr-linux"
+command = [".bootstrap-venv/bin/python", "scripts/check-runtime-stderr.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "runtime-stderr-macos"
+command = [".bootstrap-venv/bin/python", "scripts/check-runtime-stderr.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "runtime-stderr-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", "scripts/check-runtime-stderr.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "same-host-portability-linux"
+command = [".bootstrap-venv/bin/python", ".just/lint_same_host_portability.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "same-host-portability-macos"
+command = [".bootstrap-venv/bin/python", ".just/lint_same_host_portability.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "same-host-portability-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_same_host_portability.py"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "sc-boundary"
@@ -207,16 +405,49 @@ command = [".sc-lint\\venv\\Scripts\\python.exe", "-m", "sc_lint.lint_cargo_shea
 platform = "windows"
 
 [[tool.sc-lint.lint]]
-name = "silent-emit"
-command = ["just", "_py", "scripts/check-silent-emit.py"]
+name = "silent-emit-linux"
+command = [".bootstrap-venv/bin/python", "scripts/check-silent-emit.py"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
-name = "site-generated"
-command = ["just", "_py", ".just/check_site_generated.py"]
+name = "silent-emit-macos"
+command = [".bootstrap-venv/bin/python", "scripts/check-silent-emit.py"]
+platform = "macos"
 
 [[tool.sc-lint.lint]]
-name = "site-links"
-command = ["just", "_py", ".just/check_site_links.py"]
+name = "silent-emit-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", "scripts/check-silent-emit.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "site-generated-linux"
+command = [".bootstrap-venv/bin/python", ".just/check_site_generated.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "site-generated-macos"
+command = [".bootstrap-venv/bin/python", ".just/check_site_generated.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "site-generated-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_site_generated.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "site-links-linux"
+command = [".bootstrap-venv/bin/python", ".just/check_site_links.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "site-links-macos"
+command = [".bootstrap-venv/bin/python", ".just/check_site_links.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "site-links-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_site_links.py"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "spell-linux"
@@ -234,12 +465,34 @@ command = [".sc-lint\\venv\\Scripts\\python.exe", "-m", "sc_lint.lint_codespell"
 platform = "windows"
 
 [[tool.sc-lint.lint]]
-name = "template-frontmatter"
-command = ["just", "_py", ".just/check_template_frontmatter.py"]
+name = "template-frontmatter-linux"
+command = [".bootstrap-venv/bin/python", ".just/check_template_frontmatter.py"]
+platform = "linux"
 
 [[tool.sc-lint.lint]]
-name = "ttl-triage"
-command = ["just", "_py", ".just/lint_ttl_triage_consistency.py"]
+name = "template-frontmatter-macos"
+command = [".bootstrap-venv/bin/python", ".just/check_template_frontmatter.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "template-frontmatter-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_template_frontmatter.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "ttl-triage-linux"
+command = [".bootstrap-venv/bin/python", ".just/lint_ttl_triage_consistency.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "ttl-triage-macos"
+command = [".bootstrap-venv/bin/python", ".just/lint_ttl_triage_consistency.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "ttl-triage-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_ttl_triage_consistency.py"]
+platform = "windows"
 
 [[tool.sc-lint.lint]]
 name = "version-linux"

@@ -11,6 +11,7 @@ SECTIONS = (
             ("help", "Show this help."),
             ("bootstrap", "Install and verify the exact pinned CI tool contract."),
             ("setup", "Install the pinned sc-lint adoption tools."),
+            ("setup-sc-lint-python", "Install repository lint/test Python dependencies into sc-lint's environment."),
             ("upgrade", "Upgrade the managed sc-lint installation."),
             ("build", "Build the full workspace."),
             ("test", "Run manifest-defined tests or a named selector."),

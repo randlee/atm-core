@@ -24,21 +24,9 @@ help:
 bootstrap *args:
     {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
-# Execute repository Python through the pinned bootstrap environment; sc-lint
-# rows cannot select this interpreter cross-platform yet (sc-lint#198).
-# Arguments reach Python as given, never re-split by the shell.
-[private]
-[unix]
-[positional-arguments]
-_py *args:
-    {{python_cmd}} "$@"
-
-[private]
-[windows]
-[positional-arguments]
-[script('pwsh', '-NoLogo', '-NonInteractive', '-File')]
-_py *args:
-    {{python_cmd}} @args
+# Install the shared lint/test Python dependencies in sc-lint's Python environment.
+setup-sc-lint-python:
+    {{seed_python_cmd}} .just/setup_sc_lint_python.py
 
 # Format the Rust workspace or run the formatting gate.
 fmt mode='check':

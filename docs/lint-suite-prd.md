@@ -126,8 +126,9 @@ Lint execution model:
   plain `sc-lint.toml` steps that call the kit's managed interpreter directly
   (`.sc-lint/venv/bin/python -m sc_lint.<helper>`, the invocation sc-lint
   documents), one platform-tagged step per OS because the interpreter path
-  differs on Windows. Clippy uses host-aware steps with `env_paths` to select
-  the bootstrap interpreter for PyO3.
+  differs on Windows. Repository-owned Python script rows use per-OS
+  `.bootstrap-venv` interpreters; Clippy uses host-aware steps with `env_paths`
+  to select the bootstrap interpreter for PyO3.
 
 ### Current custom Python lint tools
 

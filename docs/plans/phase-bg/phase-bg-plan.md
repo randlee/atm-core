@@ -2,7 +2,7 @@
 
 Rendered from the beads plan (`bd show`). The beads are authoritative; this file is for review.
 
-> **Current state (2026-11-01).** bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit runner, moved repo lint steps into `.sc-lint/install.json`, and removed the in-tree analyzers. The kit now owns Windows-target cross compilation tools and rustup targets through its `tools` contract. The repository retains its private Python launcher because lint rows cannot select the bootstrap interpreter across operating systems (sc-lint#198 remains closed). The cleanup branch adds the macOS-host Windows-target Clippy row and removes redundant setup and bootstrap infrastructure. See the linked bead history for earlier decisions and sprint details.
+> **Current state (2026-11-01).** bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit runner, moved repo lint steps into `.sc-lint/install.json`, and removed the in-tree analyzers. The kit now owns Windows-target cross compilation tools and rustup targets through its `tools` contract. This cleanup removes the private Python bridge: each Python lint and test row has Linux, macOS and Windows variants that invoke the `.sc-lint/venv` interpreter directly, and the test runner selects the host variant. It also adds the macOS-host Windows-target Clippy row and removes redundant setup infrastructure. See the linked bead history for earlier decisions and sprint details.
 
 ---
 
@@ -62,10 +62,10 @@ Install the sc-lint 0.7.0 adoption kit verbatim so atm-core has the shared `just
 
 ## Deliverables
 1. BG1-1 Kit apply: `python3 <kit-0.7.0>/install.py --input <input> .` writes `.sc-lint/install.json`, `sc-lint.toml`, `.sc-lint/{justfile,bootstrap,bootstrap.ps1,installed.json}`, `plugins/sc-lint/**`, the adopter agent and skill, and the managed Justfile import block. Kit files are committed unedited; `python3 plugins/sc-lint/install.py --dry-run .` exits 0 with no output.
-2. BG1-2 Steps: `.sc-lint/install.json` `profiles` has one step per current `run_lint.py all` target, same name, argv `["just", "_py", ".just/run_lint.py", "<target>"]`; `test` keeps today's `just test` (the kit leaves an existing `test` recipe alone, sc-lint#194).
-3. BG1-3 Justfile: remove the recipes that collide with the kit justfile (`lint target=`, `default` if it collides); add `_py *args` (runs the pinned `.bootstrap-venv` interpreter for the host OS); every other recipe unchanged. Bare `just` still prints help.
+2. BG1-2 Steps: `.sc-lint/install.json` `profiles` has one step per current `run_lint.py all` target, same name, argv through the Justfile Python bridge; `test` keeps today's `just test` (the kit leaves an existing `test` recipe alone, sc-lint#194).
+3. BG1-3 Justfile: remove the recipes that collide with the kit justfile (`lint target=`, `default` if it collides); add a Justfile Python bridge to run scripts through the pinned bootstrap interpreter; every other recipe unchanged. Bare `just` still prints help.
 4. BG1-4 xwin: step `clippy-windows` runs the published `sc-lint clippy xwin` (and `clippy` runs `sc-lint clippy native`); the only wrapper is the PYO3_PYTHON environment the pyo3 crates (atm-query-python, atm-graft-python) need, marked `delete when randlee/sc-lint#198 ships`. On Windows `clippy-windows` exits 0 saying native clippy covers it. `cargo-xwin` pinned in `tools/bootstrap.toml`; `tools/bootstrap.py` adds the msvc target on non-Windows hosts; bootstrap tests and doc updated.
-5. BG1-5 CI: `.github/workflows/ci.yml` lint and test jobs run `just setup` after bootstrap and cache the sc-lint binary and the xwin SDK; the just-lint job, which calls `just lint` today, calls `just _py .just/run_lint.py all` until bg-6; there is still one lint workflow (no kit `sc-lint.yml`, `ci.enabled = false`).
+5. BG1-5 CI: `.github/workflows/ci.yml` lint and test jobs run `just setup` after bootstrap and cache the sc-lint binary and the xwin SDK; the just-lint job, which calls `just lint` today, calls the Justfile Python bridge for `.just/run_lint.py all` until bg-6; there is still one lint workflow (no kit `sc-lint.yml`, `ci.enabled = false`).
 
 ## Does Not Close
 - Retargeting steps to published analyzers and deleting legacy tools (bg-2..bg-5); runner cutover and speed (bg-6).
@@ -75,7 +75,7 @@ Install the sc-lint 0.7.0 adoption kit verbatim so atm-core has the shared `just
 ## Kit model (sc-lint v0.7.0, packages/sc-lint-adoption)
 - `install.py` persists its validated input at `.sc-lint/install.json`; `--input` bootstraps it. `profiles` and `test` argv are rendered verbatim into `sc-lint.toml` `[[tool.sc-lint.lint]]` / `[[tool.sc-lint.test]]`.
 - `.sc-lint/justfile`: `setup`, `lint *profile`, `upgrade` via `.sc-lint/bootstrap` (`.ps1` on Windows). `test.just` is added only when the consumer has no `test` recipe; atm-core has one.
-- Consumer argv runs with no shell, so every atm step goes through `just _py ...`, which picks the bootstrap venv Python on each OS.
+- Consumer argv runs with no shell. Python lint and test rows use explicit per-OS `.sc-lint/venv` interpreter paths, and `just test` selects the row matching the current host.
 - Kit steps run serially and stop at the first failure until sc-lint#195 ships (bg-6); CI keeps `run_lint.py all` meanwhile.
 
 ## Upstream
@@ -86,7 +86,7 @@ Install the sc-lint 0.7.0 adoption kit verbatim so atm-core has the shared `just
 ## Acceptance Criteria
 - [ ] `python3 plugins/sc-lint/install.py --dry-run .` exits 0, no output; no kit-managed file differs from the 0.7.0 kit render.
 - [ ] `just lint` runs every step `run_lint.py all` ran on develop, by name, plus `clippy-windows`; the ADR-008 gates (fixed-sleep, runtime-waits, daemon-singleton, same-host-portability) are named steps; Linux CI passes.
-- [ ] Each step's argv in `.sc-lint/install.json` is `["just", "_py", ".just/run_lint.py", "<target>"]` or a published sc-lint command; `just _py --version` prints the `.bootstrap-venv` Python; bare `just` prints help.
+- [ ] Each step in `.sc-lint/install.json` uses the Justfile Python bridge or a published sc-lint command; the bridge runs the pinned `.bootstrap-venv` Python; bare `just` prints help.
 - [ ] `just lint clippy-windows` runs `sc-lint clippy xwin` with `-D warnings` on macOS/Linux and exits 0 on Windows; `cargo-xwin` is pinned in `tools/bootstrap.toml` and bootstrap adds the msvc target (bootstrap tests cover both).
 - [ ] `.github/workflows/ci.yml` runs `just setup`, caches the sc-lint binary and xwin SDK, and has one lint workflow; Windows and macOS legs are proven on the phase release PR (phase AC).
 
@@ -208,7 +208,7 @@ The `runtime-waits` step runs the published `sc-lint lint sc-runtime` configured
 Every step the `sc_lint` wheel duplicates runs the published module (ANC-010): fmt, function-length, lines, manifests fully; spell, deny, shear, version and identities where the wheel covers them. Each legacy script is deleted after comparison (ANC-011, ANC-012); length findings are fixed by refactors (ANC-014).
 
 ## Deliverables
-1. BG5-0 Invocation: `function-length`, `lines` and `identities` use `sc-lint lint function-length|line-counts|identity-literals`; `fmt` runs `cargo fmt --all --check` (the command the published fmt step runs); the other wheel modules run through one Justfile recipe that calls `-m sc_lint.<module>` with the `.sc-lint/venv` interpreter for the host OS, marked `delete when randlee/sc-lint#198 ships`. No second sc-lint pin in `tools/bootstrap.toml`.
+1. BG5-0 Invocation: `function-length`, `lines` and `identities` use `sc-lint lint function-length|line-counts|identity-literals`; `fmt` runs `cargo fmt --all --check` (the command the published fmt step runs); the other wheel modules run through the Justfile Python bridge with the `.sc-lint/venv` interpreter for the host OS. No second sc-lint pin in `tools/bootstrap.toml`.
 2. BG5-1 Full duplicates: `fmt`, `function-length`, `lines`, `manifests` run as BG5-0 states; legacy scripts, their tests and the dead `modules` target deleted after comparison; `just fmt write|check` stays and calls `cargo fmt --all` directly (the pre-push hook and `just help` use it). For function-length, the comparison is: at the cut commit, the legacy tool's grandfathered list equals the rows `--write-baseline` writes; one finding bead tracks the baseline and closes when the file is empty.
 3. BG5-2 Partial duplicates: `spell`, `deny`, `shear`, `version`, `identities` run the published tool; the gaps (sc-lint#349 Windows console output for spell and any other wheel runner that fails the same way on Windows, #346 shear allowlist, #347 identity `concat!`, #137 Python pin lockstep, and the deny DNS retry under a new sc-lint issue) stay as the smallest atm-side check each, marked `delete when randlee/sc-lint#<n> ships`.
 4. BG5-3 Findings: each new function-length or line-count finding is fixed by a refactor that improves the code (no shaving to just under the limit); suppressions carry a reason and a finding bead.
@@ -246,7 +246,7 @@ sc-lint owns the step list and runs it: parallel, keep-going (sc-lint#195); `jus
 - `atm-phase-bg-gate-sclint-runner`: a published sc-lint release with #195, #196 and #199.
 
 ## Deliverables
-1. BG6-1 Steps call their tool directly from `.sc-lint/install.json`; `run_lint.py`'s `all`/`fast` modes and log plumbing are deleted; CI and `scripts/validate_release.py` (which runs `python3 .just/run_lint.py all`) switch to `just lint ci all`. The `_py` and venv-interpreter recipes stay until sc-lint#198 ships, marked `delete when`.
+1. BG6-1 Steps call their tool directly from `.sc-lint/install.json`; `run_lint.py`'s `all`/`fast` modes and log plumbing are deleted; CI and `scripts/validate_release.py` (which runs `python3 .just/run_lint.py all`) switch to `just lint ci all`. The earlier bridge-retention decision was superseded by the per-OS row cleanup: Python rows invoke `.sc-lint/venv` directly for each platform, and the bridge recipes are removed.
 2. BG6-2 Platform scope (REQ-P-PLATFORM-001/002): `just lint ci` = host-only, `just lint ci all` = every platform (#199). `clippy-windows` keeps its PYO3_PYTHON wrapper until #198 and its per-step target until #197, each marked `delete when`.
 3. BG6-3 Test manifest: `just test` and its named selectors come from `test` in `.sc-lint/install.json` (the consumer manifest of #196), covering today's `just test` steps, including the `sign_daemon_dev.py` step (REQ-P-TEST-001); plain `just test` excludes coverage; `just test coverage` writes the host's tracked report on macOS and Windows and fails clearly on Linux (REQ-P-COVERAGE-001).
 4. BG6-4 Speed (ANC-004): on one host with warm caches (cargo target dir, venvs), time the same check set at the phase base commit (`just lint`, i.e. `run_lint.py all`) and at the bg-6 head (`just lint` with `clippy-windows` excluded, the one step the base does not run): 1 discarded run, then 3 timed runs each; the head median is lower; commands and numbers in the PR body.
