@@ -27,15 +27,15 @@ fn prepares_the_active_log_file() {
 fn retained_log_pruning_uses_controlled_file_times() {
     let tempdir = TempDir::new().expect("tempdir");
     let active_log_path = tempdir.path().join(CANONICAL_LOG_FILE_NAME);
-    let recent_rotated_log_path = tempdir.path().join(format!("{CANONICAL_LOG_FILE_NAME}.1"));
+    let retained_rotated_log_path = tempdir.path().join(format!("{CANONICAL_LOG_FILE_NAME}.1"));
     let stale_rotated_log_path = tempdir.path().join(format!("{CANONICAL_LOG_FILE_NAME}.2"));
     std::fs::write(&active_log_path, "active\n").expect("active log");
-    std::fs::write(&recent_rotated_log_path, "recent\n").expect("recent rotated log");
+    std::fs::write(&retained_rotated_log_path, "retained\n").expect("retained rotated log");
     std::fs::write(&stale_rotated_log_path, "stale\n").expect("rotated log");
-    std::fs::File::open(&recent_rotated_log_path)
-        .expect("open recent rotated log")
-        .set_modified(std::time::SystemTime::now() - Duration::from_secs(10))
-        .expect("set controlled recent modification time");
+    std::fs::File::open(&retained_rotated_log_path)
+        .expect("open retained rotated log")
+        .set_modified(std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(4_102_444_800))
+        .expect("set fixed future modification time");
     std::fs::File::open(&stale_rotated_log_path)
         .expect("open rotated log")
         .set_modified(std::time::SystemTime::UNIX_EPOCH)
@@ -53,7 +53,9 @@ fn retained_log_pruning_uses_controlled_file_times() {
 
     // `JsonlFileSink::open` performs the same maintenance pass as the logger
     // worker, without depending on its cadence or scheduling. The ATM mapping
-    // must preserve the age: a zero-age mutation would prune the recent file.
+    // must preserve the age. The fixed future mtime makes retention independent
+    // of how long the test takes, while a zero-age mutation still fails during
+    // ATM policy conversion.
     let _sink = sc_observability::JsonlFileSink::open(active_log_path, backend_policy)
         .expect("synchronous retained-log maintenance");
 
@@ -62,8 +64,8 @@ fn retained_log_pruning_uses_controlled_file_times() {
         "maintenance must remove a rotated file older than the retention age"
     );
     assert!(
-        recent_rotated_log_path.exists(),
-        "maintenance must retain a recent rotated file under the ATM retention age"
+        retained_rotated_log_path.exists(),
+        "maintenance must retain a rotated file with a fixed future mtime"
     );
 }
 
