@@ -151,10 +151,14 @@ class SignDaemonDevTests(unittest.TestCase):
         justfile = (REPO_ROOT / "Justfile").read_text(encoding="utf-8")
         manifest = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["test"]
         self.assertEqual(manifest["daemon-signing"], {
-            "command": ["just", "_py", ".just/sign_daemon_dev.py"], "after_all": True,
+            "command": ["just", "lint", "daemon-signing-tests"], "after_all": True,
         })
+        self.assertEqual(manifest["python"], ["just", "lint", "python-tests"])
         self.assertNotIn("coverage", manifest)
         self.assertNotIn("default", manifest)
+        profiles = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["profiles"]
+        self.assertEqual(profiles["python-tests-macos"]["command"], [".bootstrap-venv/bin/python", ".just/run_pytests.py"])
+        self.assertEqual(profiles["python-tests-windows"]["command"], [".bootstrap-venv\\Scripts\\python.exe", ".just/run_pytests.py"])
         self.assertIn(".sc-lint/bootstrap.py test --config sc-lint.toml", justfile)
 
     def test_benchmark_recipe_uses_the_shipped_binary_runner(self) -> None:

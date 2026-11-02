@@ -604,6 +604,16 @@
       "version-linux",
       "version-macos",
       "version-windows"
+    ],
+    "daemon-signing-tests": [
+      "daemon-signing-tests-linux",
+      "daemon-signing-tests-macos",
+      "daemon-signing-tests-windows"
+    ],
+    "python-tests": [
+      "python-tests-linux",
+      "python-tests-macos",
+      "python-tests-windows"
     ]
   },
   "minimum_version": "0.8.4",
@@ -775,6 +785,27 @@
       "command": [
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_daemon_signing_coupling.py"
+      ],
+      "platform": "windows"
+    },
+    "daemon-signing-tests-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/sign_daemon_dev.py"
+      ],
+      "platform": "linux"
+    },
+    "daemon-signing-tests-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/sign_daemon_dev.py"
+      ],
+      "platform": "macos"
+    },
+    "daemon-signing-tests-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/sign_daemon_dev.py"
       ],
       "platform": "windows"
     },
@@ -1093,6 +1124,27 @@
       ],
       "platform": "windows"
     },
+    "python-tests-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/run_pytests.py"
+      ],
+      "platform": "linux"
+    },
+    "python-tests-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/run_pytests.py"
+      ],
+      "platform": "macos"
+    },
+    "python-tests-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/run_pytests.py"
+      ],
+      "platform": "windows"
+    },
     "read-concurrency-gates-linux": {
       "command": [
         ".bootstrap-venv/bin/python",
@@ -1396,8 +1448,8 @@
       "after_all": true,
       "command": [
         "just",
-        "_py",
-        ".just/sign_daemon_dev.py"
+        "lint",
+        "daemon-signing-tests"
       ]
     },
     "herdr": [
@@ -1409,8 +1461,8 @@
     ],
     "python": [
       "just",
-      "_py",
-      ".just/run_pytests.py"
+      "lint",
+      "python-tests"
     ],
     "workspace": [
       "cargo",

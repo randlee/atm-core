@@ -22,6 +22,8 @@ reason = "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling 
 
 [tool.sc-lint.lint_profiles]
 ci = ["adr-index-linux", "adr-index-macos", "adr-index-windows", "arch-gates", "atm-graft-python-boundary-linux", "atm-graft-python-boundary-macos", "atm-graft-python-boundary-windows", "boundaries-linux", "boundaries-macos", "boundaries-windows", "clippy-linux", "clippy-macos", "clippy-native-windows", "clippy-windows", "clippy-windows-macos", "daemon-signing-coupling-linux", "daemon-signing-coupling-macos", "daemon-signing-coupling-windows", "daemon-singleton-linux", "daemon-singleton-macos", "daemon-singleton-windows", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary-linux", "env-var-boundary-macos", "env-var-boundary-windows", "fixed-sleep-linux", "fixed-sleep-macos", "fixed-sleep-windows", "fmt", "function-length", "hermes-adapter-linux", "hermes-adapter-macos", "hermes-adapter-windows", "hermes-atm-boundary-linux", "hermes-atm-boundary-macos", "hermes-atm-boundary-windows", "identities", "kit-drift-linux", "kit-drift-macos", "kit-drift-windows", "legacy-mailbox-paths-linux", "legacy-mailbox-paths-macos", "legacy-mailbox-paths-windows", "legacy-transport-removal-linux", "legacy-transport-removal-macos", "legacy-transport-removal-windows", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy-linux", "nudge-taxonomy-macos", "nudge-taxonomy-windows", "peer-dial-seam-linux", "peer-dial-seam-macos", "peer-dial-seam-windows", "read-concurrency-gates-linux", "read-concurrency-gates-macos", "read-concurrency-gates-windows", "runtime-observation-boundary-linux", "runtime-observation-boundary-macos", "runtime-observation-boundary-windows", "runtime-stderr-linux", "runtime-stderr-macos", "runtime-stderr-windows", "same-host-portability-linux", "same-host-portability-macos", "same-host-portability-windows", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit-linux", "silent-emit-macos", "silent-emit-windows", "site-generated-linux", "site-generated-macos", "site-generated-windows", "site-links-linux", "site-links-macos", "site-links-windows", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter-linux", "template-frontmatter-macos", "template-frontmatter-windows", "ttl-triage-linux", "ttl-triage-macos", "ttl-triage-windows", "version-linux", "version-macos", "version-windows"]
+daemon-signing-tests = ["daemon-signing-tests-linux", "daemon-signing-tests-macos", "daemon-signing-tests-windows"]
+python-tests = ["python-tests-linux", "python-tests-macos", "python-tests-windows"]
 
 [[tool.sc-lint.lint]]
 name = "adr-index-linux"
@@ -119,6 +121,21 @@ platform = "macos"
 [[tool.sc-lint.lint]]
 name = "daemon-signing-coupling-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_daemon_signing_coupling.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "daemon-signing-tests-linux"
+command = [".bootstrap-venv/bin/python", ".just/sign_daemon_dev.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "daemon-signing-tests-macos"
+command = [".bootstrap-venv/bin/python", ".just/sign_daemon_dev.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "daemon-signing-tests-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/sign_daemon_dev.py"]
 platform = "windows"
 
 [[tool.sc-lint.lint]]
@@ -315,6 +332,21 @@ platform = "macos"
 [[tool.sc-lint.lint]]
 name = "peer-dial-seam-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_peer_dial_seam.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "python-tests-linux"
+command = [".bootstrap-venv/bin/python", ".just/run_pytests.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "python-tests-macos"
+command = [".bootstrap-venv/bin/python", ".just/run_pytests.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "python-tests-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/run_pytests.py"]
 platform = "windows"
 
 [[tool.sc-lint.lint]]
@@ -519,7 +551,7 @@ command = ["cargo", "test", "-p", "agent-team-mail", "--features", "cli-surface-
 
 [[tool.sc-lint.test]]
 name = "daemon-signing"
-command = ["just", "_py", ".just/sign_daemon_dev.py"]
+command = ["just", "lint", "daemon-signing-tests"]
 after_all = true
 
 [[tool.sc-lint.test]]
@@ -528,7 +560,7 @@ command = ["cargo", "test", "-p", "atm-herdr", "--all-features"]
 
 [[tool.sc-lint.test]]
 name = "python"
-command = ["just", "_py", ".just/run_pytests.py"]
+command = ["just", "lint", "python-tests"]
 
 [[tool.sc-lint.test]]
 name = "workspace"
