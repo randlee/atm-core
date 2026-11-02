@@ -3545,7 +3545,7 @@ Required testing architecture:
   test execution.
 
   Required behavior:
-  - the repository must expose `just test coverage`
+  - the repository must expose `just coverage`
   - plain `just test` must not implicitly collect coverage
   - coverage reporting must write tracked latest reports:
     - `reports/coverage/mac.md`

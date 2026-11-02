@@ -350,9 +350,6 @@ jobs:
           sc-compose --version
           wyvern --version
 
-      - name: Build workspace
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: cargo build --verbose
 
       # Historical reference only while Phase AL constructs the replacement
       # executable. This must not be cited as AL acceptance evidence.
@@ -374,15 +371,11 @@ jobs:
           Copy-Item "target/release/atm-daemon$suffix" (Join-Path $binDir "atm-daemon$suffix") -Force
           "ATM_SMOKE_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Run replacement-workspace tests excluding legacy atm-daemon
+      - name: Run manifest test suite
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
-        run: cargo test --workspace --exclude atm-daemon --verbose
-
-      - name: Run Herdr transport fixtures
-        if: ${{ always() && !cancelled() && needs.ci-scope.outputs.runtime == 'true' }}
-        run: cargo test -p atm-herdr --all-features --verbose
+        run: just test
 
       - name: Produce Windows Herdr process-audit doctor fixture
         if: ${{ always() && !cancelled() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}
@@ -401,10 +394,6 @@ jobs:
           path: ${{ runner.temp }}/atm-herdr-process-audit/windows-ci-doctor.json
           if-no-files-found: error
           retention-days: 7
-
-      - name: Run ATM CLI surface compatibility contract
-        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: cargo test -p agent-team-mail --features cli-surface-dump --test cli_surface --verbose
 
       - name: Download host release-wheel candidate
         if: ${{ needs.ci-scope.outputs.runtime == 'true' && needs.hermes-atm-release-wheels.result == 'success' }}

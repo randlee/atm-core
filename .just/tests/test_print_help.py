@@ -18,7 +18,7 @@ class PrintHelpTests(unittest.TestCase):
         self.assertIn("version latest", output)
         self.assertIn("setup", output)
         self.assertIn("coverage", output)
-        self.assertIn("test python|build|workspace|cli-surface|daemon-signing", output)
+        self.assertIn("test python|build|workspace|cli-surface|herdr|daemon-signing", output)
         self.assertIn("upgrade", output)
         self.assertIn("lint clippy-windows", output)
         self.assertIn("lint daemon-singleton", output)
