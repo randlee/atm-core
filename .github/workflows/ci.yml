@@ -102,10 +102,10 @@ jobs:
 
       - name: Configure platform cache directories
         run: >-
-          python -c "import os; from pathlib import Path; cache_root = Path(os.environ['RUNNER_TEMP']); sc_lint = cache_root / 'sc-lint' / 'bin'; xwin = cache_root / 'xwin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(sc_lint) + os.linesep + 'XWIN_CACHE_DIR=' + str(xwin) + os.linesep)"
+          python -c "import os; from pathlib import Path; cache_root = Path(os.environ['RUNNER_TEMP']); sc_lint = cache_root / 'sc-lint' / 'bin'; xwin = cache_root / 'xwin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(sc_lint) + '\n' + 'XWIN_CACHE_DIR=' + str(xwin) + '\n')"
 
       - name: Expose Cargo binaries on PATH
-        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
+        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + '\n')"
 
       - name: Cache bootstrap outputs
         uses: actions/cache@v4
@@ -306,7 +306,7 @@ jobs:
 
       - name: Expose Cargo binaries on PATH
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
-        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
+        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + '\n')"
 
       # Only develop/main save; PRs restore the default branch (develop) cache.
       # Per-PR saves filled the 10 GB repo limit with identical 3 GB targets.
@@ -348,7 +348,7 @@ jobs:
       - name: Configure sc-lint installation directory
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         run: >-
-          python -c "import os; from pathlib import Path; path = Path(os.environ['RUNNER_TEMP']) / 'sc-lint' / 'bin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(path) + os.linesep)"
+          python -c "import os; from pathlib import Path; path = Path(os.environ['RUNNER_TEMP']) / 'sc-lint' / 'bin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(path) + '\n')"
 
       - name: Set up sc-lint
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
