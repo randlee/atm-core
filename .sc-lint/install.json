@@ -624,9 +624,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_adr_index.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "adr-index-macos": {
@@ -634,9 +631,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_adr_index.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "adr-index-windows": {
@@ -644,9 +638,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/check_adr_index.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "arch-gates": [
@@ -682,9 +673,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_boundaries.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "boundaries-macos": {
@@ -692,9 +680,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_boundaries.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "boundaries-windows": {
@@ -702,9 +687,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_boundaries.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "clippy-linux": {
@@ -791,9 +773,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_daemon_signing_coupling.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "daemon-signing-coupling-macos": {
@@ -801,9 +780,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_daemon_signing_coupling.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "daemon-signing-coupling-windows": {
@@ -811,9 +787,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_daemon_signing_coupling.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "daemon-signing-tests-linux": {
@@ -842,9 +815,6 @@
         ".bootstrap-venv/bin/python",
         "scripts/lint_daemon_singleton.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "daemon-singleton-macos": {
@@ -852,9 +822,6 @@
         ".bootstrap-venv/bin/python",
         "scripts/lint_daemon_singleton.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "daemon-singleton-windows": {
@@ -862,9 +829,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         "scripts/lint_daemon_singleton.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "deny-linux": {
@@ -896,9 +860,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_env_var_boundary.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "env-var-boundary-macos": {
@@ -906,9 +867,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_env_var_boundary.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "env-var-boundary-windows": {
@@ -916,9 +874,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/check_env_var_boundary.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "fixed-sleep-linux": {
@@ -926,9 +881,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_fixed_sleep_hygiene.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "fixed-sleep-macos": {
@@ -936,9 +888,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_fixed_sleep_hygiene.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "fixed-sleep-windows": {
@@ -946,9 +895,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/check_fixed_sleep_hygiene.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "fmt": [
@@ -967,9 +913,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_hermes_adapter.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "hermes-adapter-macos": {
@@ -977,9 +920,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_hermes_adapter.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "hermes-adapter-windows": {
@@ -987,9 +927,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_hermes_adapter.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "hermes-atm-boundary-linux": {
@@ -997,9 +934,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_hermes_atm_boundary.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "hermes-atm-boundary-macos": {
@@ -1007,9 +941,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_hermes_atm_boundary.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "hermes-atm-boundary-windows": {
@@ -1017,9 +948,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_hermes_atm_boundary.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "identities": [
@@ -1181,9 +1109,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_peer_dial_seam.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "peer-dial-seam-macos": {
@@ -1191,9 +1116,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_peer_dial_seam.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "peer-dial-seam-windows": {
@@ -1201,9 +1123,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_peer_dial_seam.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "python-tests-linux": {
@@ -1211,9 +1130,6 @@
         ".bootstrap-venv/bin/python",
         ".just/run_pytests.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "python-tests-macos": {
@@ -1221,9 +1137,6 @@
         ".bootstrap-venv/bin/python",
         ".just/run_pytests.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "python-tests-windows": {
@@ -1231,9 +1144,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/run_pytests.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "read-concurrency-gates-linux": {
@@ -1241,9 +1151,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_read_concurrency_gates.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "read-concurrency-gates-macos": {
@@ -1251,9 +1158,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_read_concurrency_gates.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "read-concurrency-gates-windows": {
@@ -1261,9 +1165,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/check_read_concurrency_gates.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "runtime-observation-boundary-linux": {
@@ -1271,9 +1172,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_runtime_observation_boundary.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "runtime-observation-boundary-macos": {
@@ -1281,9 +1179,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_runtime_observation_boundary.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "runtime-observation-boundary-windows": {
@@ -1291,39 +1186,27 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/check_runtime_observation_boundary.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "runtime-stderr-linux": {
       "command": [
         ".bootstrap-venv/bin/python",
-        "scripts/check-runtime-stderr.py"
+        ".just/check_runtime_stderr.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "runtime-stderr-macos": {
       "command": [
         ".bootstrap-venv/bin/python",
-        "scripts/check-runtime-stderr.py"
+        ".just/check_runtime_stderr.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "runtime-stderr-windows": {
       "command": [
         ".bootstrap-venv\\Scripts\\python.exe",
-        "scripts/check-runtime-stderr.py"
+        ".just/check_runtime_stderr.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "same-host-portability-linux": {
@@ -1331,9 +1214,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_same_host_portability.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "same-host-portability-macos": {
@@ -1341,9 +1221,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_same_host_portability.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "same-host-portability-windows": {
@@ -1351,9 +1228,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_same_host_portability.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "sc-boundary": [
@@ -1493,9 +1367,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_template_frontmatter.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "template-frontmatter-macos": {
@@ -1503,9 +1374,6 @@
         ".bootstrap-venv/bin/python",
         ".just/check_template_frontmatter.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "template-frontmatter-windows": {
@@ -1513,9 +1381,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/check_template_frontmatter.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "ttl-triage-linux": {
@@ -1523,9 +1388,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_ttl_triage_consistency.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "linux"
     },
     "ttl-triage-macos": {
@@ -1533,9 +1395,6 @@
         ".bootstrap-venv/bin/python",
         ".just/lint_ttl_triage_consistency.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/lib/python3.14/site-packages"
-      },
       "platform": "macos"
     },
     "ttl-triage-windows": {
@@ -1543,9 +1402,6 @@
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_ttl_triage_consistency.py"
       ],
-      "env_paths": {
-        "PYTHONPATH": ".sc-lint/venv/Lib/site-packages"
-      },
       "platform": "windows"
     },
     "version-linux": {

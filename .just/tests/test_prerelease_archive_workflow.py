@@ -735,21 +735,14 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 self.run_fixture(command, cwd=repo, env=env, check=True)
             if os.name == "nt":
                 python_command = f'& "{sys.executable}"'
-                sc_lint_python_command = f'& "{root / ".sc-lint" / "venv" / "Scripts" / "python.exe"}"'
             else:
                 python_command = shlex.quote(sys.executable)
-                sc_lint_python_command = shlex.quote(
-                    str(root / ".sc-lint" / "venv" / "bin" / "python")
-                )
             result = self.run_fixture(
                 [
                     "just",
                     "--set",
                     "python_cmd",
                     python_command,
-                    "--set",
-                    "sc_lint_python_cmd",
-                    sc_lint_python_command,
                     "prerelease-tag",
                     "--dry-run",
                 ],

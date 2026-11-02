@@ -10,7 +10,6 @@ seed_python_cmd := if os_family() == "windows" { "py -3.12" } else { "env PATH=\
 # Keep the bootstrap venv first in PATH as well as executing its Python
 # directly. The path is absolute so helpers remain pinned after changing cwd.
 python_cmd := if os_family() == "windows" { "$env:PATH = \"$PWD\\.bootstrap-venv\\Scripts;\" + $env:PATH; & \"$PWD\\.bootstrap-venv\\Scripts\\python.exe\"" } else { "env PATH=\"$PWD/.bootstrap-venv/bin:$PATH\" \"$PWD/.bootstrap-venv/bin/python\"" }
-sc_lint_python_cmd := if os_family() == "windows" { "& \"$PWD\\.sc-lint\\venv\\Scripts\\python.exe\"" } else { "\"$PWD/.sc-lint/venv/bin/python\"" }
 
 # Show the curated repo task help.
 default: help
@@ -25,36 +24,18 @@ help:
 bootstrap *args:
     {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
-# Execute a repository Python command through the pinned bootstrap environment.
-# Shared sc-lint helpers are loaded from the managed package environment.
-# Arguments reach Python as given, never re-split by the shell.
-[private]
-[unix]
-[positional-arguments]
-_py *args:
-    sc_lint_site_packages="$({{sc_lint_python_cmd}} -c 'import site; print(site.getsitepackages()[0])')"; PYTHONPATH="$PWD/.just:$sc_lint_site_packages${PYTHONPATH:+:$PYTHONPATH}" {{python_cmd}} "$@"
-
-[private]
-[windows]
-[positional-arguments]
-[script('pwsh', '-NoLogo', '-NonInteractive', '-File')]
-_py *args:
-    $sitePackages = {{sc_lint_python_cmd}} -c "import site; print(site.getsitepackages()[0])"
-    if ($env:PYTHONPATH) { $env:PYTHONPATH = "$PWD\.just;$sitePackages;$env:PYTHONPATH" } else { $env:PYTHONPATH = "$PWD\.just;$sitePackages" }
-    {{python_cmd}} @args
-
 # Format the Rust workspace or run the formatting gate.
 fmt mode='check':
     cargo fmt --all {{if mode == "check" { "-- --check" } else { "" }}}
 
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
-    {{sc_lint_python_cmd}} -m sc_lint.run_version {{mode}}
+    {{python_cmd}} -m sc_lint.run_version {{mode}}
 
 # Patch-bump the workspace, commit it on the current feature/fix branch, and
 # publish the matching prerelease/vX.Y.Z tag. Use --dry-run to inspect the plan.
 prerelease-tag *args:
-    just --set python_cmd '{{python_cmd}}' --set sc_lint_python_cmd '{{sc_lint_python_cmd}}' _py .just/prerelease_tag.py {{args}}
+    {{python_cmd}} .just/prerelease_tag.py {{args}}
 
 # Build the full workspace.
 build:
@@ -186,7 +167,7 @@ benchmark-read-under-write-load:
 
 # Generate architecture visualization artifacts.
 view target='all':
-    just _py .just/run_view.py {{target}}
+    {{python_cmd}} .just/run_view.py {{target}}
 
 # Run the local CI-equivalent command set.
 ci: lint test

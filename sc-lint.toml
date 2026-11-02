@@ -29,19 +29,16 @@ python-tests = ["python-tests-linux", "python-tests-macos", "python-tests-window
 name = "adr-index-linux"
 command = [".bootstrap-venv/bin/python", ".just/check_adr_index.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "adr-index-macos"
 command = [".bootstrap-venv/bin/python", ".just/check_adr_index.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "adr-index-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_adr_index.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "arch-gates"
@@ -66,19 +63,16 @@ platform = "windows"
 name = "boundaries-linux"
 command = [".bootstrap-venv/bin/python", ".just/lint_boundaries.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "boundaries-macos"
 command = [".bootstrap-venv/bin/python", ".just/lint_boundaries.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "boundaries-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_boundaries.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "clippy-linux"
@@ -118,19 +112,16 @@ env_paths = { "PYO3_PYTHON" = ".bootstrap-venv/bin/python" }
 name = "daemon-signing-coupling-linux"
 command = [".bootstrap-venv/bin/python", ".just/lint_daemon_signing_coupling.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "daemon-signing-coupling-macos"
 command = [".bootstrap-venv/bin/python", ".just/lint_daemon_signing_coupling.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "daemon-signing-coupling-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_daemon_signing_coupling.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "daemon-signing-tests-linux"
@@ -151,19 +142,16 @@ platform = "windows"
 name = "daemon-singleton-linux"
 command = [".bootstrap-venv/bin/python", "scripts/lint_daemon_singleton.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "daemon-singleton-macos"
 command = [".bootstrap-venv/bin/python", "scripts/lint_daemon_singleton.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "daemon-singleton-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", "scripts/lint_daemon_singleton.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "deny-linux"
@@ -184,37 +172,31 @@ platform = "windows"
 name = "env-var-boundary-linux"
 command = [".bootstrap-venv/bin/python", ".just/check_env_var_boundary.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "env-var-boundary-macos"
 command = [".bootstrap-venv/bin/python", ".just/check_env_var_boundary.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "env-var-boundary-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_env_var_boundary.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "fixed-sleep-linux"
 command = [".bootstrap-venv/bin/python", ".just/check_fixed_sleep_hygiene.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "fixed-sleep-macos"
 command = [".bootstrap-venv/bin/python", ".just/check_fixed_sleep_hygiene.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "fixed-sleep-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_fixed_sleep_hygiene.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "fmt"
@@ -228,37 +210,31 @@ command = ["sc-lint", "lint", "function-length"]
 name = "hermes-adapter-linux"
 command = [".bootstrap-venv/bin/python", ".just/lint_hermes_adapter.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "hermes-adapter-macos"
 command = [".bootstrap-venv/bin/python", ".just/lint_hermes_adapter.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "hermes-adapter-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_hermes_adapter.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "hermes-atm-boundary-linux"
 command = [".bootstrap-venv/bin/python", ".just/lint_hermes_atm_boundary.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "hermes-atm-boundary-macos"
 command = [".bootstrap-venv/bin/python", ".just/lint_hermes_atm_boundary.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "hermes-atm-boundary-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_hermes_atm_boundary.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "identities"
@@ -347,109 +323,91 @@ platform = "windows"
 name = "peer-dial-seam-linux"
 command = [".bootstrap-venv/bin/python", ".just/lint_peer_dial_seam.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "peer-dial-seam-macos"
 command = [".bootstrap-venv/bin/python", ".just/lint_peer_dial_seam.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "peer-dial-seam-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_peer_dial_seam.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "python-tests-linux"
 command = [".bootstrap-venv/bin/python", ".just/run_pytests.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "python-tests-macos"
 command = [".bootstrap-venv/bin/python", ".just/run_pytests.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "python-tests-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/run_pytests.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "read-concurrency-gates-linux"
 command = [".bootstrap-venv/bin/python", ".just/check_read_concurrency_gates.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "read-concurrency-gates-macos"
 command = [".bootstrap-venv/bin/python", ".just/check_read_concurrency_gates.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "read-concurrency-gates-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_read_concurrency_gates.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "runtime-observation-boundary-linux"
 command = [".bootstrap-venv/bin/python", ".just/check_runtime_observation_boundary.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "runtime-observation-boundary-macos"
 command = [".bootstrap-venv/bin/python", ".just/check_runtime_observation_boundary.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "runtime-observation-boundary-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_runtime_observation_boundary.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "runtime-stderr-linux"
-command = [".bootstrap-venv/bin/python", "scripts/check-runtime-stderr.py"]
+command = [".bootstrap-venv/bin/python", ".just/check_runtime_stderr.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "runtime-stderr-macos"
-command = [".bootstrap-venv/bin/python", "scripts/check-runtime-stderr.py"]
+command = [".bootstrap-venv/bin/python", ".just/check_runtime_stderr.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "runtime-stderr-windows"
-command = [".bootstrap-venv\\Scripts\\python.exe", "scripts/check-runtime-stderr.py"]
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_runtime_stderr.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "same-host-portability-linux"
 command = [".bootstrap-venv/bin/python", ".just/lint_same_host_portability.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "same-host-portability-macos"
 command = [".bootstrap-venv/bin/python", ".just/lint_same_host_portability.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "same-host-portability-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_same_host_portability.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "sc-boundary"
@@ -542,37 +500,31 @@ platform = "windows"
 name = "template-frontmatter-linux"
 command = [".bootstrap-venv/bin/python", ".just/check_template_frontmatter.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "template-frontmatter-macos"
 command = [".bootstrap-venv/bin/python", ".just/check_template_frontmatter.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "template-frontmatter-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_template_frontmatter.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "ttl-triage-linux"
 command = [".bootstrap-venv/bin/python", ".just/lint_ttl_triage_consistency.py"]
 platform = "linux"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "ttl-triage-macos"
 command = [".bootstrap-venv/bin/python", ".just/lint_ttl_triage_consistency.py"]
 platform = "macos"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/lib/python3.14/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "ttl-triage-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_ttl_triage_consistency.py"]
 platform = "windows"
-env_paths = { "PYTHONPATH" = ".sc-lint/venv/Lib/site-packages" }
 
 [[tool.sc-lint.lint]]
 name = "version-linux"

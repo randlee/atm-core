@@ -270,6 +270,7 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertEqual(manifest.sc_compose, "1.7.0")
         self.assertEqual(manifest.wyvern, "0.8.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
+        self.assertEqual(dict(manifest.python_packages)["sc-lint"], "0.8.4")
         self.assertNotIn("sc-compose", dict(manifest.python_packages))
         requirements = (SCRIPT.parents[1] / "tools" / "bootstrap-requirements.txt").read_text(encoding="utf-8")
         self.assertNotIn("sc-compose==", requirements)
