@@ -4508,6 +4508,51 @@
           "reason": "Rand, 2026-11-01: \"we need to lock the remaining anchors\""
         }
       ]
+    },
+    {
+      "id": "ANC-075",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd queues, cron, console (TUI), show and snapshot subcommands must work for both lite and orchestration phases through traits that both profiles implement, selected by the phase file's profile.",
+      "quote": "we will need to make queues, cron and console work w/ both.  not sure what show and snapshot are, but those likely need to handle both as well.  I would expect all the cli subcommands and tui would be working to traits that both skills would need to implement",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan 2026-11-01 (fenix): Rand's ruling on the ANC-005/ANC-032 vs ANC-030 conflict",
+      "summary": "",
+      "scope": "",
+      "deterministic_check": "uv run pytest apps/atm-bd-console/tests/test_profile_traits.py passes: each of queues, cron, console, show and snapshot runs on a lite and an orchestration phase fixture through the trait",
+      "fixtures": {
+        "pass": [
+          "uv run pytest apps/atm-bd-console/tests/test_profile_traits.py passes: queues, cron, console, show and snapshot each run on a lite phase fixture and an orchestration phase fixture through the PhaseProfile traits, and the console picks the implementation from the phase file's profile."
+        ],
+        "fail": [
+          "atm-bd queues, show and snapshot exit 3 with 'phase is lite; lite has no queues script', and only cron runs for a lite phase."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-02T04:40:55+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-02T04:41:17+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
     }
   ]
 }

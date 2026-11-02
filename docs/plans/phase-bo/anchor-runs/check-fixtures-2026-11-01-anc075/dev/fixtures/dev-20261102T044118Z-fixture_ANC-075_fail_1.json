@@ -1,0 +1,113 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261102T044118Z-fixture_ANC-075_fail_1",
+  "gate": "dev",
+  "created_at": "2026-11-02T04:41:18+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-075:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 125,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-075",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd queues, cron, console (TUI), show and snapshot subcommands must work for both lite and orchestration phases through traits that both profiles implement, selected by the phase file's profile.",
+      "quote": "we will need to make queues, cron and console work w/ both.  not sure what show and snapshot are, but those likely need to handle both as well.  I would expect all the cli subcommands and tui would be working to traits that both skills would need to implement",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan 2026-11-01 (fenix): Rand's ruling on the ANC-005/ANC-032 vs ANC-030 conflict",
+      "anchor_version": 2,
+      "deterministic_check": "uv run pytest apps/atm-bd-console/tests/test_profile_traits.py passes: each of queues, cron, console, show and snapshot runs on a lite and an orchestration phase fixture through the trait",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The delivered work went against this anchor.",
+      "usage": {
+        "input_tokens": 1210,
+        "output_tokens": 152
+      },
+      "attempts": 1,
+      "item_chars_sent": 125,
+      "item_shortened": false,
+      "request_bytes": 3845
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-075"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

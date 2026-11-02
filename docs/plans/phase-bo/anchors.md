@@ -80,6 +80,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-072 | locked | review findings bind to the spec | 2026-11-01 |
 | ANC-073 | locked | anchor checks are mechanical | 2026-11-01 |
 | ANC-074 | locked |  | 2026-11-01 |
+| ANC-075 | proposed |  | 2026-11-01 |
 
 ## ANC-001
 
@@ -1408,3 +1409,17 @@ Deterministic check to pair with the development gate: test of skills/atm-bd-lit
 Fixtures:
 - pass: uv run pytest skills/atm-bd-lite/tests/test_cron.py passes: given a bdc ready listing with one ready unassigned QA task and one ready QA task already assigned, the cron script runs atm task assign for the unassigned one only, and prints the command it ran.
 - fail: The lite cron script lists ready QA tasks in its report to the lead, and the lead assigns each one by hand.
+
+## ANC-075
+
+Anchor: The atm-bd queues, cron, console (TUI), show and snapshot subcommands must work for both lite and orchestration phases through traits that both profiles implement, selected by the phase file's profile.
+
+> we will need to make queues, cron and console work w/ both.  not sure what show and snapshot are, but those likely need to handle both as well.  I would expect all the cli subcommands and tui would be working to traits that both skills would need to implement
+
+Said by Rand, phase-bo replan 2026-11-01 (fenix): Rand's ruling on the ANC-005/ANC-032 vs ANC-030 conflict, 2026-11-01. Status: proposed. Version 2.
+
+Deterministic check to pair with the development gate: uv run pytest apps/atm-bd-console/tests/test_profile_traits.py passes: each of queues, cron, console, show and snapshot runs on a lite and an orchestration phase fixture through the trait
+
+Fixtures:
+- pass: uv run pytest apps/atm-bd-console/tests/test_profile_traits.py passes: queues, cron, console, show and snapshot each run on a lite phase fixture and an orchestration phase fixture through the PhaseProfile traits, and the console picks the implementation from the phase file's profile.
+- fail: atm-bd queues, show and snapshot exit 3 with 'phase is lite; lite has no queues script', and only cron runs for a lite phase.
