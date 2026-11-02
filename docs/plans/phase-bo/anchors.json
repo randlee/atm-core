@@ -4296,6 +4296,40 @@
           "reason": "Rand: \"Set ANC-064..073 to proposed. I lock them, not you.\""
         }
       ]
+    },
+    {
+      "id": "ANC-074",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The lite cron script must assign each QA task that bdc ready reports as ready and unassigned.",
+      "quote": "wait, lite will have cron. / yes, initial cron script will assign 'bdc ready' qa tasks and run a set of checks similar to atm-bd-orchestration",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo fixture report rulings, 2026-11-01 (fenix). Withdraws ruling A for ANC-031 and the brief's 'no cron dispatching QA'. The second half, 'a set of checks similar to atm-bd-orchestration', needs the checks named before it can be an anchor.",
+      "summary": "",
+      "scope": "adds or changes the lite cron script or lite QA assignment",
+      "deterministic_check": "test of skills/atm-bd-lite/scripts cron: with fakes where bdc ready returns ready QA beads, one atm task assign is issued per ready unassigned QA bead and none for an assigned one",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-02T03:03:34+00:00",
+          "event": "created",
+          "status": "proposed"
+        }
+      ]
     }
   ]
 }
