@@ -178,7 +178,6 @@
             "peer-tls",
             "rustix",
             "sc-lint-attributes",
-            "sc-observability-log",
             "serde",
             "serde_json",
             "serial_test",

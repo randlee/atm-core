@@ -252,7 +252,6 @@ dependencies = [
  "peer-tls",
  "rustix",
  "sc-lint-attributes 0.8.4",
- "sc-observability-log",
  "serde",
  "serde_json",
  "serial_test",
