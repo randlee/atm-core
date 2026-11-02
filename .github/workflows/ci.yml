@@ -344,6 +344,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure sc-lint installation directory
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: >-
+          python -c "import os; from pathlib import Path; path = Path(os.environ['RUNNER_TEMP']) / 'sc-lint' / 'bin'; Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8').write('SC_LINT_INSTALL_DIR=' + str(path) + os.linesep)"
+
+      - name: Set up sc-lint
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        run: just setup
+
       - name: Verify pinned ecosystem tools
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         shell: bash
@@ -373,11 +382,35 @@ jobs:
           Copy-Item "target/release/atm-daemon$suffix" (Join-Path $binDir "atm-daemon$suffix") -Force
           "ATM_SMOKE_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Run manifest test suite
+      - name: Run manifest test selector build
         if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
-        run: just test
+        run: just test build
+
+      - name: Run manifest test selector cli-surface
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        env:
+          ATM_TEST_RECV_TIMEOUT_SECS: "60"
+        run: just test cli-surface
+
+      - name: Run manifest test selector herdr
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        env:
+          ATM_TEST_RECV_TIMEOUT_SECS: "60"
+        run: just test herdr
+
+      - name: Run manifest test selector python
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        env:
+          ATM_TEST_RECV_TIMEOUT_SECS: "60"
+        run: just test python
+
+      - name: Run manifest test selector workspace
+        if: ${{ needs.ci-scope.outputs.runtime == 'true' }}
+        env:
+          ATM_TEST_RECV_TIMEOUT_SECS: "60"
+        run: just test workspace
 
       - name: Produce Windows Herdr process-audit doctor fixture
         if: ${{ always() && !cancelled() && needs.ci-scope.outputs.runtime == 'true' && matrix.os == 'windows-latest' }}

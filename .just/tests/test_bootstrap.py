@@ -528,7 +528,7 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertLess(just_lint.index(cache_step), just_lint.index("run: just lint ci all"))
 
         test_job = workflow.split("\n  test:", 1)[1].split("\n  hermes-atm-release-wheels:", 1)[0]
-        self.assertNotIn("SC_LINT_INSTALL_DIR", test_job)
+        self.assertIn("SC_LINT_INSTALL_DIR", test_job)
         self.assertNotIn("Configure platform cache directories", test_job)
 
     def test_just_recipes_propagate_the_bootstrap_python_to_children(self) -> None:
