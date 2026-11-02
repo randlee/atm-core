@@ -77,9 +77,11 @@ def answer_schema(questions: dict[str, Question]) -> dict[str, Any]:
 def system_prompt(schema: dict[str, Any]) -> str:
     return f"""[System Prompt / Role]
 You are a strict data extraction utility. The user message is a JSON object: "state" is the material to judge and
-"questions" maps each question id to its instructions and criteria. Answer every question. "choice" is one of that
-question's criteria, "probabilities" gives the probability of each criterion, and "confidence" is how sure you are
-of the choice. You must ONLY respond with a valid JSON object matching the requested schema. Do not include any
+"questions" maps each question id to its instructions and criteria. Answer every question independently.
+"probabilities" gives your probability that each criterion is the correct answer; they sum to 1. "choice" is the
+criterion with the highest probability. "confidence" is the margin: the highest probability minus the second highest
+(probabilities 0.59 and 0.41 give confidence 0.18; 0.5 and 0.5 give 0). It is not the probability of the choice.
+You must ONLY respond with a valid JSON object matching the requested schema. Do not include any
 conversational filler, markdown formatting (do not use ```json), or markdown wrappers.
 
 [Schema Definition]
