@@ -32,11 +32,17 @@ fn retained_log_pruning_uses_controlled_file_times() {
     std::fs::write(&active_log_path, "active\n").expect("active log");
     std::fs::write(&retained_rotated_log_path, "retained\n").expect("retained rotated log");
     std::fs::write(&stale_rotated_log_path, "stale\n").expect("rotated log");
-    std::fs::File::open(&retained_rotated_log_path)
+    // Windows only allows `set_modified` through a handle with write access
+    // (FILE_WRITE_ATTRIBUTES); a read-only `File::open` handle is denied there.
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&retained_rotated_log_path)
         .expect("open retained rotated log")
         .set_modified(std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(4_102_444_800))
         .expect("set fixed future modification time");
-    std::fs::File::open(&stale_rotated_log_path)
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&stale_rotated_log_path)
         .expect("open rotated log")
         .set_modified(std::time::SystemTime::UNIX_EPOCH)
         .expect("set controlled modification time");
