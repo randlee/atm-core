@@ -70,6 +70,45 @@ fn retained_log_pruning_uses_controlled_file_times() {
 }
 
 #[test]
+fn backend_retained_log_policy_preserves_production_values() {
+    let atm_policy = RetainedLogPolicy {
+        rotation_max_bytes: 10 * 1024 * 1024,
+        rotation_max_files: 5,
+        retention_max_age: Duration::from_secs(7 * 24 * 60 * 60),
+        maintenance_cadence: Duration::from_secs(60),
+        writer_shutdown_timeout: Duration::from_secs(1),
+        maintenance_max_work_per_pass: Some(5),
+    };
+
+    let backend_policy = backend_retained_log_policy(atm_policy);
+
+    assert_eq!(
+        backend_policy.rotation_max_bytes.as_u64(),
+        atm_policy.rotation_max_bytes
+    );
+    assert_eq!(
+        backend_policy.rotation_max_files.as_usize(),
+        atm_policy.rotation_max_files
+    );
+    assert_eq!(
+        backend_policy.retention_max_age.as_duration(),
+        atm_policy.retention_max_age
+    );
+    assert_eq!(
+        backend_policy.maintenance_cadence.as_duration(),
+        atm_policy.maintenance_cadence
+    );
+    assert_eq!(
+        backend_policy.writer_shutdown_timeout.as_duration(),
+        atm_policy.writer_shutdown_timeout
+    );
+    assert_eq!(
+        backend_policy.maintenance_max_work_per_pass,
+        atm_policy.maintenance_max_work_per_pass
+    );
+}
+
+#[test]
 fn retained_logger_bootstrap_error_preserves_historical_json_without_cause() {
     let daemon_error = super::map_retained_logger_error("synthetic initialization failure");
     let historical = AtmError::observability_bootstrap(
