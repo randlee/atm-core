@@ -197,7 +197,8 @@ class BootstrapTests(IsolatedHomeTests):
 
     def test_sc_compose_install_leaves_ambient_cargo_sentinel_untouched(self) -> None:
         """Bootstrap test installs stay in the test CARGO_HOME, never the caller's."""
-        ambient_binary = self._prepatch_cargo_home / "bin" / "sc-compose"
+        executable = "sc-compose.exe" if os.name == "nt" else "sc-compose"
+        ambient_binary = self._prepatch_cargo_home / "bin" / executable
         ambient_binary.parent.mkdir(parents=True)
         ambient_binary.write_bytes(b"ambient-sentinel")
 
@@ -225,7 +226,7 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertEqual(ambient_binary.read_bytes(), b"ambient-sentinel")
         self.assertEqual(
             bootstrap.cargo_bin_path("sc-compose"),
-            Path(self._test_cargo_home.name) / "bin" / "sc-compose",
+            Path(self._test_cargo_home.name) / "bin" / executable,
         )
         self.assertEqual(bootstrap.cargo_bin_path("sc-compose").read_bytes(), binary)
 
