@@ -72,7 +72,7 @@ def parse(argv):
         else:
             positional.append(token)
     maximum = {"setup": 0, "upgrade": 0, "lint": 2, "test": len(positional)}[operation]
-    if not config or len(positional) > maximum or (operation == "lint" and len(positional) == 2 and not all(positional)):
+    if not config or len(positional) > maximum or (operation == "lint" and len(positional) == 2 and not positional[1]):
         usage()
     if "--list" in flags and (positional or "--fail-fast" in flags):
         usage()

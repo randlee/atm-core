@@ -97,6 +97,10 @@ def _schema_value(value: object, schema: dict, label: str) -> None:
         articles = {"object": "an object", "string": "a string", "boolean": "a boolean", "array": "an array"}
         expected = " or ".join(articles[name] for name in accepted_types)
         raise ValueError(f"{label} must be {expected}")
+    if "enum" in schema and value not in schema["enum"]:
+        raise ValueError(f"{label} must be one of {schema['enum']}")
+    if isinstance(value, str) and len(value) < schema.get("minLength", 0):
+        raise ValueError(f"{label} must contain at least {schema['minLength']} characters")
     if "pattern" in schema and isinstance(value, str) and not re.fullmatch(schema["pattern"], value): raise ValueError(f"{label} does not match {schema['pattern']}")
     if "oneOf" in schema:
         errors = []
@@ -110,12 +114,17 @@ def _schema_value(value: object, schema: dict, label: str) -> None:
         if schema.get("additionalProperties") is False and extra: raise ValueError(f"{label} has unknown fields: {sorted(extra)}")
         missing = set(schema.get("required", [])) - set(value)
         if missing: raise ValueError(f"{label} has missing required fields: {sorted(missing)}")
+        if "propertyNames" in schema:
+            for key in value:
+                _schema_value(key, schema["propertyNames"], f"{label} key")
         for key, item in value.items():
             if key in properties:
                 _schema_value(item, properties[key], f"{label}.{key}")
             elif isinstance(schema.get("additionalProperties"), dict):
                 _schema_value(item, schema["additionalProperties"], f"{label}.{key}")
     if isinstance(value, list) and "items" in schema:
+        if len(value) < schema.get("minItems", 0):
+            raise ValueError(f"{label} must contain at least {schema['minItems']} items")
         for index, item in enumerate(value): _schema_value(item, schema["items"], f"{label}[{index}]")
 
 
@@ -164,11 +173,20 @@ def lint_profiles_table(lint_profiles: dict) -> str:
 
 
 def lint_step(name: str, step: object) -> str:
-    """Renders one lint row; semantics (platform, target, shape) belong to the sc-lint binary."""
+    """Render one lint row; cross-target and command semantics belong to sc-lint."""
     command, tags = (step, {}) if isinstance(step, list) else (step["command"], step)
-    lines = [f"name = {json.dumps(name)}", f"command = {json.dumps(command)}"]
-    lines += [f"{key} = {json.dumps(tags[key])}" for key in ("platform", "target") if key in tags]
+    lines = [f"name = {json.dumps(tags.get('name', name))}", f"command = {toml_value(command)}"]
+    lines += [f"{key} = {toml_value(tags[key])}" for key in ("platform", "target", "host", "after_all", "env", "env_paths", "cwd") if key in tags]
     return "[[tool.sc-lint.lint]]\n" + "\n".join(lines)
+
+
+def test_layer(name: str, step: object) -> str:
+    """Renders one test row using the fields accepted by the Rust test-step model."""
+    command, fields = (step, {}) if isinstance(step, list) else (step["command"], step)
+    lines = [f"name = {json.dumps(name)}", f"command = {toml_value(command)}"]
+    if "after_all" in fields:
+        lines.append(f"after_all = {toml_value(fields['after_all'])}")
+    return "[[tool.sc-lint.test]]\n" + "\n".join(lines)
 
 
 def lint_workflow_steps(data: dict) -> str:
@@ -198,7 +216,7 @@ def render(template: Path, data: dict) -> str:
         for name, value in data["analyzers"].items()
     )
     profiles = "\n\n".join(filter(None, [lint_profiles_table(data.get("lint_profiles", {})), *(lint_step(name, step) for name, step in data["profiles"].items())]))
-    layers = "\n\n".join(f'[[tool.sc-lint.test]]\nname = {json.dumps(name)}\ncommand = {json.dumps(command)}' for name, command in data.get("test", {}).items())
+    layers = "\n\n".join(test_layer(name, step) for name, step in data.get("test", {}).items())
     runners = [ {"linux":"ubuntu-latest", "macos":"macos-latest", "windows":"windows-latest"}.get(item, item) for item in data["ci"]["os"] ]
     replacements = {
         "minimum_version": data["minimum_version"],

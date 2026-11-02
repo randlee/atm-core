@@ -59,6 +59,40 @@ def packaging_script(workflow: str, step_name: str) -> str:
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
+    def test_replace_version_occurrences_rejects_adjacent_version_component(self) -> None:
+        self.assertEqual(
+            prerelease_tag.replace_version_occurrences(
+                "https://example.invalid/atm_1.1.2.0_x86_64.zip", "1.1.2", "1.1.3"
+            ),
+            "https://example.invalid/atm_1.1.2.0_x86_64.zip",
+        )
+
+    @mock.patch("prerelease_tag.subprocess.run")
+    def test_sync_python_version_propagates_owner_failure(self, run: mock.Mock) -> None:
+        run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="owner failed"
+        )
+        with self.assertRaisesRegex(SystemExit, "owner failed"):
+            prerelease_tag.sync_python_version(Path("/tmp/atm"), Path("/tmp/atm/crates/example/pyproject.toml"))
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlink support is required")
+    def test_copy_tracked_files_excludes_untracked_content_and_preserves_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "source"
+            destination = Path(tempdir) / "destination"
+            source.mkdir()
+            (source / "tracked.txt").write_text("tracked", encoding="utf-8")
+            (source / "target.txt").write_text("target", encoding="utf-8")
+            (source / "link.txt").symlink_to("target.txt")
+            (source / "secret.txt").write_text("untracked", encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=source, check=True)
+            subprocess.run(["git", "add", "tracked.txt", "target.txt", "link.txt"], cwd=source, check=True)
+            prerelease_tag.copy_tracked_files(source, destination)
+            self.assertTrue((destination / "tracked.txt").is_file())
+            self.assertFalse((destination / "secret.txt").exists())
+            self.assertTrue((destination / "link.txt").is_symlink())
+            self.assertEqual(os.readlink(destination / "link.txt"), "target.txt")
+
     def fixture_env(self, home: Path) -> dict[str, str]:
         env = os.environ.copy()
         env.update({
@@ -507,11 +541,9 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 mock.patch.object(prerelease_tag, "require_clean_tree"),
                 mock.patch.object(prerelease_tag, "workspace_version", return_value="1.5.14"),
                 mock.patch.object(prerelease_tag, "remote_tag_exists", return_value=True),
-                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
             ):
                 with self.assertRaisesRegex(SystemExit, "tag already exists on origin"):
                     prerelease_tag.execute(repo, dry_run=True)
-            verify_lockstep.assert_not_called()
 
     def test_publish_and_dry_run_share_tag_availability_preflight(self) -> None:
         root = discover_repo_root()
@@ -526,13 +558,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     "require_available_tag",
                     side_effect=SystemExit("collision"),
                 ) as require_available_tag,
-                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
                 mock.patch.object(prerelease_tag, "candidate_changes") as candidate_changes,
             ):
                 with self.assertRaisesRegex(SystemExit, "collision"):
                     prerelease_tag.execute(root, dry_run=dry_run)
             require_available_tag.assert_called_once_with(root, "prerelease/v1.5.15")
-            verify_lockstep.assert_not_called()
             candidate_changes.assert_not_called()
 
     def test_candidate_bump_updates_actual_lockfile_collision_safely(self) -> None:

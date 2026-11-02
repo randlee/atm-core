@@ -6,24 +6,62 @@
           {
             "description": "Existing shape: a command argv array, rendered verbatim.",
             "type": "array",
-            "items": { "type": "string" }
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
           },
           {
-            "description": "Object step: a command plus an optional platform tag and cargo target. Shape only; the sc-lint binary owns platform, target, and command-shape semantics.",
+            "description": "Object lint step matching ConsumerProfileStepFile; the map key supplies the step name unless name is explicitly set. The binary owns cross-field validation: env/env_paths duplicate keys (PROFILE.DUPLICATE_STEP_ENV_KEY) and selected no-target platform/host contradictions (PROFILE.INVALID_HOST).",
             "type": "object",
             "additionalProperties": false,
             "required": ["command"],
             "properties": {
-              "command": { "type": "array", "items": { "type": "string" } },
-              "platform": { "type": "string" },
-              "target": { "type": "string" }
+              "name": { "type": "string", "pattern": ".*\\S.*" },
+              "command": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+              "platform": { "type": "string", "enum": ["linux", "macos", "windows"] },
+              "target": { "type": "string" },
+              "after_all": { "type": "boolean" },
+              "env": {
+                "type": "object",
+                "propertyNames": { "type": "string", "minLength": 1, "pattern": "^[^=\\u0000]+$" },
+                "additionalProperties": { "type": "string" }
+              },
+              "host": { "type": "string", "enum": ["linux", "macos", "windows"] },
+              "env_paths": {
+                "type": "object",
+                "propertyNames": { "type": "string", "minLength": 1, "pattern": "^[^=\\u0000]+$" },
+                "additionalProperties": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000]+$" }
+              },
+              "cwd": { "type": "string", "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+$" }
+            }
+          }
+        ]
+      }
+    },
+    "test": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "description": "Legacy command argv array; the map key supplies the step name.",
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          {
+            "description": "Test step object; name is supplied by the map key; only command and after_all are accepted by test rows.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["command"],
+            "properties": {
+              "command": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+              "after_all": { "type": "boolean" }
             }
           }
         ]
       }
     },
     "lint_profiles": {
-      "description": "Optional named lint profiles: profile name to ordered list of step names from `profiles`. Shape only; the sc-lint binary rejects unknown, duplicate, empty, and colliding members.",
+      "description": "Optional named lint profiles mapping profile names to ordered step-name lists. The sc-lint binary validates membership, unique members, non-empty profiles, and name collisions.",
       "type": "object",
       "additionalProperties": {
         "type": "array",

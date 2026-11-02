@@ -57,7 +57,7 @@ dependencies = [
  "interprocess",
  "libc",
  "parking_lot",
- "sc-lint-attributes 0.8.3",
+ "sc-lint-attributes 0.8.4",
  "semver",
  "serde",
  "serde_json",
@@ -188,7 +188,7 @@ checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -251,7 +251,7 @@ dependencies = [
  "opentelemetry_sdk",
  "peer-tls",
  "rustix",
- "sc-lint-attributes 0.8.3",
+ "sc-lint-attributes 0.8.4",
  "sc-observability-log",
  "serde",
  "serde_json",
@@ -276,7 +276,7 @@ dependencies = [
  "atm-storage",
  "fs4",
  "interprocess",
- "sc-lint-attributes 0.8.3",
+ "sc-lint-attributes 0.8.4",
  "serde_json",
  "tempfile",
  "tokio",
@@ -323,7 +323,7 @@ name = "atm-herdr"
 version = "1.6.5"
 dependencies = [
  "agent-team-mail-core",
- "sc-lint-attributes 0.8.3",
+ "sc-lint-attributes 0.8.4",
  "serde_json",
  "tokio",
 ]
@@ -346,7 +346,7 @@ dependencies = [
  "hyper-util",
  "noyalib",
  "reqwest",
- "sc-lint-attributes 0.8.3",
+ "sc-lint-attributes 0.8.4",
  "serde",
  "serde_json",
  "tempfile",
@@ -724,7 +724,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -860,7 +860,7 @@ checksum = "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -1003,7 +1003,7 @@ checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -2379,14 +2379,14 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-attributes"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e9ae3bfa54d0b977d9fffb9b9913daab1cd13d15c2c7caf424e7760bf521ae1"
+checksum = "d82e560c2f76d35374e5609a2aa33d419a91364507aeadfc93a6101e037ce6e5"
 dependencies = [
  "proc-macro2",
  "quote",
- "sc-lint-directives 0.8.3",
- "syn 2.0.119",
+ "sc-lint-directives 0.8.4",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -2400,11 +2400,11 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-directives"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13bb66717dcc2c2ba0eec0bc38b74b604f2cdee94abaa33e6bb69893d23565f6"
+checksum = "664ec4aaf50583b3610614b7f0dfbaf0d275fffcd2e907815374235968e66ef0"
 dependencies = [
- "syn 2.0.119",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -2544,7 +2544,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -2756,9 +2756,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.3"
+version = "3.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
+checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2856,7 +2856,7 @@ checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -2947,7 +2947,7 @@ checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -3749,7 +3749,7 @@ checksum = "34df6fc39dbd26ddc9c10e6a2984476e13acce22e64e4487636ef494369225da"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.3",
+ "syn 3.0.9",
 ]
 
 [[package]]
