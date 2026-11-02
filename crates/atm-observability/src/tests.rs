@@ -4,8 +4,9 @@ use tempfile::TempDir;
 
 use super::{
     ATM_LOG_LEVEL_ENV, AtmObservabilityHealthState, CANONICAL_LOG_FILE_NAME, RetainedCommandEvent,
-    RetainedLogLevel, RetainedLogOffer, RetainedLogPolicy, RetainedLogger, build_retained_logger,
-    logger_level_override_from, parse_logger_level, prepare_retained_log,
+    RetainedLogLevel, RetainedLogOffer, RetainedLogPolicy, RetainedLogger,
+    backend_retained_log_policy, build_retained_logger, logger_level_override_from,
+    parse_logger_level, prepare_retained_log,
 };
 use sc_observability::LoggerConfig;
 use sc_observability_types::{LogQuery, ServiceName};
@@ -20,6 +21,91 @@ fn prepares_the_active_log_file() {
 
     assert_eq!(active_log_path, log_dir.join("atm.log.jsonl"));
     assert!(active_log_path.is_file());
+}
+
+#[test]
+fn retained_log_pruning_uses_controlled_file_times() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let active_log_path = tempdir.path().join(CANONICAL_LOG_FILE_NAME);
+    let retained_rotated_log_path = tempdir.path().join(format!("{CANONICAL_LOG_FILE_NAME}.1"));
+    let stale_rotated_log_path = tempdir.path().join(format!("{CANONICAL_LOG_FILE_NAME}.2"));
+    std::fs::write(&active_log_path, "active\n").expect("active log");
+    std::fs::write(&retained_rotated_log_path, "retained\n").expect("retained rotated log");
+    std::fs::write(&stale_rotated_log_path, "stale\n").expect("rotated log");
+    std::fs::File::open(&retained_rotated_log_path)
+        .expect("open retained rotated log")
+        .set_modified(std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(4_102_444_800))
+        .expect("set fixed future modification time");
+    std::fs::File::open(&stale_rotated_log_path)
+        .expect("open rotated log")
+        .set_modified(std::time::SystemTime::UNIX_EPOCH)
+        .expect("set controlled modification time");
+
+    let atm_policy = RetainedLogPolicy {
+        rotation_max_bytes: 4096,
+        rotation_max_files: 5,
+        retention_max_age: Duration::from_secs(60),
+        maintenance_cadence: Duration::from_secs(60),
+        writer_shutdown_timeout: Duration::from_secs(1),
+        maintenance_max_work_per_pass: Some(5),
+    };
+    let backend_policy = backend_retained_log_policy(atm_policy);
+
+    // `JsonlFileSink::open` performs the same maintenance pass as the logger
+    // worker, without depending on its cadence or scheduling. The ATM mapping
+    // must preserve the age. The fixed future mtime makes retention independent
+    // of how long the test takes, while a zero-age mutation still fails during
+    // ATM policy conversion.
+    let _sink = sc_observability::JsonlFileSink::open(active_log_path, backend_policy)
+        .expect("synchronous retained-log maintenance");
+
+    assert!(
+        !stale_rotated_log_path.exists(),
+        "maintenance must remove a rotated file older than the retention age"
+    );
+    assert!(
+        retained_rotated_log_path.exists(),
+        "maintenance must retain a rotated file with a fixed future mtime"
+    );
+}
+
+#[test]
+fn backend_retained_log_policy_preserves_production_values() {
+    let atm_policy = RetainedLogPolicy {
+        rotation_max_bytes: 10 * 1024 * 1024,
+        rotation_max_files: 5,
+        retention_max_age: Duration::from_secs(7 * 24 * 60 * 60),
+        maintenance_cadence: Duration::from_secs(60),
+        writer_shutdown_timeout: Duration::from_secs(1),
+        maintenance_max_work_per_pass: Some(5),
+    };
+
+    let backend_policy = backend_retained_log_policy(atm_policy);
+
+    assert_eq!(
+        backend_policy.rotation_max_bytes.as_u64(),
+        atm_policy.rotation_max_bytes
+    );
+    assert_eq!(
+        backend_policy.rotation_max_files.as_usize(),
+        atm_policy.rotation_max_files
+    );
+    assert_eq!(
+        backend_policy.retention_max_age.as_duration(),
+        atm_policy.retention_max_age
+    );
+    assert_eq!(
+        backend_policy.maintenance_cadence.as_duration(),
+        atm_policy.maintenance_cadence
+    );
+    assert_eq!(
+        backend_policy.writer_shutdown_timeout.as_duration(),
+        atm_policy.writer_shutdown_timeout
+    );
+    assert_eq!(
+        backend_policy.maintenance_max_work_per_pass,
+        atm_policy.maintenance_max_work_per_pass
+    );
 }
 
 #[test]
