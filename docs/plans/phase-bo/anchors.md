@@ -81,6 +81,7 @@ Intent: `docs/plans/phase-bo/intent.md`
 | ANC-073 | locked | anchor checks are mechanical | 2026-11-01 |
 | ANC-074 | locked |  | 2026-11-01 |
 | ANC-075 | proposed |  | 2026-11-01 |
+| ANC-076 | proposed |  | 2026-11-01 |
 
 ## ANC-001
 
@@ -1423,3 +1424,17 @@ Deterministic check to pair with the development gate: uv run pytest apps/atm-bd
 Fixtures:
 - pass: uv run pytest apps/atm-bd-console/tests/test_profile_traits.py passes: queues, cron, console, show and snapshot each run on a lite phase fixture and an orchestration phase fixture through the PhaseProfile traits, and the console picks the implementation from the phase file's profile.
 - fail: atm-bd queues, show and snapshot exit 3 with 'phase is lite; lite has no queues script', and only cron runs for a lite phase.
+
+## ANC-076
+
+Anchor: The atm-bd monitoring code for lite must be two separate layers in atm-bd-core: collectors (atm, git, beads, provider) that only gather facts, and a decision layer of pure functions from those facts to actions and report rows; the lite policy differs from the orchestration policy only in its rules (no sanity stage).
+
+> there are a set of collectors.  atm collectors, git collectors, bd collectors.  they collect info then there is business logic layer w/ simple decision making logic based on the collectors.  this decision making logic would be slightly different for atm-bd-lite (there are no sanity agents).  everything else is pretty much the same. | the problem is spagetti code which mixes concerns. | it is the same regardless of what you are monitoring.
+
+Said by Rand, phase-bo replan 2026-11-01 (fenix): console profile design; existing console logic is not refactored, the layer is newly written (ANC-036) and orchestration cuts over later, 2026-11-01. Status: proposed. Version 2.
+
+Deterministic check to pair with the development gate: grep -rnE 'subprocess|bd_cache_rs|open\(|requests|http' core/atm_bd_core/decide prints nothing; uv run pytest core/tests/test_decide.py passes on fixed facts values with no fakes of I/O
+
+Fixtures:
+- pass: grep -rnE 'subprocess|bd_cache_rs|open\(' core/atm_bd_core/decide prints nothing, and uv run pytest core/tests/test_decide.py passes: each lite rule is called with a fixed facts value built in the test and its actions are asserted, with no I/O fakes; the collectors in core/atm_bd_core/collect only return facts.
+- fail: The lite cron tick reads bdc ready, decides which QA bead to assign and runs atm task assign inside the same function, and the dashboard code calls git directly while it renders.

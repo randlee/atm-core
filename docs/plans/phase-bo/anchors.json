@@ -4553,6 +4553,51 @@
           ]
         }
       ]
+    },
+    {
+      "id": "ANC-076",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd monitoring code for lite must be two separate layers in atm-bd-core: collectors (atm, git, beads, provider) that only gather facts, and a decision layer of pure functions from those facts to actions and report rows; the lite policy differs from the orchestration policy only in its rules (no sanity stage).",
+      "quote": "there are a set of collectors.  atm collectors, git collectors, bd collectors.  they collect info then there is business logic layer w/ simple decision making logic based on the collectors.  this decision making logic would be slightly different for atm-bd-lite (there are no sanity agents).  everything else is pretty much the same. | the problem is spagetti code which mixes concerns. | it is the same regardless of what you are monitoring.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan 2026-11-01 (fenix): console profile design; existing console logic is not refactored, the layer is newly written (ANC-036) and orchestration cuts over later",
+      "summary": "",
+      "scope": "",
+      "deterministic_check": "grep -rnE 'subprocess|bd_cache_rs|open\\(|requests|http' core/atm_bd_core/decide prints nothing; uv run pytest core/tests/test_decide.py passes on fixed facts values with no fakes of I/O",
+      "fixtures": {
+        "pass": [
+          "grep -rnE 'subprocess|bd_cache_rs|open\\(' core/atm_bd_core/decide prints nothing, and uv run pytest core/tests/test_decide.py passes: each lite rule is called with a fixed facts value built in the test and its actions are asserted, with no I/O fakes; the collectors in core/atm_bd_core/collect only return facts."
+        ],
+        "fail": [
+          "The lite cron tick reads bdc ready, decides which QA bead to assign and runs atm task assign inside the same function, and the dashboard code calls git directly while it renders."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "proposed",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-02T05:00:52+00:00",
+          "event": "created",
+          "status": "proposed"
+        },
+        {
+          "at": "2026-11-02T05:01:15+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
     }
   ]
 }

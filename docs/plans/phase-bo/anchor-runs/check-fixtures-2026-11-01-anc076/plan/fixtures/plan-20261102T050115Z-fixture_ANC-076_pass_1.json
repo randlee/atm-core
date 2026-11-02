@@ -1,0 +1,63 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261102T050115Z-fixture_ANC-076_pass_1",
+  "gate": "plan",
+  "created_at": "2026-11-02T05:01:15+00:00",
+  "anchors_path": "docs/plans/phase-bo/anchors.json",
+  "plan": "phase-bo",
+  "item": {
+    "id": "fixture:ANC-076:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 312,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": null,
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-076",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd monitoring code for lite must be two separate layers in atm-bd-core: collectors (atm, git, beads, provider) that only gather facts, and a decision layer of pure functions from those facts to actions and report rows; the lite policy differs from the orchestration policy only in its rules (no sanity stage).",
+      "quote": "there are a set of collectors.  atm collectors, git collectors, bd collectors.  they collect info then there is business logic layer w/ simple decision making logic based on the collectors.  this decision making logic would be slightly different for atm-bd-lite (there are no sanity agents).  everything else is pretty much the same. | the problem is spagetti code which mixes concerns. | it is the same regardless of what you are monitoring.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-01",
+      "context": "phase-bo replan 2026-11-01 (fenix): console profile design; existing console logic is not refactored, the layer is newly written (ANC-036) and orchestration cuts over later",
+      "anchor_version": 2,
+      "deterministic_check": "grep -rnE 'subprocess|bd_cache_rs|open\\(|requests|http' core/atm_bd_core/decide prints nothing; uv run pytest core/tests/test_decide.py passes on fixed facts values with no fakes of I/O",
+      "kind": "structural",
+      "leaning": null,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 312,
+      "item_shortened": false
+    }
+  ],
+  "summary": {
+    "counts": {
+      "deterministic_only": 1
+    },
+    "failing": [],
+    "leaning_counts": {},
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}
