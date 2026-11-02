@@ -2,7 +2,7 @@
 
 Rendered from the beads plan (`bd show`). The beads are authoritative; this file is for review.
 
-> **As landed (2026-10-25, atm-phase-bg.landed-qa-f3).** bg-1..bg-5 landed on the 0.7.x line, not 0.7.0: the 0.7.1 kit at d5a17e3b1, and `sc-lint.toml` `minimum_version` 0.7.3 at the develop sync. bg-4 did **not** delete `crates/sc-lint-boundary` or `crates/sc-lint-directives`, and `analyzers.runtime` is still disabled (sc-lint#373). Both moved to bg-6. bg-6 now adopts sc-lint v0.8.0 and routes `just lint` to atm-core's parallel `run_lint.py`, because sc-lint 0.8.0 keeps consumer profiles sequential and fail-fast (ADR-017 item 4). bg-7 adds the test manifest and the speed proof in atm-core, and hands both designs to sc-lint#195/#196 with the implementing commits. Neither sprint waits on unreleased sc-lint. The bg-6 section below is the pre-0.8.0 text: `bd show atm-bg-6` and `bd show atm-bg-7` are the current plan.
+> **Current state (2026-11-01).** bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit runner, moved repo lint steps into `.sc-lint/install.json`, and removed the in-tree analyzers. The kit now owns Windows-target cross compilation tools and rustup targets through its `tools` contract. The repository retains its private Python launcher because lint rows cannot select the bootstrap interpreter across operating systems (sc-lint#198 remains closed). The cleanup branch adds the macOS-host Windows-target Clippy row and removes redundant setup and bootstrap infrastructure. See the linked bead history for earlier decisions and sprint details.
 
 ---
 

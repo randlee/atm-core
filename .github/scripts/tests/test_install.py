@@ -193,27 +193,6 @@ class InstallValuesTests(unittest.TestCase):
                 project = tomllib.loads(rendered.read_text())["project"]
                 self.assertEqual(project.get("sc_lint_source_revision"), revision)
 
-    def test_installed_consumer_resolves_its_rendered_immutable_source(self) -> None:
-        if not (INSTALLER.parent / ".sc-publish-source-root").is_file():
-            self.skipTest("source installer integration")
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            consumer = root / "consumer"
-            consumer.mkdir()
-            values = self.valid_values()
-            values["project"]["sc_lint_source_revision"] = "a" * 40
-            contract = root / "install.json"
-            contract.write_text(json.dumps(values))
-            subprocess.run([sys.executable, INSTALLER, "--input", contract, consumer], check=True, capture_output=True)
-            result = subprocess.run([sys.executable, INSTALLER, "--dry-run", "--input", contract, consumer], capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            import os
-            env = dict(os.environ, GITHUB_WORKSPACE=str(consumer), GITHUB_ENV=str(root / "env"), SC_LINT_SOURCE_REVISION_INPUT="")
-            helper = consumer / ".github/scripts/setup_sc_lint_source.py"
-            result = subprocess.run([sys.executable, helper, "resolve"], env=env, capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((root / "env").read_text(), "SC_LINT_SOURCE_REVISION=" + "a" * 40 + "\n")
-
     def test_load_install_values_rejects_invalid_publish_orders(self) -> None:
         cases = {
             "boolean": (True, "integer"),

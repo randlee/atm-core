@@ -142,8 +142,9 @@ Lint execution model:
   - are the published reusable analyzers enabled from `.sc-lint/install.json`
   - use per-rule, documented exceptions where an upstream analyzer gap remains
 - `.just/lint_boundaries.py`
-  - parses crate-local boundary records from `docs/*/boundaries.md`
-  - validates schema and enforces current boundary rules
+  - enforces ATM-specific boundary records and checks that are not reusable
+    analyzer policy; the published `sc-lint` analyzer owns boundary schema
+    validation
 - the published `sc_lint.lint_manifests` runner
   - enforces Cargo manifest policy beyond Cargo/Clippy defaults
 - the published `sc_lint.lint_cargo_deny` runner

@@ -515,6 +515,7 @@
       "clippy-macos",
       "clippy-native-windows",
       "clippy-windows",
+      "clippy-windows-macos",
       "daemon-signing-coupling",
       "daemon-singleton",
       "deny-linux",
@@ -645,6 +646,23 @@
       "platform": "windows",
       "target": "x86_64-pc-windows-msvc"
     },
+    "clippy-windows-macos": {
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "env_paths": {
+        "PYO3_PYTHON": ".bootstrap-venv/bin/python"
+      },
+      "host": "macos",
+      "platform": "windows",
+      "target": "x86_64-pc-windows-msvc"
+    },
     "daemon-signing-coupling": [
       "just",
       "_py",
@@ -690,9 +708,10 @@
       ".just/check_fixed_sleep_hygiene.py"
     ],
     "fmt": [
-      "just",
+      "cargo",
       "fmt",
-      "check"
+      "--all",
+      "--check"
     ],
     "function-length": [
       "sc-lint",
@@ -961,6 +980,14 @@
       "--workspace",
       "--exclude",
       "atm-daemon"
+    ]
+  },
+  "tools": {
+    "cargo": {
+      "cargo-xwin": "0.18.4"
+    },
+    "rustup_targets": [
+      "x86_64-pc-windows-msvc"
     ]
   }
 }

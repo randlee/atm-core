@@ -24,9 +24,8 @@ help:
 bootstrap *args:
     {{seed_python_cmd}} tools/bootstrap.py {{args}}
 
-# Execute a repository Python command through the pinned bootstrap environment.
-# The sc-lint adoption profiles use this private bridge until sc-lint provides
-# a repository-runner setting (randlee/sc-lint#198).
+# Execute repository Python through the pinned bootstrap environment; sc-lint
+# rows cannot select this interpreter cross-platform yet (sc-lint#198).
 # Arguments reach Python as given, never re-split by the shell.
 [private]
 [unix]
@@ -44,11 +43,6 @@ _py *args:
 # Format the Rust workspace or run the formatting gate.
 fmt mode='check':
     cargo fmt --all {{if mode == "check" { "-- --check" } else { "" }}}
-
-[private]
-_lint-fmt:
-    @just fmt check
-
 
 # Show current workspace version state or latest recommended direct dependency upgrades.
 version mode='current':
