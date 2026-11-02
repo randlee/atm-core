@@ -753,27 +753,58 @@ def cmd_verify_python_version(args: argparse.Namespace) -> int:
 
 
 def cmd_sync_python_version(args: argparse.Namespace) -> int:
-    version = workspace_version(Path(args.workspace_toml))
+    workspace_toml = Path(args.workspace_toml).resolve()
+    version = workspace_version(workspace_toml)
     pyproject = Path(args.pyproject)
-    lines = pyproject.read_text(encoding="utf-8").splitlines()
-    output: list[str] = []
-    in_project = False
-    updated = False
+    text = pyproject.read_text(encoding="utf-8")
+    project = tomllib.loads(text).get("project", {})
+    dependencies = project.get("dependencies", [])
+    if not isinstance(dependencies, list) or not all(isinstance(dep, str) for dep in dependencies):
+        raise SystemExit(f"{pyproject}: [project].dependencies must be an array of strings")
 
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            in_project = stripped == "[project]"
-        if in_project and re.match(r'^\s*version\s*=\s*"[^"]+"\s*$', line):
-            output.append(re.sub(r'"[^"]+"', f'"{version}"', line, count=1))
-            updated = True
-            continue
-        output.append(line)
+    def canonical(name: str) -> str:
+        return re.sub(r"[-_.]+", "-", name).lower()
 
-    if not updated:
-        raise SystemExit(f"{pyproject}: could not find [project].version to rewrite")
+    workspace_names = set()
+    for path in (workspace_toml.parent / "crates").glob("*/pyproject.toml"):
+        name = tomllib.loads(path.read_text(encoding="utf-8")).get("project", {}).get("name")
+        if isinstance(name, str):
+            workspace_names.add(canonical(name))
 
-    pyproject.write_text("\n".join(output) + "\n", encoding="utf-8")
+    section = re.search(r"(?ms)^\[project\]\s*$.*?(?=^\[|\Z)", text)
+    if section is None:
+        raise SystemExit(f"{pyproject}: could not find [project] to rewrite")
+    body = section.group()
+    version_pattern = r'(?m)^(\s*version\s*=\s*)"[^"]+"(\s*(?:#.*)?)$'
+    body, count = re.subn(version_pattern, lambda m: f'{m[1]}"{version}"{m[2]}', body)
+    if count != 1:
+        raise SystemExit(f"{pyproject}: could not find one [project].version to rewrite")
+
+    # Exact pins couple co-installed wheels only; daemon compatibility uses RPC/schema versions.
+    workspace_dependencies = []
+    for dep in dependencies:
+        match = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)(.*)$", dep.strip())
+        if match and canonical(match[1]) in workspace_names:
+            if not re.fullmatch(r"\s*(?:[<>=!~][0-9A-Za-z.*+!,<>=~\s-]*)?", match[2]):
+                raise SystemExit(f"{pyproject}: cannot rewrite workspace dependency {dep!r}")
+            workspace_dependencies.append((dep, match[1]))
+    if workspace_dependencies:
+        array = re.search(r"(?ms)^[ \t]*dependencies\s*=\s*\[(.*?)\]", body)
+        if array is None:
+            raise SystemExit(f"{pyproject}: cannot rewrite [project].dependencies")
+        items = array.group(1)
+        for dep, name in workspace_dependencies:
+            literal = re.compile(r"([\"'])" + re.escape(dep) + r"\1")
+            items, count = literal.subn(lambda m: f'{m[1]}{name}=={version}{m[1]}', items, count=1)
+            if count != 1:
+                raise SystemExit(f"{pyproject}: cannot rewrite workspace dependency {dep!r}")
+        body = body[:array.start(1)] + items + body[array.end(1):]
+    updated = text[:section.start()] + body + text[section.end():]
+    parsed = tomllib.loads(updated).get("project", {})
+    expected = [f"{name}=={version}" if (name := next((n for d, n in workspace_dependencies if d == dep), None)) else dep for dep in dependencies]
+    if parsed.get("version") != version or parsed.get("dependencies", []) != expected:
+        raise SystemExit(f"{pyproject}: cannot safely rewrite [project].dependencies")
+    pyproject.write_text(updated, encoding="utf-8")
     print(f"synced python package version to {version}")
     return 0
 

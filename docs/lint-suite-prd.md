@@ -143,8 +143,6 @@ Lint execution model:
   `sc-lint lint sc-runtime`
   - are the published reusable analyzers enabled from `.sc-lint/install.json`
   - use per-rule, documented exceptions where an upstream analyzer gap remains
-- `.just/check_version_sync.py`
-  - verifies workspace/crate/release-version alignment
 - `.just/lint_boundaries.py`
   - parses crate-local boundary records from `docs/*/boundaries.md`
   - validates schema and enforces current boundary rules

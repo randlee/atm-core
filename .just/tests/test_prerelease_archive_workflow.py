@@ -507,11 +507,9 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 mock.patch.object(prerelease_tag, "require_clean_tree"),
                 mock.patch.object(prerelease_tag, "workspace_version", return_value="1.5.14"),
                 mock.patch.object(prerelease_tag, "remote_tag_exists", return_value=True),
-                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
             ):
                 with self.assertRaisesRegex(SystemExit, "tag already exists on origin"):
                     prerelease_tag.execute(repo, dry_run=True)
-            verify_lockstep.assert_not_called()
 
     def test_publish_and_dry_run_share_tag_availability_preflight(self) -> None:
         root = discover_repo_root()
@@ -526,13 +524,11 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     "require_available_tag",
                     side_effect=SystemExit("collision"),
                 ) as require_available_tag,
-                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
                 mock.patch.object(prerelease_tag, "candidate_changes") as candidate_changes,
             ):
                 with self.assertRaisesRegex(SystemExit, "collision"):
                     prerelease_tag.execute(root, dry_run=dry_run)
             require_available_tag.assert_called_once_with(root, "prerelease/v1.5.15")
-            verify_lockstep.assert_not_called()
             candidate_changes.assert_not_called()
 
     def test_candidate_bump_updates_actual_lockfile_collision_safely(self) -> None:

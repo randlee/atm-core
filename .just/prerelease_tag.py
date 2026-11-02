@@ -190,18 +190,6 @@ def regenerate_cli_reference(repo_root: Path) -> dict[Path, str]:
     }
 
 
-def verify_lockstep(repo_root: Path) -> None:
-    result = subprocess.run(
-        [sys.executable, str(repo_root / ".just" / "check_version_sync.py")],
-        cwd=repo_root,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise SystemExit((result.stderr or result.stdout).strip() or "version lockstep verification failed")
-
-
 def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Path, str]) -> None:
     for manifest_path, text in manifest_updates.items():
         if manifest_path.suffix != ".toml":
@@ -256,7 +244,6 @@ def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Pat
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
             raise SystemExit(f"release version validation failed: {detail}")
-    verify_lockstep(repo_root)
 
 
 def candidate_changes(repo_root: Path, old: str, new: str) -> dict[Path, str]:
@@ -364,7 +351,6 @@ def execute(repo_root: Path, *, dry_run: bool) -> int:
     require_available_tag(repo_root, tag)
 
     if dry_run:
-        verify_lockstep(repo_root)
         describe_plan(branch, old, new)
         return 0
 

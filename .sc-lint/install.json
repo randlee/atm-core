@@ -558,7 +558,6 @@
       "ttl-triage",
       "version-linux",
       "version-macos",
-      "version-python-pins",
       "version-windows"
     ]
   },
@@ -918,11 +917,6 @@
       ],
       "platform": "macos"
     },
-    "version-python-pins": [
-      "just",
-      "_py",
-      ".just/check_version_sync.py"
-    ],
     "version-windows": {
       "command": [
         ".sc-lint\\venv\\Scripts\\python.exe",
