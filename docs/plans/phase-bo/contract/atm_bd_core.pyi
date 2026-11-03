@@ -1,4 +1,4 @@
-# atm-bd-types 0.3.0 framework surface: the same for every profile. Policy loading, decision record, view,
+# atm-bd-types 0.4.0 framework surface: the same for every profile. Policy loading, decision record, view,
 # executor outcomes, ports. The framework executes the Actions a plug-in decides; plug-ins never import this.
 import builtins
 import enum
