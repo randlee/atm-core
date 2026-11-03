@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-SKILLS = Path(__file__).parent.parent.parent / "skills"
+SKILLS = Path(__file__).resolve().parents[2] / "skills" / "atm-bd-lite"
 ALLOWED = {"atm_bd_types", "sys"}
 
 
