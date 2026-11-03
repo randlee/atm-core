@@ -13,6 +13,8 @@ Rand, 2026-11-02, follow-up: "the python/monty code called by cron would be part
 
 Plug-ins import only `atm_bd_types`; `lite/tests` enforces it.
 
+Composition (Rand, 2026-11-02): "it is fine if each plug-in builds its own composition root. as long as most of what it is composing is 'common'. this is probably the most powerful architecture since the plug-in would have the power to replace any component it deemed necessary." Each lite hook's `__main__` is its composition root: it wires the common `CacheStore` and `PhaseFilesCli` into the pure `hook(...)`.
+
 | File | Contents |
 |---|---|
 | `src/plugin.rs` | Plug-in surface: re-exports the hook and wire types below; defines facts, `PhaseFacts`, `Action` (`Assign`/`Report`/`Notify`), `Params`, `Cron` (the one cron entry point, `decide`), `Profile`. |
