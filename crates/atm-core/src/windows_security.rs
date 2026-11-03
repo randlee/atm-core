@@ -12,9 +12,9 @@ use std::path::Path;
 use std::ptr::null_mut;
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, LocalFree};
-use windows_sys::Win32::Security::Authorization::{
-    GetNamedSecurityInfoW, GetSecurityInfo, SE_FILE_OBJECT,
-};
+#[cfg(test)]
+use windows_sys::Win32::Security::Authorization::GetNamedSecurityInfoW;
+use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
 use windows_sys::Win32::Security::{
     ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce, GetLengthSid,
     GetTokenInformation, IsValidAcl, IsValidSid, OWNER_SECURITY_INFORMATION, PSID, TOKEN_QUERY,
@@ -130,6 +130,7 @@ fn same_sid(left: &[u8], right: &[u8]) -> bool {
     left == right
 }
 
+#[cfg(test)]
 fn descriptor(path: &Path) -> Result<(Descriptor, PSID, *mut ACL), WindowsSecurityError> {
     let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
     if wide.contains(&0) {
@@ -171,6 +172,7 @@ fn descriptor(path: &Path) -> Result<(Descriptor, PSID, *mut ACL), WindowsSecuri
 ///
 /// # Errors
 /// Returns a typed error if the owner or current-user SID cannot be read.
+#[cfg(test)]
 pub fn owned_by_current_user(path: &Path) -> Result<bool, WindowsSecurityError> {
     let (_descriptor, owner, _) = descriptor(path)?;
     Ok(same_sid(&copy_sid(owner)?, &current_user_sid()?))
@@ -182,6 +184,7 @@ pub fn owned_by_current_user(path: &Path) -> Result<bool, WindowsSecurityError> 
 /// Owner Rights (S-1-3-4) is recognized as referring to the file owner.
 /// # Errors
 /// Returns a typed error if the descriptor cannot be inspected or interpreted.
+#[cfg(test)]
 pub fn dacl_grants_only_owner(path: &Path) -> Result<bool, WindowsSecurityError> {
     let (_descriptor, owner, dacl) = descriptor(path)?;
     dacl_only_owner(owner, dacl)
