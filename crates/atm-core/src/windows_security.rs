@@ -1,20 +1,29 @@
 //! Windows file owner and DACL inspection. Unknown ACE types fail closed.
 //!
-//! These path-based checks inspect a security descriptor snapshot. Callers
-//! that subsequently open a path must address replacement races themselves.
+//! Path-based checks inspect a snapshot. Use `VerifiedHandle` when an object
+//! must remain stable between inspection and subsequent operations.
 
 use std::ffi::c_void;
 use std::fmt;
+use std::io::Read;
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use std::ptr::null_mut;
 
-use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, LocalFree};
-use windows_sys::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
+use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, LocalFree};
+use windows_sys::Win32::Security::Authorization::{
+    GetNamedSecurityInfoW, GetSecurityInfo, SE_FILE_OBJECT,
+};
 use windows_sys::Win32::Security::{
     ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce, GetLengthSid,
     GetTokenInformation, IsValidAcl, IsValidSid, OWNER_SECURITY_INFORMATION, PSID, TOKEN_QUERY,
     TOKEN_USER, TokenUser,
+};
+use windows_sys::Win32::Storage::FileSystem::{
+    CreateFileW, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO, FILE_FLAG_BACKUP_SEMANTICS,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_READ_DATA, FILE_SHARE_READ,
+    FileAttributeTagInfo, GetFileInformationByHandleEx, OPEN_EXISTING, READ_CONTROL,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
@@ -28,6 +37,8 @@ pub enum WindowsSecurityError {
     },
     /// The returned security descriptor or ACL is invalid or unsupported.
     InvalidDescriptor(&'static str),
+    /// The file owner, DACL, or file type does not meet the private-object policy.
+    Insecure(&'static str),
 }
 
 impl fmt::Display for WindowsSecurityError {
@@ -37,6 +48,7 @@ impl fmt::Display for WindowsSecurityError {
             Self::InvalidDescriptor(reason) => {
                 write!(f, "invalid Windows security descriptor: {reason}")
             }
+            Self::Insecure(reason) => write!(f, "insecure Windows object: {reason}"),
         }
     }
 }
@@ -44,7 +56,7 @@ impl std::error::Error for WindowsSecurityError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::System { source, .. } => Some(source),
-            Self::InvalidDescriptor(_) => None,
+            Self::InvalidDescriptor(_) | Self::Insecure(_) => None,
         }
     }
 }
@@ -59,7 +71,7 @@ fn os_error(operation: &'static str) -> WindowsSecurityError {
 struct Descriptor(*mut c_void);
 impl Drop for Descriptor {
     fn drop(&mut self) {
-        // SAFETY: GetNamedSecurityInfoW allocates the descriptor with LocalAlloc.
+        // SAFETY: Windows security-info APIs allocate the descriptor with LocalAlloc.
         unsafe { LocalFree(self.0) };
     }
 }
@@ -172,6 +184,10 @@ pub fn owned_by_current_user(path: &Path) -> Result<bool, WindowsSecurityError> 
 /// Returns a typed error if the descriptor cannot be inspected or interpreted.
 pub fn dacl_grants_only_owner(path: &Path) -> Result<bool, WindowsSecurityError> {
     let (_descriptor, owner, dacl) = descriptor(path)?;
+    dacl_only_owner(owner, dacl)
+}
+
+fn dacl_only_owner(owner: PSID, dacl: *mut ACL) -> Result<bool, WindowsSecurityError> {
     let owner = copy_sid(owner)?;
     if dacl.is_null() || unsafe { IsValidAcl(dacl) } == 0 {
         return Err(WindowsSecurityError::InvalidDescriptor(
@@ -216,6 +232,146 @@ pub fn dacl_grants_only_owner(path: &Path) -> Result<bool, WindowsSecurityError>
         }
     }
     Ok(true)
+}
+
+/// A verified Windows file or directory held open without write/delete sharing.
+/// The same handle is used for security inspection, reads, and metadata.
+pub struct VerifiedHandle {
+    file: std::fs::File,
+}
+
+impl VerifiedHandle {
+    /// Open without following a final reparse point, then verify owner and DACL.
+    ///
+    /// # Errors
+    /// Rejects inaccessible, reparse-point, foreign-owned or shared objects.
+    pub fn open(path: &Path) -> Result<Self, WindowsSecurityError> {
+        let file = open_unshared(path)?;
+        reject_reparse_point(&file)?;
+        verify_handle_security(&file)?;
+        Ok(Self { file })
+    }
+
+    /// Read the verified open file to completion without reopening its path.
+    ///
+    /// # Errors
+    /// Returns an I/O error if reading the held handle fails.
+    pub fn read_to_end(&mut self) -> Result<Vec<u8>, WindowsSecurityError> {
+        let mut bytes = Vec::new();
+        self.file
+            .read_to_end(&mut bytes)
+            .map_err(|source| WindowsSecurityError::System {
+                operation: "read verified handle",
+                source,
+            })?;
+        Ok(bytes)
+    }
+
+    /// Read metadata from the verified open handle.
+    ///
+    /// # Errors
+    /// Returns an I/O error if querying the handle fails.
+    pub fn metadata(&self) -> Result<std::fs::Metadata, WindowsSecurityError> {
+        self.file
+            .metadata()
+            .map_err(|source| WindowsSecurityError::System {
+                operation: "metadata on verified handle",
+                source,
+            })
+    }
+}
+
+fn open_unshared(path: &Path) -> Result<std::fs::File, WindowsSecurityError> {
+    let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
+    if wide.contains(&0) {
+        return Err(WindowsSecurityError::InvalidDescriptor("path contains NUL"));
+    }
+    wide.push(0);
+    // SAFETY: wide is NUL-terminated and the other arguments follow CreateFileW's contract.
+    let raw = unsafe {
+        CreateFileW(
+            wide.as_ptr(),
+            FILE_READ_DATA | FILE_READ_ATTRIBUTES | READ_CONTROL,
+            FILE_SHARE_READ,
+            null_mut(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+            null_mut(),
+        )
+    };
+    if raw == INVALID_HANDLE_VALUE {
+        return Err(os_error("CreateFileW"));
+    }
+    // SAFETY: CreateFileW returned a valid owned handle, transferred to File.
+    let file = unsafe { std::fs::File::from_raw_handle(raw.cast()) };
+    Ok(file)
+}
+
+fn reject_reparse_point(file: &std::fs::File) -> Result<(), WindowsSecurityError> {
+    let mut info = FILE_ATTRIBUTE_TAG_INFO {
+        FileAttributes: 0,
+        ReparseTag: 0,
+    };
+    // SAFETY: file owns a live handle and info is a correctly sized writable output.
+    if unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle().cast(),
+            FileAttributeTagInfo,
+            (&mut info as *mut FILE_ATTRIBUTE_TAG_INFO).cast(),
+            std::mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
+        )
+    } == 0
+    {
+        return Err(os_error("GetFileInformationByHandleEx"));
+    }
+    if info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        return Err(WindowsSecurityError::Insecure(
+            "reparse points are not permitted",
+        ));
+    }
+    Ok(())
+}
+
+fn verify_handle_security(file: &std::fs::File) -> Result<(), WindowsSecurityError> {
+    let mut owner = null_mut();
+    let mut dacl = null_mut();
+    let mut raw_descriptor = null_mut();
+    // SAFETY: file is live and all requested outputs are writable.
+    let status = unsafe {
+        GetSecurityInfo(
+            file.as_raw_handle().cast(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            &mut owner,
+            null_mut(),
+            &mut dacl,
+            null_mut(),
+            &mut raw_descriptor,
+        )
+    };
+    if status != 0 {
+        return Err(WindowsSecurityError::System {
+            operation: "GetSecurityInfo",
+            source: std::io::Error::from_raw_os_error(status as i32),
+        });
+    }
+    if raw_descriptor.is_null() {
+        return Err(WindowsSecurityError::InvalidDescriptor(
+            "missing descriptor",
+        ));
+    }
+    let _descriptor = Descriptor(raw_descriptor);
+    if !same_sid(&copy_sid(owner)?, &current_user_sid()?) {
+        return Err(WindowsSecurityError::Insecure(
+            "owner is not the current user",
+        ));
+    }
+    if !dacl_only_owner(owner, dacl)? {
+        return Err(WindowsSecurityError::Insecure(
+            "DACL grants access to another principal",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -325,6 +481,28 @@ mod tests {
         set_owner_to_current_user(&path);
         set_dacl(&path, "D:P(A;;FA;;;OW)(A;;FW;;;WD)");
         assert!(!dacl_grants_only_owner(&path).unwrap());
+    }
+
+    #[test]
+    fn verified_handle_blocks_replacement_and_reads_original_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("record");
+        let replacement = dir.path().join("replacement");
+        std::fs::write(&path, b"original").unwrap();
+        std::fs::write(&replacement, b"replacement").unwrap();
+        set_owner_to_current_user(&path);
+        set_dacl(&path, "D:P(A;;FA;;;OW)");
+        let mut guard = VerifiedHandle::open(&path).expect("verify original record");
+        assert!(guard.metadata().unwrap().is_file());
+        assert!(
+            std::fs::rename(&replacement, &path).is_err(),
+            "open guard denies replacement"
+        );
+        assert_eq!(guard.read_to_end().unwrap(), b"original");
+        drop(guard);
+        std::fs::remove_file(&path).unwrap();
+        std::fs::rename(&replacement, &path).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"replacement");
     }
 
     #[test]
