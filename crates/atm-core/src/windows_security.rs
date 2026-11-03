@@ -491,12 +491,14 @@ pub(crate) fn create_owner_only_directory(path: &Path) -> Result<(), WindowsSecu
             "ConvertStringSecurityDescriptorToSecurityDescriptorW",
         ));
     }
-    let parsed = Descriptor(raw);
+    let parsed = DescriptorAllocation(raw);
     let mut present = 0;
     let mut defaulted = 0;
     let mut dacl = null_mut();
     // SAFETY: parsed is live and all outputs are writable.
-    if unsafe { GetSecurityDescriptorDacl(parsed.0, &mut present, &mut dacl, &mut defaulted) } == 0
+    if unsafe {
+        GetSecurityDescriptorDacl(parsed.0.cast(), &mut present, &mut dacl, &mut defaulted)
+    } == 0
         || present == 0
         || dacl.is_null()
     {
@@ -504,7 +506,7 @@ pub(crate) fn create_owner_only_directory(path: &Path) -> Result<(), WindowsSecu
             "missing owner-only DACL",
         ));
     }
-    let sid = current_user_sid()?;
+    let sid = current_token_owner_sids()?.0;
     let mut aligned_sid = vec![0_u32; sid.len().div_ceil(4)];
     // SAFETY: aligned_sid has enough writable storage and does not overlap sid.
     unsafe {
