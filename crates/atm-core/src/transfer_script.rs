@@ -126,14 +126,21 @@ pub fn synthesized_transfer_script_env(env: &dyn EnvSource) -> Vec<(&'static str
     vars
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix supplies system executable directories; Windows windows_synthesized_transfer_script_path builds its own PATH (crates/atm-core/src/transfer_script.rs).")]
+#[cfg(unix)]
 fn unix_synthesized_transfer_script_path() -> OsString {
-    OsString::from("/usr/bin:/bin:/usr/local/bin")
-}
-
-#[cfg(target_os = "macos")]
-fn unix_synthesized_transfer_script_path() -> OsString {
-    OsString::from("/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin")
+    let root = PathBuf::from(std::path::MAIN_SEPARATOR.to_string());
+    let paths = vec![
+        root.join("usr").join("bin"),
+        root.join("bin"),
+        root.join("usr").join("local").join("bin"),
+    ];
+    #[cfg(target_os = "macos")]
+    let paths = paths.into_iter().chain(std::iter::once(
+        root.join("opt").join("homebrew").join("bin"),
+    ));
+    std::env::join_paths(paths)
+        .expect("static Unix PATH entries cannot contain a path-list separator")
 }
 
 #[cfg(windows)]
@@ -790,6 +797,7 @@ fn normalized_prefix_key(kind: std::path::Prefix<'_>) -> String {
 
 /// Pure predicate so tests can exercise "not owner-executable" without
 /// depending on how the mode bits were produced.
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix checks owner-execute mode; Windows has no mode counterpart: check_script_safety checks path containment (crates/atm-core/src/transfer_script.rs).")]
 #[cfg(unix)]
 fn is_owner_executable(mode: u32) -> bool {
     mode & 0o100 != 0

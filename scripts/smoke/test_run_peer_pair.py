@@ -83,7 +83,7 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             log.write_text("ready\n", encoding="utf-8")
             config = sample_config(log)
 
-            with patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
+            with patch.dict(RUNNER.os.environ, {"ATM_SMOKE_INSTALL_ROOT": ""}), patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
                 def command_with_rejection_event(command, timeout):
                     result = public_atm_command(command, timeout)
                     if command[1:] == ["reject"]:
@@ -226,7 +226,7 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             config = sample_config(log)
             config["cases"][1]["verification"]["assertions"]["receiver_visible"]["equals"] = "01TEST"
 
-            with patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
+            with patch.dict(RUNNER.os.environ, {"ATM_SMOKE_INSTALL_ROOT": ""}), patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
                 with self.assertRaisesRegex(RuntimeError, "must bind to `\\$message_ulid`"):
                     RUNNER.validate(config)
 
@@ -241,7 +241,7 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             )
             rejection["verification"]["forbidden_daemon_log_entries"] = ["legacy-token"]
 
-            with patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
+            with patch.dict(RUNNER.os.environ, {"ATM_SMOKE_INSTALL_ROOT": ""}), patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
                 with self.assertRaisesRegex(RuntimeError, "was removed"):
                     RUNNER.validate(config)
 
@@ -256,7 +256,7 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             )
             del rejection["verification"]["required_daemon_log_events"]
 
-            with patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
+            with patch.dict(RUNNER.os.environ, {"ATM_SMOKE_INSTALL_ROOT": ""}), patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
                 with self.assertRaisesRegex(RuntimeError, "requires required_daemon_log_events"):
                     RUNNER.validate(config)
 

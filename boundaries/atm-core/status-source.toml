@@ -19,7 +19,8 @@ io_forbidden = ["sqlite", "socket_io"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon"]
-allowed_dependencies = []
+allowed_dependencies = ["atm-error", "atm-storage"]
+allowed_dev_dependencies = ["atm-runtime-test-support"]
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
@@ -37,10 +38,12 @@ forbidden_test_bypasses = []
 
 [enforcement]
 # No production implementer exists; cfg(test) doubles are intentionally ignored by the policy sweep.
-no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-STATUS-SOURCE-REFERENCES"]
 review_gates = ["no_status_leakage_into_roster_store"]
 
 [status]
 state = "active"
 notes = ["callable status trait and named snapshot DTOs landed in atm_core::boundary", "live status remains separate from durable roster truth", "runtime status snapshots now carry liveness, readiness, singleton-owner, SQLite-ready, degraded-ingest, and member-count fields"]
+
+[extensions.atm]
+no_in_repo_implementation = true

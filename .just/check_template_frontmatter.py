@@ -9,7 +9,7 @@ import re
 import subprocess
 import sys
 
-from lint_common import discover_repo_root
+from sc_lint.lint_common import discover_repo_root
 
 
 # sc-compose 1.7.0 reports these Jinja keywords as undeclared tokens
@@ -17,7 +17,6 @@ from lint_common import discover_repo_root
 SC_COMPOSE_784_TOKENS = frozenset({"autoescape", "endautoescape", "is", "defined"})
 UNDECLARED = re.compile(r"ERR_VAL_UNDECLARED_TOKEN: undeclared referenced token: (\S+)")
 MISSING_FRONTMATTER = "ERR_VAL_MISSING_FRONTMATTER"
-
 
 def tracked_templates(repo_root: Path) -> list[str]:
     listed = subprocess.run(
@@ -77,7 +76,7 @@ def main(argv: list[str]) -> int:
         print("template front matter violations:")
         print("\n".join(f"- {violation}" for violation in violations))
         return 1
-    print("template front matter: every tracked *.j2 declares the variables it uses")
+    print("template front matter: every repo-owned tracked *.j2 declares the variables it uses")
     return 0
 
 

@@ -341,7 +341,7 @@ identity state.
 
 Python tests that exercise a repository `.sh` fixture must invoke a real POSIX
 shell on Windows: Windows does not interpret a shebang through `CreateProcess`.
-Use `.just/lint_common.py`'s `resolve_posix_shell()` rather than adding a
+Use `.just/shell_support.py`'s `resolve_posix_shell()` rather than adding a
 test-local resolver. It discovers Git Bash from `git --exec-path` or `PATH`
 and explicitly rejects `C:\Windows\System32\bash.exe`, which is the WSL launcher
 rather than the Git-for-Windows shell needed by these fixtures.

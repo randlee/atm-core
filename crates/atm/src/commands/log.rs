@@ -1,4 +1,5 @@
 use std::path::Path;
+#[cfg(test)]
 use std::thread;
 use std::time::Duration;
 
@@ -58,7 +59,7 @@ impl LogCommand {
                 let snapshot = observability.query(args.build_query(LogMode::Snapshot)?)?;
                 output::print_log_snapshot(&snapshot, args.json)
             }
-            LogModeCommand::Tail(args) => args.run(observability),
+            LogModeCommand::Tail(args) => args.run(observability).await,
         }
     }
 }
@@ -427,18 +428,18 @@ struct TailArgs {
 
 impl TailArgs {
     #[cfg(not(test))]
-    fn run(self, observability: &CliObservability) -> Result<()> {
+    async fn run(self, observability: &CliObservability) -> Result<()> {
         let mut session = observability.follow(self.query.build_query(LogMode::Tail)?)?;
 
         loop {
             let snapshot = session.poll()?;
             output::print_log_records(snapshot.records, self.query.json)?;
-            thread::sleep(std::time::Duration::from_millis(self.poll_interval_ms));
+            tokio::time::sleep(std::time::Duration::from_millis(self.poll_interval_ms)).await;
         }
     }
 
     #[cfg(test)]
-    fn run(self, observability: &CliObservability) -> Result<()> {
+    async fn run(self, observability: &CliObservability) -> Result<()> {
         let mut session = observability.follow(self.query.build_query(LogMode::Tail)?)?;
         let mut polls = 0usize;
 

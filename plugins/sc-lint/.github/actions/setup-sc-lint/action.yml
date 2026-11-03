@@ -1,0 +1,34 @@
+name: Setup sc-lint
+description: Install and verify the sc-lint release selected by sc-lint.toml.
+
+inputs:
+  config:
+    description: Consumer sc-lint configuration file.
+    required: false
+    default: sc-lint.toml
+
+runs:
+  using: composite
+  steps:
+    - name: Install verified sc-lint release
+      shell: python
+      env:
+        SC_LINT_ACTION_CONFIG: ${{ inputs.config }}
+      run: |
+        import os
+        from pathlib import Path
+        import shutil
+        import subprocess
+        import sys
+
+        install_dir = Path(os.environ['RUNNER_TEMP']) / 'sc-lint' / 'bin'
+        env = dict(os.environ, SC_LINT_INSTALL_DIR=str(install_dir))
+        env.pop('SC_LINT_BIN', None)
+        subprocess.run([sys.executable, '.sc-lint/bootstrap.py', 'setup', '--config',
+                        env['SC_LINT_ACTION_CONFIG']], env=env, check=True)
+        binary = install_dir / ('sc-lint.exe' if os.name == 'nt' else 'sc-lint')
+        resolved = str(binary) if binary.is_file() else shutil.which('sc-lint', path=env.get('PATH'))
+        if not resolved:
+            raise SystemExit('setup succeeded but no sc-lint executable was found')
+        with open(env['GITHUB_PATH'], 'a', encoding='utf-8') as path_file:
+            path_file.write(str(Path(resolved).parent) + '\n')

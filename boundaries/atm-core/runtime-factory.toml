@@ -37,10 +37,12 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["service_runtime_store::default_runtime"]
 
 [enforcement]
-no_in_repo_implementation = true
 lint_rules = ["SCB-RETAINED-001", "SCB-SINGLETON-001"]
 review_gates = ["no_ambient_runtime_factory_leakage"]
 
 [status]
 state = "planned"
 notes = ["canonical planning-line record for the retained-runtime construction seam referenced by the Phase Z smoke and coverage sprints", "ambient singleton access is explicitly outside this boundary and remains governed by the singleton lint line"]
+
+[extensions.atm]
+no_in_repo_implementation = true

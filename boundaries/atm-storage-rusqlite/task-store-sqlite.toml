@@ -9,7 +9,7 @@ trait = "TaskStore"
 [implementation]
 type = "SqliteTaskStore"
 module = "atm_storage_rusqlite::task_store"
-visibility = "private"
+visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]

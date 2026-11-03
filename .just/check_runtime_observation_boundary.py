@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 
-from lint_common import discover_repo_root, is_code_line, load_lint_config, rust_file_test_scope
+from sc_lint.lint_common import discover_repo_root, is_code_line, load_lint_config, rust_file_test_scope
 
 
 LINT_NAME = "runtime-observation-boundary"

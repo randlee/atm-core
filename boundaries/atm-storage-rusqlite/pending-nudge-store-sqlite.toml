@@ -9,7 +9,7 @@ trait = "PendingNudgeStore"
 [implementation]
 type = "SqlitePendingNudgeStore"
 module = "atm_storage_rusqlite::pending_nudge_store"
-visibility = "private"
+visibility = "pub(crate)"
 constructor = "pub(crate)"
 
 [composition]

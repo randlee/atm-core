@@ -171,6 +171,7 @@ impl Export {
 /// The daemon process's observability owner: the retained logger and the
 /// standard SDK providers. The entrypoint bootstraps it once and passes it
 /// into daemon composition, which drains and shuts it down.
+#[derive(Clone)]
 pub struct DaemonObservability {
     // Keep one shared logger lifecycle behind a mutex so emit/health paths and
     // shutdown can coordinate a single transition into the stopped state.
@@ -184,16 +185,6 @@ impl std::fmt::Debug for DaemonObservability {
         f.debug_struct("DaemonObservability")
             .field("active_log_path", &self.active_log_path)
             .finish_non_exhaustive()
-    }
-}
-
-impl Clone for DaemonObservability {
-    fn clone(&self) -> Self {
-        Self {
-            logger: Arc::clone(&self.logger),
-            active_log_path: self.active_log_path.clone(),
-            export: Arc::clone(&self.export),
-        }
     }
 }
 
@@ -211,6 +202,21 @@ impl DaemonObservability {
         env: &dyn atm_core::atm_temp::EnvSource,
         log_dir: PathBuf,
     ) -> Result<Self, AtmError> {
+        Self::bootstrap_routed(
+            env,
+            log_dir,
+            retained_log_policy(RETAINED_LOG_ROTATION_MAX_BYTES),
+        )
+        .await
+    }
+
+    /// [`Self::bootstrap_from`] with an explicit retained-log policy. The
+    /// daemon passes its production policy; tests pass their own bounds.
+    async fn bootstrap_routed(
+        env: &dyn atm_core::atm_temp::EnvSource,
+        log_dir: PathBuf,
+        retained_log_policy: RetainedLogPolicy,
+    ) -> Result<Self, AtmError> {
         let export = resolve_export(env);
         let destination = export.destination;
         let otel_logger = export
@@ -226,7 +232,7 @@ impl DaemonObservability {
             let logger = build_routed_retained_logger(
                 ATM_SERVICE_NAME,
                 &log_dir,
-                retained_log_policy(RETAINED_LOG_ROTATION_MAX_BYTES),
+                retained_log_policy,
                 level,
                 destination,
                 otel_logger,
@@ -418,19 +424,6 @@ impl DaemonObservability {
     }
 
     #[cfg(test)]
-    fn bootstrap_at_log_dir_with_policy_for_test(
-        log_dir: PathBuf,
-        retained_log_policy: RetainedLogPolicy,
-    ) -> Result<Self, AtmError> {
-        let (logger, active_log_path) = build_file_logger(&log_dir, retained_log_policy)?;
-        Ok(Self {
-            logger: Arc::new(Mutex::new(LoggerLifecycle(Arc::new(logger)))),
-            active_log_path,
-            export: Arc::new(Export::inert()),
-        })
-    }
-
-    #[cfg(test)]
     pub(crate) fn export_providers_present_for_test(&self) -> bool {
         self.export
             .providers
@@ -442,39 +435,6 @@ impl DaemonObservability {
     #[cfg(test)]
     pub(crate) fn export_health_for_test(&self) -> AtmTelemetryExportHealth {
         self.export.health()
-    }
-
-    /// The same bridge `install_tracing_bridge` installs process-wide, for a
-    /// test-scoped dispatcher.
-    #[cfg(test)]
-    pub(crate) fn tracing_bridge_for_test(&self) -> atm_observability::TracingBridgeLayer {
-        let logger = self.logger.lock().expect("logger lock");
-        let bridge = atm_observability::TracingBridgeLayer::new(Arc::clone(&logger.0));
-        bridge.set_export_diagnostics(Arc::clone(&self.export.diagnostics));
-        bridge
-    }
-
-    #[cfg(test)]
-    fn shutdown_for_test(self) {
-        let logger = match Arc::try_unwrap(self.logger) {
-            Ok(logger) => logger,
-            Err(_) => panic!("test observability logger must have one owner"),
-        };
-        let lifecycle = match logger.into_inner() {
-            Ok(lifecycle) => lifecycle,
-            Err(_) => panic!("test observability logger lock must not be poisoned"),
-        };
-        let retained_logger = match Arc::try_unwrap(lifecycle.0) {
-            Ok(retained_logger) => retained_logger,
-            Err(_) => panic!("test retained logger must have one owner"),
-        };
-        drop(retained_logger.shutdown());
-    }
-
-    #[cfg(test)]
-    fn flush_for_test(&self) {
-        let logger = self.logger.lock().expect("test observability logger lock");
-        logger.0.flush().expect("test observability logger flush");
     }
 }
 
@@ -536,18 +496,14 @@ fn resolve_export(env: &dyn atm_core::atm_temp::EnvSource) -> ResolvedExport {
         export: Export::new(ExportSelection::Invalid, Arc::default(), None),
         destination: LogDestination::File,
     };
-    let Ok(destination) = LogDestination::from_env(env) else {
+    let Ok((destination, config)) = export_configuration(env) else {
         return invalid();
     };
-    let config = match TelemetryExportConfig::from_env(env) {
-        Ok(Some(config)) => config,
-        Ok(None) => {
-            return ResolvedExport {
-                export: Export::inert(),
-                destination,
-            };
-        }
-        Err(_) => return invalid(),
+    let Some(config) = config else {
+        return ResolvedExport {
+            export: Export::inert(),
+            destination,
+        };
     };
     let selection = ExportSelection::Configured {
         endpoint: config.endpoint().to_owned(),
@@ -564,6 +520,24 @@ fn resolve_export(env: &dyn atm_core::atm_temp::EnvSource) -> ResolvedExport {
     }
 }
 
+/// Parses daemon export inputs before creating providers or starting workers.
+fn export_configuration(
+    env: &dyn atm_core::atm_temp::EnvSource,
+) -> Result<(LogDestination, Option<TelemetryExportConfig>), ()> {
+    let destination = LogDestination::from_env(env).map_err(|_| ())?;
+    let config = TelemetryExportConfig::from_env(env).map_err(|_| ())?;
+    Ok((destination, config))
+}
+
+fn retained_command_event(event: &CommandEvent) -> RetainedCommandEvent<'_> {
+    RetainedCommandEvent {
+        target: ATM_DAEMON_TARGET,
+        action: event.action.as_str(),
+        outcome: event.outcome.as_str(),
+        code: event.error_code.as_ref().map(|code| code.as_str()),
+    }
+}
+
 impl atm_core::boundary::sealed::Sealed for DaemonObservability {}
 
 impl ObservabilityPort for DaemonObservability {
@@ -573,12 +547,7 @@ impl ObservabilityPort for DaemonObservability {
                 "shared daemon observability emit failed because the logger lock was poisoned",
             )
         })?;
-        match logger.0.try_log_command(RetainedCommandEvent {
-            target: ATM_DAEMON_TARGET,
-            action: event.action.as_str(),
-            outcome: event.outcome.as_str(),
-            code: event.error_code.map(|code| code.as_str()),
-        })? {
+        match logger.0.try_log_command(retained_command_event(&event))? {
             RetainedLogOffer::Accepted | RetainedLogOffer::QueueFull => Ok(()),
             RetainedLogOffer::Rejected { diagnostic_code } => Err(AtmError::observability_emit(
                 format!("shared daemon observability log admission failed ({diagnostic_code})"),
@@ -610,21 +579,6 @@ impl ObservabilityPort for DaemonObservability {
     }
 }
 
-#[cfg(test)]
-fn build_file_logger(
-    log_dir: &std::path::Path,
-    retained_log_policy: RetainedLogPolicy,
-) -> Result<(RetainedLogger, PathBuf), AtmError> {
-    let active_log_path = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
-    let logger = atm_observability::build_retained_logger(
-        ATM_SERVICE_NAME,
-        log_dir,
-        retained_log_policy,
-        None,
-    )?;
-    Ok((logger, active_log_path))
-}
-
 fn retained_log_policy(rotation_max_bytes: u64) -> RetainedLogPolicy {
     RetainedLogPolicy {
         rotation_max_bytes,
@@ -638,29 +592,163 @@ fn retained_log_policy(rotation_max_bytes: u64) -> RetainedLogPolicy {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-    use std::sync::{Arc, Condvar, Mutex};
-    use std::time::{Duration, SystemTime};
+    use std::sync::Arc;
+    use std::time::Duration;
 
     use atm_core::test_support::EnvGuard;
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{DaemonObservability, RetainedLogPolicy};
+    use super::{
+        ATM_SERVICE_NAME, DaemonObservability, Export, ExportSelection, LoggerLifecycle,
+        RETAINED_LOG_ROTATION_MAX_BYTES, build_routed_retained_logger, retained_log_policy,
+    };
 
-    /// Makes a rotated log unambiguously older than the configured retention
-    /// age without relying on scheduler delay or filesystem timestamp
-    /// resolution.
-    fn age_rotated_log(path: &Path, retention_max_age: Duration) {
-        let expired_at = SystemTime::now()
-            .checked_sub(retention_max_age + Duration::from_secs(1))
-            .expect("test retention age must not underflow SystemTime");
-        std::fs::OpenOptions::new()
-            .write(true)
-            .open(path)
-            .expect("open rotated log for mtime rewrite")
-            .set_times(std::fs::FileTimes::new().set_modified(expired_at))
-            .expect("backdate rotated log");
+    #[derive(Clone, Debug, Default)]
+    struct CapturingLogExporter(Arc<std::sync::Mutex<Vec<String>>>);
+
+    impl opentelemetry_sdk::logs::LogExporter for CapturingLogExporter {
+        fn export(
+            &self,
+            batch: opentelemetry_sdk::logs::LogBatch<'_>,
+        ) -> impl std::future::Future<Output = opentelemetry_sdk::error::OTelSdkResult> + Send
+        {
+            let records = Arc::clone(&self.0);
+            async move {
+                let mut records = records.lock().expect("capture lock");
+                records.extend(batch.iter().map(|(record, _)| format!("{record:?}")));
+                Ok(())
+            }
+        }
+    }
+
+    fn routed_observability(
+        tempdir: &TempDir,
+        destination: atm_core::LogDestination,
+        exporter: &CapturingLogExporter,
+    ) -> (
+        DaemonObservability,
+        opentelemetry_sdk::logs::SdkLoggerProvider,
+    ) {
+        use opentelemetry::logs::LoggerProvider as _;
+        use opentelemetry_sdk::logs::{SdkLoggerProvider, SimpleLogProcessor};
+
+        let provider = SdkLoggerProvider::builder()
+            .with_log_processor(SimpleLogProcessor::new(exporter.clone()))
+            .build();
+        let logger = provider.logger(ATM_SERVICE_NAME);
+        let log_dir = tempdir.path().join("logs");
+        let retained_logger = build_routed_retained_logger(
+            ATM_SERVICE_NAME,
+            &log_dir,
+            retained_log_policy(RETAINED_LOG_ROTATION_MAX_BYTES),
+            Some(atm_observability::RetainedLogLevel::Warn),
+            destination,
+            Some(logger),
+        )
+        .expect("routed retained logger");
+        let export = Export::new(
+            ExportSelection::Configured {
+                endpoint: "in-memory".to_owned(),
+            },
+            Arc::default(),
+            None,
+        );
+        (
+            DaemonObservability {
+                logger: Arc::new(std::sync::Mutex::new(LoggerLifecycle(Arc::new(
+                    retained_logger,
+                )))),
+                active_log_path: log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME),
+                export: Arc::new(export),
+            },
+            provider,
+        )
+    }
+
+    #[test]
+    fn daemon_log_destinations_filter_secrets_and_thresholds() {
+        use tracing_subscriber::layer::SubscriberExt as _;
+
+        for destination in [
+            atm_core::LogDestination::File,
+            atm_core::LogDestination::Both,
+        ] {
+            let tempdir = TempDir::new().expect("tempdir");
+            let exporter = CapturingLogExporter::default();
+            let (observability, _provider) = routed_observability(&tempdir, destination, &exporter);
+            let retained_logger = Arc::clone(&observability.logger.lock().expect("logger lock").0);
+            let dispatch = tracing::Dispatch::new(
+                tracing_subscriber::registry()
+                    .with(atm_observability::TracingBridgeLayer::new(retained_logger)),
+            );
+            let subscriber = tracing::dispatcher::set_default(&dispatch);
+            tracing::warn!(
+                target: "atm_daemon_bootstrap::observability_test_allowed",
+                token = "observability-test-secret",
+                "routed warning"
+            );
+            tracing::debug!(
+                target: "atm_daemon_bootstrap::observability_test_below_threshold",
+                "below threshold"
+            );
+            observability
+                .logger
+                .lock()
+                .expect("logger lock")
+                .0
+                .flush()
+                .expect("flush routed logs");
+            drop(subscriber);
+            drop(dispatch);
+
+            let records = exporter.0.lock().expect("capture lock").clone();
+            if destination == atm_core::LogDestination::File {
+                assert!(
+                    records.is_empty(),
+                    "file-only must not export logs: {records:#?}"
+                );
+            } else {
+                assert_eq!(
+                    records.len(),
+                    1,
+                    "only the warning is exported: {records:#?}"
+                );
+                let exported = records.join("\n");
+                assert!(
+                    exported.contains("observability_test_allowed"),
+                    "{exported}"
+                );
+                assert!(
+                    !exported.contains("observability_test_below_threshold"),
+                    "{exported}"
+                );
+                assert!(
+                    !exported.contains("observability-test-secret"),
+                    "{exported}"
+                );
+            }
+
+            let file =
+                std::fs::read_to_string(&observability.active_log_path).expect("retained JSONL");
+            assert_eq!(
+                file.lines().count(),
+                1,
+                "only the warning is retained: {file}"
+            );
+            assert!(file.contains("observability_test_allowed"), "{file}");
+            assert!(
+                !file.contains("observability_test_below_threshold"),
+                "{file}"
+            );
+            assert!(!file.contains("observability-test-secret"), "{file}");
+            observability
+                .logger
+                .lock()
+                .expect("logger lock")
+                .0
+                .shutdown_shared();
+        }
     }
 
     #[tokio::test]
@@ -752,227 +840,63 @@ mod tests {
     }
 
     #[test]
-    fn retained_log_prune_runs_on_a_background_worker() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let log_dir = tempdir.path().join("logs");
-        std::fs::create_dir_all(&log_dir).expect("log dir");
-        let active_log_path = log_dir.join("atm.log.jsonl");
-        std::fs::write(&active_log_path, "active\n").expect("active log");
-        let rotated_log_path = log_dir.join("atm.log.jsonl.1");
-        std::fs::write(&rotated_log_path, "stale\n").expect("rotated log");
-        let retention_max_age = Duration::from_millis(1);
-        age_rotated_log(&rotated_log_path, retention_max_age);
-
-        let policy = RetainedLogPolicy {
-            rotation_max_bytes: 1024,
-            rotation_max_files: 5,
-            retention_max_age,
-            maintenance_cadence: Duration::from_nanos(1),
-            writer_shutdown_timeout: Duration::from_secs(1),
-            maintenance_max_work_per_pass: Some(5),
-        };
-        let observability =
-            super::DaemonObservability::bootstrap_at_log_dir_with_policy_for_test(log_dir, policy)
-                .expect("bootstrap");
-        observability.flush_for_test();
-
-        let completion = Arc::new((Mutex::new(None::<()>), Condvar::new()));
-        let completion_worker = Arc::clone(&completion);
-        let shutdown_worker = std::thread::spawn(move || {
-            observability.shutdown_for_test();
-            let (state, changed) = &*completion_worker;
-            *state.lock().expect("completion state") = Some(());
-            changed.notify_one();
-        });
-
-        let (state, changed) = &*completion;
-        let state = state.lock().expect("completion state");
-        let (mut state, timeout) = changed
-            .wait_timeout_while(state, Duration::from_secs(2), |health| health.is_none())
-            .expect("completion wait");
-        assert!(state.is_some(), "background writer shutdown must complete");
-        assert!(
-            !timeout.timed_out(),
-            "background writer shutdown exceeded the hard test bound"
+    fn retained_log_policy_preserves_daemon_limits() {
+        let policy = super::retained_log_policy(2048);
+        assert_eq!(policy.rotation_max_bytes, 2048);
+        assert_eq!(policy.rotation_max_files, 5);
+        assert_eq!(
+            policy.retention_max_age,
+            Duration::from_secs(7 * 24 * 60 * 60)
         );
-        state.take().expect("completion completion");
-        shutdown_worker.join().expect("shutdown worker");
-
-        assert!(
-            !rotated_log_path.exists(),
-            "background prune worker should remove expired rotated files"
-        );
+        assert_eq!(policy.maintenance_cadence, Duration::from_secs(60));
+        assert_eq!(policy.writer_shutdown_timeout, Duration::from_secs(1));
+        assert_eq!(policy.maintenance_max_work_per_pass, Some(5));
     }
 
-    /// Positive: through the daemon's own bootstrap, each of
-    /// `ATM_LOG_DESTINATION=file|otel|both` delivers one record per selected
-    /// destination for a CLI-startup port record, a direct `sc` macro record,
-    /// and a tracing-origin record, and
-    /// the standard logger provider still exports after the retained logger
-    /// is shut down.
-    /// Negative: a below-threshold record and a secret field value reach
-    /// neither destination, and SDK diagnostics never recurse into export.
-    /// Query/follow and CLI-error behavior remain covered by
-    /// `concrete_adapter_emits_queries_follows_and_reports_health` and
-    /// `run_snapshot_surfaces_observability_query_error`; rotation retention
-    /// remains covered by `retained_log_prune_runs_on_a_background_worker`.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn daemon_log_destinations_route_once_and_keep_the_provider() {
-        use crate::telemetry_lifecycle_tests::receiver::Receiver;
-        use atm_core::observability::{
-            CommandEvent, ObservabilityPort, action_name, outcome_label,
-        };
-        use opentelemetry::logs::{LogRecord as _, Logger as _, LoggerProvider as _};
-        use tracing_subscriber::layer::SubscriberExt as _;
+    #[test]
+    fn daemon_export_configuration_and_command_record_are_deterministic() {
+        use atm_core::LogDestination;
+        use atm_core::observability::{CommandEvent, action_name, outcome_label};
+        use atm_core::test_support::FakeEnvSource;
 
-        fn count(records: &[String], needle: &str) -> usize {
-            records
-                .iter()
-                .filter(|record| record.contains(needle))
-                .count()
-        }
-
-        for destination in ["file", "otel", "both"] {
-            let receiver = Receiver::start(false).await;
-            let root = TempDir::new().expect("tempdir");
-            let log_dir = root.path().join("logs");
-            let env = atm_core::test_support::FakeEnvSource::new([
-                ("ATM_OTEL_ENDPOINT", Some(receiver.endpoint.as_str())),
-                ("ATM_LOG_DESTINATION", Some(destination)),
+        for (value, expected) in [
+            ("file", LogDestination::File),
+            ("otel", LogDestination::Otel),
+            ("both", LogDestination::Both),
+        ] {
+            let env = FakeEnvSource::new([
+                ("ATM_OTEL_ENDPOINT", Some("http://127.0.0.1:4317")),
+                ("ATM_LOG_DESTINATION", Some(value)),
             ]);
-            let observability = DaemonObservability::bootstrap_from(&env, log_dir.clone())
-                .await
-                .expect("bootstrap");
-            let mut direct_sc_attachment = observability
-                .logger
-                .lock()
-                .expect("logger lock")
-                .0
-                .attach_sc_log_facade()
-                .expect("attach direct sc logger");
-            let dispatch = tracing::Dispatch::new(
-                tracing_subscriber::registry().with(observability.tracing_bridge_for_test()),
-            );
-            let subscriber = tracing::dispatcher::set_default(&dispatch);
-            observability
-                .emit(CommandEvent {
-                    command: "atm",
-                    action: action_name("cli_startup"),
-                    outcome: outcome_label("ok"),
-                    team: "bd6-team".parse().expect("team"),
-                    agent: "sender".parse().expect("agent"),
-                    sender: "sender".parse().expect("agent"),
-                    message_id: None,
-                    requires_ack: false,
-                    dry_run: false,
-                    task_id: None,
-                    error_code: None,
-                    error_message: None,
-                })
-                .expect("CLI startup record");
-            sc_observability_log::event!(
-                name: "bd6.direct_sc_macro",
-                target: "atm_daemon_bootstrap::bd6_direct_sc_macro",
-                sc_observability_log::Level::INFO,
-                "bd6 direct sc macro record"
-            );
-            tracing::warn!(target: "atm_daemon_bootstrap::bd6_tracing_record", token = "raw-secret", "bd6 tracing record");
-            tracing::debug!(target: "atm_daemon_bootstrap::bd6_below_threshold", "bd6 below threshold");
-            observability.flush_for_test();
-            let exported = |receiver: &Receiver| -> Vec<String> {
-                receiver
-                    .capture
-                    .logs
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .map(|record| format!("{record:?}"))
-                    .collect()
-            };
-            if destination != "file" {
-                receiver
-                    .capture
-                    .wait(Duration::from_secs(15), "both exported records", || {
-                        let logs = exported(&receiver);
-                        count(&logs, "cli_startup") == 1
-                            && count(&logs, "bd6.direct_sc_macro") == 1
-                            && count(&logs, "bd6_tracing_record") == 1
-                    })
-                    .await;
-                let logs = exported(&receiver);
-                assert_eq!(logs.len(), 3, "{destination}: no recursion: {logs:#?}");
-                assert_eq!(count(&logs, "raw-secret"), 0);
-                assert_eq!(count(&logs, "below_threshold"), 0);
-            } else {
-                // Negative control: file-only owns the retained JSONL sink,
-                // so every collector record would be an unintended export.
-                assert!(
-                    exported(&receiver).is_empty(),
-                    "file-only must not export OTLP logs: {:#?}",
-                    exported(&receiver)
-                );
-            }
-            let file = log_dir.join(atm_observability::CANONICAL_LOG_FILE_NAME);
-            if destination == "otel" {
-                assert!(!file.exists(), "otel-only writes no JSONL");
-            } else {
-                let lines: Vec<String> = std::fs::read_to_string(&file)
-                    .expect("jsonl")
-                    .lines()
-                    .map(str::to_owned)
-                    .collect();
-                assert_eq!(count(&lines, "cli_startup"), 1, "{lines:#?}");
-                assert_eq!(count(&lines, "bd6.direct_sc_macro"), 1, "{lines:#?}");
-                assert_eq!(count(&lines, "bd6_tracing_record"), 1, "{lines:#?}");
-                assert_eq!(count(&lines, "raw-secret"), 0);
-                assert_eq!(count(&lines, "below_threshold"), 0);
-            }
-            drop(subscriber);
-            drop(dispatch);
-            direct_sc_attachment
-                .detach(Duration::from_secs(1))
-                .expect("detach direct sc logger");
-            let export = Arc::clone(&observability.export);
-            let caller = export
-                .providers
-                .lock()
-                .unwrap()
-                .as_ref()
-                .expect("configured providers")
-                .1
-                .logger("bd6-caller");
-            observability.shutdown_for_test();
-            let mut record = caller.create_log_record();
-            record.set_body("bd6 after retained logger shutdown".into());
-            caller.emit(record);
-            drop(caller);
-            let providers = export.providers.lock().unwrap().take().expect("providers");
-            super::shutdown_providers(
-                providers,
-                tokio::time::Instant::now() + Duration::from_secs(1),
-                &export.diagnostics,
-            )
-            .await;
+            let (destination, config) =
+                super::export_configuration(&env).expect("valid configuration");
+            assert_eq!(destination, expected);
             assert_eq!(
-                count(&exported(&receiver), "bd6 after retained logger shutdown"),
-                1,
-                "{destination}: the provider outlives the retained logger"
+                config.expect("configured endpoint").endpoint(),
+                "http://127.0.0.1:4317"
             );
-            if destination == "file" {
-                // Negative control, read after the providers are flushed and
-                // shut down: apart from the provider-direct caller record
-                // above, no routed record may have reached the collector.
-                let routed: Vec<String> = exported(&receiver)
-                    .into_iter()
-                    .filter(|record| !record.contains("bd6 after retained logger shutdown"))
-                    .collect();
-                assert!(
-                    routed.is_empty(),
-                    "file-only must export no routed OTLP log: {routed:#?}"
-                );
-            }
-            receiver.stop().await;
         }
+        let invalid = FakeEnvSource::new([("ATM_LOG_DESTINATION", Some("invalid"))]);
+        assert!(super::export_configuration(&invalid).is_err());
+        let event = CommandEvent {
+            command: "atm",
+            action: action_name("cli_startup"),
+            outcome: outcome_label("ok"),
+            team: "bd6-team".parse().unwrap(),
+            agent: "sender".parse().unwrap(),
+            sender: "sender".parse().unwrap(),
+            message_id: None,
+            requires_ack: false,
+            dry_run: false,
+            task_id: None,
+            error_code: None,
+            error_message: None,
+        };
+        let record = super::retained_command_event(&event);
+        assert_eq!(record.target, "atm.daemon");
+        assert_eq!(record.action, "cli_startup");
+        assert_eq!(record.outcome, "ok");
+        assert!(record.code.is_none());
     }
 
     /// Runs `hold`, which locks a mutex and panics while holding the guard,

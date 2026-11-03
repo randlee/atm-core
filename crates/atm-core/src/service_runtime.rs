@@ -1100,15 +1100,15 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         team: &TeamName,
         agent: &AgentName,
     ) -> Option<crate::boundary::RosterEntry> {
-        Self::load_roster_member(self, team, agent)
+        self.roster_runtime.load_roster_member(team, agent)
     }
 
     fn load_team_roster(&self, team: &TeamName) -> Vec<crate::boundary::RosterEntry> {
-        Self::load_team_roster(self, team)
+        self.roster_runtime.load_team_roster(team)
     }
 
     fn list_roster_teams(&self) -> Vec<TeamName> {
-        Self::list_roster_teams(self)
+        self.roster_runtime.list_teams()
     }
 
     fn resolve_roster_member_at_ingress(
@@ -1117,7 +1117,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         candidate: &AgentName,
         allow_database_wide_alias: bool,
     ) -> Option<(TeamName, AgentName)> {
-        Self::resolve_roster_member_at_ingress(
+        roster_resolution::resolve_retained_roster_member_at_ingress(
             self,
             addressed_team,
             candidate,

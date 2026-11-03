@@ -369,6 +369,17 @@ fn staged_help_resolves_cron_doc_from_binary_and_symlink() {
     fs::create_dir_all(&bin_dir).expect("bin dir");
     copy_tree(&root.join("docs/user-documents"), &docs_dir);
     let installed_atm = bin_dir.join(if cfg!(windows) { "atm.exe" } else { "atm" });
+    // Copy in a child so concurrent forks cannot inherit a writable descriptor to the executable.
+    #[cfg(unix)]
+    assert!(
+        std::process::Command::new("cp")
+            .arg(env!("CARGO_BIN_EXE_atm"))
+            .arg(&installed_atm)
+            .status()
+            .expect("start binary copy")
+            .success()
+    );
+    #[cfg(not(unix))]
     fs::copy(env!("CARGO_BIN_EXE_atm"), &installed_atm).expect("copy atm binary");
 
     let result: Value =

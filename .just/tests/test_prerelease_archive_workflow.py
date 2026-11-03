@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
 import json
 import os
-from pathlib import Path
-from contextlib import redirect_stderr
-import hashlib
 import shlex
 import subprocess
 import sys
@@ -16,14 +14,16 @@ import tarfile
 import tempfile
 import tomllib
 import unittest
+from contextlib import contextmanager, redirect_stderr
+from pathlib import Path
 from unittest import mock
 
 JUST_DIR = Path(__file__).resolve().parents[1]
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
-from lint_common import discover_repo_root
-from lint_common import workspace_manifest_paths
+from sc_lint.lint_common import discover_repo_root
+from sc_lint.lint_common import workspace_manifest_paths
 import prerelease_tag
 from prerelease_tag import patch_bump
 from prerelease_tag import workspace_version
@@ -59,7 +59,91 @@ def packaging_script(workflow: str, step_name: str) -> str:
 
 
 class PrereleaseArchiveWorkflowTests(unittest.TestCase):
-    SUBPROCESS_TIMEOUT_SECONDS = 30
+    def test_replace_version_occurrences_rejects_adjacent_version_component(self) -> None:
+        self.assertEqual(
+            prerelease_tag.replace_version_occurrences(
+                "https://example.invalid/atm_1.1.2.0_x86_64.zip", "1.1.2", "1.1.3"
+            ),
+            "https://example.invalid/atm_1.1.2.0_x86_64.zip",
+        )
+
+    @mock.patch("prerelease_tag.subprocess.run")
+    def test_sync_python_version_propagates_owner_failure(self, run: mock.Mock) -> None:
+        run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="owner failed"
+        )
+        with self.assertRaisesRegex(SystemExit, "owner failed"):
+            prerelease_tag.sync_python_version(Path("/tmp/atm"), Path("/tmp/atm/crates/example/pyproject.toml"))
+
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlink support is required")
+    def test_copy_tracked_files_excludes_untracked_content_and_preserves_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            source = Path(tempdir) / "source"
+            destination = Path(tempdir) / "destination"
+            source.mkdir()
+            (source / "tracked.txt").write_text("tracked", encoding="utf-8")
+            (source / "target.txt").write_text("target", encoding="utf-8")
+            (source / "link.txt").symlink_to("target.txt")
+            (source / "secret.txt").write_text("untracked", encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=source, check=True)
+            subprocess.run(["git", "add", "tracked.txt", "target.txt", "link.txt"], cwd=source, check=True)
+            prerelease_tag.copy_tracked_files(source, destination)
+            self.assertTrue((destination / "tracked.txt").is_file())
+            self.assertFalse((destination / "secret.txt").exists())
+            self.assertTrue((destination / "link.txt").is_symlink())
+            self.assertEqual(os.readlink(destination / "link.txt"), "target.txt")
+
+    def fixture_env(self, home: Path) -> dict[str, str]:
+        env = os.environ.copy()
+        env.update({
+            "HOME": str(home),
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            # A fixture commit of the tracked tree exceeds gc.auto's loose-object
+            # threshold; a detached `gc --auto` would keep writing .git while
+            # TemporaryDirectory removes it.
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_0": "gc.auto",
+            "GIT_CONFIG_VALUE_0": "0",
+            "GIT_CONFIG_KEY_1": "maintenance.auto",
+            "GIT_CONFIG_VALUE_1": "false",
+        })
+        return env
+
+    def run_fixture(self, command: list[str], *, cwd: Path, env: dict[str, str], **kwargs):
+        return subprocess.run(command, cwd=cwd, env=env, **kwargs)
+
+    def configure_fixture_git(self, repo: Path, env: dict[str, str]) -> None:
+        for command in (
+            ["git", "config", "gc.auto", "0"],
+            ["git", "config", "gc.autoDetach", "false"],
+            ["git", "config", "maintenance.auto", "false"],
+            ["git", "config", "maintenance.autoDetach", "false"],
+        ):
+            self.run_fixture(command, cwd=repo, env=env, check=True)
+
+    @contextmanager
+    def fixture_repo(self, *, branch: str | None = None):
+        """Create an isolated Git fixture without background maintenance."""
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            home = repo / ".home"
+            home.mkdir()
+            env = self.fixture_env(home)
+            init = ["git", "init", "-q"]
+            if branch is not None:
+                init.extend(["-b", branch])
+            for command in (
+                init,
+                ["git", "config", "commit.gpgsign", "false"],
+                ["git", "config", "core.hooksPath", os.devnull],
+                ["git", "config", "user.email", "test@example.invalid"],
+                ["git", "config", "user.name", "AS1.1 test"],
+            ):
+                self.run_fixture(command, cwd=repo, env=env, check=True)
+            self.configure_fixture_git(repo, env)
+            yield repo, env
 
     def fixture_public_release_assets(
         self, prerelease, manifest: dict, version: str
@@ -271,7 +355,6 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                         check=True,
                         text=True,
                         capture_output=True,
-                        timeout=self.SUBPROCESS_TIMEOUT_SECONDS,
                     )
                 self.assertEqual(
                     command_text,
@@ -451,20 +534,50 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
         self.assertEqual(patch_bump("1.4.5"), "1.4.6")
         self.assertEqual(patch_bump("9.99.0"), "9.99.1")
 
-    def test_prerelease_tag_dry_run_rejects_remote_tag_collision(self) -> None:
+    def test_version_drift_refuses_publish_and_dry_run(self) -> None:
+        python = prerelease_tag.version_check_python(discover_repo_root())
         with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory)
-            subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
+            root = Path(directory)
+            (root / "crates/example").mkdir(parents=True)
+            (root / ".just").mkdir()
+            (root / ".winget").mkdir()
+            (root / "Cargo.toml").write_text('[workspace]\nmembers=["crates/example"]\n[workspace.package]\nversion="1.2.3"\n', encoding="utf-8")
+            (root / "crates/example/Cargo.toml").write_text('[package]\nname="example"\nversion.workspace=true\nedition="2024"\n', encoding="utf-8")
+            (root / ".just/lint-config.toml").write_text('[version_sync.winget]\nenabled=true\nmanifest_glob=".winget/*.yaml"\n', encoding="utf-8")
+            (root / ".winget/example.yaml").write_text('PackageVersion: 0.0.1\nManifestVersion: 1.2.3\nInstallerUrl: https://example.invalid/1.2.3/file\n', encoding="utf-8")
+            for dry_run in (True, False):
+                with (self.subTest(dry_run=dry_run),
+                      mock.patch.object(prerelease_tag, "current_branch", return_value="fixture"),
+                      mock.patch.object(prerelease_tag, "require_clean_tree"),
+                      mock.patch.object(prerelease_tag, "require_available_tag"),
+                      mock.patch.object(prerelease_tag, "version_check_python", return_value=python),
+                      mock.patch.object(prerelease_tag, "candidate_changes") as candidate,
+                      mock.patch.object(prerelease_tag, "git") as git):
+                    with self.assertRaisesRegex(SystemExit, "winget.package_version"):
+                        prerelease_tag.execute(root, dry_run=dry_run)
+                    candidate.assert_not_called()
+                    git.assert_not_called()
+
+    def test_candidate_validation_checks_published_version_sync(self) -> None:
+        success = subprocess.CompletedProcess(args=[], returncode=0, stdout='{"workspace_toml":"Cargo.toml"}', stderr="")
+        failed = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="winget.package_version drift")
+        with (tempfile.TemporaryDirectory() as directory,
+              mock.patch.object(prerelease_tag.subprocess, "run", side_effect=[success, success, success, failed]) as run):
+            root = Path(directory)
+            with self.assertRaisesRegex(SystemExit, "winget.package_version drift"):
+                prerelease_tag.validate_candidate(root, "1.2.3", {}, Path("python"))
+            self.assertEqual(run.call_args.args[0], ["python", "-m", "sc_lint.check_version_sync", "--root", str(root)])
+
+    def test_prerelease_tag_dry_run_rejects_remote_tag_collision(self) -> None:
+        with self.fixture_repo(branch="fixture") as (repo, _env):
             with (
                 mock.patch.object(prerelease_tag, "current_branch", return_value="fixture"),
                 mock.patch.object(prerelease_tag, "require_clean_tree"),
                 mock.patch.object(prerelease_tag, "workspace_version", return_value="1.5.14"),
                 mock.patch.object(prerelease_tag, "remote_tag_exists", return_value=True),
-                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
             ):
                 with self.assertRaisesRegex(SystemExit, "tag already exists on origin"):
                     prerelease_tag.execute(repo, dry_run=True)
-            verify_lockstep.assert_not_called()
 
     def test_publish_and_dry_run_share_tag_availability_preflight(self) -> None:
         root = discover_repo_root()
@@ -479,29 +592,91 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     "require_available_tag",
                     side_effect=SystemExit("collision"),
                 ) as require_available_tag,
-                mock.patch.object(prerelease_tag, "verify_lockstep") as verify_lockstep,
                 mock.patch.object(prerelease_tag, "candidate_changes") as candidate_changes,
             ):
                 with self.assertRaisesRegex(SystemExit, "collision"):
                     prerelease_tag.execute(root, dry_run=dry_run)
             require_available_tag.assert_called_once_with(root, "prerelease/v1.5.15")
-            verify_lockstep.assert_not_called()
             candidate_changes.assert_not_called()
+
+    def test_candidate_reference_outputs_survive_another_candidate_build_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / "first", root / "second"
+            first.mkdir()
+            second.mkdir()
+            inherited = {
+                "CARGO_TARGET_DIR": str(root / "shared-target"),
+                "CARGO_HOME": str(root / "cargo-cache"),
+                "RUSTC_WRAPPER": "fixture-compiler-cache",
+                "RUSTFLAGS": "--cfg fixture",
+            }
+            outputs = (
+                "crates/atm/tests/cli_surface_baseline.json",
+                "docs/user-documents/cli-reference.md",
+                "site/cli/index.html",
+                "site/cli/cli-reference.css",
+                "site/cli/cli-reference.js",
+            )
+            compiled_roots: dict[str, Path] = {}
+            launched = []
+
+            def cargo_run(command, *, cwd, env=None, **_kwargs):
+                effective_env = os.environ if env is None else env
+                for key in ("CARGO_HOME", "RUSTC_WRAPPER", "RUSTFLAGS"):
+                    self.assertEqual(effective_env[key], inherited[key])
+                target = effective_env.get("CARGO_TARGET_DIR", str(cwd / "target"))
+                compiled_roots[target] = cwd
+                if cwd == first:
+                    # Cargo's build lock is released before executable launch.
+                    other = prerelease_tag.regenerate_cli_reference(second)
+                    self.assertEqual(set(other), {second / path for path in outputs})
+                    self.assertEqual(set(other.values()), {str(second)})
+                executable_root = compiled_roots[target]
+                self.assertEqual(
+                    executable_root, cwd,
+                    "another candidate replaced the generator before launch",
+                )
+                launched.append(executable_root)
+                for relative in outputs:
+                    path = executable_root / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(str(executable_root), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with (mock.patch.dict(os.environ, inherited),
+                  mock.patch.object(prerelease_tag.subprocess, "run", side_effect=cargo_run)):
+                generated = prerelease_tag.regenerate_cli_reference(first)
+                self.assertEqual(set(generated), {first / path for path in outputs})
+                self.assertEqual(set(generated.values()), {str(first)})
+                self.assertEqual(launched, [second, first])
+                self.assertEqual(os.environ["CARGO_TARGET_DIR"], inherited["CARGO_TARGET_DIR"])
 
     def test_candidate_bump_updates_actual_lockfile_collision_safely(self) -> None:
         root = discover_repo_root()
         old_version = workspace_version(root)
         new_version = patch_bump(old_version)
-        changes = prerelease_tag.candidate_changes(root, old_version, new_version)
+        reference_paths = (
+            "crates/atm/tests/cli_surface_baseline.json",
+            "docs/user-documents/cli-reference.md",
+            "site/cli/index.html",
+            "site/cli/cli-reference.css",
+            "site/cli/cli-reference.js",
+        )
+        # Keep real lockfile generation; CLI rendering has its own surface
+        # tests and release-preflight generator check.
+        with mock.patch.object(
+            prerelease_tag, "regenerate_cli_reference",
+            side_effect=lambda candidate: {
+                candidate / path: f"generated {path}" for path in reference_paths
+            },
+        ):
+            changes = prerelease_tag.candidate_changes(root, old_version, new_version)
         lock = tomllib.loads(changes[root / "Cargo.lock"])
-        directives = [
-            package for package in lock["package"] if package["name"] == "sc-lint-directives"
-        ]
-        # Retained logging 1.5 uses registry 0.4; the independent lint family
-        # still uses registry 0.5. Neither may be bumped with the workspace.
+        original = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
         self.assertEqual(
-            [(package["version"], "source" in package) for package in directives],
-            [("0.4.0", True), ("0.5.0", True), (new_version, False)],
+            [package for package in lock["package"] if "source" in package],
+            [package for package in original["package"] if "source" in package],
         )
         self.assertEqual(
             tomllib.loads(changes[root / "crates" / "atm-query-python" / "pyproject.toml"])[
@@ -518,11 +693,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             ),
             root / ".winget" / "randlee.agent-team-mail.yaml",
             root / "Cargo.lock",
-            root / "crates/atm/tests/cli_surface_baseline.json",
-            root / "docs/user-documents/cli-reference.md",
-            root / "site/cli/index.html",
-            root / "site/cli/cli-reference.css",
-            root / "site/cli/cli-reference.js",
+            *(root / path for path in reference_paths),
         }
         self.assertEqual(set(changes), expected)
         for path in prerelease_tag.python_project_paths(root):
@@ -573,17 +744,13 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     self.assertNotIn("path", dependency)
 
     def test_write_and_commit_restores_files_when_commit_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            repo = Path(directory)
-            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
+        with self.fixture_repo() as (repo, env):
             manifest = repo / "Cargo.toml"
             # Fixture-local versions: this test exercises rollback after a failed commit.
             original = "[workspace.package]\nversion = \"1.4.5\"\n"
             manifest.write_text(original, encoding="utf-8")
-            subprocess.run(["git", "add", "Cargo.toml"], cwd=repo, check=True)
-            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
+            self.run_fixture(["git", "add", "Cargo.toml"], cwd=repo, env=env, check=True)
+            self.run_fixture(["git", "commit", "-qm", "fixture"], cwd=repo, env=env, check=True)
 
             real_git = prerelease_tag.git
 
@@ -601,9 +768,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                     )
             self.assertEqual(manifest.read_text(encoding="utf-8"), original)
             self.assertEqual(
-                subprocess.run(
+                self.run_fixture(
                     ["git", "status", "--porcelain"],
                     cwd=repo,
+                    env=env,
                     text=True,
                     capture_output=True,
                     check=True,
@@ -611,23 +779,73 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
                 "",
             )
 
+    def test_fixture_env_disables_background_git_gc(self) -> None:
+        with self.fixture_repo() as (repo, env):
+            for key, expected in (("gc.auto", "0"), ("maintenance.auto", "false")):
+                value = self.run_fixture(
+                    ["git", "config", "--get", key],
+                    cwd=repo,
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip()
+                self.assertEqual(value, expected, key)
+
+    def test_fixture_command_has_no_host_load_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            env = self.fixture_env(repo)
+            with mock.patch.object(subprocess, "run") as run:
+                self.run_fixture(["git", "init"], cwd=repo, env=env, check=True)
+            self.assertNotIn("timeout", run.call_args.kwargs)
+            self.assertTrue(run.call_args.kwargs["check"])
+
     def test_just_prerelease_tag_dry_run_is_end_to_end_and_clean(self) -> None:
         root = discover_repo_root()
         old_version = workspace_version(root)
         new_version = patch_bump(old_version)
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory) / "atm-core"
+            home = Path(directory) / ".home"
+            home.mkdir()
+            env = self.fixture_env(home)
 
             prerelease_tag.copy_tracked_files(root, repo)
-            subprocess.run(["git", "init", "-q", "-b", "fixture"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.name", "AS1.1 test"], cwd=repo, check=True)
-            subprocess.run(["git", "add", "."], cwd=repo, check=True)
-            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
-            python_command = "python" if os.name == "nt" else "python3"
-            result = subprocess.run(
-                ["just", "--set", "python_cmd", python_command, "prerelease-tag", "--dry-run"],
+            managed_justfile = root / ".sc-lint" / "justfile"
+            self.assertTrue(
+                managed_justfile.is_file(),
+                "just setup must generate .sc-lint/justfile before the prerelease fixture is copied",
+            )
+            fixture_managed_justfile = repo / ".sc-lint" / "justfile"
+            fixture_managed_justfile.parent.mkdir(parents=True, exist_ok=True)
+            fixture_managed_justfile.write_bytes(managed_justfile.read_bytes())
+            for command in (
+                ["git", "init", "-q", "-b", "fixture"],
+                ["git", "config", "commit.gpgsign", "false"],
+                ["git", "config", "core.hooksPath", os.devnull],
+                ["git", "config", "user.email", "test@example.invalid"],
+                ["git", "config", "user.name", "AS1.1 test"],
+            ):
+                self.run_fixture(command, cwd=repo, env=env, check=True)
+            self.configure_fixture_git(repo, env)
+            for command in (["git", "add", "."], ["git", "commit", "-qm", "fixture"]):
+                self.run_fixture(command, cwd=repo, env=env, check=True)
+            if os.name == "nt":
+                python_command = f'& "{sys.executable}"'
+            else:
+                python_command = shlex.quote(sys.executable)
+            result = self.run_fixture(
+                [
+                    "just",
+                    "--set",
+                    "python_cmd",
+                    python_command,
+                    "prerelease-tag",
+                    "--dry-run",
+                ],
                 cwd=repo,
+                env=env,
                 text=True,
                 capture_output=True,
                 check=False,
@@ -636,9 +854,10 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             self.assertIn(f"workspace version: {old_version} -> {new_version}", result.stdout)
             self.assertIn(f"would create tag: prerelease/v{new_version}", result.stdout)
             self.assertEqual(
-                subprocess.run(
+                self.run_fixture(
                     ["git", "status", "--porcelain"],
                     cwd=repo,
+                    env=env,
                     text=True,
                     capture_output=True,
                     check=True,

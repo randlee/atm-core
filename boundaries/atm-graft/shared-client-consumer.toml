@@ -31,6 +31,7 @@ allowed_dependents = ["atm-graft-python"]
 # atm-http-runtime: AL.9 (cc3ae58c4) routes atm-graft write-transport
 # selection through atm_http_runtime::preferred_local_client/selected_write_transport.
 allowed_dependencies = ["atm-core", "atm-daemon-client", "atm-http-runtime"]
+allowed_dev_dependencies = ["atm-runtime-test-support"]
 forbidden_edges = [
   "atm-graft -> atm-daemon-bootstrap",
   "atm-graft -> atm-daemon",

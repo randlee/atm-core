@@ -20,7 +20,8 @@ io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
 allowed_dependents = ["atm-runtime"]
-allowed_dependencies = []
+allowed_dependencies = ["atm-error", "atm-storage"]
+allowed_dev_dependencies = ["atm-runtime-test-support"]
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]

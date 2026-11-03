@@ -26,6 +26,7 @@ path = "src/bin/atm-daemon-benchmark.rs"
 required-features = ["benchmark-harness"]
 
 [dependencies]
+sc-lint-attributes = { workspace = true }
 async-trait.workspace = true
 atm-core.workspace = true
 atm-cron.workspace = true
@@ -76,7 +77,6 @@ atm-storage-rusqlite = { workspace = true, features = ["test-support"] }
 # In-process OTLP gRPC collector for the BD6 lifecycle proofs.
 opentelemetry-proto = { version = "=0.33.1", default-features = false, features = ["gen-tonic", "trace", "logs", "metrics"] }
 serial_test = "3"
-sc-observability-log.workspace = true
 serde_json.workspace = true
 tempfile = "3"
 tokio-stream = { version = "0.1", features = ["net"] }

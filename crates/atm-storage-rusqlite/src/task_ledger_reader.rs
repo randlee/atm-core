@@ -16,7 +16,9 @@ use crate::mailbox_reader::read_lane_storage_error;
 use crate::reader_pool::ReaderPool;
 use crate::shared_db::{SharedDbTarget, sqlite_error};
 use crate::task_sql;
+use sc_lint_attributes::sc_lint;
 
+#[sc_lint(boundary.internal_only)]
 struct TaskLedgerReader {
     pool: ReaderPool,
 }

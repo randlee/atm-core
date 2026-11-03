@@ -13,7 +13,7 @@ class Tests(unittest.TestCase):
             "crates/hermes-atm/pyproject.toml",
         ):
             source = JUST.parent / path; target = root / path; target.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(source, target)
-    def test_undeclared_dependency_fails(self):
+    def test_unapproved_python_dependency_fails(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); self.fixture(root); path = root / "crates/atm-graft-python/pyproject.toml"
             path.write_text(path.read_text().replace('dependencies = ["pydantic>=2,<3"]', 'dependencies = ["pydantic>=2,<3", "other"]'))

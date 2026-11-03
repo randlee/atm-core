@@ -420,7 +420,7 @@ After a FAIL verdict, include a short flat list of blocking findings with:
 - Never accept boundary relaxation as a fix. If any change loosens an
   established boundary requirement — widens visibility of sealed types or
   modules, removes enforcement layers, expands permitted impl sites, or
-  bypasses `lint_boundaries.py` / `lint_manifests.py` checks — reject it as
+  bypasses `lint_boundaries.py` / `just lint manifests` checks — reject it as
   BLOCKING and escalate to the lead for a ruling. `It compiles` or `tests
   pass` is not justification. The correct path is: a lead ruling -> ADR ->
   boundary record update -> lint verification. `arch-qa` RULE-012 governs

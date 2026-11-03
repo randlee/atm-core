@@ -1010,6 +1010,7 @@ fn unix_socket_config(
     Ok(unix_socket_config_for_uid(scope.runtime_root.as_ref(), uid))
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix configures a uid-owned socket; Windows bind_loopback_listener uses TCP (crates/atm-http-runtime/src/runtime_listener.rs).")]
 #[cfg(unix)]
 fn unix_socket_config_for_uid(
     runtime_root: &std::path::Path,

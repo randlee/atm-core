@@ -327,7 +327,7 @@ No spawn/channel (`boundary_enforcement.rs:2871-2880`). Tests: `queue_dispatch()
 - **3.4 hermes-atm `PyNudge`**: `PyNudge::from_post_send` (`atm-graft-python/src/lib.rs:1063`) uses `PostSendHookEvent`, untouched. `GraftPostSendRequest` built field-by-field (`graft.rs:116-120`) — `kind` cannot leak into wire JSON. Only `atm-graft/src/runtime.rs:738` changes.
 - **3.5 Windows**: `UPDATE … RETURNING` needs SQLite ≥ 3.35 (bundled-windows + modern_sqlite, `atm-storage-rusqlite/Cargo.toml:30-31`) — ensure the claim test is not `#[cfg(unix)]`. Lint script: pathlib/`as_posix()`, explicit UTF-8, `{{python_cmd}}`, ASCII output. No test shells out to tmux.
 - **3.6a Blocking in `commit_write` — REVISED (quality-mgr QM40-B1, 2026-08-26)**: the original "accepted, same class as the ack transition" call was wrong: the router `spawn_blocking`s every other SQLite hop and `debug_assert_blocking_only` guards the async lane. `mark_pending` must run inside the router's existing blocking hop for the canonical state upsert (or an adjacent `spawn_blocking` gated on `newly_persisted && Deferred`), never directly on a Tokio worker; a Deferred-write test through the real async router + SQLite is required.
-- **3.6b `StorageHandleParts` struct-literal break**: single in-tree constructor (`lib.rs:681`, L1). Check `boundaries/hermes-atm/runtime-composition.toml`; if hermes constructs it, make the field `Option<…>` with an accessor.
+- **3.6b `StorageHandleParts` struct-literal break**: single in-tree constructor (`lib.rs:681`, L1). Check `policy/hermes-atm/runtime-composition.toml`; if hermes constructs it, make the field `Option<…>` with an accessor.
 
 ## 4. Deferred out of AQ1
 

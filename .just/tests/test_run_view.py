@@ -29,7 +29,10 @@ class RunViewTests(unittest.TestCase):
             repo_root = Path(tempdir)
             tasks = build_tasks(repo_root)
             self.assertEqual(tasks["boundaries"].command[-1], str(repo_root / ".just/view_boundaries.py"))
-            self.assertEqual(tasks["lines"].command[-1], str(repo_root / ".just/view_lines.py"))
+            self.assertEqual(
+                tasks["lines"].command[1:],
+                [str(repo_root / ".sc-lint/bootstrap.py"), "exec", "--config", "sc-lint.toml", "--", "sc-lint", "lint", "line-counts"],
+            )
             self.assertEqual(tasks["modules"].command[-1], str(repo_root / ".just/view_modules.py"))
             self.assertEqual(tasks["deps"].command[-1], str(repo_root / ".just/view_deps.py"))
             self.assertEqual(tasks["unsafe"].command[-1], str(repo_root / ".just/view_unsafe.py"))

@@ -141,8 +141,10 @@ mechanism, not a one-off review note.
 
 Mechanism:
 
-- repository-local implementation lives first in `.just/lint_boundaries.py`
-  and is exercised by `just lint boundaries`
+- the rule family is implemented in `.just/lint_boundaries.py` and is
+  exercised by `just lint boundaries`; the published `sc-lint lint
+  sc-boundary` analyzer (which now enforces the boundary inventory schema and
+  workspace dependency edges) has no `SCB-CONFIG-*` equivalent
 - the first implementation is deterministic token / regex scanning against the
   checked-in source tree plus a checked-in known-bad fixture; it is not a
   prose-only checklist

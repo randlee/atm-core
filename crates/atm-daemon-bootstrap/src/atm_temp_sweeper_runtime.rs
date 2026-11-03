@@ -562,11 +562,11 @@ mod tests {
         }
 
         impl EntryAgeSource for CancelAfterN<'_> {
-            fn age_of(&self, _path: &Path, metadata: &std::fs::Metadata) -> EntryAge {
+            fn age_of(&self, path: &Path, metadata: &std::fs::Metadata) -> EntryAge {
                 if self.visited.fetch_add(1, Ordering::Relaxed) + 1 >= self.threshold {
                     self.cancelled.store(true, Ordering::Relaxed);
                 }
-                EntryAge::from_metadata(metadata)
+                EntryAge::from_path_metadata(path, metadata)
             }
         }
 

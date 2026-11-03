@@ -55,6 +55,11 @@ every other Python-backed `just` recipe runs through `.bootstrap-venv` after set
 `bin`/`Scripts` directory is also first on child-process `PATH`, so PyO3 and
 other helpers cannot accidentally select an unrelated account-level Python.
 
+The sc-lint adoption kit pins `cargo-xwin` and installs the
+`x86_64-pc-windows-msvc` Rust target through `.sc-lint/install.json`'s `tools`
+contract. The macOS and Linux Windows-target Clippy rows run
+`cargo xwin clippy`; Windows runs native `cargo clippy` instead.
+
 On macOS, the recipe includes `/opt/homebrew/bin` while locating `python3.14`.
 That makes the same command work from a non-interactive account whose shell
 does not source the interactive Homebrew PATH setup; the bootstrap still

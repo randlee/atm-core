@@ -26,6 +26,16 @@ const SQLITE_IMPLEMENTATION: &str = "crates/atm-storage-rusqlite/src/tool_sender
 struct BoundaryManifest {
     dependencies: Dependencies,
     testing: Testing,
+    extensions: Extensions,
+}
+
+#[derive(Deserialize)]
+struct Extensions {
+    atm: AtmExtensions,
+}
+
+#[derive(Deserialize)]
+struct AtmExtensions {
     inspection_issuer: InspectionIssuer,
 }
 
@@ -100,7 +110,10 @@ fn inspection_issuer_impls_stay_within_documented_adapter_and_test_paths() {
         "the private in-memory inspection issuer and external compile fixture must be covered"
     );
     assert_eq!(
-        unapproved_impl_paths(&actual, &manifest.inspection_issuer.allowed_impl_paths),
+        unapproved_impl_paths(
+            &actual,
+            &manifest.extensions.atm.inspection_issuer.allowed_impl_paths
+        ),
         BTreeSet::new(),
         "inspection issuers are restricted to the private SQLite adapter record and named deterministic fixtures"
     );
@@ -113,7 +126,10 @@ fn unapproved_inspection_issuer_path_is_rejected() {
         toml::from_str(&read(&root.join(MANIFEST))).expect("tool sender boundary manifest parses");
     let actual = BTreeSet::from(["crates/atm-rogue/src/forged_issuer.rs".to_owned()]);
     assert_eq!(
-        unapproved_impl_paths(&actual, &manifest.inspection_issuer.allowed_impl_paths),
+        unapproved_impl_paths(
+            &actual,
+            &manifest.extensions.atm.inspection_issuer.allowed_impl_paths
+        ),
         actual,
         "an issuer implementation outside the documented adapter and test paths must be rejected"
     );

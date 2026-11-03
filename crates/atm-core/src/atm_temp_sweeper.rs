@@ -11,6 +11,8 @@
 use std::fmt;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
@@ -108,9 +110,9 @@ pub struct SweepReport {
 /// (whose `mtime` alone is already fresh under the single-signal rule this
 /// replaces).
 ///
-/// On a platform with no ctime-equivalent, `changed` is `None` and the
-/// mtime-only signal decides on its own — a documented residual window
-/// (ADR-055).
+/// On Windows, `changed` comes from `FILE_BASIC_INFO.ChangeTime`; on Unix it
+/// comes from ctime. Platforms without either signal use the mtime-only
+/// fallback documented in ADR-055.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct EntryAge {
     pub modified: Option<SystemTime>,
@@ -118,38 +120,29 @@ pub struct EntryAge {
 }
 
 impl EntryAge {
-    /// Builds an [`EntryAge`] from real filesystem `Metadata`. Production
+    /// Builds an [`EntryAge`] from a path and its real filesystem `Metadata`.
+    /// Production
     /// code always goes through this constructor (via
     /// [`RealEntryAgeSource`]); tests that need to exercise the dual
-    /// mtime/ctime decision deterministically construct an `EntryAge`
+    /// mtime/change-time decision deterministically construct an `EntryAge`
     /// directly instead, because a real inode's `ctime` cannot be
-    /// backdated by any safe API — the kernel always stamps it "now" on any
-    /// metadata-changing syscall, by design, which makes the usual
-    /// `SystemTime`-backdate-a-real-file test technique unusable for the
-    /// `ctime` side of this check.
-    #[cfg(unix)]
+    /// backdated by any safe API — the kernel always stamps it on metadata
+    /// changes, which makes backdating a real file unsuitable for this check.
     #[must_use]
-    pub fn from_metadata(metadata: &std::fs::Metadata) -> Self {
+    pub fn from_path_metadata(_path: &Path, metadata: &std::fs::Metadata) -> Self {
+        #[cfg(unix)]
+        let changed = unix_epoch_time(metadata.ctime(), metadata.ctime_nsec());
+        #[cfg(windows)]
+        let changed = windows_change_time(_path);
+        #[cfg(not(any(unix, windows)))]
+        let changed = None;
         Self {
             modified: metadata.modified().ok(),
-            changed: unix_epoch_time(metadata.ctime(), metadata.ctime_nsec()),
-        }
-    }
-
-    /// No portable ctime-equivalent exists on this platform; `changed` is
-    /// `None` and [`is_expired`] falls back to the mtime-only signal (a
-    /// documented residual window, ADR-055).
-    #[cfg(not(unix))]
-    #[must_use]
-    pub fn from_metadata(metadata: &std::fs::Metadata) -> Self {
-        Self {
-            modified: metadata.modified().ok(),
-            changed: None,
+            changed,
         }
     }
 }
 
-#[cfg(unix)]
 fn unix_epoch_time(secs: i64, nsecs: i64) -> Option<SystemTime> {
     let secs = u64::try_from(secs).ok()?;
     let nsecs = u32::try_from(nsecs).ok()?;
@@ -158,8 +151,8 @@ fn unix_epoch_time(secs: i64, nsecs: i64) -> Option<SystemTime> {
 
 /// Reads one directory entry's [`EntryAge`]. Every real sweep uses
 /// [`RealEntryAgeSource`]; a test-only implementation lets a test inject
-/// synthetic ages (see [`EntryAge::from_metadata`]'s doc comment for why
-/// that is the only way to deterministically test the ctime-guard branch),
+/// synthetic ages (see [`EntryAge::from_path_metadata`]'s doc comment for
+/// why deterministic ages are needed to test the changed-time guard),
 /// or observe/react to each entry visited (used to test the cancellation
 /// seam and to simulate a slow filesystem).
 pub trait EntryAgeSource {
@@ -171,9 +164,51 @@ pub trait EntryAgeSource {
 pub struct RealEntryAgeSource;
 
 impl EntryAgeSource for RealEntryAgeSource {
-    fn age_of(&self, _path: &Path, metadata: &std::fs::Metadata) -> EntryAge {
-        EntryAge::from_metadata(metadata)
+    fn age_of(&self, path: &Path, metadata: &std::fs::Metadata) -> EntryAge {
+        EntryAge::from_path_metadata(path, metadata)
     }
+}
+
+#[cfg(windows)]
+fn windows_change_time(path: &Path) -> Option<SystemTime> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_BASIC_INFO, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        FILE_READ_ATTRIBUTES, FileBasicInfo, GetFileInformationByHandleEx,
+    };
+
+    let file = std::fs::OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .ok()?;
+    // SAFETY: FILE_BASIC_INFO is a C struct containing only integer fields;
+    // zero is a valid initialization for the output buffer.
+    let mut info: FILE_BASIC_INFO = unsafe { std::mem::zeroed() };
+    // SAFETY: the open handle is valid for the duration of the call, `info`
+    // is writable, and its size matches FILE_BASIC_INFO.
+    let success = unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle() as _,
+            FileBasicInfo,
+            (&mut info as *mut FILE_BASIC_INFO).cast(),
+            std::mem::size_of::<FILE_BASIC_INFO>() as u32,
+        )
+    };
+    if success == 0 {
+        return None;
+    }
+    windows_filetime_to_system_time(info.ChangeTime)
+}
+
+#[cfg(windows)]
+fn windows_filetime_to_system_time(ticks_since_1601: i64) -> Option<SystemTime> {
+    const WINDOWS_TO_UNIX_EPOCH_TICKS: i128 = 116_444_736_000_000_000;
+    const TICKS_PER_SECOND: i128 = 10_000_000;
+    let ticks_since_unix = i128::from(ticks_since_1601) - WINDOWS_TO_UNIX_EPOCH_TICKS;
+    let seconds = ticks_since_unix.div_euclid(TICKS_PER_SECOND);
+    let nanos = ticks_since_unix.rem_euclid(TICKS_PER_SECOND) * 100;
+    unix_epoch_time(i64::try_from(seconds).ok()?, i64::try_from(nanos).ok()?)
 }
 
 /// Removes everything under `root` whose age (see [`EntryAge`]) is at least
@@ -759,8 +794,8 @@ mod tests {
     /// just landed via an atomic rename that preserved an old content
     /// mtime) must not be reclaimed (QM43-I6).
     #[test]
-    fn mtime_old_but_ctime_fresh_is_not_expired() {
-        let now = SystemTime::now();
+    fn mtime_old_but_changed_time_fresh_is_not_expired() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
         let old = now
             .checked_sub(TTL + Duration::from_secs(60))
             .expect("no underflow");
@@ -772,8 +807,8 @@ mod tests {
     }
 
     #[test]
-    fn both_mtime_and_ctime_old_is_expired() {
-        let now = SystemTime::now();
+    fn both_mtime_and_changed_time_old_is_expired() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
         let old = now
             .checked_sub(TTL + Duration::from_secs(60))
             .expect("no underflow");
@@ -786,7 +821,7 @@ mod tests {
 
     #[test]
     fn both_fresh_is_not_expired() {
-        let now = SystemTime::now();
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
         let age = EntryAge {
             modified: Some(now),
             changed: Some(now),
@@ -798,7 +833,7 @@ mod tests {
     /// to mtime alone — the documented residual window (ADR-055).
     #[test]
     fn no_ctime_signal_falls_back_to_mtime_only() {
-        let now = SystemTime::now();
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
         let old = now
             .checked_sub(TTL + Duration::from_secs(60))
             .expect("no underflow");
@@ -807,6 +842,19 @@ mod tests {
             changed: None,
         };
         assert!(is_expired(&age, TTL, now));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_entry_age_reads_change_time() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("changed-time.txt");
+        std::fs::write(&path, b"change time").expect("write file");
+        let metadata = std::fs::symlink_metadata(&path).expect("metadata");
+
+        let age = EntryAge::from_path_metadata(&path, &metadata);
+
+        assert!(age.changed.is_some(), "Windows ChangeTime was not read");
     }
 
     #[cfg(unix)]

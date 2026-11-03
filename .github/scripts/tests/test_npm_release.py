@@ -253,7 +253,7 @@ def test_node24_runtime_floors():
     workflows = ("release", "release-candidate", "release-preflight", "crates-publish",
                  "pypi-publish", "npm-publish", "homebrew-publish", "scoop-publish", "winget-publish")
     actions = ("extract-published-renderer", "install-linux-native-deps", "setup-lint-toolchain",
-               "setup-python-release-build", "setup-renderer", "setup-sc-lint", "verify-published-release")
+               "setup-python-release-build", "setup-renderer", "verify-published-release")
     github = INSTALL.PACKAGE_ROOT / ".github"
     paths = [*(github / "workflows" / f"{name}.yml" for name in workflows),
              *(github / "actions" / name / "action.yml" for name in actions)]

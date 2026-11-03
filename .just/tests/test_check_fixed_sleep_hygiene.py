@@ -79,6 +79,32 @@ mod tests {
             self.assertEqual(len(violations), 1)
             self.assertEqual(violations[0].line_number, 5)
 
+    def test_tests_directory_feature_cfg_does_not_hide_fixed_sleep(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / "Cargo.toml").write_text(
+                '[workspace]\nmembers = ["crates/x"]\nresolver = "2"\n', encoding="utf-8"
+            )
+            (repo_root / "crates/x/tests").mkdir(parents=True)
+            (repo_root / "crates/x/Cargo.toml").write_text(
+                '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
+            )
+            test_source = repo_root / "crates/x/tests/a.rs"
+            test_source.write_text(
+                '#[cfg(feature = "test-utils")]\n'
+                'fn feature_fixture() {}\n'
+                '#[test]\n'
+                'fn waits() { std::thread::sleep(std::time::Duration::from_millis(5)); }\n',
+                encoding="utf-8",
+            )
+
+            violations = collect_fixed_sleep_violations(repo_root, allowed_paths=())
+
+            self.assertEqual(
+                [violation.render() for violation in violations],
+                ["crates/x/tests/a.rs:4: fn waits() { std::thread::sleep(std::time::Duration::from_millis(5)); }"],
+            )
+
     def test_flags_tokio_sleep_inside_cfg_test_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

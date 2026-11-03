@@ -30,7 +30,7 @@ JUST_DIR = Path(__file__).resolve().parents[1]
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
-from lint_common import resolve_posix_shell
+from shell_support import resolve_posix_shell
 
 ROOT = Path(__file__).resolve().parents[2]
 SFTP_SH = ROOT / "scripts" / "transfer" / "sftp.sh"
@@ -679,7 +679,7 @@ class SftpPs1Tests(unittest.TestCase):
 class PosixShellDiscoveryTests(unittest.TestCase):
     """Direct coverage for non-Windows PATH resolution, independent of host.
 
-    Windows has a distinct Git-Bash probe, covered in test_lint_common.py.
+    Windows has a distinct Git-Bash probe, covered in test_shell_support.py.
     These tests set ``windows=False`` so a real Git-for-Windows installation
     cannot leak into mocked PATH expectations on a Windows CI runner.
     """

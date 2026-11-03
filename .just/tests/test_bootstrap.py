@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -12,7 +14,6 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from unittest import mock
-import hashlib
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "bootstrap.py"
@@ -136,14 +137,14 @@ class BootstrapTests(IsolatedHomeTests):
     def test_wyvern_uses_the_pinned_release_asset(self) -> None:
         manifest = bootstrap.load_manifest()
         asset, url = bootstrap.wyvern_install_command(manifest.wyvern, "aarch64-apple-darwin")
-        self.assertEqual(asset, "wyvern_0.6.0_aarch64-apple-darwin.tar.gz")
+        self.assertEqual(asset, "wyvern_0.8.0_aarch64-apple-darwin.tar.gz")
         self.assertEqual(
             url,
-            "https://github.com/randlee/wyvern/releases/download/v0.6.0/wyvern_0.6.0_aarch64-apple-darwin.tar.gz",
+            "https://github.com/randlee/wyvern/releases/download/v0.8.0/wyvern_0.8.0_aarch64-apple-darwin.tar.gz",
         )
         self.assertEqual(
             dict(manifest.wyvern_checksums)[asset],
-            "b5f5b986868d65b37d39966d7e9fa0c2bb6fd35fd0675397cbe3b4f77dc6b9dc",
+            "32c7d6ed53314a8d6cd07334f98375cd81cae6b40caca97ee6a5d1140806a8bd",
         )
 
     def test_wyvern_checksum_mismatch_is_a_hard_failure(self) -> None:
@@ -172,7 +173,7 @@ class BootstrapTests(IsolatedHomeTests):
             with redirect_stderr(stderr):
                 bootstrap.install_wyvern_release(manifest, dry_run=False)
         self.assertIn("upstream checksums.txt missing; verified against pinned SHA256 only", stderr.getvalue())
-        extract.assert_called_once_with(archive, "wyvern_0.6.0_aarch64-apple-darwin.tar.gz", bootstrap.cargo_bin_path("wyvern"))
+        extract.assert_called_once_with(archive, "wyvern_0.8.0_aarch64-apple-darwin.tar.gz", bootstrap.cargo_bin_path("wyvern"))
 
     def test_wyvern_present_checksums_file_disagreement_is_a_hard_failure(self) -> None:
         manifest = bootstrap.load_manifest()
@@ -180,7 +181,7 @@ class BootstrapTests(IsolatedHomeTests):
         with (
             mock.patch.object(bootstrap, "sc_compose_target", return_value="aarch64-apple-darwin"),
             mock.patch.object(bootstrap, "_wyvern_release_checksum", return_value=hashlib.sha256(archive).hexdigest()),
-                mock.patch.object(bootstrap, "_download_release", side_effect=[archive, b"bad-hash  wyvern_0.6.0_aarch64-apple-darwin.tar.gz\n"]),
+                mock.patch.object(bootstrap, "_download_release", side_effect=[archive, b"bad-hash  wyvern_0.8.0_aarch64-apple-darwin.tar.gz\n"]),
         ):
             with self.assertRaisesRegex(bootstrap.BootstrapError, "checksums.txt does not confirm"):
                 bootstrap.install_wyvern_release(manifest, dry_run=False)
@@ -196,7 +197,8 @@ class BootstrapTests(IsolatedHomeTests):
 
     def test_sc_compose_install_leaves_ambient_cargo_sentinel_untouched(self) -> None:
         """Bootstrap test installs stay in the test CARGO_HOME, never the caller's."""
-        ambient_binary = self._prepatch_cargo_home / "bin" / "sc-compose"
+        executable = "sc-compose.exe" if os.name == "nt" else "sc-compose"
+        ambient_binary = self._prepatch_cargo_home / "bin" / executable
         ambient_binary.parent.mkdir(parents=True)
         ambient_binary.write_bytes(b"ambient-sentinel")
 
@@ -224,7 +226,7 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertEqual(ambient_binary.read_bytes(), b"ambient-sentinel")
         self.assertEqual(
             bootstrap.cargo_bin_path("sc-compose"),
-            Path(self._test_cargo_home.name) / "bin" / "sc-compose",
+            Path(self._test_cargo_home.name) / "bin" / executable,
         )
         self.assertEqual(bootstrap.cargo_bin_path("sc-compose").read_bytes(), binary)
 
@@ -267,10 +269,14 @@ class BootstrapTests(IsolatedHomeTests):
             "0950f5a9f3422f74dea181d11f8b4d4447d1e9d1a9fdadcb72ff5b0b63c95207",
         )
         self.assertEqual(manifest.sc_compose, "1.7.0")
-        self.assertEqual(manifest.wyvern, "0.6.0")
+        self.assertEqual(manifest.wyvern, "0.8.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
-        self.assertNotIn("sc-compose", dict(manifest.python_packages))
         requirements = (SCRIPT.parents[1] / "tools" / "bootstrap-requirements.txt").read_text(encoding="utf-8")
+        sc_lint_pin = next(
+            line.partition("==")[2] for line in requirements.splitlines() if line.startswith("sc-lint==")
+        )
+        self.assertEqual(dict(manifest.python_packages)["sc-lint"], sc_lint_pin)
+        self.assertNotIn("sc-compose", dict(manifest.python_packages))
         self.assertNotIn("sc-compose==", requirements)
 
     def test_macos_homebrew_seed_formula_is_derived_from_the_exact_python_pin(self) -> None:
@@ -297,9 +303,13 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "binstall_tool_matches", return_value=False),
             mock.patch.object(bootstrap, "sc_compose_matches", return_value=False),
             mock.patch.object(bootstrap, "wyvern_matches", return_value=False),
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="x86_64-pc-windows-msvc") as target,
+            mock.patch.object(bootstrap.platform, "_uname_cache", None),
+            mock.patch.object(bootstrap.platform, "uname", side_effect=AssertionError("unexpected host discovery")),
             mock.patch.object(bootstrap.subprocess, "run") as run,
         ):
             bootstrap.bootstrap(manifest, dry_run=True)
+        self.assertEqual(target.call_count, 3)
         run.assert_not_called()
         verify.assert_not_called()
 
@@ -502,15 +512,69 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertIn("cargo-bins/cargo-binstall@75b4bfae1b2c753a6806bbce6e6cb89b602de33c", workflow)
         self.assertEqual(workflow.count("Pre-seed pinned cargo-binstall (bootstrap also verifies)"), 2)
         self.assertGreaterEqual(workflow.count("run: just bootstrap"), 2)
+        just_lint = workflow.split("\n  fmt:", 1)[0]
+        sc_lint_setup = "- name: Set up sc-lint\n        run: just setup"
+        self.assertIn(sc_lint_setup, just_lint)
+        self.assertLess(just_lint.index("SC_LINT_INSTALL_DIR"), just_lint.index(sc_lint_setup))
+        self.assertLess(just_lint.index(sc_lint_setup), just_lint.index("- name: Run just lint"))
+        self.assertLess(just_lint.index("run: just bootstrap"), just_lint.index("sc-compose --version"))
+
+    def test_ci_caches_xwin_sdk_for_non_windows_lint_before_clippy(self) -> None:
+        workflow = (SCRIPT.parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertNotIn("SC_LINT_INSTALL_DIR: ${{ runner.temp }}", workflow)
+        self.assertEqual(workflow.count("- name: Configure platform cache directories"), 1)
+        just_lint = workflow.split("\n  fmt:", 1)[0]
+        self.assertEqual(just_lint.count("os.environ['RUNNER_TEMP']"), 1)
+        self.assertEqual(just_lint.count("os.environ['GITHUB_ENV']"), 1)
+        self.assertEqual(just_lint.count("${{ env.SC_LINT_INSTALL_DIR }}"), 1)
+        self.assertIn("xwin = cache_root / 'xwin'", just_lint)
+        self.assertIn("'XWIN_CACHE_DIR=' + str(xwin)", just_lint)
+        cache_step = "- name: Cache xwin SDK\n        if: runner.os != 'Windows'\n        uses: actions/cache@v4"
+        self.assertIn(cache_step, just_lint)
+        self.assertIn("path: ${{ env.XWIN_CACHE_DIR }}", just_lint)
+        self.assertLess(just_lint.index("XWIN_CACHE_DIR=' + str(xwin)"), just_lint.index(cache_step))
+        self.assertLess(just_lint.index(cache_step), just_lint.index("run: just lint ci all"))
+
+        test_job = workflow.split("\n  test:", 1)[1].split("\n  hermes-atm-release-wheels:", 1)[0]
+        self.assertIn("SC_LINT_INSTALL_DIR", test_job)
+        self.assertNotIn("Configure platform cache directories", test_job)
 
     def test_just_recipes_propagate_the_bootstrap_python_to_children(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn("$PWD/.bootstrap-venv/bin:$PATH", justfile)
-        self.assertIn("PYO3_PYTHON", justfile)
         self.assertIn(
             "test-admission-capacity:\n"
             "    {{python_cmd}} -m unittest scripts/smoke/test_run_admission_capacity.py",
             justfile,
+        )
+
+    def test_sc_lint_clippy_profiles_select_host_and_bootstrap_python(self) -> None:
+        root = SCRIPT.parents[1]
+        install = json.loads((root / ".sc-lint" / "install.json").read_text(encoding="utf-8"))
+        profiles = install["profiles"]
+        command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+        for name, platform, python in (
+            ("clippy-linux", "linux", ".bootstrap-venv/bin/python"),
+            ("clippy-macos", "macos", ".bootstrap-venv/bin/python"),
+            ("clippy-native-windows", "windows", ".bootstrap-venv/Scripts/python.exe"),
+        ):
+            self.assertEqual(profiles[name], {"command": command, "platform": platform, "env_paths": {"PYO3_PYTHON": python}})
+        for host in ("linux", "macos"):
+            name = "clippy-windows" if host == "linux" else "clippy-windows-macos"
+            self.assertEqual(
+                profiles[name],
+                {
+                    "command": command,
+                    "platform": "windows",
+                    "target": "x86_64-pc-windows-msvc",
+                    "host": host,
+                    "env_paths": {"PYO3_PYTHON": ".bootstrap-venv/bin/python"},
+                },
+            )
+        self.assertIn("clippy-windows-macos", install["lint_profiles"]["ci"])
+        self.assertEqual(
+            install["tools"],
+            {"cargo": {"cargo-xwin": "0.18.4"}, "rustup_targets": ["x86_64-pc-windows-msvc"]},
         )
 
     def test_ci_uses_bootstrap_python_and_requirements_for_all_pydantic_consumers(self) -> None:

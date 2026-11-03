@@ -13,7 +13,9 @@ use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 use crate::reader_pool::ReaderPool;
 use crate::shared_db::{SharedDbTarget, deserialize_json, sqlite_error};
 use crate::sql_filters::{SqlFilterAliases, compile_sql_filters_for};
+use sc_lint_attributes::sc_lint;
 
+#[sc_lint(boundary.internal_only)]
 struct MailboxReader {
     pool: ReaderPool,
 }

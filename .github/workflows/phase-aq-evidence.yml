@@ -61,7 +61,7 @@ jobs:
           python-version: "3.14.7"
 
       - name: Expose Cargo binaries on PATH
-        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + os.linesep)"
+        run: python -c "import os; cargo_bin = os.path.expanduser('~/.cargo/bin'); open(os.environ['GITHUB_PATH'], 'a', encoding='utf-8').write(cargo_bin + '\n')"
 
       - name: Cache bootstrap outputs
         uses: actions/cache@v4

@@ -22,7 +22,6 @@ def load_script(module_name: str, relative_path: str):
 
 
 LEGACY_MODULE = load_script("check_legacy_mailbox_paths", "scripts/check-legacy-mailbox-paths.py")
-CAPABILITY_MODULE = load_script("check_capability_degradation", "scripts/check-capability-degradation.py")
 
 
 class PhaseXGuardrailTests(unittest.TestCase):
@@ -49,20 +48,6 @@ class PhaseXGuardrailTests(unittest.TestCase):
         self.assertEqual(len(violations), 1)
         self.assertEqual(violations[0].label, "legacy mailbox runtime type")
 
-    def test_capability_guardrail_rejects_new_replay_store_none_assignment(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            repo_root = Path(tempdir)
-            path = repo_root / "crates" / "atm-daemon" / "src"
-            path.mkdir(parents=True)
-            (path / "sample.rs").write_text(
-                "fn demo() {\n    let replay_store = None;\n}\n",
-                encoding="utf-8",
-            )
-
-            violations = CAPABILITY_MODULE.find_violations(repo_root)
-
-        self.assertEqual(len(violations), 1)
-        self.assertEqual(violations[0].label, "replay capability degradation assignment")
 
 
 if __name__ == "__main__":

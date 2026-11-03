@@ -42,13 +42,13 @@ x86_64-pc-windows-msvc = "80027b651ef86f2abe9ca88a16635fd53994fc0e9ec3c6c14d56ab
 x86_64-unknown-linux-gnu = "5e2ffeb47072b26c47a44bfcc0d7068d0dfb8d5742feecc309fc535dab2e1c84"
 
 [wyvern]
-version = "0.6.0"
+version = "0.8.0"
 
 [wyvern.checksums]
-"wyvern_0.6.0_x86_64-unknown-linux-gnu.tar.gz" = "549d7898e717475cbb0a1412cb768f6d0cb08053acc461dccb8e4fe66854315c"
-"wyvern_0.6.0_aarch64-apple-darwin.tar.gz" = "b5f5b986868d65b37d39966d7e9fa0c2bb6fd35fd0675397cbe3b4f77dc6b9dc"
-"wyvern_0.6.0_x86_64-apple-darwin.tar.gz" = "325880ca0edf0d2e0afda4cf2ef4818f1dc2c3d7fe3d5811cf55a3893bc43cc6"
-"wyvern_0.6.0_x86_64-pc-windows-msvc.zip" = "d330f7f7903a738640613a497975b88fcdeab3fbb03ca4b27619dbc138ec0835"
+"wyvern_0.8.0_x86_64-unknown-linux-gnu.tar.gz" = "83af9e9c57c2c86dfa42343f0cf780f93e957c0851dedd74fda61db2d3eb80ea"
+"wyvern_0.8.0_aarch64-apple-darwin.tar.gz" = "32c7d6ed53314a8d6cd07334f98375cd81cae6b40caca97ee6a5d1140806a8bd"
+"wyvern_0.8.0_x86_64-apple-darwin.tar.gz" = "168ee2464b5f9f40a34d7b144c5aee04d1b17df9ab25c16768936b49a107e974"
+"wyvern_0.8.0_x86_64-pc-windows-msvc.zip" = "493002fe950e1529589211d122e5582e0cb3005987d17cc423bd55cb4ff62729"
 
 [python]
 codespell = "2.4.3"
@@ -56,5 +56,6 @@ maturin = "1.14.1"
 pydantic = "2.13.4"
 annotated-types = "0.8.0"
 pydantic-core = "2.46.4"
+sc-lint = "0.8.4"
 typing-extensions = "4.16.0"
 typing-inspection = "0.4.4"

@@ -34,6 +34,7 @@ pub(crate) trait HttpRuntimeConnector: Send + Sync {
 /// The physical socket is the only Unix-specific concern. Request encoding,
 /// response decoding, deadline enforcement, and the public error contract are
 /// all owned by [`HttpRuntimeClient`].
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix creates a socket client; Windows loopback_tcp_client uses the endpoint-record capability (crates/atm-http-runtime/src/client.rs).")]
 #[cfg(unix)]
 pub fn unix_socket_client(
     socket_path: impl AsRef<Path>,
@@ -103,6 +104,7 @@ impl UnixSocketConnector {
     }
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix builds a socket client; Windows build_loopback_reqwest_client builds the TCP client (crates/atm-http-runtime/src/client.rs).")]
 #[cfg(unix)]
 fn build_unix_socket_reqwest_client(
     socket_path: &Path,
@@ -115,6 +117,7 @@ fn build_unix_socket_reqwest_client(
         })
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix identifies socket generations from metadata; Windows load_active_loopback_daemon_instance_id reads the endpoint record (crates/atm-http-runtime/src/client.rs).")]
 #[cfg(unix)]
 fn unix_socket_generation(
     socket_path: &Path,

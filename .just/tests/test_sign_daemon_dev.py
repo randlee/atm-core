@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 import importlib.util
 import tempfile
@@ -11,6 +12,12 @@ import unittest
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "sign_daemon_dev.py"
+REPO_ROOT = SCRIPT.parents[1]
+JUST_DIR = SCRIPT.parent
+if str(JUST_DIR) not in sys.path:
+    sys.path.insert(0, str(JUST_DIR))
+
+
 SPEC = importlib.util.spec_from_file_location("sign_daemon_dev", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 sign_daemon_dev = importlib.util.module_from_spec(SPEC)
@@ -140,14 +147,18 @@ class SignDaemonDevTests(unittest.TestCase):
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
         self.assertIn("build:\n    cargo build --workspace\n    {{python_cmd}} .just/sign_daemon_dev.py", justfile)
 
-    def test_test_recipe_re_signs_debug_artifacts_after_tests(self) -> None:
-        justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")
-        self.assertIn(
-            "test mode='default':\n"
-            "    {{python_cmd}} .just/run_tests.py {{mode}}\n"
-            "    {{python_cmd}} .just/sign_daemon_dev.py",
-            justfile,
-        )
+    def test_signing_is_explicit_and_not_in_default_test_manifest(self) -> None:
+        justfile = (REPO_ROOT / "Justfile").read_text(encoding="utf-8")
+        manifest = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["test"]
+        self.assertNotIn("daemon-signing", manifest)
+        self.assertIn("test-signing:\n    {{python_cmd}} .just/sign_daemon_dev.py", justfile)
+        self.assertEqual(manifest["python"], ["just", "lint", "python-tests"])
+        self.assertNotIn("coverage", manifest)
+        self.assertNotIn("default", manifest)
+        profiles = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["profiles"]
+        self.assertEqual(profiles["python-tests-macos"]["command"], [".bootstrap-venv/bin/python", ".just/run_pytests.py"])
+        self.assertEqual(profiles["python-tests-windows"]["command"], [".bootstrap-venv\\Scripts\\python.exe", ".just/run_pytests.py"])
+        self.assertIn(".sc-lint/bootstrap.py test --config sc-lint.toml", justfile)
 
     def test_benchmark_recipe_uses_the_shipped_binary_runner(self) -> None:
         justfile = (SCRIPT.parents[1] / "Justfile").read_text(encoding="utf-8")

@@ -20,7 +20,9 @@ use crate::store_support::{
     encode_custom, internal, parse_custom, parse_optional_stamp, parse_stamp, query_rows, stamp,
     text, write_error,
 };
+use sc_lint_attributes::sc_lint;
 
+#[sc_lint(boundary.internal_only)]
 struct SqliteHookRegistrationStore {
     db: Arc<SharedDb>,
 }

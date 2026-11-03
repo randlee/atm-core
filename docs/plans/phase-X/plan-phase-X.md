@@ -443,7 +443,6 @@ Goal:
 
 Primary file scope:
 - `scripts/check-legacy-mailbox-paths.py`
-- `scripts/check-capability-degradation.py`
 - CI workflow files that own repository gate execution
 - `.claude/assets/sc-rust/quality-mgr/templates/`
 - `.claude/skills/rust-development/guidelines.txt`
@@ -456,10 +455,6 @@ Required deliverables:
   - `allows_legacy_mailbox_files()`
   - `legacy:` production mailbox-key branches
   - command/runtime use of source-file mailbox helper APIs
-- add a CI gate preventing replay-capability degradation regressions after
-  `X.4`, with a no-production-match search for:
-  - `replay_store = None`
-  - `replay_store: None`
 - wire the pre-phase silent-emit and RULE-002 guards into the documented local
   lint/CI entrypoints used by Phase `X` branches, rather than re-implementing
   them on the integration line
@@ -477,7 +472,6 @@ Required deliverables:
 
 Acceptance criteria:
 - the legacy-mailbox-regression gate is runnable in CI
-- the replay-capability-degradation regression gate is runnable in CI
 - the pre-phase silent-emit and RULE-002 gates are referenced as already-live
   branch prerequisites for all Phase `X` sprint branches
 - the local lint entrypoints include dependency-ownership validation

@@ -151,6 +151,10 @@ impl LocalCapability {
     }
 
     pub fn parse_base64url(value: &str) -> Result<Self, AtmError> {
+        Self::decode_base64url(value)
+    }
+
+    fn decode_base64url(value: &str) -> Result<Self, AtmError> {
         let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(value)
             .map_err(|source| {
@@ -166,7 +170,7 @@ impl LocalCapability {
     }
 
     pub fn matches_header(&self, value: &str) -> bool {
-        match Self::parse_base64url(value) {
+        match Self::decode_base64url(value) {
             Ok(candidate) => {
                 let mut difference = 0_u8;
                 for (left, right) in self.0.iter().zip(candidate.0.iter()) {

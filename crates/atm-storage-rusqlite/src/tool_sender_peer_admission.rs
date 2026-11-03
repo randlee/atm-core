@@ -18,6 +18,7 @@ use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
 use crate::shared_db::SharedDb;
+use sc_lint_attributes::sc_lint;
 
 #[derive(Clone, Debug)]
 pub struct TrustedToolOriginKey {
@@ -135,6 +136,7 @@ impl ToolPeerAdmissionIssuer for SqliteToolPeerAdmissionIssuer {
     }
 }
 
+#[sc_lint(boundary.internal_only)]
 struct SqliteToolSenderPeerAdmissionStore {
     db: Arc<SharedDb>,
     config: Option<ToolSenderPeerAdmissionConfig>,

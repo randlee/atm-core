@@ -1,6 +1,26 @@
 # `sc-lint` Roadmap
 
-## Current Decisions
+> **Historical roadmap:** this document describes the initial in-tree
+> implementation and extraction plan. ATM now uses published `sc-lint`
+> v0.8.0; the in-tree `sc-lint-boundary` and `sc-lint-directives` crates were
+> removed during adoption. Current integration and rule policy are configured
+> in [`sc-lint.toml`](../../sc-lint.toml), and
+> [`.sc-lint/install.json`](../../.sc-lint/install.json) records the required
+> published version. References below to the scaffold or its defaults are
+> historical.
+
+## Current ATM Integration
+
+ATM's `just lint` uses the repository's parallel runner and the published
+`sc-lint` v0.8.0 analyzers. CI and release validation use `just lint ci all`.
+The current analyzer rules and failure policy are declared in
+[`sc-lint.toml`](../../sc-lint.toml); the required published tool version is
+recorded in [`.sc-lint/install.json`](../../.sc-lint/install.json). Current
+integration does not read an in-tree `sc-lint-boundary` defaults file.
+
+## Initial In-Tree Design (Historical)
+
+## Decisions At The Time
 
 These points are considered settled for the initial spike.
 
@@ -21,7 +41,7 @@ Reason:
 - creating it early avoids late packaging churn
 - the analyzer crate should not carry proc-macro concerns
 
-Current scaffold state:
+Scaffold state at the time:
 
 - `sc-lint-attributes`
   - created
@@ -101,9 +121,9 @@ The first useful deliverable is an internal analyzer that can:
 5. classify cycle shapes
 6. distinguish self-loop/tool-noise cases from multi-owner architectural cycles
 
-## Immediate Rule Scope
+## Initial Rule Scope (Historical)
 
-The first sprint cut now includes:
+The first sprint cut included:
 
 - cycle analysis
 - initial boundary enforcement
@@ -114,10 +134,10 @@ The analyzer should be able to classify at least:
 - `trait_impl_self_loop`
 - `multi_owner_architectural_cycle`
 
-The exact names may change, but the rule categories should stay stable enough
-to support JSON findings and later config.
+The exact names could change, but the rule categories were intended to stay
+stable enough to support JSON findings and later configuration.
 
-Current implementation status:
+Implementation status at the time:
 
 - implemented:
   - `type_method_self_loop`
@@ -128,9 +148,9 @@ Current implementation status:
   - `internal_only` visibility/reference enforcement
   - `forbid_external_impls` enforcement
 - deferred:
-  - additional boundary declarations beyond current attribute set
+  - additional boundary declarations beyond the attribute set at the time
 
-## What Is Explicitly Deferred
+## Items Deferred In The Original Plan
 
 - full visibility enforcement
 - full sealed-trait enforcement
@@ -139,11 +159,11 @@ Current implementation status:
 - graph database integration
 - full attribute-driven policy expression
 
-## Extraction Path
+## Original Extraction Path
 
-The intended rollout is:
+The planned rollout was:
 
-1. internal workspace crates now
+1. internal workspace crates
 2. prove the model on the first consumer repository
 3. stabilize:
    - CLI contract
@@ -154,7 +174,7 @@ The intended rollout is:
 4. extract to a separate repository
 5. publish to crates.io
 
-## Near-Term Integration Expectation
+## Original Near-Term Integration Expectation
 
 The analyzer is expected to plug into the existing lint surface rather than
 replace it wholesale.
@@ -166,30 +186,32 @@ Likely future integration:
 - `just lint modules` or a replacement rule target eventually uses the analyzer
   instead of raw `cargo-modules --acyclic`
 
-Current integration state:
+Integration state at the time:
 
 - `just lint sc-boundary`
-  - exists now as a separate preliminary/manual target
-  - is intentionally not part of default `just lint` yet
+  - existed as a separate preliminary/manual target
+  - was not part of default `just lint` at that time
 
-## Default Rule Policy
+## Default Rule Policy In The Former Scaffold
 
-`sc-lint-boundary` ships with an embedded default rule config at:
+The former in-tree `sc-lint-boundary` scaffold used an embedded default rule
+config at this path, which was deleted with the scaffold:
 
 - `crates/sc-lint-boundary/config/defaults.toml`
 
-It currently carries the built-in `trait_self_loop` policy through:
+That file carried the built-in `trait_self_loop` policy through:
 
 - `ignored_trait_paths`
 - `ignored_trait_names`
 
-This is the default-install extension point for common non-architectural trait
-families such as comparison, hashing, conversion, and serde traits.
+For the current published tool, use the boundary analyzer configuration in
+[`sc-lint.toml`](../../sc-lint.toml). It declares the ATM failure policy;
+published-tool defaults are supplied by sc-lint v0.8.0.
 
-## Next Planning Items
+## Historical Next Planning Items
 
-The next planned boundary-enforcement work after the current implementation
-branch merges is:
+The planned boundary-enforcement work after that implementation branch merged
+was:
 
 1. boundary definition migration from Markdown parsing to TOML
 2. inventory-parity warn/error enforcement on top of the TOML-backed boundary
@@ -200,7 +222,7 @@ These are documented in:
 - [`boundary-enforcement-model.md`](./boundary-enforcement-model.md)
 - [`boundary-toml-migration.md`](./boundary-toml-migration.md)
 
-Current direction for both items:
+The planned direction for both items was:
 
 - TOML dual-loader support and canonical schema should land before
   inventory-parity warn/error enforcement

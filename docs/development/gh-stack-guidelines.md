@@ -128,11 +128,11 @@ person's head instead of in the templates.
 14. **Pre-push gates are the CI, locally.** The orchestrator runs the full
     gate list on every reviewed head before accepting a push: fmt, clippy
     `-D warnings`, workspace tests, the `cli_surface` feature test,
-    `.just/check_line_counts.py` (RULE-003), `.just/lint_boundaries.py`,
-    `scripts/check-function-length.py --base-ref origin/<trunk>`,
+    `sc-lint lint line-counts` (RULE-003), `.just/lint_boundaries.py`,
+    `sc-lint lint function-length`,
     `scripts/check-nudge-taxonomy.py`, `.just/check_read_concurrency_gates.py`,
     `just lint identities`, `just lint adr-index`, and `just lint manifests`
-    (the three `run_lint.py` targets also cover doc-only pushes). *Why:* BA.3
+    (the three named lint targets also cover doc-only pushes). *Why:* BA.3
     froze green on nine gates and went red in CI on the tenth (identity
     literals).
 15. **Freeze the trunk while the stack lands.** After the final sync,

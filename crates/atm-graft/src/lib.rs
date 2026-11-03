@@ -410,68 +410,6 @@ impl GraftClient {
         }
     }
 
-    pub(crate) fn register_receiver_sync(
-        &self,
-        team: TeamName,
-        agent: AgentName,
-        endpoint: SocketAddr,
-        capability: LocalCapability,
-        owner_generation: OwnerGeneration,
-    ) -> Result<(), AtmError> {
-        match self.execute_request_sync(RequestEnvelope::GraftReceiverRegister(
-            GraftReceiverRegistration {
-                team,
-                agent,
-                endpoint,
-                capability,
-                owner_generation,
-            },
-        ))? {
-            ResponseEnvelope::GraftReceiverRegister => Ok(()),
-            other => Err(unexpected_response("graft receiver register", other)),
-        }
-    }
-
-    /// Owner-checked liveness keepalive (ADR-056's `refresh`): fails with
-    /// `AtmErrorCode::GraftReceiverNotOwner` when another generation now owns
-    /// the stored lease, unlike [`Self::register_receiver_sync`]'s
-    /// unconditional upsert.
-    pub(crate) fn refresh_receiver_sync(
-        &self,
-        team: TeamName,
-        agent: AgentName,
-        owner_generation: OwnerGeneration,
-    ) -> Result<(), AtmError> {
-        match self.execute_request_sync(RequestEnvelope::GraftReceiverRefresh(
-            GraftReceiverRefreshRequest {
-                team,
-                agent,
-                owner_generation,
-            },
-        ))? {
-            ResponseEnvelope::GraftReceiverRefresh => Ok(()),
-            other => Err(unexpected_response("graft receiver refresh", other)),
-        }
-    }
-
-    pub(crate) fn unregister_receiver_sync(
-        &self,
-        team: TeamName,
-        agent: AgentName,
-        owner_generation: OwnerGeneration,
-    ) -> Result<(), AtmError> {
-        match self.execute_request_sync(RequestEnvelope::GraftReceiverUnregister(
-            GraftReceiverUnregistration {
-                team,
-                agent,
-                owner_generation,
-            },
-        ))? {
-            ResponseEnvelope::GraftReceiverUnregister => Ok(()),
-            other => Err(unexpected_response("graft receiver unregister", other)),
-        }
-    }
-
     /// Read a mailbox projection without changing the selected message state.
     pub async fn peek_message(&self, query: PeekQuery) -> Result<ReadOutcome, AtmError> {
         match self.execute_request(RequestEnvelope::Peek(query)).await? {
@@ -532,23 +470,40 @@ impl GraftReceiverLeaseClient for GraftClient {
         capability: LocalCapability,
         owner_generation: OwnerGeneration,
     ) -> Result<(), AtmError> {
-        GraftClient::register_receiver_sync(
-            self,
-            team,
-            agent,
-            endpoint,
-            capability,
-            owner_generation,
-        )
+        match self.execute_request_sync(RequestEnvelope::GraftReceiverRegister(
+            GraftReceiverRegistration {
+                team,
+                agent,
+                endpoint,
+                capability,
+                owner_generation,
+            },
+        ))? {
+            ResponseEnvelope::GraftReceiverRegister => Ok(()),
+            other => Err(unexpected_response("graft receiver register", other)),
+        }
     }
 
+    /// Owner-checked liveness keepalive (ADR-056's `refresh`): fails with
+    /// `AtmErrorCode::GraftReceiverNotOwner` when another generation now owns
+    /// the stored lease, unlike [`GraftReceiverLeaseClient::register_receiver_sync`]'s
+    /// unconditional upsert.
     fn refresh_receiver_sync(
         &self,
         team: TeamName,
         agent: AgentName,
         owner_generation: OwnerGeneration,
     ) -> Result<(), AtmError> {
-        GraftClient::refresh_receiver_sync(self, team, agent, owner_generation)
+        match self.execute_request_sync(RequestEnvelope::GraftReceiverRefresh(
+            GraftReceiverRefreshRequest {
+                team,
+                agent,
+                owner_generation,
+            },
+        ))? {
+            ResponseEnvelope::GraftReceiverRefresh => Ok(()),
+            other => Err(unexpected_response("graft receiver refresh", other)),
+        }
     }
 
     fn unregister_receiver_sync(
@@ -557,7 +512,16 @@ impl GraftReceiverLeaseClient for GraftClient {
         agent: AgentName,
         owner_generation: OwnerGeneration,
     ) -> Result<(), AtmError> {
-        GraftClient::unregister_receiver_sync(self, team, agent, owner_generation)
+        match self.execute_request_sync(RequestEnvelope::GraftReceiverUnregister(
+            GraftReceiverUnregistration {
+                team,
+                agent,
+                owner_generation,
+            },
+        ))? {
+            ResponseEnvelope::GraftReceiverUnregister => Ok(()),
+            other => Err(unexpected_response("graft receiver unregister", other)),
+        }
     }
 }
 

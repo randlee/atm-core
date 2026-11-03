@@ -1,0 +1,6 @@
+# Required by the published sc-lint boundary loader (v0.7.0), which refuses to
+# load the inventory without [planning].current_sprint. atm-core records no
+# planned items. Delete this file if a later sc-lint release drops the
+# requirement.
+[planning]
+current_sprint = "bg.2"

@@ -19,7 +19,7 @@ class HermesAtmBoundaryLintTests(unittest.TestCase):
         root = JUST_DIR.parent
         for relative in (
             "Cargo.toml",
-            "boundaries/hermes-atm/runtime-composition.toml",
+            "policy/hermes-atm/runtime-composition.toml",
             "crates/hermes-atm/pyproject.toml",
             "crates/hermes-atm/src/hermes_atm",
         ):

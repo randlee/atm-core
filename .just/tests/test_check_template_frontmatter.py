@@ -87,6 +87,17 @@ class TemplateFrontmatterTests(unittest.TestCase):
         self.assertEqual(len(templates), 2)
         self.assertTrue(any("atm-bd-orchestration" in template for template in templates))
 
+    def test_tracked_templates_checks_everything_without_a_kit_manifest(self) -> None:
+        listed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="docs/example.j2\nplugins/sc-lint/templates/sc-lint.toml.j2\n", stderr=""
+        )
+        with tempfile.TemporaryDirectory() as temporary, patch(
+            "check_template_frontmatter.subprocess.run", return_value=listed
+        ):
+            templates = tracked_templates(Path(temporary))
+
+        self.assertEqual(templates, ["docs/example.j2", "plugins/sc-lint/templates/sc-lint.toml.j2"])
+
 
 if __name__ == "__main__":
     unittest.main()

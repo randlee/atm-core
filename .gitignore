@@ -21,6 +21,7 @@ Cargo.toml.ci
 **/__pycache__/
 scripts/__pycache__/
 .bootstrap-venv/
+.sc-lint/venv/
 
 # Local Synaptic Canvas orchestration state: retain it locally for agent
 # history/status, but never treat it as repository content.
@@ -61,3 +62,6 @@ tmp/
 .atm-bd/sanity-close/
 .atm-bd/*.bd-cache.sqlite3*
 .atm-bd/*.bd-cache.drain.*
+
+# sc-lint 0.8 analyzer finding artifacts written by `just lint`
+/artifacts/findings/

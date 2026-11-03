@@ -80,6 +80,7 @@ pub(super) fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError
     Ok(())
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix validates a socket path; Windows validate_loopback_config validates TCP configuration (crates/atm-http-runtime/src/loopback_tcp.rs).")]
 #[cfg(unix)]
 pub(crate) fn validate_unix_socket_path(path: &Path) -> Result<(), AtmError> {
     if path.as_os_str().is_empty() {

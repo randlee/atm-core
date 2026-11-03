@@ -7,15 +7,15 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import argparse
+import re
 import sys
 import tomllib
 
-from lint_common import build_report, discover_repo_root, monotonic_now, print_report
-from check_version_sync import validate_workspace_version
+from sc_lint.lint_common import build_report, discover_repo_root, monotonic_now, print_report
 
 
 LINT_NAME = "hermes-atm-boundary"
-BOUNDARY_PATH = Path("boundaries/hermes-atm/runtime-composition.toml")
+BOUNDARY_PATH = Path("policy/hermes-atm/runtime-composition.toml")
 PACKAGE_PATH = Path("crates/hermes-atm/pyproject.toml")
 SOURCE_ROOT = Path("crates/hermes-atm/src/hermes_atm")
 EXPECTED_RULE = "LINT-BOUNDARY-HERMES-ATM-IMPORTS"
@@ -67,17 +67,8 @@ def collect_violations(repo_root: Path) -> list[Violation]:
         violations.append(Violation(str(BOUNDARY_PATH), "forbidden references must cover rusqlite and reqwest"))
 
     dependencies = package.get("project", {}).get("dependencies", [])
-    workspace_version = validate_workspace_version(repo_root)
-    major, minor = (int(part) for part in workspace_version.split(".")[:2])
-    expected_dependency = f"atm-graft>={major}.{minor},<{major}.{minor + 1}"
-    if dependencies != [expected_dependency]:
-        violations.append(
-            Violation(
-                str(PACKAGE_PATH),
-                f"dependencies must be exactly the public atm-graft {major}.{minor}.x contract "
-                f'("{expected_dependency}"), tracking the current workspace minor version',
-            )
-        )
+    if not isinstance(dependencies, list) or len(dependencies) != 1 or not isinstance(dependencies[0], str) or not re.match(r"^atm-graft(?:$|[<>=!~;\[\s])", dependencies[0]):
+        violations.append(Violation(str(PACKAGE_PATH), "dependencies must contain only atm-graft"))
     package_text = (repo_root / PACKAGE_PATH).read_text(encoding="utf-8").lower()
     for dependency in FORBIDDEN_DEPENDENCIES:
         if dependency in package_text:

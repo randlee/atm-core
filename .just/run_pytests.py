@@ -8,7 +8,7 @@ import argparse
 import sys
 import unittest
 
-from lint_common import discover_repo_root
+from sc_lint.lint_common import discover_repo_root
 
 
 def flatten_suite(suite: unittest.TestSuite) -> list[unittest.TestCase]:

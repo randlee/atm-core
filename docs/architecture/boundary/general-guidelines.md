@@ -68,11 +68,16 @@ Prioritize findings in this order:
 Treat these as mandatory evidence:
 
 - `boundaries/**/*.toml`
-- `.just/lint_boundaries.py`
-- `.just/lint_manifests.py`
-- `.just/run_lint.py`
+- `sc-lint lint sc-boundary` (published analyzer, configured by
+  `analyzers.boundary` in `.sc-lint/install.json`): boundary inventory schema
+  and workspace dependency edges
+- published `sc-lint` analyzer profiles for reusable checks; any temporary
+  exception is per rule, documented in `.sc-lint/install.json`, and linked to
+  its upstream retirement issue
+- `.just/lint_boundaries.py` for ATM-specific boundary records and checks; the
+  published `sc-lint` analyzer owns boundary schema validation
+- `just lint`, which runs the kit's configured lint profiles
 - `crates/atm-architecture/tests/boundary_enforcement.rs`
-- `crates/sc-lint-boundary/config/defaults.toml`
 - `docs/sc-lint/README.md`
 - `docs/sc-lint/boundary-enforcement-model.md`
 - `.claude/agents/boundary-guard.md`

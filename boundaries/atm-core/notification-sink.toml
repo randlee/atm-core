@@ -37,10 +37,12 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["std::process::Command"]
 
 [enforcement]
-no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-NOTIFICATION-SINK-REFERENCES"]
 review_gates = ["no_direct_process_spawn"]
 
 [status]
 state = "retired"
 notes = ["Phase AD AD.5 retired NotificationSink as an accepted boundary.", "Post-send notification logging is now a direct append helper at the event site rather than a retained notification sink contract."]
+
+[extensions.atm]
+no_in_repo_implementation = true

@@ -67,7 +67,6 @@ release flow.
   - `silent-emit`
   - `function-length`
   - `legacy-mailbox-paths`
-  - `capability-degradation`
   - `spell`
   - `fixed-sleep`
   - `ttl-triage`

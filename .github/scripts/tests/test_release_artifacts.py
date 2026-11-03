@@ -1013,8 +1013,6 @@ def test_no_single_repo_concerns_leak_into_kit_workflows_actions_or_scripts() ->
     """Extend the anti-leakage guard to every vendored workflow, action, and script."""
     forbidden = ("sc-compose", "sc_compose", "randlee")
     allowlist = {
-        # Deliberate shared ecosystem pin: setup-sc-lint's default repository.
-        "actions/setup-sc-lint/action.yml": {"randlee"},
         # The pinned renderer wheel is the sc-compose PyPI package by design.
         "scripts/bootstrap_sc_compose.py": {"sc-compose", "sc_compose"},
         # Composite action invokes the shared bootstrapper by path.
@@ -1038,12 +1036,10 @@ def test_no_single_repo_concerns_leak_into_kit_workflows_actions_or_scripts() ->
         "setup-lint-toolchain",
         "setup-python-release-build",
         "setup-renderer",
-        "setup-sc-lint",
         "verify-published-release",
     )
     kit_scripts = (
         "bootstrap_sc_compose.py",
-        "setup_sc_lint_source.py",
         "release_artifacts.py",
         "release_manifest.py",
         "release_registry.py",
@@ -1090,19 +1086,11 @@ def test_hygiene_single_sources_pins_paths_and_publish_time_validations(tmp_path
     python_action_text = (
         repo_root() / ".github" / "actions" / "setup-python-release-build" / "action.yml"
     ).read_text(encoding="utf-8")
-    sc_lint_action_text = (
-        repo_root() / ".github" / "actions" / "setup-sc-lint" / "action.yml"
-    ).read_text(encoding="utf-8")
 
     # Item 1: the Rust toolchain pin is single-sourced through build-plan.
     for text in (release_text, preflight_text, crates_text, python_action_text):
         assert "1.94.1" not in text
         assert "rust_toolchain" in text
-
-    # Item 2: the sc-lint repository slug is an input with a documented pin.
-    assert "SC_LINT_REPOSITORY" in sc_lint_action_text
-    assert 'default: "randlee/sc-lint"' in sc_lint_action_text
-    assert "https://github.com/randlee" not in sc_lint_action_text
 
     # Item 5: release.yml reads the manifest path from its env everywhere.
     assert release_text.count("release/publish-artifacts.toml") == 1
@@ -1638,6 +1626,38 @@ def run_manifest_command(*args: str) -> subprocess.CompletedProcess[str]:
         timeout=TEST_COMMAND_TIMEOUT_SECONDS,
     )
 
+
+
+def test_sync_python_version_rewrites_workspace_dependency_only(tmp_path: Path) -> None:
+    workspace = tmp_path / "Cargo.toml"
+    workspace.write_text('[workspace.package]\nversion = "2.3.4"\n', encoding="utf-8")
+    owner = tmp_path / "crates" / "owner" / "pyproject.toml"
+    owner.parent.mkdir(parents=True)
+    owner.write_text('[project]\nname = "shared-wheel"\nversion = "1.0.0"\n', encoding="utf-8")
+    consumer = tmp_path / "crates" / "consumer" / "pyproject.toml"
+    consumer.parent.mkdir(parents=True)
+    consumer.write_text('[project]\nname = "consumer"\nversion = "1.0.0"\ndependencies = ["shared-wheel>=1,<2", "third-party>=4"]\n', encoding="utf-8")
+    result = run_manifest_command("sync-python-version", "--workspace-toml", str(workspace), "--pyproject", str(consumer))
+    assert result.returncode == 0, result.stderr
+    project = tomllib.loads(consumer.read_text(encoding="utf-8"))["project"]
+    assert project["version"] == "2.3.4"
+    assert project["dependencies"] == ["shared-wheel==2.3.4", "third-party>=4"]
+
+
+def test_sync_python_version_rejects_unrewritable_workspace_dependency(tmp_path: Path) -> None:
+    workspace = tmp_path / "Cargo.toml"
+    workspace.write_text('[workspace.package]\nversion = "2.3.4"\n', encoding="utf-8")
+    owner = tmp_path / "crates" / "owner" / "pyproject.toml"
+    owner.parent.mkdir(parents=True)
+    owner.write_text('[project]\nname = "shared-wheel"\nversion = "1.0.0"\n', encoding="utf-8")
+    consumer = tmp_path / "crates" / "consumer" / "pyproject.toml"
+    consumer.parent.mkdir(parents=True)
+    original = '[project]\nname = "consumer"\nversion = "1.0.0"\ndependencies = ["shared-wheel[extra]>=1"]\n'
+    consumer.write_text(original, encoding="utf-8")
+    result = run_manifest_command("sync-python-version", "--workspace-toml", str(workspace), "--pyproject", str(consumer))
+    assert result.returncode != 0
+    assert "cannot rewrite workspace dependency" in result.stderr
+    assert consumer.read_text(encoding="utf-8") == original
 
 def test_manifest_drives_parallel_post_release_dispatch_plan() -> None:
     require_full_channel_set()

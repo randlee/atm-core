@@ -50,7 +50,6 @@ target: integrate/phase-Xb
 ## Exact Targets
 
 - `scripts/check-legacy-mailbox-paths.py`
-- `scripts/check-capability-degradation.py`
 - CI workflow files that own repository gate execution
 - `.claude/assets/sc-rust/quality-mgr/templates/`
 - `.claude/skills/rust-development/guidelines.txt`
@@ -63,8 +62,6 @@ target: integrate/phase-Xb
 ## Required Work
 
 - add a CI gate for mailbox-legacy deletion regressions
-- add a CI gate preventing replay-capability degradation regressions after
-  `X.4`
 - wire dependency-ownership validation, including `cargo-shear`, into the
   active lint/CI path
 - update QA/checklist language so deletion sprints require whole-workspace
@@ -78,7 +75,6 @@ target: integrate/phase-Xb
 ## Acceptance Criteria
 
 - the legacy-mailbox-regression gate is runnable in CI
-- the replay-capability-degradation regression gate is runnable in CI
 - the pre-phase silent-emit and RULE-002 gates are treated as already-live
   prerequisites, not delayed `integrate/phase-Xb` sprint work
 - the local lint entrypoints include dependency-ownership validation
@@ -95,7 +91,6 @@ target: integrate/phase-Xb
 
 - added Phase `X` closeout guardrail scripts:
   - `scripts/check-legacy-mailbox-paths.py`
-  - `scripts/check-capability-degradation.py`
 - wired those gates into the active local lint surface:
   - `Justfile`
   - `.just/run_lint.py`

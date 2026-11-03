@@ -89,6 +89,7 @@ pub fn raise_descriptor_soft_limit() -> DescriptorLimitOutcome {
     }
 }
 
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix reports errno; Windows has no limit-raising counterpart: raise_descriptor_soft_limit returns Unsupported (crates/atm-core/src/descriptor_limit.rs).")]
 #[cfg(unix)]
 fn last_errno() -> i32 {
     std::io::Error::last_os_error().raw_os_error().unwrap_or(0)

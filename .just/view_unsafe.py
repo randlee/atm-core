@@ -7,12 +7,12 @@ import json
 import subprocess
 import sys
 
-from lint_common import discover_repo_root
-from lint_common import workspace_crates
-from view_common import relative_artifact_path
-from view_common import reset_view_dir
-from view_common import write_json
-from view_common import write_text
+from sc_lint.lint_common import discover_repo_root
+from sc_lint.lint_common import workspace_crates
+from sc_lint.view_common import relative_artifact_path
+from sc_lint.view_common import reset_view_dir
+from sc_lint.view_common import write_json
+from sc_lint.view_common import write_text
 
 
 def geiger_command(manifest_path: Path, package_name: str, output_format: str) -> list[str]:

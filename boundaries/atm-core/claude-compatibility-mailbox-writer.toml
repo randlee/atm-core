@@ -37,10 +37,12 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["execute_claude_delivery"]
 
 [enforcement]
-no_in_repo_implementation = true
 lint_rules = ["LINT-BOUNDARY-CLAUDE-COMPATIBILITY-MAILBOX-WRITER-REFERENCES"]
 review_gates = ["no_direct_claude_compat_delivery_executor"]
 
 [status]
 state = "retired"
 notes = ["Phase AD AD.3 deleted the accepted Claude-compatibility delivery executor and its retained-runtime append seam.", "Explicit inbox rebuild/export helpers remain separate repair-only compatibility support and are not part of the live send or ack delivery path."]
+
+[extensions.atm]
+no_in_repo_implementation = true

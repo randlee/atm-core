@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import importlib.util
 import os
 import re
 import shutil
@@ -13,11 +14,113 @@ import sys
 import tempfile
 import tomllib
 from pathlib import Path
+from typing import Callable
 
-from lint_common import discover_repo_root
-from check_version_sync import sync_winget_manifests
-from check_version_sync import version_sync_config
+from sc_lint.lint_common import discover_repo_root, load_lint_config
 
+
+
+def fail(message: str) -> None:
+    raise SystemExit(message)
+
+
+def read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def version_sync_config(repo_root: Path) -> dict:
+    config = load_lint_config(repo_root).get("version_sync", {})
+    if not isinstance(config, dict):
+        raise SystemExit("[version_sync] must be a TOML table")
+    return config
+
+
+def winget_settings(config: dict) -> tuple[str, str, str, str] | None:
+    winget = config.get("winget", {})
+    if not isinstance(winget, dict) or not winget.get("enabled", False):
+        return None
+    manifest_glob = winget.get("manifest_glob")
+    fields = (
+        winget.get("package_version_field", "PackageVersion"),
+        winget.get("manifest_version_field", "ManifestVersion"),
+        winget.get("installer_url_field", "InstallerUrl"),
+    )
+    if not isinstance(manifest_glob, str) or not manifest_glob.strip():
+        raise SystemExit("[version_sync.winget].manifest_glob must be a non-empty string when enabled")
+    if not all(isinstance(field, str) and field for field in fields):
+        raise SystemExit("[version_sync.winget] field names must be non-empty strings")
+    return (manifest_glob, *fields)
+
+
+def winget_manifest_paths(repo_root: Path, manifest_glob: str) -> list[Path]:
+    paths = sorted(repo_root.glob(manifest_glob))
+    if not paths:
+        fail(f"no Winget manifests found for glob {manifest_glob!r}")
+    return paths
+
+
+def winget_field_pattern(field_name: str) -> re.Pattern[str]:
+    return re.compile(rf"^([ \t]*{re.escape(field_name)}:[ \t]*)(\S+)([ \t]*)$", re.MULTILINE)
+
+
+def replace_winget_field_values(
+    text: str, field_name: str, transform: Callable[[str], str], *, expected_count: int | None = None
+) -> tuple[str, int]:
+    pattern = winget_field_pattern(field_name)
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return text, 0
+    if expected_count is not None and len(matches) != expected_count:
+        return text, len(matches)
+    updated = pattern.sub(
+        lambda match: f"{match.group(1)}{transform(match.group(2))}{match.group(3)}",
+        text,
+    )
+    return updated, len(matches)
+
+
+def replace_version_occurrences(value: str, old_version: str, new_version: str) -> str:
+    pattern = re.compile(rf"(?<![0-9.]){re.escape(old_version)}(?![0-9.])")
+    return pattern.sub(new_version, value)
+
+
+def sync_winget_manifests(
+    repo_root: Path, old_version: str, workspace_version: str, config: dict
+) -> list[Path]:
+    """Update the configured Winget version fields for a release."""
+
+    settings = winget_settings(config)
+    if settings is None:
+        return []
+    manifest_glob, package_version_field, manifest_version_field, installer_url_field = settings
+    manifest_paths = winget_manifest_paths(repo_root, manifest_glob)
+
+    changed: list[Path] = []
+    for manifest_path in manifest_paths:
+        text = read_text(manifest_path)
+        original = text
+        for field_name in (package_version_field, manifest_version_field):
+            text, count = replace_winget_field_values(
+                text,
+                field_name,
+                lambda _old_value: workspace_version,
+                expected_count=1,
+            )
+            if count != 1:
+                fail(f"{manifest_path.relative_to(repo_root)} must contain exactly one {field_name} field")
+
+        text, count = replace_winget_field_values(
+            text,
+            installer_url_field,
+            lambda value: replace_version_occurrences(value, old_version, workspace_version),
+        )
+        if count == 0:
+            fail(f"{manifest_path.relative_to(repo_root)} is missing {installer_url_field} version")
+
+        if text != original:
+            manifest_path.write_text(text, encoding="utf-8")
+            changed.append(manifest_path)
+    return changed
 
 STABLE_VERSION = re.compile(r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)$")
 
@@ -159,6 +262,10 @@ def update_lockfile(repo_root: Path) -> str:
 
 def regenerate_cli_reference(repo_root: Path) -> dict[Path, str]:
     """Regenerate the versioned installed and website CLI references."""
+    env = os.environ.copy()
+    # The generator embeds this candidate's path and launches a sibling binary.
+    # Keep both executables owned by the candidate through build and launch.
+    env["CARGO_TARGET_DIR"] = str(repo_root.resolve() / "target")
     result = subprocess.run(
         [
             "cargo",
@@ -171,6 +278,7 @@ def regenerate_cli_reference(repo_root: Path) -> dict[Path, str]:
             "gen_cli_docs",
         ],
         cwd=repo_root,
+        env=env,
         text=True,
         capture_output=True,
         check=False,
@@ -190,19 +298,26 @@ def regenerate_cli_reference(repo_root: Path) -> dict[Path, str]:
     }
 
 
-def verify_lockstep(repo_root: Path) -> None:
-    result = subprocess.run(
-        [sys.executable, str(repo_root / ".just" / "check_version_sync.py")],
-        cwd=repo_root,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise SystemExit((result.stderr or result.stdout).strip() or "version lockstep verification failed")
+def version_check_python(repo_root: Path) -> Path:
+    if importlib.util.find_spec("sc_lint") is not None:
+        return Path(sys.executable)
+    return repo_root / ".sc-lint" / "venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 
-def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Path, str]) -> None:
+def verify_version_sync(repo_root: Path, python: Path) -> None:
+    try:
+        result = subprocess.run(
+            [str(python), "-m", "sc_lint.check_version_sync", "--root", str(repo_root)],
+            cwd=repo_root, text=True, capture_output=True, check=False,
+        )
+    except OSError as error:
+        raise SystemExit(f"version sync check could not start: {error}") from error
+    if result.returncode:
+        detail = (result.stderr or result.stdout).strip()
+        raise SystemExit(f"version sync check failed: {detail}")
+
+
+def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Path, str], python: Path) -> None:
     for manifest_path, text in manifest_updates.items():
         if manifest_path.suffix != ".toml":
             continue
@@ -256,7 +371,7 @@ def validate_candidate(repo_root: Path, version: str, manifest_updates: dict[Pat
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
             raise SystemExit(f"release version validation failed: {detail}")
-    verify_lockstep(repo_root)
+    verify_version_sync(repo_root, python)
 
 
 def candidate_changes(repo_root: Path, old: str, new: str) -> dict[Path, str]:
@@ -267,7 +382,7 @@ def candidate_changes(repo_root: Path, old: str, new: str) -> dict[Path, str]:
         lockfile = update_lockfile(candidate)
         candidate_updates[candidate / "Cargo.lock"] = lockfile
         candidate_updates.update(regenerate_cli_reference(candidate))
-        validate_candidate(candidate, new, candidate_updates)
+        validate_candidate(candidate, new, candidate_updates, version_check_python(repo_root))
         return {
             repo_root / path.relative_to(candidate): text
             for path, text in candidate_updates.items()
@@ -362,9 +477,9 @@ def execute(repo_root: Path, *, dry_run: bool) -> int:
     new = patch_bump(old)
     tag = f"prerelease/v{new}"
     require_available_tag(repo_root, tag)
+    verify_version_sync(repo_root, version_check_python(repo_root))
 
     if dry_run:
-        verify_lockstep(repo_root)
         describe_plan(branch, old, new)
         return 0
 

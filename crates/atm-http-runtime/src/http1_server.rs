@@ -257,6 +257,7 @@ pub(crate) async fn serve_authenticated_peer_http1(
 
 /// Serves the additive Unix adapter with the same HTTP protocol and deadline
 /// policy as the loopback adapter.
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix serves UnixListener; Windows serve_loopback_http1 serves TCP (crates/atm-http-runtime/src/http1_server.rs).")]
 #[cfg(unix)]
 pub(crate) async fn serve_unix_http1(
     listener: UnixListener,

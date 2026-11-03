@@ -1,5 +1,19 @@
-use super::SqliteRosterStore;
 use crate::shared_db::{SharedDb, deserialize_json, serialize_json};
+use std::sync::Arc;
+
+#[derive(Debug)]
+pub(crate) struct SqliteRosterStore {
+    pub(crate) db: Arc<SharedDb>,
+}
+
+impl SqliteRosterStore {
+    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
+}
+
+impl atm_storage::contract::sealed::Sealed for SqliteRosterStore {}
+
 use atm_storage::contract::{
     AgentType, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
     RosterUniqueName,

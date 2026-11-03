@@ -19,7 +19,8 @@ io_forbidden = ["sqlite", "process_spawn", "socket_io"]
 
 [dependencies]
 allowed_dependents = ["atm-daemon-bootstrap","atm-http-runtime","atm-runtime-test-support","atm-cron"]
-allowed_dependencies = []
+allowed_dependencies = ["atm-error", "atm-storage"]
+allowed_dev_dependencies = ["atm-runtime-test-support"]
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
 [references]
@@ -39,12 +40,14 @@ forbidden_test_bypasses = ["std::process::Command"]
 lint_rules = ["LINT-BOUNDARY-CRON-SCHEDULER-REFERENCES"]
 review_gates = ["sealed_trait", "typed_contract", "deterministic_test_doubles"]
 
-[enforcement.io_forbidden_source_modules]
+[status]
+state = "concrete_landed"
+notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters."]
+
+[extensions.atm.io_forbidden_source_modules]
 sqlite = ["atm_core::boundary::cron_scheduler"]
 process_spawn = ["atm_core::boundary::cron_scheduler"]
 socket_io = ["atm_core::boundary::cron_scheduler"]
 
-[status]
-state = "concrete_landed"
+[extensions.atm]
 concrete_landed = ["atm_cron::scheduler::AtmCron"]
-notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters."]

@@ -1,0 +1,22 @@
+{
+  "analyzer": "portability",
+  "families": {},
+  "own_keys": [
+    "config_home_env",
+    "unix_path_prefixes",
+    "targets",
+    "platform_adapters"
+  ],
+  "rules": [
+    "PORT-001",
+    "PORT-002",
+    "PORT-003",
+    "PORT-004",
+    "PORT-005",
+    "PORT-006",
+    "PORT-007",
+    "PORT-008",
+    "PORT-009",
+    "PORT-010"
+  ]
+}
