@@ -565,10 +565,39 @@ fn check_script_safety(
     host: &HostName,
     metadata: &std::fs::Metadata,
 ) -> Result<(), AtmTempError> {
+    check_script_safety_with_owner(
+        path,
+        host,
+        metadata,
+        crate::windows_security::owned_by_current_user,
+    )
+}
+
+#[cfg(windows)]
+fn check_script_safety_with_owner(
+    path: &Path,
+    host: &HostName,
+    metadata: &std::fs::Metadata,
+    is_owned_by_current_user: impl FnOnce(
+        &Path,
+    )
+        -> Result<bool, crate::windows_security::WindowsSecurityError>,
+) -> Result<(), AtmTempError> {
     if !metadata.is_file() {
         return Err(AtmTempError::TransferScriptUnsafe {
             host: host.clone(),
             reason: format!("{} is not a regular file", path.display()),
+        });
+    }
+    let owned =
+        is_owned_by_current_user(path).map_err(|error| AtmTempError::TransferScriptUnsafe {
+            host: host.clone(),
+            reason: format!("could not verify script owner: {error}"),
+        })?;
+    if !owned {
+        return Err(AtmTempError::TransferScriptUnsafe {
+            host: host.clone(),
+            reason: "script is not owned by the current Windows user".to_string(),
         });
     }
     let profile_home =
@@ -962,6 +991,39 @@ mod tests {
             matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("reparse point")),
             "{error:?}"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn transfer_script_safety_rejects_a_foreign_owner() {
+        let profile_home =
+            windows_profile_home_for_containment(&ProcessEnvSource).expect("Windows profile home");
+        let dir = tempfile::tempdir_in(profile_home).expect("temp dir under profile");
+        let path = dir.path().join("m5.ps1");
+        std::fs::write(&path, "Write-Output ok\n").expect("write script");
+        let metadata = std::fs::symlink_metadata(&path).expect("script metadata");
+
+        let error = check_script_safety_with_owner(&path, &host("m5"), &metadata, |_| Ok(false))
+            .expect_err("foreign-owned script must be refused");
+
+        assert!(
+            matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("not owned by the current Windows user")),
+            "{error:?}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn transfer_script_safety_accepts_a_current_user_owner() {
+        let profile_home =
+            windows_profile_home_for_containment(&ProcessEnvSource).expect("Windows profile home");
+        let dir = tempfile::tempdir_in(profile_home).expect("temp dir under profile");
+        let path = dir.path().join("m5.ps1");
+        std::fs::write(&path, "Write-Output ok\n").expect("write script");
+        let metadata = std::fs::symlink_metadata(&path).expect("script metadata");
+
+        check_script_safety(&path, &host("m5"), &metadata)
+            .expect("current-user-owned script under profile is accepted");
     }
 
     /// A verbatim (`\\?\`) drive prefix and its non-verbatim spelling name
