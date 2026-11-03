@@ -238,6 +238,7 @@ impl BeadPatch {
 
 /// Reads and the one guarded write a hook makes. The beads-cache adapter implements it.
 pub trait BeadStore {
+    fn refresh(&self, bead_ids: &[String]) -> Result<(), Refusal>;
     fn show(&self, bead_id: &str) -> Result<Bead, Refusal>;
     /// The ledger layer of the QA bead's closed dev/fix blocker, or of its `checked_bead`.
     fn target_layer(&self, qa_bead: &Bead) -> Result<Layer, Refusal>;
