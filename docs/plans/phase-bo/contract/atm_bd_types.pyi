@@ -332,10 +332,18 @@ class PhaseFacts:
     errors: list[CollectError] = ...
 
 @_record
+class ReviewTarget:
+    repo: str
+    pr_number: int
+    branch: str
+    commit: str
+
+@_record
 class AssignVars:
     task_id: str
     phase: str
     profile: str
+    review: ReviewTarget | None = None
 
 @_record
 class Assign:

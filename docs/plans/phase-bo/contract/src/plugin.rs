@@ -76,8 +76,13 @@ pub struct PhaseFacts {
     pub errors: Vec<CollectError>,
 }
 
+/// What a review assignment points at: repo from the phase file key `repo`; branch from the
+/// dev bead; pr_number and commit from the StackFact on that branch (its pr and head).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AssignVars { pub task_id: String, pub phase: String, pub profile: String }
+pub struct ReviewTarget { pub repo: String, pub pr_number: u64, pub branch: String, pub commit: String }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AssignVars { pub task_id: String, pub phase: String, pub profile: String, pub review: Option<ReviewTarget> }
 
 /// `key` dedupes: a Report whose key is in REPORTED_KEYS stays a view row only.
 #[derive(Clone, Debug, PartialEq, Eq)]
