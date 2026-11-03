@@ -1,10 +1,45 @@
 //! The framework: the same for every profile. Policy loading, the tick record, the view, executor
 //! outcomes, the process and beads ports, the hook Errors tables and the reply cap. It collects facts, calls
 //! the profile's `Cron::decide`, and executes what it returns; it never decides a meaningful state change itself.
-use crate::plugin::{Action, Bead, BeadStore, CheckState, CollectError, Params, PhaseFacts, Refusal, Stage, Status, TaskState};
+use crate::plugin::{Action, Bead, BeadStore, CheckState, CollectError, Evidence, Params, PhaseFacts, Refusal, Stage, Status, TaskState};
 
 pub use crate::hook::{fix, Fix, Owner};
 pub use crate::wire::HOOK_ACTIONS_MAX;
+
+/// Match the journal's existing compact, sorted, ASCII-escaped JSON encoding.
+fn ascii_json(value: &serde_json::Value) -> String {
+    use std::fmt::Write;
+    let mut result = String::new();
+    for character in value.to_string().chars() {
+        if character >= '\u{7f}' {
+            for unit in character.encode_utf16(&mut [0; 2]).iter() {
+                write!(&mut result, "\\u{unit:04x}").expect("writing to a String cannot fail");
+            }
+        } else {
+            result.push(character);
+        }
+    }
+    result
+}
+
+/// Encode close evidence for the beads journal; the guarded patch itself stays typed.
+fn evidence_json(evidence: &Evidence) -> serde_json::Value {
+    match evidence {
+        Evidence::Layer(layer) => serde_json::json!({"kind": "layer", "branch": layer.branch,
+            "head": layer.head.as_str(), "pr": layer.pr, "base": layer.base}),
+        Evidence::QaPass(pass) => serde_json::json!({"kind": "qa_pass", "sha": pass.sha.as_str()}),
+        Evidence::QaFail(fail) => serde_json::json!({"kind": "qa_fail", "sha": fail.sha.as_str(),
+            "findings": fail.findings.iter().map(|f| serde_json::json!({"id": f.id, "blocking": f.blocking})).collect::<Vec<_>>()}),
+        Evidence::Merged(merged) => {
+            serde_json::json!({"kind": "merged", "sha": merged.sha.as_str()})
+        }
+    }
+}
+
+/// Encode typed close evidence at the journal boundary in the established canonical form.
+pub fn encode_evidence(evidence: &Evidence) -> String {
+    ascii_json(&evidence_json(evidence))
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActionKind { Assign, Report, Notify }

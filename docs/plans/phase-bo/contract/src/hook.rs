@@ -8,6 +8,54 @@ pub enum Status { Open, InProgress, Blocked, Deferred, Closed }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage { Dev, Fix, Qa, Land, Stack, Other }
 
+// Define each wire spelling once for both reading and writing.
+macro_rules! wire_names {
+    ($kind:ident { $($variant:ident => $text:literal),+ $(,)? }) => {
+        impl $kind {
+            fn parse_name(value: &str) -> Option<Self> {
+                match value { $($text => Some(Self::$variant),)+ _ => None }
+            }
+            pub const fn as_str(self) -> &'static str {
+                match self { $(Self::$variant => $text,)+ }
+            }
+        }
+    };
+}
+
+wire_names!(Status { Open => "open", InProgress => "in_progress", Blocked => "blocked",
+                     Deferred => "deferred", Closed => "closed" });
+wire_names!(Stage { Dev => "dev", Fix => "fix", Qa => "qa", Land => "land", Stack => "stack", Other => "other" });
+
+impl Status {
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::parse_name(value)
+    }
+}
+impl Stage {
+    pub fn parse(value: &str) -> Self {
+        Self::parse_name(value).unwrap_or(Self::Other)
+    }
+}
+
+/// The operation selected by a guarded patch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PatchKind {
+    Assign,
+    Start,
+    Reopen,
+    Close,
+}
+impl PatchKind {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Assign => "assign",
+            Self::Start => "start",
+            Self::Reopen => "reopen",
+            Self::Close => "close",
+        }
+    }
+}
+
 /// A 40-hex commit id.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
@@ -229,6 +277,22 @@ pub enum BeadPatch {
 }
 
 impl BeadPatch {
+    pub fn kind(&self) -> PatchKind {
+        match self {
+            Self::Assign { .. } => PatchKind::Assign,
+            Self::Start { .. } => PatchKind::Start,
+            Self::Reopen { .. } => PatchKind::Reopen,
+            Self::Close { .. } => PatchKind::Close,
+        }
+    }
+    pub fn snapshot(&self) -> &Guard {
+        match self {
+            Self::Assign { guard, .. }
+            | Self::Start { guard }
+            | Self::Reopen { guard }
+            | Self::Close { guard, .. } => guard,
+        }
+    }
     fn guard(b: &Bead) -> Guard { Guard { bead_id: b.id.clone(), status: b.status, assignee: b.assignee.clone() } }
     pub fn assign(snapshot: &Bead, agent: &str) -> Self { Self::Assign { guard: Self::guard(snapshot), agent: agent.to_owned() } }
     pub fn start(snapshot: &Bead) -> Self { Self::Start { guard: Self::guard(snapshot) } }

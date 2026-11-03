@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 pub use crate::hook::{
     AssignTransition, Bead, BeadPatch, BeadStore, CloseTransition, Ctx, ErrorId, Evidence, Finding, Guard, Hook, Layer,
-    Merged, PhaseFile, PhaseFiles, QaFail, QaPass, Refusal, Sha, Stack, Stage, StartTransition, Status, Template, TemplateFile,
+    Merged, PatchKind, PhaseFile, PhaseFiles, QaFail, QaPass, Refusal, Sha, Stack, Stage, StartTransition, Status, Template, TemplateFile,
 };
 pub use crate::wire::{CloseVars, HookAction, HookReply, HookRequest, Outcome};
 
