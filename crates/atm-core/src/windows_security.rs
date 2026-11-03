@@ -3,6 +3,7 @@
 //! Path-based checks inspect a snapshot. Use `VerifiedHandle` when an object
 //! must remain stable between inspection and subsequent operations.
 
+use std::borrow::Cow;
 use std::ffi::c_void;
 use std::fmt;
 use std::io::Read;
@@ -74,6 +75,32 @@ struct Descriptor {
     dacl: *mut ACL,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Sid(Cow<'static, [u8]>);
+
+impl Sid {
+    const OWNER_RIGHTS: Self = Self(Cow::Borrowed(&[1, 1, 0, 0, 0, 0, 0, 3, 4, 0, 0, 0]));
+
+    /// Copy and validate a Windows SID pointer into owned bytes.
+    ///
+    /// # Safety
+    /// `sid` must point to a readable SID allocation for the duration of this call.
+    unsafe fn from_raw(sid: PSID) -> Result<Self, WindowsSecurityError> {
+        // SAFETY: SID pointers are supplied by Windows from a live descriptor or token.
+        if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
+            return Err(WindowsSecurityError::InvalidDescriptor("invalid SID"));
+        }
+        // SAFETY: IsValidSid validated the SID; the owner allocation outlives this copy.
+        let size = unsafe { GetLengthSid(sid) } as usize;
+        let bytes = unsafe { std::slice::from_raw_parts(sid.cast::<u8>(), size) };
+        Ok(Self(Cow::Owned(bytes.to_vec())))
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 struct DescriptorAllocation(*mut c_void);
 impl Drop for DescriptorAllocation {
     fn drop(&mut self) {
@@ -113,7 +140,7 @@ impl Descriptor {
             ));
         }
         // SAFETY: from_parts binds these pointers to the live allocation owned by self.
-        let owner_sid = unsafe { copy_sid(self.owner)? };
+        let owner_sid = unsafe { Sid::from_raw(self.owner)? };
         // SAFETY: from_parts guarantees dacl is a component pointer from this descriptor.
         let dacl = unsafe { &*self.dacl };
         Ok(DescriptorView { owner_sid, dacl })
@@ -122,7 +149,7 @@ impl Descriptor {
 
 /// Component data borrowed from its owning Windows security descriptor.
 struct DescriptorView<'a> {
-    owner_sid: Vec<u8>,
+    owner_sid: Sid,
     dacl: &'a ACL,
 }
 struct Token(HANDLE);
@@ -161,7 +188,7 @@ fn token_information(
     Ok(buffer)
 }
 
-fn current_token_owner_sids() -> Result<(Vec<u8>, Vec<u8>), WindowsSecurityError> {
+fn current_token_owner_sids() -> Result<(Sid, Sid), WindowsSecurityError> {
     let mut token = null_mut();
     // SAFETY: current process pseudo-handle is valid and token is a writable output.
     if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
@@ -176,36 +203,18 @@ fn current_token_owner_sids() -> Result<(Vec<u8>, Vec<u8>), WindowsSecurityError
     // SAFETY: same guarantee as above for the TokenOwner response.
     let default_owner_sid = unsafe { (*owner_buffer.as_ptr().cast::<TOKEN_OWNER>()).Owner };
     // SAFETY: both pointers refer into their live, validated token-information buffers.
-    let user_sid = unsafe { copy_sid(user_sid)? };
+    let user_sid = unsafe { Sid::from_raw(user_sid)? };
     // SAFETY: both pointers refer into their live, validated token-information buffers.
-    let default_owner_sid = unsafe { copy_sid(default_owner_sid)? };
+    let default_owner_sid = unsafe { Sid::from_raw(default_owner_sid)? };
     Ok((user_sid, default_owner_sid))
 }
 
-/// Copy a Windows SID pointer into owned bytes.
-///
-/// # Safety
-/// `sid` must point to a readable SID allocation for the duration of this call.
-unsafe fn copy_sid(sid: PSID) -> Result<Vec<u8>, WindowsSecurityError> {
-    // SAFETY: SID pointers are supplied by Windows from a live descriptor or token.
-    if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
-        return Err(WindowsSecurityError::InvalidDescriptor("invalid SID"));
-    }
-    // SAFETY: IsValidSid validated the SID; the owner allocation outlives this copy.
-    let size = unsafe { GetLengthSid(sid) } as usize;
-    Ok(unsafe { std::slice::from_raw_parts(sid.cast::<u8>(), size) }.to_vec())
-}
-
-fn same_sid(left: &[u8], right: &[u8]) -> bool {
-    left == right
-}
-
 fn verify_owner_sid(
-    owner_sid: &[u8],
-    token_user_sid: &[u8],
-    token_default_owner_sid: &[u8],
+    owner_sid: &Sid,
+    token_user_sid: &Sid,
+    token_default_owner_sid: &Sid,
 ) -> Result<(), WindowsSecurityError> {
-    if same_sid(owner_sid, token_user_sid) || same_sid(owner_sid, token_default_owner_sid) {
+    if owner_sid == token_user_sid || owner_sid == token_default_owner_sid {
         Ok(())
     } else {
         Err(WindowsSecurityError::Insecure(
@@ -214,38 +223,59 @@ fn verify_owner_sid(
     }
 }
 
-#[cfg(test)]
-fn descriptor(path: &Path) -> Result<Descriptor, WindowsSecurityError> {
+fn wide_path(path: &Path) -> Result<Vec<u16>, WindowsSecurityError> {
     let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
     if wide.contains(&0) {
         return Err(WindowsSecurityError::InvalidDescriptor("path contains NUL"));
     }
     wide.push(0);
+    Ok(wide)
+}
+
+/// Read one Windows security descriptor and retain the allocation that owns its component
+/// pointers.
+///
+/// # Safety
+/// `read` must be a Windows security-info API call that returns `owner`, `dacl`, and `raw` from
+/// the same descriptor allocation.
+unsafe fn read_security(
+    operation: &'static str,
+    read: impl FnOnce(*mut PSID, *mut *mut ACL, *mut *mut c_void) -> u32,
+) -> Result<Descriptor, WindowsSecurityError> {
     let mut owner = null_mut();
     let mut dacl = null_mut();
     let mut raw = null_mut();
-    // SAFETY: path is NUL terminated and outputs are writable. Returned pointers
-    // refer to the LocalAlloc descriptor, which the wrapper keeps alive.
-    let status = unsafe {
-        GetNamedSecurityInfoW(
-            wide.as_ptr(),
-            SE_FILE_OBJECT,
-            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-            &mut owner,
-            null_mut(),
-            &mut dacl,
-            null_mut(),
-            &mut raw,
-        )
-    };
+    let status = read(&mut owner, &mut dacl, &mut raw);
     if status != 0 {
         return Err(WindowsSecurityError::System {
-            operation: "GetNamedSecurityInfoW",
+            operation,
             source: std::io::Error::from_raw_os_error(status as i32),
         });
     }
-    // SAFETY: all three pointers were returned together by GetNamedSecurityInfoW above.
+    // SAFETY: the callback returns component pointers together with their owning descriptor.
     unsafe { Descriptor::from_parts(raw, owner, dacl) }
+}
+
+#[cfg(test)]
+fn descriptor(path: &Path) -> Result<Descriptor, WindowsSecurityError> {
+    let wide = wide_path(path)?;
+    // SAFETY: the callback calls GetNamedSecurityInfoW, which returns these components with
+    // their shared LocalAlloc descriptor.
+    unsafe {
+        read_security("GetNamedSecurityInfoW", |owner, dacl, raw| {
+            // SAFETY: path is NUL terminated and outputs are writable.
+            GetNamedSecurityInfoW(
+                wide.as_ptr(),
+                SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                owner,
+                null_mut(),
+                dacl,
+                null_mut(),
+                raw,
+            )
+        })
+    }
 }
 
 /// Whether the path owner is the current process user.
@@ -281,8 +311,6 @@ fn dacl_only_owner(descriptor: &DescriptorView<'_>) -> Result<bool, WindowsSecur
             "null or invalid DACL",
         ));
     }
-    // S-1-3-4 is the well-known OWNER RIGHTS SID.
-    const OWNER_RIGHTS: &[u8] = &[1, 1, 0, 0, 0, 0, 0, 3, 4, 0, 0, 0];
     // SAFETY: IsValidAcl validated the live DACL and its header.
     for index in 0..descriptor.dacl.AceCount {
         let mut ptr = null_mut();
@@ -314,8 +342,8 @@ fn dacl_only_owner(descriptor: &DescriptorView<'_>) -> Result<bool, WindowsSecur
             return Err(WindowsSecurityError::InvalidDescriptor("SID exceeds ACE"));
         }
         // SAFETY: the SID range was bounded by the validated ACE header above.
-        let sid = unsafe { copy_sid(sid_ptr.cast_mut().cast())? };
-        if ace.Mask != 0 && !same_sid(&sid, owner) && !same_sid(&sid, OWNER_RIGHTS) {
+        let sid = unsafe { Sid::from_raw(sid_ptr.cast_mut().cast())? };
+        if ace.Mask != 0 && &sid != owner && sid != Sid::OWNER_RIGHTS {
             return Ok(false);
         }
     }
@@ -370,11 +398,7 @@ impl VerifiedHandle {
 }
 
 fn open_unshared(path: &Path) -> Result<std::fs::File, WindowsSecurityError> {
-    let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
-    if wide.contains(&0) {
-        return Err(WindowsSecurityError::InvalidDescriptor("path contains NUL"));
-    }
-    wide.push(0);
+    let wide = wide_path(path)?;
     // SAFETY: wide is NUL-terminated and the other arguments follow CreateFileW's contract.
     let raw = unsafe {
         CreateFileW(
@@ -421,35 +445,23 @@ fn reject_reparse_point(file: &std::fs::File) -> Result<(), WindowsSecurityError
 }
 
 fn verify_handle_security(file: &std::fs::File) -> Result<(), WindowsSecurityError> {
-    let mut owner = null_mut();
-    let mut dacl = null_mut();
-    let mut raw_descriptor = null_mut();
-    // SAFETY: file is live and all requested outputs are writable.
-    let status = unsafe {
-        GetSecurityInfo(
-            file.as_raw_handle().cast(),
-            SE_FILE_OBJECT,
-            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-            &mut owner,
-            null_mut(),
-            &mut dacl,
-            null_mut(),
-            &mut raw_descriptor,
-        )
+    // SAFETY: the callback calls GetSecurityInfo, which returns these components with their
+    // shared LocalAlloc descriptor for this live handle.
+    let descriptor = unsafe {
+        read_security("GetSecurityInfo", |owner, dacl, raw| {
+            // SAFETY: file is live and all requested outputs are writable.
+            GetSecurityInfo(
+                file.as_raw_handle().cast(),
+                SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                owner,
+                null_mut(),
+                dacl,
+                null_mut(),
+                raw,
+            )
+        })?
     };
-    if status != 0 {
-        return Err(WindowsSecurityError::System {
-            operation: "GetSecurityInfo",
-            source: std::io::Error::from_raw_os_error(status as i32),
-        });
-    }
-    if raw_descriptor.is_null() {
-        return Err(WindowsSecurityError::InvalidDescriptor(
-            "missing descriptor",
-        ));
-    }
-    // SAFETY: all pointers were returned together by GetSecurityInfo above.
-    let descriptor = unsafe { Descriptor::from_parts(raw_descriptor, owner, dacl)? };
     let view = descriptor.view()?;
     let (token_user_sid, token_default_owner_sid) = current_token_owner_sids()?;
     verify_owner_sid(&view.owner_sid, &token_user_sid, &token_default_owner_sid)?;
@@ -475,11 +487,7 @@ pub(crate) fn create_owner_only_directory(path: &Path) -> Result<(), WindowsSecu
     };
     use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
 
-    let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
-    if wide.contains(&0) {
-        return Err(WindowsSecurityError::InvalidDescriptor("path contains NUL"));
-    }
-    wide.push(0);
+    let wide = wide_path(path)?;
     let sddl = "D:P(A;OICI;FA;;;OW)\0".encode_utf16().collect::<Vec<_>>();
     let mut raw = null_mut();
     // SAFETY: the SDDL is NUL-terminated and raw is a writable output.
@@ -491,7 +499,7 @@ pub(crate) fn create_owner_only_directory(path: &Path) -> Result<(), WindowsSecu
             "ConvertStringSecurityDescriptorToSecurityDescriptorW",
         ));
     }
-    let parsed = Descriptor(raw);
+    let parsed = DescriptorAllocation(raw);
     let mut present = 0;
     let mut defaulted = 0;
     let mut dacl = null_mut();
@@ -504,11 +512,16 @@ pub(crate) fn create_owner_only_directory(path: &Path) -> Result<(), WindowsSecu
             "missing owner-only DACL",
         ));
     }
-    let sid = current_user_sid()?;
-    let mut aligned_sid = vec![0_u32; sid.len().div_ceil(4)];
+    let sid = current_token_owner_sids()?.0;
+    let sid_bytes = sid.as_bytes();
+    let mut aligned_sid = vec![0_u32; sid_bytes.len().div_ceil(4)];
     // SAFETY: aligned_sid has enough writable storage and does not overlap sid.
     unsafe {
-        std::ptr::copy_nonoverlapping(sid.as_ptr(), aligned_sid.as_mut_ptr().cast(), sid.len())
+        std::ptr::copy_nonoverlapping(
+            sid_bytes.as_ptr(),
+            aligned_sid.as_mut_ptr().cast(),
+            sid_bytes.len(),
+        )
     };
     // SAFETY: the zeroed descriptor is initialized before use.
     let mut descriptor: SECURITY_DESCRIPTOR = unsafe { std::mem::zeroed() };
@@ -542,17 +555,32 @@ pub(crate) mod tests {
     use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
     use windows_sys::Win32::Security::{PROTECTED_DACL_SECURITY_INFORMATION, SetFileSecurityW};
 
+    fn sid_from_bytes(bytes: &[u8]) -> Sid {
+        let mut aligned = vec![0_u32; bytes.len().div_ceil(std::mem::size_of::<u32>())];
+        // SAFETY: aligned has at least bytes.len() writable bytes and does not overlap bytes.
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), aligned.as_mut_ptr().cast(), bytes.len())
+        };
+        // SAFETY: the aligned buffer contains the complete SID bytes for this call.
+        unsafe { Sid::from_raw(aligned.as_mut_ptr().cast()) }.expect("fixture SID must be valid")
+    }
+
     fn set_owner_to_current_user(path: &Path) {
         use windows_sys::Win32::Security::{
             InitializeSecurityDescriptor, OWNER_SECURITY_INFORMATION, SECURITY_DESCRIPTOR,
             SetSecurityDescriptorOwner,
         };
         let sid = current_token_owner_sids().unwrap().0;
+        let sid_bytes = sid.as_bytes();
         // Provide DWORD-aligned SID storage to the Windows APIs.
-        let mut aligned_sid = vec![0_u32; sid.len().div_ceil(4)];
-        // SAFETY: storage has at least sid.len() writable bytes and does not overlap sid.
+        let mut aligned_sid = vec![0_u32; sid_bytes.len().div_ceil(4)];
+        // SAFETY: storage has at least sid_bytes.len() writable bytes and does not overlap sid.
         unsafe {
-            std::ptr::copy_nonoverlapping(sid.as_ptr(), aligned_sid.as_mut_ptr().cast(), sid.len());
+            std::ptr::copy_nonoverlapping(
+                sid_bytes.as_ptr(),
+                aligned_sid.as_mut_ptr().cast(),
+                sid_bytes.len(),
+            );
         }
         // SAFETY: zeroed storage is initialized immediately by the Windows API.
         let mut security: SECURITY_DESCRIPTOR = unsafe { std::mem::zeroed() };
@@ -573,11 +601,7 @@ pub(crate) mod tests {
             },
             0
         );
-        let wide = path
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
+        let wide = wide_path(path).unwrap();
         assert_ne!(
             unsafe {
                 SetFileSecurityW(
@@ -592,11 +616,7 @@ pub(crate) mod tests {
 
     pub(crate) fn set_dacl(path: &Path, sddl: &str) {
         let text = sddl.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
-        let wide_path = path
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
+        let wide_path = wide_path(path).unwrap();
         let mut raw = null_mut();
         // SAFETY: text is NUL-terminated and raw is a writable output.
         assert_ne!(
@@ -709,16 +729,8 @@ pub(crate) mod tests {
         let target = dir.path().join("target");
         let link = dir.path().join("link");
         std::fs::write(&target, b"data").unwrap();
-        let wide_link = link
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
-        let wide_target = target
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
+        let wide_link = wide_path(&link).unwrap();
+        let wide_target = wide_path(&target).unwrap();
         // SAFETY: both paths are NUL-terminated and remain alive for the call.
         assert_ne!(
             unsafe {
@@ -744,10 +756,19 @@ pub(crate) mod tests {
     #[test]
     fn foreign_owner_sid_is_not_current_user() {
         // Pure comparison avoids depending on the CI machine's account SID.
-        let owner = [1, 1, 0, 0, 0, 0, 0, 5, 1, 0, 0, 0];
-        let other = [1, 1, 0, 0, 0, 0, 0, 5, 2, 0, 0, 0];
-        assert!(same_sid(&owner, &owner));
-        assert!(!same_sid(&owner, &other));
+        let owner = sid_from_bytes(&[1, 1, 0, 0, 0, 0, 0, 5, 1, 0, 0, 0]);
+        let other = sid_from_bytes(&[1, 1, 0, 0, 0, 0, 0, 5, 2, 0, 0, 0]);
+        assert_eq!(owner, owner.clone());
+        assert_ne!(owner, other);
+    }
+
+    #[test]
+    fn sid_rejects_invalid_pointer_and_carries_owner_rights() {
+        assert!(unsafe { Sid::from_raw(std::ptr::null_mut()) }.is_err());
+        assert_eq!(
+            Sid::OWNER_RIGHTS.as_bytes(),
+            &[1, 1, 0, 0, 0, 0, 0, 3, 4, 0, 0, 0]
+        );
     }
 
     #[test]
@@ -758,6 +779,8 @@ pub(crate) mod tests {
         ];
         let token_default_owner = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0];
 
+        let token_user = sid_from_bytes(&token_user);
+        let token_default_owner = sid_from_bytes(&token_default_owner);
         assert!(verify_owner_sid(&token_user, &token_user, &token_default_owner).is_ok());
     }
 
@@ -769,6 +792,8 @@ pub(crate) mod tests {
         ];
         let token_default_owner = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0];
 
+        let token_user = sid_from_bytes(&token_user);
+        let token_default_owner = sid_from_bytes(&token_default_owner);
         assert!(verify_owner_sid(&token_default_owner, &token_user, &token_default_owner).is_ok());
     }
 
@@ -784,6 +809,9 @@ pub(crate) mod tests {
             0, 0,
         ];
 
+        let token_user = sid_from_bytes(&token_user);
+        let token_default_owner = sid_from_bytes(&token_default_owner);
+        let foreign_owner = sid_from_bytes(&foreign_owner);
         assert!(matches!(
             verify_owner_sid(&foreign_owner, &token_user, &token_default_owner),
             Err(WindowsSecurityError::Insecure(
