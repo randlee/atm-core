@@ -22,7 +22,7 @@ impl Sha {
 
 macro_rules! error_ids {
     ($($id:ident = $code:literal),* $(,)?) => {
-        /// One id per failure, both surfaces. Hook rows: hooks/*.md Errors tables; POLICY_*: policy load.
+        /// One id per failure, both surfaces. Hook rows: hooks/*.md Errors tables; POLICY_BAD_PARAMS: policy load.
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub enum ErrorId { $($id),* }
         impl ErrorId {
@@ -38,8 +38,7 @@ error_ids! {
     TaskNotAssignee = "TASK_NOT_ASSIGNEE", CloseReasonEmpty = "CLOSE_REASON_EMPTY",
     CloseReportNotInline = "CLOSE_REPORT_NOT_INLINE", StackNotRecorded = "STACK_NOT_RECORDED",
     QaVerdict = "QA_VERDICT", QaNotOnStack = "QA_NOT_ON_STACK", QaNothingToReview = "QA_NOTHING_TO_REVIEW",
-    FindingsNotPoured = "FINDINGS_NOT_POURED", PolicyUnknownRule = "POLICY_UNKNOWN_RULE",
-    PolicyNoCollector = "POLICY_NO_COLLECTOR", PolicyBadParams = "POLICY_BAD_PARAMS",
+    FindingsNotPoured = "FINDINGS_NOT_POURED", PolicyBadParams = "POLICY_BAD_PARAMS",
 }
 
 /// The ATM task hook a request came from (selects the fix table); a profile registers one script per hook.

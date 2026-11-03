@@ -1,4 +1,4 @@
-//! The plug-in surface: task-hook types, read-only facts, `Rule`, `Params`, `Action`, `Profile`.
+//! The plug-in surface: task-hook types, read-only facts, `Params`, `Action`, `Cron`, `Profile`.
 //! A plug-in decides; it does no I/O. Times are unix seconds.
 use std::collections::BTreeMap;
 
@@ -20,10 +20,11 @@ pub struct Profile {
     /// ATM hook -> the script ATM runs for it.
     pub hooks: BTreeMap<Hook, String>,
     pub templates: BTreeMap<Template, String>,
+    /// Holds the cron's `params` table.
     pub policy: String,
-    /// The module that supplies the policy's rules, if the profile has its own.
+    /// The script whose `decide` the framework calls each tick (`Cron`); none: the cron decides nothing.
     #[serde(default)]
-    pub rules: Option<String>,
+    pub cron: Option<String>,
 }
 
 /// One member per collector.
@@ -56,7 +57,7 @@ pub struct PrBase { pub pr: u64, pub base: String }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CollectError { pub kind: FactKind, pub argv: Vec<String>, pub message: String, pub fix: String }
 
-/// One optional field per kind; only the kinds a policy needs are read.
+/// One optional field per kind; `None` when its read failed this tick (see `errors`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PhaseFacts {
     pub phase: String,
@@ -86,14 +87,10 @@ pub enum Action {
     Notify { to: String, keys: Vec<String> },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ParamKind { Int, Text }
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ParamSpec { pub name: String, pub kind: ParamKind }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParamValue { Int(i64), Text(String) }
 
-/// A rule's validated `params` table from policy.toml.
+/// The `params` table of the profile's policy.toml.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Params { pub values: Vec<(String, ParamValue)> }
 
@@ -106,11 +103,9 @@ impl Params {
     }
 }
 
-/// A pure decision: no I/O. A rule whose needed fact is `None` is not called.
-pub trait Rule {
-    fn id(&self) -> &str;
-    fn needs(&self) -> Vec<FactKind>;
-    fn params(&self) -> Vec<ParamSpec>;
+/// The profile's cron script, the plug-in's one cron entry point: pure, no I/O. The framework collects
+/// every fact, calls `decide` once per tick, then dedupes and executes the returned actions.
+pub trait Cron {
     fn decide(&self, facts: &PhaseFacts, params: &Params) -> Vec<Action>;
 }
 
@@ -127,7 +122,8 @@ mod tests {
         let profile: Profile = toml::from_str(&text).expect("profile.toml parses");
         let dir = path.parent().expect("profile dir");
         assert_eq!(profile.hooks.len(), 3, "one script per ATM task hook");
-        for script in profile.hooks.values() {
+        let cron = profile.cron.as_ref().expect("profile names a cron script");
+        for script in profile.hooks.values().chain([cron]) {
             assert!(dir.join(script).is_file(), "{script} named by profile.toml does not exist");
         }
     }

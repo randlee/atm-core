@@ -27,7 +27,8 @@ def plugin_files() -> list[Path]:
 
 
 def test_plugin_files_exist() -> None:
-    assert len(plugin_files()) >= 3, SKILLS
+    names = {p.name for p in plugin_files()}
+    assert {"atm-bd-task-assign-hook.py", "atm-bd-task-start-hook.py", "atm-bd-task-hook.py", "atm-bd-cron.py"} <= names
 
 
 @pytest.mark.parametrize("path", plugin_files(), ids=lambda p: p.name)

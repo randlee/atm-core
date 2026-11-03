@@ -1,7 +1,7 @@
-//! The framework: the same for every profile. Policy loading, the decision record, the view, executor
-//! outcomes, the process and beads ports, the hook Errors tables and the reply cap. It collects facts and
-//! executes the `Action`s a plug-in rule decides; it never decides a meaningful state change itself.
-use crate::plugin::{Action, Bead, BeadStore, CheckState, CollectError, FactKind, Params, PhaseFacts, Refusal, Stage, Status, TaskState};
+//! The framework: the same for every profile. Policy loading, the tick record, the view, executor
+//! outcomes, the process and beads ports, the hook Errors tables and the reply cap. It collects facts, calls
+//! the profile's `Cron::decide`, and executes what it returns; it never decides a meaningful state change itself.
+use crate::plugin::{Action, Bead, BeadStore, CheckState, CollectError, Params, PhaseFacts, Refusal, Stage, Status, TaskState};
 
 pub use crate::hook::{fix, Fix, Owner};
 pub use crate::wire::HOOK_ACTIONS_MAX;
@@ -9,17 +9,14 @@ pub use crate::wire::HOOK_ACTIONS_MAX;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActionKind { Assign, Report, Notify }
 
+/// A profile's policy.toml, loaded before any read: POLICY_BAD_PARAMS (a param neither int nor text), PROFILE_MISMATCH.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuleEntry { pub rule_id: String, pub params: Params }
-
-/// A profile's policy.toml, validated before any read (POLICY_UNKNOWN_RULE, POLICY_NO_COLLECTOR,
-/// POLICY_BAD_PARAMS, PROFILE_MISMATCH, each naming the rule id).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Policy { pub profile: String, pub rules: Vec<RuleEntry>, pub notify_template: String, pub needs: Vec<FactKind> }
+pub struct Policy { pub profile: String, pub params: Params, pub notify_template: String }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ViewRow { pub queue: String, pub key: String, pub bead_id: Option<String>, pub text: String, pub since: Option<i64> }
 
+/// One tick's `decide` result after dedupe: actions to execute, and Reports already sent kept as rows only.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Decision { pub actions: Vec<Action>, pub rows: Vec<ViewRow> }
 

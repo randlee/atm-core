@@ -1,5 +1,5 @@
 # atm-bd-types 0.3.0 plug-in surface: what a profile plug-in imports. The names the lite hooks use, read-only facts,
-# Rule, Params/ParamSpec, the Actions a rule returns, and the Profile manifest. Framework names: atm_bd_core.pyi.
+# Params, the Actions the cron decide returns (Cron), and the Profile manifest. Framework names: atm_bd_core.pyi.
 import builtins
 import enum
 import typing
@@ -72,8 +72,6 @@ class ErrorId(enum.Enum):
     QA_NOT_ON_STACK = ...
     QA_NOTHING_TO_REVIEW = ...
     FINDINGS_NOT_POURED = ...
-    POLICY_UNKNOWN_RULE = ...
-    POLICY_NO_COLLECTOR = ...
     POLICY_BAD_PARAMS = ...
 
 @typing.final
@@ -228,7 +226,7 @@ class CacheStore(BeadStore):
     def list(self, phase: str) -> builtins.list[Bead] | Refusal: ...
     def ready(self, phase: str) -> builtins.list[Bead] | Refusal: ...
 
-# ---- Rules: PhaseFacts -> Rule.decide -> Action. Times: unix seconds.
+# ---- Cron: PhaseFacts -> decide -> Action. Times: unix seconds.
 
 _T = typing.TypeVar("_T")
 
@@ -265,10 +263,6 @@ class CheckState(enum.Enum):
     FAILING = ...
     PENDING = ...
     NONE = ...
-
-class ParamKind(enum.Enum):
-    INT = ...
-    TEXT = ...
 
 @_record
 class TaskFact:
@@ -321,6 +315,7 @@ class CollectError:
 
 @_record
 class PhaseFacts:
+    r"""A fact is None when its read failed this tick (see errors)."""
     phase: str
     now: int
     phase_file: PhaseFile
@@ -365,32 +360,23 @@ class Notify:
 
 Action: typing.TypeAlias = Assign | Report | Notify
 
-@_record
-class ParamSpec:
-    name: str
-    kind: ParamKind
-
 @typing.final
 class Params:
-    r"""A rule's validated params table from policy.toml."""
+    r"""The params table of the profile's policy.toml."""
     def __init__(self, values: list[tuple[str, builtins.int | str]]) -> None: ...
     def int(self, name: str) -> builtins.int | None: ...
     def text(self, name: str) -> str | None: ...
 
-class Rule(typing.Protocol):
-    r"""Pure: no I/O. Not called when a needed fact is None."""
-    @property
-    def id(self) -> str: ...
-    def needs(self) -> list[FactKind]: ...
-    def params(self) -> list[ParamSpec]: ...
+class Cron(typing.Protocol):
+    r"""The profile's cron script (a module): pure, no I/O, imports only atm_bd_types. Called once per tick with every fact."""
     def decide(self, facts: PhaseFacts, params: Params) -> list[Action]: ...
 
 @_record
 class Profile:
-    r"""A plug-in's profile.toml: the team pipeline (stages in order), ATM hook -> script, templates, policy, optional rules module. Paths relative to the manifest."""
+    r"""A plug-in's profile.toml: the team pipeline (stages in order), ATM hook -> script, templates, policy, optional cron script. Paths relative to the manifest."""
     name: str
     stages: list[str]
     hooks: dict[Hook, str]
     templates: dict[Template, str]
     policy: str
-    rules: str | None = None
+    cron: str | None = None

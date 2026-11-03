@@ -20,6 +20,15 @@ class Status(enum.Enum):
     CLOSED = "closed"
 
 
+class Stage(str, enum.Enum):
+    """str-valued so the hooks' fake beads may keep plain "dev"/"qa" stages."""
+    DEV = "dev"
+    FIX = "fix"
+    QA = "qa"
+    STACK = "stack"
+    OTHER = "other"
+
+
 class Template(enum.Enum):
     REFUSE = "refuse"
     DEV_CLOSE = "dev-close"
@@ -107,6 +116,7 @@ class Bead:
 @dataclass(frozen=True)
 class PhaseFile:
     lead: str
+    profile: str = "lite"
 
     def template(self, which: Template) -> str:
         return f"templates/{which.value}.md"
@@ -289,3 +299,60 @@ class CacheStore:
 class PhaseFilesCli:
     def load(self, path: str, profile: str) -> PhaseFile | Refusal:
         return Refusal(ErrorId.PHASE_UNREADABLE, path=path)
+
+
+# ---- Cron surface: the records a cron decide reads and returns.
+
+class Params:
+    def __init__(self, values: list[tuple[str, int | str]]) -> None:
+        self.values = dict(values)
+
+    def int(self, name: str) -> int | None:
+        v = self.values.get(name)
+        return v if isinstance(v, int) else None
+
+    def text(self, name: str) -> str | None:
+        v = self.values.get(name)
+        return v if isinstance(v, str) else None
+
+
+@dataclass(frozen=True)
+class AssignVars:
+    task_id: str
+    phase: str
+    profile: str
+
+
+@dataclass(frozen=True)
+class Assign:
+    key: str
+    to: str
+    bead_id: str
+    template: str
+    vars: AssignVars
+
+
+@dataclass(frozen=True)
+class Report:
+    key: str
+    queue: str
+    bead_id: str | None
+    text: str
+
+
+@dataclass(frozen=True)
+class Notify:
+    to: str
+    keys: list[str]
+
+
+Action = Assign | Report | Notify
+
+
+@dataclass(frozen=True)
+class PhaseFacts:
+    """Only the facts lite's cron reads; the rest of the stub's fields are not needed by any fake caller."""
+    phase: str
+    now: int
+    phase_file: PhaseFile
+    ready: list[Bead] | None = None

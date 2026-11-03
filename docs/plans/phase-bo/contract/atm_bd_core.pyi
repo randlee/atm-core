@@ -4,8 +4,8 @@ import builtins
 import enum
 import typing
 
-from atm_bd_types import (Action, Bead, BeadStore, CheckState, CollectError, FactKind, Params, PhaseFacts, Refusal,
-                          Stage, Status, TaskState)
+from atm_bd_types import (Action, Bead, BeadStore, CheckState, CollectError, Params, PhaseFacts, Refusal, Stage, Status,
+                          TaskState)
 
 _T = typing.TypeVar("_T")
 
@@ -25,17 +25,11 @@ class OutcomeKind(enum.Enum):
     DRY_RUN = ...
 
 @_record
-class RuleEntry:
-    rule_id: str
-    params: Params
-
-@_record
 class Policy:
-    r"""policy.toml, validated before any read: POLICY_UNKNOWN_RULE, POLICY_NO_COLLECTOR, POLICY_BAD_PARAMS, PROFILE_MISMATCH."""
+    r"""policy.toml, loaded before any read: POLICY_BAD_PARAMS (a param neither int nor text), PROFILE_MISMATCH."""
     profile: str
-    rules: list[RuleEntry]
+    params: Params
     notify_template: str
-    needs: list[FactKind]
 
 @_record
 class ViewRow:
@@ -47,6 +41,7 @@ class ViewRow:
 
 @_record
 class Decision:
+    r"""One tick's decide result after dedupe: actions to execute; Reports already sent stay rows only."""
     actions: list[Action]
     rows: list[ViewRow]
 

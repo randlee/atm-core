@@ -2,6 +2,7 @@
 name = "lite"
 stages = ["dev", "qa"]
 policy = "policy.toml"
+cron = "scripts/atm-bd-cron.py"
 
 [hooks]
 "task.assign" = "scripts/atm-bd-task-assign-hook.py"
