@@ -72,7 +72,7 @@ pub(super) fn read_protected_file(path: &Path) -> Result<String, AtmError> {
     .map_err(|error| config_error(path, format!("cannot open protected parent: {error}")))?;
     verify_file_type(&parent_handle, true)
         .map_err(|error| config_error(path, format!("unsafe parent directory: {error}")))?;
-    verify_security(&parent_handle, true)
+    verify_handle_security(&parent_handle, true)
         .map_err(|error| config_error(path, format!("unsafe parent security: {error}")))?;
 
     let file_handle = open_handle(
@@ -83,7 +83,7 @@ pub(super) fn read_protected_file(path: &Path) -> Result<String, AtmError> {
     .map_err(|error| config_error(path, format!("cannot open trust-root file: {error}")))?;
     verify_file_type(&file_handle, false)
         .map_err(|error| config_error(path, format!("unsafe trust-root file: {error}")))?;
-    verify_security(&file_handle, false)
+    verify_handle_security(&file_handle, false)
         .map_err(|error| config_error(path, format!("unsafe trust-root security: {error}")))?;
 
     let mut bytes = Vec::new();
@@ -170,12 +170,19 @@ fn verify_file_type(handle: &Handle, expect_directory: bool) -> Result<(), &'sta
     Ok(())
 }
 
-fn verify_security(handle: &Handle, is_directory: bool) -> Result<(), &'static str> {
+fn verify_handle_security(handle: &Handle, is_directory: bool) -> Result<(), &'static str> {
     let (descriptor, owner) = read_security_descriptor(handle)?;
-    let _descriptor = descriptor;
+    verify_security(descriptor.0, owner, is_directory)
+}
+
+fn verify_security(
+    descriptor: *mut core::ffi::c_void,
+    owner: *mut core::ffi::c_void,
+    is_directory: bool,
+) -> Result<(), &'static str> {
     let (admins, system) = trusted_sids()?;
     let owner_is_trusted = owner_is_trusted(owner, &admins, &system);
-    let (dacl_protected, dacl) = protected_dacl(_descriptor.0)?;
+    let (dacl_protected, dacl) = protected_dacl(descriptor)?;
     let entries = read_dacl_entries(dacl, &admins, &system)?;
     verify_dacl(
         owner_is_trusted,
@@ -333,5 +340,73 @@ impl Drop for LocalSecurityDescriptor {
     fn drop(&mut self) {
         // SAFETY: GetSecurityInfo allocated this descriptor with LocalAlloc.
         unsafe { LocalFree(self.0) };
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
+    use windows_sys::Win32::Security::{GetSecurityDescriptorOwner, PSECURITY_DESCRIPTOR};
+
+    use super::{LocalSecurityDescriptor, verify_security};
+
+    fn descriptor_from_sddl(sddl: &str) -> (LocalSecurityDescriptor, *mut core::ffi::c_void) {
+        let sddl = sddl.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+        let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        // SAFETY: the SDDL string is null-terminated, and output pointers are writable.
+        assert_ne!(
+            unsafe {
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    sddl.as_ptr(),
+                    1,
+                    &mut descriptor,
+                    std::ptr::null_mut(),
+                )
+            },
+            0,
+            "SDDL must convert to a security descriptor"
+        );
+        assert!(!descriptor.is_null());
+
+        let mut owner = std::ptr::null_mut();
+        let mut owner_defaulted = 0;
+        // SAFETY: descriptor is valid and both output pointers are writable.
+        assert_ne!(
+            unsafe { GetSecurityDescriptorOwner(descriptor, &mut owner, &mut owner_defaulted) },
+            0,
+            "converted descriptor must contain an owner"
+        );
+        assert!(!owner.is_null());
+        (LocalSecurityDescriptor(descriptor), owner)
+    }
+
+    #[test]
+    fn verify_security_accepts_fixed_administrator_owned_protected_sddl() {
+        let (descriptor, owner) = descriptor_from_sddl("O:BAD:P(A;;FA;;;BA)(A;;0x00120089;;;WD)");
+        assert_eq!(verify_security(descriptor.0, owner, false), Ok(()));
+    }
+
+    #[test]
+    fn verify_security_rejects_everyone_write_and_untrusted_owner_sddl() {
+        let (everyone_write, owner) = descriptor_from_sddl("O:BAD:P(A;;FA;;;BA)(A;;0x2;;;WD)");
+        assert_eq!(
+            verify_security(everyone_write.0, owner, false),
+            Err("untrusted trustee can modify, replace, or change trust-root security")
+        );
+
+        let (user_owned, owner) = descriptor_from_sddl("O:BUD:P(A;;FA;;;BA)");
+        assert_eq!(
+            verify_security(user_owned.0, owner, false),
+            Err("owner must be SYSTEM or BUILTIN\\Administrators")
+        );
+    }
+
+    #[test]
+    fn verify_security_rejects_unprotected_dacl_with_specific_reason() {
+        let (descriptor, owner) = descriptor_from_sddl("O:BAD:(A;;FA;;;BA)");
+        assert_eq!(
+            verify_security(descriptor.0, owner, false),
+            Err("DACL must be protected from inheritance")
+        );
     }
 }

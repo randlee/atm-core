@@ -188,11 +188,13 @@ not enough: it does not by itself protect a file that lands via an atomic
 rename, whose destination inode gets a fresh `ctime` from the rename itself
 even when the file's *content* `mtime` is already old (for example,
 preserved from a remote source the transfer script copied from). The
-sweeper therefore requires **both** the entry's `mtime` and its `ctime` to
+sweeper therefore requires **both** the entry's `mtime` and its change time to
 independently be at least `ttl` old before reclaiming it
 (`atm_core::atm_temp_sweeper::EntryAge`/`is_expired`); either signal alone
-being fresh keeps the entry. On a platform with no ctime-equivalent, the
-mtime-only signal decides on its own. The sweeper additionally never
+being fresh keeps the entry. Unix obtains change time from `ctime`; Windows
+reads `FILE_BASIC_INFO.ChangeTime` from an open handle to the entry without
+following a reparse point. On a platform where neither signal is available,
+the mtime-only signal decides on its own. The sweeper additionally never
 reclaims an entry with an `<entry-name>.inprogress` sibling marker file,
 regardless of age — the seam a future writer (`atm send --attach`'s landing
 path, a later sprint) uses to protect an in-flight write beyond what the

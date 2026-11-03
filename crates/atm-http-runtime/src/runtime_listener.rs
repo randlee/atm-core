@@ -49,7 +49,7 @@ pub(crate) async fn bind_loopback_listener(
     Ok((listener, local_address))
 }
 
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "This listener binds the configured Unix domain socket and owns its path guard.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix binds a domain socket; Windows bind_loopback_listener binds TCP (crates/atm-http-runtime/src/runtime_listener.rs).")]
 #[cfg(unix)]
 pub(crate) async fn bind_configured_unix_listener(
     config: &HttpRuntimeConfig,

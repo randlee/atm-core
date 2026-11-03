@@ -335,7 +335,7 @@ impl UnixSocketOwnerUid {
     }
 
     #[must_use]
-    #[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix socket owner uid is applied only when configuring a Unix socket.")]
+    #[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix applies socket owner uid; Windows has no socket uid counterpart: bind_loopback_listener binds TCP (crates/atm-http-runtime/src/runtime_listener.rs).")]
     #[cfg(unix)]
     const fn get(self) -> u32 {
         self.0.get()
@@ -360,7 +360,7 @@ impl UnixSocketMode {
     }
 
     #[must_use]
-    #[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix socket mode is applied only when configuring a Unix socket.")]
+    #[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix applies socket mode; Windows has no socket mode counterpart: bind_loopback_listener binds TCP (crates/atm-http-runtime/src/runtime_listener.rs).")]
     #[cfg(unix)]
     const fn get(self) -> u32 {
         self.0.get()
