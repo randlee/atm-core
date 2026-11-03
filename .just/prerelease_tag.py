@@ -262,6 +262,10 @@ def update_lockfile(repo_root: Path) -> str:
 
 def regenerate_cli_reference(repo_root: Path) -> dict[Path, str]:
     """Regenerate the versioned installed and website CLI references."""
+    env = os.environ.copy()
+    # The generator embeds this candidate's path and launches a sibling binary.
+    # Keep both executables owned by the candidate through build and launch.
+    env["CARGO_TARGET_DIR"] = str(repo_root.resolve() / "target")
     result = subprocess.run(
         [
             "cargo",
@@ -274,6 +278,7 @@ def regenerate_cli_reference(repo_root: Path) -> dict[Path, str]:
             "gen_cli_docs",
         ],
         cwd=repo_root,
+        env=env,
         text=True,
         capture_output=True,
         check=False,
