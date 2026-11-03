@@ -4,6 +4,8 @@
 # dependencies = ["atm-bd-types==0.2.0"]
 # ///
 """task.close: hooks/task-close.md. One write, to the caller's own bead."""
+TIMEOUT_MS = 2500
+
 import sys
 from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookAction, HookReply, HookRequest, PhaseFiles,
                           PhaseFilesCli, Refusal, Status, Template)
@@ -19,11 +21,12 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
         return HookReply.refused(bead)
     if bead.assignee != req.caller:
         return HookReply.refused(Refusal(ErrorId.TASK_NOT_ASSIGNEE, bead=bead.id, agent=bead.assignee or ""))
-    if bead.status != Status.IN_PROGRESS:
-        closed = bead.status == Status.CLOSED
-        return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED if closed else ErrorId.BEAD_NOT_READY, bead=bead.id))
+    if bead.status not in (Status.IN_PROGRESS, Status.CLOSED):
+        return HookReply.refused(Refusal(ErrorId.BEAD_NOT_READY, bead=bead.id))
     if isinstance(transition := Transition.select(req, bead), Refusal):
         return HookReply.refused(transition)
+    if bead.status == Status.CLOSED and transition == Transition.GIVE_BACK:
+        return HookReply.refused(Refusal(ErrorId.BEAD_CLOSED, bead=bead.id))
 
     match transition:
         case Transition.GIVE_BACK:  # T-CLOSE-01
@@ -53,13 +56,24 @@ def hook(req: HookRequest, beads: BeadStore, phases: PhaseFiles) -> HookReply:
                 return HookReply.refused(target)
             if verdict.sha != target.head:
                 return HookReply.refused(Refusal(ErrorId.QA_NOT_ON_STACK, sha=verdict.sha, branch=target.branch, head=target.head))
+            ids = [finding.id for finding in verdict.findings] + [bead.sprint]
+            if any(not finding.blocking for finding in verdict.findings):
+                ids.append(bead.phase)
+            if (failed := beads.refresh(list(dict.fromkeys(ids)))) is not None:
+                return HookReply.refused(failed)
             for finding in verdict.findings:  # each poured finding bead exists and blocks the sprint (blocking) or phase bead
                 if isinstance(poured := beads.show(finding.id), Refusal):
                     return HookReply.refused(poured)
                 if not poured.blocks(bead.sprint if finding.blocking else bead.phase):
                     return HookReply.refused(Refusal(ErrorId.FINDINGS_NOT_POURED, ids=[finding.id], sprint=bead.sprint))
             patch, action = BeadPatch.close(bead, verdict), HookAction.close(phase.template(Template.QA_FINDINGS), verdict)
+        case Transition.LAND:  # T-CLOSE-05
+            if isinstance(merged := req.merged(), Refusal):
+                return HookReply.refused(merged)
+            patch, action = BeadPatch.close(bead, merged), HookAction.close(phase.template(Template.LAND_CLOSE), merged)
 
+    if bead.status == Status.CLOSED:
+        return HookReply.handled([action])
     if (failed := beads.update(patch, actor=req.caller)) is not None:
         return HookReply.refused(failed)
     return HookReply.handled([action])

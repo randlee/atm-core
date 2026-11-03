@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 pub use crate::hook::{
     AssignTransition, Bead, BeadPatch, BeadStore, CloseTransition, Ctx, ErrorId, Evidence, Finding, Guard, Hook, Layer,
-    PhaseFile, PhaseFiles, QaFail, QaPass, Refusal, Sha, Stack, Stage, StartTransition, Status, Template, TemplateFile,
+    Merged, PatchKind, PhaseFile, PhaseFiles, QaFail, QaPass, Refusal, Sha, Stack, Stage, StartTransition, Status, Template, TemplateFile,
 };
 pub use crate::wire::{CloseVars, HookAction, HookReply, HookRequest, Outcome};
 
@@ -25,6 +25,9 @@ pub struct Profile {
     /// The script whose `decide` the framework calls each tick (`Cron`); none: the cron decides nothing.
     #[serde(default)]
     pub cron: Option<String>,
+    /// Policy agent parameter -> startup-message parameter.
+    #[serde(default)]
+    pub startup: BTreeMap<String, String>,
 }
 
 /// One member per collector.
@@ -76,8 +79,13 @@ pub struct PhaseFacts {
     pub errors: Vec<CollectError>,
 }
 
+/// What a review assignment points at: repo from the phase file key `repo`; branch from the
+/// dev bead; pr_number and commit from the StackFact on that branch (its pr and head).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AssignVars { pub task_id: String, pub phase: String, pub profile: String }
+pub struct ReviewTarget { pub repo: String, pub pr_number: u64, pub branch: String, pub commit: String }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AssignVars { pub task_id: String, pub phase: String, pub profile: String, pub review: Option<ReviewTarget> }
 
 /// `key` dedupes: a Report whose key is in REPORTED_KEYS stays a view row only.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,6 +113,7 @@ impl Params {
 
 /// The profile's cron script, the plug-in's one cron entry point: pure, no I/O. The framework collects
 /// every fact, calls `decide` once per tick, then dedupes and executes the returned actions.
+/// Intentionally open: each plug-in supplies its own decision logic.
 pub trait Cron {
     fn decide(&self, facts: &PhaseFacts, params: &Params) -> Vec<Action>;
 }

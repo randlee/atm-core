@@ -1,10 +1,10 @@
-# atm-bd-types 0.3.0 framework surface: the same for every profile. Policy loading, decision record, view,
+# atm-bd-types 0.4.0 framework surface: the same for every profile. Policy loading, decision record, view,
 # executor outcomes, ports. The framework executes the Actions a plug-in decides; plug-ins never import this.
 import builtins
 import enum
 import typing
 
-from atm_bd_types import (Action, Bead, BeadStore, CheckState, CollectError, Params, PhaseFacts, Refusal, Stage, Status,
+from atm_bd_types import (Action, Bead, BeadStore, CheckState, CollectError, Layer, Merged, Params, PhaseFacts, QaFail, QaPass, Refusal, Stack, Stage, Status,
                           TaskState)
 
 _T = typing.TypeVar("_T")
@@ -124,3 +124,7 @@ class BeadsCache(BeadStore, typing.Protocol):
 class Ports:
     runner: CommandRunner
     cache: BeadsCache
+
+def stack_of(bead: Bead) -> Stack | None: ...
+
+def encode_evidence(evidence: Layer | QaPass | QaFail | Merged) -> str: ...

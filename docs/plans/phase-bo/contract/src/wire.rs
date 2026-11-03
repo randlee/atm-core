@@ -15,8 +15,14 @@ enum TaskOp { Start, Close { outcome: Outcome, #[serde(default, skip_serializing
 #[derive(Clone, Debug, Deserialize)]
 enum Source { Inline(String), File(IgnoredAny), Template(IgnoredAny) }
 
-#[derive(Clone, Debug, Deserialize)]
-struct Address { agent: String }
+/// atm-core `AgentAddressWire`: echoed unchanged into the close action's `to`.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct Address {
+    agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")] chat_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] team: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] host: Option<String>,
+}
 
 /// The fields of ATM's task write request (`send::WriteRequest`) a hook reads or echoes.
 #[derive(Clone, Debug, Deserialize)]
@@ -44,6 +50,10 @@ fn invalid(field: &str) -> Refusal { Refusal::new(ErrorId::RequestInvalid).with(
 fn bad_verdict() -> Refusal { Refusal::new(ErrorId::QaVerdict) }
 
 enum Verdict { Pass(QaPass), Findings(QaFail) }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawMerged { merged: String }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -102,6 +112,14 @@ impl HookRequest {
     pub fn qa_findings(&self) -> Result<QaFail, Refusal> {
         match self.verdict()? { Verdict::Findings(f) => Ok(f), Verdict::Pass(_) => Err(bad_verdict()) }
     }
+    pub fn merged(&self) -> Result<Merged, Refusal> {
+        let invalid = || Refusal::new(ErrorId::LandEvidence);
+        let blocks: Vec<RawMerged> = self.close_report().unwrap_or("").split("```").skip(1).step_by(2)
+            .filter_map(|b| serde_json::from_str(b.strip_prefix("json").unwrap_or(b).trim()).ok()).collect();
+        let [raw] = blocks.as_slice() else { return Err(invalid()) };
+        Sha::parse(&raw.merged).ok_or_else(invalid)?;
+        Ok(Merged { sha: raw.merged.clone() })
+    }
 }
 
 impl CloseTransition {
@@ -110,6 +128,7 @@ impl CloseTransition {
         match (req.outcome().ok_or_else(|| invalid("outcome"))?, bead.stage) {
             (Outcome::Refused | Outcome::Cancelled, _) => Ok(Self::GiveBack),
             (Outcome::Completed, Stage::Dev | Stage::Fix) => Ok(Self::WorkClose),
+            (Outcome::Completed, Stage::Land) => Ok(Self::Land),
             (Outcome::Completed, Stage::Qa) => match req.verdict()? { Verdict::Pass(_) => Ok(Self::QaPass), Verdict::Findings(_) => Ok(Self::QaFindings) },
             (Outcome::Completed, Stage::Stack | Stage::Other) => Err(invalid("stage")),
         }
@@ -119,13 +138,14 @@ impl CloseTransition {
 /// `--vars` of the close action: a layer, a sha, a sha plus finding ids, or the give-back reason.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
-pub enum CloseVars { Layer(Layer), Sha { sha: Sha }, ShaIds { sha: Sha, ids: Vec<String> }, Reason { reason: String } }
+pub enum CloseVars { Layer(Layer), Sha { sha: Sha }, ShaIds { sha: Sha, ids: Vec<String> }, Reason { reason: String }, MergedSha { sha: String } }
 
 impl From<&Evidence> for CloseVars {
     fn from(e: &Evidence) -> Self {
         match e {
             Evidence::Layer(l) => CloseVars::Layer(l.clone()),
             Evidence::QaPass(p) => CloseVars::Sha { sha: p.sha.clone() },
+            Evidence::Merged(m) => CloseVars::MergedSha { sha: m.sha.clone() },
             Evidence::QaFail(f) => CloseVars::ShaIds { sha: f.sha.clone(), ids: f.findings.iter().map(|x| x.id.clone()).collect() },
         }
     }
@@ -155,6 +175,8 @@ struct CloseBody {
     current_dir: String,
     caller_identity: String,
     caller_team: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to: Option<Address>,
     message_source: MessageSource,
     requires_ack: bool,
     task_id: String,
@@ -176,7 +198,7 @@ impl HookAction {
         };
         HookAction { command: "task.close", request: CloseBody {
             home_dir: b.home_dir.clone(), current_dir: b.current_dir.clone(), caller_identity: req.caller.clone(),
-            caller_team: b.caller_team.clone(), message_source: MessageSource::Template(source), requires_ack: false,
+            caller_team: b.caller_team.clone(), to: b.to.clone(), message_source: MessageSource::Template(source), requires_ack: false,
             task_id: req.task_id.clone(), task_op: TaskOp::Close { outcome: req.outcome().unwrap_or(Outcome::Completed), reason: None },
             dry_run: b.dry_run,
         } }
@@ -218,12 +240,14 @@ mod tests {
 
     const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
-    fn close_request(report: &str) -> HookRequest {
+    fn close_request(report: &str) -> HookRequest { close_request_to(report, serde_json::Value::Null) }
+
+    fn close_request_to(report: &str, to: serde_json::Value) -> HookRequest {
         let stdin = serde_json::json!({
             "schema_version": "1.0.0", "hook": "task.close", "team": "t", "phase": "bo",
             "caller": {"identity": "qa", "team": "t", "host": null}, "custom": {},
             "request": {"home_dir": "/h", "current_dir": "/r", "caller_identity": "qa", "caller_team": "t",
-                "to": null, "message_source": {"Inline": report}, "requires_ack": false, "task_id": "bo-3",
+                "to": to, "message_source": {"Inline": report}, "requires_ack": false, "task_id": "bo-3",
                 "task_op": {"op": "close", "outcome": "completed"}, "dry_run": false}
         });
         HookRequest::parse(&stdin.to_string()).expect("fixture decodes")
@@ -254,5 +278,36 @@ mod tests {
             r#""canonical_template_root":"/r/t","raw_file_bytes":[111,107],"input_defaults":{{}},"var_file_values":{{"sha":"{}"}},"#,
             r#""explicit_values":{{}},"environment_values":{{}}}}}},"requires_ack":false,"task_id":"bo-3","#,
             r#""task_op":{{"op":"close","outcome":"completed"}},"dry_run":false}}}}]}}"#), SHA));
+    }
+
+    #[test]
+    fn close_action_echoes_destination() {
+        // atm-core write/pipeline.rs refuses a task write with no `to`: "message write is missing a destination".
+        let to = serde_json::json!({"agent": "lead", "team": "t", "host": "h1"});
+        let req = close_request_to(&format!("done\n```json\n{{\"verdict\": \"PASS\", \"sha\": \"{SHA}\"}}\n```\n"), to.clone());
+        let pass = req.qa_pass().expect("one PASS block");
+        let t = TemplateFile { path: "/r/t/qa-pass.md.j2".into(), root: "/r/t".into(), bytes: b"ok".to_vec() };
+        let reply = HookReply::handled(vec![HookAction::close(&req, &t, CloseVars::from(&Evidence::QaPass(pass)))]);
+        let json: serde_json::Value = serde_json::from_str(&reply.to_json(Some(req.hook()))).expect("reply is JSON");
+        assert_eq!(json["atm-action"][0]["request"]["to"], to);
+    }
+
+    #[test]
+    fn land_select_and_merged_evidence_validate_report() {
+        let req = close_request(&format!("done\n```json\n{{\"merged\":\"{SHA}\"}}\n```"));
+        let bead = Bead { id: "bo-3".into(), status: Status::InProgress, stage: Stage::Land, assignee: Some("qa".into()),
+            open_blockers: vec![], blocks_ids: vec![], branch: String::new(), stack_bead: String::new(),
+            sprint: String::new(), phase: String::new(), checked_bead: None, stack: None };
+        assert_eq!(CloseTransition::select(&req, &bead), Ok(CloseTransition::Land));
+        let merged = req.merged().expect("one merged block");
+        assert_eq!(merged.sha, SHA);
+        let t = TemplateFile { path: "land".into(), root: "/r".into(), bytes: b"ok".to_vec() };
+        let json: serde_json::Value = serde_json::from_str(&HookReply::handled(vec![HookAction::close(&req, &t,
+            CloseVars::from(&Evidence::Merged(merged)))]).to_json(Some(req.hook()))).expect("reply is JSON");
+        assert_eq!(json["atm-action"][0]["request"]["message_source"]["Template"]["var_file_values"]["sha"], SHA);
+        for report in ["missing", "```json\n{\"merged\":\"bad\"}\n```",
+                       "```json\n{\"merged\":\"0123456789abcdef0123456789abcdef01234567\",\"extra\":1}\n```"] {
+            assert!(close_request(report).merged().is_err());
+        }
     }
 }
