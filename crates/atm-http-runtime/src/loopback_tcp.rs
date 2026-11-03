@@ -374,6 +374,96 @@ fn restrict_record_to_owner(path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
+/// Set a deterministic current-user owner and fixed DACL for Windows test records.
+#[cfg(all(test, windows))]
+pub(crate) fn set_test_record_security(path: &Path, sddl: &str) {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr::null_mut;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, LocalFree};
+    use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
+    use windows_sys::Win32::Security::{
+        DACL_SECURITY_INFORMATION, GetTokenInformation, InitializeSecurityDescriptor,
+        OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, SECURITY_DESCRIPTOR,
+        SetFileSecurityW, SetSecurityDescriptorOwner, TOKEN_QUERY, TOKEN_USER, TokenUser,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    struct Token(HANDLE);
+    impl Drop for Token {
+        fn drop(&mut self) {
+            // SAFETY: the token is an owned handle returned by OpenProcessToken.
+            unsafe { CloseHandle(self.0) };
+        }
+    }
+    let wide = path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let mut raw_token = null_mut();
+    // SAFETY: the process pseudo-handle is valid and output storage is writable.
+    assert_ne!(
+        unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw_token) },
+        0
+    );
+    let token = Token(raw_token);
+    let mut needed = 0;
+    // SAFETY: the null buffer requests the required token-information size.
+    unsafe { GetTokenInformation(token.0, TokenUser, null_mut(), 0, &mut needed) };
+    assert_ne!(needed, 0);
+    let mut buffer = vec![0_usize; (needed as usize).div_ceil(std::mem::size_of::<usize>())];
+    // SAFETY: buffer is aligned and has at least the requested number of bytes.
+    assert_ne!(
+        unsafe {
+            GetTokenInformation(
+                token.0,
+                TokenUser,
+                buffer.as_mut_ptr().cast(),
+                needed,
+                &mut needed,
+            )
+        },
+        0
+    );
+    // SAFETY: a successful TokenUser response starts with TOKEN_USER.
+    let sid = unsafe { (*buffer.as_ptr().cast::<TOKEN_USER>()).User.Sid };
+    // SAFETY: initialization below fills this writable descriptor before use.
+    let mut security: SECURITY_DESCRIPTOR = unsafe { std::mem::zeroed() };
+    let descriptor = (&mut security as *mut SECURITY_DESCRIPTOR).cast();
+    // SAFETY: descriptor and token SID stay live through SetFileSecurityW.
+    assert_ne!(unsafe { InitializeSecurityDescriptor(descriptor, 1) }, 0);
+    assert_ne!(unsafe { SetSecurityDescriptorOwner(descriptor, sid, 0) }, 0);
+    assert_ne!(
+        unsafe { SetFileSecurityW(wide.as_ptr(), OWNER_SECURITY_INFORMATION, descriptor) },
+        0
+    );
+    let text = sddl.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+    let mut dacl_descriptor = null_mut();
+    // SAFETY: text is NUL-terminated and output pointer is writable.
+    assert_ne!(
+        unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                text.as_ptr(),
+                1,
+                &mut dacl_descriptor,
+                null_mut(),
+            )
+        },
+        0
+    );
+    // SAFETY: the converted descriptor and path remain live through the call.
+    let applied = unsafe {
+        SetFileSecurityW(
+            wide.as_ptr(),
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            dacl_descriptor,
+        )
+    };
+    // SAFETY: the conversion API returns a LocalAlloc allocation.
+    unsafe { LocalFree(dacl_descriptor) };
+    assert_ne!(applied, 0);
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};

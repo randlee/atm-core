@@ -2772,6 +2772,8 @@ mod tests {
             serde_json::to_vec(&stale_record).expect("encode stale record"),
         )
         .expect("write stale record");
+        #[cfg(windows)]
+        crate::loopback_tcp::set_test_record_security(&record_path, "D:P(A;;FA;;;OW)");
         let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
             .expect("shared loopback client");
         let error = client
@@ -2800,6 +2802,8 @@ mod tests {
             serde_json::to_vec(&invalid_record).expect("encode invalid record"),
         )
         .expect("write invalid record");
+        #[cfg(windows)]
+        crate::loopback_tcp::set_test_record_security(&record_path, "D:P(A;;FA;;;OW)");
 
         let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
             .expect("shared loopback client");
