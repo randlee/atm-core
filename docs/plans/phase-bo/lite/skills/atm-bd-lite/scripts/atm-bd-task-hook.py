@@ -4,6 +4,8 @@
 # dependencies = ["atm-bd-types==0.2.0"]
 # ///
 """task.close: hooks/task-close.md. One write, to the caller's own bead."""
+TIMEOUT_MS = 2500
+
 import sys
 from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookAction, HookReply, HookRequest, PhaseFiles,
                           PhaseFilesCli, Refusal, Status, Template)

@@ -3,6 +3,8 @@
 intent.md, "The close contract": "When the dev bead closes the QA bead is released and is assigned by the
 existing `atm task assign` path." Who and with what template: policy.toml params `qa_agent`, `qa_template`.
 """
+TIMEOUT_MS = 2500
+
 from atm_bd_types import Action, Assign, AssignVars, Bead, Params, PhaseFacts, Report, Stage, Status
 
 

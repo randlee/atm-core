@@ -4,6 +4,8 @@
 # dependencies = ["atm-bd-types==0.2.0"]
 # ///
 """task.start: hooks/task-start.md. One write: in_progress. Does not read the ledger."""
+TIMEOUT_MS = 2500
+
 import sys
 from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli,
                           Refusal)

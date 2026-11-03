@@ -4,6 +4,8 @@
 # dependencies = ["atm-bd-types==0.2.0"]
 # ///
 """task.assign: hooks/task-assign.md. One write: the assignee."""
+TIMEOUT_MS = 2500
+
 import sys
 from atm_bd_types import (BeadPatch, BeadStore, CacheStore, ErrorId, HookReply, HookRequest, PhaseFiles, PhaseFilesCli,
                           Refusal)
