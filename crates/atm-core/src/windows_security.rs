@@ -17,8 +17,8 @@ use windows_sys::Win32::Security::Authorization::GetNamedSecurityInfoW;
 use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
 use windows_sys::Win32::Security::{
     ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, GetAce, GetLengthSid,
-    GetTokenInformation, IsValidAcl, IsValidSid, OWNER_SECURITY_INFORMATION, PSID, TOKEN_QUERY,
-    TOKEN_USER, TokenUser,
+    GetTokenInformation, IsValidAcl, IsValidSid, OWNER_SECURITY_INFORMATION, PSID, TOKEN_OWNER,
+    TOKEN_QUERY, TOKEN_USER, TokenOwner, TokenUser,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO, FILE_FLAG_BACKUP_SEMANTICS,
@@ -133,26 +133,23 @@ impl Drop for Token {
     }
 }
 
-fn current_user_sid() -> Result<Vec<u8>, WindowsSecurityError> {
-    let mut token = null_mut();
-    // SAFETY: current process pseudo-handle is valid and token is a writable output.
-    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
-        return Err(os_error("OpenProcessToken"));
-    }
-    let token = Token(token);
+fn token_information(
+    token: HANDLE,
+    information_class: windows_sys::Win32::Security::TOKEN_INFORMATION_CLASS,
+) -> Result<Vec<usize>, WindowsSecurityError> {
     let mut needed = 0;
-    // SAFETY: the null buffer requests the required size.
-    unsafe { GetTokenInformation(token.0, TokenUser, null_mut(), 0, &mut needed) };
+    // SAFETY: the null buffer requests the size for this token information class.
+    unsafe { GetTokenInformation(token, information_class, null_mut(), 0, &mut needed) };
     if needed == 0 {
         return Err(os_error("GetTokenInformation size"));
     }
-    // usize storage provides alignment for TOKEN_USER and its embedded pointer.
+    // usize storage provides alignment for TOKEN_USER/TOKEN_OWNER and embedded pointers.
     let mut buffer = vec![0_usize; (needed as usize).div_ceil(std::mem::size_of::<usize>())];
-    // SAFETY: buffer has at least `needed` writable bytes and suitable alignment.
+    // SAFETY: buffer is large and aligned enough for the requested token information class.
     if unsafe {
         GetTokenInformation(
-            token.0,
-            TokenUser,
+            token,
+            information_class,
             buffer.as_mut_ptr().cast(),
             needed,
             &mut needed,
@@ -161,10 +158,28 @@ fn current_user_sid() -> Result<Vec<u8>, WindowsSecurityError> {
     {
         return Err(os_error("GetTokenInformation"));
     }
-    // SAFETY: successful TokenUser response begins with TOKEN_USER; buffer remains live.
-    let sid = unsafe { (*buffer.as_ptr().cast::<TOKEN_USER>()).User.Sid };
-    // SAFETY: sid points into the live, validated TOKEN_USER buffer above.
-    unsafe { copy_sid(sid) }
+    Ok(buffer)
+}
+
+fn current_token_owner_sids() -> Result<(Vec<u8>, Vec<u8>), WindowsSecurityError> {
+    let mut token = null_mut();
+    // SAFETY: current process pseudo-handle is valid and token is a writable output.
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return Err(os_error("OpenProcessToken"));
+    }
+    let token = Token(token);
+    let user_buffer = token_information(token.0, TokenUser)?;
+    let owner_buffer = token_information(token.0, TokenOwner)?;
+    // SAFETY: successful responses begin with their corresponding token information structs;
+    // both buffers stay alive through the copies below.
+    let user_sid = unsafe { (*user_buffer.as_ptr().cast::<TOKEN_USER>()).User.Sid };
+    // SAFETY: same guarantee as above for the TokenOwner response.
+    let default_owner_sid = unsafe { (*owner_buffer.as_ptr().cast::<TOKEN_OWNER>()).Owner };
+    // SAFETY: both pointers refer into their live, validated token-information buffers.
+    let user_sid = unsafe { copy_sid(user_sid)? };
+    // SAFETY: both pointers refer into their live, validated token-information buffers.
+    let default_owner_sid = unsafe { copy_sid(default_owner_sid)? };
+    Ok((user_sid, default_owner_sid))
 }
 
 /// Copy a Windows SID pointer into owned bytes.
@@ -183,6 +198,20 @@ unsafe fn copy_sid(sid: PSID) -> Result<Vec<u8>, WindowsSecurityError> {
 
 fn same_sid(left: &[u8], right: &[u8]) -> bool {
     left == right
+}
+
+fn verify_owner_sid(
+    owner_sid: &[u8],
+    token_user_sid: &[u8],
+    token_default_owner_sid: &[u8],
+) -> Result<(), WindowsSecurityError> {
+    if same_sid(owner_sid, token_user_sid) || same_sid(owner_sid, token_default_owner_sid) {
+        Ok(())
+    } else {
+        Err(WindowsSecurityError::Insecure(
+            "owner is neither the token user nor the token default owner",
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -227,7 +256,8 @@ fn descriptor(path: &Path) -> Result<Descriptor, WindowsSecurityError> {
 pub fn owned_by_current_user(path: &Path) -> Result<bool, WindowsSecurityError> {
     let descriptor = descriptor(path)?;
     let view = descriptor.view()?;
-    Ok(same_sid(&view.owner_sid, &current_user_sid()?))
+    let (token_user_sid, token_default_owner_sid) = current_token_owner_sids()?;
+    Ok(verify_owner_sid(&view.owner_sid, &token_user_sid, &token_default_owner_sid).is_ok())
 }
 
 /// Whether every access-granting DACL entry is for the file owner.
@@ -421,11 +451,8 @@ fn verify_handle_security(file: &std::fs::File) -> Result<(), WindowsSecurityErr
     // SAFETY: all pointers were returned together by GetSecurityInfo above.
     let descriptor = unsafe { Descriptor::from_parts(raw_descriptor, owner, dacl)? };
     let view = descriptor.view()?;
-    if !same_sid(&view.owner_sid, &current_user_sid()?) {
-        return Err(WindowsSecurityError::Insecure(
-            "owner is not the current user",
-        ));
-    }
+    let (token_user_sid, token_default_owner_sid) = current_token_owner_sids()?;
+    verify_owner_sid(&view.owner_sid, &token_user_sid, &token_default_owner_sid)?;
     if !dacl_only_owner(&view)? {
         return Err(WindowsSecurityError::Insecure(
             "DACL grants access to another principal",
@@ -520,7 +547,7 @@ pub(crate) mod tests {
             InitializeSecurityDescriptor, OWNER_SECURITY_INFORMATION, SECURITY_DESCRIPTOR,
             SetSecurityDescriptorOwner,
         };
-        let sid = current_user_sid().unwrap();
+        let sid = current_token_owner_sids().unwrap().0;
         // Provide DWORD-aligned SID storage to the Windows APIs.
         let mut aligned_sid = vec![0_u32; sid.len().div_ceil(4)];
         // SAFETY: storage has at least sid.len() writable bytes and does not overlap sid.
@@ -721,5 +748,47 @@ pub(crate) mod tests {
         let other = [1, 1, 0, 0, 0, 0, 0, 5, 2, 0, 0, 0];
         assert!(same_sid(&owner, &owner));
         assert!(!same_sid(&owner, &other));
+    }
+
+    #[test]
+    fn token_user_owner_sid_is_accepted() {
+        let token_user = [
+            1, 5, 0, 0, 0, 0, 0, 5, 21, 0, 0, 0, 100, 0, 0, 0, 200, 0, 0, 0, 44, 1, 0, 0, 233, 3,
+            0, 0,
+        ];
+        let token_default_owner = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0];
+
+        assert!(verify_owner_sid(&token_user, &token_user, &token_default_owner).is_ok());
+    }
+
+    #[test]
+    fn token_default_owner_sid_is_accepted() {
+        let token_user = [
+            1, 5, 0, 0, 0, 0, 0, 5, 21, 0, 0, 0, 100, 0, 0, 0, 200, 0, 0, 0, 44, 1, 0, 0, 233, 3,
+            0, 0,
+        ];
+        let token_default_owner = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0];
+
+        assert!(verify_owner_sid(&token_default_owner, &token_user, &token_default_owner).is_ok());
+    }
+
+    #[test]
+    fn foreign_owner_sid_is_rejected_when_token_is_elevated() {
+        let token_user = [
+            1, 5, 0, 0, 0, 0, 0, 5, 21, 0, 0, 0, 100, 0, 0, 0, 200, 0, 0, 0, 44, 1, 0, 0, 233, 3,
+            0, 0,
+        ];
+        let token_default_owner = [1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0];
+        let foreign_owner = [
+            1, 5, 0, 0, 0, 0, 0, 5, 21, 0, 0, 0, 100, 0, 0, 0, 200, 0, 0, 0, 44, 1, 0, 0, 234, 3,
+            0, 0,
+        ];
+
+        assert!(matches!(
+            verify_owner_sid(&foreign_owner, &token_user, &token_default_owner),
+            Err(WindowsSecurityError::Insecure(
+                "owner is neither the token user nor the token default owner"
+            ))
+        ));
     }
 }
