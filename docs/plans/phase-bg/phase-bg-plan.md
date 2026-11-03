@@ -1,15 +1,15 @@
 # Phase bg: migrate to published sc-lint
 
-Rendered from the beads plan (`bd show`). The beads are authoritative; this file is for review.
+Historical sprint detail rendered from the beads plan (`bd show`). The beads are authoritative; the current landed state is summarized below.
 
-> **Current state (2026-11-01).** bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit runner, moved repo lint steps into `.sc-lint/install.json`, and removed the in-tree analyzers. The kit now owns Windows-target cross compilation tools and rustup targets through its `tools` contract. This cleanup removes the private Python bridge: each Python lint and test row has Linux, macOS and Windows variants that invoke the `.bootstrap-venv` interpreter directly, and the test runner selects the host variant. It also adds the macOS-host Windows-target Clippy row and removes redundant setup infrastructure. See the linked bead history for earlier decisions and sprint details.
+> **Current landed state.** atm-core uses the published sc-lint 0.8.4 adoption kit with `minimum_version = "0.8.4"`. bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit runner, moved repo lint steps into `.sc-lint/install.json`, and removed the vendored `sc-lint-boundary` and `sc-lint-directives` crates. The kit owns Windows-target cross compilation tools and rustup targets through its `tools` contract. The private Python bridge and redundant setup infrastructure are gone: each Python lint and test row has Linux, macOS and Windows variants that invoke the `.bootstrap-venv` interpreter directly, and the test runner selects the host variant. macOS-host Windows-target Clippy is configured. The historical sprint snapshots below retain their original versions and decisions; see the linked bead history for subsequent changes.
 
 ---
 
-## atm-phase-bg: phase-bg: migrate atm-core lint to published sc-lint 0.7.0
+## atm-phase-bg: phase-bg: migrate atm-core lint to published sc-lint 0.8.4
 
 ## Goal
-atm-core's lint runs on the published sc-lint 0.7.0 crates, wheel and adoption kit, and every local lint tool sc-lint duplicates is deleted after its output is compared. Intent: `docs/plans/phase-bg/intent.md`; anchors ANC-001..021: `docs/plans/phase-bg/anchors.json` (branch plan/phase-bg, PR #1762, until it merges). Replaces the stalled phase-be (atm-phase-be), which waited on 0.6.x.
+atm-core's lint runs on the published sc-lint 0.8.4 crates, wheel and adoption kit, and every local lint tool sc-lint duplicates is deleted after its output is compared. Intent: `docs/plans/phase-bg/intent.md`; anchors ANC-001..021: `docs/plans/phase-bg/anchors.json` (landed with plan PR #1762). Replaces the stalled phase-be (atm-phase-be), which waited on 0.6.x.
 
 ## Sprints (one stack, one package per step, ANC-019)
 | Layer | Sprint | Package | Depends on |
@@ -17,9 +17,9 @@ atm-core's lint runs on the published sc-lint 0.7.0 crates, wheel and adoption k
 | 1 | bg-1 | adoption kit (just setup/lint/upgrade), xwin clippy | plan review |
 | 2 | bg-2 | sc-lint-boundary (sc-boundary) | bg-1 |
 | 3 | bg-3 | sc-lint-portability (sc-portability, unix-gating) | bg-2 |
-| 4 | bg-4 | sc-lint-runtime (runtime-waits); vendored crates deleted | bg-3 |
+| 4 | bg-4 | sc-lint-runtime (runtime-waits) | bg-3 |
 | 5 | bg-5 | sc_lint Python wheel tools | bg-4 |
-| 6 | bg-6 | runner cutover: parallel steps, `just lint ci` platform scope, `just test` manifest, speed | bg-5, gate atm-phase-bg-gate-sclint-runner |
+| 6 | bg-6 | runner cutover: parallel steps, `just lint ci` platform scope, `just test` manifest, speed; vendored crates deleted | bg-5, gate atm-phase-bg-gate-sclint-runner |
 
 ## Phase rules
 - atm-core-specific config goes in the kit's consumer input (`.sc-lint/install.json`) and recipes outside the kit block; kit-managed files are never edited, and a missing extension point is requested on randlee/sc-lint (ANC-002).

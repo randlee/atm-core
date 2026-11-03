@@ -2,6 +2,11 @@
   "analyzers": {
     "boundary": {
       "enabled": true,
+      "exclude_paths_by_rule": {
+        "SCB-CYCLE-001": [
+          "crates/atm-core/src/observability.rs"
+        ]
+      },
       "fail_rules": [
         "SCB-CYCLE-001",
         "SCB-CYCLE-002",
@@ -467,7 +472,7 @@
           "owner_manifest_path": "crates/atm-http-runtime/Cargo.toml"
         }
       ],
-      "reason": "Boundary inventory, crate cycles, forbidden crate edges, and composition-root policy for the atm-core workspace."
+      "reason": "Boundary inventory, crate cycles, forbidden crate edges, and composition-root policy for the atm-core workspace. SCB-CYCLE-001 alone is excluded for crates/atm-core/src/observability.rs: LogFieldValue and LogFieldMap intentionally represent recursive JSON values and maps; every other boundary rule still checks this file. Rule-scoped configuration replaces the source attributes now that randlee/sc-lint#385 has shipped."
     },
     "portability": {
       "config_home_env": "ATM_CONFIG_HOME",
