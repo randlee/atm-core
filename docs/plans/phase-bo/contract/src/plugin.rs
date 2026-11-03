@@ -113,6 +113,7 @@ impl Params {
 
 /// The profile's cron script, the plug-in's one cron entry point: pure, no I/O. The framework collects
 /// every fact, calls `decide` once per tick, then dedupes and executes the returned actions.
+/// Intentionally open: each plug-in supplies its own decision logic.
 pub trait Cron {
     fn decide(&self, facts: &PhaseFacts, params: &Params) -> Vec<Action>;
 }

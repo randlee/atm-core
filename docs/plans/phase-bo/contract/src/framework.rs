@@ -59,11 +59,13 @@ pub struct TickResult { pub facts: PhaseFacts, pub decision: Decision, pub view:
 pub struct CommandResult { pub code: i32, pub stdout: String, pub stderr: String }
 
 /// The only process port: collectors read through it, the executor writes through it.
+/// Intentionally open: a plug-in composition root may replace this framework port.
 pub trait CommandRunner {
     fn run(&self, argv: &[String], stdin: Option<&str>) -> CommandResult;
 }
 
 /// The beads port: `show` (from `BeadStore`) plus the phase's listed and ready beads.
+/// Intentionally open: a plug-in composition root may replace this framework port.
 pub trait BeadsCache: BeadStore {
     fn list(&self, phase: &str) -> Result<Vec<Bead>, Refusal>;
     fn ready(&self, phase: &str) -> Result<Vec<Bead>, Refusal>;
