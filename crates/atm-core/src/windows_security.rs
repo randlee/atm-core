@@ -68,12 +68,62 @@ fn os_error(operation: &'static str) -> WindowsSecurityError {
     }
 }
 
-struct Descriptor(*mut c_void);
-impl Drop for Descriptor {
+struct Descriptor {
+    _allocation: DescriptorAllocation,
+    owner: PSID,
+    dacl: *mut ACL,
+}
+
+struct DescriptorAllocation(*mut c_void);
+impl Drop for DescriptorAllocation {
     fn drop(&mut self) {
         // SAFETY: Windows security-info APIs allocate the descriptor with LocalAlloc.
         unsafe { LocalFree(self.0) };
     }
+}
+
+impl Descriptor {
+    /// Build a descriptor owner and the component pointers returned with it by a Windows
+    /// security-info API.
+    ///
+    /// # Safety
+    /// `raw` must own a live security descriptor allocation, and `owner` and `dacl` must be
+    /// the corresponding component pointers returned by that same API call.
+    unsafe fn from_parts(
+        raw: *mut c_void,
+        owner: PSID,
+        dacl: *mut ACL,
+    ) -> Result<Self, WindowsSecurityError> {
+        if raw.is_null() {
+            return Err(WindowsSecurityError::InvalidDescriptor(
+                "missing descriptor",
+            ));
+        }
+        Ok(Self {
+            _allocation: DescriptorAllocation(raw),
+            owner,
+            dacl,
+        })
+    }
+
+    fn view(&self) -> Result<DescriptorView<'_>, WindowsSecurityError> {
+        if self.owner.is_null() || self.dacl.is_null() {
+            return Err(WindowsSecurityError::InvalidDescriptor(
+                "missing owner or DACL",
+            ));
+        }
+        // SAFETY: from_parts binds these pointers to the live allocation owned by self.
+        let owner_sid = unsafe { copy_sid(self.owner)? };
+        // SAFETY: from_parts guarantees dacl is a component pointer from this descriptor.
+        let dacl = unsafe { &*self.dacl };
+        Ok(DescriptorView { owner_sid, dacl })
+    }
+}
+
+/// Component data borrowed from its owning Windows security descriptor.
+struct DescriptorView<'a> {
+    owner_sid: Vec<u8>,
+    dacl: &'a ACL,
 }
 struct Token(HANDLE);
 impl Drop for Token {
@@ -113,10 +163,15 @@ fn current_user_sid() -> Result<Vec<u8>, WindowsSecurityError> {
     }
     // SAFETY: successful TokenUser response begins with TOKEN_USER; buffer remains live.
     let sid = unsafe { (*buffer.as_ptr().cast::<TOKEN_USER>()).User.Sid };
-    copy_sid(sid)
+    // SAFETY: sid points into the live, validated TOKEN_USER buffer above.
+    unsafe { copy_sid(sid) }
 }
 
-fn copy_sid(sid: PSID) -> Result<Vec<u8>, WindowsSecurityError> {
+/// Copy a Windows SID pointer into owned bytes.
+///
+/// # Safety
+/// `sid` must point to a readable SID allocation for the duration of this call.
+unsafe fn copy_sid(sid: PSID) -> Result<Vec<u8>, WindowsSecurityError> {
     // SAFETY: SID pointers are supplied by Windows from a live descriptor or token.
     if sid.is_null() || unsafe { IsValidSid(sid) } == 0 {
         return Err(WindowsSecurityError::InvalidDescriptor("invalid SID"));
@@ -131,7 +186,7 @@ fn same_sid(left: &[u8], right: &[u8]) -> bool {
 }
 
 #[cfg(test)]
-fn descriptor(path: &Path) -> Result<(Descriptor, PSID, *mut ACL), WindowsSecurityError> {
+fn descriptor(path: &Path) -> Result<Descriptor, WindowsSecurityError> {
     let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
     if wide.contains(&0) {
         return Err(WindowsSecurityError::InvalidDescriptor("path contains NUL"));
@@ -160,12 +215,8 @@ fn descriptor(path: &Path) -> Result<(Descriptor, PSID, *mut ACL), WindowsSecuri
             source: std::io::Error::from_raw_os_error(status as i32),
         });
     }
-    if raw.is_null() {
-        return Err(WindowsSecurityError::InvalidDescriptor(
-            "missing descriptor",
-        ));
-    }
-    Ok((Descriptor(raw), owner, dacl))
+    // SAFETY: all three pointers were returned together by GetNamedSecurityInfoW above.
+    unsafe { Descriptor::from_parts(raw, owner, dacl) }
 }
 
 /// Whether the path owner is the current process user.
@@ -174,8 +225,9 @@ fn descriptor(path: &Path) -> Result<(Descriptor, PSID, *mut ACL), WindowsSecuri
 /// Returns a typed error if the owner or current-user SID cannot be read.
 #[cfg(test)]
 pub fn owned_by_current_user(path: &Path) -> Result<bool, WindowsSecurityError> {
-    let (_descriptor, owner, _) = descriptor(path)?;
-    Ok(same_sid(&copy_sid(owner)?, &current_user_sid()?))
+    let descriptor = descriptor(path)?;
+    let view = descriptor.view()?;
+    Ok(same_sid(&view.owner_sid, &current_user_sid()?))
 }
 
 /// Whether every access-granting DACL entry is for the file owner.
@@ -186,13 +238,15 @@ pub fn owned_by_current_user(path: &Path) -> Result<bool, WindowsSecurityError> 
 /// Returns a typed error if the descriptor cannot be inspected or interpreted.
 #[cfg(test)]
 pub fn dacl_grants_only_owner(path: &Path) -> Result<bool, WindowsSecurityError> {
-    let (_descriptor, owner, dacl) = descriptor(path)?;
-    dacl_only_owner(owner, dacl)
+    let descriptor = descriptor(path)?;
+    let view = descriptor.view()?;
+    dacl_only_owner(&view)
 }
 
-fn dacl_only_owner(owner: PSID, dacl: *mut ACL) -> Result<bool, WindowsSecurityError> {
-    let owner = copy_sid(owner)?;
-    if dacl.is_null() || unsafe { IsValidAcl(dacl) } == 0 {
+fn dacl_only_owner(descriptor: &DescriptorView<'_>) -> Result<bool, WindowsSecurityError> {
+    let owner = &descriptor.owner_sid;
+    let dacl = std::ptr::from_ref(descriptor.dacl).cast_mut();
+    if unsafe { IsValidAcl(dacl) } == 0 {
         return Err(WindowsSecurityError::InvalidDescriptor(
             "null or invalid DACL",
         ));
@@ -200,7 +254,7 @@ fn dacl_only_owner(owner: PSID, dacl: *mut ACL) -> Result<bool, WindowsSecurityE
     // S-1-3-4 is the well-known OWNER RIGHTS SID.
     const OWNER_RIGHTS: &[u8] = &[1, 1, 0, 0, 0, 0, 0, 3, 4, 0, 0, 0];
     // SAFETY: IsValidAcl validated the live DACL and its header.
-    for index in 0..unsafe { (*dacl).AceCount } {
+    for index in 0..descriptor.dacl.AceCount {
         let mut ptr = null_mut();
         // SAFETY: index is below AceCount and ptr is a writable output.
         if unsafe { GetAce(dacl, u32::from(index), &mut ptr) } == 0 || ptr.is_null() {
@@ -229,8 +283,9 @@ fn dacl_only_owner(owner: PSID, dacl: *mut ACL) -> Result<bool, WindowsSecurityE
         if 8 + subauthorities * 4 > sid_capacity {
             return Err(WindowsSecurityError::InvalidDescriptor("SID exceeds ACE"));
         }
-        let sid = copy_sid(sid_ptr.cast_mut().cast())?;
-        if ace.Mask != 0 && !same_sid(&sid, &owner) && !same_sid(&sid, OWNER_RIGHTS) {
+        // SAFETY: the SID range was bounded by the validated ACE header above.
+        let sid = unsafe { copy_sid(sid_ptr.cast_mut().cast())? };
+        if ace.Mask != 0 && !same_sid(&sid, owner) && !same_sid(&sid, OWNER_RIGHTS) {
             return Ok(false);
         }
     }
@@ -363,13 +418,15 @@ fn verify_handle_security(file: &std::fs::File) -> Result<(), WindowsSecurityErr
             "missing descriptor",
         ));
     }
-    let _descriptor = Descriptor(raw_descriptor);
-    if !same_sid(&copy_sid(owner)?, &current_user_sid()?) {
+    // SAFETY: all pointers were returned together by GetSecurityInfo above.
+    let descriptor = unsafe { Descriptor::from_parts(raw_descriptor, owner, dacl)? };
+    let view = descriptor.view()?;
+    if !same_sid(&view.owner_sid, &current_user_sid()?) {
         return Err(WindowsSecurityError::Insecure(
             "owner is not the current user",
         ));
     }
-    if !dacl_only_owner(owner, dacl)? {
+    if !dacl_only_owner(&view)? {
         return Err(WindowsSecurityError::Insecure(
             "DACL grants access to another principal",
         ));
@@ -526,7 +583,7 @@ pub(crate) mod tests {
             },
             0
         );
-        let descriptor = Descriptor(raw);
+        let descriptor = DescriptorAllocation(raw);
         // SAFETY: path and descriptor remain valid throughout the call.
         assert_ne!(
             unsafe {
