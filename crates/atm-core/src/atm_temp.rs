@@ -340,44 +340,27 @@ fn validate_existing_scratch_dir(
 #[cfg(windows)]
 fn validate_existing_scratch_dir(
     path: &Path,
-    metadata: &std::fs::Metadata,
+    _metadata: &std::fs::Metadata,
 ) -> Result<(), AtmTempError> {
+    let guard = crate::windows_security::VerifiedHandle::open(path)
+        .map_err(|error| windows_scratch_inspection_error(path, error))?;
+    let metadata = guard
+        .metadata()
+        .map_err(|error| windows_scratch_inspection_error(path, error))?;
     if !metadata.is_dir() {
         return Err(AtmTempError::NotWritable);
     }
-    let inspect_error =
-        |error: crate::windows_security::WindowsSecurityError| AtmTempError::AtmTempInsecure {
-            path: path.to_path_buf(),
-            reason: format!("cannot inspect Windows owner or DACL: {error}"),
-        };
-    let owner = crate::windows_security::owned_by_current_user(path).map_err(inspect_error)?;
-    if !owner {
-        return windows_scratch_security_decision(path, false, false);
-    }
-    let owner_only =
-        crate::windows_security::dacl_grants_only_owner(path).map_err(inspect_error)?;
-    windows_scratch_security_decision(path, owner, owner_only)
+    Ok(())
 }
 
 #[cfg(windows)]
-fn windows_scratch_security_decision(
+fn windows_scratch_inspection_error(
     path: &Path,
-    owned: bool,
-    owner_only: bool,
-) -> Result<(), AtmTempError> {
-    let reason = if !owned {
-        Some("scratch directory is not owned by the current user")
-    } else if !owner_only {
-        Some("scratch directory DACL grants access to another principal")
-    } else {
-        None
-    };
-    match reason {
-        Some(reason) => Err(AtmTempError::AtmTempInsecure {
-            path: path.to_path_buf(),
-            reason: reason.into(),
-        }),
-        None => Ok(()),
+    error: crate::windows_security::WindowsSecurityError,
+) -> AtmTempError {
+    AtmTempError::AtmTempInsecure {
+        path: path.to_path_buf(),
+        reason: format!("cannot inspect Windows scratch directory: {error}"),
     }
 }
 
@@ -488,15 +471,17 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn windows_foreign_owner_is_rejected_by_policy() {
-        let parent = tempfile::tempdir().expect("temp parent");
-        let path = parent.path().join("scratch");
-        resolve_at_root(path.clone()).expect("create root");
-        // Inject the owner decision without a machine-specific foreign SID.
-        let error =
-            windows_scratch_security_decision(&path, false, true).expect_err("foreign owner");
+    fn windows_foreign_owner_error_names_scratch_root() {
+        let path = Path::new(r"C:\scratch");
+        let error = windows_scratch_inspection_error(
+            path,
+            crate::windows_security::WindowsSecurityError::Insecure(
+                "owner is not the current user",
+            ),
+        );
         assert!(
-            matches!(error, AtmTempError::AtmTempInsecure { reason, .. } if reason.contains("not owned"))
+            matches!(error, AtmTempError::AtmTempInsecure { path: actual, reason }
+            if actual == path && reason.contains("owner"))
         );
     }
 
