@@ -25,6 +25,9 @@ pub struct Profile {
     /// The script whose `decide` the framework calls each tick (`Cron`); none: the cron decides nothing.
     #[serde(default)]
     pub cron: Option<String>,
+    /// Policy agent parameter -> startup-message parameter.
+    #[serde(default)]
+    pub startup: BTreeMap<String, String>,
 }
 
 /// One member per collector.

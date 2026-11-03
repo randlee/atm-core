@@ -15,3 +15,8 @@ dev-close = "templates/dev-close.md.j2"
 qa-pass = "templates/qa-pass.md.j2"
 qa-findings = "templates/qa-findings.md.j2"
 land-close = "templates/land-close.md.j2"
+
+[startup]
+dev_agent = "dev_startup"
+qa_agent = "qa_startup"
+lead = "lead_startup"

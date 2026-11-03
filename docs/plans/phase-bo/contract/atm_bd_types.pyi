@@ -401,3 +401,4 @@ class Profile:
     templates: dict[Template, str]
     policy: str
     cron: str | None = None
+    startup: dict[str, str] = {}
