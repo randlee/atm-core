@@ -96,7 +96,7 @@ class PhaseView:
 class ActionOutcome:
     action: Action
     kind: OutcomeKind
-    failure: str | None
+    failure: Refusal | None
 
 @_record
 class TickResult:

@@ -50,7 +50,7 @@ pub struct PhaseView {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ActionOutcome { pub action: Action, pub kind: OutcomeKind, pub failure: Option<String> }
+pub struct ActionOutcome { pub action: Action, pub kind: OutcomeKind, pub failure: Option<Refusal> }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TickResult { pub facts: PhaseFacts, pub decision: Decision, pub view: PhaseView, pub outcomes: Vec<ActionOutcome> }
