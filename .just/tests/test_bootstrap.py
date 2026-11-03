@@ -303,9 +303,13 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(bootstrap, "binstall_tool_matches", return_value=False),
             mock.patch.object(bootstrap, "sc_compose_matches", return_value=False),
             mock.patch.object(bootstrap, "wyvern_matches", return_value=False),
+            mock.patch.object(bootstrap, "sc_compose_target", return_value="x86_64-pc-windows-msvc") as target,
+            mock.patch.object(bootstrap.platform, "_uname_cache", None),
+            mock.patch.object(bootstrap.platform, "uname", side_effect=AssertionError("unexpected host discovery")),
             mock.patch.object(bootstrap.subprocess, "run") as run,
         ):
             bootstrap.bootstrap(manifest, dry_run=True)
+        self.assertEqual(target.call_count, 3)
         run.assert_not_called()
         verify.assert_not_called()
 
