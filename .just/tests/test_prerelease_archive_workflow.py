@@ -599,11 +599,79 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             require_available_tag.assert_called_once_with(root, "prerelease/v1.5.15")
             candidate_changes.assert_not_called()
 
+    def test_candidate_reference_outputs_survive_another_candidate_build_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first, second = root / "first", root / "second"
+            first.mkdir()
+            second.mkdir()
+            inherited = {
+                "CARGO_TARGET_DIR": str(root / "shared-target"),
+                "CARGO_HOME": str(root / "cargo-cache"),
+                "RUSTC_WRAPPER": "fixture-compiler-cache",
+                "RUSTFLAGS": "--cfg fixture",
+            }
+            outputs = (
+                "crates/atm/tests/cli_surface_baseline.json",
+                "docs/user-documents/cli-reference.md",
+                "site/cli/index.html",
+                "site/cli/cli-reference.css",
+                "site/cli/cli-reference.js",
+            )
+            compiled_roots: dict[str, Path] = {}
+            launched = []
+
+            def cargo_run(command, *, cwd, env=None, **_kwargs):
+                effective_env = os.environ if env is None else env
+                for key in ("CARGO_HOME", "RUSTC_WRAPPER", "RUSTFLAGS"):
+                    self.assertEqual(effective_env[key], inherited[key])
+                target = effective_env.get("CARGO_TARGET_DIR", str(cwd / "target"))
+                compiled_roots[target] = cwd
+                if cwd == first:
+                    # Cargo's build lock is released before executable launch.
+                    other = prerelease_tag.regenerate_cli_reference(second)
+                    self.assertEqual(set(other), {second / path for path in outputs})
+                    self.assertEqual(set(other.values()), {str(second)})
+                executable_root = compiled_roots[target]
+                self.assertEqual(
+                    executable_root, cwd,
+                    "another candidate replaced the generator before launch",
+                )
+                launched.append(executable_root)
+                for relative in outputs:
+                    path = executable_root / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(str(executable_root), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with (mock.patch.dict(os.environ, inherited),
+                  mock.patch.object(prerelease_tag.subprocess, "run", side_effect=cargo_run)):
+                generated = prerelease_tag.regenerate_cli_reference(first)
+                self.assertEqual(set(generated), {first / path for path in outputs})
+                self.assertEqual(set(generated.values()), {str(first)})
+                self.assertEqual(launched, [second, first])
+                self.assertEqual(os.environ["CARGO_TARGET_DIR"], inherited["CARGO_TARGET_DIR"])
+
     def test_candidate_bump_updates_actual_lockfile_collision_safely(self) -> None:
         root = discover_repo_root()
         old_version = workspace_version(root)
         new_version = patch_bump(old_version)
-        changes = prerelease_tag.candidate_changes(root, old_version, new_version)
+        reference_paths = (
+            "crates/atm/tests/cli_surface_baseline.json",
+            "docs/user-documents/cli-reference.md",
+            "site/cli/index.html",
+            "site/cli/cli-reference.css",
+            "site/cli/cli-reference.js",
+        )
+        # Keep real lockfile generation; CLI rendering has its own surface
+        # tests and release-preflight generator check.
+        with mock.patch.object(
+            prerelease_tag, "regenerate_cli_reference",
+            side_effect=lambda candidate: {
+                candidate / path: f"generated {path}" for path in reference_paths
+            },
+        ):
+            changes = prerelease_tag.candidate_changes(root, old_version, new_version)
         lock = tomllib.loads(changes[root / "Cargo.lock"])
         original = tomllib.loads((root / "Cargo.lock").read_text(encoding="utf-8"))
         self.assertEqual(
@@ -625,11 +693,7 @@ class PrereleaseArchiveWorkflowTests(unittest.TestCase):
             ),
             root / ".winget" / "randlee.agent-team-mail.yaml",
             root / "Cargo.lock",
-            root / "crates/atm/tests/cli_surface_baseline.json",
-            root / "docs/user-documents/cli-reference.md",
-            root / "site/cli/index.html",
-            root / "site/cli/cli-reference.css",
-            root / "site/cli/cli-reference.js",
+            *(root / path for path in reference_paths),
         }
         self.assertEqual(set(changes), expected)
         for path in prerelease_tag.python_project_paths(root):

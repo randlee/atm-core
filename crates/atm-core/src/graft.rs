@@ -262,6 +262,29 @@ pub(crate) fn deliver_published_receiver_hook<R>(
 where
     R: RetainedServiceRuntime + ?Sized,
 {
+    deliver_published_receiver_hook_with_transport(
+        runtime,
+        dispatch,
+        deadline,
+        deliver_graft_post_send_with_deadline,
+    )
+}
+
+fn deliver_published_receiver_hook_with_transport<R, F>(
+    runtime: &R,
+    dispatch: &BuiltInPostSendDispatch,
+    deadline: RequestDeadline,
+    deliver: F,
+) -> Result<PostSendEmissionPath, AtmError>
+where
+    R: RetainedServiceRuntime + ?Sized,
+    F: FnOnce(
+        SocketAddr,
+        &LocalCapability,
+        &GraftPostSendRequest,
+        RequestDeadline,
+    ) -> Result<GraftPostSendResponse, AtmError>,
+{
     let PostSendBuiltInTarget::Graft(GraftNudgeTarget {
         recipient,
         recipient_team,
@@ -292,7 +315,7 @@ where
             recipient,
         ));
     };
-    let response = deliver_graft_post_send_with_deadline(
+    let response = deliver(
         lease.endpoint,
         &lease.capability,
         &GraftPostSendRequest {
@@ -883,8 +906,8 @@ mod tests {
         GraftPostSendResponse, GraftPostSendWireRequest, GraftReceiverListener,
         GraftReceiverRequest, GraftReceiverWireRequest, RECEIVER_HOOK_RESULT_HANDOFF_GRACE,
         deliver_graft_post_send, deliver_published_cron_lifecycle, deliver_published_receiver_hook,
-        graft_receiver_lock_path_from_root, graft_receiver_not_registered_error,
-        remaining_hook_budget,
+        deliver_published_receiver_hook_with_transport, graft_receiver_lock_path_from_root,
+        graft_receiver_not_registered_error, remaining_hook_budget,
     };
     use crate::api::RequestDeadline;
     use crate::boundary::{
@@ -905,7 +928,7 @@ mod tests {
     use atm_storage::AgentType;
     use atm_storage::DeliveryRetryCause;
     use std::fs;
-    use std::net::TcpStream;
+    use std::net::{SocketAddr, TcpStream};
     use std::path::Path;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -1419,38 +1442,37 @@ mod tests {
         runtime: &GraftLeaseTestRuntime,
         listener: &GraftReceiverListener,
     ) -> Result<PostSendEmissionPath, AtmError> {
-        std::thread::scope(|scope| {
-            scope.spawn(|| {
-                let mut stream = loop {
-                    if let Some(stream) = listener.poll_accept().expect("poll accept") {
-                        break stream;
-                    }
-                    std::thread::yield_now();
-                };
-                listener
-                    .read_request(&mut stream, Duration::from_secs(3))
-                    .expect("read request");
-                listener
-                    .write_response(&mut stream, &GraftPostSendResponse::Delivered)
-                    .expect("write response");
-            });
-            deliver_published_receiver_hook(
-                runtime,
-                &dispatch_for(test_event()),
-                RequestDeadline::after(Duration::from_secs(3)),
-            )
-        })
+        deliver_through_listener_capturing_request(runtime, listener).0
     }
 
     fn deliver_through_listener_capturing_request(
         runtime: &GraftLeaseTestRuntime,
         listener: &GraftReceiverListener,
     ) -> (Result<PostSendEmissionPath, AtmError>, GraftPostSendRequest) {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::mpsc;
+
+        struct ReceiverFinished(mpsc::Sender<()>);
+
+        impl Drop for ReceiverFinished {
+            fn drop(&mut self) {
+                let _ = self.0.send(());
+            }
+        }
+
+        let client_finished = AtomicBool::new(false);
         std::thread::scope(|scope| {
-            let receiver = scope.spawn(|| {
+            let (finished_tx, finished_rx) = mpsc::channel();
+            let client_finished = &client_finished;
+            let receiver = scope.spawn(move || {
+                // Report completion after socket cleanup, including on panic.
+                let _completion = ReceiverFinished(finished_tx);
                 let mut stream = loop {
                     if let Some(stream) = listener.poll_accept().expect("poll accept") {
                         break stream;
+                    }
+                    if client_finished.load(Ordering::Acquire) {
+                        return None;
                     }
                     std::thread::yield_now();
                 };
@@ -1460,14 +1482,27 @@ mod tests {
                 listener
                     .write_response(&mut stream, &GraftPostSendResponse::Delivered)
                     .expect("write response");
-                request
+                Some(request)
             });
-            let outcome = deliver_published_receiver_hook(
-                runtime,
-                &dispatch_for(test_event()),
-                RequestDeadline::after(Duration::from_secs(3)),
-            );
-            (outcome, receiver.join().expect("receiver thread"))
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                deliver_published_receiver_hook(
+                    runtime,
+                    &dispatch_for(test_event()),
+                    RequestDeadline::after(Duration::from_secs(3)),
+                )
+            }));
+            client_finished.store(true, Ordering::Release);
+            // On timeout, scoped cleanup is still bounded: accept checks the
+            // stop predicate and accepted sockets retain their 3s I/O timeouts.
+            finished_rx
+                .recv_timeout(Duration::from_secs(3))
+                .expect("graft test receiver did not report completion within 3s of client exit");
+            let request = receiver.join();
+            let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+            let request = request
+                .expect("receiver thread")
+                .expect("delivery completed before the receiver accepted a request");
+            (outcome, request)
         })
     }
 
@@ -1556,17 +1591,13 @@ mod tests {
     fn ac3_connect_failure_marks_the_lease_unreachable_and_surfaces_todays_delivery_error() {
         let team = TeamName::from_validated(TEST_TEAM);
         let agent = AgentName::from_validated(TEST_QA);
-        // A bound-then-dropped loopback listener yields a port nothing is
-        // listening on, deterministically producing a connect failure
-        // without depending on any particular unused-port convention.
-        let dead_port = {
-            let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind probe");
-            listener.local_addr().expect("probe addr")
-        };
+        // Drive the transport result directly: a released port can be
+        // claimed by another listener before the hook attempts delivery.
+        let endpoint = SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 1));
         let owner_generation =
             OwnerGeneration::new("01J00000000000000000000030").expect("owner generation");
         let lease = atm_storage::GraftReceiverLease {
-            endpoint: dead_port,
+            endpoint,
             capability: crate::local_http::LocalCapability::generate().expect("capability"),
             owner_generation: owner_generation.clone(),
             registered_at: chrono::Utc::now(),
@@ -1575,15 +1606,28 @@ mod tests {
         };
         let runtime = GraftLeaseTestRuntime::with_lease(Some(lease));
 
-        let error = deliver_published_receiver_hook(
+        let connect_error = AtmError::new(
+            crate::error::AtmErrorCode::PostSendGraftUnavailable,
+            "controlled connection refusal",
+        );
+        let expected_error = serde_json::to_value(&connect_error).expect("serialize error");
+        let error = deliver_published_receiver_hook_with_transport(
             &runtime,
             &dispatch_for(test_event()),
             RequestDeadline::after(Duration::from_secs(3)),
+            |actual_endpoint, _, _, _| {
+                assert_eq!(actual_endpoint, endpoint);
+                Err(connect_error)
+            },
         )
-        .expect_err("a dead endpoint must surface today's connect-failure error");
+        .expect_err("a transport failure must surface the original delivery error");
         assert_eq!(
             error.code(),
             crate::error::AtmErrorCode::PostSendGraftUnavailable
+        );
+        assert_eq!(
+            serde_json::to_value(&error).expect("serialize returned error"),
+            expected_error,
         );
 
         let marked = runtime
