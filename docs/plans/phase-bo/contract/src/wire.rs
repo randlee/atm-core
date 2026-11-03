@@ -15,8 +15,14 @@ enum TaskOp { Start, Close { outcome: Outcome, #[serde(default, skip_serializing
 #[derive(Clone, Debug, Deserialize)]
 enum Source { Inline(String), File(IgnoredAny), Template(IgnoredAny) }
 
-#[derive(Clone, Debug, Deserialize)]
-struct Address { agent: String }
+/// atm-core `AgentAddressWire`: echoed unchanged into the close action's `to`.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct Address {
+    agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")] chat_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] team: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] host: Option<String>,
+}
 
 /// The fields of ATM's task write request (`send::WriteRequest`) a hook reads or echoes.
 #[derive(Clone, Debug, Deserialize)]
@@ -155,6 +161,8 @@ struct CloseBody {
     current_dir: String,
     caller_identity: String,
     caller_team: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    to: Option<Address>,
     message_source: MessageSource,
     requires_ack: bool,
     task_id: String,
@@ -176,7 +184,7 @@ impl HookAction {
         };
         HookAction { command: "task.close", request: CloseBody {
             home_dir: b.home_dir.clone(), current_dir: b.current_dir.clone(), caller_identity: req.caller.clone(),
-            caller_team: b.caller_team.clone(), message_source: MessageSource::Template(source), requires_ack: false,
+            caller_team: b.caller_team.clone(), to: b.to.clone(), message_source: MessageSource::Template(source), requires_ack: false,
             task_id: req.task_id.clone(), task_op: TaskOp::Close { outcome: req.outcome().unwrap_or(Outcome::Completed), reason: None },
             dry_run: b.dry_run,
         } }
@@ -218,12 +226,14 @@ mod tests {
 
     const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
-    fn close_request(report: &str) -> HookRequest {
+    fn close_request(report: &str) -> HookRequest { close_request_to(report, serde_json::Value::Null) }
+
+    fn close_request_to(report: &str, to: serde_json::Value) -> HookRequest {
         let stdin = serde_json::json!({
             "schema_version": "1.0.0", "hook": "task.close", "team": "t", "phase": "bo",
             "caller": {"identity": "qa", "team": "t", "host": null}, "custom": {},
             "request": {"home_dir": "/h", "current_dir": "/r", "caller_identity": "qa", "caller_team": "t",
-                "to": null, "message_source": {"Inline": report}, "requires_ack": false, "task_id": "bo-3",
+                "to": to, "message_source": {"Inline": report}, "requires_ack": false, "task_id": "bo-3",
                 "task_op": {"op": "close", "outcome": "completed"}, "dry_run": false}
         });
         HookRequest::parse(&stdin.to_string()).expect("fixture decodes")
@@ -254,5 +264,17 @@ mod tests {
             r#""canonical_template_root":"/r/t","raw_file_bytes":[111,107],"input_defaults":{{}},"var_file_values":{{"sha":"{}"}},"#,
             r#""explicit_values":{{}},"environment_values":{{}}}}}},"requires_ack":false,"task_id":"bo-3","#,
             r#""task_op":{{"op":"close","outcome":"completed"}},"dry_run":false}}}}]}}"#), SHA));
+    }
+
+    #[test]
+    fn close_action_echoes_destination() {
+        // atm-core write/pipeline.rs refuses a task write with no `to`: "message write is missing a destination".
+        let to = serde_json::json!({"agent": "lead", "team": "t", "host": "h1"});
+        let req = close_request_to(&format!("done\n```json\n{{\"verdict\": \"PASS\", \"sha\": \"{SHA}\"}}\n```\n"), to.clone());
+        let pass = req.qa_pass().expect("one PASS block");
+        let t = TemplateFile { path: "/r/t/qa-pass.md.j2".into(), root: "/r/t".into(), bytes: b"ok".to_vec() };
+        let reply = HookReply::handled(vec![HookAction::close(&req, &t, CloseVars::from(&Evidence::QaPass(pass)))]);
+        let json: serde_json::Value = serde_json::from_str(&reply.to_json(Some(req.hook()))).expect("reply is JSON");
+        assert_eq!(json["atm-action"][0]["request"]["to"], to);
     }
 }
