@@ -1450,18 +1450,23 @@ mod tests {
         listener: &GraftReceiverListener,
     ) -> (Result<PostSendEmissionPath, AtmError>, GraftPostSendRequest) {
         use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::mpsc;
 
-        struct ClientFinished<'a>(&'a AtomicBool);
+        struct ReceiverFinished(mpsc::Sender<()>);
 
-        impl Drop for ClientFinished<'_> {
+        impl Drop for ReceiverFinished {
             fn drop(&mut self) {
-                self.0.store(true, Ordering::Release);
+                let _ = self.0.send(());
             }
         }
 
         let client_finished = AtomicBool::new(false);
         std::thread::scope(|scope| {
-            let receiver = scope.spawn(|| {
+            let (finished_tx, finished_rx) = mpsc::channel();
+            let client_finished = &client_finished;
+            let receiver = scope.spawn(move || {
+                // Report completion after socket cleanup, including on panic.
+                let _completion = ReceiverFinished(finished_tx);
                 let mut stream = loop {
                     if let Some(stream) = listener.poll_accept().expect("poll accept") {
                         break stream;
@@ -1479,16 +1484,22 @@ mod tests {
                     .expect("write response");
                 Some(request)
             });
-            // Also release the accept loop if the client returns early or panics.
-            let completion = ClientFinished(&client_finished);
-            let outcome = deliver_published_receiver_hook(
-                runtime,
-                &dispatch_for(test_event()),
-                RequestDeadline::after(Duration::from_secs(3)),
-            );
-            drop(completion);
-            let request = receiver
-                .join()
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                deliver_published_receiver_hook(
+                    runtime,
+                    &dispatch_for(test_event()),
+                    RequestDeadline::after(Duration::from_secs(3)),
+                )
+            }));
+            client_finished.store(true, Ordering::Release);
+            // On timeout, scoped cleanup is still bounded: accept checks the
+            // stop predicate and accepted sockets retain their 3s I/O timeouts.
+            finished_rx
+                .recv_timeout(Duration::from_secs(3))
+                .expect("graft test receiver did not report completion within 3s of client exit");
+            let request = receiver.join();
+            let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+            let request = request
                 .expect("receiver thread")
                 .expect("delivery completed before the receiver accepted a request");
             (outcome, request)
