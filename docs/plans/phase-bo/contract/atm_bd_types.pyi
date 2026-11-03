@@ -1,4 +1,5 @@
-# atm-bd-types 0.3.0 Python surface: the hook names the lite hooks use, plus the monitor names.
+# atm-bd-types 0.3.0 plug-in surface: what a profile plug-in imports. The names the lite hooks use, read-only facts,
+# Rule, Params/ParamSpec, the Actions a rule returns, and the Profile manifest. Framework names: atm_bd_core.pyi.
 import builtins
 import enum
 import typing
@@ -45,6 +46,7 @@ class CloseTransition(enum.Enum):
     @staticmethod
     def select(req: HookRequest, bead: Bead) -> CloseTransition | Refusal:
         r"""outcome x stage (x verdict kind for QA); REQUEST_INVALID / QA_VERDICT when they do not decode."""
+
 
 class Template(enum.Enum):
     REFUSE = ...
@@ -210,19 +212,36 @@ class BeadStore(typing.Protocol):
 class PhaseFiles(typing.Protocol):
     def load(self, path: str, profile: str) -> PhaseFile | Refusal: ...
 
-
 @typing.final
 class PhaseFilesCli(PhaseFiles):
     def __new__(cls) -> PhaseFilesCli: ...
     def load(self, path: str, profile: str) -> PhaseFile | Refusal: ...
 
-# ---- Monitor surface: collectors -> PhaseFacts -> Rule.decide -> Action -> executor -> PhaseView. Times: unix seconds.
+@typing.final
+class CacheStore(BeadStore):
+    r"""The beads-cache adapter the hooks' entry points construct; the framework's BeadsCache port."""
+    @staticmethod
+    def for_phase(phase: str) -> CacheStore | Refusal: ...
+    def show(self, bead_id: str) -> Bead | Refusal: ...
+    def target_layer(self, qa_bead: Bead) -> Layer | Refusal: ...
+    def update(self, patch: BeadPatch, actor: str) -> Refusal | None: ...
+    def list(self, phase: str) -> builtins.list[Bead] | Refusal: ...
+    def ready(self, phase: str) -> builtins.list[Bead] | Refusal: ...
+
+# ---- Rules: PhaseFacts -> Rule.decide -> Action. Times: unix seconds.
 
 _T = typing.TypeVar("_T")
 
 @typing.dataclass_transform(frozen_default=True)
 def _record(cls: type[_T]) -> type[_T]:
     r"""Stub-only: a frozen Rust record whose constructor takes every field in order."""
+
+
+class Hook(enum.Enum):
+    r"""The ATM task hook a script is registered for."""
+    TASK_ASSIGN = ...
+    TASK_START = ...
+    TASK_CLOSE = ...
 
 class FactKind(enum.Enum):
     TASKS = ...
@@ -250,16 +269,6 @@ class CheckState(enum.Enum):
 class ParamKind(enum.Enum):
     INT = ...
     TEXT = ...
-
-class ActionKind(enum.Enum):
-    ASSIGN = ...
-    REPORT = ...
-    NOTIFY = ...
-
-class OutcomeKind(enum.Enum):
-    SENT = ...
-    FAILED = ...
-    DRY_RUN = ...
 
 @_record
 class TaskFact:
@@ -368,19 +377,6 @@ class Params:
     def int(self, name: str) -> builtins.int | None: ...
     def text(self, name: str) -> str | None: ...
 
-@_record
-class RuleEntry:
-    rule_id: str
-    params: Params
-
-@_record
-class Policy:
-    r"""policy.toml, validated before any read: POLICY_UNKNOWN_RULE, POLICY_NO_COLLECTOR, POLICY_BAD_PARAMS, PROFILE_MISMATCH."""
-    profile: str
-    rules: list[RuleEntry]
-    notify_template: str
-    needs: list[FactKind]
-
 class Rule(typing.Protocol):
     r"""Pure: no I/O. Not called when a needed fact is None."""
     @property
@@ -390,104 +386,11 @@ class Rule(typing.Protocol):
     def decide(self, facts: PhaseFacts, params: Params) -> list[Action]: ...
 
 @_record
-class ViewRow:
-    queue: str
-    key: str
-    bead_id: str | None
-    text: str
-    since: int | None
-
-@_record
-class Decision:
-    actions: list[Action]
-    rows: list[ViewRow]
-
-@_record
-class ViewStep:
-    bead_id: str
-    stage: Stage
-    status: Status
-    assignee: str | None
-    ready: bool
-
-@_record
-class ViewSprint:
-    id: str
-    title: str
-    status: Status
-    depends_on: list[str]
-    steps: list[ViewStep]
-
-@_record
-class ViewTask:
-    task_id: str
-    assignee: str
-    state: TaskState
-    reminders: int
-    since: int | None
-
-@_record
-class ViewAction:
-    r"""outcome None: planned, not executed."""
-    kind: ActionKind
-    to: str
-    bead_id: str | None
-    key: str
-    outcome: OutcomeKind | None
-
-@_record
-class PhaseView:
-    phase: str
-    root_id: str
-    root_closed: bool
-    lead: str
-    generated_at: int
-    sprints: list[ViewSprint]
-    tasks: list[ViewTask]
-    rows: list[ViewRow]
-    actions: list[ViewAction]
-    top_ci: CheckState | None
-    errors: list[CollectError]
-
-@_record
-class ActionOutcome:
-    action: Action
-    kind: OutcomeKind
-    failure: str | None
-
-@_record
-class TickResult:
-    facts: PhaseFacts
-    decision: Decision
-    view: PhaseView
-    outcomes: list[ActionOutcome]
-
-@_record
-class CommandResult:
-    code: int
-    stdout: str
-    stderr: str
-
-class CommandRunner(typing.Protocol):
-    r"""The only process port: collectors read through it, the executor writes through it."""
-    def run(self, argv: list[str], stdin: str | None) -> CommandResult: ...
-
-class BeadsCache(BeadStore, typing.Protocol):
-    r"""show() from BeadStore plus the phase's listed and ready beads."""
-    def list(self, phase: str) -> builtins.list[Bead] | Refusal: ...
-    def ready(self, phase: str) -> builtins.list[Bead] | Refusal: ...
-
-@_record
-class Ports:
-    runner: CommandRunner
-    cache: BeadsCache
-
-@typing.final
-class CacheStore(BeadsCache):
-    @staticmethod
-    def for_phase(phase: str) -> CacheStore | Refusal: ...
-    def show(self, bead_id: str) -> Bead | Refusal: ...
-    def target_layer(self, qa_bead: Bead) -> Layer | Refusal: ...
-    def update(self, patch: BeadPatch, actor: str) -> Refusal | None: ...
-    def list(self, phase: str) -> builtins.list[Bead] | Refusal: ...
-    def ready(self, phase: str) -> builtins.list[Bead] | Refusal: ...
+class Profile:
+    r"""A plug-in's profile.toml: the team pipeline (stages in order), ATM hook -> script, templates, policy, optional rules module. Paths relative to the manifest."""
+    name: str
+    stages: list[str]
+    hooks: dict[Hook, str]
+    templates: dict[Template, str]
+    policy: str
+    rules: str | None = None

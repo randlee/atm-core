@@ -1,5 +1,5 @@
 //! Task-hook surface (hooks/task-*.md): beads, transitions, guarded writes, typed refusals.
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status { Open, InProgress, Blocked, Deferred, Closed }
@@ -42,9 +42,13 @@ error_ids! {
     PolicyNoCollector = "POLICY_NO_COLLECTOR", PolicyBadParams = "POLICY_BAD_PARAMS",
 }
 
-/// The ATM task hook a request came from; selects the fix table.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Hook { TaskAssign, TaskStart, TaskClose }
+/// The ATM task hook a request came from (selects the fix table); a profile registers one script per hook.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+pub enum Hook {
+    #[serde(rename = "task.assign")] TaskAssign,
+    #[serde(rename = "task.start")] TaskStart,
+    #[serde(rename = "task.close")] TaskClose,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Owner { Dev, Qa, Lead }
@@ -187,7 +191,8 @@ impl StartTransition {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Template { Refuse, DevClose, QaPass, QaFindings }
 
 /// A template the phase file names, read at load (the daemon renders from these bytes).

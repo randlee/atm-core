@@ -1,0 +1,15 @@
+# atm-bd-lite profile manifest. Paths are relative to this file.
+name = "lite"
+stages = ["dev", "qa"]
+policy = "policy.toml"
+
+[hooks]
+"task.assign" = "scripts/atm-bd-task-assign-hook.py"
+"task.start" = "scripts/atm-bd-task-start-hook.py"
+"task.close" = "scripts/atm-bd-task-hook.py"
+
+[templates]
+refuse = "templates/refuse.md.j2"
+dev-close = "templates/dev-close.md.j2"
+qa-pass = "templates/qa-pass.md.j2"
+qa-findings = "templates/qa-findings.md.j2"

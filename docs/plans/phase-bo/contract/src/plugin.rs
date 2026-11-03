@@ -1,6 +1,30 @@
-//! Monitor surface: collectors -> facts -> pure rules -> actions -> executor -> view.
-//! Times are unix seconds. Errors are `hook::Refusal` (policy load, cache) or `CollectError` (a failed read).
-use crate::hook::{Bead, PhaseFile, Refusal, Sha, Stack, Stage, Status};
+//! The plug-in surface: task-hook types, read-only facts, `Rule`, `Params`, `Action`, `Profile`.
+//! A plug-in decides; it does no I/O. Times are unix seconds.
+use std::collections::BTreeMap;
+
+use serde::Deserialize;
+
+pub use crate::hook::{
+    AssignTransition, Bead, BeadPatch, BeadStore, CloseTransition, Ctx, ErrorId, Evidence, Finding, Guard, Hook, Layer,
+    PhaseFile, PhaseFiles, QaFail, QaPass, Refusal, Sha, Stack, Stage, StartTransition, Status, Template, TemplateFile,
+};
+pub use crate::wire::{CloseVars, HookAction, HookReply, HookRequest, Outcome};
+
+/// A profile plug-in's manifest (`profile.toml`). Paths are relative to the manifest's directory.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Profile {
+    pub name: String,
+    /// The team pipeline in order: which stage follows which.
+    pub stages: Vec<String>,
+    /// ATM hook -> the script ATM runs for it.
+    pub hooks: BTreeMap<Hook, String>,
+    pub templates: BTreeMap<Template, String>,
+    pub policy: String,
+    /// The module that supplies the policy's rules, if the profile has its own.
+    #[serde(default)]
+    pub rules: Option<String>,
+}
 
 /// One member per collector.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -63,9 +87,6 @@ pub enum Action {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ActionKind { Assign, Report, Notify }
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParamKind { Int, Text }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParamSpec { pub name: String, pub kind: ParamKind }
@@ -85,14 +106,6 @@ impl Params {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuleEntry { pub rule_id: String, pub params: Params }
-
-/// A profile's policy.toml, validated before any read (POLICY_UNKNOWN_RULE, POLICY_NO_COLLECTOR,
-/// POLICY_BAD_PARAMS, PROFILE_MISMATCH, each naming the rule id).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Policy { pub profile: String, pub rules: Vec<RuleEntry>, pub notify_template: String, pub needs: Vec<FactKind> }
-
 /// A pure decision: no I/O. A rule whose needed fact is `None` is not called.
 pub trait Rule {
     fn id(&self) -> &str;
@@ -101,59 +114,21 @@ pub trait Rule {
     fn decide(&self, facts: &PhaseFacts, params: &Params) -> Vec<Action>;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ViewRow { pub queue: String, pub key: String, pub bead_id: Option<String>, pub text: String, pub since: Option<i64> }
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Decision { pub actions: Vec<Action>, pub rows: Vec<ViewRow> }
+    use super::*;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ViewStep { pub bead_id: String, pub stage: Stage, pub status: Status, pub assignee: Option<String>, pub ready: bool }
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ViewSprint { pub id: String, pub title: String, pub status: Status, pub depends_on: Vec<String>, pub steps: Vec<ViewStep> }
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ViewTask { pub task_id: String, pub assignee: String, pub state: TaskState, pub reminders: u32, pub since: Option<i64> }
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OutcomeKind { Sent, Failed, DryRun }
-
-/// `outcome` is `None` when the action was planned, not executed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ViewAction { pub kind: ActionKind, pub to: String, pub bead_id: Option<String>, pub key: String, pub outcome: Option<OutcomeKind> }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PhaseView {
-    pub phase: String,
-    pub root_id: String,
-    pub root_closed: bool,
-    pub lead: String,
-    pub generated_at: i64,
-    pub sprints: Vec<ViewSprint>,
-    pub tasks: Vec<ViewTask>,
-    pub rows: Vec<ViewRow>,
-    pub actions: Vec<ViewAction>,
-    pub top_ci: Option<CheckState>,
-    pub errors: Vec<CollectError>,
+    #[test]
+    fn lite_profile_parses_and_its_scripts_exist() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../lite/skills/atm-bd-lite/profile.toml");
+        let text = std::fs::read_to_string(&path).expect("profile.toml readable");
+        let profile: Profile = toml::from_str(&text).expect("profile.toml parses");
+        let dir = path.parent().expect("profile dir");
+        assert_eq!(profile.hooks.len(), 3, "one script per ATM task hook");
+        for script in profile.hooks.values() {
+            assert!(dir.join(script).is_file(), "{script} named by profile.toml does not exist");
+        }
+    }
 }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ActionOutcome { pub action: Action, pub kind: OutcomeKind, pub failure: Option<String> }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TickResult { pub facts: PhaseFacts, pub decision: Decision, pub view: PhaseView, pub outcomes: Vec<ActionOutcome> }
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CommandResult { pub code: i32, pub stdout: String, pub stderr: String }
-
-/// The only process port: collectors read through it, the executor writes through it.
-pub trait CommandRunner {
-    fn run(&self, argv: &[String], stdin: Option<&str>) -> CommandResult;
-}
-
-/// The beads port: `show` (from `BeadStore`) plus the phase's listed and ready beads.
-pub trait BeadsCache: crate::hook::BeadStore {
-    fn list(&self, phase: &str) -> Result<Vec<Bead>, Refusal>;
-    fn ready(&self, phase: &str) -> Result<Vec<Bead>, Refusal>;
-}
-
-pub struct Ports<'a> { pub runner: &'a dyn CommandRunner, pub cache: &'a dyn BeadsCache }
