@@ -6,7 +6,7 @@ pub enum Status { Open, InProgress, Blocked, Deferred, Closed }
 
 /// The bead's `stage:` label; an unknown label decodes to `Other`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Stage { Dev, Fix, Qa, Stack, Other }
+pub enum Stage { Dev, Fix, Qa, Land, Stack, Other }
 
 /// A 40-hex commit id.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -38,7 +38,7 @@ error_ids! {
     TaskNotAssignee = "TASK_NOT_ASSIGNEE", CloseReasonEmpty = "CLOSE_REASON_EMPTY",
     CloseReportNotInline = "CLOSE_REPORT_NOT_INLINE", StackNotRecorded = "STACK_NOT_RECORDED",
     QaVerdict = "QA_VERDICT", QaNotOnStack = "QA_NOT_ON_STACK", QaNothingToReview = "QA_NOTHING_TO_REVIEW",
-    FindingsNotPoured = "FINDINGS_NOT_POURED", PolicyBadParams = "POLICY_BAD_PARAMS",
+    FindingsNotPoured = "FINDINGS_NOT_POURED", PolicyBadParams = "POLICY_BAD_PARAMS", LandEvidence = "LAND_EVIDENCE",
 }
 
 /// The ATM task hook a request came from (selects the fix table); a profile registers one script per hook.
@@ -75,6 +75,7 @@ pub fn fix(hook: Hook, id: ErrorId) -> Fix {
         (TaskClose, BeadClosed) => row(Dev, &["<bead> is already closed."]),
         (TaskClose, BeadNotReady) => row(Dev, &["<bead> is <status>; `atm task start` it first."]),
         (TaskClose, QaVerdict) => row(Qa, &["End the report with one fenced block {\"verdict\": PASS or FINDINGS, \"sha\": …, \"findings\": [{\"id\": …, \"blocking\": true or false}]}."]),
+        (TaskClose, LandEvidence) => row(Lead, &["Include one fenced JSON block with merged and a 40-hex merge SHA."]),
         (TaskClose, QaNotOnStack) => row(Qa, &["Your verdict is for <sha>; <branch> is at <head>. Review <head>, then close again."]),
         (TaskClose, FindingsNotPoured) => row(Qa, &["Findings <ids> are not poured or do not block <sprint>. Run the pour block, then close again."]),
         (TaskStart | TaskClose, _) => row(Lead, &["Not yours to fix: <what failed>. The lead has it."]),
@@ -156,17 +157,19 @@ pub struct Finding { pub id: String, pub blocking: bool }
 pub struct QaPass { pub sha: Sha }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QaFail { pub sha: Sha, pub findings: Vec<Finding> }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Merged { pub sha: String }
 
 /// What a close records on the bead (T-CLOSE-02..04).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Evidence { Layer(Layer), QaPass(QaPass), QaFail(QaFail) }
+pub enum Evidence { Layer(Layer), QaPass(QaPass), QaFail(QaFail), Merged(Merged) }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AssignTransition { AssignSame, Assign, AssignClosed, AssignNotReady }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StartTransition { Start, StartAgain, StartClosed, StartNotReady }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CloseTransition { GiveBack, WorkClose, QaPass, QaFindings }
+pub enum CloseTransition { GiveBack, WorkClose, QaPass, QaFindings, Land }
 
 impl AssignTransition {
     pub fn select(status: Status, assignee: Option<&str>, wanted: &str) -> Self {
@@ -192,7 +195,7 @@ impl StartTransition {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum Template { Refuse, DevClose, QaPass, QaFindings }
+pub enum Template { Refuse, DevClose, QaPass, QaFindings, LandClose }
 
 /// A template the phase file names, read at load (the daemon renders from these bytes).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -203,7 +206,7 @@ pub struct PhaseFile {
     pub profile: String,
     pub lead: String,
     /// Indexed by `Template as usize`.
-    pub templates: [TemplateFile; 4],
+    pub templates: [TemplateFile; 5],
     /// Other top-level string keys (`root`, `integration_branch`, keys a policy param names).
     pub keys: Vec<(String, String)>,
 }

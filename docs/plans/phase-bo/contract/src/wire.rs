@@ -53,6 +53,10 @@ enum Verdict { Pass(QaPass), Findings(QaFail) }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct RawMerged { merged: String }
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawVerdict { verdict: String, sha: String, #[serde(default)] findings: Vec<RawFinding> }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -108,6 +112,14 @@ impl HookRequest {
     pub fn qa_findings(&self) -> Result<QaFail, Refusal> {
         match self.verdict()? { Verdict::Findings(f) => Ok(f), Verdict::Pass(_) => Err(bad_verdict()) }
     }
+    pub fn merged(&self) -> Result<Merged, Refusal> {
+        let invalid = || Refusal::new(ErrorId::LandEvidence);
+        let blocks: Vec<RawMerged> = self.close_report().unwrap_or("").split("```").skip(1).step_by(2)
+            .filter_map(|b| serde_json::from_str(b.strip_prefix("json").unwrap_or(b).trim()).ok()).collect();
+        let [raw] = blocks.as_slice() else { return Err(invalid()) };
+        Sha::parse(&raw.merged).ok_or_else(invalid)?;
+        Ok(Merged { sha: raw.merged.clone() })
+    }
 }
 
 impl CloseTransition {
@@ -116,6 +128,7 @@ impl CloseTransition {
         match (req.outcome().ok_or_else(|| invalid("outcome"))?, bead.stage) {
             (Outcome::Refused | Outcome::Cancelled, _) => Ok(Self::GiveBack),
             (Outcome::Completed, Stage::Dev | Stage::Fix) => Ok(Self::WorkClose),
+            (Outcome::Completed, Stage::Land) => Ok(Self::Land),
             (Outcome::Completed, Stage::Qa) => match req.verdict()? { Verdict::Pass(_) => Ok(Self::QaPass), Verdict::Findings(_) => Ok(Self::QaFindings) },
             (Outcome::Completed, Stage::Stack | Stage::Other) => Err(invalid("stage")),
         }
@@ -125,13 +138,14 @@ impl CloseTransition {
 /// `--vars` of the close action: a layer, a sha, a sha plus finding ids, or the give-back reason.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
-pub enum CloseVars { Layer(Layer), Sha { sha: Sha }, ShaIds { sha: Sha, ids: Vec<String> }, Reason { reason: String } }
+pub enum CloseVars { Layer(Layer), Sha { sha: Sha }, ShaIds { sha: Sha, ids: Vec<String> }, Reason { reason: String }, MergedSha { sha: String } }
 
 impl From<&Evidence> for CloseVars {
     fn from(e: &Evidence) -> Self {
         match e {
             Evidence::Layer(l) => CloseVars::Layer(l.clone()),
             Evidence::QaPass(p) => CloseVars::Sha { sha: p.sha.clone() },
+            Evidence::Merged(m) => CloseVars::MergedSha { sha: m.sha.clone() },
             Evidence::QaFail(f) => CloseVars::ShaIds { sha: f.sha.clone(), ids: f.findings.iter().map(|x| x.id.clone()).collect() },
         }
     }
@@ -276,5 +290,24 @@ mod tests {
         let reply = HookReply::handled(vec![HookAction::close(&req, &t, CloseVars::from(&Evidence::QaPass(pass)))]);
         let json: serde_json::Value = serde_json::from_str(&reply.to_json(Some(req.hook()))).expect("reply is JSON");
         assert_eq!(json["atm-action"][0]["request"]["to"], to);
+    }
+
+    #[test]
+    fn land_select_and_merged_evidence_validate_report() {
+        let req = close_request(&format!("done\n```json\n{{\"merged\":\"{SHA}\"}}\n```"));
+        let bead = Bead { id: "bo-3".into(), status: Status::InProgress, stage: Stage::Land, assignee: Some("qa".into()),
+            open_blockers: vec![], blocks_ids: vec![], branch: String::new(), stack_bead: String::new(),
+            sprint: String::new(), phase: String::new(), checked_bead: None, stack: None };
+        assert_eq!(CloseTransition::select(&req, &bead), Ok(CloseTransition::Land));
+        let merged = req.merged().expect("one merged block");
+        assert_eq!(merged.sha, SHA);
+        let t = TemplateFile { path: "land".into(), root: "/r".into(), bytes: b"ok".to_vec() };
+        let json: serde_json::Value = serde_json::from_str(&HookReply::handled(vec![HookAction::close(&req, &t,
+            CloseVars::from(&Evidence::Merged(merged)))]).to_json(Some(req.hook()))).expect("reply is JSON");
+        assert_eq!(json["atm-action"][0]["request"]["message_source"]["Template"]["var_file_values"]["sha"], SHA);
+        for report in ["missing", "```json\n{\"merged\":\"bad\"}\n```",
+                       "```json\n{\"merged\":\"0123456789abcdef0123456789abcdef01234567\",\"extra\":1}\n```"] {
+            assert!(close_request(report).merged().is_err());
+        }
     }
 }
