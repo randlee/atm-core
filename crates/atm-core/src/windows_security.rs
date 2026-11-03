@@ -374,8 +374,83 @@ fn verify_handle_security(file: &std::fs::File) -> Result<(), WindowsSecurityErr
     Ok(())
 }
 
+/// Create one directory with the current user as owner and a protected,
+/// inheritable owner-only DACL in the initial creation operation.
+///
+/// # Errors
+/// Returns a typed error if the descriptor cannot be constructed or creation fails.
+pub(crate) fn create_owner_only_directory(path: &Path) -> Result<(), WindowsSecurityError> {
+    use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
+    use windows_sys::Win32::Security::{
+        GetSecurityDescriptorDacl, InitializeSecurityDescriptor, SE_DACL_PROTECTED,
+        SECURITY_ATTRIBUTES, SECURITY_DESCRIPTOR, SetSecurityDescriptorControl,
+        SetSecurityDescriptorDacl, SetSecurityDescriptorOwner,
+    };
+    use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
+
+    let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
+    if wide.contains(&0) {
+        return Err(WindowsSecurityError::InvalidDescriptor("path contains NUL"));
+    }
+    wide.push(0);
+    let sddl = "D:P(A;OICI;FA;;;OW)\0".encode_utf16().collect::<Vec<_>>();
+    let mut raw = null_mut();
+    // SAFETY: the SDDL is NUL-terminated and raw is a writable output.
+    if unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.as_ptr(), 1, &mut raw, null_mut())
+    } == 0
+    {
+        return Err(os_error(
+            "ConvertStringSecurityDescriptorToSecurityDescriptorW",
+        ));
+    }
+    let parsed = Descriptor(raw);
+    let mut present = 0;
+    let mut defaulted = 0;
+    let mut dacl = null_mut();
+    // SAFETY: parsed is live and all outputs are writable.
+    if unsafe { GetSecurityDescriptorDacl(parsed.0, &mut present, &mut dacl, &mut defaulted) } == 0
+        || present == 0
+        || dacl.is_null()
+    {
+        return Err(WindowsSecurityError::InvalidDescriptor(
+            "missing owner-only DACL",
+        ));
+    }
+    let sid = current_user_sid()?;
+    let mut aligned_sid = vec![0_u32; sid.len().div_ceil(4)];
+    // SAFETY: aligned_sid has enough writable storage and does not overlap sid.
+    unsafe {
+        std::ptr::copy_nonoverlapping(sid.as_ptr(), aligned_sid.as_mut_ptr().cast(), sid.len())
+    };
+    // SAFETY: the zeroed descriptor is initialized before use.
+    let mut descriptor: SECURITY_DESCRIPTOR = unsafe { std::mem::zeroed() };
+    let descriptor_ptr = (&mut descriptor as *mut SECURITY_DESCRIPTOR).cast();
+    // SAFETY: descriptor is writable; SID and DACL remain live through CreateDirectoryW.
+    if unsafe { InitializeSecurityDescriptor(descriptor_ptr, 1) } == 0
+        || unsafe { SetSecurityDescriptorOwner(descriptor_ptr, aligned_sid.as_mut_ptr().cast(), 0) }
+            == 0
+        || unsafe { SetSecurityDescriptorDacl(descriptor_ptr, 1, dacl, 0) } == 0
+        || unsafe {
+            SetSecurityDescriptorControl(descriptor_ptr, SE_DACL_PROTECTED, SE_DACL_PROTECTED)
+        } == 0
+    {
+        return Err(os_error("construct owner-only security descriptor"));
+    }
+    let attributes = SECURITY_ATTRIBUTES {
+        nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: descriptor_ptr,
+        bInheritHandle: 0,
+    };
+    // SAFETY: path and descriptor inputs remain valid through the call.
+    if unsafe { CreateDirectoryW(wide.as_ptr(), &attributes) } == 0 {
+        return Err(os_error("CreateDirectoryW"));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
     use windows_sys::Win32::Security::{PROTECTED_DACL_SECURITY_INFORMATION, SetFileSecurityW};
@@ -428,7 +503,7 @@ mod tests {
         );
     }
 
-    fn set_dacl(path: &Path, sddl: &str) {
+    pub(crate) fn set_dacl(path: &Path, sddl: &str) {
         let text = sddl.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
         let wide_path = path
             .as_os_str()

@@ -81,8 +81,8 @@ pub enum AtmTempError {
     /// exists but is not writable.
     NotWritable,
     /// The resolved directory (fallback default or explicit `ATM_TEMP`)
-    /// exists but is not owned by the current uid, or has a group/world
-    /// permission bit set.
+    /// exists but is not owned by the current user, or grants access to
+    /// another principal.
     AtmTempInsecure { path: PathBuf, reason: String },
     /// A transfer script exists at `~/.atm/transfer/<host>` but failed the
     /// executable-bit / owner-uid / not-group-or-world-writable check.
@@ -298,8 +298,8 @@ fn create_scratch_dir(path: &Path) -> Result<(), AtmTempError> {
 
 #[cfg(windows)]
 fn create_scratch_dir(path: &Path) -> Result<(), AtmTempError> {
-    std::fs::create_dir_all(path).map_err(|error| {
-        warn_atm_temp_io_error("create_scratch_dir", path, &error);
+    crate::windows_security::create_owner_only_directory(path).map_err(|error| {
+        tracing::warn!(subsystem = "atm_temp", action = "create_scratch_dir", path = %path.display(), %error, "failed to create owner-only scratch root");
         AtmTempError::NotWritable
     })
 }
@@ -339,15 +339,46 @@ fn validate_existing_scratch_dir(
 
 #[cfg(windows)]
 fn validate_existing_scratch_dir(
-    _path: &Path,
+    path: &Path,
     metadata: &std::fs::Metadata,
 ) -> Result<(), AtmTempError> {
     if !metadata.is_dir() {
         return Err(AtmTempError::NotWritable);
     }
-    // Windows has no POSIX owner/mode model here; `%TEMP%` is already
-    // per-user, so ADR-055 does not add a Windows-specific ACL check.
-    Ok(())
+    let inspect_error =
+        |error: crate::windows_security::WindowsSecurityError| AtmTempError::AtmTempInsecure {
+            path: path.to_path_buf(),
+            reason: format!("cannot inspect Windows owner or DACL: {error}"),
+        };
+    let owner = crate::windows_security::owned_by_current_user(path).map_err(inspect_error)?;
+    if !owner {
+        return windows_scratch_security_decision(path, false, false);
+    }
+    let owner_only =
+        crate::windows_security::dacl_grants_only_owner(path).map_err(inspect_error)?;
+    windows_scratch_security_decision(path, owner, owner_only)
+}
+
+#[cfg(windows)]
+fn windows_scratch_security_decision(
+    path: &Path,
+    owned: bool,
+    owner_only: bool,
+) -> Result<(), AtmTempError> {
+    let reason = if !owned {
+        Some("scratch directory is not owned by the current user")
+    } else if !owner_only {
+        Some("scratch directory DACL grants access to another principal")
+    } else {
+        None
+    };
+    match reason {
+        Some(reason) => Err(AtmTempError::AtmTempInsecure {
+            path: path.to_path_buf(),
+            reason: reason.into(),
+        }),
+        None => Ok(()),
+    }
 }
 
 /// Returns whether `metadata`'s owner uid matches `owner_uid`. A pure
@@ -359,7 +390,7 @@ fn validate_existing_scratch_dir(
 /// (`crate::transfer_script::check_script_safety`), and the daemon's
 /// UDS-socket owner check (`atm_http_runtime::unix_socket::is_owned_by`) all
 /// call this one function rather than each inventing their own comparison.
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix checks uid; Windows has no equivalent owner check: validate_existing_scratch_dir checks directory type only (crates/atm-core/src/atm_temp.rs).")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix checks uid; Windows validate_existing_scratch_dir checks the owner SID (crates/atm-core/src/atm_temp.rs).")]
 #[cfg(unix)]
 #[must_use]
 pub fn is_owned_by_uid(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
@@ -373,7 +404,7 @@ pub fn is_owned_by_uid(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
 /// the `ATM_TEMP` scratch root (below) and the transfer-script safety check
 /// (`crate::transfer_script::check_script_safety`), which the daemon's
 /// UDS-socket precedent's narrower write-only `0o022` check does not cover.
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix checks mode bits; Windows has no equivalent ACL check: validate_existing_scratch_dir checks directory type only (crates/atm-core/src/atm_temp.rs).")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix checks mode bits; Windows validate_existing_scratch_dir checks the DACL (crates/atm-core/src/atm_temp.rs).")]
 #[cfg(unix)]
 pub(crate) fn has_group_or_world_bits(mode: u32) -> bool {
     mode & 0o077 != 0
@@ -425,6 +456,49 @@ mod tests {
     use crate::test_support::FakeEnvSource;
     #[cfg(unix)]
     use crate::test_support::capture_tracing;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_scratch_creation_is_owner_only_and_existing_root_is_accepted() {
+        let parent = tempfile::tempdir().expect("temp parent");
+        let path = parent.path().join("scratch");
+        let created = resolve_at_root(path.clone()).expect("create protected scratch root");
+        assert_eq!(created.as_ref(), path);
+        assert!(crate::windows_security::owned_by_current_user(&path).unwrap());
+        assert!(crate::windows_security::dacl_grants_only_owner(&path).unwrap());
+        let child = path.join("child");
+        std::fs::write(&child, b"private").expect("write child");
+        assert!(crate::windows_security::dacl_grants_only_owner(&child).unwrap());
+        resolve_at_root(path).expect("accept existing owner-only root");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_shared_dacl_scratch_root_is_rejected() {
+        let parent = tempfile::tempdir().expect("temp parent");
+        let path = parent.path().join("scratch");
+        resolve_at_root(path.clone()).expect("create protected root");
+        crate::windows_security::tests::set_dacl(&path, "D:P(A;OICI;FA;;;OW)(A;OICI;FW;;;WD)");
+        let error = resolve_at_root(path.clone()).expect_err("shared DACL must be rejected");
+        assert!(
+            matches!(error, AtmTempError::AtmTempInsecure { reason, .. } if reason.contains("DACL"))
+        );
+        crate::windows_security::tests::set_dacl(&path, "D:P(A;OICI;FA;;;OW)");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_foreign_owner_is_rejected_by_policy() {
+        let parent = tempfile::tempdir().expect("temp parent");
+        let path = parent.path().join("scratch");
+        resolve_at_root(path.clone()).expect("create root");
+        // Inject the owner decision without a machine-specific foreign SID.
+        let error =
+            windows_scratch_security_decision(&path, false, true).expect_err("foreign owner");
+        assert!(
+            matches!(error, AtmTempError::AtmTempInsecure { reason, .. } if reason.contains("not owned"))
+        );
+    }
 
     #[test]
     fn unix_default_scratch_root_has_uid_suffix() {
