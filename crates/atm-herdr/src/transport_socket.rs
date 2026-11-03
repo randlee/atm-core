@@ -880,4 +880,68 @@ mod tests {
         .await;
         assert!(matches!(expired, Err(HerdrError::Timeout)));
     }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn named_pipe_connect_exchanges_one_request_with_a_server() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::windows::named_pipe::ServerOptions;
+
+        let pipe_name = unique_test_pipe_name();
+        let mut server = ServerOptions::new()
+            .create(&pipe_name)
+            .expect("create test named-pipe server");
+        let endpoint = HerdrEndpoint::NamedPipe(pipe_name);
+
+        let mut client = connect_named_pipe(
+            &endpoint,
+            RequestDeadline::after(Duration::from_secs(5)),
+            PIPE_BUSY_RETRY_DELAY,
+        )
+        .await
+        .expect("connect to test named-pipe server");
+        server.connect().await.expect("accept named-pipe client");
+
+        client
+            .write_all(b"request\n")
+            .await
+            .expect("write one request");
+        let mut request = [0; 8];
+        server
+            .read_exact(&mut request)
+            .await
+            .expect("read one request");
+        assert_eq!(&request, b"request\n");
+
+        server
+            .write_all(b"response\n")
+            .await
+            .expect("write one response");
+        let mut response = [0; 9];
+        client
+            .read_exact(&mut response)
+            .await
+            .expect("read one response");
+        assert_eq!(&response, b"response\n");
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn missing_named_pipe_returns_a_typed_error_before_deadline() {
+        let endpoint = HerdrEndpoint::NamedPipe(unique_test_pipe_name());
+        let deadline = RequestDeadline::after(Duration::from_secs(5));
+
+        let result = connect_named_pipe(&endpoint, deadline, PIPE_BUSY_RETRY_DELAY).await;
+
+        assert!(matches!(result, Err(HerdrError::ServerUnavailable { .. })));
+    }
+
+    #[cfg(windows)]
+    fn unique_test_pipe_name() -> String {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static NEXT_PIPE_ID: AtomicU64 = AtomicU64::new(0);
+        let id = NEXT_PIPE_ID.fetch_add(1, Ordering::Relaxed);
+        format!(r"\\.\pipe\atm-herdr-test-{}-{id}", std::process::id())
+    }
 }
