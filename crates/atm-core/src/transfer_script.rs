@@ -565,37 +565,12 @@ fn check_script_safety(
     host: &HostName,
     metadata: &std::fs::Metadata,
 ) -> Result<(), AtmTempError> {
-    check_script_safety_with_verified_handle(
-        path,
-        host,
-        metadata,
-        crate::windows_security::VerifiedHandle::open,
-    )
-}
-
-#[cfg(windows)]
-fn check_script_safety_with_verified_handle(
-    path: &Path,
-    host: &HostName,
-    metadata: &std::fs::Metadata,
-    verify_with_handle: impl FnOnce(
-        &Path,
-    ) -> Result<
-        crate::windows_security::VerifiedHandle,
-        crate::windows_security::WindowsSecurityError,
-    >,
-) -> Result<(), AtmTempError> {
     if !metadata.is_file() {
         return Err(AtmTempError::TransferScriptUnsafe {
             host: host.clone(),
             reason: format!("{} is not a regular file", path.display()),
         });
     }
-    let _verified_handle =
-        verify_with_handle(path).map_err(|error| AtmTempError::TransferScriptUnsafe {
-            host: host.clone(),
-            reason: format!("could not verify script security: {error}"),
-        })?;
     let profile_home =
         windows_profile_home_for_containment(&ProcessEnvSource).ok_or_else(|| {
             AtmTempError::TransferScriptUnsafe {
@@ -837,51 +812,6 @@ mod tests {
         value.parse().expect("valid host")
     }
 
-    #[cfg(windows)]
-    fn set_owner_only_dacl(path: &Path) {
-        use std::os::windows::ffi::OsStrExt;
-        use std::ptr::null_mut;
-        use windows_sys::Win32::Foundation::LocalFree;
-        use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
-        use windows_sys::Win32::Security::{
-            DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, SetFileSecurityW,
-        };
-
-        let sddl = "D:P(A;;FA;;;OW)"
-            .encode_utf16()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
-        let wide_path = path
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
-        let mut descriptor = null_mut();
-        // SAFETY: the SDDL is NUL-terminated and descriptor is a writable output.
-        assert_ne!(
-            unsafe {
-                ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                    sddl.as_ptr(),
-                    1,
-                    &mut descriptor,
-                    null_mut(),
-                )
-            },
-            0
-        );
-        // SAFETY: the path and converted descriptor remain valid through the call.
-        let result = unsafe {
-            SetFileSecurityW(
-                wide_path.as_ptr(),
-                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                descriptor,
-            )
-        };
-        // SAFETY: ConvertStringSecurityDescriptorToSecurityDescriptorW allocated this value.
-        unsafe { LocalFree(descriptor) };
-        assert_ne!(result, 0);
-    }
-
     #[test]
     fn missing_script_is_not_configured() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -1032,44 +962,6 @@ mod tests {
             matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("reparse point")),
             "{error:?}"
         );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn transfer_script_safety_rejects_a_foreign_owner() {
-        let profile_home =
-            windows_profile_home_for_containment(&ProcessEnvSource).expect("Windows profile home");
-        let dir = tempfile::tempdir_in(profile_home).expect("temp dir under profile");
-        let path = dir.path().join("m5.ps1");
-        std::fs::write(&path, "Write-Output ok\n").expect("write script");
-        let metadata = std::fs::symlink_metadata(&path).expect("script metadata");
-
-        let error = check_script_safety_with_verified_handle(&path, &host("m5"), &metadata, |_| {
-            Err(crate::windows_security::WindowsSecurityError::Insecure(
-                "owner is not the current user",
-            ))
-        })
-        .expect_err("foreign-owned script must be refused");
-
-        assert!(
-            matches!(&error, AtmTempError::TransferScriptUnsafe { reason, .. } if reason.contains("owner is not the current user")),
-            "{error:?}"
-        );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn transfer_script_safety_accepts_a_current_user_owner() {
-        let profile_home =
-            windows_profile_home_for_containment(&ProcessEnvSource).expect("Windows profile home");
-        let dir = tempfile::tempdir_in(profile_home).expect("temp dir under profile");
-        let path = dir.path().join("m5.ps1");
-        std::fs::write(&path, "Write-Output ok\n").expect("write script");
-        set_owner_only_dacl(&path);
-        let metadata = std::fs::symlink_metadata(&path).expect("script metadata");
-
-        check_script_safety(&path, &host("m5"), &metadata)
-            .expect("current-user-owned script under profile is accepted");
     }
 
     /// A verbatim (`\\?\`) drive prefix and its non-verbatim spelling name

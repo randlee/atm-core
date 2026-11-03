@@ -213,7 +213,3 @@ pub use workflow_analytics::{
     LifecycleObservation, WorkflowFact, WorkflowProjectionRequest, WorkflowSelector,
     project_lifecycles,
 };
-
-/// Windows owner and DACL inspection for same-host security checks.
-#[cfg(windows)]
-pub mod windows_security;

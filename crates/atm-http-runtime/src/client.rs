@@ -948,9 +948,6 @@ async fn load_active_loopback_daemon_instance_id(
 fn load_active_loopback_endpoint_blocking(
     endpoint_record_path: &Path,
 ) -> Result<(std::net::SocketAddr, LocalCapability, Ulid), HttpRuntimeClientFailure> {
-    #[cfg(windows)]
-    let contents = read_verified_loopback_record(endpoint_record_path)?;
-    #[cfg(not(windows))]
     let contents = std::fs::read(endpoint_record_path).map_err(|source| {
         if source.kind() == std::io::ErrorKind::NotFound {
             return HttpRuntimeClientFailure::Connect(format!(
@@ -998,32 +995,6 @@ fn load_active_loopback_endpoint_blocking(
         ));
     }
     Ok((endpoint, capability, record.daemon_instance_id))
-}
-
-#[cfg(windows)]
-fn read_verified_loopback_record(path: &Path) -> Result<Vec<u8>, HttpRuntimeClientFailure> {
-    use atm_core::windows_security::{VerifiedHandle, WindowsSecurityError};
-
-    let mut guard = VerifiedHandle::open(path).map_err(|error| {
-        if let WindowsSecurityError::System { source, .. } = &error
-            && source.kind() == std::io::ErrorKind::NotFound
-        {
-            return HttpRuntimeClientFailure::Connect(format!(
-                "local HTTP endpoint record {} is absent: {error}",
-                path.display()
-            ));
-        }
-        HttpRuntimeClientFailure::EndpointRecord(AtmError::daemon_unavailable(format!(
-            "local HTTP endpoint record {} failed security validation: {error}",
-            path.display()
-        )))
-    })?;
-    guard.read_to_end().map_err(|error| {
-        HttpRuntimeClientFailure::EndpointRecord(AtmError::daemon_unavailable(format!(
-            "failed to read verified local HTTP endpoint record {}: {error}",
-            path.display()
-        )))
-    })
 }
 
 /// Physical connection setup for the one shared HTTP client.
@@ -1406,52 +1377,6 @@ mod tests {
             load_active_loopback_endpoint_blocking(&directory.path().join("endpoint.json")),
             Err(HttpRuntimeClientFailure::Connect(_))
         ));
-    }
-
-    #[cfg(windows)]
-    fn windows_endpoint_fixture(sddl: &str) -> (tempfile::TempDir, PathBuf, std::net::SocketAddr) {
-        use atm_core::local_http::{LocalCapability, LocalHttpEndpointRecord};
-        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let path = directory.path().join("local-http.json");
-        let instance = Ulid::from(1_u128);
-        let endpoint = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345);
-        let capability =
-            LocalCapability::parse_base64url(&"A".repeat(43)).expect("fixed capability");
-        let record = LocalHttpEndpointRecord::active(instance, Some(endpoint), None, &capability);
-        std::fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
-        std::fs::write(
-            directory
-                .path()
-                .join(atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE),
-            format!("1:test-owner:{instance}\n"),
-        )
-        .unwrap();
-        crate::loopback_tcp::set_test_record_security(&path, sddl);
-        (directory, path, endpoint)
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn windows_owner_only_endpoint_record_is_accepted() {
-        let (_directory, path, endpoint) = windows_endpoint_fixture("D:P(A;;FA;;;OW)");
-        let (actual, _, instance) =
-            load_active_loopback_endpoint_blocking(&path).expect("owner-only record");
-        assert_eq!(actual, endpoint);
-        assert_eq!(instance, Ulid::from(1_u128));
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn windows_shared_endpoint_record_is_rejected_before_use() {
-        let (_directory, path, _) = windows_endpoint_fixture("D:P(A;;FA;;;OW)(A;;FR;;;WD)");
-        let error = match load_active_loopback_endpoint_blocking(&path) {
-            Err(HttpRuntimeClientFailure::EndpointRecord(error)) => error,
-            _ => panic!("shared endpoint record must be rejected"),
-        };
-        assert_eq!(error.code().as_str(), "ATM_DAEMON_UNAVAILABLE");
-        assert!(error.message().contains(&path.display().to_string()));
-        assert!(error.message().contains("DACL"));
     }
 
     #[cfg(unix)]

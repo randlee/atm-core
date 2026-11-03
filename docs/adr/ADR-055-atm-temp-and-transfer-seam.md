@@ -52,8 +52,8 @@ unaffected either way.
 
 - Unix: `<std::env::temp_dir()>/atm-<uid>`, created with mode `0700` if
   missing.
-- Windows: `<std::env::temp_dir()>\atm` (no uid suffix), created with a
-  protected owner-only DACL if missing.
+- Windows: `<std::env::temp_dir()>\atm` (no uid suffix — `%TEMP%` is already
+  per-user on Windows).
 
 Falling back emits exactly one `tracing::warn!` line naming the default path
 and the `ATM_TEMP` override, mirroring the existing optional-config warning
@@ -63,11 +63,10 @@ Hermes fleet daemon, and any direct `cargo test` invocation booting and
 passing unmodified: none of them sets `ATM_TEMP` today, and none needs to.
 
 **Shared-host safety (critical review F7).** If the resolved directory
-(fallback or an explicit `ATM_TEMP`) already exists, Unix requires the current
-uid and no group or world permission bits. Windows requires the current-user
-owner SID and an owner-only DACL. A failed or unreadable security check returns
-`AtmTempInsecure` rather than adopting a directory another user could have
-pre-created. The same check applies uniformly to the default
+(fallback or an explicit `ATM_TEMP`) already exists and is not owned by the
+current uid, or has any group or world permission bit set, resolution fails
+closed with `AtmTempInsecure` rather than adopting a directory another user
+could have pre-created. The same check applies uniformly to the default
 fallback path and to an explicit `ATM_TEMP` value — there is one security
 check, not two.
 
@@ -328,10 +327,6 @@ its containing `~/.atm/transfer` directory:
    must not pass a naive check, and a verbatim `\\?\`-prefixed path must
    compare equal to its non-verbatim spelling of the same drive/UNC
    location, not mismatch because only one side was `canonicalize()`d).
-3. **Current-user ownership.** The script file's owner SID must match the
-   current process user's SID (`windows_security::owned_by_current_user`);
-   a foreign-owned script is refused. Failure to inspect the owner also
-   fails closed as `TransferScriptUnsafe`.
 
 **The mistake a review caught, and the fix.** The first version of this
 check resolved `profile_home` via `home::os_account_home` (the
@@ -364,22 +359,19 @@ catch it.
 
 **Unix/Windows asymmetry, and what remains deferred.** Unix's check (mode
 bits + owner uid, `mode & 0o077`, decision (c) above) and Windows's check
-(reparse refusal + profile containment + current-user owner SID) are *not*
-parallel implementations of one shared policy — they are the best achievable
-check for each platform's actual security model. Windows has no POSIX
-mode-bits/owner-uid concept to port; it compares the file's Windows owner SID
-with the current process user's SID instead. Unix has no NTFS reparse-point
-or known-folder-profile concept. **Full Windows ACL inspection (who besides
-the current user has write access to the script or its directory) is
-explicitly deferred, not silently assumed closed.** Unlike a Unix mode
-integer, a Windows ACL has no single-comparison shape to check generically —
-enumerating and evaluating
+(reparse refusal + profile containment) are *not* parallel implementations
+of one shared policy — they are the best achievable check for each
+platform's actual security model. Windows has no POSIX mode-bits/owner-uid
+concept to port; Unix has no NTFS reparse-point or known-folder-profile
+concept. **Full Windows ACL inspection (who besides the current user has
+write access to the script or its directory) is explicitly deferred, not
+silently assumed closed.** Unlike a Unix mode integer, a Windows ACL has no
+single-comparison shape to check generically — enumerating and evaluating
 an arbitrary ACL correctly (inherited entries, deny-before-allow ordering,
-well-known SIDs) is real, scoped work this sprint does not include. The scratch-root policy in decision (a) is stricter: Windows now validates
-the current-user owner SID and an owner-only DACL through
-`validate_existing_scratch_dir`. Newly created scratch roots receive a
-protected, inheritable owner-only DACL at creation. This does not change the
-separate transfer-script policy described in this amendment.
+well-known SIDs) is real, scoped work this sprint does not include. This
+mirrors decision (a)'s own Windows scratch-root check
+(`validate_existing_scratch_dir`), which likewise performs no ACL check and
+documents why rather than pretending the gap is closed.
 
 ### Amendment (2026-08-27): synthesized transfer-script `PATH`
 

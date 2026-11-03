@@ -345,18 +345,10 @@ impl Drop for LocalSecurityDescriptor {
 
 #[cfg(all(test, windows))]
 mod tests {
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
     use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
-    use windows_sys::Win32::Security::{
-        DACL_SECURITY_INFORMATION, GetSecurityDescriptorOwner, PROTECTED_DACL_SECURITY_INFORMATION,
-        PSECURITY_DESCRIPTOR, SetFileSecurityW,
-    };
+    use windows_sys::Win32::Security::{GetSecurityDescriptorOwner, PSECURITY_DESCRIPTOR};
 
-    use super::{LocalSecurityDescriptor, read_protected_file, verify_security};
-
-    static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(0);
+    use super::{LocalSecurityDescriptor, verify_security};
 
     fn descriptor_from_sddl(sddl: &str) -> (LocalSecurityDescriptor, *mut core::ffi::c_void) {
         let sddl = sddl.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
@@ -410,65 +402,11 @@ mod tests {
     }
 
     #[test]
-    fn read_protected_file_refuses_a_temporary_file() {
-        let temp_path = unique_temp_file_path();
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)
-            .expect("create temporary trust-root file");
-        set_file_sddl(
-            &temp_path,
-            "D:P(A;;FA;;;BA)(A;;0x0012008b;;;WD)(A;;0x10000;;;OW)",
+    fn verify_security_rejects_unprotected_dacl_with_specific_reason() {
+        let (descriptor, owner) = descriptor_from_sddl("O:BAD:(A;;FA;;;BA)");
+        assert_eq!(
+            verify_security(descriptor.0, owner, false),
+            Err("DACL must be protected from inheritance")
         );
-        let result = read_protected_file(&temp_path);
-        std::fs::remove_file(&temp_path).expect("remove temporary trust-root file");
-
-        let error = result.expect_err("a user-owned temporary file must be refused");
-        assert_eq!(error.code(), atm_storage::AtmErrorCode::ConfigParseFailed);
-    }
-
-    fn unique_temp_file_path() -> PathBuf {
-        let suffix = NEXT_TEMP_FILE.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!(
-            "atm-trust-root-test-{}-{suffix}.json",
-            std::process::id()
-        ))
-    }
-
-    fn set_file_sddl(path: &std::path::Path, sddl: &str) {
-        use std::os::windows::ffi::OsStrExt;
-
-        let path = path
-            .as_os_str()
-            .encode_wide()
-            .chain(Some(0))
-            .collect::<Vec<_>>();
-        let sddl = sddl.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
-        let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
-        // SAFETY: the SDDL string is null-terminated, and output pointers are writable.
-        assert_ne!(
-            unsafe {
-                ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                    sddl.as_ptr(),
-                    1,
-                    &mut descriptor,
-                    std::ptr::null_mut(),
-                )
-            },
-            0,
-            "SDDL must convert to a security descriptor"
-        );
-        // SAFETY: both pointers refer to live null-terminated Windows strings / descriptor.
-        let applied = unsafe {
-            SetFileSecurityW(
-                path.as_ptr(),
-                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-                descriptor,
-            )
-        };
-        // SAFETY: the descriptor was allocated by ConvertStringSecurityDescriptorToSecurityDescriptorW.
-        unsafe { windows_sys::Win32::Foundation::LocalFree(descriptor) };
-        assert_ne!(applied, 0, "test file DACL must be set from fixed SDDL");
     }
 }

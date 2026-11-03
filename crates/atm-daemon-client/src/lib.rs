@@ -76,7 +76,7 @@ impl AsRef<Path> for DaemonLocalIpcEndpoint {
 }
 
 impl DaemonLocalIpcEndpoint {
-    #[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix resolves a socket path; Windows try_connect_local_http_record reads the TCP endpoint record (crates/atm-daemon-client/src/lib.rs).")]
+    #[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "The local Unix IPC endpoint resolves to a filesystem socket path; other platforms use their own endpoint.")]
     #[cfg(unix)]
     fn unix_socket_path(&self) -> Result<PathBuf, AtmError> {
         self.0.parent().map_or_else(
@@ -380,7 +380,7 @@ pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalDaemonConne
     try_connect_with_transport(endpoint, local_daemon_transport()?)
 }
 
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "Unix connects a domain socket; Windows try_connect_local_http_record connects TCP (crates/atm-daemon-client/src/lib.rs).")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "This adapter connects the daemon client through a Unix domain socket.")]
 #[cfg(unix)]
 fn try_connect_unix_socket(
     endpoint: &DaemonLocalIpcEndpoint,
@@ -1022,14 +1022,12 @@ pub fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::net::{SocketAddr, TcpListener};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
-    use atm_storage::{AtmError, AtmErrorCode, LocalCapability};
+    use atm_storage::{AtmError, AtmErrorCode};
     use tempfile::TempDir;
 
     use super::{
@@ -1038,7 +1036,6 @@ mod tests {
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
         HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, next_auto_start_poll_interval,
         resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
-        try_connect_local_http_record,
     };
     #[cfg(unix)]
     use super::{
@@ -1076,102 +1073,6 @@ mod tests {
 
     fn launch_lock_path(tempdir: &TempDir) -> PathBuf {
         tempdir.path().join(HOST_RUNTIME_LAUNCH_LOCK_FILE)
-    }
-
-    fn write_local_http_record(
-        tempdir: &TempDir,
-        record_instance: &str,
-        owner_instance: &str,
-        ipv4_loopback: Option<SocketAddr>,
-    ) -> PathBuf {
-        let capability =
-            LocalCapability::parse_base64url(&"A".repeat(43)).expect("fixed test capability");
-        let record = atm_core::local_http::LocalHttpEndpointRecord::active(
-            record_instance.parse().expect("record instance id"),
-            ipv4_loopback,
-            None,
-            &capability,
-        );
-        let record_path = tempdir
-            .path()
-            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
-        fs::write(
-            &record_path,
-            serde_json::to_vec(&record).expect("serialize local HTTP record"),
-        )
-        .expect("write local HTTP record");
-        fs::write(
-            tempdir
-                .path()
-                .join(atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE),
-            format!("123:owner-token:{owner_instance}\n"),
-        )
-        .expect("write owner record");
-        record_path
-    }
-
-    #[test]
-    fn local_http_record_connects_to_its_loopback_listener() {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind loopback listener");
-        let endpoint = listener.local_addr().expect("listener address");
-        let tempdir = TempDir::new().expect("temp runtime");
-        let record_path = write_local_http_record(
-            &tempdir,
-            "00000000000000000000000001",
-            "00000000000000000000000001",
-            Some(endpoint),
-        );
-
-        let client = try_connect_local_http_record(&record_path).expect("connect to record");
-        let (server, _) = listener.accept().expect("accept client connection");
-
-        assert_eq!(client.peer_addr().expect("client peer"), endpoint);
-        assert_eq!(
-            server.peer_addr().expect("server peer"),
-            client.local_addr().expect("client local")
-        );
-    }
-
-    #[test]
-    fn local_http_record_missing_file_returns_typed_error() {
-        let tempdir = TempDir::new().expect("temp runtime");
-
-        let error = try_connect_local_http_record(&tempdir.path().join("missing.json"))
-            .expect_err("missing record must fail");
-
-        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-    }
-
-    #[test]
-    fn local_http_record_rejects_non_loopback_address() {
-        let tempdir = TempDir::new().expect("temp runtime");
-        let record_path = write_local_http_record(
-            &tempdir,
-            "00000000000000000000000002",
-            "00000000000000000000000002",
-            Some("192.0.2.1:1234".parse().expect("non-loopback address")),
-        );
-
-        let error =
-            try_connect_local_http_record(&record_path).expect_err("non-loopback record must fail");
-
-        assert_eq!(error.code(), AtmErrorCode::LocalHttpEndpointNonLoopback);
-    }
-
-    #[test]
-    fn local_http_record_rejects_stale_instance_id() {
-        let tempdir = TempDir::new().expect("temp runtime");
-        let record_path = write_local_http_record(
-            &tempdir,
-            "00000000000000000000000004",
-            "00000000000000000000000003",
-            Some("127.0.0.1:1234".parse().expect("loopback address")),
-        );
-
-        let error =
-            try_connect_local_http_record(&record_path).expect_err("stale record must fail");
-
-        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
     }
 
     #[test]
