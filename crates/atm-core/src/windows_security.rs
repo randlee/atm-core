@@ -506,6 +506,80 @@ mod tests {
     }
 
     #[test]
+    fn verified_handle_rejects_dacl_with_an_extra_principal() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("extra-principal");
+        std::fs::write(&path, b"data").unwrap();
+        set_owner_to_current_user(&path);
+        set_dacl(&path, "D:P(A;;FA;;;OW)(A;;FW;;;WD)");
+
+        assert!(matches!(
+            VerifiedHandle::open(&path),
+            Err(WindowsSecurityError::Insecure(
+                "DACL grants access to another principal"
+            ))
+        ));
+    }
+
+    #[test]
+    fn verified_handle_rejects_a_deny_ace_as_unsupported() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("deny-ace");
+        std::fs::write(&path, b"data").unwrap();
+        set_owner_to_current_user(&path);
+        set_dacl(&path, "D:P(D;;FA;;;WD)(A;;FA;;;OW)");
+
+        assert!(matches!(
+            VerifiedHandle::open(&path),
+            Err(WindowsSecurityError::InvalidDescriptor(
+                "unsupported ACE type"
+            ))
+        ));
+    }
+
+    #[test]
+    fn verified_handle_rejects_a_final_component_symlink() {
+        use windows_sys::Win32::Storage::FileSystem::{
+            CreateSymbolicLinkW, SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE,
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target");
+        let link = dir.path().join("link");
+        std::fs::write(&target, b"data").unwrap();
+        let wide_link = link
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        let wide_target = target
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        // SAFETY: both paths are NUL-terminated and remain alive for the call.
+        assert_ne!(
+            unsafe {
+                CreateSymbolicLinkW(
+                    wide_link.as_ptr(),
+                    wide_target.as_ptr(),
+                    SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE,
+                )
+            },
+            0,
+            "Windows CI must support unprivileged file symlinks: {:?}",
+            std::io::Error::last_os_error()
+        );
+
+        assert!(matches!(
+            VerifiedHandle::open(&link),
+            Err(WindowsSecurityError::Insecure(
+                "reparse points are not permitted"
+            ))
+        ));
+    }
+
+    #[test]
     fn foreign_owner_sid_is_not_current_user() {
         // Pure comparison avoids depending on the CI machine's account SID.
         let owner = [1, 1, 0, 0, 0, 0, 0, 5, 1, 0, 0, 0];
