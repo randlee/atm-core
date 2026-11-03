@@ -119,6 +119,12 @@ pub(crate) struct LoopbackEndpointRecordGuard {
     expected: LocalHttpEndpointRecord,
 }
 
+struct EndpointRecordParent {
+    path: PathBuf,
+    #[cfg(windows)]
+    _verified: atm_core::windows_security::VerifiedHandle,
+}
+
 /// Removes the record only after the owned Axum task has stopped.
 ///
 /// Endpoint-record I/O is synchronous filesystem work, so lifecycle code must
@@ -170,7 +176,7 @@ pub(crate) fn publish_loopback_endpoint_record(
     let parent = prepare_endpoint_record_parent(config, endpoint)?;
     let record = active_endpoint_record(config.daemon_instance_id, endpoint, capability);
     let bytes = serialize_endpoint_record(&record)?;
-    publish_private_endpoint_record(&config.endpoint_record_path, parent, &bytes)?;
+    publish_private_endpoint_record(&config.endpoint_record_path, &parent.path, &bytes)?;
     Ok(LoopbackEndpointRecordGuard {
         path: config.endpoint_record_path.clone(),
         expected: record,
@@ -180,7 +186,7 @@ pub(crate) fn publish_loopback_endpoint_record(
 fn prepare_endpoint_record_parent(
     config: &LoopbackTcpConfig,
     endpoint: SocketAddr,
-) -> Result<&Path, AtmError> {
+) -> Result<EndpointRecordParent, AtmError> {
     if !endpoint.ip().is_loopback() {
         return Err(AtmError::local_http_endpoint_non_loopback(
             "local HTTP listener must bind only a loopback address",
@@ -199,8 +205,15 @@ fn prepare_endpoint_record_parent(
         AtmError::daemon_unavailable("failed to create local HTTP endpoint record directory")
             .with_cause(source)
     })?;
+    #[cfg(windows)]
+    let verified = validate_record_parent(parent)?;
+    #[cfg(not(windows))]
     validate_record_parent(parent)?;
-    Ok(parent)
+    Ok(EndpointRecordParent {
+        path: parent.to_path_buf(),
+        #[cfg(windows)]
+        _verified: verified,
+    })
 }
 
 fn serialize_endpoint_record(record: &LocalHttpEndpointRecord) -> Result<Vec<u8>, AtmError> {
@@ -302,7 +315,23 @@ fn validate_record_parent(parent: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn validate_record_parent(
+    parent: &Path,
+) -> Result<atm_core::windows_security::VerifiedHandle, AtmError> {
+    match atm_core::windows_security::VerifiedHandle::open(parent) {
+        Ok(verified) => Ok(verified),
+        Err(atm_core::windows_security::WindowsSecurityError::Insecure(_)) => Err(
+            AtmError::config("local HTTP endpoint record directory must not be writable by others"),
+        ),
+        Err(source) => Err(AtmError::daemon_unavailable(
+            "failed to inspect local HTTP endpoint record directory",
+        )
+        .with_cause(source)),
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
 fn validate_record_parent(_parent: &Path) -> Result<(), AtmError> {
     Ok(())
 }
@@ -492,5 +521,75 @@ mod tests {
         );
         assert!(ipv6.ipv4_loopback.is_none());
         assert!(ipv6.ipv6_loopback.is_some());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn record_parent_rejects_everyone_writable_dacl() {
+        let directory = tempfile::tempdir().expect("temporary parent directory");
+        set_directory_dacl(directory.path(), "D:P(A;;FA;;;OW)(A;;FW;;;WD)");
+
+        let error = super::validate_record_parent(directory.path())
+            .err()
+            .expect("Everyone-writable parent must be rejected");
+        let expected = atm_core::error::AtmError::config(
+            "local HTTP endpoint record directory must not be writable by others",
+        );
+        assert_eq!(error.message(), expected.message());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn record_parent_accepts_owner_only_dacl() {
+        let directory = tempfile::tempdir().expect("temporary parent directory");
+        set_directory_dacl(directory.path(), "D:P(A;;FA;;;OW)");
+
+        super::validate_record_parent(directory.path())
+            .expect("owner-only parent directory must be accepted");
+    }
+
+    #[cfg(windows)]
+    fn set_directory_dacl(path: &std::path::Path, sddl: &str) {
+        use std::os::windows::ffi::OsStrExt;
+
+        use windows_sys::Win32::Foundation::LocalFree;
+        use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
+        use windows_sys::Win32::Security::{
+            DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+            SetFileSecurityW,
+        };
+
+        let path = path
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        let sddl = sddl.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+        let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        // SAFETY: SDDL is null terminated and descriptor is a writable output.
+        assert_ne!(
+            unsafe {
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    sddl.as_ptr(),
+                    1,
+                    &mut descriptor,
+                    std::ptr::null_mut(),
+                )
+            },
+            0,
+            "test DACL SDDL must convert"
+        );
+
+        // SAFETY: path and descriptor are valid for the duration of the call.
+        let result = unsafe {
+            SetFileSecurityW(
+                path.as_ptr(),
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                descriptor,
+            )
+        };
+        // SAFETY: ConvertStringSecurityDescriptorToSecurityDescriptorW allocates via LocalAlloc.
+        unsafe { LocalFree(descriptor) };
+        assert_ne!(result, 0, "test directory DACL must be set from fixed SDDL");
     }
 }
