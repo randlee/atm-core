@@ -307,7 +307,8 @@ fn dacl_only_owner(descriptor: &DescriptorView<'_>) -> Result<bool, WindowsSecur
         if sid_capacity < 8 {
             return Err(WindowsSecurityError::InvalidDescriptor("truncated SID"));
         }
-        let sid_ptr = (&ace.SidStart as *const u32).cast::<u8>();
+        // SAFETY: sid_offset is within the validated ACE allocation.
+        let sid_ptr = unsafe { ptr.cast::<u8>().add(sid_offset).cast_const() };
         // SAFETY: at least eight SID bytes lie within this ACE.
         let subauthorities = unsafe { *sid_ptr.add(1) } as usize;
         if 8 + subauthorities * 4 > sid_capacity {
@@ -323,7 +324,8 @@ fn dacl_only_owner(descriptor: &DescriptorView<'_>) -> Result<bool, WindowsSecur
 }
 
 /// A verified Windows file or directory held open without write/delete sharing.
-/// The same handle is used for security inspection, reads, and metadata.
+/// The same handle is used for security inspection and metadata; file handles
+/// also support reads. Ancestor directories are not pinned.
 pub struct VerifiedHandle {
     file: std::fs::File,
 }
@@ -332,7 +334,8 @@ impl VerifiedHandle {
     /// Open without following a final reparse point, then verify owner and DACL.
     ///
     /// # Errors
-    /// Rejects inaccessible, reparse-point, foreign-owned or shared objects.
+    /// Rejects inaccessible, reparse-point or foreign-owned objects, and
+    /// objects whose DACL grants access to another principal.
     pub fn open(path: &Path) -> Result<Self, WindowsSecurityError> {
         let file = open_unshared(path)?;
         reject_reparse_point(&file)?;
