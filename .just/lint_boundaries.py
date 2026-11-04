@@ -7,6 +7,7 @@ from pathlib import Path
 import argparse
 import re
 import sys
+import tomllib
 
 from sc_lint.lint_common import build_report
 from sc_lint.lint_common import discover_repo_root
@@ -530,8 +531,6 @@ def boundary_toml_files(repo_root: Path) -> list[Path]:
 
 
 def tomllib_load(path: Path) -> dict:
-    import tomllib
-
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
