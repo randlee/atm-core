@@ -1,0 +1,67 @@
+# bp-2: plan-hardening evals and live eval runs
+
+## Goal
+Prove the skill on the cheapest tier: haiku and luna, each running it once as a background subagent and once as a teammate. Each run is against a seeded plan with planted defects, and each agent is questioned after its run.
+
+Anchors: ANC-018, ANC-019.
+
+## Deliverables
+1. `plugins/atm-bd-orchestration/skills/plan-hardening/evals/fixture-plan.jsonl`: a seeded plan whose ids use the prefix `eval-phase-z`, rendered from the atm-beads templates. It has four planted defects:
+   - two `parallel_safe` sprints with overlapping `owned_paths`;
+   - a `must_follow` sprint that consumes no named artifact;
+   - a `boundary` sprint whose acceptance claims end-to-end behaviour (false closure);
+   - a ledger artifact that has no consumer (ceremony).
+   `plugins/atm-bd-orchestration/skills/plan-hardening/evals/planted.json` maps each defect to the plan bead that carries it.
+2. `plugins/atm-bd-orchestration/skills/plan-hardening/evals/subagent.md` and `plugins/atm-bd-orchestration/skills/plan-hardening/evals/teammate.md`: the eval-runner prompts.
+   - They import the fixture plan (`bd import`), run one planner-with-subagents or planner-with-teammates iteration plus the final formula against it with the agent under test, run `evals/check.sh`, burn the fixture beads, and then ask the post-run questions.
+   - Each prompt has a `## Post-run questions` section. The runner asks these of the same agent after its run closes: SendMessage for a subagent, `atm send` for a teammate. The questions are:
+     - which instruction was unclear;
+     - where it guessed;
+     - which instruction it skipped or reinterpreted, and why;
+     - what it needed but did not have;
+     - what it would change.
+3. `plugins/atm-bd-orchestration/skills/plan-hardening/evals/check.sh <root>`: mechanical checks that exit non-zero on any miss.
+   - Each planted bead in `planted.json` has a `stage:plan-fix` bead with `metadata.plan_bead` equal to it.
+   - Every step bead is closed with `VERDICT=PASS` or `VERDICT=FAIL` in its close reason.
+   - In a teammate cell, `atm task events <step>` shows start and close.
+   - In a subagent cell, there is no ATM task for the step.
+   A debrief answer never counts toward a pass.
+4. `plugins/atm-bd-orchestration/skills/plan-hardening/evals/README.md`: the run matrix and who runs each cell. fenix runs both haiku cells; solar or arch-ctm runs both luna cells. It also says how to burn the fixture beads.
+5. Add `test_eval_prompts_have_post_run_questions` and `test_eval_check_script_rejects_missing_fix_bead` to `plugins/atm-bd-orchestration/skills/plan-hardening/tests/test_plan_hardening.py`. The second test feeds `check.sh` recorded `bd ... --json` outputs through a `BD` override, so it needs no live database.
+6. Run all four cells live. Fix each fault that a check or a debrief shows in the template, formulas, SKILL.md or references, and re-run the failed cell. Post each cell's check output and debrief answers in the PR description; they are not committed.
+7. Regenerate the manifest.
+
+## Does not close
+- Evals for other tiers.
+- atm-core's switch-over.
+
+## Design
+
+## Fixture
+The fixture is rendered with the atm-beads `plan-root.json.j2` and `sprint-bead.json.j2` templates. Its root is `eval-phase-z` and its sprints are `eval-z-1` to `eval-z-4`, imported into the live store under their own prefix. `check.sh` and the README burn them afterwards with `bd delete --force` on each id in the fixture, so the eval never touches a real phase.
+
+## check.sh
+Use POSIX sh and `jq`. Read the `bd` binary from `${BD:-bd}` so the test can stand in recorded outputs. Run `bd list --parent <root> -l stage:plan-fix -n 0 --json` and match `.metadata.plan_bead` against `planted.json`. Read close reasons with `bd show <step> --json | jq -r '.[0].close_reason'`.
+
+## Cells
+| Cell | Agent | Runner | Run by |
+| --- | --- | --- | --- |
+| 1 | haiku | subagent | fenix |
+| 2 | haiku | teammate | fenix |
+| 3 | luna | subagent | solar or arch-ctm |
+| 4 | luna | teammate | solar or arch-ctm |
+
+## Acceptance Criteria
+- [ ] `plugins/atm-bd-orchestration/skills/plan-hardening/evals/` contains `fixture-plan.jsonl`, `planted.json`, `subagent.md`, `teammate.md`, `check.sh` and `README.md` (ANC-018).
+- [ ] `test_eval_prompts_have_post_run_questions` passes (ANC-019).
+- [ ] `test_eval_check_script_rejects_missing_fix_bead` passes. A fixture with one planted bead unmatched makes `check.sh` exit non-zero.
+- [ ] The PR description has all four cells, each with `check.sh` exit 0 and the agent's debrief answers.
+- [ ] `tests/gen_manifest.py --check` passes.
+
+## Validation
+- `just lint`
+- `just test`
+- `plugins/atm-bd-orchestration/skills/plan-hardening/evals/check.sh eval-phase-z` once per cell
+
+## Metadata
+{"relation":"must_follow","closure_type":"integration","target_boundary":"the plan-hardening skill proven by live eval runs","owned_paths":["plugins/atm-bd-orchestration/skills/plan-hardening/evals/","plugins/atm-bd-orchestration/skills/plan-hardening/tests/","plugins/atm-bd-orchestration/skills/plan-hardening/formulas/","plugins/atm-bd-orchestration/skills/plan-hardening/templates/","plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md","plugins/atm-bd-orchestration/skills/plan-hardening/references/","plugins/atm-bd-orchestration/manifest.yaml"],"difficulty":"normal","branch":"sprint/bp-2-plan-hardening-evals","pr_target":"sprint/bp-1-plan-hardening-skill","requirements":["NONE"],"adrs":["NONE"]}

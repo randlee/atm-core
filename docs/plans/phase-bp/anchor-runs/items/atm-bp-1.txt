@@ -1,0 +1,102 @@
+# bp-1: plan-hardening skill: formulas, step template, SKILL.md, adversarial reference, bd reviewer agents
+
+## Goal
+The plan-hardening skill in the atm-bd package, for bd plans only, with tests. bp-2 proves it live.
+
+Anchors: ANC-001..ANC-017 and ANC-020..ANC-022 (atm-core `docs/plans/phase-bp/anchors.json`). Requirements: `NONE`. atm-bd's role docs have numbered items and no ids, and deliverable 6 writes the role doc for this skill.
+
+## Deliverables
+1. Copy the contract files byte for byte from atm-core `develop`: `docs/plans/phase-bp/contract/skills/plan-hardening/` to `plugins/atm-bd-orchestration/skills/plan-hardening/`: the three formulas (`plan-hardening-iteration`, `plan-hardening-final`, `plan-hardening-adversary`), `templates/plan-hardening-step.xml.j2`, and both example vars files. Keep every step id, metadata key, variable and command. The design below lists the only edit allowed.
+2. `plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md`, with the sections given in the design: Run modes, Mode selection, Reviewer selection, Iterations, Loop, Planner with subagents, Planner with teammates, Lead adversarial, and Finish.
+3. `plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md`: the lead's procedure, given in the design.
+4. `plugins/atm-bd-orchestration/agents/plan-scope-reviewer.md` and `critical-plan-reviewer.md`: bd forms of atm-core's `.claude/agents/` files of the same names. The review rules are unchanged. Inputs are the root and sprint-container bead text from the step template's plan block, not sprint docs. Each finding carries `title`, `description`, `severity` (Blocking, Important or Minor) and `plan_bead`. Every rule cites `.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md` in place of `sprint-planning-guidelines.md`. Tools stay read-only, because the runner, not the agent, writes beads.
+5. `plugins/atm-bd-orchestration/skills/plan-hardening/tests/test_plan_hardening.py`, with the tests listed in the acceptance criteria.
+6. `docs/requirements/plan-hardening.md`: numbered requirements for the planner, lead and reviewers running this skill, with Sources and Unresolved sections as in `planner.md`. Add its row to `docs/requirements/README.md`.
+7. Regenerate `plugins/atm-bd-orchestration/manifest.yaml` with `tests/gen_manifest.py`.
+
+## Does not close
+- The live runs and the evals (bp-2).
+- atm-core's markdown plan-hardening skill, which is deleted in the atm-core install PR after release.
+- Any orchestration script, hook or Plan Gate template. These are not touched.
+
+## Design
+
+## Contract
+atm-core `develop`: `docs/plans/phase-bp/contract/skills/plan-hardening/`. Its `README.md` records the proof for each file.
+
+The one allowed edit: the scope and critical step descriptions point at `.claude/agents/plan-scope-reviewer.md` and `.claude/agents/critical-plan-reviewer.md`. These are the paths the atm-bd installer writes, so they stay as they are.
+
+## Runner model
+The runner is the agent that takes a step: a teammate, or a `general-purpose` background subagent. It reads the reviewer agent file named in the step description as its review rules, and it runs every `bd` and `atm` command in the rendered template. The reviewer agent files are rules, not the subagent type, which is why they can stay read-only.
+
+## SKILL.md content
+- **Run modes**: planner with subagents; planner with teammates; lead adversarial, where the phase lead runs hardening against the planner.
+- **Mode selection**:
+  - When the team has no assigned work, use lead adversarial.
+  - Otherwise, use planner with teammates when the plan is hard enough to be worth interrupting another frontier model, preferably one from a different foundry.
+  - Otherwise, use planner with subagents. This is the mid-phase replan case, while teammates are busy.
+- **Reviewer selection**:
+  - Tiers come from the dev-dispatch `difficulty` rule in `atm-bd-orchestration/SKILL.md` (fast, normal, frontier). The scope and critical passes run at frontier.
+  - Prefer a different foundry (Anthropic, OpenAI, xAI) wherever possible, and run each pass in iteration 2 on a different foundry than in iteration 1.
+- **Iterations**:
+  - The default is 2. The lead or planner may set another number.
+  - Within an iteration, the scope and critical passes and every adversary run in parallel.
+  - The final formula runs after the last iteration's fix step closes, so ceremony-qa reviews the plan after the final critical pass.
+  - A FAIL from the final critical pass is normal, because that pass is adversarial. Fix the findings and go on to the final formula; never add an iteration because of it.
+- **Loop**: for i in 1..N:
+  1. Render the iteration formula: `sc-compose bead render --request <req.json> --json` with `operation: render` and `compose_variables {root, phase, iteration: i, iterations: N, planner}`.
+  2. Run `bd mol wisp <rendered file> --json`.
+  3. List the steps with `bd ready --mol <wisp> --json`.
+  4. Dispatch the ready scope and critical steps (and, in lead mode, every adversary wisp) at the same time.
+  5. Once they have all closed, dispatch the fix step to the planner.
+  6. When the fix step closes, wisp the next iteration.
+  After the last iteration, wisp the final formula and run ceremony, then fix, then verify. Last, run `bd mol squash <wisp>` on each wisp and hand the plan to the Plan Gate (`atm-bd-orchestration` SKILL.md), unchanged.
+- **Dispatch**:
+  - A teammate step is sent with `atm task assign <agent> --task-id <step> --template plugins/atm-bd-orchestration/skills/plan-hardening/templates/plan-hardening-step.xml.j2 --vars <vars.json>`, using `runner=teammate` and `actor=<agent>`.
+  - A subagent step is rendered with `sc-compose render --strict --file <same template> --var-file <vars.json> --output <tmp>`, using `runner=subagent` and `actor=<dispatcher>`. The rendered file is the prompt of one background `general-purpose` agent at the chosen tier, and that agent's fenced JSON is the return.
+  - Never hand-write a step prompt.
+- **Planner with subagents**: the planner wisps every iteration and the final formula, and runs every pass with its own background subagents, including the final critical and ceremony passes. No step waits on the phase lead, and the lead is not told until the Plan Gate.
+- **Planner with teammates**: the planner assigns the scope, critical and verify steps to teammates and takes the fix steps itself.
+- **Lead adversarial**: follow `references/adversarial-plan-hardening.md`. The planner is a teammate, and the lead assigns it the fix step only after the iteration's adversary wisps have closed.
+
+## references/adversarial-plan-hardening.md content
+The phase lead, each iteration:
+1. List every integration the plan has with another repository or an external API (CLI, schema, service). Assign an agent to research each listed integration for detail the plan is missing. Each assignment is one `plan-hardening-adversary` wisp, with `area` set to the integration and `task` set to the research instruction.
+2. Review each existing and new requirement and ADR that the plan relates to, looking for inconsistency, gaps and vague language. For an existing one that the plan outgrows, contradicts or sharpens, file a fix bead proposing its revision. This is an adversary wisp with `area = req-adr`.
+3. Review the plan yourself and file your own findings through a wisp with `area = lead`. In iteration 2, your lead step first verifies the open fix beads filed by `lead` and `adversary:*` passes.
+4. Pick each researcher's tier from the dev-dispatch `difficulty` rule. Broad, shallow ground goes to several fast agents in parallel, and background subagents are allowed. Difficult code and integrations go to frontier models, preferably from different foundries.
+5. Never give an adversary the same task in iteration 2 as in iteration 1. Each iteration-2 task targets a weakness iteration 1 found, or a plan area no one has covered yet. Record each adversary's area per iteration in the wisp title.
+6. All of this runs alongside the iteration's scope and critical steps, not in place of them.
+
+## Acceptance Criteria
+- [ ] `cmp` of each contract file against its copy under `plugins/atm-bd-orchestration/skills/plan-hardening/` reports no difference, except the edit allowed in the design.
+- [ ] `plugins/atm-bd-orchestration/skills/plan-hardening/tests/test_plan_hardening.py` passes, with these tests. Each one reads the shipped files:
+  - `test_step_template_renders_both_runners` (ANC-013)
+  - `test_step_template_refuses_other_runner` (ANC-013): `runner=bogus` gives a non-zero exit and no output file.
+  - `test_step_template_start_and_close_by_runner` (ANC-014):
+    - the teammate render has `atm task start` and `atm task close`;
+    - the subagent render has no `atm ` command;
+    - both renders have `bd update <step> --claim` and `bd close <step>`.
+  - `test_step_template_reads_bead_description` (ANC-012)
+  - `test_finding_block_files_planner_fix_beads` (ANC-015): `bd create` with `--assignee '<planner>'` and `stage:plan-fix`.
+  - `test_formulas_are_vapor` (ANC-012): each formula is rendered with `sc-compose bead render` and parsed with `tomllib`, and has `phase = "vapor"`.
+  - `test_iteration_review_steps_are_parallel` (ANC-005): scope and critical have no `needs`, and fix needs both.
+  - `test_final_formula_starts_with_ceremony` (ANC-002)
+  - `test_skill_names_three_modes` (ANC-001)
+  - `test_skill_mode_selection` (ANC-020, ANC-021)
+  - `test_skill_foundry_rule` (ANC-011)
+  - `test_skill_default_two_iterations_and_final_fail_normal` (ANC-003, ANC-004)
+  - `test_skill_planner_mode_needs_no_lead` (ANC-022)
+  - `test_adversarial_reference_integration_step` (ANC-008)
+  - `test_adversarial_reference_req_adr_step` (ANC-009)
+  - `test_adversarial_reference_lead_findings_new_tasks_tiers` (ANC-006, ANC-007, ANC-010)
+  - `test_skill_is_bd_only` (ANC-016): no `br ` command and no `.md` plan path under `plugins/atm-bd-orchestration/skills/plan-hardening/`.
+- [ ] `tests/gen_manifest.py --check` passes, and the manifest lists every new file (ANC-017).
+- [ ] Every new `*.j2` passes `test_frontmatter` (`sc-compose validate --strict`, and declared variables equal to the used variables).
+
+## Validation
+- `just lint`
+- `just test`
+
+## Metadata
+{"relation":"root","closure_type":"boundary","target_boundary":"the plan-hardening skill package files in atm-bd","owned_paths":["plugins/atm-bd-orchestration/skills/plan-hardening/formulas/","plugins/atm-bd-orchestration/skills/plan-hardening/templates/","plugins/atm-bd-orchestration/skills/plan-hardening/examples/","plugins/atm-bd-orchestration/skills/plan-hardening/references/","plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md","plugins/atm-bd-orchestration/skills/plan-hardening/tests/","plugins/atm-bd-orchestration/agents/plan-scope-reviewer.md","plugins/atm-bd-orchestration/agents/critical-plan-reviewer.md","docs/requirements/plan-hardening.md","docs/requirements/README.md","plugins/atm-bd-orchestration/manifest.yaml"],"difficulty":"hard","branch":"sprint/bp-1-plan-hardening-skill","pr_target":"integrate/phase-bp","requirements":["NONE"],"adrs":["NONE"]}
