@@ -571,6 +571,9 @@
       "peer-dial-seam-linux",
       "peer-dial-seam-macos",
       "peer-dial-seam-windows",
+      "python-dependency-pins-linux",
+      "python-dependency-pins-macos",
+      "python-dependency-pins-windows",
       "read-concurrency-gates-linux",
       "read-concurrency-gates-macos",
       "read-concurrency-gates-windows",
@@ -1101,6 +1104,27 @@
       "command": [
         ".bootstrap-venv\\Scripts\\python.exe",
         ".just/lint_peer_dial_seam.py"
+      ],
+      "platform": "windows"
+    },
+    "python-dependency-pins-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_python_dependency_pins.py"
+      ],
+      "platform": "linux"
+    },
+    "python-dependency-pins-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_python_dependency_pins.py"
+      ],
+      "platform": "macos"
+    },
+    "python-dependency-pins-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_python_dependency_pins.py"
       ],
       "platform": "windows"
     },

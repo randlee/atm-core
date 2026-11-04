@@ -22,7 +22,7 @@ exclude_paths_by_rule = { "SCB-RUNTIME-003" = ["crates/atm/src/commands/internal
 reason = "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. sc-lint 0.8.4 has no item-level runtime allow; retain the narrowest supported whole-file exclusion (randlee/sc-lint#836)."
 
 [tool.sc-lint.lint_profiles]
-ci = ["adr-index-linux", "adr-index-macos", "adr-index-windows", "arch-gates", "atm-graft-python-boundary-linux", "atm-graft-python-boundary-macos", "atm-graft-python-boundary-windows", "boundaries-linux", "boundaries-macos", "boundaries-windows", "clippy-linux", "clippy-macos", "clippy-native-windows", "clippy-windows", "clippy-windows-macos", "daemon-signing-coupling-linux", "daemon-signing-coupling-macos", "daemon-signing-coupling-windows", "daemon-singleton-linux", "daemon-singleton-macos", "daemon-singleton-windows", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary-linux", "env-var-boundary-macos", "env-var-boundary-windows", "fixed-sleep-linux", "fixed-sleep-macos", "fixed-sleep-windows", "fmt", "function-length", "hermes-adapter-linux", "hermes-adapter-macos", "hermes-adapter-windows", "hermes-atm-boundary-linux", "hermes-atm-boundary-macos", "hermes-atm-boundary-windows", "identities", "kit-drift-linux", "kit-drift-macos", "kit-drift-windows", "legacy-mailbox-paths-linux", "legacy-mailbox-paths-macos", "legacy-mailbox-paths-windows", "legacy-transport-removal-linux", "legacy-transport-removal-macos", "legacy-transport-removal-windows", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy-linux", "nudge-taxonomy-macos", "nudge-taxonomy-windows", "peer-dial-seam-linux", "peer-dial-seam-macos", "peer-dial-seam-windows", "read-concurrency-gates-linux", "read-concurrency-gates-macos", "read-concurrency-gates-windows", "runtime-observation-boundary-linux", "runtime-observation-boundary-macos", "runtime-observation-boundary-windows", "runtime-stderr-linux", "runtime-stderr-macos", "runtime-stderr-windows", "same-host-portability-linux", "same-host-portability-macos", "same-host-portability-windows", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit-linux", "silent-emit-macos", "silent-emit-windows", "site-generated-linux", "site-generated-macos", "site-generated-windows", "site-links-linux", "site-links-macos", "site-links-windows", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter-linux", "template-frontmatter-macos", "template-frontmatter-windows", "ttl-triage-linux", "ttl-triage-macos", "ttl-triage-windows", "version-linux", "version-macos", "version-windows"]
+ci = ["adr-index-linux", "adr-index-macos", "adr-index-windows", "arch-gates", "atm-graft-python-boundary-linux", "atm-graft-python-boundary-macos", "atm-graft-python-boundary-windows", "boundaries-linux", "boundaries-macos", "boundaries-windows", "clippy-linux", "clippy-macos", "clippy-native-windows", "clippy-windows", "clippy-windows-macos", "daemon-signing-coupling-linux", "daemon-signing-coupling-macos", "daemon-signing-coupling-windows", "daemon-singleton-linux", "daemon-singleton-macos", "daemon-singleton-windows", "deny-linux", "deny-macos", "deny-windows", "env-var-boundary-linux", "env-var-boundary-macos", "env-var-boundary-windows", "fixed-sleep-linux", "fixed-sleep-macos", "fixed-sleep-windows", "fmt", "function-length", "hermes-adapter-linux", "hermes-adapter-macos", "hermes-adapter-windows", "hermes-atm-boundary-linux", "hermes-atm-boundary-macos", "hermes-atm-boundary-windows", "identities", "kit-drift-linux", "kit-drift-macos", "kit-drift-windows", "legacy-mailbox-paths-linux", "legacy-mailbox-paths-macos", "legacy-mailbox-paths-windows", "legacy-transport-removal-linux", "legacy-transport-removal-macos", "legacy-transport-removal-windows", "lines", "manifests-linux", "manifests-macos", "manifests-windows", "nudge-taxonomy-linux", "nudge-taxonomy-macos", "nudge-taxonomy-windows", "peer-dial-seam-linux", "peer-dial-seam-macos", "peer-dial-seam-windows", "python-dependency-pins-linux", "python-dependency-pins-macos", "python-dependency-pins-windows", "read-concurrency-gates-linux", "read-concurrency-gates-macos", "read-concurrency-gates-windows", "runtime-observation-boundary-linux", "runtime-observation-boundary-macos", "runtime-observation-boundary-windows", "runtime-stderr-linux", "runtime-stderr-macos", "runtime-stderr-windows", "same-host-portability-linux", "same-host-portability-macos", "same-host-portability-windows", "sc-boundary", "sc-portability", "sc-runtime", "shear-linux", "shear-macos", "shear-windows", "silent-emit-linux", "silent-emit-macos", "silent-emit-windows", "site-generated-linux", "site-generated-macos", "site-generated-windows", "site-links-linux", "site-links-macos", "site-links-windows", "spell-linux", "spell-macos", "spell-windows", "template-frontmatter-linux", "template-frontmatter-macos", "template-frontmatter-windows", "ttl-triage-linux", "ttl-triage-macos", "ttl-triage-windows", "version-linux", "version-macos", "version-windows"]
 python-tests = ["python-tests-linux", "python-tests-macos", "python-tests-windows"]
 
 [[tool.sc-lint.lint]]
@@ -317,6 +317,21 @@ platform = "macos"
 [[tool.sc-lint.lint]]
 name = "peer-dial-seam-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", ".just/lint_peer_dial_seam.py"]
+platform = "windows"
+
+[[tool.sc-lint.lint]]
+name = "python-dependency-pins-linux"
+command = [".bootstrap-venv/bin/python", ".just/check_python_dependency_pins.py"]
+platform = "linux"
+
+[[tool.sc-lint.lint]]
+name = "python-dependency-pins-macos"
+command = [".bootstrap-venv/bin/python", ".just/check_python_dependency_pins.py"]
+platform = "macos"
+
+[[tool.sc-lint.lint]]
+name = "python-dependency-pins-windows"
+command = [".bootstrap-venv\\Scripts\\python.exe", ".just/check_python_dependency_pins.py"]
 platform = "windows"
 
 [[tool.sc-lint.lint]]

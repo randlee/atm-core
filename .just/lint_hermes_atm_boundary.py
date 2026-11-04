@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import argparse
-import re
 import sys
 import tomllib
 
@@ -57,6 +56,9 @@ def collect_violations(repo_root: Path) -> list[Violation]:
     expected_tags = set(FORBIDDEN_SOURCE_MARKERS)
     if forbidden_tags != expected_tags:
         violations.append(Violation(str(BOUNDARY_PATH), f"io_forbidden must be exactly {sorted(expected_tags)}"))
+    allowed_dependencies = boundary.get("dependencies", {}).get("allowed_dependencies", [])
+    if allowed_dependencies != ["atm-graft"]:
+        violations.append(Violation(str(BOUNDARY_PATH), "allowed_dependencies must be exactly [atm-graft]"))
     declared_edges = set(boundary.get("dependencies", {}).get("forbidden_edges", []))
     for dependency in FORBIDDEN_DEPENDENCIES:
         edge = f"hermes-atm -> {dependency}"
@@ -67,8 +69,10 @@ def collect_violations(repo_root: Path) -> list[Violation]:
         violations.append(Violation(str(BOUNDARY_PATH), "forbidden references must cover rusqlite and reqwest"))
 
     dependencies = package.get("project", {}).get("dependencies", [])
-    if not isinstance(dependencies, list) or len(dependencies) != 1 or not isinstance(dependencies[0], str) or not re.match(r"^atm-graft(?:$|[<>=!~;\[\s])", dependencies[0]):
-        violations.append(Violation(str(PACKAGE_PATH), "dependencies must contain only atm-graft"))
+    workspace = load_toml(repo_root / "Cargo.toml")
+    version = workspace.get("workspace", {}).get("package", {}).get("version")
+    if not isinstance(version, str) or dependencies != [f"atm-graft=={version}"]:
+        violations.append(Violation(str(PACKAGE_PATH), "dependencies must pin atm-graft to the exact workspace version"))
     package_text = (repo_root / PACKAGE_PATH).read_text(encoding="utf-8").lower()
     for dependency in FORBIDDEN_DEPENDENCIES:
         if dependency in package_text:
