@@ -76,7 +76,10 @@ impl AsRef<Path> for DaemonLocalIpcEndpoint {
 }
 
 impl DaemonLocalIpcEndpoint {
-    #[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "The local Unix IPC endpoint resolves to a filesystem socket path; other platforms use their own endpoint.")]
+    #[sc_lint_attributes::sc_lint(
+        allow(PORT-010),
+        reason = "Unix resolves to a filesystem socket path; Windows connects through loopback_tcp_client using the host-scoped local HTTP record."
+    )]
     #[cfg(unix)]
     fn unix_socket_path(&self) -> Result<PathBuf, AtmError> {
         self.0.parent().map_or_else(
@@ -380,7 +383,10 @@ pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalDaemonConne
     try_connect_with_transport(endpoint, local_daemon_transport()?)
 }
 
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "This adapter connects the daemon client through a Unix domain socket.")]
+#[sc_lint_attributes::sc_lint(
+    allow(PORT-010),
+    reason = "This adapter connects through a Unix domain socket; Windows uses loopback TCP via try_connect_local_http_record and the host-scoped endpoint record."
+)]
 #[cfg(unix)]
 fn try_connect_unix_socket(
     endpoint: &DaemonLocalIpcEndpoint,
