@@ -215,6 +215,19 @@ Every step the `sc_lint` wheel duplicates runs the published module (ANC-010): f
 5. BG5-4 Importers: `lint_manifests.py` (which imports `check_version_sync`) is deleted; `check_version_sync.py` stays as the version gap check, so `prerelease_tag.py` and `lint_hermes_atm_boundary.py` keep their imports; `view_lines.py` reads the published `line-counts` output or is deleted with its `just view lines` recipe (no copy of the line-count logic stays); `.just/tests/test_lint_external_tools.py` keeps only tests of the kept gap checks.
 6. BG5-5 References: `lines` becomes the RULE-003 authority. Every live reference to a deleted script (the docs and agent files in owned_paths) points to its sc-lint step; historical records (`docs/plans/**`, `CHANGELOG.md`, `release/**`, `site/**`, `.triage/**`, `.sprints/**`, `reports/**`) are left as written.
 
+### BG5-2 gap disposition
+
+The repository uses sc-lint 0.8.4. The following upstream releases and retained
+check account for the BG5-2 gaps:
+
+| Gap | Disposition |
+| --- | --- |
+| Windows console output, [sc-lint#349](https://github.com/randlee/sc-lint/issues/349) | Fixed in [0.7.1](https://github.com/randlee/sc-lint/releases/tag/v0.7.1); the shared safe-output helper covers codespell, cargo-deny and cargo-shear. |
+| cargo-shear unused dependency allowlist, [sc-lint#346](https://github.com/randlee/sc-lint/issues/346) | Fixed in [0.7.1](https://github.com/randlee/sc-lint/releases/tag/v0.7.1). |
+| Identity literals split across `concat!`, [sc-lint#347](https://github.com/randlee/sc-lint/issues/347) | Fixed in [0.7.1](https://github.com/randlee/sc-lint/releases/tag/v0.7.1). |
+| cargo-deny DNS retry, [sc-lint#371](https://github.com/randlee/sc-lint/issues/371) | Fixed in [0.8.0](https://github.com/randlee/sc-lint/releases/tag/v0.8.0). |
+| Python version sync, [sc-lint#137](https://github.com/randlee/sc-lint/issues/137) | Project-version checks shipped in [0.8.1](https://github.com/randlee/sc-lint/releases/tag/v0.8.1); sibling dependency-pin validation was excluded. The retained `.just/check_python_dependency_pins.py` check is marked for deletion when [sc-lint#783](https://github.com/randlee/sc-lint/issues/783) ships. |
+
 ### Design
 
 ## Rules every package step follows (ANC-011, 013, 014, 016, 019, 020, 021)
