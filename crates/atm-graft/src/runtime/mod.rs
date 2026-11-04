@@ -773,6 +773,15 @@ fn recover_after_poll_accept_error(
 fn recover_graft_receiver(
     ctx: &GraftReceiverLoopContext,
 ) -> Result<Option<RegisteredGraftReceiver>, AtmError> {
+    recover_graft_receiver_with(ctx, rebind_graft_receiver)
+}
+
+fn recover_graft_receiver_with(
+    ctx: &GraftReceiverLoopContext,
+    mut rebind: impl FnMut(
+        &GraftReceiverLoopContext,
+    ) -> Result<Option<RegisteredGraftReceiver>, AtmError>,
+) -> Result<Option<RegisteredGraftReceiver>, AtmError> {
     set_session_state(
         &ctx.snapshot,
         GraftSessionState::Degraded,
@@ -783,7 +792,7 @@ fn recover_graft_receiver(
         if stop_requested(&ctx.stop_rx) {
             return Ok(None);
         }
-        match rebind_graft_receiver(ctx) {
+        match rebind(ctx) {
             Ok(Some(listener)) => {
                 set_session_state(
                     &ctx.snapshot,
@@ -970,7 +979,7 @@ mod tests {
         RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, ReceiverRecoveryCircuit,
         RegisteredGraftReceiver, ResultWait, handle_graft_receiver_connection,
         join_receive_loop_with_deadline, load_graft_config, read_snapshot,
-        recover_after_poll_accept_error, recover_graft_receiver, wait_for_stop_or_delay,
+        recover_after_poll_accept_error, recover_graft_receiver_with, wait_for_stop_or_delay,
     };
     use crate::{GraftSessionState, SessionSnapshot};
 
@@ -1010,16 +1019,6 @@ mod tests {
     struct NoopObservability;
 
     impl GraftObservability for NoopObservability {}
-
-    struct StateObservability {
-        states: mpsc::SyncSender<GraftSessionState>,
-    }
-
-    impl GraftObservability for StateObservability {
-        fn session_state_changed(&self, snapshot: &SessionSnapshot) {
-            let _ = self.states.try_send(snapshot.state);
-        }
-    }
 
     #[derive(Debug)]
     struct FirstCallBlocksInjector {
@@ -1549,13 +1548,9 @@ mod tests {
     }
 
     #[test]
-    fn receiver_recovery_marks_session_degraded_while_rebind_is_blocked() {
+    fn receiver_recovery_marks_session_degraded_when_rebind_fails() {
         let paths = test_paths();
-        let initial_listener = bind_receiver(&paths, None).expect("bind initial listener");
-        drop(initial_listener);
-        let blocker = bind_receiver(&paths, None).expect("bind competing listener");
         let (stop_tx, stop_rx) = mpsc::channel();
-        let (state_tx, state_rx) = mpsc::sync_channel(2);
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
             team: TeamName::from_validated(TEST_TEAM),
             agent: AgentName::from_validated(TEST_QA),
@@ -1569,34 +1564,38 @@ mod tests {
             client: None,
             snapshot: Arc::clone(&snapshot),
             injector: Arc::new(RecordingInjector::default()),
-            observability: Arc::new(StateObservability { states: state_tx }),
+            observability: Arc::new(NoopObservability),
             stop_rx,
             ready_tx: None,
             receiver_target_tx: None,
         };
-        let recovery = std::thread::spawn(move || recover_graft_receiver(&ctx));
-
-        assert_eq!(
-            state_rx
-                .recv_timeout(Duration::from_secs(1))
-                .expect("recovery must publish its degraded state"),
-            GraftSessionState::Degraded
-        );
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let attempts_in_recovery = Arc::clone(&attempts);
+        let recovery = std::thread::spawn(move || {
+            let listener = recover_graft_receiver_with(&ctx, |ctx| {
+                assert_eq!(
+                    read_snapshot(&ctx.snapshot)
+                        .expect("read rebind snapshot")
+                        .state,
+                    GraftSessionState::Degraded,
+                    "rebind must start only after publishing Degraded"
+                );
+                attempts_in_recovery.fetch_add(1, Ordering::SeqCst);
+                stop_tx.send(()).expect("stop recovery");
+                Err(AtmError::daemon_unavailable("simulated rebind failure"))
+            })?;
+            assert!(
+                listener.is_none(),
+                "stop must end recovery without a listener"
+            );
+            Ok(())
+        });
+        join_receive_loop_with_deadline(recovery).expect("join recovery");
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
         assert_eq!(
             read_snapshot(&snapshot).expect("read retry snapshot").state,
             GraftSessionState::Degraded
         );
-
-        stop_tx.send(()).expect("stop recovery");
-        assert!(
-            recovery
-                .join()
-                .expect("join recovery")
-                .expect("recover result")
-                .is_none(),
-            "stop must end the rebind loop without a false Listening state"
-        );
-        drop(blocker);
     }
 
     #[test]
