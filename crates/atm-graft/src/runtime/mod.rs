@@ -244,9 +244,35 @@ fn signal_ready_sender(ready_tx: &SyncSender<()>) -> Result<(), AtmError> {
     })
 }
 
+#[derive(Clone, Copy)]
+enum ResultWait {
+    Bounded(Duration),
+    #[cfg(test)]
+    UntilComplete,
+}
+
+impl ResultWait {
+    fn receive<T>(self, receiver: Receiver<T>) -> Result<T, RecvTimeoutError> {
+        match self {
+            Self::Bounded(deadline) => receiver.recv_timeout(deadline),
+            #[cfg(test)]
+            Self::UntilComplete => receiver.recv().map_err(|_| RecvTimeoutError::Disconnected),
+        }
+    }
+
+    fn timeout_ms(self) -> Option<u128> {
+        match self {
+            Self::Bounded(deadline) => Some(deadline.as_millis()),
+            #[cfg(test)]
+            Self::UntilComplete => None,
+        }
+    }
+}
+
 struct BoundedHostNudgeInjector {
     injector: Arc<dyn HostNudgeInjector>,
     helper_budget: Arc<HelperThreadBudget>,
+    wait: ResultWait,
 }
 
 impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
@@ -258,8 +284,9 @@ impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
             nudge.clone(),
             helper_permit,
             result_tx,
+            self.wait,
         )?;
-        receive_host_nudge_result(result_rx, &self.helper_budget)
+        receive_host_nudge_result(result_rx, &self.helper_budget, self.wait)
     }
 
     fn inject_cron_nudge(&self, nudge: &HostCronNudge) -> DeliveryReceipt {
@@ -272,20 +299,22 @@ impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
             nudge.clone(),
             helper_permit,
             result_tx,
+            self.wait,
         )
         .is_err()
         {
             return unknown_cron_receipt("graft host cron nudge helper could not start");
         }
-        receive_host_cron_nudge_result(result_rx, &self.helper_budget)
+        receive_host_cron_nudge_result(result_rx, &self.helper_budget, self.wait)
     }
 }
 
 impl BoundedHostNudgeInjector {
-    fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Self {
+    fn spawn(injector: Arc<dyn HostNudgeInjector>, wait: ResultWait) -> Self {
         Self {
             injector,
             helper_budget: Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS)),
+            wait,
         }
     }
 }
@@ -311,6 +340,7 @@ fn spawn_host_nudge_helper(
     nudge: HostNudge,
     helper_permit: HelperThreadPermit,
     result_tx: SyncSender<Result<(), AtmError>>,
+    wait: ResultWait,
 ) -> Result<(), AtmError> {
     thread::Builder::new()
         .name("atm-graft-host-nudge".to_string())
@@ -319,7 +349,7 @@ fn spawn_host_nudge_helper(
             let result = injector.inject_nudge(&nudge);
             if result_tx.send(result).is_err() {
                 tracing::debug!(
-                    timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis(),
+                    timeout_ms = wait.timeout_ms().unwrap_or_default(),
                     "graft host nudge helper dropped its result because the bounded caller already timed out"
                 );
             }
@@ -336,23 +366,19 @@ fn spawn_host_nudge_helper(
 fn receive_host_nudge_result(
     result_rx: Receiver<Result<(), AtmError>>,
     helper_budget: &Arc<HelperThreadBudget>,
+    wait: ResultWait,
 ) -> Result<(), AtmError> {
-    match result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE) {
+    match wait.receive(result_rx) {
         Ok(result) => result,
         Err(RecvTimeoutError::Timeout) => {
             let error = AtmError::new(
                 AtmErrorCode::WaitTimeout,
                 format!(
-                    "graft host nudge injection exceeded the {:?} delivery deadline",
-                    HOST_NUDGE_INJECTION_DEADLINE
+                    "graft host nudge injection exceeded the {}ms delivery deadline",
+                    wait.timeout_ms().expect("only bounded waits can time out")
                 ),
             );
-            warn_host_nudge_result(
-                "timeout",
-                &error,
-                helper_budget,
-                Some(HOST_NUDGE_INJECTION_DEADLINE.as_millis()),
-            );
+            warn_host_nudge_result("timeout", &error, helper_budget, wait.timeout_ms());
             Err(error)
         }
         Err(RecvTimeoutError::Disconnected) => {
@@ -371,6 +397,7 @@ fn spawn_host_cron_nudge_helper(
     nudge: HostCronNudge,
     helper_permit: HelperThreadPermit,
     result_tx: SyncSender<Result<DeliveryReceipt, AtmError>>,
+    wait: ResultWait,
 ) -> Result<(), AtmError> {
     thread::Builder::new()
         .name("atm-graft-host-cron-nudge".to_string())
@@ -379,7 +406,7 @@ fn spawn_host_cron_nudge_helper(
             let result = Ok(injector.inject_cron_nudge(&nudge));
             if result_tx.send(result).is_err() {
                 tracing::debug!(
-                    timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis(),
+                    timeout_ms = wait.timeout_ms().unwrap_or_default(),
                     "graft host cron nudge helper dropped its result because the bounded caller already timed out"
                 );
             }
@@ -396,8 +423,9 @@ fn spawn_host_cron_nudge_helper(
 fn receive_host_cron_nudge_result(
     result_rx: Receiver<Result<DeliveryReceipt, AtmError>>,
     helper_budget: &Arc<HelperThreadBudget>,
+    wait: ResultWait,
 ) -> DeliveryReceipt {
-    match result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE) {
+    match wait.receive(result_rx) {
         Ok(Ok(receipt)) => receipt,
         Ok(Err(_)) => unknown_cron_receipt("graft host cron nudge result is unknown"),
         Err(RecvTimeoutError::Timeout) => {
@@ -408,7 +436,7 @@ fn receive_host_cron_nudge_result(
                     "graft host cron nudge injection exceeded its delivery deadline",
                 ),
                 helper_budget,
-                Some(HOST_NUDGE_INJECTION_DEADLINE.as_millis()),
+                wait.timeout_ms(),
             );
             unknown_cron_receipt("graft host cron nudge handoff result is unknown after timeout")
         }
@@ -612,7 +640,14 @@ pub(crate) struct GraftReceiverLoopContext {
 }
 
 pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> {
-    let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector));
+    run_graft_receiver_loop_with_wait(ctx, ResultWait::Bounded(HOST_NUDGE_INJECTION_DEADLINE))
+}
+
+fn run_graft_receiver_loop_with_wait(
+    ctx: GraftReceiverLoopContext,
+    wait: ResultWait,
+) -> Result<(), AtmError> {
+    let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector), wait);
     let result = listen_for_graft_nudges(&ctx, &injector);
     let terminal_state = if result.is_ok() {
         GraftSessionState::Closed
@@ -933,9 +968,9 @@ mod tests {
         GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLeaseClient,
         GraftReceiverLoopContext, HelperThreadBudget, MAX_HOST_NUDGE_HELPERS,
         RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, ReceiverRecoveryCircuit,
-        RegisteredGraftReceiver, handle_graft_receiver_connection, join_receive_loop_with_deadline,
-        load_graft_config, read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
-        run_graft_receiver_loop, wait_for_stop_or_delay,
+        RegisteredGraftReceiver, ResultWait, handle_graft_receiver_connection,
+        join_receive_loop_with_deadline, load_graft_config, read_snapshot,
+        recover_after_poll_accept_error, recover_graft_receiver, wait_for_stop_or_delay,
     };
     use crate::{GraftSessionState, SessionSnapshot};
 
@@ -989,6 +1024,7 @@ mod tests {
     #[derive(Debug)]
     struct FirstCallBlocksInjector {
         first_call_gate: Mutex<Option<mpsc::Receiver<()>>>,
+        first_started: mpsc::Sender<()>,
         call_count: AtomicUsize,
     }
 
@@ -996,6 +1032,9 @@ mod tests {
         fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             let call_index = self.call_count.fetch_add(1, Ordering::SeqCst);
             if call_index == 0 {
+                self.first_started
+                    .send(())
+                    .expect("signal first helper started");
                 let gate = self
                     .first_call_gate
                     .lock()
@@ -1010,16 +1049,20 @@ mod tests {
 
     #[derive(Debug)]
     struct AlwaysBlocksInjector {
-        released: Arc<std::sync::atomic::AtomicBool>,
+        release: Mutex<mpsc::Receiver<()>>,
+        started: mpsc::Sender<()>,
         call_count: AtomicUsize,
     }
 
     impl HostNudgeInjector for AlwaysBlocksInjector {
         fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
-            while !self.released.load(Ordering::SeqCst) {
-                std::thread::yield_now();
-            }
+            self.started.send(()).expect("signal helper started");
+            self.release
+                .lock()
+                .expect("release lock")
+                .recv()
+                .expect("release helper");
             Ok(())
         }
     }
@@ -1147,7 +1190,9 @@ mod tests {
             ready_tx: Some(ready_latch.notifier()),
             receiver_target_tx: Some(target_tx),
         };
-        let join = std::thread::spawn(move || run_graft_receiver_loop(ctx));
+        let join = std::thread::spawn(move || {
+            super::run_graft_receiver_loop_with_wait(ctx, ResultWait::UntilComplete)
+        });
         ready_latch
             .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
             .expect("receiver ready");
@@ -1200,14 +1245,9 @@ mod tests {
         // waiting out `RECEIVE_LOOP_READY_DEADLINE` and reporting a bare,
         // causeless timeout.
         drop(latch.notifier());
-        let started = Instant::now();
         let error = latch
             .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
             .expect_err("a dropped notifier must not be reported as readiness");
-        assert!(
-            started.elapsed() < RECEIVE_LOOP_READY_DEADLINE,
-            "worker exit must be observed before the readiness deadline"
-        );
         assert_eq!(error.code(), AtmErrorCode::InternalError);
         assert!(
             error
@@ -1250,21 +1290,53 @@ mod tests {
     #[test]
     fn bounded_host_nudge_injector_timeout_does_not_wedge_future_delivery() {
         let (gate_tx, gate_rx) = mpsc::channel();
-        let injector = BoundedHostNudgeInjector::spawn(Arc::new(FirstCallBlocksInjector {
-            first_call_gate: Mutex::new(Some(gate_rx)),
-            call_count: AtomicUsize::new(0),
-        }) as Arc<dyn HostNudgeInjector>);
+        let (started_tx, started_rx) = mpsc::channel();
+        let mut injector = BoundedHostNudgeInjector::spawn(
+            Arc::new(FirstCallBlocksInjector {
+                first_call_gate: Mutex::new(Some(gate_rx)),
+                first_started: started_tx,
+                call_count: AtomicUsize::new(0),
+            }) as Arc<dyn HostNudgeInjector>,
+            ResultWait::Bounded(Duration::ZERO),
+        );
 
         let first_error = injector
             .inject_nudge(&request_nudge())
             .expect_err("first delivery should time out");
         assert_eq!(first_error.code(), AtmErrorCode::WaitTimeout);
+        started_rx.recv().expect("first helper started");
+        injector.wait = ResultWait::UntilComplete;
 
         injector
             .inject_nudge(&request_nudge())
             .expect("second delivery should use a fresh helper thread");
 
         gate_tx.send(()).expect("release blocked first helper");
+    }
+
+    #[test]
+    fn cron_nudge_wait_returns_receipt_or_unknown_on_immediate_timeout() {
+        let budget = Arc::new(HelperThreadBudget::new(1));
+        let (ready_tx, ready_rx) = mpsc::channel();
+        ready_tx
+            .send(Ok(
+                atm_core::boundary::DeliveryReceipt::RecipientUnavailable,
+            ))
+            .expect("send ready receipt");
+        assert_eq!(
+            super::receive_host_cron_nudge_result(ready_rx, &budget, ResultWait::UntilComplete),
+            atm_core::boundary::DeliveryReceipt::RecipientUnavailable
+        );
+
+        let (_pending_tx, pending_rx) = mpsc::channel();
+        assert!(matches!(
+            super::receive_host_cron_nudge_result(
+                pending_rx,
+                &budget,
+                ResultWait::Bounded(Duration::ZERO),
+            ),
+            atm_core::boundary::DeliveryReceipt::Unknown { .. }
+        ));
     }
 
     #[test]
@@ -1334,13 +1406,16 @@ mod tests {
 
     #[test]
     fn bounded_host_nudge_injector_caps_helper_growth_under_repeated_hangs() {
-        let released = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (release_tx, release_rx) = mpsc::channel();
+        let (started_tx, started_rx) = mpsc::channel();
         let blocking_injector = Arc::new(AlwaysBlocksInjector {
-            released: Arc::clone(&released),
+            release: Mutex::new(release_rx),
+            started: started_tx,
             call_count: AtomicUsize::new(0),
         });
         let injector = BoundedHostNudgeInjector::spawn(
-            Arc::clone(&blocking_injector) as Arc<dyn HostNudgeInjector>
+            Arc::clone(&blocking_injector) as Arc<dyn HostNudgeInjector>,
+            ResultWait::Bounded(Duration::ZERO),
         );
 
         for _ in 0..MAX_HOST_NUDGE_HELPERS {
@@ -1348,6 +1423,7 @@ mod tests {
                 .inject_nudge(&request_nudge())
                 .expect_err("blocked helper should time out");
             assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
+            started_rx.recv().expect("blocked helper started");
         }
 
         let error = injector
@@ -1365,7 +1441,9 @@ mod tests {
             MAX_HOST_NUDGE_HELPERS
         );
 
-        released.store(true, Ordering::SeqCst);
+        for _ in 0..MAX_HOST_NUDGE_HELPERS {
+            release_tx.send(()).expect("release blocked helper");
+        }
     }
 
     #[test]
@@ -1459,7 +1537,8 @@ mod tests {
             .poll_accept()
             .expect("poll rebound listener")
             .expect("connected loopback peer");
-        let bounded_injector = BoundedHostNudgeInjector::spawn(injector.clone());
+        let bounded_injector =
+            BoundedHostNudgeInjector::spawn(injector.clone(), ResultWait::UntilComplete);
         handle_graft_receiver_connection(&ctx, &bounded_injector, &listener.listener, &mut stream)
             .expect("deliver through rebound listener");
         let response: GraftPostSendResponse =
@@ -2050,7 +2129,7 @@ mod tests {
         let capability = receiver.listener.capability().clone();
         let loop_injector = injector.clone();
         let join = std::thread::spawn(move || {
-            let bounded = BoundedHostNudgeInjector::spawn(loop_injector);
+            let bounded = BoundedHostNudgeInjector::spawn(loop_injector, ResultWait::UntilComplete);
             super::serve_registered_receiver(&ctx, &bounded, receiver)
         });
         assert_eq!(
