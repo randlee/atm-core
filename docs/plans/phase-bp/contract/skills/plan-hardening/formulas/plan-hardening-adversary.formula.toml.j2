@@ -1,0 +1,49 @@
+---
+name: plan-hardening-adversary
+version: 1.0.0
+description: One lead-adversarial task as a bd wisp, run in parallel with an iteration's scope and critical passes. The lead's own review uses it with area "lead".
+format: toml
+required_variables:
+  - root
+  - phase
+  - iteration
+  - planner
+  - area
+  - task
+---
+{#
+Rendered with `sc-compose bead render` and created with `bd mol wisp <file>`,
+like the iteration formula. `area` names what the adversary covers (a short
+slug: `lead`, `repo-sc-compose`, `api-github`, `req-adr`); `task` is the
+lead's instruction for this iteration and must not contain three double
+quotes in a row.
+#}
+formula = "plan-hardening-adversary"
+description = "Plan hardening of {{{ root }}}: iteration {{{ iteration }}} adversary {{{ area }}}."
+version = 1
+type = "workflow"
+phase = "vapor"
+
+[[steps]]
+id = "attack"
+title = "{{{ root }}} hardening {{{ iteration }}}: adversary {{{ area }}}"
+labels = ["phase-{{{ phase }}}", "stage:plan-hardening"]
+metadata = { pass = "adversary:{{{ area }}}", root = "{{{ root }}}", planner = "{{{ planner }}}", iteration = "{{{ iteration }}}" }
+description = """
+Pass: adversary `{{{ area }}}`, iteration {{{ iteration }}}. The planning
+rules are `.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md`.
+
+The plan is the phase root {{{ root }}} and its sprint containers. Read them
+with the plan block of your dispatch template.
+
+Your task from the phase lead:
+
+{{{ task }}}
+
+1. Do the task. Cite every source you used: a file and line, a command and
+   its output, or a URL.
+2. File each place the plan is wrong, missing detail or vague as a finding
+   with the finding block. The planner is {{{ planner }}}.
+3. Close this step: PASS when you filed no Blocking or Important finding,
+   FAIL otherwise.
+"""

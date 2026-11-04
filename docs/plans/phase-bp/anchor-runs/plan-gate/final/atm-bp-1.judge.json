@@ -1,0 +1,1303 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261104T053928Z-atm-bp-1",
+  "gate": "plan",
+  "created_at": "2026-11-04T05:39:28+00:00",
+  "anchors_path": "docs/plans/phase-bp/anchors.json",
+  "plan": "phase-bp",
+  "item": {
+    "id": "atm-bp-1",
+    "title": "bp-1",
+    "source": "docs/plans/phase-bp/anchor-runs/items/atm-bp-1.txt",
+    "chars": 12462,
+    "truncated": false,
+    "chars_before_reduction": 12462,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md must define three run modes: planner with subagents, planner with teammates, and phase lead adversarial to the planner.",
+      "quote": "/plan-hardening can be run by a planning agent w/ his subagents (if team-mates are busy) OR w/ team-mates OR orchestrated by phase-lead adversarially to planning-agent",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep -c the three mode names in plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md == 3 mode headings",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4411,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15613
+    },
+    {
+      "anchor_id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "In the atm-bd plan-hardening formulas, the ceremony-qa review step must depend on the step for the final critical-plan-reviewer pass, so ceremony-qa reviews the plan after that pass.",
+      "quote": "ceremony-qa agent must review the plan after final @critical-plan-reviewer pass (too much critical review can cause ceremony)",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "in plugins/atm-bd-orchestration/skills/plan-hardening/formulas/plan-hardening-final.formula.toml.j2 the ceremony step runs after the final iteration's critical step (final formula is wisped only after the last iteration wisp closes)",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.85,
+          "probabilities": {
+            "yes": 0.09,
+            "no": 0.9,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.85,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4418,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15639
+    },
+    {
+      "anchor_id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md must tell the planning agent that a FAIL from the final critical-plan-reviewer pass is normal because that review is adversarial.",
+      "quote": "It must be clear to planner that failures on final @.claude/agents/critical-plan-reviewer.md is normal since this is an adversarial review",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep -n 'normal' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md near the final critical-plan-reviewer pass",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4415,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15636
+    },
+    {
+      "anchor_id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md must set the default number of review iterations to 2.",
+      "quote": "typical/default # of iterations is 2",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep -n 'iterations' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md shows default 2",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4398,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15551
+    },
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "In the atm-bd plan-hardening iteration formula, the plan-scope-reviewer step and the critical-plan-reviewer step must not depend on each other, so the two passes run in parallel.",
+      "quote": "2 iterations of @plan-scope-reviewer and @critical-plan-reviewer and adversaries (if phase-lead orchestrated) run in parallel",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "the scope and critical steps in plugins/atm-bd-orchestration/skills/plan-hardening/formulas/plan-hardening-iteration.formula.toml.j2 have no needs entry naming each other",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4418,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15655
+    },
+    {
+      "anchor_id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must forbid giving an adversary the same task in iteration 2 as in iteration 1.",
+      "quote": "adversaries should not be given the same task both iterations. new tasks based either on weaknesses uncovered or mixing things up for complete plan coverage",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep -n 'same task' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4409,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15594
+    },
+    {
+      "anchor_id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must instruct the phase lead to review the plan itself and file its own findings, in addition to dispatching reviewers.",
+      "quote": "phase-lead should work to find weaknesses in the plan, not simply coordinate other agents",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep -n 'own findings' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4408,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15610
+    },
+    {
+      "anchor_id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must instruct the phase lead to list every integration the plan has with another repository or an external API and to assign an agent to research each listed integration for detail the plan is missing.",
+      "quote": "adversarial-plan-hardening would describe the process of evaluating the plan and identifying areas that may be weak i.e. integrating w/ another repo or external API in which other agents could research and identify areas not covered w/ enough detail",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "grep -n -i 'external API' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 1.0,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4420,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15692
+    },
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must instruct a review of each existing and new requirement and ADR the plan relates to for inconsistency, gaps and vague language, with existing ones considered for revision.",
+      "quote": "All related Requirements/ADR both existing and new should be reviewed for consistency/gaps/vague language/opportunities to tighten ... there should also be a note that existing req/adr should be considered for revision/update",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "grep -n -i 'ADR' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4418,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15666
+    },
+    {
+      "anchor_id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must pick each research agent's tier from the fast, normal and frontier tiers used for dev dispatch, using fast agents for broad ground and frontier models for difficult code.",
+      "quote": "fast agent(s) if there is a lot of ground to cover (potentially even using background agents). frontier models for difficult code ... referencing the same fast/normal/frontier we use for dev-sprint planning",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep -n -E 'fast|normal|frontier' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md cites the dev dispatch difficulty rule",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4417,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15666
+    },
+    {
+      "anchor_id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md must say to prefer reviewers from a different model vendor (Anthropic, OpenAI, xAI) where possible, including a different vendor in iteration 2 than in iteration 1 of the same review pass.",
+      "quote": "mixing foundries where possible is preferred even using different foundries for rounds 1 and 2",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "grep -n -i 'foundry' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4435,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15710
+    },
+    {
+      "anchor_id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each review pass of the atm-bd plan-hardening skill must get its instructions from the description of a step bead created with `bd mol wisp`, not from text written into a subagent prompt.",
+      "quote": "I would also prefer if the instructions were written as beads (ephemeral) instead of subagent prompt.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "plugins/atm-bd-orchestration/skills/plan-hardening/formulas/*.formula.toml.j2 set phase = \"vapor\" and the dispatch template reads instructions with bd show of the step bead",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.05,
+            "no": 0.95,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.92,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4412,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15632
+    },
+    {
+      "anchor_id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening skill must dispatch teammates and background subagents with the same template file, which takes a `runner` variable of `teammate` or `subagent`.",
+      "quote": "exactly atm task assign w/ template to team-mate, background subagent w/ same template? ... runner = teammate | subagent so it renders properly for both?",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "one file plugins/atm-bd-orchestration/skills/plan-hardening/templates/plan-hardening-step.xml.j2; test renders it with runner=teammate and runner=subagent and refuses any other value",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.04,
+            "no": 0.96,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.94,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4411,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15619
+    },
+    {
+      "anchor_id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening dispatch template must render `atm task start` for `runner=teammate` and no `atm` command for `runner=subagent`, while both renders claim and close the step bead.",
+      "quote": "teammate needs to do task open, bd claim where subagent simply does bd claim. at close both close bead",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "test: teammate render contains 'atm task start' and 'bd update --claim'; subagent render contains 'bd update --claim' and no 'atm '; both contain 'bd close'",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.97,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4416,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15621
+    },
+    {
+      "anchor_id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "For each finding a plan-hardening review files, the atm-bd plan-hardening dispatch template must create a bd bead assigned to the planning agent to fix that finding.",
+      "quote": "I like that, findings get assigned back to planner as fix beads",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "the step template's finding block runs bd create with --assignee set to the planner variable",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.91,
+            "no": 0.07,
+            "unclear": 0.02
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.96,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.97,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.86,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4404,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15601
+    },
+    {
+      "anchor_id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Files under the atm-bd package's `skills/plan-hardening/` must read and write the plan only through `bd` commands, with no markdown plan path and no `br` path.",
+      "quote": "bd only for atm-bd",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep -rnE '\\bbr |sprint-.*\\.md|docs/plans/.*\\.md' plugins/atm-bd-orchestration/skills/plan-hardening returns nothing outside evals fixtures",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.79,
+          "probabilities": {
+            "yes": 0.13,
+            "no": 0.86,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.79,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4411,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15598
+    },
+    {
+      "anchor_id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The bd-based plan-hardening skill must be shipped in the atm-bd package manifest, so the atm-bd installer installs it.",
+      "quote": "yes, plan-hardening should be rewritten to be bd based and installed as part of atm-bd.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "plugins/atm-bd-orchestration/manifest.yaml lists skills/plan-hardening/SKILL.md; tests/gen_manifest.py --check passes",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.95,
+            "no": 0.03,
+            "unclear": 0.02
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.92,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4402,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15572
+    },
+    {
+      "anchor_id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md mode-selection rule must choose the phase-lead adversarial mode whenever the team has no assigned work.",
+      "quote": "if team is idle, I would do adversarial every time",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "grep -n -i 'idle' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md mode selection",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.98,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4402,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15577
+    },
+    {
+      "anchor_id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md mode-selection rule must choose planner-with-teammates when the plan is hard enough to interrupt another frontier model, typically from a different model vendor.",
+      "quote": "the planner-with-teammates is when the plan is harder and it's worth interrupting another frontier model (typically different foundry because reviews are better)",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "grep -n -i 'planner with teammates' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md mode selection",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.03,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.16,
+            "no": 0.83,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.74,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4410,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15635
+    },
+    {
+      "anchor_id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "In the atm-bd plan-hardening planner-with-subagents mode, the planning agent must run every review pass with its own subagents and need nothing from the phase lead.",
+      "quote": "if plans change mid phase, all team-mates are busy and I typically pull a frontier model off to the side to create a new sprint or two to fill the gap. having him coordinate w/ phase-lead (who is busy coordinating) isn't reasonable. it's easier for him to use subagents",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 3,
+      "deterministic_check": "plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md planner-with-subagents section names no phase-lead step",
+      "kind": "directive",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 1.0,
+            "no": 0.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.97,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 4406,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 12462,
+      "item_shortened": false,
+      "request_bytes": 15601
+    }
+  ],
+  "summary": {
+    "counts": {
+      "satisfied": 20
+    },
+    "failing": [],
+    "leaning_counts": {
+      "satisfied": 20
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": true
+  }
+}

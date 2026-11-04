@@ -1,0 +1,84 @@
+---
+name: plan-hardening-step
+version: 1.0.0
+description: Runs one plan-hardening wisp step. One template for both runners - a teammate (an ATM task) and a background subagent (a rendered prompt).
+format: xml
+required_variables: [step, runner, actor, phase, root, planner]
+metadata:
+  type: plan-hardening-step
+  tags: [stage:plan-hardening]
+---
+{%- if runner == "teammate" %}{% set teammate = true %}{% elif runner == "subagent" %}{% set teammate = false %}{% else %}{{ ("runner must be teammate or subagent, got " ~ runner) | int }}{% endif %}
+<plan-hardening-step id="{{ step }}" runner="{{ runner }}">
+  <phase>{{ phase }}</phase>
+  <root>{{ root }}</root>
+  <instructions><![CDATA[
+Your instructions are the description of step bead {{ step }}. This template
+only starts, records and closes the step.
+
+1. Start:
+
+```bash
+set -euo pipefail
+{% if teammate %}atm task start {{ step }} "plan-hardening step {{ step }}"
+{% endif %}bd update {{ step }} --claim --actor {{ actor }}
+bd show {{ step }} --json | jq -er '.[0].description'
+```
+
+2. Read the plan when the step reviews it:
+
+```bash
+set -euo pipefail
+bd show {{ root }} --json | jq -e '.[0] | {id, title, description, design, acceptance_criteria}'
+bd list --parent {{ root }} -l stage:sprint -n 0 --json \
+  | jq -e '[.[] | {id, title, description, design, acceptance_criteria, metadata}]'
+```
+
+3. Do what the step description says.
+
+4. File findings when you have any. Write a JSON array to
+   `${TMPDIR:-/tmp}/{{ step }}-findings.json`, one object per finding:
+   `title`, `description` (the problem and the exact correction, naming the
+   bead and field), `severity` (`Blocking`, `Important` or `Minor`) and
+   `plan_bead` (the bead it is about). Then run:
+
+```bash
+set -euo pipefail
+STEP='{{ step }}'
+PASS=$(bd show "$STEP" --json | jq -er '.[0].metadata.pass')
+jq -ce '.[]' "${TMPDIR:-/tmp}/$STEP-findings.json" | while IFS= read -r f; do
+  jq -e '(.severity | IN("Blocking","Important","Minor")) and (.title|length>0) and (.plan_bead|length>0)' <<<"$f" >/dev/null
+  bd create "$(jq -er .title <<<"$f")" --parent '{{ root }}' --type task --assignee '{{ planner }}' \
+    --labels 'phase-{{ phase }},stage:plan-fix' --description "$(jq -er .description <<<"$f")" \
+    --metadata "$(jq -c --arg pass "$PASS" --arg step "$STEP" '{pass:$pass, filed_by_step:$step, severity, plan_bead}' <<<"$f")" \
+    --actor '{{ actor }}' --json | jq -er '.id'
+done | tee "${TMPDIR:-/tmp}/$STEP-filed.txt"
+```
+
+   Close a fix bead you verified with
+   `bd close <fix bead> --reason "verified: <what resolves it>" --actor {{ actor }}`;
+   note one that is still wrong with
+   `bd update <fix bead> --append-notes "still open: <what>" --actor {{ actor }}`.
+
+5. Close the step. VERDICT is PASS or FAIL as the description says:
+
+```bash
+set -euo pipefail
+bd close {{ step }} --actor {{ actor }} \
+  --reason "VERDICT=<PASS|FAIL> filed=<fix bead ids, comma separated, or none> verified=<closed fix bead ids or none>"
+```
+
+{% if teammate -%}
+6. Close your task with a short report that ends in this fenced JSON, then
+   stop: `atm task close {{ step }} completed --stdin`. If the close fails,
+   read the error, fix its cause and rerun it.
+{% else -%}
+6. Return only this fenced JSON as your final message. Run no `atm` command.
+{% endif %}
+
+
+```json
+{"step": "{{ step }}", "verdict": "PASS|FAIL", "findings": ["<filed fix bead ids>"]}
+```
+  ]]></instructions>
+</plan-hardening-step>

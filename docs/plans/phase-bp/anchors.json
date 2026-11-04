@@ -1,0 +1,1053 @@
+{
+  "schema": "plan-anchoring/anchors/1",
+  "plan": "phase-bp",
+  "intent_ref": "docs/plans/phase-bp/intent.md",
+  "anchors": [
+    {
+      "id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md must define three run modes: planner with subagents, planner with teammates, and phase lead adversarial to the planner.",
+      "quote": "/plan-hardening can be run by a planning agent w/ his subagents (if team-mates are busy) OR w/ team-mates OR orchestrated by phase-lead adversarially to planning-agent",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Three run modes",
+      "scope": "adds or changes the plan-hardening SKILL.md run modes or the step template",
+      "deterministic_check": "grep -c the three mode names in plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md == 3 mode headings",
+      "fixtures": {
+        "pass": [
+          "skills/plan-hardening/SKILL.md has a Run Modes section defining three modes: planner with subagents, planner with teammates, and lead adversarial, where the phase lead orchestrates against the planner (test_skill_names_three_modes)."
+        ],
+        "fail": [
+          "skills/plan-hardening/SKILL.md describes one run mode: the team lead routes every pass to reviewers."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:07+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:40+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "In the atm-bd plan-hardening formulas, the ceremony-qa review step must depend on the step for the final critical-plan-reviewer pass, so ceremony-qa reviews the plan after that pass.",
+      "quote": "ceremony-qa agent must review the plan after final @critical-plan-reviewer pass (too much critical review can cause ceremony)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "ceremony-qa after final critical pass",
+      "scope": "adds or changes the plan-hardening formulas, step order or SKILL.md flow",
+      "deterministic_check": "in plugins/atm-bd-orchestration/skills/plan-hardening/formulas/plan-hardening-final.formula.toml.j2 the ceremony step runs after the final iteration's critical step (final formula is wisped only after the last iteration wisp closes)",
+      "fixtures": {
+        "pass": [
+          "The final formula skills/plan-hardening/formulas/plan-hardening-final.formula.toml.j2 starts with a ceremony step, and SKILL.md wisps it only after the last iteration's critical-plan-reviewer step has closed, so ceremony-qa reviews the plan after the final critical pass (test_final_formula_starts_with_ceremony)."
+        ],
+        "fail": [
+          "ceremony-qa runs in iteration 1 in parallel with the critical-plan-reviewer and is not run again after the final critical pass."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:07+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:40+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md must tell the planning agent that a FAIL from the final critical-plan-reviewer pass is normal because that review is adversarial.",
+      "quote": "It must be clear to planner that failures on final @.claude/agents/critical-plan-reviewer.md is normal since this is an adversarial review",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Final critical FAIL is normal",
+      "scope": "adds or changes plan-hardening SKILL.md, the fix step instructions or the step template",
+      "deterministic_check": "grep -n 'normal' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md near the final critical-plan-reviewer pass",
+      "fixtures": {
+        "pass": [
+          "skills/plan-hardening/SKILL.md and the fix step description tell the planner: a FAIL from the final critical-plan-reviewer pass is normal because that review is adversarial; fix the findings and continue to ceremony-qa."
+        ],
+        "fail": [
+          "The final critical-plan-reviewer FAIL makes the planner start another iteration until it passes."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:07+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:40+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md must set the default number of review iterations to 2.",
+      "quote": "typical/default # of iterations is 2",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Default two iterations",
+      "scope": "adds or changes the plan-hardening iteration count, formulas or SKILL.md loop",
+      "deterministic_check": "grep -n 'iterations' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md shows default 2",
+      "fixtures": {
+        "pass": [
+          "skills/plan-hardening/SKILL.md: run 2 iterations by default (the lead or planner may set another count); the loop wisps plan-hardening-iteration for iteration 1 and 2."
+        ],
+        "fail": [
+          "The skill runs reviewer cycles until convergence with a cap of 3."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:07+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "In the atm-bd plan-hardening iteration formula, the plan-scope-reviewer step and the critical-plan-reviewer step must not depend on each other, so the two passes run in parallel.",
+      "quote": "2 iterations of @plan-scope-reviewer and @critical-plan-reviewer and adversaries (if phase-lead orchestrated) run in parallel",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Passes in an iteration run in parallel",
+      "scope": "adds or changes the plan-hardening iteration formula step dependencies or adversary dispatch",
+      "deterministic_check": "the scope and critical steps in plugins/atm-bd-orchestration/skills/plan-hardening/formulas/plan-hardening-iteration.formula.toml.j2 have no needs entry naming each other",
+      "fixtures": {
+        "pass": [
+          "In plan-hardening-iteration.formula.toml.j2 the scope and critical steps have no needs entries; only the fix step needs both, and the lead dispatches adversary tasks at the same time, so all passes of an iteration run in parallel (test_iteration_review_steps_are_parallel)."
+        ],
+        "fail": [
+          "The critical step needs the scope step, so the critical-plan-reviewer starts only after plan-scope-reviewer closes."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:07+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must forbid giving an adversary the same task in iteration 2 as in iteration 1.",
+      "quote": "adversaries should not be given the same task both iterations. new tasks based either on weaknesses uncovered or mixing things up for complete plan coverage",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Adversaries get new tasks in iteration 2",
+      "scope": "adds or changes the adversarial-plan-hardening reference or adversary assignment",
+      "deterministic_check": "grep -n 'same task' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "fixtures": {
+        "pass": [
+          "references/adversarial-plan-hardening.md: never give an adversary the same task in iteration 2; each iteration-2 task targets a weakness iteration 1 found or a plan area no one has covered yet, and the lead records each adversary's area per iteration."
+        ],
+        "fail": [
+          "The lead re-sends the same adversary tasks unchanged in iteration 2 to confirm their findings."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:07+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must instruct the phase lead to review the plan itself and file its own findings, in addition to dispatching reviewers.",
+      "quote": "phase-lead should work to find weaknesses in the plan, not simply coordinate other agents",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Phase lead files its own findings",
+      "scope": "adds or changes the adversarial-plan-hardening reference",
+      "deterministic_check": "grep -n 'own findings' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "fixtures": {
+        "pass": [
+          "references/adversarial-plan-hardening.md: the phase lead reviews the plan itself every iteration and files its own findings as plan-fix beads, besides dispatching reviewers and adversaries."
+        ],
+        "fail": [
+          "The phase lead only dispatches reviewers and forwards their findings; it files none of its own."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:07+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must instruct the phase lead to list every integration the plan has with another repository or an external API and to assign an agent to research each listed integration for detail the plan is missing.",
+      "quote": "adversarial-plan-hardening would describe the process of evaluating the plan and identifying areas that may be weak i.e. integrating w/ another repo or external API in which other agents could research and identify areas not covered w/ enough detail",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Research each external repo or API integration",
+      "scope": "adds or changes the adversarial-plan-hardening reference",
+      "deterministic_check": "grep -n -i 'external API' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "fixtures": {
+        "pass": [
+          "plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md step 1 tells the phase lead to list every integration the plan has with another repository or an external API (CLI, schema, service) and to assign an agent to research each listed integration and file what the plan is missing as fix beads. tests/test_plan_hardening.py::test_adversarial_reference_integration_step asserts the step names the phase lead, 'external API' and the per-integration research assignment; just test passes."
+        ],
+        "fail": [
+          "The adversarial reference covers internal sprint shape only and names no research of other repositories or APIs."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:07+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-04T05:27:46+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must instruct a review of each existing and new requirement and ADR the plan relates to for inconsistency, gaps and vague language, with existing ones considered for revision.",
+      "quote": "All related Requirements/ADR both existing and new should be reviewed for consistency/gaps/vague language/opportunities to tighten ... there should also be a note that existing req/adr should be considered for revision/update",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Review and revise related REQs and ADRs",
+      "scope": "adds or changes the adversarial-plan-hardening reference",
+      "deterministic_check": "grep -n -i 'ADR' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "fixtures": {
+        "pass": [
+          "plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md step 2 tells the phase lead to review each existing and new requirement and ADR the plan relates to for inconsistency, gaps and vague language, and to file a revision fix bead for each existing one the plan outgrows, contradicts or sharpens. tests/test_plan_hardening.py::test_adversarial_reference_req_adr_step asserts the step names existing and new requirements and ADRs and revision; just test passes."
+        ],
+        "fail": [
+          "Requirements and ADRs are checked only for whether their ids exist."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-04T05:27:46+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must pick each research agent's tier from the fast, normal and frontier tiers used for dev dispatch, using fast agents for broad ground and frontier models for difficult code.",
+      "quote": "fast agent(s) if there is a lot of ground to cover (potentially even using background agents). frontier models for difficult code ... referencing the same fast/normal/frontier we use for dev-sprint planning",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Researcher tier by difficulty, dev tiers",
+      "scope": "adds or changes the adversarial-plan-hardening reference",
+      "deterministic_check": "grep -n -E 'fast|normal|frontier' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md cites the dev dispatch difficulty rule",
+      "fixtures": {
+        "pass": [
+          "references/adversarial-plan-hardening.md assigns researchers by the dev dispatch difficulty tiers (fast, normal, frontier, per atm-bd-orchestration SKILL.md): fast agents, background allowed, for broad ground; frontier models for difficult code."
+        ],
+        "fail": [
+          "Every adversary is a frontier model regardless of the area's difficulty."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md must say to prefer reviewers from a different model vendor (Anthropic, OpenAI, xAI) where possible, including a different vendor in iteration 2 than in iteration 1 of the same review pass.",
+      "quote": "mixing foundries where possible is preferred even using different foundries for rounds 1 and 2",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Mix foundries, including across rounds",
+      "scope": "adds or changes plan-hardening SKILL.md reviewer selection or the adversarial-plan-hardening reference",
+      "deterministic_check": "grep -n -i 'foundry' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md",
+      "fixtures": {
+        "pass": [
+          "plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md Reviewer selection says to prefer reviewers from a different foundry (Anthropic, OpenAI, xAI) wherever possible and to run each pass in iteration 2 on a different foundry than in iteration 1. tests/test_plan_hardening.py::test_skill_foundry_rule asserts both sentences; just test passes."
+        ],
+        "fail": [
+          "All reviewers in both iterations are Claude subagents."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-04T05:27:46+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each review pass of the atm-bd plan-hardening skill must get its instructions from the description of a step bead created with `bd mol wisp`, not from text written into a subagent prompt.",
+      "quote": "I would also prefer if the instructions were written as beads (ephemeral) instead of subagent prompt.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Instructions are ephemeral beads",
+      "scope": "adds or changes plan-hardening formulas or the step template",
+      "deterministic_check": "plugins/atm-bd-orchestration/skills/plan-hardening/formulas/*.formula.toml.j2 set phase = \"vapor\" and the dispatch template reads instructions with bd show of the step bead",
+      "fixtures": {
+        "pass": [
+          "plugins/atm-bd-orchestration/skills/plan-hardening/formulas/plan-hardening-iteration.formula.toml.j2 and plan-hardening-final.formula.toml.j2 set phase = \"vapor\", the skill creates each iteration with bd mol wisp, and each pass's instructions are its step bead description; plugins/atm-bd-orchestration/skills/plan-hardening/templates/plan-hardening-step.xml.j2 contains no review instructions and only runs bd show <step> to read them. tests/test_plan_hardening.py::test_formulas_are_vapor and ::test_step_template_reads_bead_description assert this; just test passes."
+        ],
+        "fail": [
+          "The reviewer instructions are written into the subagent prompt text by the lead."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-04T05:27:46+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening skill must dispatch teammates and background subagents with the same template file, which takes a `runner` variable of `teammate` or `subagent`.",
+      "quote": "exactly atm task assign w/ template to team-mate, background subagent w/ same template? ... runner = teammate | subagent so it renders properly for both?",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "One step template for both runners",
+      "scope": "adds or changes the plan-hardening step template or its dispatch",
+      "deterministic_check": "one file plugins/atm-bd-orchestration/skills/plan-hardening/templates/plan-hardening-step.xml.j2; test renders it with runner=teammate and runner=subagent and refuses any other value",
+      "fixtures": {
+        "pass": [
+          "One template, skills/plan-hardening/templates/plan-hardening-step.xml.j2, with runner = teammate or subagent; test_step_template_renders_both_runners renders both and test_step_template_refuses_other_runner checks any other value fails the strict render."
+        ],
+        "fail": [
+          "There are two templates, plan-hardening-teammate.xml.j2 and plan-hardening-subagent.xml.j2."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:41+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening dispatch template must render `atm task start` for `runner=teammate` and no `atm` command for `runner=subagent`, while both renders claim and close the step bead.",
+      "quote": "teammate needs to do task open, bd claim where subagent simply does bd claim. at close both close bead",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Teammate starts task; both claim and close bead",
+      "scope": "adds or changes the plan-hardening step template",
+      "deterministic_check": "test: teammate render contains 'atm task start' and 'bd update --claim'; subagent render contains 'bd update --claim' and no 'atm '; both contain 'bd close'",
+      "fixtures": {
+        "pass": [
+          "The teammate render of plan-hardening-step.xml.j2 runs atm task start then bd update --claim on the step bead; the subagent render runs only bd update --claim and no atm command; both end with bd close on the step bead (test_step_template_start_and_close_by_runner)."
+        ],
+        "fail": [
+          "The subagent render also runs atm task start and atm task close."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "For each finding a plan-hardening review files, the atm-bd plan-hardening dispatch template must create a bd bead assigned to the planning agent to fix that finding.",
+      "quote": "I like that, findings get assigned back to planner as fix beads",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Findings become fix beads for the planner",
+      "scope": "adds or changes how plan-hardening records findings",
+      "deterministic_check": "the step template's finding block runs bd create with --assignee set to the planner variable",
+      "fixtures": {
+        "pass": [
+          "The step template's finding block runs bd create for each finding with --assignee set to the planner and label stage:plan-fix, so every finding is a fix bead for the planner."
+        ],
+        "fail": [
+          "Findings are returned only in the reviewer's fenced JSON and listed in the close report."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Files under the atm-bd package's `skills/plan-hardening/` must read and write the plan only through `bd` commands, with no markdown plan path and no `br` path.",
+      "quote": "bd only for atm-bd",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "bd only",
+      "scope": "adds or changes plan-hardening plan reading or writing",
+      "deterministic_check": "grep -rnE '\\bbr |sprint-.*\\.md|docs/plans/.*\\.md' plugins/atm-bd-orchestration/skills/plan-hardening returns nothing outside evals fixtures",
+      "fixtures": {
+        "pass": [
+          "skills/plan-hardening reads the plan with bd show and bd list and writes with bd create, update and close only; no markdown plan path and no br command."
+        ],
+        "fail": [
+          "The skill reads docs/plans/phase-x/sprint-*.md when present and falls back to br."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The bd-based plan-hardening skill must be shipped in the atm-bd package manifest, so the atm-bd installer installs it.",
+      "quote": "yes, plan-hardening should be rewritten to be bd based and installed as part of atm-bd.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Installed as part of atm-bd",
+      "scope": "adds or changes the plan-hardening skill files or the atm-bd manifest",
+      "deterministic_check": "plugins/atm-bd-orchestration/manifest.yaml lists skills/plan-hardening/SKILL.md; tests/gen_manifest.py --check passes",
+      "fixtures": {
+        "pass": [
+          "plugins/atm-bd-orchestration/manifest.yaml lists every file under skills/plan-hardening/ and the two reviewer agents; tests/gen_manifest.py --check passes, so atm-bd skill installs them."
+        ],
+        "fail": [
+          "The skill stays in atm-core's .claude/skills/plan-hardening/ and is not in the atm-bd manifest."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd package must contain `skills/plan-hardening/evals/` with agent prompts for four eval runs: haiku as a background subagent, haiku as a teammate, luna as a background subagent and luna as a teammate.",
+      "quote": "I would create some evals for the skill as well in skills/plan-hardening/evals/ which have some agent prompts to test against both background haiku/luna or haiku/luna team-mates",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Evals for haiku and luna, both runners",
+      "scope": "adds or changes plan-hardening evals",
+      "deterministic_check": "ls plugins/atm-bd-orchestration/skills/plan-hardening/evals/ shows prompts covering haiku/luna x subagent/teammate",
+      "fixtures": {
+        "pass": [
+          "skills/plan-hardening/evals/ has eval prompts and a fixture plan; the run matrix is haiku and luna, each as a background subagent and as a teammate (four runs)."
+        ],
+        "fail": [
+          "The evals run only the subagent runner with a frontier model."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:08+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-019",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each eval prompt in the atm-bd `skills/plan-hardening/evals/` must include post-run questions that the eval runner asks the agent after its run, about which instructions were unclear or missing.",
+      "quote": "the evals should interrogate the agents post run to get good feedback",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Evals interrogate the agent after the run",
+      "scope": "adds or changes plan-hardening evals",
+      "deterministic_check": "each plugins/atm-bd-orchestration/skills/plan-hardening/evals/*.md prompt contains a post-run questions section",
+      "fixtures": {
+        "pass": [
+          "Each eval prompt plugins/atm-bd-orchestration/skills/plan-hardening/evals/*.md has a Post-run questions section that the eval runner asks the same agent after its run closes (SendMessage for a subagent, atm send for a teammate): which instruction was unclear, where it guessed, what it skipped and why, and what it needed but did not have. tests/test_plan_hardening.py::test_eval_prompts_have_post_run_questions asserts the section in every prompt; just test passes."
+        ],
+        "fail": [
+          "Evals only check the bead state after the run; the agent is not asked anything."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:09+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-04T05:27:46+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md mode-selection rule must choose the phase-lead adversarial mode whenever the team has no assigned work.",
+      "quote": "if team is idle, I would do adversarial every time",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Idle team means adversarial mode",
+      "scope": "adds or changes plan-hardening SKILL.md mode selection",
+      "deterministic_check": "grep -n -i 'idle' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md mode selection",
+      "fixtures": {
+        "pass": [
+          "plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md Mode selection: when the team has no assigned work, use lead adversarial mode. tests/test_plan_hardening.py::test_skill_mode_selection asserts the rule; just test passes."
+        ],
+        "fail": [
+          "Mode selection always uses planner with subagents."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:09+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-04T05:27:46+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd plan-hardening SKILL.md mode-selection rule must choose planner-with-teammates when the plan is hard enough to interrupt another frontier model, typically from a different model vendor.",
+      "quote": "the planner-with-teammates is when the plan is harder and it's worth interrupting another frontier model (typically different foundry because reviews are better)",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Hard plan means planner with teammates",
+      "scope": "adds or changes plan-hardening SKILL.md mode selection",
+      "deterministic_check": "grep -n -i 'planner with teammates' plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md mode selection",
+      "fixtures": {
+        "pass": [
+          "plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md Mode selection: use planner with teammates when the plan is hard enough to be worth interrupting another frontier model, preferably from a different foundry. tests/test_plan_hardening.py::test_skill_mode_selection asserts the rule; just test passes."
+        ],
+        "fail": [
+          "Planner with teammates is used whenever any teammate is idle."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:09+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-04T05:27:46+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "In the atm-bd plan-hardening planner-with-subagents mode, the planning agent must run every review pass with its own subagents and need nothing from the phase lead.",
+      "quote": "if plans change mid phase, all team-mates are busy and I typically pull a frontier model off to the side to create a new sprint or two to fill the gap. having him coordinate w/ phase-lead (who is busy coordinating) isn't reasonable. it's easier for him to use subagents",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "summary": "Planner mode needs no lead",
+      "scope": "adds or changes plan-hardening SKILL.md planner mode",
+      "deterministic_check": "plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md planner-with-subagents section names no phase-lead step",
+      "fixtures": {
+        "pass": [
+          "plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md Planner with subagents: the planner wisps every iteration and the final formula and runs every pass, including the final critical-plan-reviewer and ceremony-qa passes, with its own background subagents; no step needs the phase lead. tests/test_plan_hardening.py::test_skill_planner_mode_needs_no_lead asserts the section names no phase-lead step; just test passes."
+        ],
+        "fail": [
+          "In planner mode the phase lead dispatches the final critical-plan-reviewer and ceremony-qa passes."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-04T05:18:09+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-04T05:18:42+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-04T05:27:46+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ]
+    }
+  ]
+}
