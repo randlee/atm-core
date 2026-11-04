@@ -1,0 +1,102 @@
+---
+name: plan-hardening-iteration
+version: 1.0.0
+description: One plan-hardening iteration as a bd wisp. The scope and critical passes have no edge between them and run in parallel; the planner's fix step needs both.
+format: toml
+required_variables:
+  - root
+  - phase
+  - iteration
+  - iterations
+  - planner
+---
+{#
+Rendered with `sc-compose bead render` (operation render, no bd call) to a
+.formula.toml, then created with `bd mol wisp <file>`: phase vapor makes every
+step ephemeral, so the steps stay out of `bd ready` (they appear with
+`bd ready --mol <wisp> --include-ephemeral`). Each step's description is the
+whole instruction for its pass; the dispatch template only claims the step,
+prints this description and closes the step.
+#}
+formula = "plan-hardening-iteration"
+description = "Plan hardening of {{{ root }}}: iteration {{{ iteration }}} of {{{ iterations }}}."
+version = 1
+type = "workflow"
+phase = "vapor"
+
+[[steps]]
+id = "scope"
+title = "{{{ root }}} hardening {{{ iteration }}}/{{{ iterations }}}: plan-scope-reviewer pass"
+labels = ["phase-{{{ phase }}}", "stage:plan-hardening"]
+metadata = { pass = "scope", root = "{{{ root }}}", planner = "{{{ planner }}}", iteration = "{{{ iteration }}}" }
+description = """
+Pass: plan-scope-reviewer. Your review instructions are the agent file
+`.claude/agents/plan-scope-reviewer.md`; the planning rules are
+`.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md`.
+
+The plan is the phase root {{{ root }}} and its sprint containers. Read them
+with the plan block of your dispatch template.
+
+1. Verify first. For each open `stage:plan-fix` bead under {{{ root }}} whose
+   `metadata.pass` is `scope`: close it when the plan now resolves it; leave it
+   open, with a note saying what is still wrong, when it does not.
+2. Review the whole plan as the agent file says and file every new
+   Blocking, Important or Minor finding with the finding block. The planner
+   is {{{ planner }}}.
+3. Close this step: PASS when no Blocking or Important finding filed by this
+   pass is open, FAIL otherwise.
+"""
+
+[[steps]]
+id = "critical"
+title = "{{{ root }}} hardening {{{ iteration }}}/{{{ iterations }}}: critical-plan-reviewer pass"
+labels = ["phase-{{{ phase }}}", "stage:plan-hardening"]
+metadata = { pass = "critical", root = "{{{ root }}}", planner = "{{{ planner }}}", iteration = "{{{ iteration }}}" }
+description = """
+Pass: critical-plan-reviewer, a hostile review. Your review instructions are
+the agent file `.claude/agents/critical-plan-reviewer.md`; the planning rules
+are `.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md`.
+
+The plan is the phase root {{{ root }}} and its sprint containers. Read them
+with the plan block of your dispatch template.
+
+1. Verify first. For each open `stage:plan-fix` bead under {{{ root }}} whose
+   `metadata.pass` is `critical`: close it when the plan now resolves it; leave
+   it open, with a note saying what is still wrong, when it does not.
+2. Attack the whole plan as the agent file says and file every new finding
+   with the finding block. The planner is {{{ planner }}}.
+3. Close this step: PASS when no Blocking or Important finding filed by this
+   pass is open, FAIL otherwise.
+"""
+
+[[steps]]
+id = "fix"
+title = "{{{ root }}} hardening {{{ iteration }}}/{{{ iterations }}}: planner fixes"
+needs = ["scope", "critical"]
+assignee = "{{{ planner }}}"
+labels = ["phase-{{{ phase }}}", "stage:plan-hardening"]
+metadata = { pass = "fix", root = "{{{ root }}}", planner = "{{{ planner }}}", iteration = "{{{ iteration }}}" }
+description = """
+Planner {{{ planner }}}: fix the plan. This is iteration {{{ iteration }}} of
+{{{ iterations }}}.
+
+In lead adversarial mode, start only after the lead tells you every adversary
+task of this iteration has closed.
+
+1. List your open fix beads:
+   `bd list --parent {{{ root }}} -l stage:plan-fix --assignee {{{ planner }}} --status open -n 0 --json`.
+2. For each one, change the plan beads it names with `bd update` (description,
+   design, acceptance criteria, metadata) and add a note to the fix bead:
+   `bd update <fix bead> --append-notes "fixed: <what changed, where>"`.
+   A finding you reject gets `--append-notes "rebutted: <citation>"`. Rebut a
+   finding that adds a state, verb, check, artifact or edge the design does
+   not name. Never close a fix bead: the pass that filed it closes it.
+3. Re-run `.claude/skills/atm-beads/scripts/validate-plan --phase {{{ phase }}}`
+   and fix what it reports. When the plan changed, re-run
+   `.claude/skills/sprint-review/scripts/sprint-review --root {{{ root }}}` and
+   push the DAG to the plan PR.
+4. A FAIL from the critical-plan-reviewer in the last iteration is normal: it
+   is an adversarial review. Fix its findings and close this step. Do not add
+   an iteration; the final formula's verify step checks the fixes.
+5. Close this step when every fix bead has a fixed or rebutted note.
+"""

@@ -1,0 +1,103 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261104T051849Z-fixture_ANC-008_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-04T05:18:49+00:00",
+  "anchors_path": "docs/plans/phase-bp/anchors.json",
+  "plan": "phase-bp",
+  "item": {
+    "id": "fixture:ANC-008:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 112,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must instruct the phase lead to list every integration the plan has with another repository or an external API and to assign an agent to research each listed integration for detail the plan is missing.",
+      "quote": "adversarial-plan-hardening would describe the process of evaluating the plan and identifying areas that may be weak i.e. integrating w/ another repo or external API in which other agents could research and identify areas not covered w/ enough detail",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep -n -i 'external API' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.77,
+          "probabilities": {
+            "yes": 0.85,
+            "no": 0.12,
+            "unclear": 0.03
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.92,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.95,
+            "unclear": 0.04
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.72,
+          "probabilities": {
+            "yes": 0.81,
+            "no": 0.17,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.72,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1036,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 112,
+      "item_shortened": false,
+      "request_bytes": 3190
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-008"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

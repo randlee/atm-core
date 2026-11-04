@@ -1,0 +1,170 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "dev-20261104T051918Z-fixture_ANC-009_pass_1",
+  "gate": "dev",
+  "created_at": "2026-11-04T05:19:18+00:00",
+  "anchors_path": "docs/plans/phase-bp/anchors.json",
+  "plan": "phase-bp",
+  "item": {
+    "id": "fixture:ANC-009:pass:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 238,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 64000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd `adversarial-plan-hardening` reference must instruct a review of each existing and new requirement and ADR the plan relates to for inconsistency, gaps and vague language, with existing ones considered for revision.",
+      "quote": "All related Requirements/ADR both existing and new should be reviewed for consistency/gaps/vague language/opportunities to tighten ... there should also be a note that existing req/adr should be considered for revision/update",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "grep -n -i 'ADR' plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md",
+      "kind": "directive",
+      "leaning": "asserted_only",
+      "question_set": {
+        "gate": "dev",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "3c3003769e83070c2318361583df704621657784f6dfbe6c77a894e380f08503",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.0,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.61,
+          "probabilities": {
+            "yes": 0.74,
+            "no": 0.13,
+            "unclear": 0.13
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.48,
+          "probabilities": {
+            "yes": 0.33,
+            "no": 0.65,
+            "unclear": 0.02
+          }
+        }
+      },
+      "verdict_first": "underspecified",
+      "verdict_second": "satisfied",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.0,
+            "unclear": 0.01
+          }
+        },
+        "implemented": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.56,
+          "probabilities": {
+            "yes": 0.71,
+            "no": 0.15,
+            "unclear": 0.14
+          }
+        },
+        "violated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "evidenced": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.52,
+          "probabilities": {
+            "yes": 0.3,
+            "no": 0.68,
+            "unclear": 0.02
+          }
+        }
+      },
+      "min_confidence": 0.56,
+      "explanation": "Jev was not confident (min confidence 0.56); the anchor or the work may be underspecified.",
+      "usage": {
+        "input_tokens": 1243,
+        "output_tokens": 152
+      },
+      "low_questions": [
+        {
+          "ask": "first",
+          "role": "compliance",
+          "question_id": "implemented",
+          "choice": "yes",
+          "confidence": 0.56
+        }
+      ],
+      "attempts": 2,
+      "item_chars_sent": 238,
+      "item_shortened": false,
+      "request_bytes": 4038
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1
+    },
+    "failing": [
+      "ANC-009"
+    ],
+    "leaning_counts": {
+      "asserted_only": 1
+    },
+    "unstable": [
+      "ANC-009"
+    ],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}

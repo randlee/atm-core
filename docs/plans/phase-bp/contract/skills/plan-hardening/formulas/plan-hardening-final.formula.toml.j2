@@ -1,0 +1,82 @@
+---
+name: plan-hardening-final
+version: 1.0.0
+description: The closing plan-hardening wisp, created after the last iteration's fix step closes. ceremony-qa reviews the plan after the final critical-plan-reviewer pass, the planner fixes, and one verify pass closes the fixed findings.
+format: toml
+required_variables:
+  - root
+  - phase
+  - planner
+---
+{#
+Rendered with `sc-compose bead render` to a .formula.toml and created with
+`bd mol wisp <file>` only after the last iteration wisp's fix step closes, so
+the ceremony step always follows the final critical-plan-reviewer pass.
+#}
+formula = "plan-hardening-final"
+description = "Plan hardening of {{{ root }}}: ceremony review, fixes and verification."
+version = 1
+type = "workflow"
+phase = "vapor"
+
+[[steps]]
+id = "ceremony"
+title = "{{{ root }}} hardening final: ceremony-qa pass"
+labels = ["phase-{{{ phase }}}", "stage:plan-hardening"]
+metadata = { pass = "ceremony", root = "{{{ root }}}", planner = "{{{ planner }}}", iteration = "final" }
+description = """
+Pass: ceremony-qa. Your review instructions are the agent file
+`.claude/agents/ceremony-qa.md`, with the plan beads as its review targets.
+It recommends removals only.
+
+The plan is the phase root {{{ root }}} and its sprint containers. Read them
+with the plan block of your dispatch template.
+
+1. Review the whole plan as the agent file says and file every finding with
+   the finding block. The planner is {{{ planner }}}.
+2. Close this step: PASS when you filed no Blocking or Important finding,
+   FAIL otherwise.
+"""
+
+[[steps]]
+id = "fix"
+title = "{{{ root }}} hardening final: planner fixes"
+needs = ["ceremony"]
+assignee = "{{{ planner }}}"
+labels = ["phase-{{{ phase }}}", "stage:plan-hardening"]
+metadata = { pass = "fix", root = "{{{ root }}}", planner = "{{{ planner }}}", iteration = "final" }
+description = """
+Planner {{{ planner }}}: fix the plan for every open fix bead under
+{{{ root }}}: the ceremony findings and any critical-plan-reviewer findings
+from the last iteration. A FAIL from that final critical pass is normal.
+
+1. `bd list --parent {{{ root }}} -l stage:plan-fix --assignee {{{ planner }}} --status open -n 0 --json`.
+2. For each one, change the plan beads with `bd update` and add a
+   `fixed: ...` or `rebutted: <citation>` note. Never close a fix bead.
+3. Re-run `.claude/skills/atm-beads/scripts/validate-plan --phase {{{ phase }}}`;
+   when the plan changed, re-run
+   `.claude/skills/sprint-review/scripts/sprint-review --root {{{ root }}}` and
+   push the DAG to the plan PR.
+4. Close this step when every fix bead has a note.
+"""
+
+[[steps]]
+id = "verify"
+title = "{{{ root }}} hardening final: verify fixes"
+needs = ["fix"]
+labels = ["phase-{{{ phase }}}", "stage:plan-hardening"]
+metadata = { pass = "verify", root = "{{{ root }}}", planner = "{{{ planner }}}", iteration = "final" }
+description = """
+Pass: verify. For each open `stage:plan-fix` bead under {{{ root }}}, read
+the agent file of the pass that filed it (`metadata.pass`: scope is
+`.claude/agents/plan-scope-reviewer.md`, critical is
+`.claude/agents/critical-plan-reviewer.md`, ceremony is
+`.claude/agents/ceremony-qa.md`, lead and adversary findings name their own
+check) and check only that finding against the plan.
+
+1. Close each fix bead the plan now resolves. A rebuttal that cites the
+   design closes it too. Leave the others open with a note saying what is
+   still wrong; file nothing new.
+2. Close this step: PASS when no Blocking or Important fix bead is open,
+   FAIL otherwise. The open ones go to quality-mgr plan review with the plan.
+"""

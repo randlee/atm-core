@@ -1,0 +1,105 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261104T051852Z-fixture_ANC-018_fail_1",
+  "gate": "plan",
+  "created_at": "2026-11-04T05:18:52+00:00",
+  "anchors_path": "docs/plans/phase-bp/anchors.json",
+  "plan": "phase-bp",
+  "item": {
+    "id": "fixture:ANC-018:fail:1",
+    "title": "fixture",
+    "source": "fixtures",
+    "chars": 61,
+    "truncated": false
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "results": [
+    {
+      "anchor_id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The atm-bd package must contain `skills/plan-hardening/evals/` with agent prompts for four eval runs: haiku as a background subagent, haiku as a teammate, luna as a background subagent and luna as a teammate.",
+      "quote": "I would create some evals for the skill as well in skills/plan-hardening/evals/ which have some agent prompts to test against both background haiku/luna or haiku/luna team-mates",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-03",
+      "context": "planning session 2026-11-03 (fenix)",
+      "anchor_version": 2,
+      "deterministic_check": "ls plugins/atm-bd-orchestration/skills/plan-hardening/evals/ shows prompts covering haiku/luna x subagent/teammate",
+      "kind": "directive",
+      "leaning": "contradicted",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "contradicted",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.03,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.62,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.75,
+            "unclear": 0.23
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.96,
+            "no": 0.03,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.62,
+      "explanation": "This bead proposes something the anchor rules out.",
+      "usage": {
+        "input_tokens": 1029,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 61,
+      "item_shortened": false,
+      "request_bytes": 3076
+    }
+  ],
+  "summary": {
+    "counts": {
+      "contradicted": 1
+    },
+    "failing": [
+      "ANC-018"
+    ],
+    "leaning_counts": {
+      "contradicted": 1
+    },
+    "unstable": [],
+    "errors": [],
+    "excluded": [],
+    "shortened": [],
+    "pass": false
+  }
+}
