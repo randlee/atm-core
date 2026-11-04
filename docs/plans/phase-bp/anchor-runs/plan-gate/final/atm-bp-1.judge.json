@@ -1,17 +1,17 @@
 {
   "schema": "plan-anchoring/run/1",
-  "run_id": "plan-20261104T053238Z-atm-bp-1",
+  "run_id": "plan-20261104T053928Z-atm-bp-1",
   "gate": "plan",
-  "created_at": "2026-11-04T05:32:38+00:00",
+  "created_at": "2026-11-04T05:39:28+00:00",
   "anchors_path": "docs/plans/phase-bp/anchors.json",
   "plan": "phase-bp",
   "item": {
     "id": "atm-bp-1",
     "title": "bp-1",
     "source": "docs/plans/phase-bp/anchor-runs/items/atm-bp-1.txt",
-    "chars": 11194,
+    "chars": 12462,
     "truncated": false,
-    "chars_before_reduction": 11194,
+    "chars_before_reduction": 12462,
     "code_reduced": {
       "blocks": 0,
       "lines": 0
@@ -80,13 +80,13 @@
       "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4013,
+        "input_tokens": 4411,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14336
+      "request_bytes": 15613
     },
     {
       "anchor_id": "ANC-002",
@@ -143,13 +143,13 @@
       "min_confidence": 0.85,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4020,
+        "input_tokens": 4418,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14362
+      "request_bytes": 15639
     },
     {
       "anchor_id": "ANC-003",
@@ -206,13 +206,13 @@
       "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4017,
+        "input_tokens": 4415,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14359
+      "request_bytes": 15636
     },
     {
       "anchor_id": "ANC-004",
@@ -258,24 +258,24 @@
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 1.0,
+          "confidence": 0.98,
           "probabilities": {
-            "yes": 0.0,
-            "no": 1.0,
+            "yes": 0.01,
+            "no": 0.99,
             "unclear": 0.0
           }
         }
       },
-      "min_confidence": 1.0,
+      "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4000,
+        "input_tokens": 4398,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14274
+      "request_bytes": 15551
     },
     {
       "anchor_id": "ANC-005",
@@ -321,24 +321,24 @@
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 0.96,
+          "confidence": 0.98,
           "probabilities": {
-            "yes": 0.03,
-            "no": 0.97,
+            "yes": 0.01,
+            "no": 0.99,
             "unclear": 0.0
           }
         }
       },
-      "min_confidence": 0.96,
+      "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4020,
+        "input_tokens": 4418,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14378
+      "request_bytes": 15655
     },
     {
       "anchor_id": "ANC-006",
@@ -384,24 +384,24 @@
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 1.0,
+          "confidence": 0.98,
           "probabilities": {
-            "yes": 0.0,
-            "no": 1.0,
+            "yes": 0.01,
+            "no": 0.99,
             "unclear": 0.0
           }
         }
       },
-      "min_confidence": 1.0,
+      "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4011,
+        "input_tokens": 4409,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14317
+      "request_bytes": 15594
     },
     {
       "anchor_id": "ANC-007",
@@ -458,13 +458,13 @@
       "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4010,
+        "input_tokens": 4408,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14333
+      "request_bytes": 15610
     },
     {
       "anchor_id": "ANC-008",
@@ -510,24 +510,24 @@
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 0.98,
+          "confidence": 1.0,
           "probabilities": {
-            "yes": 0.01,
-            "no": 0.99,
+            "yes": 0.0,
+            "no": 1.0,
             "unclear": 0.0
           }
         }
       },
-      "min_confidence": 0.98,
+      "min_confidence": 1.0,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4022,
+        "input_tokens": 4420,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14415
+      "request_bytes": 15692
     },
     {
       "anchor_id": "ANC-009",
@@ -584,13 +584,13 @@
       "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4020,
+        "input_tokens": 4418,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14389
+      "request_bytes": 15666
     },
     {
       "anchor_id": "ANC-010",
@@ -647,13 +647,13 @@
       "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4019,
+        "input_tokens": 4417,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14389
+      "request_bytes": 15666
     },
     {
       "anchor_id": "ANC-011",
@@ -710,13 +710,13 @@
       "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4037,
+        "input_tokens": 4435,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14433
+      "request_bytes": 15710
     },
     {
       "anchor_id": "ANC-012",
@@ -773,13 +773,13 @@
       "min_confidence": 0.92,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4014,
+        "input_tokens": 4412,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14355
+      "request_bytes": 15632
     },
     {
       "anchor_id": "ANC-013",
@@ -815,34 +815,34 @@
         "addressed": {
           "type": "choice",
           "choice": "yes",
-          "confidence": 1.0,
+          "confidence": 0.98,
           "probabilities": {
-            "yes": 1.0,
-            "no": 0.0,
+            "yes": 0.99,
+            "no": 0.01,
             "unclear": 0.0
           }
         },
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 0.97,
+          "confidence": 0.94,
           "probabilities": {
-            "yes": 0.02,
-            "no": 0.98,
+            "yes": 0.04,
+            "no": 0.96,
             "unclear": 0.0
           }
         }
       },
-      "min_confidence": 0.97,
+      "min_confidence": 0.94,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4013,
+        "input_tokens": 4411,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14342
+      "request_bytes": 15619
     },
     {
       "anchor_id": "ANC-014",
@@ -899,13 +899,13 @@
       "min_confidence": 0.97,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4018,
+        "input_tokens": 4416,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14344
+      "request_bytes": 15621
     },
     {
       "anchor_id": "ANC-015",
@@ -931,44 +931,44 @@
         "relevant": {
           "type": "choice",
           "choice": "yes",
-          "confidence": 0.94,
+          "confidence": 1.0,
           "probabilities": {
-            "yes": 0.96,
-            "no": 0.04,
+            "yes": 1.0,
+            "no": 0.0,
             "unclear": 0.0
           }
         },
         "addressed": {
           "type": "choice",
           "choice": "yes",
-          "confidence": 0.77,
+          "confidence": 0.86,
           "probabilities": {
-            "yes": 0.85,
-            "no": 0.12,
-            "unclear": 0.03
+            "yes": 0.91,
+            "no": 0.07,
+            "unclear": 0.02
           }
         },
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 0.94,
+          "confidence": 0.96,
           "probabilities": {
             "yes": 0.03,
-            "no": 0.96,
-            "unclear": 0.01
+            "no": 0.97,
+            "unclear": 0.0
           }
         }
       },
-      "min_confidence": 0.77,
+      "min_confidence": 0.86,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4006,
+        "input_tokens": 4404,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14324
+      "request_bytes": 15601
     },
     {
       "anchor_id": "ANC-016",
@@ -994,10 +994,10 @@
         "relevant": {
           "type": "choice",
           "choice": "yes",
-          "confidence": 0.98,
+          "confidence": 1.0,
           "probabilities": {
-            "yes": 0.99,
-            "no": 0.01,
+            "yes": 1.0,
+            "no": 0.0,
             "unclear": 0.0
           }
         },
@@ -1014,24 +1014,24 @@
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 0.85,
+          "confidence": 0.79,
           "probabilities": {
-            "yes": 0.1,
-            "no": 0.9,
-            "unclear": 0.0
+            "yes": 0.13,
+            "no": 0.86,
+            "unclear": 0.01
           }
         }
       },
-      "min_confidence": 0.85,
+      "min_confidence": 0.79,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4013,
+        "input_tokens": 4411,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14321
+      "request_bytes": 15598
     },
     {
       "anchor_id": "ANC-017",
@@ -1067,34 +1067,34 @@
         "addressed": {
           "type": "choice",
           "choice": "yes",
-          "confidence": 0.96,
+          "confidence": 0.92,
           "probabilities": {
-            "yes": 0.97,
-            "no": 0.02,
-            "unclear": 0.01
+            "yes": 0.95,
+            "no": 0.03,
+            "unclear": 0.02
           }
         },
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 0.98,
+          "confidence": 0.97,
           "probabilities": {
-            "yes": 0.01,
-            "no": 0.99,
+            "yes": 0.02,
+            "no": 0.98,
             "unclear": 0.0
           }
         }
       },
-      "min_confidence": 0.96,
+      "min_confidence": 0.92,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4004,
+        "input_tokens": 4402,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14295
+      "request_bytes": 15572
     },
     {
       "anchor_id": "ANC-020",
@@ -1140,24 +1140,24 @@
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 1.0,
+          "confidence": 0.98,
           "probabilities": {
-            "yes": 0.0,
-            "no": 1.0,
+            "yes": 0.01,
+            "no": 0.99,
             "unclear": 0.0
           }
         }
       },
-      "min_confidence": 1.0,
+      "min_confidence": 0.98,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4004,
+        "input_tokens": 4402,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14300
+      "request_bytes": 15577
     },
     {
       "anchor_id": "ANC-021",
@@ -1203,24 +1203,24 @@
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 0.8,
+          "confidence": 0.74,
           "probabilities": {
-            "yes": 0.11,
-            "no": 0.87,
-            "unclear": 0.02
+            "yes": 0.16,
+            "no": 0.83,
+            "unclear": 0.01
           }
         }
       },
-      "min_confidence": 0.8,
+      "min_confidence": 0.74,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4012,
+        "input_tokens": 4410,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14358
+      "request_bytes": 15635
     },
     {
       "anchor_id": "ANC-022",
@@ -1266,24 +1266,24 @@
         "contradicted": {
           "type": "choice",
           "choice": "no",
-          "confidence": 0.96,
+          "confidence": 0.97,
           "probabilities": {
-            "yes": 0.03,
-            "no": 0.97,
+            "yes": 0.02,
+            "no": 0.98,
             "unclear": 0.0
           }
         }
       },
-      "min_confidence": 0.96,
+      "min_confidence": 0.97,
       "explanation": "The directive is carried forward.",
       "usage": {
-        "input_tokens": 4008,
+        "input_tokens": 4406,
         "output_tokens": 117
       },
       "attempts": 1,
-      "item_chars_sent": 11194,
+      "item_chars_sent": 12462,
       "item_shortened": false,
-      "request_bytes": 14324
+      "request_bytes": 15601
     }
   ],
   "summary": {

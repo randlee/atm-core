@@ -3,16 +3,16 @@
 ## Goal
 The plan-hardening skill in the atm-bd package, for bd plans only, with tests. bp-2 proves it live.
 
-Anchors: ANC-001..ANC-017 and ANC-020..ANC-022 (atm-core `docs/plans/phase-bp/anchors.json`). Requirements: `NONE`. atm-bd's role docs have numbered items and no ids, and deliverable 6 writes the role doc for this skill.
+Anchors: ANC-001..ANC-017 and ANC-020..ANC-022 (atm-core `docs/plans/phase-bp/anchors.json`). Requirements: `NONE`. atm-bd's role docs have numbered items and no ids, and deliverable 6 writes the role doc for this skill. ADRs: ADR-062 (atm-core), because the step template runs `atm task start` and `atm task close`.
 
 ## Deliverables
-1. Copy the contract files byte for byte from atm-core `develop`: `docs/plans/phase-bp/contract/skills/plan-hardening/` to `plugins/atm-bd-orchestration/skills/plan-hardening/`: the three formulas (`plan-hardening-iteration`, `plan-hardening-final`, `plan-hardening-adversary`), `templates/plan-hardening-step.xml.j2`, and both example vars files. Keep every step id, metadata key, variable and command. The design below lists the only edit allowed.
-2. `plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md`, with the sections given in the design: Run modes, Mode selection, Reviewer selection, Iterations, Loop, Planner with subagents, Planner with teammates, Lead adversarial, and Finish.
+1. Copy the contract files byte for byte from atm-core `develop`: `docs/plans/phase-bp/contract/skills/plan-hardening/` to `plugins/atm-bd-orchestration/skills/plan-hardening/`: the three formulas (`plan-hardening-iteration`, `plan-hardening-final`, `plan-hardening-adversary`), `templates/plan-hardening-step.xml.j2`, and both example vars files. There is no allowed edit: copy with `cp`, never the `.sc-compose/` directory.
+2. `plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md`, with the sections given in the design: Run modes, Mode selection, Reviewer selection, Iterations, Loop, Dispatch, Planner with subagents, Planner with teammates, and Lead adversarial.
 3. `plugins/atm-bd-orchestration/skills/plan-hardening/references/adversarial-plan-hardening.md`: the lead's procedure, given in the design.
 4. `plugins/atm-bd-orchestration/agents/plan-scope-reviewer.md` and `critical-plan-reviewer.md`: bd forms of atm-core's `.claude/agents/` files of the same names. The review rules are unchanged. Inputs are the root and sprint-container bead text from the step template's plan block, not sprint docs. Each finding carries `title`, `description`, `severity` (Blocking, Important or Minor) and `plan_bead`. Every rule cites `.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md` in place of `sprint-planning-guidelines.md`. Tools stay read-only, because the runner, not the agent, writes beads.
 5. `plugins/atm-bd-orchestration/skills/plan-hardening/tests/test_plan_hardening.py`, with the tests listed in the acceptance criteria.
 6. `docs/requirements/plan-hardening.md`: numbered requirements for the planner, lead and reviewers running this skill, with Sources and Unresolved sections as in `planner.md`. Add its row to `docs/requirements/README.md`.
-7. Regenerate `plugins/atm-bd-orchestration/manifest.yaml` with `tests/gen_manifest.py`.
+7. Regenerate `plugins/atm-bd-orchestration/manifest.yaml` and `registry.yaml` with `tests/gen_manifest.py`.
 
 ## Does not close
 - The live runs and the evals (bp-2).
@@ -24,7 +24,7 @@ Anchors: ANC-001..ANC-017 and ANC-020..ANC-022 (atm-core `docs/plans/phase-bp/an
 ## Contract
 atm-core `develop`: `docs/plans/phase-bp/contract/skills/plan-hardening/`. Its `README.md` records the proof for each file.
 
-The one allowed edit: the scope and critical step descriptions point at `.claude/agents/plan-scope-reviewer.md` and `.claude/agents/critical-plan-reviewer.md`. These are the paths the atm-bd installer writes, so they stay as they are.
+There is no allowed edit. The step descriptions already name `.claude/agents/plan-scope-reviewer.md`, `.claude/agents/critical-plan-reviewer.md` and `.claude/agents/ceremony-qa.md`, the paths the atm-bd installer writes.
 
 ## Runner model
 The runner is the agent that takes a step: a teammate, or a `general-purpose` background subagent. It reads the reviewer agent file named in the step description as its review rules, and it runs every `bd` and `atm` command in the rendered template. The reviewer agent files are rules, not the subagent type, which is why they can stay read-only.
@@ -69,7 +69,7 @@ The phase lead, each iteration:
 6. All of this runs alongside the iteration's scope and critical steps, not in place of them.
 
 ## Acceptance Criteria
-- [ ] `cmp` of each contract file against its copy under `plugins/atm-bd-orchestration/skills/plan-hardening/` reports no difference, except the edit allowed in the design.
+- [ ] `cmp` reports no difference between each of the six contract files (three formulas, the step template, two example vars files) and its copy under `plugins/atm-bd-orchestration/skills/plan-hardening/`, and no `.sc-compose/` directory is copied.
 - [ ] `plugins/atm-bd-orchestration/skills/plan-hardening/tests/test_plan_hardening.py` passes, with these tests. Each one reads the shipped files:
   - `test_step_template_renders_both_runners` (ANC-013)
   - `test_step_template_refuses_other_runner` (ANC-013): `runner=bogus` gives a non-zero exit and no output file.
@@ -90,13 +90,16 @@ The phase lead, each iteration:
   - `test_adversarial_reference_integration_step` (ANC-008)
   - `test_adversarial_reference_req_adr_step` (ANC-009)
   - `test_adversarial_reference_lead_findings_new_tasks_tiers` (ANC-006, ANC-007, ANC-010)
-  - `test_skill_is_bd_only` (ANC-016): no `br ` command and no `.md` plan path under `plugins/atm-bd-orchestration/skills/plan-hardening/`.
-- [ ] `tests/gen_manifest.py --check` passes, and the manifest lists every new file (ANC-017).
+  - `test_skill_is_bd_only` (ANC-016): scans `SKILL.md`, `references/`, `templates/` and `formulas/` under `plugins/atm-bd-orchestration/skills/plan-hardening/` (not `tests/` or `evals/`) and finds no match for `\bbr (create|update|close|show|list|ready|import)\b` and none for `sprint-[a-z0-9-]+\.md|phase-[a-z0-9-]+-plan\.md`.
+  - `test_reviewer_agents_bd_form` (deliverable 4): both agent files exist; their front matter `tools` is exactly `Glob, Grep, LS, Read, BashOutput`; each cites `atm-beads-plan-guidelines.md` and never `sprint-planning-guidelines.md`; each names the finding fields `title`, `description`, `severity` and `plan_bead`.
+  - `test_role_doc` (deliverable 6): `docs/requirements/plan-hardening.md` has `Sources:`, a `## Requirements` section of numbered items and a `## Unresolved` section, and `docs/requirements/README.md` links it.
+- [ ] `tests/gen_manifest.py --check` passes, and the manifest lists every new file (ANC-017). `registry.yaml` changes only inside its generated block.
 - [ ] Every new `*.j2` passes `test_frontmatter` (`sc-compose validate --strict`, and declared variables equal to the used variables).
 
 ## Validation
 - `just lint`
-- `just test`
+- `just test` (its `pytest -q` step in `plugins/atm-bd-orchestration` collects `plugins/atm-bd-orchestration/skills/plan-hardening/tests/`)
+- `cd plugins/atm-bd-orchestration && uv run --frozen --project ../../apps/atm-bd-console python -m pytest -q skills/plan-hardening/tests/test_plan_hardening.py`
 
 ## Metadata
-{"relation":"root","closure_type":"boundary","target_boundary":"the plan-hardening skill package files in atm-bd","owned_paths":["plugins/atm-bd-orchestration/skills/plan-hardening/formulas/","plugins/atm-bd-orchestration/skills/plan-hardening/templates/","plugins/atm-bd-orchestration/skills/plan-hardening/examples/","plugins/atm-bd-orchestration/skills/plan-hardening/references/","plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md","plugins/atm-bd-orchestration/skills/plan-hardening/tests/","plugins/atm-bd-orchestration/agents/plan-scope-reviewer.md","plugins/atm-bd-orchestration/agents/critical-plan-reviewer.md","docs/requirements/plan-hardening.md","docs/requirements/README.md","plugins/atm-bd-orchestration/manifest.yaml"],"difficulty":"hard","branch":"sprint/bp-1-plan-hardening-skill","pr_target":"integrate/phase-bp","requirements":["NONE"],"adrs":["NONE"]}
+{"relation":"root","closure_type":"boundary","target_boundary":"the plan-hardening skill package files in atm-bd","owned_paths":["plugins/atm-bd-orchestration/skills/plan-hardening/formulas/","plugins/atm-bd-orchestration/skills/plan-hardening/templates/","plugins/atm-bd-orchestration/skills/plan-hardening/examples/","plugins/atm-bd-orchestration/skills/plan-hardening/references/","plugins/atm-bd-orchestration/skills/plan-hardening/SKILL.md","plugins/atm-bd-orchestration/skills/plan-hardening/tests/","plugins/atm-bd-orchestration/agents/plan-scope-reviewer.md","plugins/atm-bd-orchestration/agents/critical-plan-reviewer.md","docs/requirements/plan-hardening.md","docs/requirements/README.md","plugins/atm-bd-orchestration/manifest.yaml","plugins/atm-bd-orchestration/registry.yaml"],"difficulty":"hard","branch":"sprint/bp-1-plan-hardening-skill","pr_target":"integrate/phase-bp","requirements":["NONE"],"adrs":["ADR-062"]}
