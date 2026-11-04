@@ -2197,6 +2197,8 @@ mod tests {
     // unregister call past the outer receive-loop join deadline.
     #[test]
     fn rsh001_stalled_daemon_calls_never_delay_stop_past_the_join_deadline() {
+        const STALLED_CALL_SIGNAL_DEADLINE: Duration = Duration::from_secs(15);
+
         let paths = test_paths();
         let (refresh_started_tx, refresh_started_rx) = mpsc::sync_channel(1);
         let (refresh_release_tx, refresh_release_rx) = mpsc::channel();
@@ -2244,14 +2246,14 @@ mod tests {
             Some(client),
         );
         refresh_started_rx
-            .recv()
-            .expect("the periodic refresh reaches the controlled stalled call");
+            .recv_timeout(STALLED_CALL_SIGNAL_DEADLINE)
+            .expect("timed out waiting for periodic refresh to enter the stalled refresh call");
 
         stop_tx.send(()).expect("stop");
         join_receive_loop_with_deadline(join).expect("join receiver despite stalled lease calls");
         unregister_started_rx
-            .recv()
-            .expect("shutdown reaches the controlled stalled unregister call");
+            .recv_timeout(STALLED_CALL_SIGNAL_DEADLINE)
+            .expect("timed out waiting for shutdown to enter the stalled unregister call");
         assert_eq!(
             stalled_calls.load(Ordering::SeqCst),
             2,
