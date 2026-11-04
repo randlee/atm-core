@@ -897,7 +897,8 @@ mod tests {
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::{
         GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendRequest, GraftPostSendResponse,
-        GraftReceiverListener, deliver_graft_post_send,
+        GraftPostSendWireRequest, GraftReceiverListener, deliver_graft_post_send,
+        read_graft_post_send_message, write_graft_post_send_message,
     };
     use atm_core::protocol::{
         CLI_SCHEMA_VERSION, CompatibilityVerdict, HttpApiVersion, LocalCapability, OwnerGeneration,
@@ -909,7 +910,7 @@ mod tests {
     use atm_core::types::{AgentName, ChatId, TeamName};
     use std::collections::HashMap;
     use std::fs;
-    use std::net::SocketAddr;
+    use std::net::{SocketAddr, TcpStream};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc;
@@ -1425,25 +1426,38 @@ mod tests {
         );
         let endpoint = listener.listener.local_addr().expect("rebound endpoint");
         let capability = listener.listener.capability().clone();
-        let sender =
-            std::thread::spawn(move || deliver_request(endpoint, &capability, request_event()));
-        let mut stream = loop {
-            if let Some(stream) = listener
-                .listener
-                .poll_accept()
-                .expect("poll rebound listener")
-            {
-                break stream;
-            }
-            std::thread::yield_now();
+        // A completed connect queues this loopback peer before the single
+        // nonblocking accept, without polling or relying on another thread.
+        let mut client = TcpStream::connect_timeout(&endpoint, DELIVER_CONNECT_DEADLINE)
+            .expect("connect to rebound listener");
+        client
+            .set_read_timeout(Some(DELIVER_IO_DEADLINE))
+            .expect("set response deadline");
+        client
+            .set_write_timeout(Some(DELIVER_IO_DEADLINE))
+            .expect("set request deadline");
+        let wire = GraftPostSendWireRequest {
+            capability_base64url: capability.to_base64url(),
+            request: GraftPostSendRequest {
+                event: request_event(),
+                kind: NudgeKind::Steer,
+                rendered_nudge: "<atm>test nudge</atm>".to_string(),
+            },
         };
+        write_graft_post_send_message(&mut client, &wire, "write request", "oversize request")
+            .expect("write authenticated request");
+        let mut stream = listener
+            .listener
+            .poll_accept()
+            .expect("poll rebound listener")
+            .expect("connected loopback peer");
         let bounded_injector = BoundedHostNudgeInjector::spawn(injector.clone());
         handle_graft_receiver_connection(&ctx, &bounded_injector, &listener.listener, &mut stream)
             .expect("deliver through rebound listener");
-        assert_eq!(
-            sender.join().expect("join sender"),
-            GraftPostSendResponse::Delivered
-        );
+        let response: GraftPostSendResponse =
+            read_graft_post_send_message(&mut client, "read response", "oversize response")
+                .expect("read delivered response");
+        assert_eq!(response, GraftPostSendResponse::Delivered);
         assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
     }
 
