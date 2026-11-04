@@ -634,11 +634,19 @@ fn listen_for_graft_nudges(
     ctx: &GraftReceiverLoopContext,
     injector: &BoundedHostNudgeInjector,
 ) -> Result<(), AtmError> {
-    let mut listener = activate_graft_receiver(ctx)?;
+    let listener = activate_graft_receiver(ctx)?;
     publish_receiver_target(ctx, &listener.listener);
     if let Some(ready_tx) = ctx.ready_tx.as_ref() {
         signal_ready_sender(ready_tx)?;
     }
+    serve_registered_receiver(ctx, injector, listener)
+}
+
+fn serve_registered_receiver(
+    ctx: &GraftReceiverLoopContext,
+    injector: &BoundedHostNudgeInjector,
+    mut listener: RegisteredGraftReceiver,
+) -> Result<(), AtmError> {
     // Non-blocking accept + poll: the loop re-checks its stop signal every
     // ACCEPT_POLL_INTERVAL instead of parking in a blocking accept, so no
     // wake-by-connect machinery is needed to unblock shutdown.
@@ -1975,77 +1983,84 @@ mod tests {
         stop_receiver(stop_tx, join);
     }
 
-    // ATM-QA-102: unlike AC5 (a stale lease displaced by a *successor's*
-    // bind before this receiver ever runs), this exercises a *live,
-    // already-announced* receiver's own periodic refresh tick observing
-    // `NotOwner` — the exact `RegisteredGraftReceiver::refresh` path the
-    // `displaced` flag exists for. Run through the real accept loop (not
-    // `refresh()` called in isolation), so both halves of the contract are
-    // proven against production code: `displaced` gets set and refresh stops
-    // permanently, while the accept loop itself keeps running and delivering.
+    // Drive each due refresh tick explicitly so a foreign owner is installed
+    // before the first tick and the no-more-refresh assertion needs no clock window.
     #[test]
     fn refresh_tick_observing_notowner_on_a_live_receiver_sets_displaced_and_stops_refreshing() {
         let paths = test_paths();
         let registry = FakeGraftRegistry::new(true);
         let team = TeamName::from_validated(TEST_TEAM);
         let agent = AgentName::from_validated(TEST_QA);
-        let (stop_tx, join, _snapshot, (endpoint, capability)) = spawn_receiver_with_client(
-            paths.workspace_root.clone(),
-            Arc::new(RecordingInjector::default()),
-            Some(registry.client()),
-        );
-        assert!(
-            wait_until(Duration::from_secs(3), || registry.registration_count()
-                >= 1),
-            "the receiver must announce once at bind time before it can be displaced"
-        );
-        let refresh_count_before_displacement = registry.refresh_count();
-
-        // A foreign generation takes over the lease elsewhere (e.g. a
-        // successor bind after this process is SIGKILLed) while this
-        // receiver is still alive and periodically refreshing — the exact
-        // race `displaced` exists to detect, distinct from AC5's pre-bind
-        // staleness scenario.
+        let injector = Arc::new(RecordingInjector::default());
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let ctx = GraftReceiverLoopContext {
+            graft_root: paths.workspace_root.clone(),
+            team: team.clone(),
+            agent: agent.clone(),
+            owner_chat_id: None,
+            client: Some(Arc::new(registry.client()) as Arc<dyn GraftReceiverLeaseClient>),
+            snapshot: Arc::new(RwLock::new(SessionSnapshot {
+                team: team.clone(),
+                agent: agent.clone(),
+                state: GraftSessionState::Listening,
+            })),
+            injector: injector.clone() as Arc<dyn HostNudgeInjector>,
+            observability: Arc::new(NoopObservability),
+            stop_rx,
+            ready_tx: None,
+            receiver_target_tx: None,
+        };
+        let listener = bind_receiver(&paths, None).expect("bind listener");
+        let mut receiver = RegisteredGraftReceiver::new(listener, &ctx);
+        receiver.announce().expect("announce receiver");
         let foreign_generation =
             OwnerGeneration::new("01J000000000000000000000CC").expect("generation");
         registry.seed_stale_lease(team.clone(), agent.clone(), foreign_generation.clone());
+        let refreshes_before = registry.refresh_count();
+        let failures_before = registry.refresh_failure_count();
 
-        assert!(
-            wait_until(Duration::from_secs(3), || registry.refresh_failure_count()
-                >= 1),
-            "a refresh tick must observe NotOwner once a foreign generation owns the lease"
-        );
-        let refresh_failures_at_displacement = registry.refresh_failure_count();
-
-        // The accept loop must never crash once displaced: deliver a nudge
-        // through the still-running receiver.
-        assert_eq!(
-            deliver_request(endpoint, &capability, request_event()),
-            GraftPostSendResponse::Delivered,
-            "the accept loop must keep delivering after its refresh path is displaced"
-        );
-
-        // `refresh` becomes a permanent no-op for this generation: no
-        // further refresh attempt (success or NotOwner failure) reaches the
-        // daemon, even across several more would-be refresh ticks.
-        assert!(
-            !wait_until(Duration::from_millis(1500), || {
-                registry.refresh_count() > refresh_count_before_displacement
-                    || registry.refresh_failure_count() > refresh_failures_at_displacement
-            }),
-            "refresh must stop entirely once displaced, not keep retrying against the \
-             foreign generation"
-        );
+        // A backoff whose first deadline has already elapsed makes each call
+        // an explicit tick; the test never waits for elapsed wall-clock time.
+        let mut due_tick = || {
+            let mut backoff = super::LeaseRefreshBackoff::new(
+                Instant::now() - super::lease_client::GRAFT_LEASE_REFRESH_INTERVAL,
+            );
+            super::tick_lease_refresh(&ctx, &mut receiver, &mut backoff);
+        };
+        due_tick();
+        assert_eq!(registry.refresh_failure_count(), failures_before + 1);
+        for _ in 0..3 {
+            due_tick();
+        }
+        assert_eq!(registry.refresh_count(), refreshes_before);
+        assert_eq!(registry.refresh_failure_count(), failures_before + 1);
+        assert_eq!(registry.registration_count(), 1);
         assert_eq!(
             registry
                 .lease(&team, &agent)
-                .expect("the foreign generation's lease must remain")
+                .expect("foreign lease")
                 .owner_generation,
             foreign_generation,
-            "a displaced receiver must never reclaim or disturb the foreign generation's lease"
+            "a displaced receiver must not disturb the foreign lease"
         );
 
+        // Run the real receive loop with the already-displaced receiver and
+        // verify it continues serving authenticated traffic.
+        let endpoint = receiver.listener.local_addr().expect("endpoint");
+        let capability = receiver.listener.capability().clone();
+        let loop_injector = injector.clone();
+        let join = std::thread::spawn(move || {
+            let bounded = BoundedHostNudgeInjector::spawn(loop_injector);
+            super::serve_registered_receiver(&ctx, &bounded, receiver)
+        });
+        assert_eq!(
+            deliver_request(endpoint, &capability, request_event()),
+            GraftPostSendResponse::Delivered
+        );
+        assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
         stop_receiver(stop_tx, join);
+        assert_eq!(registry.refresh_count(), refreshes_before);
+        assert_eq!(registry.refresh_failure_count(), failures_before + 1);
     }
 
     #[test]
