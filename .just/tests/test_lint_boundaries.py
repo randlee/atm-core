@@ -671,6 +671,18 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             self.assertFalse(records[0].is_active)
 
 
+    def test_parse_boundary_records_skips_malformed_toml(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text="invalid = [\n")
+
+            records, violations = parse_boundary_records(repo_root)
+
+            self.assertEqual(records, [])
+            self.assertEqual(violations, [])
+
+
     def test_boundary_doc_section_lines_reports_per_doc_counts(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

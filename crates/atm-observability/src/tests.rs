@@ -235,7 +235,7 @@ fn atm_adapter_logger_contract_includes_query_records() {
         .expect("typed query logger")
         .into(),
     );
-    query_logger
+    let admitted = query_logger
         .try_log_command(RetainedCommandEvent {
             target: "atm.query",
             action: "qualification",
@@ -243,17 +243,11 @@ fn atm_adapter_logger_contract_includes_query_records() {
             code: Some("ATM_QUERY_CONTRACT"),
         })
         .expect("query record admission");
+    assert_eq!(admitted, RetainedLogOffer::Accepted);
+    // Flush waits for the writer to process all previously admitted records.
     query_logger.flush().expect("query record flush");
-    let snapshot = (0..20)
-        .find_map(|_| {
-            let snapshot = query_logger.query(&LogQuery::default()).ok()?;
-            if snapshot.events.is_empty() {
-                std::thread::yield_now();
-                None
-            } else {
-                Some(snapshot)
-            }
-        })
+    let snapshot = query_logger
+        .query(&LogQuery::default())
         .expect("query record");
     assert_eq!(snapshot.events.len(), 1);
     assert_eq!(

@@ -11,8 +11,21 @@ RUNTIME_PATHS = (
     "crates/",
     ".github/workflows/",
     ".github/scripts/",
+    "boundaries/",
+    "policy/",
+    "release/",
+    "tools/",
+    ".claude/skills/daemon-switch/",
 )
-RUNTIME_FILES = {"Cargo.toml", "Cargo.lock", "build.rs", "Justfile", "sc-lint.toml"}
+RUNTIME_FILES = {
+    "Cargo.toml",
+    "Cargo.lock",
+    "build.rs",
+    "Justfile",
+    "sc-lint.toml",
+    ".just/lint-config.toml",
+    "deny.toml",
+}
 
 
 def requires_runtime(changed_paths: Iterable[str]) -> bool:

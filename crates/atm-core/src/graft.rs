@@ -1016,35 +1016,37 @@ mod tests {
         };
         let endpoint = listener.local_addr().expect("local addr");
         let capability = listener.capability().clone();
-        let sender = std::thread::spawn({
-            move || {
-                deliver_graft_post_send(
-                    endpoint,
-                    &capability,
-                    &request,
-                    Duration::from_secs(1),
-                    Duration::from_secs(3),
-                )
-            }
+        // Accept on a dedicated thread. The delivery call has its own I/O
+        // deadline, so a failed client cannot leave the test spinning forever.
+        listener
+            .listener
+            .set_nonblocking(false)
+            .expect("blocking listener");
+        let receiver = std::thread::spawn(move || {
+            let mut stream = listener
+                .poll_accept()
+                .expect("accept")
+                .expect("loopback peer");
+            let received = listener
+                .read_request(&mut stream, Duration::from_secs(3))
+                .expect("read request");
+            listener
+                .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+                .expect("write response");
+            received
         });
-
-        let mut stream = loop {
-            if let Some(stream) = listener.poll_accept().expect("poll accept") {
-                break stream;
-            }
-            std::thread::yield_now();
-        };
-        let received = listener
-            .read_request(&mut stream, Duration::from_secs(3))
-            .expect("read request");
+        let response = deliver_graft_post_send(
+            endpoint,
+            &capability,
+            &request,
+            Duration::from_secs(1),
+            Duration::from_secs(3),
+        )
+        .expect("deliver");
+        let received = receiver.join().expect("join receiver");
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.event.description, "loopback graft transport");
         assert_eq!(received.kind, NudgeKind::Steer);
-        listener
-            .write_response(&mut stream, &GraftPostSendResponse::Delivered)
-            .expect("write response");
-
-        let response = sender.join().expect("join sender").expect("deliver");
         assert_eq!(response, GraftPostSendResponse::Delivered);
     }
 
@@ -1187,25 +1189,23 @@ mod tests {
         .expect("bind listener");
         let endpoint = listener.local_addr().expect("local addr");
 
-        let forger = std::thread::spawn(move || {
-            let mut stream = TcpStream::connect(endpoint).expect("connect to loopback receiver");
-            let wire = super::GraftPostSendWireRequest {
-                capability_base64url: "not-the-real-capability".to_string(),
-                request: GraftPostSendRequest {
-                    event: test_event(),
-                    kind: NudgeKind::Steer,
-                    rendered_nudge: "<atm>test nudge</atm>".to_string(),
-                },
-            };
-            super::write_graft_post_send_message(&mut stream, &wire, "write", "oversized")
-        });
-
-        let mut stream = loop {
-            if let Some(stream) = listener.poll_accept().expect("poll accept") {
-                break stream;
-            }
-            std::thread::yield_now();
+        // Connect and write before polling: a completed connect queues the
+        // loopback peer, so acceptance does not depend on a racing thread.
+        let mut forger = TcpStream::connect(endpoint).expect("connect to loopback receiver");
+        let wire = super::GraftPostSendWireRequest {
+            capability_base64url: "not-the-real-capability".to_string(),
+            request: GraftPostSendRequest {
+                event: test_event(),
+                kind: NudgeKind::Steer,
+                rendered_nudge: "<atm>test nudge</atm>".to_string(),
+            },
         };
+        super::write_graft_post_send_message(&mut forger, &wire, "write", "oversized")
+            .expect("write forged request");
+        let mut stream = listener
+            .poll_accept()
+            .expect("accept")
+            .expect("connected loopback peer");
         let error = listener
             .read_request(&mut stream, Duration::from_secs(3))
             .expect_err("forged capability must be rejected");
@@ -1213,7 +1213,6 @@ mod tests {
             error.message().contains("invalid local capability"),
             "{error:?}"
         );
-        let _ = forger.join().expect("join forger");
     }
 
     #[test]

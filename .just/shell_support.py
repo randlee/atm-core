@@ -5,7 +5,6 @@ import ntpath
 import os
 from pathlib import Path
 import shutil
-import subprocess
 
 
 def resolve_posix_shell(
@@ -18,15 +17,9 @@ def resolve_posix_shell(
     if not (os.name == "nt" if windows is None else windows):
         return shutil.which("bash") or shutil.which("sh")
     candidates = _windows_shell_candidates(git_bash)
-    try:
-        git_result = subprocess.run(
-            ["git", "--exec-path"], text=True, capture_output=True, check=False, timeout=5
-        )
-    except OSError:
-        git_exec_path = ""
-    else:
-        git_exec_path = git_result.stdout.strip()
-    candidates.extend(_git_bash_candidates(git_exec_path))
+    git_path = shutil.which("git")
+    if git_path:
+        candidates.extend(_git_bash_candidates(ntpath.dirname(git_path)))
     candidates.extend(value for value in (shutil.which("bash"), shutil.which("sh")) if value)
     system32 = ntpath.join(windir or os.environ.get("WINDIR", r"C:\Windows"), "System32")
     for candidate in candidates:
