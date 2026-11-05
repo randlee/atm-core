@@ -44,6 +44,23 @@ const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const LOCAL_IPC_RESPONSE_GRACE: Duration = Duration::from_millis(250);
 const AUTO_START_MAX_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
+trait PublishWaitClock {
+    fn now(&self) -> Instant;
+    fn sleep(&mut self, duration: Duration);
+}
+
+struct SystemPublishWaitClock;
+
+impl PublishWaitClock for SystemPublishWaitClock {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+
+    fn sleep(&mut self, duration: Duration) {
+        thread::sleep(duration);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapCommandEvent {
     pub command: &'static str,
@@ -806,11 +823,33 @@ impl DaemonSupervisor {
     where
         F: FnMut() -> Result<(), AtmError>,
     {
-        let halfway_deadline = Instant::now() + (publish_timeout / 2);
+        self.wait_for_published_daemon_with_clock(
+            try_connect,
+            deadline,
+            publish_timeout,
+            poll_interval,
+            traceability,
+            &mut SystemPublishWaitClock,
+        )
+    }
+
+    fn wait_for_published_daemon_with_clock<F>(
+        &self,
+        try_connect: &mut F,
+        deadline: Instant,
+        publish_timeout: Duration,
+        poll_interval: Duration,
+        traceability: Option<&BootstrapTraceability<'_>>,
+        clock: &mut impl PublishWaitClock,
+    ) -> Result<(), AtmError>
+    where
+        F: FnMut() -> Result<(), AtmError>,
+    {
+        let halfway_deadline = clock.now() + (publish_timeout / 2);
         let mut halfway_reported = false;
         let mut current_poll_interval = poll_interval;
         let mut last_connect_error = None;
-        while Instant::now() < deadline {
+        while clock.now() < deadline {
             match try_connect() {
                 Ok(()) => {
                     self.emit_trace(traceability, "daemon_connect", "connected", None);
@@ -821,7 +860,7 @@ impl DaemonSupervisor {
                     last_connect_error = Some(error);
                 }
             }
-            if !halfway_reported && Instant::now() >= halfway_deadline {
+            if !halfway_reported && clock.now() >= halfway_deadline {
                 tracing::warn!(
                     endpoint = %self.endpoint.display(),
                     publish_timeout_ms = publish_timeout.as_millis(),
@@ -835,11 +874,11 @@ impl DaemonSupervisor {
                 "publish_wait_continuing",
                 None,
             );
-            let remaining = deadline.saturating_duration_since(Instant::now());
+            let remaining = deadline.saturating_duration_since(clock.now());
             if remaining.is_zero() {
                 break;
             }
-            thread::sleep(current_poll_interval.min(remaining));
+            clock.sleep(current_poll_interval.min(remaining));
             current_poll_interval = next_auto_start_poll_interval(current_poll_interval);
         }
         let detail = last_connect_error
@@ -1040,9 +1079,22 @@ mod tests {
         AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, next_auto_start_poll_interval,
-        resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, PublishWaitClock,
+        next_auto_start_poll_interval, resolve_daemon_local_ipc_endpoint,
+        resolve_daemon_local_ipc_endpoint_from_home,
     };
+
+    struct FakePublishWaitClock(Instant);
+
+    impl PublishWaitClock for FakePublishWaitClock {
+        fn now(&self) -> Instant {
+            self.0
+        }
+
+        fn sleep(&mut self, duration: Duration) {
+            self.0 += duration;
+        }
+    }
     #[cfg(unix)]
     use super::{
         FailedAutoStartChild, LocalDaemonTransport, reap_failed_auto_start,
@@ -1296,9 +1348,11 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let supervisor = supervisor(&tempdir);
         let attempts = AtomicUsize::new(0);
+        let mut clock = FakePublishWaitClock(Instant::now());
+        let deadline = clock.0 + Duration::from_millis(50);
 
         supervisor
-            .wait_for_published_daemon(
+            .wait_for_published_daemon_with_clock(
                 &mut || {
                     if attempts.fetch_add(1, Ordering::SeqCst) < 2 {
                         Err(AtmError::daemon_unavailable("record not ready"))
@@ -1306,10 +1360,11 @@ mod tests {
                         Ok(())
                     }
                 },
-                Instant::now() + Duration::from_millis(50),
+                deadline,
                 Duration::from_millis(1),
                 Duration::from_millis(1),
                 None,
+                &mut clock,
             )
             .expect("daemon record becomes connectable before the bounded deadline");
 
@@ -1320,16 +1375,24 @@ mod tests {
     fn publish_wait_retains_the_last_local_ipc_failure_in_its_timeout_error() {
         let tempdir = TempDir::new().expect("tempdir");
         let supervisor = supervisor(&tempdir);
+        let mut clock = FakePublishWaitClock(Instant::now());
+        let deadline = clock.0 + Duration::from_millis(2);
+        let mut attempts = 0;
         let error = supervisor
-            .wait_for_published_daemon(
-                &mut || Err(AtmError::daemon_unavailable("fixture connection refused")),
-                Instant::now() + Duration::from_millis(2),
+            .wait_for_published_daemon_with_clock(
+                &mut || {
+                    attempts += 1;
+                    Err(AtmError::daemon_unavailable("fixture connection refused"))
+                },
+                deadline,
                 Duration::from_millis(2),
                 Duration::from_millis(1),
                 None,
+                &mut clock,
             )
             .expect_err("unreachable daemon must exhaust the publish wait");
 
+        assert_eq!(attempts, 2);
         assert!(
             error.message().contains("fixture connection refused"),
             "the timeout must retain the last local IPC diagnostic"
