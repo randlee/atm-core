@@ -118,17 +118,57 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
                              "peer configuration rejected")
             self.assertIn("peer configuration rejected", markdown_path.read_text())
 
-    def test_loopback_peer_configures_interface_and_trust_before_daemon_launch(self) -> None:
+    def test_loopback_peer_reuses_account_interface_and_removes_only_its_trust(self) -> None:
         module = load_module()
-        with mock.patch.object(module, "run_cli", return_value=SimpleNamespace(returncode=0)) as run:
-            record = module.configure_loopback_peer(Path("atm"), {}, 5, 45678)
+        responses = [
+            SimpleNamespace(returncode=0, stdout='[{"bind_addr":"0.0.0.0:43101","enabled":true}]'),
+            SimpleNamespace(returncode=0, stdout="[]"),
+            SimpleNamespace(returncode=0, stdout=""),
+            SimpleNamespace(returncode=0, stdout=""),
+        ]
+        owned: dict[str, Any] = {}
+        with mock.patch.object(module, "run_cli", side_effect=responses) as run:
+            record = module.configure_loopback_peer(Path("atm"), {}, 5, 45678, owned)
+            errors = module.cleanup_loopback_peer(Path("atm"), {}, 5, owned)
+        self.assertEqual(record["port"], 43101)
         self.assertEqual(record["topology"], "self-loop")
+        self.assertEqual(errors, [])
         commands = [call.args[2] for call in run.call_args_list]
-        self.assertEqual(commands[0][:3], ["peer", "interface", "set"])
-        self.assertIn("127.0.0.1:45678", commands[0])
-        self.assertEqual(commands[1][:3], ["peer", "trust", "add"])
-        self.assertIn("localhost", commands[1])
-        self.assertIn("45678", commands[1])
+        self.assertEqual([command[:3] for command in commands], [
+            ["peer", "interface", "list"], ["peer", "trust", "list"],
+            ["peer", "trust", "add"], ["peer", "trust", "revoke"],
+        ])
+        self.assertIn("43101", commands[2])
+
+    def test_loopback_peer_removes_new_interface_after_partial_failure(self) -> None:
+        module = load_module()
+        responses = [
+            SimpleNamespace(returncode=0, stdout="[]"),
+            SimpleNamespace(returncode=0, stdout="[]"),
+            SimpleNamespace(returncode=0, stdout=""),
+            SimpleNamespace(returncode=1, stdout="", stderr="add failed"),
+            SimpleNamespace(returncode=0, stdout=""),
+            SimpleNamespace(returncode=0, stdout=""),
+        ]
+        owned: dict[str, Any] = {}
+        with mock.patch.object(module, "run_cli", side_effect=responses) as run:
+            with self.assertRaisesRegex(RuntimeError, "add failed"):
+                module.configure_loopback_peer(Path("atm"), {}, 5, 45678, owned)
+            self.assertEqual(module.cleanup_loopback_peer(Path("atm"), {}, 5, owned), [])
+        commands = [call.args[2] for call in run.call_args_list]
+        self.assertEqual(commands[-2][:3], ["peer", "trust", "revoke"])
+        self.assertEqual(commands[-1], ["peer", "interface", "remove", "--bind", "127.0.0.1:45678"])
+
+    def test_loopback_peer_refuses_to_replace_existing_trust(self) -> None:
+        module = load_module()
+        responses = [SimpleNamespace(returncode=0, stdout="[]"),
+                     SimpleNamespace(returncode=0, stdout='[{"host":"localhost"}]')]
+        owned: dict[str, Any] = {}
+        with mock.patch.object(module, "run_cli", side_effect=responses) as run:
+            with self.assertRaisesRegex(RuntimeError, "already exists"):
+                module.configure_loopback_peer(Path("atm"), {}, 5, 45678, owned)
+        self.assertEqual(owned, {})
+        self.assertEqual(run.call_count, 2)
 
     def test_write_evidence_skipped_no_sshd_is_an_honest_non_silent_skip(self) -> None:
         module = load_module()
