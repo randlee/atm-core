@@ -6,8 +6,8 @@ exactly as an operator would install it) through a real `atm send --attach`
 invocation against a real loopback `sshd` this script starts on a scratch
 port, proving end to end that a file attached on the sending side lands
 under the receiving side's `$ATM_TEMP` staging convention
-(`send_to_staging_dir`) via nothing but genuine SSH/SCP I/O -- no daemon
-transport, no envelope change (ADR-055 decisions (c)/(d)). On Windows this
+(`send_to_staging_dir`) via genuine SSH/SCP I/O, with peer transport for
+the message (ADR-055 decisions (c)/(d)). On Windows this
 drives `scripts/transfer/sftp.ps1` instead (via `pwsh`), matching how
 `crates/atm-core/src/transfer_script.rs` resolves a `.ps1` transfer script
 there.
@@ -18,18 +18,12 @@ already owns this OS account's singleton runtime lock, exactly like AQ1.9's
 `run_hermes_atm_restart_matrix.py`), a scratch `$HOME`/`$ATM_HOME` for ATM's
 own state, and a self-diagnosing JSON + Markdown transcript.
 
-Why the recipient host is the literal string ``localhost``, not
-``127.0.0.1``: `atm send --host <h>` only skips the (heavier, trusted-peer)
-authority-lookup path for the exact case-insensitive literal `localhost`
-(`crates/atm/src/commands/send.rs::is_legacy_direct_host`) -- every other
-host string, including a dotted IP literal, requires a registered
-`TrustedPeer`. Attachment-locality classification
-(`classify_recipient_locality`) still correctly resolves `localhost` as
-*remote* (it does not special-case the string; only an unset host or a host
-equal to the sender's configured `local_host` is same-host), so this one
-label gets both properties this scenario needs: no peer/mTLS setup required
-for message delivery, and the real transfer-script path exercised for the
-attachment.
+The scenario temporarily configures an account-scoped localhost peer that loops
+back to the owned daemon in explicit plaintext-test mode. It reuses any existing
+listener port and removes only rows it created, including on failure. Host-qualified writes use the
+current daemon peer transport, while the distinct sender local_host makes the
+attachment exercise the real SSH transfer script. This is a loopback transfer
+check, not evidence of two-host or mTLS interoperability.
 
 Why this script never touches the real `$HOME/.ssh/config` (QA-2 B6): an
 earlier revision backed up and overwrote the OS account's real
@@ -668,6 +662,56 @@ def run_cli(
     )
 
 
+def _peer_command(atm: Path, env: dict[str, str], timeout: float, command: list[str]) -> str:
+    result = run_cli(atm, env, command, identity=SENDER, timeout=timeout)
+    if result.returncode:
+        raise RuntimeError(f"peer command failed: {result.stderr.strip() or result.stdout.strip()}")
+    return result.stdout
+
+
+def configure_loopback_peer(
+    atm: Path, env: dict[str, str], timeout: float, port: int, owned: dict[str, Any]
+) -> dict[str, Any]:
+    """Reuse the account interface and track only peer rows this run owns."""
+    interfaces = json.loads(_peer_command(atm, env, timeout, ["peer", "interface", "list", "--json"]))
+    peers = json.loads(_peer_command(atm, env, timeout, ["peer", "trust", "list", "--json"]))
+    if any(peer["host"].lower() == TRANSFER_HOST for peer in peers):
+        raise RuntimeError("localhost trusted peer already exists; refusing to replace account configuration")
+    enabled = [interface for interface in interfaces if interface["enabled"]]
+    ports = {int(interface["bind_addr"].rsplit(":", 1)[1]) for interface in enabled}
+    if len(ports) > 1:
+        raise RuntimeError("existing enabled peer interfaces use conflicting ports")
+    if ports:
+        port = ports.pop()
+    else:
+        bind = f"127.0.0.1:{port}"
+        if any(interface["bind_addr"] == bind for interface in interfaces):
+            raise RuntimeError("chosen loopback interface already exists; refusing to replace it")
+        owned["interface"] = bind
+        _peer_command(atm, env, timeout, ["peer", "interface", "set", "--bind", bind,
+                                         "--advertise-host", TRANSFER_HOST])
+    owned["trust"] = TRANSFER_HOST
+    _peer_command(atm, env, timeout, ["peer", "trust", "add", "--host", TRANSFER_HOST,
+                                      "--fingerprint", "0" * 64, "--https-port", str(port), "--yes"])
+    return {"host": TRANSFER_HOST, "port": port, "security": "plaintext-test", "topology": "self-loop"}
+
+
+def cleanup_loopback_peer(atm: Path, env: dict[str, str], timeout: float, owned: dict[str, Any]) -> list[str]:
+    """Remove only rows introduced by this scenario, even after partial setup."""
+    errors = []
+    commands = []
+    if "trust" in owned:
+        commands.append(["peer", "trust", "revoke", "--host", owned["trust"], "--yes"])
+    if "interface" in owned:
+        commands.append(["peer", "interface", "remove", "--bind", owned["interface"]])
+    for command in commands:
+        try:
+            _peer_command(atm, env, timeout, command)
+        except Exception as error:  # noqa: BLE001 - report every cleanup failure in evidence
+            errors.append(str(error))
+    return errors
+
+
 def _kill_process_tree(pid: int) -> None:
     """Best-effort termination of `pid` and any descendants it spawned (for
     example a wedged `atm send --attach`'s `pwsh.exe -> sftp.ps1 ->
@@ -810,9 +854,7 @@ def add_roster_member(
         # Decision (e): the roster's own registered host binding, recorded
         # for picker-projection fidelity -- independent of (and consistent
         # with) the `--host` this scenario also passes explicitly on `atm
-        # send` below, since the legacy direct-host path
-        # (`is_legacy_direct_host`) never consults the roster for host
-        # resolution.
+        # send` below, keeping the roster and transfer target consistent.
         args += ["--host", host]
     args.append("--json")
     completed = run_cli(atm, env, args, identity=SENDER, timeout=timeout)
@@ -1379,6 +1421,7 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
     sshd_process: subprocess.Popen[str] | None = None
     sshd_drain: PipeDrain | None = None
     remote_landing_dir: Path | None = None
+    owned_peer: dict[str, Any] = {}
     try:
         keys = generate_ssh_keys(sshd_root)
         config_path = write_sshd_config(sshd_root, port, keys)
@@ -1451,6 +1494,7 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
                         f"got {recorded_mode} (record: {record['transfer_script']})"
                     )
 
+        record["loopback_peer"] = configure_loopback_peer(args.atm, env, args.timeout, free_loopback_port(), owned_peer)
         daemon = start_daemon(args.daemon, env, args.timeout)
         daemon_process = daemon.pop("process")
         daemon_drain = daemon.pop("drain")
@@ -1575,6 +1619,11 @@ def run_scenario(args: argparse.Namespace) -> dict[str, Any]:
         # and sshd children can still be holding anything under `root`
         # open at this point.
         stop_daemon(daemon_process, daemon_drain)
+        peer_cleanup_errors = cleanup_loopback_peer(args.atm, env, args.timeout, owned_peer)
+        if peer_cleanup_errors:
+            record["peer_cleanup_errors"] = peer_cleanup_errors
+            record["error"] = "peer configuration cleanup failed: " + "; ".join(peer_cleanup_errors)
+            record["status"] = "fail"
         stop_sshd(sshd_process, sshd_drain)
         # Restore the OpenSSH `DefaultShell` registry value this scenario
         # changed above -- an account-wide setting, so it must never be
@@ -1695,6 +1744,7 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
             f"Command: `{' '.join(str(part) for part in send.get('argv', []))}`",
             f"Exit code: `{send.get('returncode')}`",
             "",
+            "Send stderr:",
             "```",
             send.get("stderr_tail", ""),
             "```",
@@ -1732,6 +1782,11 @@ def write_evidence(args: argparse.Namespace, record: dict[str, Any]) -> tuple[Pa
             "",
             f"Command: `{' '.join(str(part) for part in send.get('argv', []))}`",
             f"Exit code: `{send.get('returncode')}`",
+            "",
+            "Send stderr:",
+            "```",
+            send.get("stderr_tail", ""),
+            "```",
             "",
             f"Landed path (from the receiver's real mailbox): `{record.get('landed_path')}`",
             f"Matches `send_to_staging_dir` convention (`.../send-to/<transfer-id>`): **{record.get('landed_matches_send_to_convention')}**",
