@@ -164,9 +164,22 @@ class Linker:
             ref = self.command(['git', 'rev-parse', 'refs/remotes/origin/' + pull['head']])
             if ref.stdout.strip() != pull['sha']:
                 raise StackError('hosted stack head differs from fetched branch')
-            ancestry = self.command(['git', 'merge-base', '--is-ancestor', 'origin/' + previous, pull['sha']], check=False)
-            if ancestry.returncode:
-                raise StackError('hosted stack has conflicting git ancestry')
+            if index == 0:
+                # A frozen bottom does not track later trunk commits. New ledgers
+                # pin its cut base; legacy ledgers can prove common history only.
+                cut_base = layers[0].get('base_head') if layers else None
+                if cut_base is not None:
+                    if not isinstance(cut_base, str) or not re.fullmatch(r'[0-9a-fA-F]{7,64}', cut_base):
+                        raise StackError('bottom layer has an invalid recorded cut base')
+                    ancestry = self.command(['git', 'merge-base', '--is-ancestor', cut_base, pull['sha']], check=False)
+                else:
+                    ancestry = self.command(['git', 'merge-base', 'origin/' + previous, pull['sha']], check=False)
+                if ancestry.returncode:
+                    raise StackError('hosted bottom has conflicting or unavailable cut ancestry')
+            else:
+                ancestry = self.command(['git', 'merge-base', '--is-ancestor', 'origin/' + previous, pull['sha']], check=False)
+                if ancestry.returncode:
+                    raise StackError('hosted stack has conflicting git ancestry')
             if index < len(layers):
                 layer = layers[index]
                 if (layer['pr'], layer['branch'], layer['head'], layer['base']) != (number, pull['head'], pull['sha'], previous):
@@ -188,6 +201,12 @@ class Linker:
             stream.flush()
             self.command(['bd', 'update', self.values['stack_bead'], '--if-assignee', self.actor,
                           '--metadata', '@' + stream.name, '--actor', self.actor])
+
+    def verify_trunk_merge(self, trunk, head):
+        merge = self.command(['git', 'merge-tree', '--write-tree', 'origin/' + trunk, head], check=False)
+        if merge.returncode:
+            raise StackError('stack top does not merge cleanly into current trunk: ' +
+                             (merge.stderr or merge.stdout or f'exit {merge.returncode}').strip())
 
     def execute(self):
         timeout = self.acquire()
@@ -240,6 +259,7 @@ class Linker:
             if selected_head != recorded_head:
                 raise StackError('recorded stack top differs from the fetched branch head')
             if recorded['linked']:
+                self.verify_trunk_merge(metadata['trunk'], selected_head)
                 if metadata != original:
                     self.write(metadata)
                 return {'result': 'stacked', 'top': layers[-1], 'stack_number': metadata.get('stack_number')}
@@ -262,6 +282,9 @@ class Linker:
         if (lean or not layers) and candidate['base'] != base:
             raise StackError(f"pull request base {candidate['base']} differs from stack top {base}")
         new = recorded or {'branch': self.values['branch'], 'pr': self.values['pr_number'], 'head': self.values['commit'], 'base': base, 'linked': False}
+        if not layers:
+            new['base_head'] = recorded_head
+        self.verify_trunk_merge(metadata['trunk'], self.values['commit'])
         pending, stack_number = [], metadata.get('stack_number')
         if not lean and layers:
             pending = [entry for entry in layers if not entry['linked']]

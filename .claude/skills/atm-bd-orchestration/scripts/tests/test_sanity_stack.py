@@ -163,6 +163,122 @@ def test_already_linked_lower_layer_at_pinned_commit_is_stacked(world):
     assert not any(call[:3] == ['gh', 'stack', 'link'] for call in world.calls)
 
 
+@pytest.mark.parametrize('legacy', [False, True])
+def test_advanced_trunk_keeps_frozen_bottom_and_links_merged_top(world, legacy):
+    cut = world.git('rev-parse', 'origin/trunk')
+    first = world.branch('first', 'trunk', 1)
+    second = world.branch('second', 'first', 2)
+    assert world.link(first)['result'] == 'stacked'
+    assert world.link(second)['result'] == 'stacked'
+    if legacy:
+        world.bead['metadata']['layers'][0].pop('base_head', None)
+    world.git('checkout', 'trunk')
+    (world.root / 'trunk.txt').write_text('new trunk work\n')
+    world.git('add', 'trunk.txt')
+    world.git('commit', '-m', 'advance trunk after bottom froze')
+    world.git('push', 'origin', 'trunk')
+    third = world.branch('third', 'second', 3)
+    world.git('merge', '--no-edit', 'origin/trunk')
+    third['commit'] = world.git('rev-parse', 'HEAD')
+    world.pulls[-1]['sha'] = third['commit']
+    world.git('push', 'origin', 'third')
+
+    result = world.link(third)
+
+    assert result['result'] == 'stacked'
+    assert world.stacks[0]['prs'] == [1, 2, 3]
+    assert world.git('rev-parse', 'origin/first') == first['commit']
+    bottom = world.bead['metadata']['layers'][0]
+    assert bottom.get('base_head') == (None if legacy else cut)
+    assert world.link(first)['result'] == 'stacked'
+
+
+def test_unavailable_recorded_bottom_cut_fails_without_writes(world):
+    first = world.branch('first', 'trunk', 1)
+    second = world.branch('second', 'first', 2)
+    assert world.link(first)['result'] == 'stacked'
+    assert world.link(second)['result'] == 'stacked'
+    world.bead['metadata']['layers'][0]['base_head'] = 'f' * 40
+    before = copy.deepcopy(world.bead['metadata'])
+    world.calls.clear()
+
+    result = world.link(second)
+
+    assert result['result'] == 'stack_failed'
+    assert 'cut ancestry' in result['evidence']
+    assert world.bead['metadata'] == before
+    assert not any(call[:3] == ['gh', 'stack', 'link'] or '--metadata' in call for call in world.calls)
+
+
+def test_legacy_bottom_rejects_unrelated_trunk_history(world):
+    first = world.branch('first', 'trunk', 1)
+    second = world.branch('second', 'first', 2)
+    assert world.link(first)['result'] == 'stacked'
+    assert world.link(second)['result'] == 'stacked'
+    world.bead['metadata']['layers'][0].pop('base_head')
+    world.git('checkout', '--orphan', 'replacement')
+    world.git('commit', '--allow-empty', '-m', 'unrelated trunk')
+    world.git('push', '--force', 'origin', 'replacement:trunk')
+    before = copy.deepcopy(world.bead['metadata'])
+    world.calls.clear()
+
+    result = world.link(second)
+
+    assert result['result'] == 'stack_failed'
+    assert 'cut ancestry' in result['evidence']
+    assert world.bead['metadata'] == before
+    assert not any(call[:3] == ['gh', 'stack', 'link'] or '--metadata' in call for call in world.calls)
+
+
+def test_hosted_interlayer_divergence_remains_an_error(world):
+    first = world.branch('first', 'trunk', 1)
+    second = world.branch('second', 'first', 2)
+    assert world.link(first)['result'] == 'stacked'
+    assert world.link(second)['result'] == 'stacked'
+    rival = world.branch('rival', 'trunk', 3)
+    world.git('push', '--force', 'origin', 'rival:second')
+    world.pulls[1]['sha'] = rival['commit']
+    world.bead['metadata']['layers'][1]['head'] = rival['commit']
+    before = copy.deepcopy(world.bead['metadata'])
+    world.calls.clear()
+
+    result = world.link(first)
+
+    assert result['result'] == 'stack_failed'
+    assert 'conflicting git ancestry' in result['evidence']
+    assert world.bead['metadata'] == before
+    assert not any(call[:3] == ['gh', 'stack', 'link'] or '--metadata' in call for call in world.calls)
+
+
+def test_trunk_conflict_fails_before_appending_or_writing(world):
+    first = world.branch('first', 'trunk', 1)
+    second = world.branch('second', 'first', 2)
+    assert world.link(first)['result'] == 'stacked'
+    assert world.link(second)['result'] == 'stacked'
+    world.git('checkout', 'trunk')
+    (world.root / 'conflict.txt').write_text('trunk\n')
+    world.git('add', 'conflict.txt')
+    world.git('commit', '-m', 'trunk change')
+    world.git('push', 'origin', 'trunk')
+    third = world.branch('third', 'second', 3)
+    (world.root / 'conflict.txt').write_text('layer\n')
+    world.git('add', 'conflict.txt')
+    world.git('commit', '-m', 'conflicting layer change')
+    third['commit'] = world.git('rev-parse', 'HEAD')
+    world.pulls[-1]['sha'] = third['commit']
+    world.git('push', 'origin', 'third')
+    before = copy.deepcopy(world.bead['metadata'])
+    world.calls.clear()
+
+    result = world.link(third)
+
+    assert result['result'] == 'stack_failed'
+    assert 'merge cleanly into current trunk' in result['evidence']
+    assert world.bead['metadata'] == before
+    assert world.stacks[0]['prs'] == [1, 2]
+    assert not any(call[:3] == ['gh', 'stack', 'link'] or '--metadata' in call for call in world.calls)
+
+
 def test_unlinked_recorded_layer_is_not_reported_as_already_stacked(world):
     values = world.branch('first', 'trunk', 1)
     world.bead['metadata']['layers'].append({
@@ -380,7 +496,8 @@ def test_replaying_same_pr_with_changed_head_cannot_claim_stack_success(world):
 def test_lean_uses_only_rest_and_defers_link(world, budget, unavailable):
     first = world.branch("first", "trunk", 1)
     assert world.link(first)["top"]["linked"] is False
-    first_layer = {"branch": "first", "pr": 1, "head": first["commit"], "base": "trunk", "linked": False}
+    first_layer = {"branch": "first", "pr": 1, "head": first["commit"], "base": "trunk", "linked": False,
+                   "base_head": world.git('rev-parse', 'origin/trunk')}
     assert world.bead["metadata"]["layers"] == [first_layer]
     assert world.bead["metadata"]["stack_number"] is None
 

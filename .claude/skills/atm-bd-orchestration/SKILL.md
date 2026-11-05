@@ -1,6 +1,6 @@
 ---
 name: atm-bd-orchestration
-version: 0.19.12
+version: 0.19.14
 description: Bead-driven phase orchestration for the lead. Use when running a phase whose plan is in beads, dispatching from `bd ready` with ATM tasks, and landing it as one gh stack.
 requires:
   cli:
@@ -104,7 +104,7 @@ the selected path is a Git toplevel with a GitHub `origin`; phase data, beads,
 plans and console state remain in the beads repository.
 The shared phase reader requires `plan`, `root`, `integration_branch`, `lead`,
 and the `templates` table, and rejects unknown top-level keys. `code_checkout`
-is optional. The table requires `dev`, `fix`, `sanity`, `qa`,
+is optional. An optional `team` names the ATM team that owns the phase's tasks; without it `atm-bd queues` and the console use `.atm.toml` `[atm] default_team`, never the caller's `ATM_TEAM`. The table requires `dev`, `fix`, `sanity`, `qa`,
 `plan_review` and `review`; each points to an existing repository-relative
 file inside `.claude/skills/atm-bd-orchestration/templates/`. The phase lead
 has no repository YAML, registry-role, CLI identity or environment fallback.

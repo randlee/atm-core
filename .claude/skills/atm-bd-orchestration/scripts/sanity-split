@@ -464,7 +464,12 @@ class Cancelled(Exception):
 def stop_group(pgid: int, child: subprocess.Popen[bytes]) -> bool:
     """TERM the lint process group, wait the grace period, KILL the survivors; True once the group is empty."""
     def empty() -> bool:
-        child.poll()                                # reap the direct child so it does not linger as a zombie
+        # Reap the direct child so it does not linger as a zombie. Not child.poll(): a Cancelled raised
+        # just after Popen.wait acquired its waitpid lock leaves that lock held, and poll() then never reaps.
+        try:
+            os.waitpid(child.pid, os.WNOHANG)
+        except ChildProcessError:                   # already reaped
+            pass
         try:
             os.killpg(pgid, 0)
         except ProcessLookupError:
@@ -476,7 +481,7 @@ def stop_group(pgid: int, child: subprocess.Popen[bytes]) -> bool:
     def signal_group(sig: signal.Signals) -> None:
         try:
             os.killpg(pgid, sig)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):   # macOS: EPERM while only exiting members remain
             pass
 
     def wait_empty(seconds: float) -> bool:

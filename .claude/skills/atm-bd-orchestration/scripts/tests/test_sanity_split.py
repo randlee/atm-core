@@ -29,9 +29,14 @@ FAKE_LINT = "sh -c 'echo lint-ran; exit 1'"
 # child's pid; the supervisor starts it in a new session) atomically, before the supervisor waits, so a
 # test knows the group whether or not the command ever started. With --gated the supervisor's wait
 # expires (TimeoutExpired) when the test writes a byte to this driver's stdin instead of on the clock.
-DRIVER = """import importlib.machinery, importlib.util, os, subprocess, sys
+# With --ready the wait writes b"W" to the event fd when it starts, so a test signals the supervisor
+# only once it waits. --locked also holds Popen's waitpid lock and pauses there: CPython can run the
+# SIGTERM handler right after Popen.wait's acquire() returns and before its try block, and the
+# Cancelled it raises then leaves the lock held.
+DRIVER = """import importlib.machinery, importlib.util, os, signal, subprocess, sys
 from pathlib import Path
-script, pgid_file, gated, argv = sys.argv[1], Path(sys.argv[2]), sys.argv[3] == "--gated", sys.argv[4:]
+script, pgid_file, mode, argv = sys.argv[1], Path(sys.argv[2]), sys.argv[3], sys.argv[4:]
+gated = mode == "--gated"
 loader = importlib.machinery.SourceFileLoader("sanity_split", script)
 split = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
 loader.exec_module(split)
@@ -48,6 +53,12 @@ class Recorded(subprocess.Popen):
         os.replace(partial, pgid_file)
 
     def wait(self, timeout=None):
+        if mode in ("--ready", "--locked") and timeout is not None:
+            if mode == "--locked":
+                self._waitpid_lock.acquire()
+            os.write(int(os.environ["SANITY_SPLIT_EVENT_FD"]), b"W")
+            if mode == "--locked":
+                signal.pause()
         if gated and timeout is not None:
             sys.stdin.buffer.read(1)
             raise subprocess.TimeoutExpired(self.args, timeout)
@@ -648,7 +659,7 @@ class SanitySplit(unittest.TestCase):
         with self.assertRaises(ProcessLookupError, msg=message):
             os.killpg(pgid, 0)
 
-    def supervise(self, command, timeout_seconds, gated=False):
+    def supervise(self, command, timeout_seconds, gated=False, mode=None):
         """Start the lint supervisor through DRIVER; return it, its exit file and the recorded group id file."""
         driver, pgid_file = self.root / "driver.py", self.root / "lint.pgid"
         exit_file = self.root / "lint.exit"
@@ -659,7 +670,7 @@ class SanitySplit(unittest.TestCase):
             env["SANITY_SPLIT_EVENT_FD"] = str(self.event_write)
             pass_fds = (self.event_write,)
         proc = subprocess.Popen(
-            [sys.executable, str(driver), str(SCRIPT), str(pgid_file), "--gated" if gated else "--clock",
+            [sys.executable, str(driver), str(SCRIPT), str(pgid_file), mode or ("--gated" if gated else "--clock"),
              "--worktree", str(self.repo.wt), "--command", command, "--log", str(self.root / "lint.log"),
              "--exit-file", str(exit_file), "--timeout-seconds", str(timeout_seconds)],
             stdin=subprocess.PIPE if gated else subprocess.DEVNULL, start_new_session=True,
@@ -749,17 +760,28 @@ class SanitySplit(unittest.TestCase):
         wait_process(self.supervisors[pid], "supervisor exit")
 
     def test_lint_supervisor_cancellation_reaps_a_descendant(self):
+        """SIGTERM is sent once the descendant exists and the supervisor waits, however slow either is."""
         lint, marker = self.descendant_command()
-        out = self.run_split(lint=lint)
-        self.assertEqual(out.returncode, 0, out.stderr)
-        manifest = json.loads(out.stdout)
-        descendant = self.read_marker(marker)
-        pgid = int(marker.read_text().split()[1])
-        os.killpg(manifest["lint"]["pid"], signal.SIGTERM)
-        self.assertEqual(self.wait_lint(manifest["lint"]["exit_file"]), "cancelled")
-        self.wait_gone(manifest["lint"]["pid"])
+        proc, exit_file, _ = self.supervise(lint, 1800, mode="--ready")
+        events = {read_event(self.event_read, "descendant marker"), read_event(self.event_read, "supervisor wait")}
+        self.assertEqual(events, {b"R", b"W"})
+        descendant, pgid = (int(number) for number in marker.read_text().split())
+        os.killpg(proc.pid, signal.SIGTERM)
+        self.assertEqual(self.finished(proc), 1)
+        self.assertEqual(exit_file.read_text().strip(), "cancelled")
         self.assertFalse(alive(descendant), "the TERM-ignoring descendant survived the cancellation")
         self.assert_group_gone(pgid, "a member of the lint process group survived the cancellation")
+
+    def test_lint_supervisor_cancellation_reaps_the_command_while_popen_holds_its_waitpid_lock(self):
+        """Cancelled raised while Popen.wait holds its waitpid lock: stop_group still reaps the dead command."""
+        self.marker_event()
+        proc, exit_file, pgid_file = self.supervise(f"exec {sys.executable} -c 'import signal; signal.pause()'", 1800,
+                                                    mode="--locked")
+        self.assertEqual(read_event(self.event_read, "supervisor holds the waitpid lock"), b"W")
+        os.killpg(proc.pid, signal.SIGTERM)
+        self.assertEqual(self.finished(proc), 1)
+        self.assertEqual(exit_file.read_text().strip(), "cancelled")
+        self.assert_group_gone(int(pgid_file.read_text()), "the lint command survived the cancellation")
 
     def test_lint_supervisor_timeout_reaps_a_descendant(self):
         """Gated clock: timeout begins only once the descendant exists, however slow its startup."""

@@ -2,12 +2,9 @@
 
 ## Execute
 
-**1. Launch the reviewer**
+**1. Dispatch the reviewer**
 
-Use Agent tool to launch `.claude/agents/critical-plan-reviewer.md`.
-On the first loop round, save the returned agent id. On subsequent loop
-rounds, re-use the same reviewer agent if it is still available so review
-context carries forward.
+Import the step bead (SKILL.md "Beads", `step` 4, `route_to` `critical-plan-reviewer`). Dispatch `critical-plan-reviewer` as your mode reference directs (SKILL.md "Modes").
 Pass a fenced JSON input that includes:
 - `source_of_truth`
 - `references`
@@ -17,19 +14,17 @@ Pass a fenced JSON input that includes:
 - `review_cycle_index`
 - `step-3` fenced JSON
 
-Set `run_in_background: true`.
-
 Expected reviewer launch input shape:
 
 ```json
 {
-  "source_of_truth": "docs/plans/phase-bc/phase-bc-plan.md",
+  "source_of_truth": "docs/plans/phase-bc.jsonl",
   "references": [
     "docs/project-plan.md"
   ],
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "plan/phase-bc",
-  "review_cycle_limit": 3,
+  "review_cycle_limit": 2,
   "review_cycle_index": 1,
   "reviewed_commit": "abc1234",
   "previous_reviewed_commit": "",
@@ -46,7 +41,7 @@ Expected reviewer launch input shape:
 ```
 
 Determine `critical_review_cycle_limit` from
-`/tmp/plan-hardening-vars.json`. If it is missing, set it to `3` before
+`/tmp/plan-hardening-vars.json`. If it is missing, set it to `2` before
 launching the reviewer. `review_cycle_index` is the count of completed Step 4
 review responses in the current hardening run, starting at `1`.
 
@@ -64,10 +59,15 @@ Save the extracted fenced JSON to `/tmp/step-4.json`.
 **3. Route by status**
 
 - `PASS` -> proceed to Step 5
-- `FAIL` -> update `/tmp/plan-hardening-vars.json` so
+- `FAIL` on the final cycle (`review_cycle_index` equal to
+  `critical_review_cycle_limit`) is the normal result of this adversarial
+  review, not a failed run: update `/tmp/plan-hardening-vars.json` so
+  `reviewer_findings_json` contains the Step 4 fenced JSON, then proceed to
+  Step 5, which fixes those findings
+- `FAIL` on an earlier cycle -> update `/tmp/plan-hardening-vars.json` so
   `reviewer_findings_json` contains the Step 4 fenced JSON, then re-run Step 3
-- every Step 4 `FAIL` must be routed to Step 3; there is no accept-and-proceed
-  path
+- every Step 4 `FAIL` must be routed to Step 3, or on the final cycle to
+  Step 5; there is no accept-and-proceed path
 - after Step 3 returns updated fenced JSON, update:
   - `previous_reviewed_commit`
   - `reviewed_commit`
@@ -79,9 +79,7 @@ Save the extracted fenced JSON to `/tmp/step-4.json`.
     `critical_review_cycle_limit`, send the updated payload back to the same
     `critical-plan-reviewer` agent when possible
   - if the just-completed reviewer response used cycle index equal to
-    `critical_review_cycle_limit`, do not launch another background review;
-    stop the hardening run after the Step 3 correction pass and report
-    `cap-exhausted / not converged`
+    `critical_review_cycle_limit`, do not launch another review
 - the reviewer must return all remaining `Blocking` and `Important` findings
   in one pass; newly surfaced findings after a previous round are acceptable
   only if the plan changed between rounds
@@ -115,19 +113,17 @@ A background reviewer generates no ATM traffic, so the round is invisible to
 `.claude/skills/plan-hardening/plan-review-notice.xml.j2`, installed under
 `~/.atm/templates/plan-hardening/`) with `reviewer: critical-plan-reviewer`,
 `round_index`, `verdict`, and a one-paragraph `summary`. Send it to
-`team-lead`; when `team-lead` runs the round itself, send it to the plan
+the lead; when the lead runs the round itself, send it to the plan
 author from Step 1 with `atm queue` so it never interrupts work in progress.
 The template declares `workflow.stage: plan`, which is what makes the round
 discoverable (`atm search --team <team> --workflow-stage plan`).
 
-Update the round table after every Step 4 response. In the Note column
-record the plan's `critical_path` and `width` for the round (from the
-`plan-scope-reviewer` `parallelism` block). A round that lengthens the
+Record the round in beads after every Step 4 response (SKILL.md "Beads"):
+file one finding bead per finding (`reviewer` `critical-plan-reviewer`), then close the Step 4
+step bead with the status, counts, `reviewed_commit` and `findings_hash`. Add the plan's `critical_path` and `width` for the round (from the
+`plan-scope-reviewer` `parallelism` block) to the close reason. A round that lengthens the
 critical path or narrows the width is a regression: name the finding that
 caused it, and prefer a boundary re-cut over accepting it.
-
-| Round | Step | Reviewer | reviewed_commit | status | blocking | important | minor | findings_hash | supersedes | Note |
-|-------|------|----------|-----------------|--------|----------|-----------|-------|---------------|------------|------|
 
 ## Hard stops
 
@@ -142,7 +138,6 @@ caused it, and prefer a boundary re-cut over accepting it.
 - reviewer output repeats the same `reviewed_commit` and the same
   `findings_hash`: do not advance; mark it as stale replay and request a fresh
   review cycle only after the plan state changes
-- reviewer has reached `critical_review_cycle_limit` without converging: do not
-  launch another reviewer cycle, do not ask the user what to do, and do not
-  accept the findings silently; finish the Step 3 correction pass and report
-  `cap-exhausted / not converged`
+- reviewer has reached `critical_review_cycle_limit`: do not launch another
+  reviewer cycle, do not ask the user what to do, and do not accept the
+  findings silently; route the final findings to Step 5

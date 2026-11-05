@@ -334,6 +334,59 @@ class JevClientTests(unittest.TestCase):
         self.assertEqual(conn.request.call_count, 4)
         self.assertEqual(raised.exception.message, "Jev retry budget exhausted")
 
+    def test_400_max_tokens_exceeded_splits_like_413(self):
+        request = client.written_request("delivery", "x" * 20000)
+        answer = {"model": client.MODEL, "answers": {"written": {
+            "type": "choice", "choice": "yes", "confidence": 1.0, "probabilities": {"yes": 1.0, "no": 0.0}}}}
+        good = MagicMock(status=200)
+        good.read.return_value = json.dumps(answer).encode()
+        too_many_tokens = MagicMock(status=400)
+        too_many_tokens.read.return_value = b'{"detail":{"error_type":"max_tokens_exceeded"}}'
+        conn = MagicMock()
+        conn.getresponse.side_effect = [too_many_tokens, good, good, good]
+        with patch.dict(client.os.environ, {"TYPESAFE_API_KEY": "test-only-key"}), \
+             patch.object(client.http.client, "HTTPSConnection", return_value=conn):
+            result = client.evaluate_parts([request], "test-only-key", ["x"], sleep=no_sleep)
+        self.assertGreaterEqual(len(result["parts"]), 2)
+        sent = [json.loads(call.kwargs["body"]) for call in conn.request.call_args_list[1:]]
+        self.assertEqual("".join(part["state"]["evidence"] for part in sent), "x" * 20000)
+
+    def test_400_max_tokens_exceeded_on_every_attempt_names_the_token_limit(self):
+        request = client.written_request("delivery", "x" * 50000, part=("1 of 1", ["x"]))
+        conn = MagicMock()
+        conn.getresponse.return_value.status = 400
+        conn.getresponse.return_value.read.return_value = b'{"detail":{"error_type":"max_tokens_exceeded"}}'
+        with patch.dict(client.os.environ, {"TYPESAFE_API_KEY": "test-only-key"}), \
+             patch.object(client.http.client, "HTTPSConnection", return_value=conn), \
+             self.assertRaises(client.JevError) as raised:
+            client.evaluate_parts([request], "test-only-key", sleep=no_sleep)
+        self.assertEqual(conn.request.call_count, 4)
+        self.assertEqual(raised.exception.code, "SANITY.JEV_REQUEST_TOO_LARGE")
+        self.assertRegex(raised.exception.message, r"^Jev request oversized \(\d+ bytes over Jev's token limit\);")
+        self.assertIsNotNone(client.CLIENT_MESSAGES.fullmatch(raised.exception.message))
+
+    def test_4xx_names_the_parsed_error_type_and_nothing_else_from_the_body(self):
+        cases = [(400, b'{"detail":{"error_type":"invalid_request","msg":"private"}}',
+                  "Jev HTTP 400 error_type=invalid_request; response body withheld"),
+                 (401, b'{"detail":{"error_type":"invalid_api_key"}}',
+                  "Jev HTTP 401 error_type=invalid_api_key; response body withheld"),
+                 (400, b'{"detail":{"error_type":"Private Body Text"}}', "Jev HTTP 400; response body withheld"),
+                 (400, b'{"detail":"private"}', "Jev HTTP 400; response body withheld"),
+                 (503, b'{"detail":{"error_type":"overloaded"}}', "Jev HTTP 503; response body withheld")]
+        for status, body, message in cases:
+            with self.subTest(status=status, body=body):
+                conn = MagicMock()
+                conn.getresponse.return_value.status = status
+                conn.getresponse.return_value.read.return_value = body
+                with patch.dict(client.os.environ, {"TYPESAFE_API_KEY": "test-only-key"}), \
+                     patch.object(client.http.client, "HTTPSConnection", return_value=conn), \
+                     self.assertRaises(client.JevError) as raised:
+                    client.evaluate(client.startup_request(), sleep=no_sleep)
+                self.assertEqual(conn.request.call_count, 1)
+                self.assertEqual(raised.exception.code, "SANITY.JEV_UNAVAILABLE")
+                self.assertEqual(raised.exception.message, message)
+                self.assertIsNotNone(client.CLIENT_MESSAGES.fullmatch(raised.exception.message))
+
     def test_elapsed_includes_retries_and_is_present_on_failure(self):
         for outcomes, elapsed, status in [([529, 200], 4.5, 0), ([OSError("down")] * 4, 5.0, 2),
                                            ([502] * 4, 11.0, 2), ([529] * 4, 11.0, 2), ([429] * 4, 11.0, 2),
@@ -829,10 +882,18 @@ class JevClientTests(unittest.TestCase):
         import re
         literals = re.findall(r'JevError\("[A-Z_.]+", f?"([^"]+)"', source)
         self.assertGreaterEqual(len(literals), 15)
+        # Placeholders computed before the literal take each value the client can give them.
+        variants = {"{bound}": [f"> {client.MAX_REQUEST_BYTES}", "over Jev's token limit"],
+                    "{named}": ["", " error_type=max_tokens_exceeded"]}
         for literal in literals:
-            with self.subTest(message=literal):
-                self.assertTrue(client.is_client_message(literal.replace("{status}", "503").replace(
-                    "{request_size}", "123456").replace("{MAX_REQUEST_BYTES}", str(client.MAX_REQUEST_BYTES))))
+            filled = [literal.replace("{status}", "503").replace("{request_size}", "123456").replace(
+                "{MAX_REQUEST_BYTES}", str(client.MAX_REQUEST_BYTES))]
+            for placeholder, values in variants.items():
+                filled = [text.replace(placeholder, value) for text in filled for value in values] \
+                    if placeholder in literal else filled
+            for message in filled:
+                with self.subTest(message=message):
+                    self.assertTrue(client.is_client_message(message))
         self.assertFalse(client.is_client_message("Selected model is at capacity"))
 
 

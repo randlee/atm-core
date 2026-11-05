@@ -250,15 +250,20 @@ def evaluate(request: JsonObject, *, sleep: Callable[[float], None] | None = Non
         finally:
             if conn is not None:
                 conn.close()
+        error_type = jev_error_type(raw) if 400 <= status < 500 else None
         if status == 413:
             raise oversize(request)
+        if error_type == "max_tokens_exceeded":
+            raise oversize(request, limit="over Jev's token limit")
         if status in (429, 502, 529) and budget.remaining > 0:
             delay = retry_delay(retry_after)
             if delay:
                 sleeper(delay)
             continue
         if status != 200:
-            raise JevError("SANITY.JEV_UNAVAILABLE", f"Jev HTTP {status}; response body withheld", status in (429, 502, 529))
+            named = f" error_type={error_type}" if error_type else ""
+            raise JevError("SANITY.JEV_UNAVAILABLE", f"Jev HTTP {status}{named}; response body withheld",
+                           status in (429, 502, 529))
         if len(raw) > MAX_RESPONSE_BYTES:
             raise JevError("SANITY.JEV_RESPONSE_INVALID", "Jev response exceeded size limit")
         try:
@@ -277,8 +282,8 @@ CLIENT_MESSAGES = re.compile("|".join([
     r"Unexpected Jev response model or shape", r"Missing or unexpected answer IDs", r"Answer must be an object",
     r"Invalid Choice answer", r"Expected pinned model, state and nonempty questions",
     r"Pilot supports well-formed Choice questions only", r"Request must contain finite JSON values",
-    r"Jev request oversized \(\d+ bytes > \d+\); no further split fits the remaining attempt budget",
-    r"Jev connection failed or timed out", r"Jev HTTP \d{3}; response body withheld",
+    r"Jev request oversized \(\d+ bytes (> \d+|over Jev's token limit)\); no further split fits the remaining attempt budget",
+    r"Jev connection failed or timed out", r"Jev HTTP \d{3}( error_type=[a-z0-9_.-]+)?; response body withheld",
     r"Jev response exceeded size limit", r"Jev response was not JSON", r"Jev retry budget exhausted",
     r"Startup probe returned the wrong literal choice", r"Request file unavailable or invalid JSON",
     r"Assignment lacks deliverable text, worktree, commits or file lists",
@@ -399,13 +404,26 @@ def written_request(text: str, evidence: str, context: dict[str, str] | None = N
         "type": "choice", "instructions": instructions, "criteria": {"yes": "delivered", "no": "not delivered"}}}}
 
 
+def jev_error_type(raw: bytes) -> str | None:
+    """`detail.error_type` from a Jev 4xx body (e.g. max_tokens_exceeded); only that short identifier leaves the
+    client, never the rest of the body."""
+    try:
+        value = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return None
+    detail = value.get("detail") if is_json_object(value) else None
+    error_type = detail.get("error_type") if is_json_object(detail) else None
+    return error_type if isinstance(error_type, str) and re.fullmatch(r"[a-z0-9_.-]{1,64}", error_type) else None
+
+
 def size(request: JsonValue) -> int:
     return len(json.dumps(request, allow_nan=False).encode("utf-8"))
 
 
-def oversize(request: JsonValue, fix: str | None = None) -> JevError:
+def oversize(request: JsonValue, fix: str | None = None, limit: str | None = None) -> JevError:
     request_size = size(request)
-    exc = JevError("SANITY.JEV_REQUEST_TOO_LARGE", f"Jev request oversized ({request_size} bytes > {MAX_REQUEST_BYTES}); no further split fits the remaining attempt budget", True)
+    bound = limit or f"> {MAX_REQUEST_BYTES}"
+    exc = JevError("SANITY.JEV_REQUEST_TOO_LARGE", f"Jev request oversized ({request_size} bytes {bound}); no further split fits the remaining attempt budget", True)
     exc.size = request_size
     exc.fix = fix and fix.format(size=exc.size)
     return exc

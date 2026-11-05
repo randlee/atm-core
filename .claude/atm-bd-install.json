@@ -1,14 +1,18 @@
 {
-  "version": "0.19.12",
-  "commit": "d21a1b60de465b2f5abde8b36f8b2cbf2155011c",
+  "version": "0.19.14",
+  "commit": "671b30ec530777ea419e4b837d3c450f988aac3a",
   "source": {
     "ref": "bundled",
-    "manifest_aggregate": "c3f4994204a74c0d26cf92a0abac1116865572000337315af7fbd98750f5d994"
+    "manifest_aggregate": "9ee2a3b2e2443d44acfbdb43ed950bccf5e4a37f5889fde5097c6afbd3c6aaf2"
   },
   "files": [
     {
       "path": ".claude/agents/ceremony-qa.md",
       "sc_sha": "5f0b5f2276b0e8e5b33ddec296e42bc69106b57bae94100084e89736e0dc52b2"
+    },
+    {
+      "path": ".claude/agents/critical-plan-reviewer.md",
+      "sc_sha": "59f3c2f33e65ad0c70ced0a4b710626db64df1ad617adc70d47b8f9fbae37f0d"
     },
     {
       "path": ".claude/agents/dev-sanity.md",
@@ -17,6 +21,10 @@
     {
       "path": ".claude/agents/parallax.md",
       "sc_sha": "48f693c636454454a5402a658d412ec6300e28abdf8d2a8d41b963f79b2da88c"
+    },
+    {
+      "path": ".claude/agents/plan-scope-reviewer.md",
+      "sc_sha": "e3b75bd33d3307362b0db13730535673fd27c93b55e2cfdda54f47ca8a70a6e3"
     },
     {
       "path": ".claude/agents/sanity-stack.md",
@@ -35,8 +43,80 @@
       "sc_sha": "fe42aab682f9e7574c17c847ee3fe30446a8920ac7075020e4ed01f77f187739"
     },
     {
+      "path": ".claude/skills/atm-bd-lite/SKILL.md",
+      "sc_sha": "4e15c1ad0f83a569abf2b67a62634534e45ddaf3b9fdd15043f4bb2151854390"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/hooks/task-assign.md",
+      "sc_sha": "7f5a9bdfbf057f7890857d57ae305b278a0ff0360efda88cd2b2686f3ebf89f4"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/hooks/task-close.md",
+      "sc_sha": "57316e7aa15e837a4f14753b9b519e1fb274977bbe82df025142cc57c748bcb5"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/hooks/task-start.md",
+      "sc_sha": "13d6e014c86866ade01b4dd5b3aec8549f79cdbc99d9362af43876374e9321a1"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/policy.toml",
+      "sc_sha": "1e52bcff5a1ace760e20fd93d7e74aff0a78dee0d8b5e212c815a0d4e658a5aa"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/profile.toml",
+      "sc_sha": "d671c4962ed854ba037f592fb761e6082b981a192d4d88db0bb7b31d91656357"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/scripts/atm-bd-cron.py",
+      "sc_sha": "80fd56b07c5ca8f70e5fa84d317a69862968e471e3375d1d844828fb71601434"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/scripts/atm-bd-task-assign-hook.py",
+      "sc_sha": "3a23d21fc3ddec38b5319281fa89f0a0e2b6f8490abd52e8e83f7d294263d2d9"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/scripts/atm-bd-task-hook.py",
+      "sc_sha": "617d3b9dd3a9f099156d52448b9d1fee5ac2eb3575e88b45a544dc1a3be4959f"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/scripts/atm-bd-task-start-hook.py",
+      "sc_sha": "f373500130f6af1b3cbe6ead088577d59ec3ab25b982102d347317077e48793d"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/templates/dev-close.md.j2",
+      "sc_sha": "85bbe011b319624036290f4ecdbece391ba5b5fe55dfe0e3e91bfbc322f46718"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/templates/dev.xml.j2",
+      "sc_sha": "f1aebcedc8d0b5435e6b9bfd1504e09967cc40c29fcb8d5a224e7daacf11e1c1"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/templates/land-close.md.j2",
+      "sc_sha": "03add45821088e1fb85bc419d3c24088b7430c66d998f060b7da20f8ea0ee5f7"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/templates/land.xml.j2",
+      "sc_sha": "0ef0c4147133b11d52a241bf431e4e2e9e05c5dfa7ddead1d231d3a7d161bf1d"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/templates/qa-findings.md.j2",
+      "sc_sha": "0795219bde64dafc8dd8ce7536750234a136d607a099e36c529b896a452883ba"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/templates/qa-pass.md.j2",
+      "sc_sha": "ad15de3b7a115009bf58213e1a603e7e4277cfa11cf72b991710cf90d6530d79"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/templates/qa.xml.j2",
+      "sc_sha": "05bc864b650bafa36779282cc00162cc902d7d9c40c5b9d146678941af42d740"
+    },
+    {
+      "path": ".claude/skills/atm-bd-lite/templates/refuse.md.j2",
+      "sc_sha": "839d37ed36ed415a87135e007f2dfff7d8417a757032962478bd63223da7e68e"
+    },
+    {
       "path": ".claude/skills/atm-bd-orchestration/SKILL.md",
-      "sc_sha": "9ae4d76f75802ed6aa12b17c6588e07fe018879fa0e90f37f45992bfe3522957"
+      "sc_sha": "87f0756c5db43fe93ac9df566e0a643656b3633f74dbe939bf1202c8f903b055"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/blocking-findings-guidelines.md",
@@ -316,7 +396,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/jev_client.py",
-      "sc_sha": "4a682be4502e93ecf2afb0f44f12f44d17e669939988eae639bae176b2ea2306"
+      "sc_sha": "ee6e7405b8c0e24a104383b02ffc35955257f8bbccf07f9972ddf1d2eb1f5040"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/post_mortem_context.py",
@@ -344,11 +424,11 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity-split",
-      "sc_sha": "e8f69a33521a4b6c767cf4210df8a7b489907675d9f27f077472b5041274f3c6"
+      "sc_sha": "b40e7141184f62b8808edbde74c3d7e265c31197af2927034fde31291fbbd448"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity-stack-link",
-      "sc_sha": "493bcc9a220e228c9fd66943352ec153bfbf7abf0994b69a74f5a33966cca677"
+      "sc_sha": "49294d052696971e5a3667f90ddee278199015e5c5065d000ab415beba1d8763"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity_close_legacy.py",
@@ -524,7 +604,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_jev_client.py",
-      "sc_sha": "dfa5b5288da703c7316d2d62b0e7da29654ac1bc3e248a534d51fb17552bfae9"
+      "sc_sha": "af068a4146cbd6e1722210355b7e0ef63d0920ae09b866732594492e8324656b"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_post_mortem_context.py",
@@ -556,11 +636,11 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_sanity_split.py",
-      "sc_sha": "1aca7369b8878307b9070d4d3a3cd585dbb61633bf27f2ec0192353fc05174c9"
+      "sc_sha": "55070d76c867753c12202ece71b6ac4b81963a48c4de8717f92c61444e2e5959"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_sanity_stack.py",
-      "sc_sha": "035197f2c96823cfd18691e8a4bbafa046f4c323d40d2a76b42e9b997a6f37af"
+      "sc_sha": "a83730c8dd0b29e0abb9e17f98b9770046c3855a00bc010ef422c379c8fe6a79"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_sanity_task_close_hook.py",
@@ -744,7 +824,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/SKILL.md",
-      "sc_sha": "8c003d28060bc2df7370e391f04e39e42c02cb4c044e8b9de1e0033bc460970d"
+      "sc_sha": "8f596546e738f0349dc8a118768ff6f5559ffcca640313d398c85ae53f61c89f"
     },
     {
       "path": ".claude/skills/atm-beads/examples/dev-sanity-bead-vars-d-4.json",
@@ -876,7 +956,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/scripts/sprint_index_common.py",
-      "sc_sha": "0ab4d1c585f8a381c62590244dffbfeddc6f0aacefef85b3f9ddc62d1f3390b5"
+      "sc_sha": "e7071416c6013ae46aff0d5982590d7ec5eee381cad96efa3ef915a5132990e8"
     },
     {
       "path": ".claude/skills/atm-beads/scripts/validate-plan",
@@ -935,6 +1015,110 @@
       "sc_sha": "033c6467d2296eb85e33630ee78a5d3e31ca66e9552302c104851ca160835c31"
     },
     {
+      "path": ".claude/skills/plan-hardening/01-plan-scope-review.xml.j2",
+      "sc_sha": "4ba0e5cccb6b3828d9192d3226f4fc932ee782dbc65ed05604da7172112dfda4"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/02-sprint-scope-hardening.xml.j2",
+      "sc_sha": "849310f6a1cb25f86d8c6f6de97b1a386e2501e0ea968438de95bd577043ddc3"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/03-consistency-hardening.xml.j2",
+      "sc_sha": "88f0343867ca21fccac5b45280d1e1e2c1d7d30489d73cf5fc3b04a2e9ad653c"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/SKILL.md",
+      "sc_sha": "65aaeebd5e64309b2b86a1ff48a98aeeb41b6264a6810d4d5250d001ab7db48a"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/examples/plan-hardening-finding-bead-vars.example.json",
+      "sc_sha": "fbbf164dc354b799227f50540113098df97ae6c983af6eb0b782079fbf871432"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/examples/plan-hardening-step-bead-vars.example.json",
+      "sc_sha": "7c9f5c5e3a17b7aea85a1705ad5eb78ca5582fe17b63442418a4738294e3fbc1"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/examples/plan-hardening-vars.example.json",
+      "sc_sha": "5302fba69072a6b4d02d3cf9aef6fe7a5c500c9f7e1dad01f0f4d6e0a280c20c"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/examples/plan-step-complete-vars.example.json",
+      "sc_sha": "89654f5057575d5c7b8dd8a75766b6b77f2904264eefdb91e3d9565916655a34"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/plan-consistency-hardening-complete.md.j2",
+      "sc_sha": "f2bd3ab0d87abacadea015dea03bb4556c3bad0e87b6adf9eab3df27f3b8f362"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/plan-critical-review-complete.md.j2",
+      "sc_sha": "408a51a3a0900cff605eb8f9c3cbcb905afe1bc3699816fbbca759041c9915e8"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/plan-critical-review.xml.j2",
+      "sc_sha": "f324e4abd69fed73b05eb6a2f3a8f4c402a0efa301b9ee01e5b0d7a517832ba7"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/plan-hardening-finding-bead.json.j2",
+      "sc_sha": "cf8730931e39de8c488b15f13d57ff8fb653ce7db42a80acf0335a2ae5423d07"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/plan-hardening-step-bead.json.j2",
+      "sc_sha": "58f72acd316a0cf1937818d7753adaa1eb61cdb5f82f1f45f5226fc9e8356c7e"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/plan-review-notice.xml.j2",
+      "sc_sha": "f217eb02fb336db4d28b62c7d5ff1ec5d808a43eabcb992ba86f8f583ca121fb"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/plan-scope-review-complete.md.j2",
+      "sc_sha": "9b1f44683de3b1fb240df36f39ce16cf3c45eb2da6a0eb45a42ed24607a2700d"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/plan-sprint-hardening-complete.md.j2",
+      "sc_sha": "7be40b7ee3eee7459552507a34e9ea136734c4b361f2b8c2a0726e7b83fe4162"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/references/mode-adversarial-lead.md",
+      "sc_sha": "28d54b779491199af33f43e6aaba6714c8aea7f783497f0cd3393eba38352426"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/references/mode-planner-subagents.md",
+      "sc_sha": "382090357d3f63c92c81e68451b36592e90d5f3f1054f41809d7c3e7ea934b1e"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/references/mode-planner-teammates.md",
+      "sc_sha": "6aa251e17f3832b67187d79b41af138107986d5353115e982e5604259e19d9d6"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/steps/step-1.md",
+      "sc_sha": "967f362b53df0e42d307653a33c8dde90e1e05a5b1e3d908bd871782c21d7407"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/steps/step-2.md",
+      "sc_sha": "488be5b61defc979c6ffb480ccd17413839548a727fca181f73a1f661d80925d"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/steps/step-3.md",
+      "sc_sha": "2d6e9d6a7900c459f852cfb5b04cf89bd6be6c7cbc0f70907d37f1b8a2d46f9b"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/steps/step-4.md",
+      "sc_sha": "ed03606806e382d49f27451dac3b2d8e3c469defcdd4c0327ea6e236d27bbad8"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/steps/step-5.md",
+      "sc_sha": "2a8903c7fabd9d3ff8e193d6ff8fd4f10988fc7d5acf12c7f37f412815a102ef"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/steps/step-6.md",
+      "sc_sha": "2eeeb50c434c1aee0139df6ac1350e4b688a6091e5a675e3244b344b6960ef09"
+    },
+    {
+      "path": ".claude/skills/plan-hardening/steps/step-7.md",
+      "sc_sha": "0b2b1cd941f4924f940b616e6e673be9abe2a235d8389d38dec363d011b743ee"
+    },
+    {
       "path": ".claude/skills/prompt-rewrite-judge/SKILL.md",
       "sc_sha": "89150a12edf208e78bfe85b772538cafaa16758f96944d75f33a2eb90e67a0d2"
     },
@@ -952,7 +1136,7 @@
     },
     {
       "path": ".claude/skills/sprint-report/SKILL.md",
-      "sc_sha": "f60281ec2a146d130056f2b3d5b53a4cea7fc6a363308fbb4a54b31e7d78cba7"
+      "sc_sha": "b262f5eb998f128f749c85fd78939f7cb3024e9f316f86db5ac442647d94353e"
     },
     {
       "path": ".claude/skills/sprint-report/dag-view.html",
@@ -988,7 +1172,7 @@
     },
     {
       "path": ".claude/skills/sprint-report/scripts/sprint_dag.py",
-      "sc_sha": "c8d2824e9086876b22e952bda5a9d372ff2046a057533d112cd693d215eaa34d"
+      "sc_sha": "a2bd6b892100ff359af37c6e2a1fdd93f22882b08d51f42ce427efb3bf527c3f"
     },
     {
       "path": ".claude/skills/sprint-report/scripts/sprint_qa.py",
@@ -1016,7 +1200,7 @@
     },
     {
       "path": ".claude/skills/sprint-review/SKILL.md",
-      "sc_sha": "379c67876e3e806c10429c01ac8b901f687413216b1171a5966a2b29473f054d"
+      "sc_sha": "fc7adc8f7829ec7de9105bd51c36809e230f124d516732d558e204f61ea32db8"
     },
     {
       "path": ".claude/skills/sprint-review/scripts/sprint-review",
