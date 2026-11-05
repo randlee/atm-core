@@ -122,8 +122,7 @@ async fn ambient_child() {
         return;
     }
     let receiver = Receiver::start(false).await;
-    let setup =
-        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
     setup
         .0
         .sink
