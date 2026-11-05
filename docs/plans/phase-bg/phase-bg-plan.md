@@ -228,6 +228,17 @@ check account for the BG5-2 gaps:
 | cargo-deny DNS retry, [sc-lint#371](https://github.com/randlee/sc-lint/issues/371) | Fixed in [0.8.0](https://github.com/randlee/sc-lint/releases/tag/v0.8.0). |
 | Python version sync, [sc-lint#137](https://github.com/randlee/sc-lint/issues/137) | Project-version checks shipped in [0.8.1](https://github.com/randlee/sc-lint/releases/tag/v0.8.1); sibling dependency-pin validation was excluded. The retained `.just/check_python_dependency_pins.py` check is marked for deletion when [sc-lint#783](https://github.com/randlee/sc-lint/issues/783) ships. |
 
+### Capability-degradation gate disposition
+
+Rand authored and merged [PR #2307](https://github.com/randlee/atm-core/pull/2307),
+which removed the obsolete capability-degradation script and lint step. The
+removed script flagged assignments or fields setting the retired replay-store
+capability to `None`. The workspace test
+`workspace_source_must_not_reintroduce_retired_peer_delivery_constructs` in
+`crates/atm-architecture/tests/boundary_enforcement.rs` scans Rust files under
+`crates/` and rejects the retired replay-store token itself, covering both old
+patterns. It runs as a workspace test; it is not a replacement sc-lint step.
+
 ### Design
 
 ## Rules every package step follows (ANC-011, 013, 014, 016, 019, 020, 021)
