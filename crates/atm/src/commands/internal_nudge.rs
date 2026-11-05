@@ -1,12 +1,9 @@
-use std::process::{Child, Command, Output, Stdio};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::Result;
 use atm_core::api::{ApiRequest, DaemonApiClient};
 use atm_core::boundary::{
     BuiltInNudgeSinkTarget, InternalNudgeEnvelope, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
-    TMUX_DOUBLE_ENTER_DELAY, TMUX_NUDGE_CONFIRM_KEY,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
@@ -23,6 +20,9 @@ use clap::Args;
 
 use crate::observability::CliObservability;
 
+mod tmux;
+use tmux::TmuxNudgeSink;
+
 /// Loopback connect budget for delivering a post-send nudge to a graft receiver.
 const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 /// Bounded request/response budget once connected to a graft receiver.
@@ -32,9 +32,6 @@ const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
 use std::collections::BTreeMap;
 
 const INTERNAL_NUDGE_ENV: &str = "ATM_INTERNAL_NUDGE";
-const TMUX_SEND_TIMEOUT: Duration = Duration::from_secs(5);
-#[cfg(test)]
-const TMUX_PROGRAM_ENV: &str = "ATM_TEST_TMUX_BIN";
 
 #[derive(Debug, Args)]
 #[command(hide = true)]
@@ -135,43 +132,6 @@ fn render_template(template: &str, values: &BTreeMap<&'static str, String>) -> R
     Ok(output)
 }
 
-struct TmuxNudgeSink;
-
-impl TmuxNudgeSink {
-    fn deliver(&self, event: &PostSendHookEvent, rendered: &str) -> Result<()> {
-        let pane_id = event
-            .recipient_pane_id
-            .as_ref()
-            .ok_or_else(|| AtmError::for_code(AtmErrorCode::PostSendPaneMissing))?;
-        run_tmux_command(
-            {
-                let mut command = tmux_command();
-                command.args(["send-keys", "-t", pane_id.as_str(), "-l", rendered]);
-                command
-            },
-            "send literal nudge",
-        )?;
-        run_tmux_command(
-            {
-                let mut command = tmux_command();
-                command.args(["send-keys", "-t", pane_id.as_str(), TMUX_NUDGE_CONFIRM_KEY]);
-                command
-            },
-            "send first Enter to nudge pane",
-        )?;
-        thread::sleep(TMUX_DOUBLE_ENTER_DELAY);
-        run_tmux_command(
-            {
-                let mut command = tmux_command();
-                command.args(["send-keys", "-t", pane_id.as_str(), TMUX_NUDGE_CONFIRM_KEY]);
-                command
-            },
-            "send second Enter to nudge pane",
-        )?;
-        Ok(())
-    }
-}
-
 struct GraftNudgeSink;
 
 impl GraftNudgeSink {
@@ -239,70 +199,8 @@ async fn lookup_receiver_via(
     }
 }
 
-fn tmux_command() -> Command {
-    #[cfg(test)]
-    if let Some(program) = std::env::var_os(TMUX_PROGRAM_ENV).filter(|value| !value.is_empty()) {
-        return Command::new(program);
-    }
-    Command::new("tmux")
-}
-
-fn run_tmux_command(mut command: Command, action: &'static str) -> Result<()> {
-    command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let child = command.spawn().map_err(|source| {
-        AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).with_cause(source)
-    })?;
-    let output = wait_for_tmux_output(child, action)?;
-    ensure_tmux_success(output, action).map_err(Into::into)
-}
-
-fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Output> {
-    let started_at = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => {
-                return child.wait_with_output().map_err(|source| {
-                    AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed)
-                        .with_cause(source)
-                        .into()
-                });
-            }
-            Ok(None) if started_at.elapsed() < TMUX_SEND_TIMEOUT => {
-                thread::sleep(Duration::from_millis(50));
-            }
-            Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).into());
-            }
-            Err(source) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed)
-                    .with_cause(source)
-                    .into());
-            }
-        }
-    }
-}
-
-fn ensure_tmux_success(output: Output, action: &'static str) -> Result<(), AtmError> {
-    if output.status.success() {
-        return Ok(());
-    }
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let detail = if stderr.is_empty() {
-        format!("tmux exited unsuccessfully while trying to {action}")
-    } else {
-        format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
-    };
-    Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).with_cause(detail))
-}
-
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::time::Duration;
 
     use atm_core::boundary::{
         BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, NudgeKind,
@@ -312,15 +210,14 @@ mod tests {
     use atm_core::send::default_template;
     use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use serial_test::serial;
-    use tempfile::tempdir;
 
     use atm_core::graft::graft_receiver_not_registered_error;
     use atm_core::protocol::{OwnerGeneration, RequestEnvelope, ResponseEnvelope};
     use atm_core::transport::testing::FakeClientTransport;
 
     use super::{
-        INTERNAL_NUDGE_ENV, InternalNudgeCommand, InternalNudgeInput, TMUX_PROGRAM_ENV,
-        lookup_receiver_via, render_template,
+        INTERNAL_NUDGE_ENV, InternalNudgeCommand, InternalNudgeInput, lookup_receiver_via,
+        render_template,
     };
 
     fn base_event() -> PostSendHookEvent {
@@ -500,46 +397,70 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn tmux_sink_uses_double_enter_sequence() {
-        let tempdir = tempdir().expect("tempdir");
-        let tmux_log = tempdir.path().join("tmux.log");
-        #[cfg(windows)]
-        let tmux_path = tempdir.path().join("tmux.cmd");
-        #[cfg(not(windows))]
-        let tmux_path = tempdir.path().join("tmux");
-        #[cfg(windows)]
-        fs::write(
-            &tmux_path,
-            "@echo off\r\n>> \"%ATM_TEST_TMUX_LOG%\" echo %*\r\nexit /b 0\r\n",
-        )
-        .expect("write tmux shim");
-        #[cfg(not(windows))]
-        fs::write(
-            &tmux_path,
-            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$ATM_TEST_TMUX_LOG\"\nexit 0\n",
-        )
-        .expect("write tmux shim");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&tmux_path).expect("metadata").permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(&tmux_path, perms).expect("chmod");
-        }
-
-        let tmux_log_value = tmux_log.display().to_string();
-        let tmux_bin_value = tmux_path.display().to_string();
-        let _env = EnvGuard::set_many([
-            (TMUX_PROGRAM_ENV, Some(tmux_bin_value.as_str())),
-            ("ATM_TEST_TMUX_LOG", Some(tmux_log_value.as_str())),
-        ]);
+        let mut commands = Vec::new();
+        let mut delays = Vec::new();
         super::TmuxNudgeSink
-            .deliver(&base_event(), "<atm/>")
+            .deliver_with(
+                &base_event(),
+                "<atm/>",
+                |command, _action| {
+                    commands.push(
+                        command
+                            .get_args()
+                            .map(|arg| arg.to_string_lossy().into_owned())
+                            .collect::<Vec<_>>(),
+                    );
+                    Ok(())
+                },
+                |duration| delays.push(duration),
+            )
             .expect("deliver");
-        let logged = fs::read_to_string(&tmux_log).expect("tmux log");
-        assert_eq!(logged.matches("Enter").count(), 2);
-        assert!(TMUX_DOUBLE_ENTER_DELAY >= Duration::from_millis(250));
+        assert_eq!(
+            commands,
+            vec![
+                vec!["send-keys", "-t", "%9", "-l", "<atm/>"],
+                vec!["send-keys", "-t", "%9", "Enter"],
+                vec!["send-keys", "-t", "%9", "Enter"],
+            ]
+        );
+        assert_eq!(delays, vec![TMUX_DOUBLE_ENTER_DELAY]);
+    }
+
+    #[test]
+    fn tmux_sink_stops_after_a_command_failure() {
+        let mut calls = 0;
+        let mut delays = Vec::new();
+        let result = super::TmuxNudgeSink.deliver_with(
+            &base_event(),
+            "<atm/>",
+            |_command, _action| {
+                calls += 1;
+                Err(anyhow::anyhow!("tmux failed"))
+            },
+            |duration| delays.push(duration),
+        );
+        assert!(result.is_err());
+        assert_eq!(calls, 1);
+        assert!(delays.is_empty());
+    }
+
+    #[test]
+    fn tmux_sink_rejects_a_missing_pane_without_running_commands() {
+        let mut event = base_event();
+        event.recipient_pane_id = None;
+        let mut calls = 0;
+        let result = super::TmuxNudgeSink.deliver_with(
+            &event,
+            "<atm/>",
+            |_command, _action| {
+                calls += 1;
+                Ok(())
+            },
+            |_duration| panic!("missing pane must not wait"),
+        );
+        assert!(result.is_err());
+        assert_eq!(calls, 0);
     }
 
     // Client-side translation-contract unit test (supplements AC7, does not

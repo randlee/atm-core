@@ -493,10 +493,10 @@
       "enabled": true,
       "exclude_paths_by_rule": {
         "SCB-RUNTIME-003": [
-          "crates/atm/src/commands/internal_nudge.rs"
+          "crates/atm/src/commands/internal_nudge/tmux.rs"
         ]
       },
-      "reason": "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. sc-lint has no item-level runtime allow; retain the narrowest supported whole-file exclusion (randlee/sc-lint#836)."
+      "reason": "SCB-RUNTIME-003: the isolated tmux sink runs on spawn_blocking. Delete this file exclusion when randlee/sc-lint#836 supports item-level runtime allow (tracking: atm-phase-bg.18)."
     }
   },
   "ci": {
