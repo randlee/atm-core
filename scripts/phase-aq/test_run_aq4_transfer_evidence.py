@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import collections
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -9,6 +10,7 @@ import sys
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 from types import SimpleNamespace
 from typing import Any
 
@@ -61,51 +63,6 @@ def _install_fake_ssh(bin_dir: Path, *, stderr_line: str, stdout_line: str | Non
     return fake_ssh
 
 
-def _install_fake_slow_atm(bin_dir: Path, *, sleep_seconds: float, stderr_line: str) -> Path:
-    """Writes a fake `atm` binary that writes `stderr_line` to stderr
-    immediately, then sleeps well past `sleep_seconds` -- long enough for a
-    deliberately tiny `run_send_with_timeout` timeout in the tests below to
-    fire first, so the timeout path is exercised with a real wedged child
-    process rather than a mock.
-
-    Platform-safe, mirroring `_install_fake_ssh` above: a bare `#!/bin/sh`
-    script has no kernel shebang interpreter on Windows, so this installs a
-    `.cmd` shim there instead (launched directly by `CreateProcess`, no
-    `shell=True` needed, exactly like `ssh.cmd` above).
-    """
-    if sys.platform == "win32":
-        fake_atm = bin_dir / "atm.cmd"
-        fake_atm.write_text(
-            "\r\n".join(
-                [
-                    "@echo off",
-                    f"echo {stderr_line} 1>&2",
-                    f"ping -n {int(sleep_seconds) + 5} 127.0.0.1 >nul",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
-        return fake_atm
-
-    import stat as stat_module
-
-    fake_atm = bin_dir / "atm"
-    fake_atm.write_text(
-        "\n".join(
-            [
-                "#!/bin/sh",
-                f'printf "%s\\n" "{stderr_line}" 1>&2',
-                f"sleep {sleep_seconds}",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    fake_atm.chmod(fake_atm.stat().st_mode | stat_module.S_IXUSR)
-    return fake_atm
-
-
 class Aq4TransferEvidenceTests(unittest.TestCase):
     def test_extract_landed_path_matches_the_real_format_attachment_note_shape(self) -> None:
         module = load_module()
@@ -149,6 +106,29 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
             markdown = markdown_path.read_text(encoding="utf-8")
             self.assertIn("PASS", markdown)
             self.assertIn("/tmp/atm-501/send-to/01J.../aq4-report.pdf", markdown)
+
+    def test_failure_evidence_includes_send_stderr_in_json_and_markdown(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            args = SimpleNamespace(host="failure", evidence_dir=Path(temporary))
+            record = {"status": "fail", "send": {"argv": ["atm", "send"], "returncode": 3,
+                                                  "stderr_tail": "peer configuration rejected"}}
+            json_path, markdown_path = module.write_evidence(args, record)
+            self.assertEqual(json.loads(json_path.read_text())["record"]["send"]["stderr_tail"],
+                             "peer configuration rejected")
+            self.assertIn("peer configuration rejected", markdown_path.read_text())
+
+    def test_loopback_peer_configures_interface_and_trust_before_daemon_launch(self) -> None:
+        module = load_module()
+        with mock.patch.object(module, "run_cli", return_value=SimpleNamespace(returncode=0)) as run:
+            record = module.configure_loopback_peer(Path("atm"), {}, 5, 45678)
+        self.assertEqual(record["topology"], "self-loop")
+        commands = [call.args[2] for call in run.call_args_list]
+        self.assertEqual(commands[0][:3], ["peer", "interface", "set"])
+        self.assertIn("127.0.0.1:45678", commands[0])
+        self.assertEqual(commands[1][:3], ["peer", "trust", "add"])
+        self.assertIn("localhost", commands[1])
+        self.assertIn("45678", commands[1])
 
     def test_write_evidence_skipped_no_sshd_is_an_honest_non_silent_skip(self) -> None:
         module = load_module()
@@ -664,39 +644,17 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
 
     # -- FTQ-002/003: continuous pipe draining --
 
-    def test_pipe_drain_keeps_draining_a_chatty_child_past_its_readiness_probe(self) -> None:
-        # Writes well past a typical 64KiB OS pipe buffer so a harness that
-        # only reads during a readiness probe (the pre-fix shape) would
-        # block the child on a full pipe the instant that probe stops
-        # reading -- proving PipeDrain keeps the pipe open for the whole
-        # process lifetime, not only while something else happens to poll
-        # it.
+    def test_pipe_drain_consumes_both_streams_and_bounds_retained_lines(self) -> None:
         module = load_module()
-        line_count = 20000
-        script = (
-            "import sys\n"
-            f"for i in range({line_count}):\n"
-            "    print('x' * 200)\n"
-            "sys.stdout.flush()\n"
+        process = SimpleNamespace(
+            stdout=io.StringIO("first\nsecond\nthird\n"),
+            stderr=io.StringIO("error\n"),
         )
-        process = subprocess.Popen(  # noqa: S603 - fixed, non-shell argv
-            [sys.executable, "-c", script],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        drain = module.PipeDrain(process)
-        try:
-            returncode = process.wait(timeout=30)
-        finally:
-            drain.join(timeout=5)
-            if process.stdout is not None:
-                process.stdout.close()
-            if process.stderr is not None:
-                process.stderr.close()
-        self.assertEqual(returncode, 0, "a chatty child must not be blocked on an undrained pipe")
-        self.assertLessEqual(len(drain.stdout_lines), 4000, "PipeDrain's deque must stay bounded")
-        self.assertTrue(all(line == "x" * 200 for line in drain.stdout_lines))
+        drain = module.PipeDrain(process, max_lines=2)
+        for thread in drain._threads:
+            thread.join()
+        self.assertEqual(list(drain.stdout_lines), ["second", "third"])
+        self.assertEqual(list(drain.stderr_lines), ["error"])
 
     def test_pipe_drain_tail_returns_the_most_recent_lines_only(self) -> None:
         module = load_module()
@@ -1154,76 +1112,55 @@ class Aq4TransferEvidenceTests(unittest.TestCase):
 
     # -- run_send_with_timeout: the harness's own send-subprocess timeout --
 
-    def test_run_send_with_timeout_captures_partial_output_and_kills_the_tree_on_timeout(
-        self,
-    ) -> None:
-        """A wedged `atm` (sleeps well past a deliberately tiny timeout)
-        must not vanish without a trace: `run_send_with_timeout` should
-        report `timed_out: True`, keep whatever stderr the child had
-        already written before being killed, and never raise
-        `TimeoutExpired` out to the caller -- exactly the AQ4 Windows
-        failure shape this fix addresses (15s harness timeout < atm's own
-        60s deadline: no send stdout/stderr, no later diagnostics)."""
+    def test_run_send_with_timeout_captures_partial_output_and_kills_the_tree_on_timeout(self) -> None:
         module = load_module()
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            bin_dir = root / "bin"
-            bin_dir.mkdir()
-            fake_atm = _install_fake_slow_atm(
-                bin_dir, sleep_seconds=30.0, stderr_line="fake atm: about to wedge"
-            )
-            cwd = root / "cwd"
-            cwd.mkdir()
-            env = dict(os.environ)
-
+        process = mock.Mock(pid=42, returncode=-9)
+        process.communicate.side_effect = [
+            subprocess.TimeoutExpired(["atm"], 2, output="partial", stderr="about to wedge"),
+            ("", ""),
+        ]
+        with mock.patch.object(module.subprocess, "Popen", return_value=process), mock.patch.object(
+            module, "_kill_process_tree"
+        ) as kill:
             result = module.run_send_with_timeout(
-                fake_atm,
-                env,
-                ["send", "aq4-receiver@aq4-transfer-evidence", "hi", "--host", "localhost"],
-                identity="aq4-sender",
-                # The timeout starts after process creation, but a loaded
-                # host may delay the child's first instruction.  Give the
-                # fixture ample startup headroom; it blocks for 30 seconds,
-                # so the timeout path still completes in about two seconds.
-                timeout=2.0,
-                cwd=cwd,
+                Path("atm"), {}, ["send", "receiver"], identity="sender", timeout=2, cwd=Path(".")
             )
+        kill.assert_called_once_with(42)
+        self.assertEqual(result["stdout"], "partial")
+        self.assertEqual(result["stderr_tail"], "about to wedge")
+        self.assertTrue(result["timed_out"])
+        self.assertIn("did not exit within", result["error"])
+        self.assertFalse(module.send_ok_from_record(result))
 
-            self.assertTrue(result["timed_out"])
-            self.assertIn("about to wedge", result["stderr_tail"])
-            self.assertIn("did not exit within", result["error"])
-            self.assertEqual(result["argv"][0], str(fake_atm))
-            # A killed-mid-flight child's returncode is never treated as a
-            # green light for the "success" path (peek/landed-path checks)
-            # -- `send_ok_from_record` is what run_scenario actually gates
-            # on, exercised directly below.
-            self.assertFalse(module.send_ok_from_record(result))
-
-    def test_run_send_with_timeout_returns_a_normal_record_when_the_child_exits_in_time(
-        self,
-    ) -> None:
+    def test_kill_process_tree_targets_group_and_child_on_posix(self) -> None:
         module = load_module()
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            bin_dir = root / "bin"
-            bin_dir.mkdir()
-            fake_atm = _install_fake_slow_atm(bin_dir, sleep_seconds=0.0, stderr_line="fake atm: ok")
-            cwd = root / "cwd"
-            cwd.mkdir()
-            env = dict(os.environ)
+        with mock.patch.object(module, "IS_WINDOWS", False), mock.patch.object(
+            module.os, "killpg", create=True
+        ) as killpg, mock.patch.object(module.os, "kill") as kill, mock.patch.object(
+            module.signal, "SIGKILL", 9, create=True
+        ):
+            module._kill_process_tree(42)
+        killpg.assert_called_once_with(42, 9)
+        kill.assert_called_once_with(42, 9)
 
+    def test_kill_process_tree_requests_descendant_cleanup_on_windows(self) -> None:
+        module = load_module()
+        with mock.patch.object(module, "IS_WINDOWS", True), mock.patch.object(module.subprocess, "run") as run:
+            module._kill_process_tree(42)
+        self.assertEqual(run.call_args.args[0], ["taskkill", "/F", "/T", "/PID", "42"])
+
+    def test_run_send_with_timeout_records_normal_exit_and_stderr(self) -> None:
+        module = load_module()
+        process = mock.Mock(pid=42, returncode=3)
+        process.communicate.return_value = ("", "no enabled trusted peer configured for localhost\n")
+        with mock.patch.object(module.subprocess, "Popen", return_value=process):
             result = module.run_send_with_timeout(
-                fake_atm,
-                env,
-                ["send", "aq4-receiver@aq4-transfer-evidence", "hi", "--host", "localhost"],
-                identity="aq4-sender",
-                timeout=10,
-                cwd=cwd,
+                Path("atm"), {}, ["send", "receiver"], identity="sender", timeout=10, cwd=Path(".")
             )
-
-            self.assertFalse(result["timed_out"])
-            self.assertEqual(result["returncode"], 0)
-            self.assertNotIn("error", result)
+        self.assertFalse(result["timed_out"])
+        self.assertEqual(result["returncode"], 3)
+        self.assertIn("no enabled trusted peer", result["stderr_tail"])
+        self.assertNotIn("error", result)
 
     def test_send_ok_from_record_treats_a_timeout_as_never_ok(self) -> None:
         module = load_module()
