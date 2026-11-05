@@ -7,7 +7,7 @@ name = "DaemonBootstrapClient"
 facade = "SameHostDaemonBootstrap"
 
 [implementation]
-type = "DaemonSupervisor"
+type = "DaemonLocalIpcEndpoint"
 module = "atm_daemon_client"
 visibility = "public"
 constructor = "public"
@@ -21,8 +21,8 @@ roots = [
 [ownership]
 io_owns = [
   "same_host_daemon_bootstrap_types",
-  "daemon_launch_gate",
-  "daemon_auto_start_spawn",
+  "same_host_endpoint_discovery",
+  "same_host_client_transport",
 ]
 io_forbidden = [
   "sqlite",
@@ -61,6 +61,6 @@ review_gates = [
 [status]
 state = "active"
 notes = [
-  "shared same-host daemon bootstrap helpers extracted from atm and atm-graft",
-  "transport adapters and request-dispatch wiring remain in their owning crates; this crate owns launch/bootstrap helpers and the X.4 connection-setup helpers try_connect, exchange, and unexpected_response",
+  "shared same-host daemon client helpers extracted from atm and atm-graft",
+  "transport adapters and request-dispatch wiring remain in their owning crates; this crate owns endpoint resolution and the X.4 connection-setup helpers try_connect, exchange, and unexpected_response",
 ]

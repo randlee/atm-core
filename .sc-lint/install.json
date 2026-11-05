@@ -208,7 +208,6 @@
             "agent-team-mail-core",
             "atm-http-runtime",
             "atm-storage",
-            "fs4",
             "interprocess",
             "sc-lint-attributes",
             "serde_json",
@@ -494,11 +493,10 @@
       "enabled": true,
       "exclude_paths_by_rule": {
         "SCB-RUNTIME-003": [
-          "crates/atm/src/commands/internal_nudge.rs",
-          "crates/atm-daemon-client/src/lib.rs"
+          "crates/atm/src/commands/internal_nudge.rs"
         ]
       },
-      "reason": "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. sc-lint 0.8.4 has no item-level runtime allow; retain the narrowest supported whole-file exclusion (randlee/sc-lint#836)."
+      "reason": "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. sc-lint has no item-level runtime allow; retain the narrowest supported whole-file exclusion (randlee/sc-lint#836)."
     }
   },
   "ci": {
