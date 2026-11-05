@@ -323,6 +323,7 @@ async fn supervise_handoff_worker(inner: Arc<StateHandoffInner>) {
     }
 }
 
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "A brief backoff prevents a busy retry loop after transient read-state write failures.")]
 async fn run_handoff_worker(inner: Arc<StateHandoffInner>) -> Result<(), AtmError> {
     loop {
         let transition = loop {
@@ -728,6 +729,7 @@ impl StorageAsyncMailboxRuntime {
         self.select_matching(scope, request, limit, deadline).await
     }
 
+    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Mailbox long-poll checks for new messages at bounded intervals until the request deadline.")]
     async fn select_for_read(
         &self,
         scope: MailboxScope,

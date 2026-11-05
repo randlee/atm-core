@@ -428,6 +428,7 @@ struct TailArgs {
 
 impl TailArgs {
     #[cfg(not(test))]
+    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Log follow polls the retained store at the configured interval.")]
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let mut session = observability.follow(self.query.build_query(LogMode::Tail)?)?;
 

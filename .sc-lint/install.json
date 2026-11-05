@@ -68,9 +68,9 @@
       "manifest_dependency_allowlists": [
         {
           "allowed_dependencies": [
+            "agent-team-mail-core",
             "anyhow",
             "async-trait",
-            "agent-team-mail-core",
             "atm-daemon-bootstrap",
             "atm-daemon-client",
             "atm-graft",
@@ -83,6 +83,7 @@
             "libc",
             "noyalib",
             "opentelemetry-proto",
+            "sc-lint-attributes",
             "sc-observability",
             "sc-observability-types",
             "serde",
@@ -90,9 +91,9 @@
             "serial_test",
             "tempfile",
             "time",
-            "toml",
             "tokio",
             "tokio-stream",
+            "toml",
             "tonic",
             "tracing",
             "tracing-subscriber",
@@ -293,10 +294,11 @@
         },
         {
           "allowed_dependencies": [
-            "async-trait",
             "agent-team-mail-core",
+            "async-trait",
             "atm-runtime-test-support",
             "atm-storage",
+            "sc-lint-attributes",
             "serde_json",
             "tokio",
             "tracing"
@@ -369,13 +371,14 @@
         },
         {
           "allowed_dependencies": [
-            "async-trait",
             "agent-team-mail-core",
+            "async-trait",
             "atm-runtime-test-support",
             "atm-storage",
             "chrono",
             "cron",
             "getrandom",
+            "sc-lint-attributes",
             "serde_json",
             "syn",
             "tokio",
@@ -618,7 +621,7 @@
       "python-tests-windows"
     ]
   },
-  "minimum_version": "0.8.4",
+  "minimum_version": "0.8.6",
   "profiles": {
     "adr-index-linux": {
       "command": [

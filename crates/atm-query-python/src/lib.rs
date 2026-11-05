@@ -55,9 +55,7 @@ fn open_readonly(database_path: Option<String>) -> PyResult<ReadonlyDatabase> {
 }
 
 fn default_database_path() -> PathBuf {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
+    std::env::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         // Durable ATM state is host-scoped. `ATM_HOME` configures workspace
         // discovery and must never select the analyst database implicitly.
