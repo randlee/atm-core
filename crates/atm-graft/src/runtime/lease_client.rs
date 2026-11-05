@@ -336,21 +336,22 @@ pub(super) fn tick_lease_refresh(
     ctx: &GraftReceiverLoopContext,
     listener: &mut RegisteredGraftReceiver,
     lease_backoff: &mut LeaseRefreshBackoff,
+    now: &impl Fn() -> Instant,
 ) {
-    let now = Instant::now();
-    if !lease_backoff.due(now) {
+    let current = now();
+    if !lease_backoff.due(current) {
         return;
     }
     match listener.refresh() {
         Ok(()) => {
-            lease_backoff.record_success(Instant::now());
+            lease_backoff.record_success(now());
             if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
                 ctx.observability
                     .receiver_ownership(&snapshot, "refresh_receiver_lease", "ok");
             }
         }
         Err(error) => {
-            lease_backoff.record_failure(Instant::now());
+            lease_backoff.record_failure(now());
             warn_runtime_error("refresh_graft_receiver", Some(&ctx.graft_root), &error);
             let outcome = if error.code() == AtmErrorCode::GraftReceiverNotOwner {
                 "displaced"
