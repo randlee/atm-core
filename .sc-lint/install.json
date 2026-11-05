@@ -440,11 +440,9 @@
           "owner_manifest_path": "crates/atm-core/Cargo.toml"
         },
         {
-          "allowed_sections": [
-            "dependencies"
-          ],
+          "allowed_sections": [],
           "dependency_package": "atm-storage-rusqlite",
-          "message": "atm-daemon may depend on atm-storage-rusqlite only through the documented runtime-owned SQLite boundaries",
+          "message": "atm-daemon must not depend on atm-storage-rusqlite",
           "owner_manifest_path": "crates/atm-daemon/Cargo.toml"
         },
         {
