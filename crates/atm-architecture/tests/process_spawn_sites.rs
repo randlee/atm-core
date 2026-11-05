@@ -259,7 +259,7 @@ fn process_spawn_sites_are_the_recorded_files() {
         ),
         ("tokio", "atm-herdr/src/transport_cli.rs"),
         ("tokio", "atm/src/commands/send_to.rs"),
-        ("std", "atm/src/commands/internal_nudge.rs"),
+        ("std", "atm/src/commands/internal_nudge/tmux.rs"),
     ]
     .into_iter()
     .map(|(kind, path)| (kind.to_owned(), path.to_owned()))
