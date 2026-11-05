@@ -13,6 +13,7 @@ homepage.workspace = true
 name = "atm_runtime"
 
 [dependencies]
+sc-lint-attributes = { workspace = true }
 atm-core.workspace = true
 atm-storage.workspace = true
 async-trait.workspace = true

@@ -242,6 +242,7 @@ pub(crate) async fn spawn_until(
     })
 }
 
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "The timer enforces the child process deadline and triggers cleanup.")]
 pub(crate) async fn spawn_with_deadline(
     spec: SpawnSpec,
     stdin: &[u8],

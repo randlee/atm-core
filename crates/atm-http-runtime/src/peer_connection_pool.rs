@@ -557,6 +557,7 @@ fn take_expired_idle(
     expired
 }
 
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Periodic idle eviction waits for the configured timeout between sweeps.")]
 fn spawn_idle_eviction_task(shared: &Arc<PoolShared>) {
     let Ok(handle) = tokio::runtime::Handle::try_current() else {
         return;

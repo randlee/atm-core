@@ -391,6 +391,7 @@ async fn connect_named_pipe(
 }
 
 #[cfg(windows)]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Named-pipe busy retries pause within the remaining connection deadline.")]
 async fn retry_pipe_busy<T>(
     remaining: impl Fn() -> Option<Duration>,
     retry_delay: Duration,
