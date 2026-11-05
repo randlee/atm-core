@@ -2,7 +2,7 @@
 
 Historical sprint detail rendered from the beads plan (`bd show`). The beads are authoritative; the current landed state is summarized below. Sprint sections after the as-built record preserve the original proposals and acceptance checklists; their present-tense wording and unchecked boxes are not a statement of current repository state.
 
-> **Current landed state.** atm-core uses the published sc-lint 0.8.4 adoption kit with `minimum_version = "0.8.4"`. bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit and removed the vendored `sc-lint-boundary` and `sc-lint-directives` crates; bg-7 moved parallel, keep-going lint execution and the test manifest into atm-core's repository-owned runner. The kit owns Windows-target cross compilation tools and rustup targets through its `tools` contract. There is no repository `.just/run_lint.py` or `.just/check_version_sync.py`; sc-lint 0.8.4 manifest rows invoke the published `sc_lint.check_version_sync` module for the retained version-alignment check. Each Python lint and test row has Linux, macOS and Windows variants that invoke the `.bootstrap-venv` interpreter directly, and the test runner selects the host variant. macOS-host Windows-target Clippy is configured.
+> **Current landed state.** atm-core uses the published sc-lint 0.8.4 adoption kit with `minimum_version = "0.8.4"`. bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit and removed the vendored `sc-lint-boundary` and `sc-lint-directives` crates; bg-7 adopted the published sc-lint consumer runner for parallel, keep-going lint execution, while the test manifest remains repository-owned. The kit owns Windows-target cross compilation tools and rustup targets through its `tools` contract. There is no repository `.just/run_lint.py` or `.just/check_version_sync.py`; sc-lint 0.8.4 manifest rows invoke the published `sc_lint.check_version_sync` module for the retained version-alignment check. Each Python lint and test row has Linux, macOS and Windows variants that invoke the `.bootstrap-venv` interpreter directly, and the test runner selects the host variant. macOS-host Windows-target Clippy is configured.
 
 > **BG4-2 evidence status.** The planned SCB-RUNTIME-001/002 vendored-versus-published finding-set diff was not recorded. [PR #1790](https://github.com/randlee/atm-core/pull/1790) records only that the published runtime analyzer could not start with sc-lint 0.7.0 because of the `--config` forwarding gap tracked by [sc-lint#373](https://github.com/randlee/sc-lint/issues/373); it contains no comparison results. [PR #1815](https://github.com/randlee/atm-core/pull/1815) reports a local `just lint` attempt terminated with exit 143, which is not a passing lint result or a BG4-2 comparison. The later 0.8.4 phase landing and CI establish the delivered analyzer configuration and validation, but do not retroactively supply the missing finding-set diff.
 
@@ -13,7 +13,7 @@ The historical sprint snapshots below retain their original proposals and versio
 ## atm-phase-bg: phase-bg: migrate atm-core lint to published sc-lint 0.8.4
 
 ## Goal
-atm-core uses the published sc-lint 0.8.4 analyzers, wheel and adoption kit with repository-owned lint and test runners. Duplicate checks were removed as the published replacements became available. BG4's required SCB-RUNTIME-001/002 comparison attempt was blocked because the analyzer could not run at the time and no finding-set diff was recorded; see the as-built evidence above. Intent: `docs/plans/phase-bg/intent.md`; anchors ANC-001..021: `docs/plans/phase-bg/anchors.json` (landed with plan PR #1762). Replaces the stalled phase-be (atm-phase-be), which waited on 0.6.x.
+atm-core uses the published sc-lint 0.8.4 analyzers, wheel, adoption kit and consumer lint runner, with a repository-owned test manifest. Duplicate checks were removed as the published replacements became available. BG4's required SCB-RUNTIME-001/002 comparison attempt was blocked because the analyzer could not run at the time and no finding-set diff was recorded; see the as-built evidence above. Intent: `docs/plans/phase-bg/intent.md`; anchors ANC-001..021: `docs/plans/phase-bg/anchors.json` (landed with plan PR #1762). Replaces the stalled phase-be (atm-phase-be), which waited on 0.6.x.
 
 ## Sprints (one stack, one package per step, ANC-019)
 | Layer | Sprint | Package | Depends on |
@@ -24,7 +24,7 @@ atm-core uses the published sc-lint 0.8.4 analyzers, wheel and adoption kit with
 | 4 | bg-4 | sc-lint-runtime (runtime-waits) | bg-3 |
 | 5 | bg-5 | sc_lint Python wheel tools | bg-4 |
 | 6 | bg-6 | runner cutover: parallel steps, `just lint ci` platform scope, `just test` manifest, speed; vendored crates deleted | bg-5, gate atm-phase-bg-gate-sclint-runner |
-| 7 | bg-7 | atm-core-owned parallel/keep-going lint runner, test manifest and speed | bg-6 |
+| 7 | bg-7 | published sc-lint consumer lint runner, repository-owned test manifest and speed | bg-6 |
 
 ## Phase rules
 - atm-core-specific config goes in the kit's consumer input (`.sc-lint/install.json`) and recipes outside the kit block; kit-managed files are never edited, and a missing extension point is requested on randlee/sc-lint (ANC-002).
@@ -34,7 +34,7 @@ atm-core uses the published sc-lint 0.8.4 analyzers, wheel and adoption kit with
 ### Design
 
 ## Serial order
-The original package-by-package ordering proposal covered bg-1→bg-6. bg-7 was added in the later re-plan to own atm-core's runner, manifest-driven tests and speed work after kit adoption; see the closed bg-7 bead. The paragraphs below preserve the original proposal and sprint snapshots.
+The original package-by-package ordering proposal covered bg-1→bg-6. bg-7 was added in the later re-plan to adopt the published sc-lint consumer lint runner and deliver manifest-driven tests and speed work after kit adoption; the test manifest remains repository-owned. See the closed bg-7 bead. The paragraphs below preserve the original proposal and sprint snapshots.
 
 ## Decisions
 - Kit-managed files are never hand-edited (ANC-002). atm-core specifics live in `.sc-lint/install.json` (its `profiles`, `test` and `analyzers`) and in recipes outside the managed Justfile block. `sc-lint.toml` is rendered from `.sc-lint/install.json` by `python3 plugins/sc-lint/install.py .` and committed as rendered, never hand-edited. Analyzer keys are the v0.7.0 schema only: boundary and runtime take enabled, reason, exclude_rules, fail_rules, exclude_paths; portability also takes config_home_env, unix_path_prefixes, targets.
