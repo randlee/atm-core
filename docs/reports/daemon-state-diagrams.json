@@ -1,18 +1,17 @@
 {
   "title": "Daemon State Machines",
-  "generated_at": "2026-05-23T02:18:51.814057+00:00",
+  "generated_at": "2026-11-05T20:44:33.653879+00:00",
   "set": "daemon",
   "output_path": "docs/reports/daemon-state-diagrams.html",
   "sections": [
     {
       "key": "cli-bootstrap-state-machine",
       "title": "CLI Bootstrap State Machine",
-      "summary": "Same-host caller bootstrap before any daemon request can run.",
-      "commentary": "This machine models `CliComposition::bootstrap()` plus `DaemonSupervisor::ensure_daemon_available_with_traceability()`. Every terminal is caller-visible and QA should be able to force each edge with connect misses, launch-lock contention, spawn failure, or successful connect.",
+      "summary": "Same-host caller bootstrap before a daemon request is sent.",
+      "commentary": "CliComposition::bootstrap resolves the account-scoped endpoint and constructs a Tokio HTTP client. The managed daemon lifecycle is separate; bootstrap does not launch a daemon.",
       "notes": [
-        "states are caller-visible bootstrap states",
-        "every terminal maps to a typed caller result",
-        "doctor only runs after DaemonReachable"
+        "endpoint resolution and client construction are code-owned",
+        "a configured client does not prove daemon availability"
       ],
       "read_tables": [],
       "write_tables": [],
