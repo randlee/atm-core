@@ -149,6 +149,16 @@ pub enum GraftPostSendResponse {
 
 const RECEIVER_HOOK_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct HookTransportLimits {
+    connect: Option<Duration>,
+    io: Option<Duration>,
+}
+
+const PRODUCTION_HOOK_TRANSPORT_LIMITS: HookTransportLimits = HookTransportLimits {
+    connect: Some(RECEIVER_HOOK_CONNECT_DEADLINE),
+    io: Some(RECEIVER_HOOK_IO_DEADLINE),
+};
 /// The outer replacement-runtime hook owner needs time to receive the blocking
 /// Graft result and turn it into a durable-success warning. Socket I/O must
 /// therefore end before, rather than race, the inherited absolute deadline.
@@ -359,8 +369,14 @@ fn remaining_hook_budget(
     deadline: RequestDeadline,
     safety_cap: Duration,
 ) -> Result<Duration, AtmError> {
-    deadline
-        .remaining()
+    hook_budget_from_remaining(deadline.remaining(), safety_cap)
+}
+
+fn hook_budget_from_remaining(
+    remaining: Option<Duration>,
+    safety_cap: Duration,
+) -> Result<Duration, AtmError> {
+    remaining
         .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
         .filter(|remaining| !remaining.is_zero())
         .map(|remaining| remaining.min(safety_cap))
@@ -378,19 +394,42 @@ fn deliver_graft_post_send_with_deadline(
     request: &GraftPostSendRequest,
     deadline: RequestDeadline,
 ) -> Result<GraftPostSendResponse, AtmError> {
-    let connect_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_CONNECT_DEADLINE)?;
-    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+    deliver_graft_post_send_with_limits(
+        endpoint,
+        capability,
+        request,
+        deadline,
+        PRODUCTION_HOOK_TRANSPORT_LIMITS,
+    )
+}
+
+fn deliver_graft_post_send_with_limits(
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
+    request: &GraftPostSendRequest,
+    deadline: RequestDeadline,
+    limits: HookTransportLimits,
+) -> Result<GraftPostSendResponse, AtmError> {
+    let connect_deadline = limits
+        .connect
+        .map(|cap| remaining_hook_budget(deadline, cap))
+        .transpose()?;
+    let connection = match connect_deadline {
+        Some(timeout) => TcpStream::connect_timeout(&endpoint, timeout),
+        None => TcpStream::connect(endpoint),
+    };
+    let mut stream = connection.map_err(|source| {
+        let detail =
+            connect_deadline.map_or_else(String::new, |timeout| format!(" within {timeout:?}"));
         AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
-            format!(
-                "failed to connect to graft receiver endpoint {} within {:?}",
-                endpoint, connect_deadline
-            ),
+            format!("failed to connect to graft receiver endpoint {endpoint}{detail}"),
         )
         .with_cause(source)
     })?;
-    let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
-    apply_stream_deadlines(&stream, io_deadline)?;
+    if let Some(cap) = limits.io {
+        apply_stream_deadlines(&stream, remaining_hook_budget(deadline, cap)?)?;
+    }
     let wire = GraftPostSendWireRequest {
         capability_base64url: capability.to_base64url(),
         request: request.clone(),
@@ -688,7 +727,17 @@ impl GraftReceiverListener {
         stream: &mut TcpStream,
         io_deadline: Duration,
     ) -> Result<GraftReceiverRequest, AtmError> {
-        apply_stream_deadlines(stream, io_deadline)?;
+        self.read_receiver_request_with_limit(stream, Some(io_deadline))
+    }
+
+    fn read_receiver_request_with_limit(
+        &self,
+        stream: &mut TcpStream,
+        io_deadline: Option<Duration>,
+    ) -> Result<GraftReceiverRequest, AtmError> {
+        if let Some(timeout) = io_deadline {
+            apply_stream_deadlines(stream, timeout)?;
+        }
         let wire: GraftReceiverWireRequest = read_graft_post_send_message(
             stream,
             "failed to read graft receiver request",
@@ -907,7 +956,7 @@ mod tests {
         GraftReceiverRequest, GraftReceiverWireRequest, RECEIVER_HOOK_RESULT_HANDOFF_GRACE,
         deliver_graft_post_send, deliver_published_cron_lifecycle, deliver_published_receiver_hook,
         deliver_published_receiver_hook_with_transport, graft_receiver_lock_path_from_root,
-        graft_receiver_not_registered_error, remaining_hook_budget,
+        graft_receiver_not_registered_error,
     };
     use crate::api::RequestDeadline;
     use crate::boundary::{
@@ -955,21 +1004,44 @@ mod tests {
     }
 
     #[test]
+    fn production_hook_transport_limits_remain_bounded() {
+        assert_eq!(
+            super::PRODUCTION_HOOK_TRANSPORT_LIMITS,
+            super::HookTransportLimits {
+                connect: Some(Duration::from_millis(250)),
+                io: Some(Duration::from_secs(3)),
+            }
+        );
+        let capability = crate::local_http::LocalCapability::generate().expect("capability");
+        let request = GraftPostSendRequest {
+            event: test_event(),
+            kind: NudgeKind::Steer,
+            rendered_nudge: "test".to_owned(),
+        };
+        let endpoint = "127.0.0.1:1".parse().expect("loopback address");
+        let expired = RequestDeadline::after_at(std::time::Instant::now(), Duration::ZERO);
+        let error =
+            super::deliver_graft_post_send_with_deadline(endpoint, &capability, &request, expired)
+                .expect_err("expired request must fail before connecting");
+        assert!(error.message().contains("request budget"));
+    }
+
+    #[test]
     fn graft_hook_budget_reserves_time_for_the_outer_result_handoff() {
-        let short = remaining_hook_budget(
-            RequestDeadline::after(RECEIVER_HOOK_RESULT_HANDOFF_GRACE),
+        let short = super::hook_budget_from_remaining(
+            Some(RECEIVER_HOOK_RESULT_HANDOFF_GRACE),
             Duration::from_secs(1),
         )
         .expect_err("a deadline with no handoff margin must not start socket I/O");
         assert!(short.message().contains("result handoff"));
 
-        let budget = remaining_hook_budget(
-            RequestDeadline::after(Duration::from_secs(1)),
-            Duration::from_secs(1),
-        )
-        .expect("larger request deadline retains socket budget");
-        assert!(budget < Duration::from_secs(1));
-        assert!(budget <= Duration::from_secs(1) - RECEIVER_HOOK_RESULT_HANDOFF_GRACE);
+        let budget =
+            super::hook_budget_from_remaining(Some(Duration::from_secs(1)), Duration::from_secs(1))
+                .expect("larger request deadline retains socket budget");
+        assert_eq!(
+            budget,
+            Duration::from_secs(1) - RECEIVER_HOOK_RESULT_HANDOFF_GRACE
+        );
     }
 
     fn test_event() -> PostSendHookEvent {
@@ -1449,53 +1521,71 @@ mod tests {
         listener: &GraftReceiverListener,
     ) -> (Result<PostSendEmissionPath, AtmError>, GraftPostSendRequest) {
         use std::sync::atomic::{AtomicBool, Ordering};
-        use std::sync::mpsc;
+        struct RestoreNonblocking<'a>(&'a GraftReceiverListener);
 
-        struct ReceiverFinished(mpsc::Sender<()>);
-
-        impl Drop for ReceiverFinished {
+        impl Drop for RestoreNonblocking<'_> {
             fn drop(&mut self) {
-                let _ = self.0.send(());
+                self.0
+                    .listener
+                    .set_nonblocking(true)
+                    .expect("restore nonblocking listener");
             }
         }
 
+        listener
+            .listener
+            .set_nonblocking(false)
+            .expect("blocking listener");
+        let _restore = RestoreNonblocking(listener);
+        let endpoint = listener.local_addr().expect("local addr");
         let client_finished = AtomicBool::new(false);
         std::thread::scope(|scope| {
-            let (finished_tx, finished_rx) = mpsc::channel();
             let client_finished = &client_finished;
             let receiver = scope.spawn(move || {
-                // Report completion after socket cleanup, including on panic.
-                let _completion = ReceiverFinished(finished_tx);
-                let mut stream = loop {
-                    if let Some(stream) = listener.poll_accept().expect("poll accept") {
-                        break stream;
-                    }
-                    if client_finished.load(Ordering::Acquire) {
-                        return None;
-                    }
-                    std::thread::yield_now();
+                let mut stream = listener
+                    .poll_accept()
+                    .expect("accept")
+                    .expect("loopback peer");
+                if client_finished.load(Ordering::Acquire) {
+                    return None;
+                }
+                let GraftReceiverRequest::PostSend(request) = listener
+                    .read_receiver_request_with_limit(&mut stream, None)
+                    .expect("read request")
+                else {
+                    panic!("expected post-send request");
                 };
-                let request = listener
-                    .read_request(&mut stream, Duration::from_secs(3))
-                    .expect("read request");
                 listener
                     .write_response(&mut stream, &GraftPostSendResponse::Delivered)
                     .expect("write response");
                 Some(request)
             });
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                deliver_published_receiver_hook(
+                deliver_published_receiver_hook_with_transport(
                     runtime,
                     &dispatch_for(test_event()),
-                    RequestDeadline::after(Duration::from_secs(3)),
+                    // This deadline is unused with blocking test transport limits;
+                    // the CI job timeout bounds a genuinely stuck exchange.
+                    RequestDeadline::after(Duration::from_secs(3600)),
+                    |endpoint, capability, request, deadline| {
+                        super::deliver_graft_post_send_with_limits(
+                            endpoint,
+                            capability,
+                            request,
+                            deadline,
+                            super::HookTransportLimits {
+                                connect: None,
+                                io: None,
+                            },
+                        )
+                    },
                 )
             }));
-            client_finished.store(true, Ordering::Release);
-            // On timeout, scoped cleanup is still bounded: accept checks the
-            // stop predicate and accepted sockets retain their 3s I/O timeouts.
-            finished_rx
-                .recv_timeout(Duration::from_secs(3))
-                .expect("graft test receiver did not report completion within 3s of client exit");
+            if !matches!(outcome, Ok(Ok(_))) {
+                client_finished.store(true, Ordering::Release);
+                // Wake a receiver still blocked in accept if delivery failed before connecting.
+                let _ = TcpStream::connect(endpoint);
+            }
             let request = receiver.join();
             let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
             let request = request
