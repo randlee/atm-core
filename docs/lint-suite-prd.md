@@ -149,7 +149,7 @@ Lint execution model:
 - the published `sc_lint.lint_manifests` runner
   - enforces Cargo manifest policy beyond Cargo/Clippy defaults
 - the published `sc_lint.lint_cargo_deny` runner
-  - wraps `cargo-deny`; the DNS retry gap is tracked by randlee/sc-lint#371
+  - wraps `cargo-deny`; its DNS retry gap was fixed in [sc-lint 0.8.0](https://github.com/randlee/sc-lint/releases/tag/v0.8.0) (randlee/sc-lint#371)
 - the published `sc_lint.lint_cargo_shear` runner
 - the published `sc_lint.lint_codespell` runner
 - `cargo fmt --all [--check]`
