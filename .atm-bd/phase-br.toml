@@ -1,6 +1,7 @@
 plan = "docs/plans/phase-br.jsonl"
 root = "atm-phase-br"
 integration_branch = "integrate/phase-br"
+code_checkout = "../atm-bd-orchestration"
 lead = "fenix"
 
 [templates]
