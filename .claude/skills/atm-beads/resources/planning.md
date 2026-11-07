@@ -178,7 +178,9 @@ set) and metadata come from these required vars:
 Optional: `model_class` (`astra`, `terra`, `luna`), `release_train`,
 `priority`.
 
-A sprint too large for one agent's context is split at planning: `stage:subtask`
+A sprint too large for one agent's context is split at planning into subtasks
+under one coordinating dev, never into independent sibling sprints with no shared
+context: one agent holding the whole design produces better code. `stage:subtask`
 child beads under the sprint container (`<container>.sub-<n>`), each sized for one
 background subagent, with `metadata.model_class` set where it differs from the
 sprint's. The split sprint's own dev is a frontier-class agent (its `model_class`
