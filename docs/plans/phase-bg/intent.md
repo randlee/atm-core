@@ -25,6 +25,16 @@ This replaces the stalled phase-be plan, which waited on sc-lint 0.6.x releases.
 - Lint checks unique to atm-core: they stay as atm-core steps.
 - Product code changes beyond what fixing sc-lint findings needs.
 
+## Later ruling for the bg-7 PE-9 non-fix
+
+The `atm-phase-bg` root bead's pause note (`PAUSED 2026-10-27T01:35Z`)
+records Rand's ruling: “I don't want your implementation of anything.” The
+same note records the scope: atm-core owns ATM concerns, sc-lint owns lint
+concerns, and atm-core must not implement lint. This is the ruling behind
+PE-9's non-fix disposition; the PE-9 close reason's `(Rand 2026-10-26)`
+shorthand omitted the quoted words. Source: `bd show atm-phase-bg`, Notes,
+`PAUSED 2026-10-27T01:35Z` entry.
+
 ## Anchors
 
 Anchors for this plan live in `anchors.json` (record of truth) and are rendered to `anchors.md`.
