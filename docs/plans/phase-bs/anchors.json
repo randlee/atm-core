@@ -1,0 +1,585 @@
+{
+  "schema": "plan-anchoring/anchors/1",
+  "plan": "phase-bs",
+  "intent_ref": "docs/plans/phase-bs/intent.md",
+  "anchors": [
+    {
+      "id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A phase plan too large for one sprint must be split into multiple sprints.",
+      "quote": "If plan is too large it MUST be split.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Split too-large plans",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The plan split must place unrelated, non-intersecting work in separate sprints so the sprint dependency graph stays short.",
+      "quote": "The split should be done to optimize horizontal waves (keep height of graph short), unrelated/un-intersecting work split into separate sprints.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Short wave graph",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A large sprint of closely related work must be split into child beads under one dev, one child bead per background subagent.",
+      "quote": "Large sprints w/ closely related work should be split into child beads one per [background] subagent.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Child beads per subagent",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-orchestration planning guidance must recommend child beads for concentrated pockets of closely related work managed by a single dev agent.",
+      "quote": "we are adding a new option which we want to highly recommend for efficiency.  It is important to create a well balanced plan of waves with concentrated pockets of work managed by a single dev agent",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Recommend child beads",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A child bead must declare its subagent's model with the existing beads class fast, normal or frontier.",
+      "quote": "Use already defined 'fast','normal','frontier' classification in beads.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Model class per child",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sprint's dev must run each child bead with a background subagent.",
+      "quote": "I think it should be a strategy as part of planning to encourage agents to delegate work to multiple subagents (and specfically handle merging subagent work into their worktree)  when therre is a larger task.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Dev runs children",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Subagent work must not get its own PR; the sprint's dev must deliver one working, tested branch.",
+      "quote": "We do not need pr for subagent work.  Primary dev agent is responsible for delivering a single working tested branch.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "One branch, no subagent PRs",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each background subagent must run focused lint and tests on its own worktree.",
+      "quote": "Additionally background sub-agents should do small focused test/lint on their worktree.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Subagent focused lint/test",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sprint's dev must delegate the full lint and test run to a background fast-class agent.",
+      "quote": "Dev should delegate running full lint/test to background 'fast' agent.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Full lint/test on fast agent",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev's final rebase onto the top of the stack must happen after full lint and test pass.",
+      "quote": "Final rebase AFTER tests/lint pass.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Final rebase after green",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev must not rerun full lint and test after the final rebase unless the rebase required resolving conflicts in code the sprint wrote.",
+      "quote": "Rebasing on top of stack AND make sure tests/lint pass 100% are impossible to both achieve if 5-15 minutes of testing are run after rebase. I have seen agents looping over run tests <-> rebase 10+ times in a row before they can land the stack. 4e could add 'unless conflicts with code written must be resolved' or similar.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "No full rerun after rebase",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev task must state in a few words that the parent bead closes after its children, with enforcement left to the bd close failure and no hook or script.",
+      "quote": "beads does NOT allow closing parent w/ open children.  This does NOT need much explaination, the agent will be told he can not close parent first so few words in task/prompt need to talk about it.  No hook/python for this at all outside of returning close fail message from failed 'bd close'.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Parent closes after children",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint must have exactly one sanity bead, and it must name every dev bead of the sprint.",
+      "quote": "There is ONE sanity bead for all dev work.  the sanity task/bead would specify all dev beads for split.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "One sanity bead per sprint",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every dev bead, parent and child, must record its git commit so sanity can match each commit to its bead.",
+      "quote": "we should require git commit# per dev bead so sanity can coorelate commit to dev task/bead",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Commit per dev bead",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:55+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint must have exactly one QA bead and one QA run on the sprint's single worktree.",
+      "quote": "Single qa bead, subagents would handle all work on single worktree as single qa run.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "One QA bead per sprint",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:55+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Docs, templates and prompts under atm-bd-orchestration must not mention plan-anchoring.",
+      "quote": "don't mention plan-anchoring in atm-bd",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "No plan-anchoring mention",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "grep -ri plan-anchoring plugins/atm-bd-orchestration returns nothing",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:55+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    },
+    {
+      "id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Prompts and task text for the subtask strategy must contain only necessary words.",
+      "quote": "in general prompts/tasks must be written with NO unnecessary words.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Necessary words only",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [],
+        "fail": []
+      },
+      "question_overrides": {},
+      "version": 1,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": null,
+        "plan_questions": null,
+        "dev_questions": null
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:55+00:00",
+          "event": "created",
+          "status": "locked"
+        }
+      ]
+    }
+  ]
+}
