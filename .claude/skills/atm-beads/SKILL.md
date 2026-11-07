@@ -62,6 +62,16 @@ Read only the one the current job needs.
 | [`resources/dev-sanity.md`](resources/dev-sanity.md) | writing or sending the sanity check assignment (recipient and message) |
 | [`resources/troubleshooting.md`](resources/troubleshooting.md) | a claim, close or assignee looks wrong, or `bd ready` misses assigned work |
 
+Pour the phase root and each sprint bead on the first write, the moment it is
+nameable, then edit the bead as every later fact arrives (`bd update
+--append-notes`, `--body-file`); never hold the plan in context or in a draft
+file to pour later. The plan takes the shape the operator asked for: a plan
+asked for as "mostly code" is mostly code, with the template's prose fields
+one line each or absent. Before a sprint is nameable, write to a `stage:plan`
+notes bead under the root (`<root>.plan-notes`: open facts, references, a
+checklist of what the plan still needs; the validator accepts it) and move
+each item into its sprint bead as the shape settles; it closes at plan review.
+
 Every phase plan must include the plan file `<plans_dir>/phase-<x>.jsonl` and the
 tracked phase file `.atm-bd/phase-<x>.toml` (format: `resources/planning.md`
 "Phase definition") and the phase DAG `<plans_dir>/phase-<x>/phase-<x>-dag.html`,

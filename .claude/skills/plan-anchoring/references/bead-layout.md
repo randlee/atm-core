@@ -66,7 +66,8 @@ Edit with `bd update <question bead> --body-file <file>`. Overrides may also liv
 - Question beads resolve from `anchors.json` (`beads.plan_questions` / `beads.dev_questions`) first, then `bd children <anchor bead> --json` filtered on the `gate:plan` or `gate:dev` label.
 - The fenced JSON from the question bead's `description` goes into an overrides file keyed by anchor ID, passed as `--overrides-file`; the script merges.
 
-All read-only. Agents never create, update, close or comment on beads.
+All read-only for these gate agents: they never create, update, close or comment on beads.
+The planner in the main session writes beads as planning happens.
 
 ## Posting results back
 

@@ -126,7 +126,8 @@ Hierarchy:
 - children of the root: exactly the listed sprint containers, plus `stage:plan*` beads,
   `bd gate` beads and sprints closed "folded into ...";
 - under the sprint container: its poured `dev ← sanity ← qa` group and one
-  poured `fix ← sanity ← qa` group per blocking finding. Important and minor
+  poured `fix ← sanity ← qa` group per blocking finding, and any `stage:subtask`
+  beads the plan split off for subagents. Important and minor
   findings are plain finding beads under the phase or feature bead.
 
 `phase-<x>-dag.html` is committed with the plan file and the phase file; when
@@ -176,6 +177,16 @@ set) and metadata come from these required vars:
 
 Optional: `model_class` (`astra`, `terra`, `luna`), `release_train`,
 `priority`.
+
+A sprint too large for one agent's context is split at planning into subtasks
+under one coordinating dev, never into independent sibling sprints with no shared
+context: one agent holding the whole design produces better code. `stage:subtask`
+child beads under the sprint container (`<container>.sub-<n>`), each sized for one
+background subagent, with `metadata.model_class` set where it differs from the
+sprint's. The split sprint's own dev is a frontier-class agent (its `model_class`
+says so) that runs each child with a background subagent, merges every
+result into its own worktree, and closes every child before closing its own bead;
+the lead never dispatches them.
 
 `requirements` and `adrs` are never left empty. The dev reads each listed id
 before coding, QA checks the change against each one, and plan review
