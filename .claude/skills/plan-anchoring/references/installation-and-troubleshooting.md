@@ -1,6 +1,6 @@
 ---
 name: installation-and-troubleshooting
-version: 0.9.2
+version: 0.10.0
 description: Installing plan-anchor into a repository or a parent folder with the plan-anchor-installer skill (install.py), per-repository overrides and per-folder upgrades, the anchor tracker this install is rendered for and how to switch it, the CLIs and credentials plan-anchoring depends on (python3, PyYAML, bd, sc-compose, jq, TypeSafe API key), minimum versions, PATH issues in Claude Code, Codex and Cursor environment policy, validation, and known issues.
 ---
 

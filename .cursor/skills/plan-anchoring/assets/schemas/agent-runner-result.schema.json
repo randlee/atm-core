@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/randlee/plan-anchor/schemas/agent-runner-result-1.0.0.json",
+  "title": "Plan Anchor agent runner result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "success", "canceled", "aborted_by", "data", "error", "metadata"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "success": {"type": "boolean"},
+    "canceled": {"type": "boolean"},
+    "aborted_by": {"type": ["string", "null"]},
+    "data": {"type": ["object", "null"]},
+    "error": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message", "recoverable", "suggested_action"],
+          "properties": {
+            "code": {"type": "string"},
+            "message": {"type": "string"},
+            "recoverable": {"type": "boolean"},
+            "suggested_action": {"type": ["string", "null"]}
+          }
+        }
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["correlation_id"],
+      "properties": {"correlation_id": {"type": "string"}}
+    }
+  }
+}

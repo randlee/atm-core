@@ -1,0 +1,53 @@
+{
+  "schema": "plan-anchoring/questions/1",
+  "gate": "testability",
+  "version": 2,
+  "notes": "Independently calibrated against the frozen plan-independent A0 corpus. Requirement form is deterministic lint, not a Jev vote. Each semantic cell is called twice; a third call is made only after choice disagreement. Production confidence is 0.6; 0.8 is diagnostic only.",
+  "questions": {
+    "single_constraint": {
+      "criteria": {
+        "no": "At least two independently enforceable duties are joined in the statement.",
+        "unclear": "The statement leaves independence of its duties ambiguous.",
+        "yes": "All details enforce the same invariant and would be evaluated together."
+      },
+      "instructions": "Is anchor.statement one invariant applied to a subject, trigger, and possibly several output surfaces? Do not count the number of nouns or listed artifacts; count independently enforceable duties.",
+      "type": "choice"
+    },
+    "observable": {
+      "criteria": {
+        "no": "It supplies only a subjective quality, undefined shorthand, or an approval with no observable record.",
+        "unclear": "Some evidence is named, but the observation needed to settle compliance remains ambiguous.",
+        "yes": "It names evidence or behavior that can be inspected with a determinate outcome."
+      },
+      "instructions": "Does anchor.statement define a checkable behavior or artifact without relying on an undefined label or an approval that has no identified record? Judge only whether the stated outcome can be observed.",
+      "type": "choice"
+    },
+    "faithful": {
+      "criteria": {
+        "no": "Even after ordinary normalization, the statement requires a new policy, implementation choice, strength, trigger, or outcome.",
+        "unclear": "Ordinary normalization does not settle whether the meaning was preserved.",
+        "yes": "Those normalization rules are sufficient and no substantive requirement was invented."
+      },
+      "instructions": "Is anchor.statement a faithful formal requirement derived from anchor.quote? Preserve meaning, not wording: informal directives may become must, print may become emit to stdout, machine-readable JSON may become JSON, and one directive in a compound quote may become one anchor. Do not penalize vagueness here.",
+      "type": "choice"
+    },
+    "scoped": {
+      "criteria": {
+        "no": "No work area or applicability set is identifiable.",
+        "unclear": "An area is named but its applicability cannot be determined.",
+        "yes": "A reviewer can identify the work area where this anchor applies, including an explicit all-items set."
+      },
+      "instructions": "Do anchor.statement and anchor.scope identify the governed activity, component, artifact, or explicit global set, independent of whether the requirement itself is vague or otherwise defective?",
+      "type": "choice"
+    },
+    "self_contained": {
+      "criteria": {
+        "no": "At least one decisive term is an undefined quality or private label, or compliance depends on an approval with no identified record.",
+        "unclear": "A possible outside-context dependency exists but the statement does not show whether it is decisive.",
+        "yes": "None of those outside-context dependencies is needed; ordinary technical terms, concrete prohibitions, lists, and explicit input/action/outcome conditions are sufficient."
+      },
+      "instructions": "Is anchor.statement independently understandable and applicable without any of these disqualifiers: an undefined subjective quality (for example robust), private shorthand, or a human approval that has no identified recorded artifact? Ignore grammar, bundling, fidelity, and scope.",
+      "type": "choice"
+    }
+  }
+}

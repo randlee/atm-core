@@ -2,7 +2,7 @@
 name: plan-anchoring
 description: Capture the facts a user states while planning as numbered anchors (ANC-001...), one clear, testable requirement each, with the user's verbatim words kept as provenance, alongside existing requirements (REQ) and ADRs. Turn them into Jev-judged questions, tune and test the questions per anchor, and enforce them at two gates with a triage-apply-rerun loop. The planning gate checks each plan bead still says what the user said; the development gate checks the delivered sprint work followed it. Use when planning a phase or sprint with beads, when the user says "anchor this", "lock this", "don't let this drift", or "remember I said", when re-opening a plan after context compression, or when reviewing a sprint against its plan. Not for general code review, and not a replacement for plan hardening.
 metadata:
-  version: "0.9.2"
+  version: "0.10.0"
 ---
 
 # Plan Anchoring
@@ -70,6 +70,8 @@ contracts only when that operation needs them.
 | Calibrate the rubric or tune anchor questions | `references/question-tuning-workflow.md` |
 | Review a Markdown or `bd` plan | `references/planning-review-workflow.md` |
 | Review delivered sprint work | `references/development-review-workflow.md` |
+
+Why did an anchor fail? Run `judge` on the item; every failing cell carries triage answers and a route (`exclude`, `plan`, `question`, `human`); `report --run <run>` shows them.
 
 Do not preload the other workflow references. Open only additional references
 named by the selected workflow when their detail is needed.

@@ -1,0 +1,4 @@
+# .sc/plan-anchor/settings.yaml
+# Repository settings for the sc-plan-anchor plugin; commit this file, never put secrets in it.
+schema_version: 1
+anchor_tracker: bd

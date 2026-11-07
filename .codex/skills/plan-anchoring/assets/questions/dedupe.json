@@ -1,0 +1,17 @@
+{
+  "schema": "plan-anchoring/questions/1",
+  "gate": "dedupe",
+  "version": 2,
+  "notes": "Independently calibrated statement-only duplicate detection. Provenance quotes are excluded because one multi-directive quote may legitimately yield multiple distinct atomic anchors.",
+  "questions": {
+    "same_constraint": {
+      "criteria": {
+        "no": "At least one statement can hold while the other does not.",
+        "unclear": "Ambiguity prevents deciding mutual entailment.",
+        "yes": "Each statement entails the other constraint."
+      },
+      "instructions": "Considering only a.statement and b.statement, do the two constraints mutually entail each other? Ignore wording and quote overlap.",
+      "type": "choice"
+    }
+  }
+}

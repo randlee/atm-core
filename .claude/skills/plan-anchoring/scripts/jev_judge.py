@@ -46,6 +46,12 @@ Subcommands
   report          render a run as markdown in the provenance-quoting format; data.pass
   coverage        anchors x items verdict matrix over one or more runs; data.uncovered_anchors
   diff            what changed between two runs of the same gate and item; data.pass_after and data.regressions
+  batch           low layer: JSONL request lines (stdin or --input) -> one JSONL result line per (item, candidate,
+                  repeat) on stdout as each answer arrives, teed to anchor-runs/tournament-<run>.jsonl; never writes beads
+  bead-batch      high layer: item beads x an anchor's question bead (and its open candidate children) as batch
+                  request lines (--emit prints them), then the low layer; reads beads only
+  tournament      run one anchor's question tournament through the low layer (oracle x candidate bundles x repeats) and
+                  score it; writes result_vars.json for the anchor-tuning agent; data.accepted; never writes beads
 
 Every subcommand prints JSON to stdout (or markdown with --format md where
 supported).
@@ -75,11 +81,15 @@ Exit codes
      SCRIPT.INTERNAL, and any Jev call that produced no answer: a Jev HTTP
      error, a network or transport failure, an invalid response, or a missing
      or malformed answers-file entry, in `judge`, `check-fixtures`,
-     `dedupe --jev`, `rubric` and `add --rubric`. A failed call is never
+     `dedupe --jev`, `rubric`, `add --rubric` and `tournament`. A failed call is never
      folded into a negative result: the error names the first failure, and
      data holds the partial work (`judge`: data.run_path, the run file written
      with the failing cells as verdict `error`; data.failures lists each one)
   130 interrupted: the error envelope with code CANCELED (recoverable true)
+  `batch` and `bead-batch` stdout carries only result lines: exit 0 when every
+  line has an answer (or --dry-run / --emit); exit 2 with the error envelope on
+  stderr when any line has none (each such line has ok false and its error);
+  an error before the first line prints the envelope on stdout as usual.
 
 Plan-gate size handling
   The plan gate never shortens prose. A bead that fits (--max-item-chars, and
@@ -95,6 +105,9 @@ Plan-gate size handling
 from __future__ import annotations
 
 import argparse
+import asyncio
+import collections
+import concurrent.futures
 import datetime as _dt
 import hashlib
 import http.client
@@ -105,10 +118,11 @@ import pathlib
 import re
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
-from typing import Any
+from typing import Any, NamedTuple, Optional
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from result import Err, Ok, Result, utf8_stdio  # noqa: E402
@@ -3073,6 +3087,79 @@ def _rubric_judgement(args, api_key: str, body: dict, qs: dict, fixture, cid, th
     return Ok((responses, attempts, outcome.value))
 
 
+RUBRIC_NEXT = ("Plan diagnosis: run `judge` on the item, then `report --run <run>` for triage answers and routes. "
+               "A disputed rubric role on a locked anchor: anchor-tuning `triage` with `gate: testability`.")
+
+
+def load_rubric_inputs(args) -> Result[tuple, JudgeError]:
+    """Optional confined inputs; seals establish integrity, not calibration or approval."""
+    questions_path = getattr(args, "questions", "")
+    intent_path = getattr(args, "approved_intent_file", "")
+    default = load_simple_question_set("testability", RUBRIC_QUESTIONS)
+    if isinstance(default, Err) or not (questions_path or intent_path):
+        return default if isinstance(default, Err) else Ok((default.value, None, False))
+    import plan_anchor_settings as settings  # stdlib-only until settings are read
+    from anchor_tuning_contract import validate_intent_descriptor, validate_questions
+
+    root = settings.find_repo_root(pathlib.Path(getattr(args, "repository_root", ".")))
+    if isinstance(root, Err):
+        return Err(_from_tool_error(root.error))
+
+    def reject_constant(value):
+        raise ValueError(f"non-finite number {value}")
+
+    def unique_keys(pairs):
+        value = {}
+        for key, child in pairs:
+            if key in value:
+                raise ValueError(f"duplicate key {key}")
+            value[key] = child
+        return value
+
+    def read(raw, label):
+        path = canonical_workspace_path(raw, root.value, label, must_exist=True, regular_file=True)
+        if isinstance(path, Err):
+            return path
+        try:
+            value = json.loads(path.value.read_text(encoding="utf-8"),
+                               parse_constant=reject_constant, object_pairs_hook=unique_keys)
+            # Escaped lone surrogates and overflowing JSON numbers are not
+            # representable in the UTF-8 request, even when the file is ASCII.
+            json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
+            return Ok(value)
+        except (OSError, UnicodeError, ValueError) as exc:
+            return fail("INPUT.MALFORMED", f"{label} is not readable strict UTF-8 JSON: {exc}")
+
+    qs, intent = default.value, None
+    if questions_path:
+        loaded = read(questions_path, "sealed rubric")
+        if isinstance(loaded, Err):
+            return loaded
+        sealed = loaded.value
+        if not isinstance(sealed, dict) or set(sealed) != {"questions", "digest"}:
+            return fail("RUBRIC.QUESTIONS", "sealed rubric requires exactly questions and digest")
+        checked = validate_questions("testability", sealed)
+        if isinstance(checked, Err):
+            return Err(_from_tool_error(checked.error))
+        for question in sealed["questions"].values():
+            if (not isinstance(question, dict) or set(question) != {"type", "instructions", "criteria"}
+                    or question["type"] != "choice" or not isinstance(question["instructions"], str)
+                    or not question["instructions"].strip() or not isinstance(question["criteria"], dict)
+                    or set(question["criteria"]) != {"yes", "no", "unclear"}
+                    or any(not isinstance(v, str) or not v.strip() for v in question["criteria"].values())):
+                return fail("RUBRIC.QUESTIONS", "rubric requires five choice questions with instructions and yes/no/unclear criteria")
+        qs = {"questions": sealed["questions"]}
+    if intent_path:
+        loaded = read(intent_path, "approved intent")
+        if isinstance(loaded, Err):
+            return loaded
+        checked = validate_intent_descriptor(loaded.value)
+        if isinstance(checked, Err):
+            return Err(_from_tool_error(checked.error))
+        intent = loaded.value
+    return Ok((qs, intent, True))
+
+
 def rubric_entries(args, candidates: list, threshold: float, dry_run: bool, fixture, what: str) -> Result[tuple, JudgeError]:
     """Lint, then one Jev request per candidate {id, statement, quote, scope, source_type}. Returns Ok((entries, requests_out)).
 
@@ -3081,24 +3168,38 @@ def rubric_entries(args, candidates: list, threshold: float, dry_run: bool, fixt
     third call is made only when the first two choices disagree. Nothing is
     written to disk.
     """
-    loaded = load_simple_question_set("testability", RUBRIC_QUESTIONS)
+    loaded = load_rubric_inputs(args)
     if isinstance(loaded, Err):
         return loaded
-    qs = loaded.value
+    qs, intent, explicit_inputs = loaded.value
+    bodies = []
+    for candidate in candidates:
+        body = {"model": args.model, "questions": qs["questions"], "state": {"anchor": {
+            "statement": candidate["statement"], "quote": candidate["quote"], "scope": candidate.get("scope") or ""}}}
+        if intent is not None:
+            body["state"]["intent"] = intent
+        if explicit_inputs:
+            fitted = fit_request(body, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MIN_ITEM_CHARS, {})
+            if isinstance(fitted, Err):
+                return fitted  # refuse before credentials, emission or any transport
+        bodies.append(body)
     api_key = ""
     if candidates and not dry_run and fixture is None:
-        cleared = remote_preflight(args, what)
+        cleared = remote_preflight(args, what + (" and the explicitly selected approved intent" if intent is not None else ""))
         if isinstance(cleared, Err):
             return cleared
         api_key = cleared.value
     entries, requests_out, failures = [], [], []
-    for c in candidates:
+    for c, body in zip(candidates, bodies):
         warnings = lint_statement(c["statement"], c["quote"], c.get("source_type") or "ANC")
         lint_errors = [w for w in warnings if w == LINT_VERBATIM or w in REQUIREMENT_FORM_WARNINGS]
         entry = {"id": c["id"], "statement": c["statement"], "quote": c["quote"], "scope": c.get("scope") or "",
                  "verdict": None, "failing": list(lint_errors), "answers": None, "lint": {"warnings": warnings, "errors": lint_errors}}
-        body = {"model": args.model, "questions": qs["questions"],
-                "state": {"anchor": {"statement": c["statement"], "quote": c["quote"], "scope": c.get("scope") or ""}}}
+        if explicit_inputs:
+            entry["inputs"] = {"question_seal": questions_digest({"questions": qs["questions"]}),
+                               "request_sha256": questions_digest(body)}
+            if intent is not None:
+                entry["inputs"]["intent"] = {key: intent[key] for key in ("id", "version", "sha256")}
         if dry_run:
             fitted = fit_request(body, DEFAULT_MAX_REQUEST_BYTES, DEFAULT_MIN_ITEM_CHARS, {})
             if isinstance(fitted, Err):
@@ -3117,6 +3218,8 @@ def rubric_entries(args, candidates: list, threshold: float, dry_run: bool, fixt
             entry["confirmations"] = outcome
             entry["failing"] = outcome["failing"]
             entry["verdict"] = outcome["verdict"]
+            if entry["verdict"] != "testable":
+                entry["next"] = RUBRIC_NEXT
         else:
             exc = judged.error
             if exc.code in ABORT_CODES:
@@ -3482,6 +3585,1305 @@ def cmd_diff(args) -> Result[dict, JudgeError]:
 # --------------------------------------------------------------------------- #
 # cli
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# batch (low layer, tracker-neutral): request lines in, one result line per (item, candidate, repeat) out
+# --------------------------------------------------------------------------- #
+BATCH_RESULT_SCHEMA = "plan-anchor/jev-batch-result/1"
+BATCH_MAX_WORKERS = 4              # parallel Jev evaluators; the anchor-tuning protocol's cap
+BATCH_RETRIES = 1                  # one retry per failed call, recorded as retry_count on the line
+BATCH_FIXTURE_ERROR = "__error__"  # an answers-file attempt {"__error__": "<code>"} simulates a failed call
+BATCH_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+QUESTION_BEAD_KEYS = {"plan": "plan_questions", "dev": "dev_questions"}
+JSON_FENCE_RE = re.compile(r"```json[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL)
+
+
+class BatchSettings(NamedTuple):
+    gate: str              # plan | dev: the default roles when a candidate carries none
+    model: str
+    repeat: int
+    prefix: str            # request ids are <prefix>/<item>/<anchor>/<candidate>/r<n>
+    threshold: float       # the line's verdict; leaning is the same answers at threshold 0
+    timeout: float
+    max_workers: int
+    max_request_bytes: int
+    dry_run: bool
+
+
+class BatchJob(NamedTuple):
+    item_id: str
+    anchor_id: str
+    candidate_id: str
+    repeat: int
+    request_id: str
+    body: dict
+    questions: dict
+    roles: dict
+    kind: str
+
+
+def canonical_digest(value) -> str:
+    """SHA-256 of canonical JSON (sorted keys, no spaces): the digest every contract in this skill uses."""
+    return questions_digest(value)
+
+
+def batch_request_id(prefix: str, item_id: str, anchor_id: str, candidate_id: str, repeat: int) -> str:
+    return f"{prefix}/{item_id}/{anchor_id}/{candidate_id}/r{repeat}"
+
+
+def batch_run_id(request_id: str) -> str:
+    """Deterministic run id: the first 16 hex digits of SHA-256 over the request id."""
+    return hashlib.sha256(request_id.encode("utf-8")).hexdigest()[:16]
+
+
+def _safe_id(value, what: str) -> Result[str, JudgeError]:
+    if not isinstance(value, str) or not BATCH_ID_RE.match(value):
+        return fail("VALIDATION.INPUT", f"{what} {value!r} is not a safe id (letters, digits and _.:- only)",
+                    action="See assets/schemas/jev-batch-request.schema.json.")
+    return Ok(value)
+
+
+def batch_jobs(line, number: int, settings: BatchSettings, base_roles: dict) -> Result[list, JudgeError]:
+    """One request line -> its jobs (candidates x repeats, in order). Refuses a malformed line or an oversized request before any call."""
+    where = f"request line {number}"
+    if not isinstance(line, dict) or set(line) - {"item", "anchor", "questions"}:
+        return fail("VALIDATION.INPUT", f"{where} must be an object with item, anchor and questions",
+                    action="See assets/schemas/jev-batch-request.schema.json.")
+    item, anchor_rec, candidates = line.get("item"), line.get("anchor"), line.get("questions")
+    if not isinstance(item, dict) or not isinstance(item.get("text"), str) or not item["text"].strip():
+        return fail("VALIDATION.INPUT", f"{where}: item needs id and non-empty text")
+    checked = _safe_id(item.get("id"), f"{where}: item id")
+    if isinstance(checked, Err):
+        return checked
+    if not isinstance(anchor_rec, dict) or not isinstance(anchor_rec.get("statement"), str) or not anchor_rec["statement"].strip():
+        return fail("VALIDATION.INPUT", f"{where}: anchor needs id and statement")
+    checked = _safe_id(anchor_rec.get("id"), f"{where}: anchor id")
+    if isinstance(checked, Err):
+        return checked
+    if not isinstance(candidates, list) or not candidates:
+        return fail("VALIDATION.INPUT", f"{where}: questions must be a non-empty array of candidates")
+    jobs, seen = [], set()
+    state = build_state(anchor_rec, {"id": item["id"], "title": item.get("title") or "", "text": item["text"]})
+    kind = anchor_kind(anchor_rec)
+    for cand in candidates:
+        if not isinstance(cand, dict):
+            return fail("VALIDATION.INPUT", f"{where}: every candidate is an object with candidate_id, questions and optional roles")
+        cid = _safe_id(cand.get("candidate_id"), f"{where}: candidate_id")
+        if isinstance(cid, Err):
+            return cid
+        if cid.value in seen:
+            return fail("VALIDATION.INPUT", f"{where}: candidate {cid.value} is listed twice", action="Use --repeat for repeats.")
+        seen.add(cid.value)
+        qs = {"questions": cand.get("questions"), "roles": cand.get("roles") or base_roles}
+        checked = check_roles(qs, f"{where}: candidate {cid.value}")
+        if isinstance(checked, Err):
+            return checked
+        body = {"model": settings.model, "state": state, "questions": qs["questions"]}
+        size = len(encode_body(body))
+        if size > settings.max_request_bytes:
+            return fail("JEV.CONTEXT_EXCEEDED", f"{where}: the request for {item['id']}/{cid.value} is {size} bytes, over --max-request-bytes {settings.max_request_bytes}",
+                        action="Shorten the item (see references/plan-size-and-shape.md); never raise the cap to make it fit.")
+        for r in range(1, settings.repeat + 1):
+            rid = batch_request_id(settings.prefix, item["id"], anchor_rec["id"], cid.value, r)
+            jobs.append(BatchJob(item["id"], anchor_rec["id"], cid.value, r, rid, body, qs["questions"], qs["roles"], kind))
+    return Ok(jobs)
+
+
+def _fixture_attempt(job: BatchJob, fixture: dict, attempt: int) -> Result[dict, JudgeError]:
+    keys = (f"{job.item_id}/{job.candidate_id}/r{job.repeat}", f"{job.item_id}/{job.candidate_id}", job.candidate_id, "*")
+    entry = next((fixture[k] for k in keys if k in fixture), None)
+    if entry is None:
+        return fail("FIXTURE.MISSING", f"answers fixture has no entry for {keys[0]} (or {keys[1]}, {keys[2]}, '*')",
+                    action=f"Add an entry for {keys[0]} to the answers file.")
+    if isinstance(entry, list):
+        if not entry:
+            return fail("FIXTURE.MISSING", f"answers fixture entry for {keys[0]} is an empty list")
+        entry = entry[min(attempt, len(entry)) - 1]
+    if isinstance(entry, dict) and BATCH_FIXTURE_ERROR in entry:
+        code = str(entry[BATCH_FIXTURE_ERROR])
+        return fail(code, f"fixture failure {code}", recoverable=code in TRANSIENT_CODES)
+    return Ok({"model": "fixture", "answers": entry})
+
+
+class _AbortFlag:
+    """Set once by the first call that must stop the batch (AUTH.CREDENTIALS, POLICY.*); later jobs send nothing."""
+
+    def __init__(self):
+        self._event = threading.Event()
+        self.error = None
+
+    def set(self, error: JudgeError) -> None:
+        self.error = error
+        self._event.set()
+
+    def is_set(self) -> bool:
+        return self._event.is_set()
+
+
+def _line(job: BatchJob, settings: BatchSettings, raw, attempts: list, error, dry_run: bool) -> dict:
+    verdict = min_conf = leaning = None
+    if raw is not None:
+        verdict, min_conf = decide(raw["answers"], job.roles, settings.threshold, job.kind)
+        leaning = decide(raw["answers"], job.roles, 0.0, job.kind)[0]
+    return redact_sensitive({
+        "schema": BATCH_RESULT_SCHEMA, "request_id": job.request_id, "run_id": batch_run_id(job.request_id),
+        "item_id": job.item_id, "anchor_id": job.anchor_id, "candidate_id": job.candidate_id, "repeat": job.repeat,
+        "request_sha256": hashlib.sha256(encode_body(job.body)).hexdigest(), "questions_sha256": questions_digest(job.questions),
+        "request": job.body, "roles": job.roles, "kind": job.kind, "dry_run": dry_run, "ok": raw is not None,
+        "raw_response": raw, "answers": raw["answers"] if raw is not None else None,
+        "model_answered": raw.get("model") if raw is not None else None,
+        "threshold": settings.threshold, "verdict": verdict, "min_confidence": min_conf, "leaning": leaning,
+        "retry_count": max(len(attempts) - 1, 0), "attempts": attempts,
+        "error": None if error is None else {"code": error.code, "message": error.message, "recoverable": error.recoverable},
+    })
+
+
+def run_batch_job(job: BatchJob, settings: BatchSettings, api_key: str, fixture, abort: _AbortFlag) -> dict:
+    """One call with one retry on a recoverable failure; returns the result line (raw evidence, redacted)."""
+    if settings.dry_run:
+        return _line(job, settings, None, [], None, True)
+    attempts, raw, error = [], None, None
+    for attempt in range(1, BATCH_RETRIES + 2):
+        if abort.is_set():
+            error = abort.error
+            attempts.append({"attempt": attempt, "ok": False, "error": {"code": error.code, "message": "not sent: the batch aborted", "recoverable": False}})
+            break
+        got = _fixture_attempt(job, fixture, attempt) if fixture is not None else call_jev(job.body, api_key, settings.timeout)
+        if isinstance(got, Ok):
+            got = validate_response(got.value, job.questions)
+        if isinstance(got, Ok):
+            raw, error = got.value, None
+            attempts.append({"attempt": attempt, "ok": True})
+            break
+        error = got.error
+        attempts.append({"attempt": attempt, "ok": False, "error": {"code": error.code, "message": error.message, "recoverable": error.recoverable}})
+        if error.code in ABORT_CODES:
+            abort.set(error)
+            break
+        if not (error.recoverable or is_transient(error)) or attempt > BATCH_RETRIES:
+            break
+        if fixture is None:
+            _sleep(error.retry_after if error.retry_after is not None else RETRY_DELAYS[0])
+    return _line(job, settings, raw, attempts, error, False)
+
+
+async def _aiter(source):
+    if hasattr(source, "__aiter__"):
+        async for value in source:
+            yield value
+    else:
+        for value in source:
+            yield value
+
+
+class BatchInputError(Exception):
+    """A request line the async API cannot judge; carries the typed JudgeError. The CLI validates every line first, so it never sees one."""
+
+    def __init__(self, error: JudgeError):
+        super().__init__(error.message)
+        self.error = error
+
+
+async def stream_batch(source, settings: BatchSettings, api_key: str = "", fixture=None):
+    """Library API: an async iterator of result lines for an (async) iterable of request-line dicts.
+
+    At most ``settings.max_workers`` Jev calls run at once. Lines are yielded in request order (candidates,
+    then repeats, within each request line) as soon as each one and every line before it has an answer, so
+    the stream is deterministic for the same input; consumers still key lines by id, never by position.
+    Raises BatchInputError for an invalid request line.
+    """
+    loop = asyncio.get_running_loop()
+    base = load_question_set(settings.gate)
+    if isinstance(base, Err):
+        raise BatchInputError(base.error)
+    abort = _AbortFlag()
+    pending = collections.deque()
+    window = settings.max_workers * 2
+    with concurrent.futures.ThreadPoolExecutor(max_workers=settings.max_workers) as pool:
+        number = 0
+        async for line in _aiter(source):
+            number += 1
+            jobs = batch_jobs(line, number, settings, base.value["roles"])
+            if isinstance(jobs, Err):
+                raise BatchInputError(jobs.error)
+            for job in jobs.value:
+                pending.append(loop.run_in_executor(pool, run_batch_job, job, settings, api_key, fixture, abort))
+                while len(pending) >= window:
+                    yield await pending.popleft()
+        while pending:
+            yield await pending.popleft()
+
+
+def read_request_lines(path: str) -> Result[list, JudgeError]:
+    """Request lines from a file or stdin (``-``): the same parser for both, one JSON object per non-empty line."""
+    if path == "-":
+        text = sys.stdin.read()
+    else:
+        p = pathlib.Path(path)
+        if not p.is_file():
+            return fail("INPUT.MISSING", f"request stream not found: {path!r}", action="Pass a JSONL file, or - for stdin.")
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            return fail("INPUT.MALFORMED", f"request stream could not be read: {exc}")
+    lines = []
+    for n, raw in enumerate(text.splitlines(), start=1):
+        if not raw.strip():
+            continue
+        try:
+            lines.append(json.loads(raw))
+        except json.JSONDecodeError as exc:
+            return fail("INPUT.MALFORMED", f"request line {n} is not JSON: {exc}", action="Write one JSON object per line.")
+    if not lines:
+        return fail("INPUT.EMPTY", "the request stream has no lines")
+    return Ok(lines)
+
+
+def read_batch_results(path: str) -> Result[list, JudgeError]:
+    """Every line of a result stream or log, in file order."""
+    p = pathlib.Path(path)
+    if not p.is_file():
+        return fail("INPUT.MISSING", f"result stream not found: {path!r}", action="Pass the JSONL file `batch` or `tournament` logged.")
+    try:
+        text = p.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return fail("INPUT.MALFORMED", f"result stream could not be read: {exc}")
+    lines = []
+    for n, raw in enumerate(text.splitlines(), start=1):
+        if not raw.strip():
+            continue
+        try:
+            line = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            return fail("INPUT.MALFORMED", f"result stream line {n} is not JSON: {exc}")
+        if not isinstance(line, dict) or line.get("schema") != BATCH_RESULT_SCHEMA:
+            return fail("INPUT.MALFORMED", f"result stream line {n} is not a {BATCH_RESULT_SCHEMA} record")
+        lines.append(line)
+    return Ok(lines)
+
+
+def write_stdout_line(text: str) -> None:
+    """One JSONL line to stdout, byte for byte as written to the log: through the binary buffer, because a text-mode
+    stdout on Windows turns "\n" into "\r\n". A stream without a buffer (a test's StringIO) gets the text."""
+    buffer = getattr(sys.stdout, "buffer", None)
+    if buffer is None:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        return
+    sys.stdout.flush()
+    buffer.write(text.encode("utf-8"))
+    buffer.flush()
+
+
+def encode_result_line(line: dict) -> str:
+    return json.dumps(line, ensure_ascii=False) + "\n"  # key order kept: request_sha256 hashes the request as sent
+
+
+def batch_settings(args, prefix: str) -> Result[BatchSettings, JudgeError]:
+    if getattr(args, "repeat", 1) < 1:
+        return fail("VALIDATION.INPUT", "--repeat must be at least 1")
+    if not 1 <= args.max_workers <= BATCH_MAX_WORKERS:
+        return fail("VALIDATION.INPUT", f"--max-workers must be between 1 and {BATCH_MAX_WORKERS}")
+    if not prefix.strip() or any(c.isspace() for c in prefix):
+        return fail("VALIDATION.INPUT", "--request-prefix must be non-empty and contain no whitespace")
+    threshold = check_threshold(getattr(args, "threshold", DEFAULT_THRESHOLD))
+    if isinstance(threshold, Err):
+        return threshold
+    gate = getattr(args, "gate", "plan")
+    cap = getattr(args, "max_request_bytes", None) or (DEFAULT_MAX_REQUEST_BYTES if gate == "plan" else DEFAULT_MAX_REQUEST_BYTES_DEV)
+    return Ok(BatchSettings(gate, args.model, getattr(args, "repeat", 1), prefix, threshold.value, args.timeout,
+                            args.max_workers, cap, bool(args.dry_run)))
+
+
+def batch_log_path(run_dir: str, run_name: str) -> Result[pathlib.Path, JudgeError]:
+    name = run_name or stamp()
+    checked = _safe_id(name, "--run-name")
+    if isinstance(checked, Err):
+        return checked
+    return Ok(pathlib.Path(run_dir) / f"tournament-{name}.jsonl")
+
+
+def pump_batch(lines: list, settings: BatchSettings, api_key: str, fixture, log_path: pathlib.Path, echo: bool) -> Result[list, JudgeError]:
+    """Run the low layer over validated request lines; tee every result line, unchanged, to stdout (when ``echo``)
+    and to the append-only log, flushing both after every line so a crash keeps the evidence."""
+
+    async def drive() -> list:
+        out = []
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8", newline="\n") as log:
+            async for line in stream_batch(lines, settings, api_key, fixture):
+                text = encode_result_line(line)
+                log.write(text)
+                log.flush()
+                if echo:
+                    write_stdout_line(text)
+                out.append(line)
+        return out
+
+    try:
+        return Ok(asyncio.run(drive()))
+    except BatchInputError as exc:
+        return Err(exc.error)
+
+
+def validate_request_lines(lines: list, settings: BatchSettings) -> Result[int, JudgeError]:
+    """Every line checked before any call: a bad line late in the stream never leaves earlier requests half-sent."""
+    base = load_question_set(settings.gate)
+    if isinstance(base, Err):
+        return base
+    total, keys = 0, set()
+    for number, line in enumerate(lines, start=1):
+        jobs = batch_jobs(line, number, settings, base.value["roles"])
+        if isinstance(jobs, Err):
+            return jobs
+        for job in jobs.value:
+            if job.request_id in keys:
+                return fail("VALIDATION.INPUT", f"request {job.request_id} appears twice in the stream",
+                            action="Pair each item, anchor and candidate once; use --repeat for repeats.")
+            keys.add(job.request_id)
+        total += len(jobs.value)
+    return Ok(total)
+
+
+def run_low_layer(args, lines: list) -> Result[Any, JudgeError]:
+    """The shared CLI path for `batch` and `bead-batch`: validate, consent, stream, log. Stdout carries only result lines."""
+    settings = batch_settings(args, args.request_prefix)
+    if isinstance(settings, Err):
+        return settings
+    settings = settings.value
+    checked = validate_request_lines(lines, settings)
+    if isinstance(checked, Err):
+        return checked
+    loaded = load_answers_fixture(args.answers_file, "'<item>/<candidate>/r<n>', '<item>/<candidate>', '<candidate>'")
+    if isinstance(loaded, Err):
+        return loaded
+    fixture = loaded.value
+    run_dir = args.run_dir or (str(pathlib.Path(args.anchors).parent / "anchor-runs") if getattr(args, "anchors", "") else "")
+    if not run_dir:
+        return fail("VALIDATION.INPUT", "the result log needs a directory: pass --anchors (log under its anchor-runs/) or --run-dir",
+                    action="Pass --anchors <plan>/anchors.json so the log lands in <plan>/anchor-runs/.")
+    log_path = batch_log_path(run_dir, args.run_name)
+    if isinstance(log_path, Err):
+        return log_path
+    api_key = ""
+    if not settings.dry_run and fixture is None:
+        cleared = remote_preflight(args, "The anchor statements, scopes and item texts in the request stream")
+        if isinstance(cleared, Err):
+            return cleared
+        api_key = cleared.value
+    pumped = pump_batch(lines, settings, api_key, fixture, log_path.value, echo=True)
+    if isinstance(pumped, Err):
+        return pumped
+    return Ok(StreamedResult([x for x in pumped.value if not x["ok"] and not x["dry_run"]]))
+
+
+class StreamedResult(NamedTuple):
+    """A command whose stdout was the result lines: main prints nothing more; exit 2 when any line has no answer."""
+    failed: list
+
+
+def cmd_batch(args) -> Result[Any, JudgeError]:
+    lines = read_request_lines(args.input)
+    if isinstance(lines, Err):
+        return lines
+    return run_low_layer(args, lines.value)
+
+
+# --------------------------------------------------------------------------- #
+# bead-batch (high layer): resolve tracker records into request lines, then the low layer
+# --------------------------------------------------------------------------- #
+class TrackerReader:
+    """Read-only access to the anchor tracker (bd): `show --json` and a bead's children. Never writes."""
+
+    def __init__(self, cli: str, cwd: pathlib.Path, run=subprocess.run):
+        self.cli = cli
+        self.cwd = cwd
+        self._run = run
+
+    def _json(self, argv: list, what: str) -> Result[Any, JudgeError]:
+        try:
+            proc = self._run([self.cli, *argv], cwd=str(self.cwd), stdin=subprocess.DEVNULL, capture_output=True,
+                             text=True, encoding="utf-8", timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return fail("TRACKER.READ", f"{what} failed: {type(exc).__name__}: {exc}",
+                        action="Check that the tracker CLI runs in this repository.")
+        if proc.returncode != 0:
+            return fail("TRACKER.READ", f"{what} exited {proc.returncode}: {(proc.stderr or '').strip()[:300]}",
+                        action="Check the bead id with `bd show <id>`.")
+        try:
+            return Ok(json.loads(proc.stdout))
+        except json.JSONDecodeError:
+            return fail("TRACKER.READ", f"{what} printed no JSON", action="Check the tracker CLI version supports --json.")
+
+    def show(self, bead_id: str) -> Result[dict, JudgeError]:
+        got = self._json(["show", bead_id, "--json"], f"bd show {bead_id}")
+        if isinstance(got, Err):
+            return got
+        value = got.value
+        if isinstance(value, list) and len(value) == 1 and isinstance(value[0], dict):
+            return Ok(value[0])
+        if isinstance(value, dict):
+            return Ok(value)
+        return fail("TRACKER.READ", f"bd show {bead_id} --json did not print one bead",
+                    action="Check the bead id with `bd show <id>`.")
+
+    def children(self, bead: dict) -> Result[list, JudgeError]:
+        """Child records with status (closed children carry close_reason)."""
+        got = self._json(["children", str(bead.get("id")), "--json"], f"bd children {bead.get('id')}")
+        if isinstance(got, Err):
+            return got
+        if not isinstance(got.value, list):
+            return fail("TRACKER.READ", f"children of {bead.get('id')} are not a JSON array")
+        return Ok(got.value)
+
+
+def open_tracker(args) -> Result[TrackerReader, JudgeError]:
+    """The tracker this repository selected (anchor_tracker.py resolve); imported lazily, so the low layer needs neither it nor PyYAML."""
+    import anchor_tracker  # lazy
+
+    selected = anchor_tracker.resolve(pathlib.Path(getattr(args, "repository_root", "") or "."))
+    if isinstance(selected, Err):
+        return Err(_from_tool_error(selected.error))
+    return Ok(TrackerReader(selected.value.cli_path, selected.value.root))
+
+
+def fenced_json_object(text: str, where: str) -> Result[dict, JudgeError]:
+    """The one fenced ```json block of a question bead's description, as an object."""
+    blocks = JSON_FENCE_RE.findall(text or "")
+    if len(blocks) != 1:
+        return fail("QUESTIONS.BEAD_MALFORMED", f"{where} must hold exactly one fenced json block (found {len(blocks)})",
+                    action="Write the questions (or {}) as one fenced json block in the bead description; see references/bead-layout.md.")
+    try:
+        value = json.loads(blocks[0])
+    except json.JSONDecodeError as exc:
+        return fail("QUESTIONS.BEAD_MALFORMED", f"{where}: the fenced json is not valid JSON: {exc}")
+    if not isinstance(value, dict):
+        return fail("QUESTIONS.BEAD_MALFORMED", f"{where}: the fenced json must be an object")
+    return Ok(value)
+
+
+def bead_candidate(base_qs: dict, a: dict, gate: str, bead: dict, candidate_id: str) -> Result[dict, JudgeError]:
+    """A question bead (or a candidate child of it) as one low-layer candidate: its fenced JSON merged onto the
+    gate's default set after the anchor record's own overrides, exactly as `judge` merges them."""
+    parsed = fenced_json_object(bead.get("description") or "", f"question bead {bead.get('id')}")
+    if isinstance(parsed, Err):
+        return parsed
+    merged = merge_overrides(base_qs, (a.get("question_overrides") or {}).get(gate) or {})
+    if isinstance(merged, Err):
+        return merged
+    merged = merge_overrides(merged.value, parsed.value)
+    if isinstance(merged, Err):
+        return merged
+    checked = check_roles(merged.value, f"question bead {bead.get('id')}")
+    if isinstance(checked, Err):
+        return checked
+    return Ok({"candidate_id": candidate_id, "questions": merged.value["questions"], "roles": merged.value["roles"]})
+
+
+def bead_request_lines(args, reader: TrackerReader) -> Result[list, JudgeError]:
+    """Item beads x one anchor's gate question bead (and, with --candidates, its open child beads) -> request lines."""
+    rec = load_record(args.anchors)
+    if isinstance(rec, Err):
+        return rec
+    a = find_anchor(rec.value, args.anchor)
+    if isinstance(a, Err):
+        return a
+    a = a.value
+    base = load_question_set(args.gate)
+    if isinstance(base, Err):
+        return base
+    key = QUESTION_BEAD_KEYS[args.gate]
+    qbead_id = (a.get("beads") or {}).get(key)
+    if not qbead_id:
+        return fail("QUESTIONS.BEAD_UNRESOLVED", f"{a['id']} records no {key} bead in anchors.json",
+                    action=f"Create the question bead and record it with `set-beads --{args.gate}-bead` (references/bead-layout.md).")
+    qbead = reader.show(qbead_id)
+    if isinstance(qbead, Err):
+        return qbead
+    candidates = []
+    current = bead_candidate(base.value, a, args.gate, qbead.value, qbead_id)
+    if isinstance(current, Err):
+        return current
+    candidates.append(current.value)
+    if args.candidates:
+        children = reader.children(qbead.value)
+        if isinstance(children, Err):
+            return children
+        for child in children.value:
+            if not isinstance(child, dict) or child.get("status") == "closed" or not child.get("id"):
+                continue  # a closed candidate was rejected; its record stays in the tracker
+            shown = reader.show(str(child["id"]))
+            if isinstance(shown, Err):
+                return shown
+            cand = bead_candidate(base.value, a, args.gate, shown.value, str(child["id"]))
+            if isinstance(cand, Err):
+                return cand
+            candidates.append(cand.value)
+    anchor_state = {"id": a["id"], "statement": a.get("statement") or "", "scope": a.get("scope") or "", "kind": anchor_kind(a)}
+    lines = []
+    for item_id in args.item:
+        shown = reader.show(item_id)
+        if isinstance(shown, Err):
+            return shown
+        children = None
+        if args.gate == "dev":
+            listed = reader.children(shown.value)
+            if isinstance(listed, Err):
+                return listed
+            children = listed.value
+        composed = compose_item_text(shown.value, children, list(COMPOSE_FOR[args.gate]))
+        if isinstance(composed, Err):
+            return composed
+        lines.append({"item": {"id": item_id, "title": composed.value["title"], "text": composed.value["text"]},
+                      "anchor": anchor_state, "questions": candidates})
+    return Ok(lines)
+
+
+def cmd_bead_batch(args) -> Result[Any, JudgeError]:
+    reader = open_tracker(args)
+    if isinstance(reader, Err):
+        return reader
+    lines = bead_request_lines(args, reader.value)
+    if isinstance(lines, Err):
+        return lines
+    if args.emit:
+        for line in lines.value:
+            write_stdout_line(json.dumps(line, ensure_ascii=False) + "\n")
+        return Ok(StreamedResult([]))
+    return run_low_layer(args, lines.value)
+
+
+# --------------------------------------------------------------------------- #
+# tournament: score a batch stream with the question-tournament protocol
+# --------------------------------------------------------------------------- #
+TOURNAMENT_PROTOCOL = "plan-anchor/question-tournament/2.0.0"
+OPTIONS_CHOICE = ("yes", "no", "unclear")
+ORACLE_SCHEMA = "plan-anchor/tune-oracle/1"
+CANDIDATES_SCHEMA = "plan-anchor/tune-candidates/1"
+TUNE_GATES = {"planning": "plan", "development": "dev"}
+ORACLE_PROBES = ("fixture_pass", "fixture_fail", "compliant", "silent", "topical_only", "conflicting", "irrelevant",
+                 "boundary", "exception", "asserted_without_evidence", "evidenced", "diagnostic")
+REQUIRED_PROBES = {"planning": ("compliant", "silent", "topical_only", "conflicting", "irrelevant", "boundary", "exception"),
+                   "development": ("compliant", "silent", "topical_only", "conflicting", "irrelevant", "boundary", "exception",
+                                   "asserted_without_evidence", "evidenced")}
+BASELINE_BUNDLE = "baseline"
+MAX_BUNDLES = 64
+TOURNAMENT_RESULTS = "results.jsonl"
+TOURNAMENT_DRY_RESULTS = "requests.dry-run.jsonl"
+TOURNAMENT_ORACLE_LOCK = "oracle.frozen.json"
+TOURNAMENT_VARS = "result_vars.json"
+RANKING_ORDER = ("semantic acceptance, exact role cells, exact semantic verdicts, stable cases, fewest regressions, "
+                 "cells at or above the confidence reference, then minimum, p10, median and mean confidence, "
+                 "fewest question bytes, bundle id")
+
+
+class OracleCase(NamedTuple):
+    case_id: str
+    probe: str
+    item: dict
+    expected_roles: dict
+    expected_verdict: str
+    rationale: str
+
+
+class Oracle(NamedTuple):
+    gate: str
+    anchor_id: str
+    citations: list
+    cases: list
+    sha256: str
+
+
+class Bundle(NamedTuple):
+    bundle_id: str
+    roles: dict      # role question id -> candidate id
+    questions: dict  # role question id -> question
+
+
+class BundleScore:
+    """One bundle's protocol score; ``regressions`` is filled in once the baseline is scored."""
+
+    def __init__(self, bundle: Bundle, complete: bool, exact_role_cells: int, total_role_cells: int,
+                 exact_semantic_verdicts: int, total_semantic_verdicts: int, stable_cases: int, total_cases: int,
+                 regressions: int, confidences: list, case_exact: dict, mismatches: list, missing: list):
+        self.bundle = bundle
+        self.complete = complete
+        self.exact_role_cells = exact_role_cells
+        self.total_role_cells = total_role_cells
+        self.exact_semantic_verdicts = exact_semantic_verdicts
+        self.total_semantic_verdicts = total_semantic_verdicts
+        self.stable_cases = stable_cases
+        self.total_cases = total_cases
+        self.regressions = regressions
+        self.confidences = confidences
+        self.case_exact = case_exact
+        self.mismatches = mismatches
+        self.missing = missing
+
+    @property
+    def accepted(self) -> bool:
+        return (self.complete and self.exact_role_cells == self.total_role_cells
+                and self.exact_semantic_verdicts == self.total_semantic_verdicts
+                and self.stable_cases == self.total_cases and self.regressions == 0)
+
+    def semantic_score(self) -> dict:
+        return {"exact_role_cells": self.exact_role_cells, "total_role_cells": self.total_role_cells,
+                "exact_semantic_verdicts": self.exact_semantic_verdicts, "total_semantic_verdicts": self.total_semantic_verdicts,
+                "stable_cases": self.stable_cases, "total_cases": self.total_cases, "regressions": self.regressions}
+
+    def diagnostics(self, reference: float) -> dict:
+        return confidence_diagnostics(self.confidences, self.total_role_cells, reference)
+
+    def complexity(self) -> int:
+        return len(json.dumps(self.bundle.questions, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+
+    def rank_key(self, reference: float) -> tuple:
+        d = self.diagnostics(reference)
+        return (not self.accepted, -self.exact_role_cells, -self.exact_semantic_verdicts, -self.stable_cases, self.regressions,
+                -d["cells_at_or_above_threshold"], -d["minimum"], -d["p10"], -d["median"], -d["mean"], self.complexity(),
+                self.bundle.bundle_id)
+
+    def tie_key(self, reference: float) -> tuple:
+        """Every ranking key except complexity and bundle id: equal tie keys are a tie the tuning agent decides."""
+        return self.rank_key(reference)[:-2]
+
+
+def _percentile(values: list, p: float) -> float:
+    xs = sorted(values)
+    k = (len(xs) - 1) * p
+    lo = int(k)
+    hi = min(lo + 1, len(xs) - 1)
+    return round(xs[lo] + (xs[hi] - xs[lo]) * (k - lo), 4)
+
+
+def confidence_diagnostics(values: list, total: int, reference: float) -> dict:
+    """Confidence over the answered role cells; ``total_cells`` is every expected cell, answered or not."""
+    if not values:
+        return {"threshold": reference, "cells_at_or_above_threshold": 0, "total_cells": total,
+                "minimum": 0.0, "p10": 0.0, "median": 0.0, "mean": 0.0}
+    return {"threshold": reference, "cells_at_or_above_threshold": sum(1 for v in values if v >= reference), "total_cells": total,
+            "minimum": round(min(values), 4), "p10": _percentile(values, 0.10), "median": _percentile(values, 0.5),
+            "mean": round(sum(values) / len(values), 4)}
+
+
+def _tournament_contract():
+    import anchor_tuning_contract  # same scripts folder; stdlib only
+    return anchor_tuning_contract
+
+
+def check_tune_request(request) -> Result[dict, JudgeError]:
+    """The request passes anchor_tuning_contract.py request, is a planning/development tune, and its authority digests hold."""
+    contract = _tournament_contract()
+    if not isinstance(request, dict):
+        return fail("TOURNAMENT.REQUEST_INVALID", "the request must be a JSON object")
+    if request.get("operation") == "testability" or request.get("gate") == "testability":
+        return fail("TOURNAMENT.GATE_UNSUPPORTED", "tournament scores planning and development tunes; testability calibration is not supported yet",
+                    action="Calibrate the rubric as references/question-tuning.md describes.")
+    try:
+        checked = contract.validate_request(request)
+    except (KeyError, TypeError, AttributeError) as exc:
+        return fail("TOURNAMENT.REQUEST_INVALID", f"the request is missing a required field: {exc}",
+                    action="Render the request with anchor-tuning-tune-request.md.j2 and validate it against anchor-tuning-request.schema.json.")
+    if isinstance(checked, Err):
+        out = JudgeError("TOURNAMENT.REQUEST_INVALID", f"anchor_tuning_contract.py request: {checked.error.code}: {checked.error.message}",
+                         action="Fix the request named by the violation; the runner never repairs a request.")
+        out.data = {"violation": {"code": checked.error.code, "message": checked.error.message}}
+        return Err(out)
+    if request.get("operation") != "tune" or request.get("gate") not in TUNE_GATES:
+        return fail("TOURNAMENT.REQUEST_INVALID", "tournament needs a tune request for the planning or development gate")
+    authority = request["authority"]
+    intent = authority["intent"]
+    if intent["sha256"] != hashlib.sha256(intent["content"].encode("utf-8")).hexdigest():
+        return fail("TOURNAMENT.AUTHORITY_DIGEST", "authority.intent.sha256 does not match its content",
+                    action="Re-render the request from the approved INTENT; never edit the digest.")
+    if authority["anchors"]["sha256"] != contract.sha256(authority["anchors"]["records"]):
+        return fail("TOURNAMENT.AUTHORITY_DIGEST", "authority.anchors.sha256 does not match its records",
+                    action="Re-render the request from the locked anchor records; never edit the digest.")
+    return Ok(request)
+
+
+def _choice_question_problem(question) -> Optional[str]:
+    if not isinstance(question, dict) or question.get("type") != "choice":
+        return "type must be choice"
+    if not isinstance(question.get("instructions"), str) or not question["instructions"].strip():
+        return "instructions must be non-empty text"
+    criteria = question.get("criteria")
+    if not isinstance(criteria, dict) or set(criteria) != {"yes", "no", "unclear"} or \
+            any(not isinstance(v, str) or not v.strip() for v in criteria.values()):
+        return "criteria must be exactly yes, no and unclear, each non-empty text"
+    if set(question) - {"type", "instructions", "criteria"}:
+        return "only type, instructions and criteria are allowed"
+    return None
+
+
+def _expected_answers(roles: dict) -> dict:
+    return {qid: {"type": "choice", "choice": choice, "confidence": 1.0} for qid, choice in roles.items()}
+
+
+def load_oracle(path: str, request: dict, role_ids: set, roles: dict, kind: str) -> Result[Oracle, JudgeError]:
+    loaded = load_json(path, "oracle")
+    if isinstance(loaded, Err):
+        return loaded
+    o = loaded.value
+
+    def bad(msg: str) -> Err:
+        return fail("TOURNAMENT.ORACLE_INVALID", f"oracle: {msg}", action="See assets/schemas/tune-oracle.schema.json.")
+
+    if not isinstance(o, dict) or o.get("schema") != ORACLE_SCHEMA:
+        return bad(f"schema must be {ORACLE_SCHEMA}")
+    if o.get("gate") != request["gate"]:
+        return bad(f"gate {o.get('gate')!r} differs from the request's {request['gate']!r}")
+    records = {r["id"]: r for r in request["authority"]["anchors"]["records"]}
+    if o.get("anchor_id") not in records:
+        return bad(f"anchor_id {o.get('anchor_id')!r} is not a locked anchor in the request")
+    citations = o.get("authority_citations")
+    if not isinstance(citations, list) or not citations or any(not isinstance(c, str) or not c.strip() for c in citations):
+        return bad("authority_citations must be a non-empty list of text")
+    raw_cases = o.get("cases")
+    if not isinstance(raw_cases, list) or not raw_cases:
+        return bad("cases must be a non-empty array")
+    cases, seen = [], set()
+    for c in raw_cases:
+        if not isinstance(c, dict):
+            return bad("every case must be an object")
+        cid = c.get("case_id")
+        if not isinstance(cid, str) or not BATCH_ID_RE.match(cid) or cid in seen:
+            return bad(f"case_id {cid!r} must be a unique safe id")
+        seen.add(cid)
+        if c.get("probe") not in ORACLE_PROBES:
+            return bad(f"{cid}: probe {c.get('probe')!r} is not one of {list(ORACLE_PROBES)}")
+        item = c.get("item")
+        if not isinstance(item, dict) or not isinstance(item.get("text"), str) or not item["text"].strip():
+            return bad(f"{cid}: item.text must be non-empty text")
+        expected = c.get("expected_roles")
+        if not isinstance(expected, dict) or set(expected) != role_ids or any(v not in OPTIONS_CHOICE for v in expected.values()):
+            return bad(f"{cid}: expected_roles must give yes, no or unclear for exactly {sorted(role_ids)}")
+        verdict = c.get("expected_verdict")
+        if verdict not in VERDICTS:
+            return bad(f"{cid}: expected_verdict {verdict!r} is not a verdict")
+        derived = decide(_expected_answers(expected), roles, 0.0, kind)[0]
+        if derived != verdict:
+            return fail("TOURNAMENT.ORACLE_INCONSISTENT",
+                        f"oracle case {cid}: expected roles derive {derived!r} under the role-to-verdict mapping, not {verdict!r}",
+                        action="Correct the expected labels from authority; the verdict follows from the roles.")
+        if not isinstance(c.get("rationale"), str) or not c["rationale"].strip():
+            return bad(f"{cid}: rationale must cite the authority behind the labels")
+        cases.append(OracleCase(cid, c["probe"], {"id": cid, "title": str(item.get("title") or ""), "text": item["text"]},
+                                dict(expected), verdict, c["rationale"]))
+    probes = {c.probe for c in cases}
+    missing = [p for p in REQUIRED_PROBES[request["gate"]] if p not in probes]
+    fixtures = records[o["anchor_id"]].get("fixtures")
+    if isinstance(fixtures, dict):
+        missing += [f"fixture_{k}" for k in ("pass", "fail") if fixtures.get(k) and f"fixture_{k}" not in probes]
+    if missing:
+        return fail("TOURNAMENT.ORACLE_COVERAGE", f"oracle lacks the required probes {missing}",
+                    action="Add the missing probes from authority before the first Jev call (agents/anchor-tuning.md, tune step 3).")
+    return Ok(Oracle(o["gate"], o["anchor_id"], list(citations), cases, canonical_digest(o)))
+
+
+
+def freeze_oracle(out_dir: pathlib.Path, oracle_value: dict, digest: str, request: dict) -> Result[None, JudgeError]:
+    """The oracle is frozen in the output folder before the first call; a different oracle later is refused."""
+    events = request["tuning_history"]["events"]
+    if events and events[-1]["oracle"]["sha256"] != digest:
+        return fail("TOURNAMENT.ORACLE_CHANGED",
+                    f"oracle digest {digest} differs from the tuning history's frozen oracle {events[-1]['oracle']['sha256']}",
+                    action="Never add, remove or relabel an oracle case after an answer; evaluate new candidates against the frozen oracle.")
+    lock = out_dir / TOURNAMENT_ORACLE_LOCK
+    if lock.exists():
+        loaded = load_json(str(lock), "frozen oracle")
+        if isinstance(loaded, Err):
+            return loaded
+        frozen = canonical_digest(loaded.value)
+        if frozen != digest:
+            return fail("TOURNAMENT.ORACLE_CHANGED", f"oracle digest {digest} differs from the oracle frozen in {lock} ({frozen})",
+                        action="Restore the frozen oracle; an oracle changed after the first response is never scored.")
+        return Ok(None)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    write_text_atomic(str(lock), json.dumps(oracle_value, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+    return Ok(None)
+
+
+def load_candidates(path: str, request: dict, role_ids: set) -> Result[list, JudgeError]:
+    """Bundles to evaluate: the baseline (current questions) first, then the listed or cross-product candidate bundles."""
+    loaded = load_json(path, "candidates")
+    if isinstance(loaded, Err):
+        return loaded
+    c = loaded.value
+    contract = _tournament_contract()
+
+    def bad(msg: str) -> Err:
+        return fail("TOURNAMENT.CANDIDATES_INVALID", f"candidates: {msg}", action="See assets/schemas/tune-candidates.schema.json.")
+
+    if not isinstance(c, dict) or c.get("schema") != CANDIDATES_SCHEMA:
+        return bad(f"schema must be {CANDIDATES_SCHEMA}")
+    if c.get("gate") != request["gate"]:
+        return bad(f"gate {c.get('gate')!r} differs from the request's {request['gate']!r}")
+    pool = c.get("candidates")
+    if not isinstance(pool, dict) or set(pool) != role_ids:
+        return bad(f"candidates must be keyed by exactly the roles {sorted(role_ids)}")
+    for role, entries in pool.items():
+        if not isinstance(entries, dict) or len(entries) < request["candidate_minimum"]:
+            return bad(f"role {role} needs at least candidate_minimum ({request['candidate_minimum']}) candidates")
+        for cid, q in entries.items():
+            if not BATCH_ID_RE.match(cid):
+                return bad(f"candidate id {cid!r} is not a safe id")
+            problem = _choice_question_problem(q)
+            if problem:
+                return bad(f"{role}/{cid}: {problem}")
+            rendered = json.dumps(q, sort_keys=True).lower()
+            for phrase in contract.FORBIDDEN_QUESTION_META:
+                if phrase in rendered:
+                    return fail("TOURNAMENT.QUESTION_META", f"candidate {role}/{cid} contains {phrase!r}",
+                                action="A production question asks only its own judgment; drop verdict and confidence instructions.")
+    listed = c.get("bundles")
+    roles_order = sorted(role_ids)
+    if listed is None:
+        combos = [{}]
+        for role in roles_order:
+            combos = [dict(x, **{role: cid}) for x in combos for cid in sorted(pool[role])]
+        if len(combos) > MAX_BUNDLES:
+            return fail("TOURNAMENT.BUNDLES", f"the cross product has {len(combos)} bundles, over {MAX_BUNDLES}",
+                        action="List the bundles to evaluate in 'bundles'.")
+        listed = [{"bundle_id": "B" + "+".join(x[r] for r in roles_order), "roles": x} for x in combos]
+    if not isinstance(listed, list) or not listed or len(listed) > MAX_BUNDLES:
+        return bad(f"bundles must be a non-empty array of at most {MAX_BUNDLES}")
+    bundles, seen = [], set()
+    for b in listed:
+        bid = b.get("bundle_id") if isinstance(b, dict) else None
+        if not isinstance(bid, str) or not BATCH_ID_RE.match(bid) or bid in seen or bid == BASELINE_BUNDLE:
+            return bad(f"bundle_id {bid!r} must be a unique safe id other than {BASELINE_BUNDLE!r}")
+        seen.add(bid)
+        roles = b.get("roles")
+        if not isinstance(roles, dict) or set(roles) != role_ids or any(roles[r] not in pool[r] for r in roles):
+            return bad(f"bundle {bid} must name one existing candidate for each of {roles_order}")
+        bundles.append(Bundle(bid, dict(roles), {r: pool[r][roles[r]] for r in roles_order}))
+    current = request.get("current_questions")
+    current = current.get("questions") if isinstance(current, dict) and isinstance(current.get("questions"), dict) else current
+    if isinstance(current, dict) and set(current) >= role_ids and all(_choice_question_problem(current[r]) is None for r in role_ids):
+        baseline = Bundle(BASELINE_BUNDLE, {r: "current" for r in roles_order}, {r: current[r] for r in roles_order})
+    elif isinstance(c.get("baseline"), dict) and set(c["baseline"]) == role_ids and all(c["baseline"][r] in pool[r] for r in role_ids):
+        baseline = Bundle(BASELINE_BUNDLE, dict(c["baseline"]), {r: pool[r][c["baseline"][r]] for r in roles_order})
+    else:
+        return fail("TOURNAMENT.BASELINE", "no baseline: current_questions is not a complete role set and candidates has no 'baseline'",
+                    action="Pass the anchor's complete current questions in the request, or name the baseline candidates in candidates.baseline.")
+    return Ok([baseline] + bundles)
+
+
+def _role_cells(answers: dict, role_order: list) -> tuple:
+    return tuple(answer_choice(answers[r])[0] for r in role_order)
+
+
+def score_bundles(bundles: list, oracle: Oracle, lines: dict, repeat: int, roles: dict, kind: str) -> list:
+    """Per bundle: exact role cells, exact threshold-0 verdicts, stability, regressions against the baseline."""
+    role_order = sorted(oracle.cases[0].expected_roles)
+    scores = []
+    for bundle in bundles:
+        exact_cells = exact_verdicts = stable = 0
+        confs, case_exact, mismatches, missing = [], {}, [], []
+        for case in oracle.cases:
+            got = [lines.get((case.case_id, bundle.bundle_id, r)) for r in range(1, repeat + 1)]
+            answered = [g["answers"] for g in got if g is not None and g.get("ok")]
+            missing += [f"{case.case_id}/{bundle.bundle_id}/r{r}"
+                        for r, g in zip(range(1, repeat + 1), got) if g is None or not g.get("ok")]
+            ok_case = len(answered) == repeat
+            for a in answered:
+                for r in role_order:
+                    choice, conf = answer_choice(a[r])
+                    confs.append(conf)
+                    if choice == case.expected_roles[r]:
+                        exact_cells += 1
+                    else:
+                        ok_case = False
+                        mismatches.append(f"{case.case_id}: {r} {choice}, expected {case.expected_roles[r]}")
+                verdict = decide(a, roles, 0.0, kind)[0]
+                if verdict == case.expected_verdict:
+                    exact_verdicts += 1
+                else:
+                    ok_case = False
+                    mismatches.append(f"{case.case_id}: verdict {verdict}, expected {case.expected_verdict}")
+            if len(answered) == repeat and len({_role_cells(a, role_order) for a in answered}) == 1:
+                stable += 1
+            elif len(answered) == repeat:
+                ok_case = False
+                mismatches.append(f"{case.case_id}: unstable across repeats")
+            case_exact[case.case_id] = ok_case
+        n = len(oracle.cases)
+        scores.append(BundleScore(bundle, not missing, exact_cells, n * repeat * len(role_order), exact_verdicts, n * repeat,
+                                  stable, n, 0, confs, case_exact, sorted(set(mismatches)), missing))
+    baseline = scores[0]
+    for s in scores[1:]:
+        s.regressions = sum(1 for cid, ok in baseline.case_exact.items() if ok and not s.case_exact[cid])
+        if s.regressions:
+            s.mismatches.append(f"{s.regressions} regression(s) against the baseline: "
+                                + ", ".join(cid for cid, ok in baseline.case_exact.items() if ok and not s.case_exact[cid]))
+    return scores
+
+
+def _decision(top: BundleScore) -> tuple:
+    if top.accepted:
+        return "sealed", "TOURNAMENT.SEALED"
+    if not top.complete:
+        return "evidence_incomplete", "TOURNAMENT.EVIDENCE_INCOMPLETE"
+    if top.stable_cases < top.total_cases:
+        return "unstable", "TOURNAMENT.UNSTABLE"
+    return "rejected", "TOURNAMENT.SEMANTIC_REJECTED"
+
+
+def _ranking_rows(ranked: list, selected: Optional[BundleScore], leaders: list, reference: float) -> list:
+    rows = []
+    tied = len(leaders) > 1
+    for rank, s in enumerate(ranked, start=1):
+        if s is selected:
+            reason = ("Selected by the tuning agent (--choose) among tied co-leaders: " + ", ".join(x.bundle.bundle_id for x in leaders) + "."
+                      if tied else "Selected: top lexicographic rank among semantically accepted bundles.")
+        elif tied and s in leaders and selected is None:
+            reason = ("Co-leader: ties " + ", ".join(x.bundle.bundle_id for x in leaders if x is not s)
+                      + " on every ranking key except complexity and id; the anchor-tuning agent chooses (--choose).")
+        elif not s.accepted:
+            causes = []
+            if s.missing:
+                causes.append(f"evidence incomplete ({len(s.missing)} calls without an answer)")
+            causes += s.mismatches[:12]
+            reason = "Rejected: " + "; ".join(causes) + ("; ..." if len(s.mismatches) > 12 else "") + "."
+        else:
+            reason = f"Semantically accepted; ranked below {(selected or leaders[0]).bundle.bundle_id} in the lexicographic order."
+        rows.append({"rank": rank, "bundle_id": s.bundle.bundle_id, "roles": s.bundle.roles,
+                     "question_sha256": canonical_digest(s.bundle.questions), "semantic_accepted": s.accepted,
+                     "complete": s.complete, **s.semantic_score(), "confidence": s.diagnostics(reference),
+                     "complexity_bytes": s.complexity(), "selected": s is selected, "co_leader": tied and s in leaders,
+                     "reason": reason,
+                     "mismatches": s.mismatches})
+    return rows
+
+
+def _role_rankings(scores: list, oracle: Oracle, lines: dict, repeat: int) -> dict:
+    """Per role candidate: exact and stable cells across every bundle that asked it (diagnostic; selection is per bundle)."""
+    out = {}
+    for role in sorted(oracle.cases[0].expected_roles):
+        seen = {}
+        for s in scores:
+            cid = s.bundle.roles[role]
+            entry = seen.setdefault(cid, {"candidate_id": cid, "bundles": [], "exact_cells": 0, "total_cells": 0, "stable_cases": 0, "total_cases": 0})
+            entry["bundles"].append(s.bundle.bundle_id)
+            for case in oracle.cases:
+                got = [lines.get((case.case_id, s.bundle.bundle_id, r)) for r in range(1, repeat + 1)]
+                choices = [answer_choice(g["answers"][role])[0] for g in got if g is not None and g.get("ok")]
+                entry["total_cells"] += repeat
+                entry["exact_cells"] += sum(1 for ch in choices if ch == case.expected_roles[role])
+                entry["total_cases"] += 1
+                entry["stable_cases"] += int(len(choices) == repeat and len(set(choices)) == 1)
+        out[role] = sorted(seen.values(), key=lambda e: (-e["exact_cells"], -e["stable_cases"], e["candidate_id"]))
+    return out
+
+
+def _acceptance_table(chosen: BundleScore, baseline: BundleScore, oracle: Oracle, lines: dict, repeat: int,
+                      roles: dict, kind: str, production: float) -> list:
+    table = []
+    role_order = sorted(oracle.cases[0].expected_roles)
+    for case in oracle.cases:
+        got = [lines.get((case.case_id, chosen.bundle.bundle_id, r)) for r in range(1, repeat + 1)]
+        answers = [g["answers"] if g is not None and g.get("ok") else None for g in got]
+        table.append({
+            "case_id": case.case_id, "probe": case.probe, "expected_roles": case.expected_roles, "expected_verdict": case.expected_verdict,
+            "observed_roles": [None if a is None else {r: answer_choice(a[r])[0] for r in role_order} for a in answers],
+            "observed_confidence": [None if a is None else {r: answer_choice(a[r])[1] for r in role_order} for a in answers],
+            "semantic_verdicts": [None if a is None else decide(a, roles, 0.0, kind)[0] for a in answers],
+            "production_verdicts_at_threshold": [None if a is None else decide(a, roles, production, kind)[0] for a in answers],
+            "stable": all(a is not None for a in answers) and len({_role_cells(a, role_order) for a in answers}) == 1,
+            "accepted": chosen.case_exact[case.case_id], "baseline_exact": baseline.case_exact[case.case_id],
+            "regression": baseline.case_exact[case.case_id] and not chosen.case_exact[case.case_id],
+            "rationale": case.rationale})
+    return table
+
+
+def index_stream(raw_lines: list, jobs: list) -> Result[dict, JudgeError]:
+    """Key the stream by (case, bundle, repeat), never by position, and prove every line answers the request this oracle and these candidates produce."""
+    expected = {(j.item_id, j.candidate_id, j.repeat): j for j in jobs}
+    indexed = {}
+    for line in raw_lines:
+        key = (line.get("item_id"), line.get("candidate_id"), line.get("repeat"))
+        job = expected.get(key)
+        if job is None:
+            return fail("TOURNAMENT.EVIDENCE_MISMATCH", f"stream line {line.get('request_id')!r} answers no request of this tournament",
+                        action="Score only the stream this oracle and these candidates produced.")
+        if key in indexed:
+            return fail("TOURNAMENT.EVIDENCE_MISMATCH", f"stream has two lines for {job.request_id}")
+        if line.get("dry_run"):
+            return fail("TOURNAMENT.EVIDENCE_MISMATCH", f"stream line {job.request_id} is a dry run; nothing was judged",
+                        action="Run the tournament without --dry-run.")
+        if line.get("request_id") != job.request_id or canonical_digest(line.get("request")) != canonical_digest(job.body) \
+                or line.get("request_sha256") != hashlib.sha256(encode_body(line.get("request"))).hexdigest():
+            return fail("TOURNAMENT.EVIDENCE_MISMATCH", f"stream line {job.request_id} does not carry this tournament's request",
+                        action="The oracle, candidates, model or correlation id changed since the stream was written; rerun into a new --out.")
+        if line.get("ok"):
+            checked = validate_response(line.get("raw_response"), job.questions)
+            if isinstance(checked, Err) or line.get("answers") != line["raw_response"].get("answers"):
+                return fail("TOURNAMENT.EVIDENCE_MISMATCH", f"stream line {job.request_id} has answers that differ from its raw response")
+        indexed[key] = line
+    return Ok(indexed)
+
+
+def _history_event(request: dict, oracle: Oracle, chosen: BundleScore, chosen_lines: list, decision: tuple, digest: Optional[str],
+                   reference: float) -> dict:
+    contract = _tournament_contract()
+    events = request["tuning_history"]["events"]
+    intent = request["authority"]["intent"]
+    record = next(r for r in request["authority"]["anchors"]["records"] if r["id"] == oracle.anchor_id)
+    status, reason = decision
+    previous = events[-1] if events else None
+    return {
+        "event_index": len(events) + 1,
+        "previous_event_sha256": contract.sha256(previous) if previous else None,
+        "event": "question_set_sealed" if status == "sealed" else "question_set_rejected",
+        "protocol_version": TOURNAMENT_PROTOCOL,
+        "authority": {"intent_id": intent["id"], "intent_version": intent["version"], "intent_sha256": intent["sha256"],
+                      "anchor_id": record["id"], "anchor_version": record["version"], "anchor_record_sha256": contract.sha256(record)},
+        "oracle": {"sha256": oracle.sha256, "case_ids": [c.case_id for c in oracle.cases], "case_count": len(oracle.cases),
+                   "repeat_count": request["repeat_count"]},
+        "candidate": {"candidate_id": chosen.bundle.bundle_id, "question_sha256": canonical_digest({"questions": chosen.bundle.questions})},
+        "evidence": {"canonical_request_sha256": [x["request_sha256"] for x in chosen_lines],
+                     "raw_response_sha256": [canonical_digest(x["raw_response"]) for x in chosen_lines if x.get("ok")],
+                     "run_ids": [x["run_id"] for x in chosen_lines]},
+        "score": dict(chosen.semantic_score(), confidence=chosen.diagnostics(reference)),
+        "decision": {"status": status, "question_set_sha256": digest, "reason_code": reason},
+        "supersedes": ({"protocol_version": previous["protocol_version"], "decision_sha256": contract.sha256(previous["decision"])}
+                       if previous else None),
+    }
+
+
+def tournament_result(request: dict, oracle: Oracle, bundles: list, indexed: dict, repeat: int, roles: dict, kind: str,
+                      out_dir: pathlib.Path, results_path: pathlib.Path, workers: int, started: float,
+                      choose: str = "") -> Result[dict, JudgeError]:
+    """Score, rank, select and assemble the anchor-tuning result variables; the contract checks them before they are written.
+
+    Accepted bundles that tie on every ranking key except complexity and id are co-leaders: without ``choose`` none
+    is sealed and all come back for the tuning agent; ``choose`` names the co-leader (or sole leader) to seal.
+    """
+    contract = _tournament_contract()
+    reference = request["confidence_reference_threshold"]
+    production = request["production_confidence_threshold"]
+    scores = score_bundles(bundles, oracle, indexed, repeat, roles, kind)
+    ranked = sorted(scores, key=lambda s: s.rank_key(reference))
+    top = ranked[0]
+    leaders = [s for s in ranked if s.accepted and s.tie_key(reference) == top.tie_key(reference)] if top.accepted else []
+    tie = len(leaders) > 1
+    if choose:
+        picked = next((s for s in leaders if s.bundle.bundle_id == choose), None)
+        if picked is None:
+            return fail("TOURNAMENT.CHOICE_INVALID", f"--choose {choose!r} is not a leader of this tournament (leaders: "
+                        + (", ".join(s.bundle.bundle_id for s in leaders) or "none: no bundle was accepted") + ")",
+                        action="Choose one of the co_leaders the unchosen run returned in evidence.tie.")
+        selected = picked
+    else:
+        selected = None if tie else (leaders[0] if leaders else None)
+    chosen = selected or top
+    chosen_lines = [indexed[(c.case_id, chosen.bundle.bundle_id, r)] for c in oracle.cases for r in range(1, repeat + 1)
+                    if (c.case_id, chosen.bundle.bundle_id, r) in indexed]
+    if not any(x.get("ok") for x in chosen_lines):
+        return fail("EXECUTION.JEV", f"no call for bundle {chosen.bundle.bundle_id} has an answer; nothing can be scored",
+                    action="Fix the cause in the stream's error fields and rerun into a new --out.")
+    accepted = selected is not None
+    sealed = {"digest": canonical_digest({"questions": selected.bundle.questions}), "questions": selected.bundle.questions} if accepted else None
+    decision = ("rejected", "TOURNAMENT.TIE_NEEDS_CHOICE") if tie and selected is None else _decision(chosen)
+    event = _history_event(request, oracle, chosen, chosen_lines, decision, sealed["digest"] if sealed else None, reference)
+    before = request["tuning_history"]
+    after = {"schema": before["schema"], "history_id": before["history_id"], "events": before["events"] + [event]}
+    all_lines = list(indexed.values())
+    baseline = scores[0]
+    score = chosen.semantic_score()
+    explanation = (f"{len(bundles)} role-complete bundles (baseline included) x {len(oracle.cases)} frozen oracle cases x {repeat} repeats: "
+                   f"{len(all_lines)} calls, {sum(x['retry_count'] for x in all_lines)} retries. ")
+    if tie and not accepted:
+        explanation += (f"Bundles {', '.join(s.bundle.bundle_id for s in leaders)} are all semantically accepted and tie on every ranking key "
+                        f"except complexity and id ({score['exact_role_cells']}/{score['total_role_cells']} role cells, "
+                        f"{score['stable_cases']}/{score['total_cases']} stable cases, zero regressions); nothing is sealed until the "
+                        "anchor-tuning agent chooses one. ")
+    elif accepted:
+        explanation += (f"Bundle {selected.bundle.bundle_id} is the top-ranked semantically accepted set: {score['exact_role_cells']}/{score['total_role_cells']} "
+                        f"role cells, {score['exact_semantic_verdicts']}/{score['total_semantic_verdicts']} threshold-0 verdicts, "
+                        f"{score['stable_cases']}/{score['total_cases']} stable cases, zero regressions against the baseline. ")
+    else:
+        explanation += (f"No bundle met semantic acceptance; the top-ranked bundle {chosen.bundle.bundle_id} has {score['exact_role_cells']}/{score['total_role_cells']} "
+                        f"role cells, {score['exact_semantic_verdicts']}/{score['total_semantic_verdicts']} verdicts, {score['stable_cases']}/{score['total_cases']} "
+                        f"stable cases and {score['regressions']} regressions ({decision[1]}). ")
+    explanation += f"Confidence is diagnostic only; production review keeps the {production} threshold."
+    data = {
+        "operation": "tune", "gate": request["gate"], "accepted": accepted, "tournament_protocol_version": TOURNAMENT_PROTOCOL,
+        "production_confidence_threshold": production, "confidence_reference_threshold": reference,
+        "semantic_score": score, "confidence_diagnostics": chosen.diagnostics(reference),
+        "tuning_history_before_sha256": contract.sha256(before), "tuning_history_after": after,
+        "tuning_history_after_sha256": contract.sha256(after), "production_semantics_unchanged": True,
+        "authority_citations": oracle.citations, "oracle_sha256": oracle.sha256, "sealed_question_set": sealed,
+        "candidate_rankings": _ranking_rows(ranked, selected, leaders, reference),
+        "acceptance_table": _acceptance_table(chosen, baseline, oracle, indexed, repeat, roles, kind, production),
+        "evidence": {
+            "out_dir": str(out_dir), "results_path": str(results_path), "oracle_path": str(out_dir / TOURNAMENT_ORACLE_LOCK),
+            "oracle_frozen_before_first_jev_call": True, "calls": len(all_lines),
+            "failed_calls": sorted(x["request_id"] for x in all_lines if not x.get("ok")),
+            "missing_calls": sorted(f"{c.case_id}/{b.bundle_id}/r{r}" for c in oracle.cases for b in bundles
+                                    for r in range(1, repeat + 1) if (c.case_id, b.bundle_id, r) not in indexed),
+            "retries": sum(x["retry_count"] for x in all_lines), "max_parallel_evaluators": workers,
+            "repeat_requests_byte_identical": all(
+                len({indexed[(c.case_id, b.bundle_id, r)]["request_sha256"] for r in range(1, repeat + 1) if (c.case_id, b.bundle_id, r) in indexed}) <= 1
+                for c in oracle.cases for b in bundles),
+            "models_answered": sorted({str(x.get("model_answered")) for x in all_lines if x.get("ok")}),
+            "baseline_bundle": BASELINE_BUNDLE, "bundles": {b.bundle_id: b.roles for b in bundles},
+            "role_rankings": _role_rankings(scores, oracle, indexed, repeat), "ranking_order": RANKING_ORDER,
+            "run_ids_all": sorted(x["run_id"] for x in all_lines),
+            "tie": None if not tie else {
+                "needs_choice": selected is None, "chosen": selected.bundle.bundle_id if selected else None,
+                "co_leaders": [{"bundle_id": s.bundle.bundle_id, "roles": s.bundle.roles, "questions": s.bundle.questions,
+                                "question_sha256": canonical_digest({"questions": s.bundle.questions}),
+                                "semantic_score": s.semantic_score(), "confidence_diagnostics": s.diagnostics(reference),
+                                "complexity_bytes": s.complexity(),
+                                "acceptance_table": _acceptance_table(s, baseline, oracle, indexed, repeat, roles, kind, production)}
+                               for s in leaders]},
+        },
+        "explanation": explanation,
+        "planner_action": (f"Write sealed_question_set.questions as the anchor's {TUNE_GATES[request['gate']]}-questions override after validating this result; "
+                           "store tuning_history_after byte-identical. Do not use tournament confidence in production review."
+                           if accepted else
+                           f"Tie: choose one of {', '.join(s.bundle.bundle_id for s in leaders)} from evidence.tie.co_leaders, then seal it with "
+                           "`tournament --results <out>/results.jsonl --choose <bundle_id>` into a new --out."
+                           if tie else
+                           "Keep the current questions. Read the acceptance table and candidate rankings, then evaluate new candidates against the same frozen oracle."),
+        "question_action": None, "sealed_question_set_digest_before": None,
+        "sealed_question_set_digest_after": sealed["digest"] if sealed else None,
+        "authority_recommendations": [],
+    }
+    variables = {"success": True, "canceled": False, "aborted_by": None, "data": data, "error": None,
+                 "metadata": {"duration_ms": int((time.monotonic() - started) * 1000),
+                              "tool_calls": sum(len(x.get("attempts") or []) for x in all_lines),
+                              "retry_count": sum(x["retry_count"] for x in all_lines), "correlation_id": request["correlation_id"],
+                              "jev_run_ids": sorted(x["run_id"] for x in all_lines), "planner_observation_trust": None,
+                              "authoritative_sources_unchanged": True}}
+    checked = contract.validate_result(dict(variables, schema_version="1.0.0"))
+    if isinstance(checked, Err):
+        return fail("TOURNAMENT.RESULT_INVALID", f"anchor_tuning_contract.py result: {checked.error.code}: {checked.error.message}",
+                    action="Report this with the request, oracle and candidates; the runner assembled a result its contract refuses.")
+    return Ok(variables)
+
+
+def cmd_tournament(args) -> Result[dict, JudgeError]:
+    started = time.monotonic()
+    if not 1 <= args.max_workers <= BATCH_MAX_WORKERS:
+        return fail("VALIDATION.INPUT", f"--max-workers must be between 1 and {BATCH_MAX_WORKERS}")
+    if args.choose and not args.results:
+        return fail("VALIDATION.INPUT", "--choose seals a co-leader of an existing stream; pass that stream with --results",
+                    action="Rerun as `tournament --results <out>/results.jsonl --choose <bundle_id> --out <new folder>`.")
+    loaded = load_json(args.request, "tune request")
+    if isinstance(loaded, Err):
+        return loaded
+    request = check_tune_request(loaded.value)
+    if isinstance(request, Err):
+        return request
+    request = request.value
+    gate = TUNE_GATES[request["gate"]]
+    base = load_question_set(gate)
+    if isinstance(base, Err):
+        return base
+    roles = base.value["roles"]
+    role_ids = set(base.value["questions"])
+    oracle_raw = load_json(args.oracle, "oracle")
+    if isinstance(oracle_raw, Err):
+        return oracle_raw
+    records = {r["id"]: r for r in request["authority"]["anchors"]["records"]}
+    anchor_id = oracle_raw.value.get("anchor_id") if isinstance(oracle_raw.value, dict) else None
+    kind = anchor_kind(records[anchor_id]) if anchor_id in records else "directive"
+    oracle = load_oracle(args.oracle, request, role_ids, roles, kind)
+    if isinstance(oracle, Err):
+        return oracle
+    oracle = oracle.value
+    bundles = load_candidates(args.candidates, request, role_ids)
+    if isinstance(bundles, Err):
+        return bundles
+    bundles = bundles.value
+    out_dir = pathlib.Path(args.out)
+    frozen = freeze_oracle(out_dir, oracle_raw.value, oracle.sha256, request)
+    if isinstance(frozen, Err):
+        return frozen
+    loaded = load_answers_fixture(args.answers_file, "'<case>/<bundle>/r<n>', '<case>/<bundle>', '<bundle>'")
+    if isinstance(loaded, Err):
+        return loaded
+    fixture = loaded.value
+    repeat = request["repeat_count"]
+    anchor = records[oracle.anchor_id]
+    request_lines = [{"item": {"id": c.case_id, "title": c.item["title"], "text": c.item["text"]}, "anchor": anchor,
+                      "questions": [{"candidate_id": b.bundle_id, "questions": b.questions, "roles": roles} for b in bundles]}
+                     for c in oracle.cases]
+    max_bytes = DEFAULT_MAX_REQUEST_BYTES if gate == "plan" else DEFAULT_MAX_REQUEST_BYTES_DEV
+    settings = BatchSettings(gate, args.model, repeat, request["correlation_id"], request["production_confidence_threshold"],
+                             args.timeout, args.max_workers, max_bytes, bool(args.dry_run))
+    jobs = []
+    for number, line in enumerate(request_lines, start=1):
+        got = batch_jobs(line, number, settings, roles)
+        if isinstance(got, Err):
+            return got
+        jobs += got.value
+    if args.results:
+        results_path = pathlib.Path(args.results)
+    elif args.dry_run:
+        path = out_dir / TOURNAMENT_DRY_RESULTS
+        pumped = pump_batch(request_lines, settings, "", None, path, echo=False)
+        if isinstance(pumped, Err):
+            return pumped
+        return Ok({"success": True, "error": None, "data": {
+            "dry_run": True, "requests": len(pumped.value), "results": str(path), "oracle_sha256": oracle.sha256,
+            "bundles": [b.bundle_id for b in bundles], "cases": len(oracle.cases)}})
+    else:
+        results_path = out_dir / TOURNAMENT_RESULTS
+        if results_path.exists():
+            return fail("TOURNAMENT.OUT_EXISTS", f"{results_path} already holds a result stream; evidence is never overwritten",
+                        action="Pass a new --out, or rescore the existing stream with --results.")
+        api_key = ""
+        if fixture is None:
+            cleared = remote_preflight(args, "The anchor statement, scope and oracle case texts")
+            if isinstance(cleared, Err):
+                return cleared
+            api_key = cleared.value
+        pumped = pump_batch(request_lines, settings, api_key, fixture, results_path, echo=False)
+        if isinstance(pumped, Err):
+            return pumped
+    streamed = read_batch_results(str(results_path))
+    if isinstance(streamed, Err):
+        return streamed
+    indexed = index_stream(streamed.value, jobs)
+    if isinstance(indexed, Err):
+        return indexed
+    assembled = tournament_result(request, oracle, bundles, indexed.value, repeat, roles, kind, out_dir, results_path,
+                                  args.max_workers, started, args.choose)
+    if isinstance(assembled, Err):
+        return assembled
+    variables = assembled.value
+    vars_path = out_dir / TOURNAMENT_VARS
+    save_json(str(vars_path), variables)
+    d = variables["data"]
+    selected = next((r["bundle_id"] for r in d["candidate_rankings"] if r["selected"]), None)
+    return Ok({"success": True, "error": None, "data": {
+        "accepted": d["accepted"], "selected_bundle": selected, "decision": d["tuning_history_after"]["events"][-1]["decision"],
+        "tie_needs_choice": bool(d["evidence"]["tie"] and d["evidence"]["tie"]["needs_choice"]),
+        "co_leaders": [c["bundle_id"] for c in d["evidence"]["tie"]["co_leaders"]] if d["evidence"]["tie"] else [],
+        "semantic_score": d["semantic_score"], "oracle_sha256": d["oracle_sha256"], "result_vars": str(vars_path),
+        "results": str(results_path), "calls": d["evidence"]["calls"], "failed_calls": d["evidence"]["failed_calls"],
+        "retries": d["evidence"]["retries"]}})
+
+
+def add_stream_options(parser) -> None:
+    """Options shared by `batch` and `bead-batch`: both run the same low layer."""
+    parser.add_argument("--run-dir", default="", help="folder of the append-only result log tournament-<run>.jsonl; default <anchors dir>/anchor-runs")
+    parser.add_argument("--run-name", default="", help="log name: tournament-<run-name>.jsonl (appended to when it exists); default a UTC timestamp")
+    parser.add_argument("--repeat", type=int, default=1, help="identical requests per (item, candidate); default 1")
+    parser.add_argument("--request-prefix", default="batch", help="request ids are <prefix>/<item>/<anchor>/<candidate>/r<n>")
+    parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD, help="confidence threshold of each line's verdict")
+    parser.add_argument("--max-workers", type=int, default=BATCH_MAX_WORKERS, help=f"parallel Jev calls, 1 to {BATCH_MAX_WORKERS}")
+    parser.add_argument("--max-request-bytes", type=int, default=None, help="refuse any request over this before sending; default the gate's cap")
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument("--dry-run", action="store_true", help="emit the result lines with the requests only; call nothing")
+    parser.add_argument("--answers-file", default="", help="fixture answers keyed '<item>/<candidate>/r<n>', '<item>/<candidate>', '<candidate>' or '*'; no network")
+    parser.add_argument("--repository-root", default=".", help=REPO_ROOT_HELP)
+
+
 def add_judge_options(parser, with_item: bool) -> None:
     parser.add_argument("--anchors", required=True)
     parser.add_argument("--gate", choices=("plan", "dev"), required=True)
@@ -3641,6 +5043,8 @@ def build_parser() -> argparse.ArgumentParser:
     rb.add_argument("--statement", help="judge a candidate not yet in the record (id 'candidate'); needs --quote")
     rb.add_argument("--quote", default="", help="the candidate's verbatim quote")
     rb.add_argument("--scope", default="", help="the candidate's scope")
+    rb.add_argument("--approved-intent-file", default="", help="repository-local JSON {id,version,sha256,content}; explicitly select already approved provenance")
+    rb.add_argument("--questions", default="", help="repository-local sealed rubric JSON {questions,digest}; select an independently accepted calibration")
     rb.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD, help="minimum confidence for a yes to count")
     rb.add_argument("--dry-run", action="store_true", help="show the requests; call nothing")
     rb.add_argument("--answers-file", default="", help="fixture answers keyed by anchor id ('candidate' for --statement) or '*'; no network")
@@ -3706,6 +5110,38 @@ def build_parser() -> argparse.ArgumentParser:
     add_judge_options(cf, with_item=False)
     cf.set_defaults(func=cmd_check_fixtures)
 
+    bt = sub.add_parser("batch", help="low layer: JSONL request lines in (stdin or --input), one JSONL result line per (item, candidate, repeat) out, logged")
+    bt.add_argument("--input", default="-", help="request stream, one JSON object per line (assets/schemas/jev-batch-request.schema.json); - or omitted reads stdin")
+    add_stream_options(bt)
+    bt.add_argument("--anchors", default="", help="anchors.json; the result log goes to its anchor-runs/ folder unless --run-dir is given")
+    bt.add_argument("--gate", choices=("plan", "dev"), default="plan", help="default roles and request cap when a candidate carries no roles")
+    bt.set_defaults(func=cmd_batch)
+
+    bb = sub.add_parser("bead-batch", help="high layer: item beads x one anchor's question bead (+ open candidate children) as request lines, run through batch")
+    bb.add_argument("--anchors", required=True, help="anchors.json: the anchor statement, scope, overrides and question-bead ids")
+    bb.add_argument("--gate", choices=("plan", "dev"), required=True, help="question-bead key, item composition and default question set")
+    bb.add_argument("--anchor", required=True, help="the anchor id whose gate question bead is judged")
+    bb.add_argument("--item", action="append", required=True, help="item bead id; repeatable")
+    bb.add_argument("--candidates", action="store_true", help="also judge each open child bead of the question bead as a candidate")
+    bb.add_argument("--emit", action="store_true", help="print the request lines for `batch` and call nothing")
+    add_stream_options(bb)
+    bb.set_defaults(func=cmd_bead_batch)
+
+    tn = sub.add_parser("tournament", help="run and score a question tournament for one anchor (plan-anchor/question-tournament/2.0.0); data.accepted")
+    tn.add_argument("--request", required=True, help="the anchor-tuning tune request (fenced JSON object, as a file)")
+    tn.add_argument("--oracle", required=True, help="frozen oracle (assets/schemas/tune-oracle.schema.json)")
+    tn.add_argument("--candidates", required=True, help="candidate questions (assets/schemas/tune-candidates.schema.json)")
+    tn.add_argument("--out", required=True, help="tournament folder: frozen oracle, result stream, result_vars.json")
+    tn.add_argument("--results", default="", help="score this existing result stream instead of calling Jev")
+    tn.add_argument("--choose", default="", help="seal this bundle: one of the tied co-leaders an earlier run returned (needs --results)")
+    tn.add_argument("--max-workers", type=int, default=BATCH_MAX_WORKERS, help=f"parallel Jev calls, 1 to {BATCH_MAX_WORKERS}")
+    tn.add_argument("--model", default=DEFAULT_MODEL)
+    tn.add_argument("--timeout", type=float, default=30.0)
+    tn.add_argument("--dry-run", action="store_true", help="write the request lines; call nothing, score nothing")
+    tn.add_argument("--answers-file", default="", help="fixture answers keyed '<case>/<bundle>/r<n>', '<case>/<bundle>', '<bundle>' or '*'; no network")
+    tn.add_argument("--repository-root", default=".", help=REPO_ROOT_HELP)
+    tn.set_defaults(func=cmd_tournament)
+
     rp = sub.add_parser("report", help="render a run")
     rp.add_argument("--run", required=True)
     rp.add_argument("--all", action="store_true", help="include satisfied and not-applicable rows")
@@ -3762,6 +5198,17 @@ def _main(argv=None) -> int:
         return 2
     if isinstance(outcome, Err):
         emit(outcome.error.to_json())
+        return 2
+    if isinstance(outcome.value, StreamedResult):  # stdout already carried the result lines and nothing else
+        failed = outcome.value.failed
+        if not failed:
+            return 0
+        first = failed[0]["error"] or {}
+        error = JudgeError(first.get("code") or "EXECUTION.JEV",
+                           f"{len(failed)} request(s) got no answer; first {failed[0]['request_id']}: {first.get('message')}",
+                           recoverable=bool(first.get("recoverable")),
+                           action="Read each failed line's error field; rerun only those requests once the cause is fixed.")
+        sys.stderr.write(json.dumps(error.to_json(), sort_keys=True) + "\n")  # stdout stays pure result lines
         return 2
     emit(outcome.value, fmt)
     return 0

@@ -1,6 +1,6 @@
 ---
 name: anchor-tuning
-version: 0.9.2
+version: 0.10.0
 description: Calibrates Jev questions from approved authority and adjudicates disputed failures without tuning toward a pass.
 model: opus
 color: purple
@@ -57,7 +57,7 @@ For `triage` require the checked-in template identity/SHA-256, sealed questions,
 canonical review request, raw response, role, source digest, and an `untrusted`
 `planner_observation`. At `gate: testability`, require an approved locked anchor
 with its fixtures, all five sealed rubric questions, and the disputed rubric
-role ID. This is separate from plan-independent bootstrap calibration.
+role ID. Bind optional `state.intent` to `authority.intent`; see `question-tuning.md`.
 
 Reject `desired_verdict`, `requested_disposition`, planner-proposed question
 text, a target pass rate, or any instruction to produce a pass.
@@ -98,30 +98,28 @@ text, a target pass rate, or any instruction to produce a pass.
    role. Preserve role IDs and answer options. Each candidate asks one judgment,
    names the obligation, distinguishes silence from conflict, and supplies
    concrete yes/no/unclear criteria.
-5. Call Jev directly and in parallel over identical frozen cases, with at most
-   four candidate evaluators and deterministic correlation IDs. Persist each
-   candidate, canonical request, raw response, run ID, answers, verdict,
-   confidence, and repeat stability. Never add, remove, or relabel an oracle
-   case after seeing an answer.
-6. Evaluate with the versioned question-tournament protocol. Semantic
-   acceptance requires complete raw evidence, exact role labels, exact verdicts
-   from the existing role-to-verdict mapping with confidence threshold `0.0`,
-   identical repeats, zero regressions, and a role-complete simple bundle.
-   Confidence is retained against `confidence_reference_threshold` as a
-   diagnostic and ranking input; it is not a semantic-acceptance conjunct. Rank
-   lexicographically by semantic acceptance,
-   exact cells, exact semantic verdicts, stability, regressions, confidence
-   diagnostics, complexity, and candidate ID. Record every selection and
-   rejection reason.
+5. Write the oracle and candidates (`assets/schemas/tune-oracle.schema.json`,
+   `tune-candidates.schema.json`) and run `python3 <runtime.script> tournament
+   --request <file> --oracle <file> --candidates <file> --out <new folder under
+   anchor-runs/>`. Never hand-roll the tournament or call Jev yourself. The
+   runner freezes the oracle, refuses a changed one, runs at most four
+   evaluators with one recorded retry each, logs every raw line to
+   `<out>/results.jsonl`, and writes no tracker record. Report a refusal's
+   typed error; never work around it.
+6. The runner scores with the question-tournament protocol (exact roles, exact
+   verdicts at confidence threshold `0.0`, identical repeats, zero
+   regressions; `confidence_reference_threshold` only ranks) and writes
+   `<out>/result_vars.json`. Read its acceptance table and rankings. You may
+   only add `authority_recommendations` and append rationale to
+   `explanation`; never change a score, ranking or selection. On a tie
+   (`evidence.tie.needs_choice`), choose a co-leader and seal it: `tournament
+   --results <out>/results.jsonl --choose <id> --out <new folder>`.
 7. If a diagnostic plan is supplied, copy it into a disposable workspace. Add
    explicit ceremony to positive variants and remove an important statement or
    deliverable from negative variants. Expectations still come from INTENT/ANC.
    Hash the authoritative source before and after and never write it.
-8. Down-select the smallest role-complete production set that satisfies the
-   oracle. Seal its canonical JSON, authority versions, protocol version,
-   semantic score, confidence diagnostics, and source-neutral tuning-history
-   digest. Unselected candidates remain evidence and never enter production
-   review payloads. The history object must be canonical byte-identical JSON for
+8. Unselected candidates remain evidence and never enter production review
+   payloads. The history object must be canonical byte-identical JSON for
    Markdown and `bd`; source paths, tracker IDs/revisions, timestamps,
    credentials, and source kind belong only in local bindings outside it.
    Production questions contain no confidence target, verdict mapping, or

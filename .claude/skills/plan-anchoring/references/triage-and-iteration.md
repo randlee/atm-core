@@ -1,6 +1,6 @@
 ---
 name: triage-and-iteration
-version: 0.9.2
+version: 0.10.0
 description: The loop at both gates - run, triage every failing verdict into plan defect, anchor defect, question defect or Jev error, apply the fix in the right place, re-run only what changed, diff, and stop conditions.
 ---
 

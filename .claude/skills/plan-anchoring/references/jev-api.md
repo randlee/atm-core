@@ -1,6 +1,6 @@
 ---
 name: jev-api
-version: 0.9.2
+version: 0.10.0
 description: How jev_judge.py talks to TypeSafe's Jev - endpoint, auth, request and response shape, validation, limits, the retry and context-shortening policy, every error code and flag, model pinning, and the committed allow_remote_judge setting that gates every call.
 ---
 
@@ -15,7 +15,7 @@ A gate run sends the anchor statement and scope and the item text (a plan bead o
 - `TYPESAFE_API_KEY`, when present, must be well-formed (non-empty, ASCII, no control characters); when it is absent the script tries the documented platform credential store, and
 - the repository's committed `.sc/plan-anchor/settings.yaml` must set `allow_remote_judge: true`. `false` is the user's no; an absent resolved credential means the live call is refused. Both are refused.
 
-Without both, `judge`, `check-fixtures`, `rubric`, `add --rubric` and `dedupe --jev` return `AUTH.CREDENTIALS` or `POLICY.REMOTE_JUDGE_DISABLED` and send nothing. The answer is recorded once per repository, never per session: ask the user, then `python3 scripts/plan_anchor_settings.py set allow_remote_judge true|false` (or the installer's `--allow-remote-judge` / `--no-remote-judge`), and commit the file. Only the user decides it: agents never write it and never infer it from existing run files or past runs. The setting is found from `--repository-root` (default `.`) by the same lookup as `anchor_tracker.py`; reading a present settings file needs PyYAML (`DEPENDENCY.PYYAML`, exit 2, otherwise), and nothing else in `jev_judge.py` does. `--dry-run` writes the exact request bodies and `totals {requests, bytes}` to the run directory. `--answers-file` runs the gating with fixture answers, offline. The key is never printed, logged, written to a run file, or included in an error.
+Without both, `judge`, `check-fixtures`, `rubric`, `add --rubric` and `dedupe --jev` return `AUTH.CREDENTIALS` or `POLICY.REMOTE_JUDGE_DISABLED` and send nothing. The answer is recorded once per repository, never per session: ask the user, then `python3 scripts/plan_anchor_settings.py set allow_remote_judge true|false` (or the installer's `--allow-remote-judge` / `--no-remote-judge`), and commit the file. Only the user decides it: agents never write it and never infer it from existing run files or past runs. The setting is found from `--repository-root` (default `.`) by the same lookup as `anchor_tracker.py`; reading a present settings file needs PyYAML (`DEPENDENCY.PYYAML`, exit 2, otherwise), and nothing else in `jev_judge.py` does. `--dry-run` writes request previews after normal presentation redaction and `totals {requests, bytes}` to the run directory. Previews may differ from canonical request bodies when text is redacted. `--answers-file` runs the gating with fixture answers, offline. The key is never printed, logged, written to a run file, or included in an error.
 
 ## Endpoint and auth
 
@@ -40,6 +40,8 @@ Without both, `judge`, `check-fixtures`, `rubric`, `add --rubric` and `dedupe --
 ```
 
 - `state` may be a string, object, or array; questions reference fields with backticked paths such as `item.text`.
+- Rubric requests contain `state.anchor {statement, quote, scope}`. Optional `rubric --approved-intent-file` adds `state.intent {id, version, sha256, content}`; `sha256` hashes the exact UTF-8 content. Optional `rubric --questions` selects a sealed `{questions,digest}` file. Both are confined to the repository, integrity-checked before transport, and never imply approval or calibration acceptance. See `question-tuning.md` for selection and consent rules.
+- With either optional input, rubric entries record `inputs {question_seal, request_sha256, intent?}`. Both request and question seals hash sorted-key compact UTF-8 JSON without ASCII escaping; the question seal hashes `{questions}`, and the request hash covers the entire body before presentation redaction. Dry-run displays redact credentials and bearer-shaped text, including synthetic examples. Reconstruct any redacted canonical request from frozen validated inputs, the selected anchor and model, and verify the recorded hash before triage. Live results do not repeat intent content.
 - `questions` is keyed by your own IDs; the `instructions` are sent, the ID is not.
 - Types: `choice` (criteria map option to description; up to 255 options), `score` (2 to 10 ordered level descriptions), `noul` (probability of yes, no confidence). This skill uses `choice` so every answer carries a confidence.
 
@@ -107,6 +109,13 @@ Agents and the skill never add a retry loop around the script. `attempts` is rec
 | `INPUT.MISSING`, `INPUT.MALFORMED`, `INPUT.EMPTY` | files | A path is not a file, not JSON, or the item text is empty |
 | `FIXTURE.MISSING`, `FIXTURE.NONE` | `--answers-file`, `check-fixtures` | No fixture answer for an anchor; no anchor has fixtures |
 | `RUNS.NONE`, `RUNS.MISMATCH` | `coverage`, `diff` | No run files; runs for different gates or items |
+| `TRACKER.READ` | `bead-batch` | `bd show` or the children listing failed or printed no JSON; check the bead id |
+| `QUESTIONS.BEAD_UNRESOLVED`, `QUESTIONS.BEAD_MALFORMED` | `bead-batch` | The anchor records no question bead for the gate (`set-beads`); a question or candidate bead lacks exactly one fenced json object |
+| `TOURNAMENT.REQUEST_INVALID`, `TOURNAMENT.GATE_UNSUPPORTED`, `TOURNAMENT.AUTHORITY_DIGEST` | `tournament` | The tune request fails `anchor_tuning_contract.py` (`data.violation` names the rule); the gate is `testability` (not run by the runner); an authority digest does not match its content |
+| `TOURNAMENT.ORACLE_INVALID`, `TOURNAMENT.ORACLE_INCONSISTENT`, `TOURNAMENT.ORACLE_COVERAGE`, `TOURNAMENT.ORACLE_CHANGED` | `tournament` | The oracle breaks `tune-oracle.schema.json`; an expected verdict does not follow from its expected roles; a required probe is missing; the oracle differs from the one frozen in `--out` or in the tuning history (tampering is refused, never re-frozen) |
+| `TOURNAMENT.CANDIDATES_INVALID`, `TOURNAMENT.QUESTION_META`, `TOURNAMENT.BUNDLES`, `TOURNAMENT.BASELINE` | `tournament` | The candidates break `tune-candidates.schema.json`; a question mentions confidence, thresholds or the oracle; a bundle names an unknown candidate or there are too many; the baseline set is unusable |
+| `TOURNAMENT.CHOICE_INVALID` | `tournament --choose` | The chosen bundle is not a leader of the stream (the unchosen run lists them in `evidence.tie.co_leaders`) |
+| `TOURNAMENT.EVIDENCE_MISMATCH`, `TOURNAMENT.OUT_EXISTS`, `TOURNAMENT.RESULT_INVALID`, `EXECUTION.JEV` | `tournament` | A stream line answers another request or its answers differ from its raw response; `--out` already holds a stream (pass a new one or `--results`); the assembled result fails the contract; no call of the chosen bundle has an answer |
 | `SCRIPT.INTERNAL` | anywhere | Unexpected exception, reported as JSON with exit 2 |
 
 Fatal codes abort with exit 2 and `success: false`. A Jev failure is never a negative result: when any cell, pair or candidate still has no answer after retries, `judge`, `check-fixtures`, `dedupe --jev`, `rubric` and `add --rubric` exit 2 with the first failure's code. The partial run is still written: `data.run_path` names it (`judge`, `check-fixtures`) and `data.failures` lists `{id, code, message}` for each item without an answer. `add --rubric` records nothing, with or without `--allow-untestable`.
@@ -128,6 +137,8 @@ A tool failure is the only nonzero exit. Exit 0 means the command ran (`success:
 | `retire`, `exclude --remove` | `data.changed` (false when the anchor is already retired, or there was no exclusion to remove) |
 | `exclude --from` | `data.applied` (one entry per line), `data.count`, `data.changed` (lines that changed the record) |
 | `report`, `coverage`, `diff` | `data.pass`; `data.uncovered_anchors`; `data.pass_after`, `data.regressions` |
+| `batch`, `bead-batch` | No envelope: stdout is the result lines (or, with `bead-batch --emit`, the request lines). Exit 0 when every line has an answer; exit 2 with the error envelope on stderr when any line has `ok: false` |
+| `tournament` | `data.accepted`, `data.selected_bundle`, `data.decision`, `data.result_vars` (the `anchor-tuning-result.md.j2` variables); on a tie `data.tie_needs_choice` true, `data.co_leaders` the tied bundles, `accepted` false and nothing sealed until a `--results ... --choose <bundle_id>` run |
 
 Exit 2 covers bad arguments, missing or unreadable files, invalid settings, `POLICY.REMOTE_JUDGE_DISABLED`, credential failure, any Jev call left without an answer, a missing dependency, and `SCRIPT.INTERNAL`. Exit 130 (`CANCELED`, `recoverable: true`) is an interrupt.
 
@@ -135,9 +146,21 @@ Exit 2 covers bad arguments, missing or unreadable files, invalid settings, `POL
 
 | Subcommand | Sends | Question set | Verdict |
 | --- | --- | --- | --- |
-| `rubric` | one anchor's statement, quote and scope | `assets/questions/testability.json` (single constraint, observable, requirement form, faithful to quote, scoped, positive form) | `testable` when every answer is yes at `--threshold` (default 0.6) and the lint has no error; else `needs_work` with the failing criteria; `data.pass` false on any `needs_work` |
+| `rubric` | one anchor's statement, quote and scope | `assets/questions/testability.json` (single constraint, observable, requirement form, faithful to quote, scoped, positive form) | `testable` when every answer is yes at `--threshold` (default 0.6) and the lint has no error; else `needs_work` with the failing criteria and a `next` hint (`judge`/`report`, anchor-tuning `triage`); `next` is absent on `testable`; `data.pass` false on any `needs_work` |
 | `dedupe --jev` | one pair of anchors (statements and quotes) per request, only for pairs the lexical pass flagged at `--threshold` (Jaccard, default 0.5) | `assets/questions/dedupe.json` (same constraint?) | pairs with `jev.choice` and confidence; likely duplicates are `yes` at the global confidence threshold, or Jaccard >= 0.8 without Jev; `data.likely_duplicates` lists any that remain. `--answers-file` implies `--jev` |
 | `check-fixtures` | one fixture sentence as the item | the gate's set | pass -> `satisfied`, fail -> `not_addressed` or `contradicted` |
+
+## Batch runner and tournament
+
+Two layers and a logged stream. Nothing in them writes to the tracker: reading the results, choosing a candidate and sealing it stay with the anchor-tuning agent.
+
+| Subcommand | Input | Output |
+| --- | --- | --- |
+| `batch` (low layer, tracker-neutral) | JSONL request lines on stdin or `--input <file>` (one parser for both), each `{"item": {id, title, text}, "anchor": {id, statement, scope, kind}, "questions": [{candidate_id, questions, roles?}, ...]}` (`assets/schemas/jev-batch-request.schema.json`) | One JSONL result line per (item, candidate, repeat) on stdout, written as soon as that line and every line before it have an answer, never held for the end; each carries `request_id` (`<prefix>/<item>/<anchor>/<candidate>/r<n>`), `run_id`, `request_sha256`, `answers` with probabilities, `verdict` at `--threshold`, `leaning` at 0, `retry_count` and `attempts` (`assets/schemas/jev-batch-result.schema.json`) |
+| `bead-batch` (high layer, bead adapter) | `--anchors`, `--gate`, `--anchor`, `--item <bead>` (repeatable); the question bead is the anchor's `beads.<gate>_questions`, and `--candidates` adds each open child bead as a candidate (closed children are skipped) | The same request lines (`--emit` prints them and calls nothing), else piped in-process through `batch`; it only reads beads |
+| `tournament` | `--request` (the tune request), `--oracle` (`tune-oracle.schema.json`), `--candidates` (`tune-candidates.schema.json`), `--out` | Builds oracle case x bundle request lines, runs them through `batch` into `<out>/results.jsonl`, scores the stream and writes `<out>/result_vars.json` for `anchor-tuning-result.md.j2`. `--results` rescores an existing stream; `--dry-run` writes `requests.dry-run.jsonl` |
+
+Every result line is also teed, unchanged, to an append-only log, flushed after every line: `batch` and `bead-batch` write `<anchors dir>/anchor-runs/tournament-<run>.jsonl` (`--run-dir`, `--run-name`; default name a UTC timestamp), so the log exists even when the caller consumes stdout; the tournament's log is `<out>/results.jsonl`. At most 4 calls run at once (`--max-workers`, 1 to 4). A failed call is retried once (recorded in `retry_count` and `attempts`); `AUTH.CREDENTIALS` and `POLICY.*` stop the remaining calls. Every request line is validated, and every request size checked against `--max-request-bytes`, before the first call. A live run needs a key and `allow_remote_judge: true` (`--repository-root`); `--dry-run` and `--answers-file` (keys `<item>/<candidate>/r<n>`, `<item>/<candidate>`, `<candidate>`, `*`; a list gives successive attempts; `{"__error__": "<code>"}` simulates a failure) never contact Jev.
 
 `lint` and `shape` are deterministic and never contact Jev. `lint` with neither `--id` nor `--all` lints every non-retired anchor.
 
