@@ -24,8 +24,12 @@ scripts/__pycache__/
 .sc-lint/venv/
 
 # Local Synaptic Canvas orchestration state: retain it locally for agent
-# history/status, but never treat it as repository content.
-.sc/
+# history/status, but never treat it as repository content. Exception: the
+# plan-anchor settings (Rand's remote-judge consent) are committed.
+.sc/*
+!.sc/plan-anchor/
+.sc/plan-anchor/*
+!.sc/plan-anchor/settings.yaml
 .sc-compose/logs/
 **/.sc-compose/logs/
 .just/logs/
