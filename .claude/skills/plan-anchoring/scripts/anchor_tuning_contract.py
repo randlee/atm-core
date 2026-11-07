@@ -169,6 +169,12 @@ def validate_testability_triage(request: dict) -> Check:
     if canonical.get("questions") != request["sealed_question_set"]["questions"]:
         return err("TRIAGE.REQUEST_QUESTIONS", "review request differs from sealed rubric")
     state = canonical.get("state")
+    if isinstance(state, dict) and "intent" in state:
+        checked = validate_intent_descriptor(state["intent"])
+        if isinstance(checked, Err):
+            return checked
+        if canonical_bytes(state["intent"]) != canonical_bytes(intent):
+            return err("TRIAGE.INTENT_AUTHORITY", "request intent differs from approved authority")
     source = state.get("anchor") if isinstance(state, dict) else None
     if not isinstance(source, dict) or set(source) != {"statement", "quote", "scope"} or any(
         not isinstance(source.get(key), str) or not source[key].strip()
@@ -194,6 +200,21 @@ def validate_testability_triage(request: dict) -> Check:
             for value in probabilities.values()
         ) or abs(sum(probabilities.values()) - 1) > 0.01 * len(probabilities):
             return err("TRIAGE.RESPONSE", "raw response probabilities are invalid")
+    return OK
+
+
+def validate_intent_descriptor(intent: object) -> Check:
+    """Integrity of an explicitly selected intent; approval is external authority."""
+    if not isinstance(intent, dict) or set(intent) != {"id", "version", "sha256", "content"}:
+        return err("RUBRIC.INTENT", "intent requires exactly id, version, sha256 and content")
+    if any(not isinstance(intent[key], str) or not intent[key].strip() for key in ("id", "content")):
+        return err("RUBRIC.INTENT", "intent id and content must be nonblank strings")
+    version = intent["version"]
+    integer = type(version) is int or (type(version) is float and version.is_integer())
+    if not integer and (not isinstance(version, str) or not version.strip()):
+        return err("RUBRIC.INTENT", "intent version must be an integer or nonblank string")
+    if intent["sha256"] != hashlib.sha256(intent["content"].encode("utf-8")).hexdigest():
+        return err("RUBRIC.INTENT_DIGEST", "intent content digest mismatch")
     return OK
 
 

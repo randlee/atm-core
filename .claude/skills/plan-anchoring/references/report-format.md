@@ -1,6 +1,6 @@
 ---
 name: report-format
-version: 0.9.2
+version: 0.10.0
 description: The provenance-quoting report format for gate results, what the planning agent or quality manager should do with each verdict, and where reports are posted.
 ---
 
