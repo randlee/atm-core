@@ -2,12 +2,9 @@
 
 ## Execute
 
-**1. Launch the reviewer**
+**1. Dispatch the reviewer**
 
-Use Agent tool to launch `.claude/agents/plan-scope-reviewer.md`.
-On the first loop round, save the returned agent id. On subsequent loop
-rounds, re-use the same reviewer agent if it is still available so review
-context carries forward.
+Import the step bead (SKILL.md "Beads", `step` 2, `route_to` `plan-scope-reviewer`). Dispatch `plan-scope-reviewer` as your mode reference directs (SKILL.md "Modes").
 Pass a fenced JSON input that includes:
 - `source_of_truth`
 - `references`
@@ -17,19 +14,17 @@ Pass a fenced JSON input that includes:
 - `review_cycle_index`
 - `step-1` fenced JSON
 
-Set `run_in_background: true`.
-
 Expected reviewer launch input shape:
 
 ```json
 {
-  "source_of_truth": "docs/plans/phase-bc/phase-bc-plan.md",
+  "source_of_truth": "docs/plans/phase-bc.jsonl",
   "references": [
     "docs/project-plan.md"
   ],
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "plan/phase-bc",
-  "review_cycle_limit": 3,
+  "review_cycle_limit": 2,
   "review_cycle_index": 1,
   "reviewed_commit": "abc1234",
   "previous_reviewed_commit": "",
@@ -46,7 +41,7 @@ Expected reviewer launch input shape:
 ```
 
 Determine `plan_scope_review_cycle_limit` from
-`/tmp/plan-hardening-vars.json`. If it is missing, set it to `3` before
+`/tmp/plan-hardening-vars.json`. If it is missing, set it to `2` before
 launching the reviewer. `review_cycle_index` is the count of completed Step 2
 review responses in the current hardening run, starting at `1`.
 
@@ -107,19 +102,17 @@ A background reviewer generates no ATM traffic, so the round is invisible to
 `.claude/skills/plan-hardening/plan-review-notice.xml.j2`, installed under
 `~/.atm/templates/plan-hardening/`) with `reviewer: plan-scope-reviewer`,
 `round_index`, `verdict`, and a one-paragraph `summary`. Send it to
-`team-lead`; when `team-lead` runs the round itself, send it to the plan
+the lead; when the lead runs the round itself, send it to the plan
 author from Step 1 with `atm queue` so it never interrupts work in progress.
 The template declares `workflow.stage: plan`, which is what makes the round
 discoverable (`atm search --team <team> --workflow-stage plan`).
 
-Update the round table after every Step 2 response. In the Note column
-record the plan's `critical_path` and `width` for the round (from the
-`plan-scope-reviewer` `parallelism` block). A round that lengthens the
+Record the round in beads after every Step 2 response (SKILL.md "Beads"):
+file one finding bead per finding (`reviewer` `plan-scope-reviewer`), then close the Step 2
+step bead with the status, counts, `reviewed_commit` and `findings_hash`. Add the plan's `critical_path` and `width` for the round (from the
+`plan-scope-reviewer` `parallelism` block) to the close reason. A round that lengthens the
 critical path or narrows the width is a regression: name the finding that
 caused it, and prefer a boundary re-cut over accepting it.
-
-| Round | Step | Reviewer | reviewed_commit | status | blocking | important | minor | findings_hash | supersedes | Note |
-|-------|------|----------|-----------------|--------|----------|-----------|-------|---------------|------------|------|
 
 ## Hard stops
 

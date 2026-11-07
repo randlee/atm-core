@@ -4,10 +4,10 @@ version: 2.1.0
 format: text
 required_variables:
   - base # owner: dev-sanity-template.xml.j2
-  - branch # owner: sanity-fail.xml.j2
+  - branch # owner: sanity close
   - checked_bead # owner: dev-sanity-template.xml.j2
-  - checked_title # owner: sanity-fail.xml.j2
-  - commit # owner: sanity-fail.xml.j2
+  - checked_title # owner: sanity close
+  - commit # owner: sanity close
   - deliverables_complete # owner: dev-complete.md.j2
   - deliverables_md # owner: dev-complete.md.j2
   - deliverables_total # owner: dev-complete.md.j2
@@ -23,12 +23,12 @@ required_variables:
   - layer # owner: qa-template.xml.j2
   - lint_command # owner: dev-sanity-template.xml.j2
   - lint_md # owner: dev-sanity-complete.md.j2
-  - max_sanity_rounds # owner: sanity-fail.xml.j2
+  - max_sanity_rounds # owner: sanity close
   - outcome # owner: fix-complete.md.j2
   - phase # owner: qa-template.xml.j2
   - phase_feature # owner: qa-template.xml.j2
   - policy_path # owner: qa-template.xml.j2
-  - pr_number # owner: sanity-fail.xml.j2
+  - pr_number # owner: sanity close
   - pr_target # owner: task-close-vars.j2 (hook contract)
   - pr_url # owner: dev-sanity-template.xml.j2
   - primary_checkout # owner: dev-sanity-template.xml.j2
@@ -38,16 +38,15 @@ required_variables:
   - resolution_md # owner: fix-complete.md.j2
   - reviewers_md # owner: qa-complete.md.j2
   - reviewers_round1 # owner: qa-template.xml.j2
-  - round # owner: sanity-fail.xml.j2
+  - round # owner: sanity close
   - sanity_bead # owner: task-close-vars.j2 (hook contract)
   - sanity_task_id # owner: task-close-vars.j2 (hook contract)
   - sprint # owner: dev-complete.md.j2
   - stack # owner: qa-template.xml.j2
   - stack_bead # owner: task-close-vars.j2 (hook contract)
-  - stack_view # owner: dev-complete.md.j2
   - stacked # owner: rebase-required.xml.j2
   - task_id # owner: dev-complete.md.j2
-  - undone # owner: sanity-fail.xml.j2
+  - undone # owner: sanity close
   - validation_md # owner: dev-complete.md.j2
   - verdict # owner: qa-complete.md.j2
   - worktree_path # owner: dev-sanity-template.xml.j2
@@ -176,7 +175,6 @@ result_variables_by_role:
     - deliverables_total
     - evidence
     - outcome
-    - stack_view
     - validation_md
   fix:
     - deliverables_complete
@@ -185,7 +183,6 @@ result_variables_by_role:
     - evidence
     - outcome
     - resolution_md
-    - stack_view
     - validation_md
 render_variables_by_role:
   dev:
@@ -210,7 +207,6 @@ render_variables_by_role:
     - sanity_task_id
     - sprint
     - stack_bead
-    - stack_view
     - task_id
     - validation_md
     - worktree_path
@@ -237,7 +233,6 @@ render_variables_by_role:
     - sanity_task_id
     - sprint
     - stack_bead
-    - stack_view
     - task_id
     - validation_md
     - worktree_path
@@ -328,9 +323,7 @@ defaults:
   pr_url: ""
   rebased_onto: ""
   resolution_md: ""
-  reviewers_round1: ""
   stack: ""
-  stack_view: ""
   stacked: ""
   validation_md: ""
   branch: ""

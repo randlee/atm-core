@@ -1,6 +1,6 @@
 ---
 name: plan-scope-reviewer
-version: 0.4.2
+version: 0.4.3
 description: Reviews sprint shape, boundary-scoped closure, parallel width, deliverable ownership, early split decisions, and direct sprint-doc consumability before hardening fixes.
 tools: Glob, Grep, LS, Read, BashOutput
 model: sonnet
@@ -23,11 +23,8 @@ trickle them across multiple rounds unless the plan changed between rounds.
 
 ## Required Reference
 
-Always read the plan guidelines named in the assignment's `reference_docs`:
-`.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md` for a plan
-in beads, `.claude/skills/plan-hardening/sprint-planning-guidelines.md` for a
-plan in markdown. Read "sprint doc" as "sprint bead" when the plan is in
-beads.
+Always read `.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md`.
+The plan is in beads: read "sprint doc" as "sprint bead".
 
 ## Input Contract
 

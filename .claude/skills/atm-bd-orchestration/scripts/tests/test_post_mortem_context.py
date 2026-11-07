@@ -1,10 +1,19 @@
 import importlib.util
 import json
-from pathlib import Path
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+from subprocess_helpers import (
+    isolated_git_env,
+    run_command,
+    run_fixture_git,
+    set_fixture_hooks_path,
+)
 
 MODULE = Path(__file__).resolve().parents[1] / "post_mortem_context.py"
 spec = importlib.util.spec_from_file_location("context", MODULE)
@@ -20,9 +29,17 @@ class CollectionTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.repo = self.root / "repo with spaces"
         self.repo.mkdir()
-        subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
-        subprocess.run(["git", "-C", str(self.repo), "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--allow-empty", "-qm", "fixture"], check=True)
-        self.head = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+        self.git_env, _ = isolated_git_env(self.root)
+        environ = patch.dict(os.environ, self.git_env)
+        environ.start()
+        self.addCleanup(environ.stop)
+        run_fixture_git(["git", "init", "-q", str(self.repo)], env=self.git_env)
+        set_fixture_hooks_path(self.repo, env=self.git_env)
+        run_fixture_git(["git", "-C", str(self.repo), "-c", "user.name=Test", "-c",
+                         "user.email=test@example.invalid", "commit", "--allow-empty", "-qm", "fixture"],
+                        env=self.git_env)
+        self.head = run_fixture_git(["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+                                    env=self.git_env).stdout.strip()
         self.real_run = subprocess.run
         self.calls = []
 
@@ -36,6 +53,69 @@ class CollectionTests(unittest.TestCase):
                 raise response
             return subprocess.CompletedProcess(args, *response)
         return run
+
+    def test_fixture_commit_ignores_hostile_git_config_and_hooks(self):
+        hostile_root = self.root / "hostile"
+        hooks = hostile_root / "hooks"
+        template = hostile_root / "template"
+        hooks.mkdir(parents=True)
+        template.mkdir(parents=True)
+        marker = hostile_root / "hook-ran"
+        for hook_name in ("pre-commit", "commit-msg"):
+            hook = hooks / hook_name
+            hook.write_text(f"#!/bin/sh\nprintf invoked > {marker}\nexit 1\n")
+            hook.chmod(0o755)
+        global_config = hostile_root / "global.gitconfig"
+        global_config.write_text(
+            f"[init]\n\ttemplateDir = {template}\n[core]\n\thooksPath = {hooks}\n"
+            "[commit]\n\tgpgsign = true\n"
+        )
+        hostile = {
+            **os.environ,
+            "HOME": str(hostile_root / "home"),
+            "GIT_CONFIG_GLOBAL": str(global_config),
+            "GIT_CONFIG_SYSTEM": str(global_config),
+            "GIT_TEMPLATE_DIR": str(template),
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.hooksPath",
+            "GIT_CONFIG_VALUE_0": str(hooks),
+        }
+        fixture_root = hostile_root / "fixture"
+        fixture_root.mkdir()
+        repository = fixture_root / "repo"
+        with patch.dict(os.environ, hostile, clear=True):
+            env, _ = isolated_git_env(fixture_root)
+            self.assertNotIn("GIT_CONFIG_COUNT", env)
+            self.assertFalse(any(key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"))
+                                 for key in env))
+            run_fixture_git(["git", "init", "-q", str(repository)], env=env)
+            set_fixture_hooks_path(repository, env=env)
+            run_fixture_git(["git", "-C", str(repository), "config", "user.name", "fixture"], env=env)
+            run_fixture_git(["git", "-C", str(repository), "config", "user.email", "fixture@example.invalid"], env=env)
+            (repository / "fixture.txt").write_text("isolated\n")
+            run_fixture_git(["git", "-C", str(repository), "add", "fixture.txt"], env=env)
+            run_fixture_git(["git", "-C", str(repository), "commit", "-m", "fixture"], env=env)
+            commit = run_fixture_git(["git", "-C", str(repository), "rev-parse", "HEAD"], env=env).stdout.strip()
+        self.assertEqual(len(commit), 40)
+        self.assertFalse(marker.exists())
+
+        targets = [
+            "test_sanity_merge.py::test_selected_fallback_errors_are_not_counted_twice",
+            "test_handoff_contracts.py::DevSanityHandoffTests::test_rendered_assignment_has_exactly_the_reviewers_input_fields",
+            "test_close_vars.py::test_rebased_fixture_layer_updates_qa_vars_and_sanity_close_context",
+            "test_strict_type_defects_report.py::MissingLimitationsTests::test_missing_limitations_is_rejected_at_prepare_and_evaluation_boundaries",
+        ]
+        result = run_command(
+            [sys.executable, "-m", "pytest", "-q", *targets],
+            cwd=Path(__file__).resolve().parent,
+            env=hostile,
+            timeout=120,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+        self.assertFalse(marker.exists())
 
     def test_pinned_full_beads_safe_argv_and_review_prompt(self):
         bead = {"id": "atm-a.1", "description": "$(touch nope)", "notes": "all notes retained", "dependencies": [{"id": "prior"}]}

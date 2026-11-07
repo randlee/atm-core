@@ -9,6 +9,7 @@ host paths, projected onto the role's fields in `task-close-vars.j2`. It reads n
 from __future__ import annotations
 
 from pathlib import Path
+import tomllib
 
 import yaml
 
@@ -22,6 +23,22 @@ POURED = ("role", "phase", "sprint", "sprint_bead", "stack", "stack_bead", "bran
 # A QA bead's reviewers_round1 is planned on that bead (bead_schema.QaMetadata); a sanity close takes it from its qa_bead.
 # Host-local: never stored on a bead.
 HOST = ("primary_checkout", "worktree_path")
+
+
+def is_fix_bead(bead: dict) -> bool:
+    return (bead.get("metadata") or {}).get("role") == "fix" or "stage:fix" in (bead.get("labels") or [])
+
+
+def reassignment(root: Path, phase: str, bead: dict, config: dict) -> tuple[Path, dict]:
+    meta = bead.get("metadata") or {}
+    phase_config = tomllib.loads((root / ".atm-bd" / f"phase-{phase}.toml").read_text())
+    template = root / phase_config["templates"]["fix" if is_fix_bead(bead) else "dev"]
+    values = {name: meta[name] for name in ("sprint", "stack", "pr_target", "branch")}
+    values.update(task_id=bead["id"], worktree_path=meta["worktree"], phase_root=phase_config["root"],
+                  primary_checkout=str(root))
+    values.update({name: config[name] for name in ("test_command", "lint_command", "policy_path",
+                                                    "requirements_globs", "adr_globs")})
+    return template, values
 
 
 class CloseFieldsError(ValueError):
@@ -81,17 +98,15 @@ def close_vars(row: dict, repo: Path) -> tuple[str, dict, list[str]]:
     return role, values, remaining
 
 
-# The checked bead records these at its dev or fix close (atm-task-close.py); a QA assignment takes them from it.
-RECORDED = ("commit", "branch", "pr_number")
-# Also recorded there: the PR's actual base; a bead closed before it was recorded falls back to the poured base.
-RECORDED_BASE = "pr_base"
+# The checked bead records these at close, but the current PR is authoritative for assignment-time head/base.
+RECORDED = ("branch", "pr_number")
 
 
-def qa_assignment_vars(qa_row: dict, checked_row: dict, repo: Path) -> dict:
-    """The `templates.qa` vars of one QA bead: its poured fields plus the PR its checked bead recorded.
+def qa_assignment_vars(qa_row: dict, checked_row: dict, repo: Path, current_pr: dict | None = None) -> dict:
+    """The `templates.qa` vars of one QA bead, using its currently observed PR head and base.
 
-    The PR, its base, commit and branch come from the checked bead, never from hand-assembled vars, so a QA assignment
-    cannot render without its PR (#2214). A value the QA bead also holds must agree with the checked bead.
+    The checked bead identifies the PR number and expected branch. The current PR supplies its head SHA and base ref;
+    first-close values may be stale after a rebase. A value the QA bead also holds must agree with the checked bead.
     """
     role, values, _ = close_vars(qa_row, repo)
     if role != "qa":
@@ -111,14 +126,40 @@ def qa_assignment_vars(qa_row: dict, checked_row: dict, repo: Path) -> dict:
                                f"Correct the stale value on {qa_row['id']} to the checked bead's recorded close.")
     for name in ("layer", "round", "reviewers_round1"):
         if metadata.get(name) in (None, "", []):
+            if name == "layer":
+                raise CloseFieldsError("ASSIGN_VARS.NOT_PLANNED", f"{qa_row['id']}: metadata lacks layer",
+                                       f"layer is the 1-based position of the checked PR in the stack bead's metadata.layers, set when linked. "
+                                       f"Run `bd update {qa_row['id']} --metadata '<full metadata JSON with \"layer\": <n>>'`; "
+                                       "--set-metadata stores a string.")
             raise CloseFieldsError("ASSIGN_VARS.NOT_PLANNED", f"{qa_row['id']}: metadata lacks {name}",
                                    f"Set {name} on {qa_row['id']} (layer when its PR is linked, round and reviewers at pour).")
-    is_fix = checked.get("role") == "fix" or "stage:fix" in (checked_row.get("labels") or [])
+    if current_pr is None:
+        raise CloseFieldsError("ASSIGN_VARS.PR_UNAVAILABLE",
+                               f"{checked_row['id']}: current PR #{checked['pr_number']} was not read; cannot derive base and head SHA",
+                               f"Read `gh pr view {checked['pr_number']} --json number,baseRefName,headRefName,headRefOid` "
+                               "and rebuild the QA assignment; do not use first-close base or commit values.")
+    live_fields = {"number": current_pr.get("number"), "baseRefName": current_pr.get("base"),
+                   "headRefName": current_pr.get("head"), "headRefOid": current_pr.get("head_sha")}
+    missing_live = [name for name, value in live_fields.items() if value in (None, "")]
+    if missing_live:
+        raise CloseFieldsError("ASSIGN_VARS.PR_FIELDS_MISSING",
+                               f"{checked_row['id']}: current PR is missing {', '.join(missing_live)}",
+                               f"Read `gh pr view {checked['pr_number']} --json number,baseRefName,headRefName,headRefOid` "
+                               "and rebuild the QA assignment.")
+    if str(live_fields["number"]) != str(checked["pr_number"]) or live_fields["headRefName"] != checked["branch"]:
+        raise CloseFieldsError(
+            "ASSIGN_VARS.PR_MISMATCH",
+            f"{checked_row['id']}: current PR #{live_fields['number']} ({live_fields['headRefName']}) does not match "
+            f"recorded PR #{checked['pr_number']} ({checked['branch']})",
+            f"Resolve the current PR for {checked_row['id']} and correct its recorded pr_number/branch before assigning QA.",
+        )
+    is_fix = is_fix_bead(checked_row)
     return {"task_id": qa_row["id"], "qa_task_id": qa_row["id"], "checked_bead": values["checked_bead"],
             "dev_task_id": values["checked_bead"], "sanity_task_id": metadata.get("sanity_bead") or "",
             "phase": metadata["phase"], "phase_feature": metadata["phase_feature"], "sprint": metadata["sprint"],
             "sprint_bead": metadata["sprint_bead"], "stack": metadata["stack"], "layer": metadata["layer"],
-            "round": metadata["round"], "base": str(checked.get(RECORDED_BASE) or metadata["base"]), "worktree_path": values["worktree_path"],
+            "round": metadata["round"], "base": str(live_fields["baseRefName"]), "worktree_path": values["worktree_path"],
             "policy_path": metadata["policy_path"], "reviewers_round1": metadata["reviewers_round1"],
-            "commit": str(checked["commit"]), "branch": str(checked["branch"]), "pr_number": str(checked["pr_number"]),
+            "commit": str(live_fields["headRefOid"]), "branch": str(live_fields["headRefName"]),
+            "pr_number": str(live_fields["number"]),
             "carry_forward": checked_row["id"] if is_fix else ""}

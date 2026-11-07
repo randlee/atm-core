@@ -32,7 +32,7 @@ The page embeds SVG directly with zoom controls and state tooltips; it needs no
 server or installed dependencies to remain readable after download. Wyvern is
 only the optional viewer. Rendering requires Python, Node and the pinned
 [sprint-report renderer](../sprint-report/renderer/package.json):
-`npm ci --prefix .claude/skills/sprint-report/renderer --ignore-scripts`.
+`(cd .claude/skills/sprint-report/renderer && npm ci --ignore-scripts)`.
 
 For report columns, badge meanings and evidence sources, see
 [sprint-report](../sprint-report/SKILL.md). Local exports for development remain

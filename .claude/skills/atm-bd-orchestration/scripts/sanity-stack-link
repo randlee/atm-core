@@ -12,13 +12,14 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 from typing import Any
 import tempfile
 import time
 
-from stack_top import select_stack_top
+from stack_top import StackTop, StackTopMismatch, select_confirmed_stack_top, select_passed_unlinked_top
 
 
 PULL_FILTER = '.[] | {number, base: .base.ref, head: .head.ref, sha: .head.sha, draft}'
@@ -29,6 +30,12 @@ HEARTBEAT_INTERVAL = 120
 
 class StackError(Exception):
     pass
+
+
+class LayerError(StackError):
+    def __init__(self, evidence, fix):
+        super().__init__(evidence)
+        self.fix = fix
 
 
 class Parser(argparse.ArgumentParser):
@@ -141,6 +148,21 @@ class Linker:
             raise StackError('filtered hosted stack list has invalid fields')
         return found
 
+    def invalid_layer(self, metadata, layer, invariant, *, remove=False):
+        repaired = copy.deepcopy(metadata)
+        index = next(i for i, item in enumerate(metadata['layers']) if item is layer)
+        if remove:
+            removed = repaired['layers'].pop(index)
+            if (isinstance(removed, dict) and index < len(repaired['layers']) and
+                    isinstance(repaired['layers'][index], dict) and repaired['layers'][index].get('base') == removed.get('branch')):
+                repaired['layers'][index]['base'] = removed.get('base')
+        else:
+            repaired['layers'][index]['linked'] = False
+        command = f"bd update {shlex.quote(self.values['stack_bead'])} --metadata {shlex.quote(json.dumps(repaired, separators=(',', ':')))}"
+        fields = layer if isinstance(layer, dict) else {}
+        raise LayerError(f"PR {fields.get('pr')} branch {fields.get('branch')} head {fields.get('head')}: {invariant}; --set-metadata stores a string",
+                         command)
+
     def reconcile(self, metadata, pulls, stacks):
         layers = metadata['layers']
         known = {entry['pr'] for entry in layers}
@@ -149,7 +171,10 @@ class Linker:
         if len(matching) > 1:
             raise StackError('ambiguous hosted stacks overlap the ledger')
         if not matching:
-            if metadata['stack_number'] is not None or any(layer['linked'] for layer in layers):
+            for layer in layers:
+                if layer['linked']:
+                    self.invalid_layer(metadata, layer, 'linked: true but absent from the hosted stack')
+            if metadata['stack_number'] is not None:
                 raise StackError('hosted stack missing for linked ledger')
             return
         stack = matching[0]
@@ -164,23 +189,78 @@ class Linker:
             ref = self.command(['git', 'rev-parse', 'refs/remotes/origin/' + pull['head']])
             if ref.stdout.strip() != pull['sha']:
                 raise StackError('hosted stack head differs from fetched branch')
-            ancestry = self.command(['git', 'merge-base', '--is-ancestor', 'origin/' + previous, pull['sha']], check=False)
-            if ancestry.returncode:
-                raise StackError('hosted stack has conflicting git ancestry')
+            if index == 0:
+                # A frozen bottom does not track later trunk commits. New ledgers
+                # pin its cut base; legacy ledgers can prove common history only.
+                cut_base = layers[0].get('base_head') if layers else None
+                if cut_base is not None:
+                    if not isinstance(cut_base, str) or not re.fullmatch(r'[0-9a-fA-F]{7,64}', cut_base):
+                        raise StackError('bottom layer has an invalid recorded cut base')
+                    ancestry = self.command(['git', 'merge-base', '--is-ancestor', cut_base, pull['sha']], check=False)
+                else:
+                    ancestry = self.command(['git', 'merge-base', 'origin/' + previous, pull['sha']], check=False)
+                if ancestry.returncode:
+                    raise StackError('hosted bottom has conflicting or unavailable cut ancestry')
+            else:
+                ancestry = self.command(['git', 'merge-base', '--is-ancestor', 'origin/' + previous, pull['sha']], check=False)
+                if ancestry.returncode:
+                    raise StackError('hosted stack has conflicting git ancestry')
+            if index < len(layers) and layers[index]['pr'] != number:
+                if layers[index]['linked']:
+                    raise StackError('hosted stack conflicts with ledger ancestry')
+                held_index = next((i for i in range(index + 1, len(layers)) if layers[i]['pr'] == number), None)
+                if held_index is not None:
+                    layers.insert(index, layers.pop(held_index))
+                else:
+                    if (sum(other['head'] == pull['head'] for other in pulls) != 1 or
+                            any(layer['branch'] == pull['head'] or layer['pr'] == number for layer in layers)):
+                        raise StackError('hosted-only stack layer is not uniquely attributable')
+                    layers.insert(index, {'branch': pull['head'], 'pr': number, 'head': pull['sha'], 'base': previous, 'linked': True})
             if index < len(layers):
                 layer = layers[index]
+                if layer.get('held_on'):
+                    if layer['held_on']['branch'] != previous:
+                        raise StackError('hosted stack conflicts with held parent')
+                    layer['base'] = previous
                 if (layer['pr'], layer['branch'], layer['head'], layer['base']) != (number, pull['head'], pull['sha'], previous):
                     raise StackError('hosted stack conflicts with ledger ancestry')
                 layer['linked'] = True
+                layer.pop('held_on', None)
             else:
                 if (sum(other['head'] == pull['head'] for other in pulls) != 1 or
                         any(layer['branch'] == pull['head'] or layer['pr'] == number for layer in layers)):
                     raise StackError('hosted-only stack layer is not uniquely attributable')
                 layers.append({'branch': pull['head'], 'pr': number, 'head': pull['sha'], 'base': previous, 'linked': True})
             previous = pull['head']
-        if any(layer['linked'] for layer in layers[len(stack['prs']):]):
-            raise StackError('linked ledger layer is absent from hosted stack')
+        for layer in layers[len(stack['prs']):]:
+            if layer['linked']:
+                self.invalid_layer(metadata, layer, 'linked: true but absent from the hosted stack')
         metadata['stack_number'] = stack['number']
+
+    def git_parent(self, candidate, pulls, base_head):
+        ancestors = []
+        for pull in pulls:
+            if pull['number'] == candidate['number']:
+                continue
+            contained = self.command(['git', 'merge-base', '--is-ancestor', pull['sha'], base_head], check=False)
+            if contained.returncode == 0:
+                continue
+            if contained.returncode != 1:
+                raise StackError('cannot determine parent ancestry relative to stack base')
+            result = self.command(['git', 'merge-base', '--is-ancestor', pull['sha'], candidate['sha']], check=False)
+            if result.returncode == 0:
+                ancestors.append(pull)
+            elif result.returncode != 1:
+                raise StackError('cannot determine parent ancestry')
+        closest = []
+        for parent in ancestors:
+            if not any(other is not parent and other['sha'] != parent['sha'] and self.command(
+                    ['git', 'merge-base', '--is-ancestor', parent['sha'], other['sha']], check=False).returncode == 0
+                    for other in ancestors):
+                closest.append(parent)
+        if len(closest) > 1:
+            raise StackError('multiple incomparable open pull request parents')
+        return closest[0] if closest else None
 
     def write(self, metadata):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', encoding='utf-8') as stream:
@@ -188,6 +268,12 @@ class Linker:
             stream.flush()
             self.command(['bd', 'update', self.values['stack_bead'], '--if-assignee', self.actor,
                           '--metadata', '@' + stream.name, '--actor', self.actor])
+
+    def verify_trunk_merge(self, trunk, head):
+        merge = self.command(['git', 'merge-tree', '--write-tree', 'origin/' + trunk, head], check=False)
+        if merge.returncode:
+            raise StackError('stack top does not merge cleanly into current trunk: ' +
+                             (merge.stderr or merge.stdout or f'exit {merge.returncode}').strip())
 
     def execute(self):
         timeout = self.acquire()
@@ -203,20 +289,53 @@ class Linker:
         previous = metadata['trunk']
         branches, numbers = set(), set()
         for layer in layers:
+            if isinstance(layer, dict) and 'held_on' in layer:
+                held_on = layer['held_on']
+                if (not isinstance(held_on, dict) or type(held_on.get('pr')) is not int or held_on['pr'] <= 0 or
+                        not isinstance(held_on.get('branch'), str) or not held_on['branch'] or
+                        layer.get('linked') is not False or ('base' in layer and layer['base'] != held_on['branch']) or
+                        held_on['pr'] == layer.get('pr')):
+                    self.invalid_layer(metadata, layer, 'invalid held_on parent or linked state', remove=True)
+            if isinstance(layer, dict) and type(layer.get('pr')) is int and layer['pr'] in numbers:
+                self.invalid_layer(metadata, layer, 'duplicate pr in metadata.layers', remove=True)
             if (not isinstance(layer, dict) or not isinstance(layer.get('branch'), str) or not layer['branch'] or
                     type(layer.get('pr')) is not int or layer['pr'] <= 0 or not isinstance(layer.get('head'), str) or
                     not re.fullmatch(r'[0-9a-fA-F]{7,64}', layer['head']) or type(layer.get('linked')) is not bool or
-                    layer.get('base') != previous or layer['branch'] in branches or layer['pr'] in numbers):
-                raise StackError('stack bead has an invalid layer')
-            previous = layer['branch']
+                    (not layer.get('held_on') and layer.get('base') != previous) or layer['branch'] in branches or layer['pr'] in numbers):
+                self.invalid_layer(metadata, layer, 'invalid layer fields, base ancestry, or duplicate branch in metadata.layers', remove=True)
+            if not layer.get('held_on'):
+                previous = layer['branch']
             branches.add(layer['branch'])
             numbers.add(layer['pr'])
         original = copy.deepcopy(metadata)
         lean = self.lean_mode()
         pulls = self.pulls()
-        if not lean and layers:
+        hosted_prs = None
+        if not lean and (layers or metadata['stack_number'] is not None):
             self.command(['git', 'fetch', 'origin'])
-            self.reconcile(metadata, pulls, self.stacks())
+            stacks = self.stacks()
+            known = {layer['pr'] for layer in layers}
+            matching = [stack for stack in stacks if stack['number'] == metadata['stack_number'] or
+                        (stack['base'] == metadata['trunk'] and known.intersection(stack['prs']))]
+            if len(matching) > 1:
+                raise StackError('ambiguous hosted stacks overlap the ledger')
+            hosted_prs = matching[0]['prs'] if matching else []
+            for layer in layers:
+                if layer['linked'] and layer['pr'] not in hosted_prs:
+                    self.invalid_layer(metadata, layer, 'linked: true but absent from the hosted stack')
+            selected = select_confirmed_stack_top(layers, hosted_prs)
+            if isinstance(selected, StackTopMismatch):
+                linked_prs = [layer['pr'] for layer in layers if layer['linked']]
+                anchors = [layer['pr'] for layer in layers if not layer.get('held_on')]
+                if (not anchors or len(hosted_prs) <= len(linked_prs) or
+                        hosted_prs[:len(anchors)] != anchors):
+                    raise StackError(f'stack top mismatch: ledger {selected.ledger_top}; hosted {selected.hosted_top}')
+                try:
+                    self.reconcile(metadata, pulls, stacks)
+                except StackError as error:
+                    raise StackError(f'stack top mismatch: ledger {selected.ledger_top}; hosted {selected.hosted_top}; {error}') from error
+            else:
+                self.reconcile(metadata, pulls, stacks)
         candidate = next((pull for pull in pulls if pull['number'] == self.values['pr_number']), None)
         if not candidate or candidate['head'] != self.values['branch'] or candidate['sha'] != self.values['commit'] or candidate['draft']:
             raise StackError('checked pull request is missing, draft, or differs from the pinned branch and commit')
@@ -228,7 +347,39 @@ class Linker:
         def resolve_head(branch):
             return self.command(['git', 'rev-parse', 'refs/remotes/origin/' + branch]).stdout.strip()
 
-        base, recorded_head = select_stack_top({'metadata': metadata}, metadata['trunk'], resolve_head)
+        selected = select_confirmed_stack_top(layers, hosted_prs)
+        if isinstance(selected, StackTopMismatch):
+            raise StackError(f'stack top mismatch: ledger {selected.ledger_top}; hosted {selected.hosted_top}')
+        base = selected.branch if selected.branch is not None else metadata['trunk']
+        recorded_head = selected.head if selected.head is not None else resolve_head(base)
+        # A passed first layer has no hosted stack until its successor passes.
+        has_passed = any(not layer.get('held_on') for layer in layers)
+        if selected.branch is None:
+            passed_top = select_passed_unlinked_top(layers)
+            if passed_top is not None:
+                assert passed_top.branch is not None and passed_top.head is not None
+                base, recorded_head = passed_top.branch, passed_top.head
+        if layers and resolve_head(base) != recorded_head:
+            raise StackError('recorded stack top differs from its recorded head')
+        parent = self.git_parent(candidate, pulls, recorded_head)
+        parent_entry = next((layer for layer in layers if parent and layer['pr'] == parent['number']), None)
+        if parent and (parent_entry is None or parent_entry.get('held_on')):
+            ancestor = self.command(['git', 'merge-base', '--is-ancestor', 'origin/' + base, self.values['commit']], check=False)
+            if ancestor.returncode == 0:
+                held = next((layer for layer in layers if layer['pr'] == candidate['number']), None)
+                if held is not None and (held['branch'] != candidate['head'] or held['head'] != candidate['sha'] or
+                                         held.get('held_on') != {'pr': parent['number'], 'branch': parent['head']}):
+                    raise StackError('checked held layer conflicts with its pinned commit or parent')
+                if resolve_head(candidate['head']) != candidate['sha']:
+                    raise StackError('checked held layer differs from fetched branch head')
+                if held is None:
+                    held = {'branch': candidate['head'], 'pr': candidate['number'], 'head': candidate['sha'],
+                            'base': parent['head'], 'linked': False, 'held_on': {'pr': parent['number'], 'branch': parent['head']}}
+                    layers.append(held)
+                    self.write(metadata)
+                return {'result': 'held', 'held_on': held['held_on']}
+            if ancestor.returncode != 1:
+                raise StackError('cannot determine stack top ancestry')
         recorded = next((layer for layer in layers
                          if layer['pr'] == self.values['pr_number'] or layer['branch'] == self.values['branch']), None)
         if recorded is not None:
@@ -240,10 +391,12 @@ class Linker:
             if selected_head != recorded_head:
                 raise StackError('recorded stack top differs from the fetched branch head')
             if recorded['linked']:
+                self.verify_trunk_merge(metadata['trunk'], selected_head)
                 if metadata != original:
                     self.write(metadata)
-                return {'result': 'stacked', 'top': layers[-1], 'stack_number': metadata.get('stack_number')}
-            if recorded is not layers[-1]:
+                return {'result': 'stacked', 'top': next(layer for layer in reversed(layers) if layer['linked']),
+                        'stack_number': metadata.get('stack_number')}
+            if any(not entry.get('held_on') for entry in layers[layers.index(recorded) + 1:]):
                 raise StackError('checked unlinked layer is not the next stack layer')
             base = recorded['base']
             recorded_head = resolve_head(base)
@@ -262,20 +415,55 @@ class Linker:
         if (lean or not layers) and candidate['base'] != base:
             raise StackError(f"pull request base {candidate['base']} differs from stack top {base}")
         new = recorded or {'branch': self.values['branch'], 'pr': self.values['pr_number'], 'head': self.values['commit'], 'base': base, 'linked': False}
+        if not has_passed and recorded is None:
+            new['base_head'] = recorded_head
+        self.verify_trunk_merge(metadata['trunk'], self.values['commit'])
+        children = []
+        next_parent = new
+        while True:
+            matches = [entry for entry in layers if entry.get('held_on', {}).get('pr') == next_parent['pr']]
+            if len(matches) > 1:
+                raise StackError('multiple held children share one parent')
+            if not matches:
+                break
+            child = matches[0]
+            child_pull = next((pull for pull in pulls if pull['number'] == child['pr']), None)
+            if (not child_pull or child_pull['draft'] or child_pull['head'] != child['branch'] or
+                    child_pull['sha'] != child['head'] or resolve_head(child['branch']) != child['head']):
+                raise StackError('held child is missing, draft or differs from its pinned commit')
+            if self.command(['git', 'merge-base', '--is-ancestor', next_parent['head'], child['head']], check=False).returncode:
+                raise StackError('held child does not contain its parent')
+            children.append(child)
+            next_parent = child
+        if children and lean:
+            if recorded is None:
+                insertion = next((i for i, entry in enumerate(layers) if entry.get('held_on')), len(layers))
+                layers.insert(insertion, new)
+            self.write(metadata)
+            return {'result': 'stacked', 'top': new, 'stack_number': metadata.get('stack_number')}
+        if children:
+            layers[:] = [entry for entry in layers if entry not in children]
+            if recorded is None:
+                insertion = next((i for i, entry in enumerate(layers) if entry.get('held_on')), len(layers))
+                layers.insert(insertion, new)
+                recorded = new
+            insertion = layers.index(new) + 1
+            layers[insertion:insertion] = children
         pending, stack_number = [], metadata.get('stack_number')
         if not lean and layers:
-            pending = [entry for entry in layers if not entry['linked']]
+            pending = [entry for entry in layers if not entry['linked'] and (not entry.get('held_on') or entry in children)]
             if new not in pending and not new['linked']:
                 pending.append(new)
         # Layer 0 alone cannot form a stack (gh stack link needs two PRs): it waits unlinked until layer 1 links with it.
         if not lean and layers and (stack_number is not None or len(pending) > 1):
-            if stack_number is None:
-                self.command(['gh', 'stack', 'link', '--base', metadata['trunk']] + [str(entry['pr']) for entry in pending])
+            if stack_number is None or children:
+                link_layers = [entry for entry in layers if entry['linked'] or entry in pending]
+                self.command(['gh', 'stack', 'link', '--base', metadata['trunk']] + [str(entry['pr']) for entry in link_layers] + ([] if new in layers else [str(new['pr'])]))
             else:
                 for entry in pending:
                     self.command(['gh', 'stack', 'link', str(stack_number), str(entry['pr'])])
             hosted = self.stacks()
-            expected = [entry['pr'] for entry in layers]
+            expected = [entry['pr'] for entry in layers if entry['linked'] or entry in pending]
             if new not in layers:
                 expected.append(new['pr'])
             matches = [stack for stack in hosted if stack['base'] == metadata['trunk'] and stack['prs'] == expected
@@ -285,10 +473,14 @@ class Linker:
             metadata['stack_number'] = matches[0]['number']
             for entry in pending:
                 entry['linked'] = True
+                if entry.get('held_on'):
+                    entry['base'] = entry['held_on']['branch']
+                entry.pop('held_on', None)
         if recorded is None:
-            layers.append(new)
+            insertion = next((i for i, entry in enumerate(layers) if entry.get('held_on')), len(layers))
+            layers.insert(insertion, new)
         self.write(metadata)
-        return {'result': 'stacked', 'top': new, 'stack_number': metadata.get('stack_number')}
+        return {'result': 'stacked', 'top': children[-1] if children else new, 'stack_number': metadata.get('stack_number')}
 
 
 def rebase_steps(values, top, metadata, contained):
@@ -346,6 +538,8 @@ def main(argv=None, runner=subprocess.run, clock=time.time):
                 result = linker.execute()
             except (StackError, OSError, ValueError, TypeError, KeyError) as error:
                 result = {'result': 'stack_failed', 'evidence': str(error)}
+                if isinstance(error, LayerError):
+                    result['fix'] = error.fix
         finally:
             try:
                 linker.release()
@@ -364,7 +558,9 @@ def main(argv=None, runner=subprocess.run, clock=time.time):
     if linker is not None and linker.mode is not None:
         result.update(mode=linker.mode, lean_reason=linker.lean_reason)
     lead = (args.notify_lead if args is not None else None) or (values.get('lead') if isinstance(values, dict) else None)
-    if lead and result['result'] != 'stacked':
+    if lead and lead == os.environ.get('ATM_IDENTITY'):
+        result['notified'] = 'skipped (self)'
+    elif lead and result['result'] != 'stacked':
         try:
             notice = runner(['atm', 'send', lead,
                              'Sanity task already closed; stack handoff needs lead action: ' + json.dumps(result)],

@@ -154,8 +154,11 @@ applies them.
 
 File: `<repo>/.atm-bd/<dolt_database>.bd-cache.sqlite3` (gitignored), e.g.
 `my-team.bd-cache.sqlite3`. The name and the project id come from
-`.beads/metadata.json` (`dolt_database`, `project_id`; `$BEADS_DIR` when
-set), so locating the file starts no `bd` process. Missing or invalid
+the configured beads directory’s `metadata.json` (`dolt_database`, `project_id`),
+so locating the file starts no `bd` process. By default the beads directory is
+`<repo>/.beads` in the planning repository, including when a phase specifies a
+separate code checkout. An explicit `beads_dir` argument overrides that default;
+the caller’s `BEADS_DIR` environment variable does not. Missing or invalid
 metadata is `BD_CACHE.NO_DATABASE`. WAL mode, busy timeout 5 s,
 `PRAGMA user_version` = cache schema version (3). A file with another
 nonzero version is refused (`BD_CACHE.SCHEMA_VERSION`); version 0 is
@@ -323,10 +326,12 @@ root closes.
 
 ## Cron module (`bd_cache_cron.py`, ADR-069)
 
-One schedule per repository, started from the beads root with
-`custom = {"team": <ATM team of the phase leads>}`; `TIMEOUT_MS` 2500,
-`CRON_TIMEOUT_MS` 30000. Phases are `.atm-bd/phase-*.toml` (`root`, `lead`);
-a phase is active while its root bead is not closed (uncached roots are read
+One schedule per repository, started from the beads root. The optional
+`custom.phases` list limits the phase names handled by a tick; it does not
+select a team. Phase `root`, `lead` and `team` values come from
+`.atm-bd/phase-*.toml`, with `team` falling back to `.atm.toml`'s
+`[atm].default_team`. `TIMEOUT_MS` is 2500 and `CRON_TIMEOUT_MS` is 30000.
+A phase is active while its root bead is not closed (uncached roots are read
 in one `bd list --id`).
 
 `cron.tick`, within a 25 s budget: drain with the deadline 5 s before the
@@ -334,15 +339,19 @@ budget ends; sync each active phase, deferring any not started 2 s before
 it (an uncached root that cannot be read during an outage counts as
 inactive); a sync failure whose code or `cause` is unreachable is not
 announced per phase; any other sync failure whose cause differs from
-`sync_alert:<phase>` is sent to that phase's lead, success clears it; an
-outage not yet announced is sent once to every active phase's lead (every
-configured lead when none is known active), then marked; every escalated entry with no
-`announced_at` is sent to its phase's lead with the `resolve` command, then
-marked. Messages go through `atm send <lead>@<team> --team tool` as `atm-bd@tool`
-(the installer's member; `cron@tool` is atm's daemon-owned scheduler principal and refuses ordinary sends).
-Any message not delivered (or an entry whose phase has no lead) makes the
-reply `refused` with the list, and is retried next tick; otherwise
-`pass-through`. Missing `custom.team` is refused.
+`sync_alert:<phase>` is sent to that phase's lead at the configured team,
+success clears it; an outage not yet announced is sent once to every active
+phase recipient (every configured phase recipient when none is known active),
+then marked; every escalated entry with no `announced_at` is sent to its
+phase's lead with the `resolve` command, then marked. The recipient team comes
+from `.atm-bd/phase-<phase>.toml`'s `team`, falling back to
+`.atm.toml`'s `[atm].default_team`. Messages go through
+`atm send <lead>@<phase-team> --as <tool_identity>`; `tool_identity` comes from
+`.claude/project/atm-bd-orchestration.yaml`, defaulting to `atm-bd@tool`
+according to ADR-066. The cron's `custom` object may limit `phases`; it does
+not select the recipient team or sender identity. Any message not delivered
+(or an entry whose phase has no lead) makes the reply `refused` with the list,
+and is retried next tick; otherwise `pass-through`.
 
 `cron.stop`: stop when no phase is active and no entry is pending or
 escalated-unannounced. `doctor`: `status`, with escalated entries as findings.
@@ -365,7 +374,7 @@ Exit 0 ok; 2 usage; 3 typed error `{ok:false, code, detail, fix, ...}`.
 | code | meaning | fix carried |
 |---|---|---|
 | `BD_CACHE.BD_UNAVAILABLE` | `bd` timed out or could not start | an outage before a write (no attempt counted); a timed-out write retries |
-| `BD_CACHE.NO_DATABASE` | no readable `dolt_database`/`project_id` in metadata.json | run from the beads root or set `BEADS_DIR` |
+| `BD_CACHE.NO_DATABASE` | no readable `dolt_database`/`project_id` in metadata.json | run from the configured beads repository root after `bd init`, or repair its `.beads/metadata.json` |
 | `BD_CACHE.WRONG_DATABASE` | file's recorded project id differs | move the file aside |
 | `BD_CACHE.NOT_FOUND` | bead in neither cache nor `bd` | check the bead id |
 | `BD_CACHE.BD_VERSION_FAILED` / `BD_SCHEMA_FAILED` | backend check failed | install `bd` / transient |
@@ -411,7 +420,7 @@ the Rust binary and the reverse.
    port every case in `tests/test_bd_cache.py` (44 tests) and
    `tests/test_bd_cache_cron.py` (13 tests, real cache with the fake runner and an
    injected sender): file name from
-   metadata.json and `BEADS_DIR`, NO_DATABASE, WRONG_DATABASE, schema change
+   configured metadata.json, explicit `beads_dir` and an ignored caller `BEADS_DIR`, NO_DATABASE, WRONG_DATABASE, schema change
    rebuilds rows and keeps the journal, first check keeps rows, model_current,
    BD_CONTRACT on a bad row with no partial store, one batched pre-read,
    unknown dep type refused, not-found escalation, miss-once, overlay

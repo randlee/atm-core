@@ -24,6 +24,7 @@ class FakeBd:
     def __init__(self):
         self.rows = {}
         self.calls = []
+        self.environments = []
         self.fail = []  # (predicate, outcome) consumed in order; outcome = returncode int or exception
         self.tick = 0
         self.schema = SCHEMA_TEXT
@@ -52,6 +53,7 @@ class FakeBd:
 
     def __call__(self, command, **kwargs):
         self.calls.append(command)
+        self.environments.append(kwargs.get("env"))
         for index, (predicate, outcome) in enumerate(self.fail):
             if predicate(command):
                 del self.fail[index]
@@ -155,10 +157,80 @@ def test_missing_metadata_is_typed(tmp_path):
     assert error.value.code == "BD_CACHE.NO_DATABASE"
 
 
-def test_beads_dir_env_names_the_database(tmp_path, monkeypatch):
-    workspace(tmp_path / "elsewhere", database="otherdb") if (tmp_path / "elsewhere").mkdir() is None else None
-    monkeypatch.setenv("BEADS_DIR", str(tmp_path / "elsewhere" / ".beads"))
-    assert bc.cache_path(tmp_path).name == "otherdb.bd-cache.sqlite3"
+def test_beads_dir_environment_does_not_select_the_database(tmp_path, monkeypatch):
+    workspace(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    workspace(elsewhere, database="otherdb")
+    monkeypatch.setenv("BEADS_DIR", str(elsewhere / ".beads"))
+    assert bc.cache_path(tmp_path).name == "testdb.bd-cache.sqlite3"
+    assert bc.cache_path(tmp_path, beads_dir=elsewhere / ".beads").name == "otherdb.bd-cache.sqlite3"
+    cache = bc.BdCache(tmp_path, runner=FakeBd())
+    assert cache.database == "testdb"
+    cache.db.close()
+    explicit = bc.BdCache(tmp_path, runner=FakeBd(), beads_dir=elsewhere / ".beads")
+    assert explicit.database == "otherdb"
+    explicit.db.close()
+
+
+def test_backend_reads_bind_repository_beads_dir_despite_conflicting_environment(tmp_path, monkeypatch):
+    workspace(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    workspace(elsewhere, database="otherdb")
+    monkeypatch.setenv("BEADS_DIR", str(elsewhere / ".beads"))
+    bd = FakeBd()
+    bd.add("b1")
+    cache = bc.BdCache(tmp_path, runner=bd)
+
+    cache.sync("x")
+
+    assert bd.calls and all(env["BEADS_DIR"] == str(tmp_path / ".beads") for env in bd.environments)
+    cache.db.close()
+
+
+def test_backend_drain_writes_bind_explicit_beads_dir_despite_conflicting_environment(tmp_path, monkeypatch):
+    workspace(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    workspace(elsewhere, database="otherdb")
+    monkeypatch.setenv("BEADS_DIR", str(tmp_path / ".beads"))
+    bd = FakeBd()
+    bd.add("b1")
+    cache = bc.BdCache(tmp_path, runner=bd, beads_dir=elsewhere / ".beads")
+    cache.write("b1", "close", {"reason": "done"}, idem_key="k1", actor="san")
+
+    report = cache.drain()
+
+    expected = str(elsewhere / ".beads")
+    assert report["applied"] == [1]
+    assert any(command[:3] == ["bd", "close", "b1"] for command in bd.calls)
+    assert bd.calls and all(env["BEADS_DIR"] == expected for env in bd.environments)
+    cache.db.close()
+
+
+def test_no_phase_uses_planning_repository_beads_dir_with_code_checkout(tmp_path, monkeypatch):
+    workspace(tmp_path)
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    workspace(checkout, database="configureddb")
+    settings = tmp_path / ".atm-bd"
+    settings.mkdir()
+    (settings / "phase-x.toml").write_text('code_checkout = "checkout"\n')
+
+    called = []
+    resolve = bc.phase_settings_module.beads_directory
+
+    def phase_settings_beads_dir(root, phase=None):
+        called.append((Path(root), phase))
+        return resolve(root, phase)
+
+    monkeypatch.setattr(bc.phase_settings_module, "beads_directory", phase_settings_beads_dir)
+    assert bc.database_identity(tmp_path) == ("testdb", "p-1")
+    assert called == [(tmp_path, None)]
+    cache = bc.BdCache(tmp_path, runner=FakeBd())
+    assert cache.database == "testdb"
+    cache.db.close()
 
 
 def test_file_from_another_project_is_refused(world, tmp_path):
