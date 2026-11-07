@@ -1,0 +1,13 @@
+plan = "docs/plans/phase-bl.jsonl"
+root = "atm-phase-bl"
+integration_branch = "integrate/phase-bl"
+lead = "team-lead"
+
+[templates]
+dev = ".claude/skills/atm-bd-orchestration/templates/dev-template.xml.j2"
+dev_fix = ".claude/skills/atm-bd-orchestration/templates/dev-fix.xml.j2"
+fix = ".claude/skills/atm-bd-orchestration/templates/fix-assignment.xml.j2"
+sanity = ".claude/skills/atm-bd-orchestration/templates/dev-sanity-template.xml.j2"
+qa = ".claude/skills/atm-bd-orchestration/templates/qa-template.xml.j2"
+plan_review = ".claude/skills/atm-bd-orchestration/templates/plan-review-template.xml.j2"
+review = ".claude/skills/atm-bd-orchestration/templates/review-template.xml.j2"
