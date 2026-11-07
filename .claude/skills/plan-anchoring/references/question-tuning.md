@@ -1,6 +1,6 @@
 ---
 name: question-tuning
-version: 0.6.1
+version: 0.9.2
 description: When and how to replace the generic Jev questions with anchor-specific wording, where the overrides live, how to test a question set with fixtures and known beads before trusting it, and when to stop tuning.
 ---
 
@@ -51,6 +51,27 @@ its canonical JSON SHA-256 and semantic case count; do not require these format
 identities to match or relabel the frozen corpus. Its legacy expected role
 `atomicity` corresponds to the rubric's `single_constraint` role.
 
+For a disputed result on an approved anchor after calibration, delegate
+`operation: triage`, `gate: testability` through
+`templates/anchor-tuning-review-feedback.md.j2`. Pass the actual request and raw
+response, the disputed rubric role ID, the five-role sealed rubric, and the
+approved locked anchor and fixtures. The evaluator may return `anchor_defect`
+with a clarity recommendation or `question_defect` with authority for reopening
+the affected rubric tournament. An anchor defect keeps the rubric digest
+unchanged. Insufficient evidence or low confidence alone produces
+`EVIDENCE.INCOMPLETE`; adjudication never waives the rubric or confidence rule.
+The plan-independent calibration corpus remains frozen and separate from this
+single-anchor diagnosis.
+
+Testability triage binds the exact sealed questions to the actual request and
+all five valid raw answers. `review.source_digest` hashes the canonical JSON
+`canonical_request.state.anchor` object (`statement`, `quote`, `scope`), which
+must match a locked authority record with nonempty approved `pass` and `fail`
+fixture arrays. The authority's record digest hashes canonical JSON records;
+the intent digest hashes its UTF-8 `content`. Both result digest fields retain
+the actual rubric seal: triage diagnoses, and a separate tournament changes
+questions. Planning/development payloads retain their existing contracts.
+
 ## Who tunes
 
 The planner never tunes questions. It launches the harness-specific
@@ -84,9 +105,17 @@ An override has the shape of the default set and contains only the questions to 
 - **Per anchor, per gate, in the question bead** (preferred): the fenced
   `json` block in the plan-questions or dev-questions bead
   (`bead-layout.md`). Use the tracker selected at the orchestration boundary:
-  `bd update <id> --body-file <file>` or the equivalent `br update` operation.
+  `bd update <id> --body-file <file>`.
 - **In the record**: `question_overrides.plan` / `.dev` in `anchors.json`, for a plan with no beads. The bead wins if both exist.
 - **For a whole plan**: a complete alternative set passed with `--questions <file>`. Rare.
+
+## Extra questions
+
+Extra questions add to the set; they never replace or gate. Pass a JSONL file with `--extra-questions <file>` (repeatable): one question per line, `{"id": "...", "type": "choice", "instructions": "...", "criteria": {"yes": "...", "no": "...", "unclear": "..."}}`. Each is asked in the same request as the gate questions and its answer is recorded with the cell, so triage can read why a cell failed (for example: does the item own the requirement, or only consume it?) without a second run. `decide()` ignores them. An `--answers-file` fixture may omit them; a missing extra answer is skipped, while a missing gate answer or an unknown id is still refused.
+
+### Default triage questions
+
+The planning gate adds five measured triage questions by default (`owns`, `specific`, `stated`, `paraphrase`, `partial`), with routing rules in `rules.json` and the evidence in the folder's `README.md`. The installer seeds them once into `.sc/plan-anchor/triage/` in the repository; the repository owns that folder: edit, extend or delete the files, and later installs never overwrite them. `judge` reads `.sc/plan-anchor/triage/plan-questions.jsonl` when present, else the copy shipped under `assets/triage/`. Pass `--no-triage-questions` to skip them. The development gate has no default triage questions. Add a new default only after measurements across plans; keep an unmeasured question in the consuming repository's own file.
 
 ## How to write an anchor-specific question
 
@@ -186,7 +215,7 @@ contract reports `HISTORY.PREDECESSOR` when that object is absent.
 Authority record `id` and history `anchor_id` preserve nonempty evaluator IDs,
 including REQ/ADR source references and ANC IDs above 999. Source-specific
 record validation remains the evaluator's responsibility.
-Markdown and `bd`/`br` copies store byte-identical canonical JSON and SHA-256;
+Markdown and `bd` copies store byte-identical canonical JSON and SHA-256;
 paths, tracker IDs/revisions, timestamps that differ by source, credentials, and
 source kind remain outside it as local bindings. A v1 result can become a v2
 seal only through digest-verified offline re-evaluation that preserves the

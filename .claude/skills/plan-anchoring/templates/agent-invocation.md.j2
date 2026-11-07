@@ -25,4 +25,5 @@ Invoke the resolved `{{ runtime.agent }}` definition at `{{ runtime.path }}` wit
 
 Accept exactly one fenced JSON result. Save the response unchanged and validate
 it with `anchor_runner_contract.py validate-fence --kind result --file
-<response-file> --correlation-id <correlation-id>` before using its data.
+<response-file> --correlation-id <correlation-id>`; use its data only when it
+reports `data.valid: true` (`data.valid: false` names the `violation`).

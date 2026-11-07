@@ -40,6 +40,22 @@ to dispatch newly unblocked work. A refused ATM task leaves its bead open
 with a note. Rejected completed work is reopened or represented by a child
 bead.
 
+## Sanity daemon-hook rollout
+
+For phases with the sanity-only `task.close` hook registered, sanity completes
+with `atm task close <sanity-task-id> completed --template
+.claude/skills/atm-bd-orchestration/templates/sanity-task-close.md.j2 --vars
+<selected-vars.json>`. This replaces the standalone close-script invocation for
+sanity in those phases. Dev/fix/QA close processing is unchanged. Validation
+errors return to the caller and escalate to phase-lead with an owner and recovery
+action; failed bead writes create a durable
+repair assignment before the original sanity task closes. The repair agent owns
+retrying until the bead operations succeed. Required bead data belongs to
+`bd-validation`; this close path has no commit-pin prerequisite. The hook and
+its unit tests are installed together by `atm-bd-integration`; atm-core is the
+test installation. See
+[the local hook contract](../.claude/skills/atm-bd-orchestration/scripts/SANITY-CLOSE-HOOK.md).
+
 ## Task Commands
 
 The task surface is a closed set:

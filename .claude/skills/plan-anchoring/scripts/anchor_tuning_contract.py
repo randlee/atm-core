@@ -2,10 +2,13 @@
 """Deterministic relational checks for anchor-tuning request/result contracts.
 
 Contract violations are returned as ``Err(ToolError)`` values (see
-``result.py``). The CLI prints one ``{success, data, error}`` JSON envelope:
-exit 0 with ``data = {"valid": true, "sha256": ...}`` when the object passes,
-exit 2 with a typed ``error`` for a violation, a missing field, unreadable or
-non-JSON input, or an unexpected failure (``SCRIPT.INTERNAL``).
+``result.py``). The CLI prints one ``{success, data, error}`` JSON envelope.
+A file that was read and checked exits 0, valid or not: ``data = {"valid":
+true, "sha256": ...}`` when the object passes, ``data = {"valid": false,
+"violation": {"code", "message"}}`` for a contract violation, a missing field,
+a non-object or non-JSON content. Exit 2 means the check could not run:
+unreadable input (``SCRIPT.IO``), bad arguments (``VALIDATION.INPUT``), or an
+unexpected failure (``SCRIPT.INTERNAL``). There is no exit 1.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from result import Err, Ok, Result, ToolError, err  # noqa: E402
+from result import Err, Ok, Result, ToolError, err, run_main, utf8_stdio  # noqa: E402
 
 
 FORBIDDEN_FIELDS = {"desired_verdict", "requested_disposition", "proposed_question_text"}
@@ -117,7 +120,12 @@ def validate_request(request: dict) -> Check:
         else:
             return validate_history(request["tuning_history"])
     elif operation == "triage":
-        return validate_questions(request["gate"], request["sealed_question_set"])
+        checked = validate_questions(request["gate"], request["sealed_question_set"])
+        if isinstance(checked, Err):
+            return checked
+        if request["gate"] == "testability":
+            return validate_testability_triage(request)
+        return OK
     return OK
 
 
@@ -132,6 +140,60 @@ def validate_questions(gate: str, sealed: dict) -> Check:
     for phrase in FORBIDDEN_QUESTION_META:
         if phrase in rendered:
             return err("TOURNAMENT.QUESTION_META", f"production question contains {phrase!r}")
+    return OK
+
+
+def validate_testability_triage(request: dict) -> Check:
+    """Bind a disputed rubric response to its approved source and exact seal."""
+    authority = request["authority"]
+    records = authority["anchors"]["records"]
+    if not records:
+        return err("VALIDATION.AUTHORITY", "testability triage requires an approved locked anchor")
+    for record in records:
+        fixtures = record.get("fixtures")
+        if record.get("state") != "locked" or not isinstance(fixtures, dict) or any(
+            not isinstance(fixtures.get(kind), list) or not fixtures[kind]
+            or any(not isinstance(text, str) or not text.strip() for text in fixtures[kind])
+            for kind in ("pass", "fail")
+        ):
+            return err("VALIDATION.FIXTURES", "testability triage requires locked pass/fail fixture pairs")
+    intent = authority["intent"]
+    if intent["sha256"] != hashlib.sha256(intent["content"].encode("utf-8")).hexdigest():
+        return err("TRIAGE.AUTHORITY_DIGEST", "intent text digest mismatch")
+    if authority["anchors"]["sha256"] != sha256(records):
+        return err("TRIAGE.AUTHORITY_DIGEST", "anchor records digest mismatch")
+    review = request["review"]
+    if review["role"] not in ROLE_IDS["testability"]:
+        return err("VALIDATION.ROLE", "testability triage requires a rubric role")
+    canonical = review["canonical_request"]
+    if canonical.get("questions") != request["sealed_question_set"]["questions"]:
+        return err("TRIAGE.REQUEST_QUESTIONS", "review request differs from sealed rubric")
+    state = canonical.get("state")
+    source = state.get("anchor") if isinstance(state, dict) else None
+    if not isinstance(source, dict) or set(source) != {"statement", "quote", "scope"} or any(
+        not isinstance(source.get(key), str) or not source[key].strip()
+        for key in ("statement", "quote", "scope")
+    ):
+        return err("TRIAGE.SOURCE", "canonical request must contain the complete source anchor")
+    if review["source_digest"] != sha256(source):
+        return err("TRIAGE.SOURCE_DIGEST", "source anchor digest mismatch")
+    if not any(all(source[key] == record.get(key) for key in ("statement", "quote", "scope")) for record in records):
+        return err("TRIAGE.SOURCE_AUTHORITY", "source anchor is not in the approved authority")
+    answers = review["raw_response"].get("answers")
+    if not isinstance(answers, dict) or set(answers) != ROLE_IDS["testability"]:
+        return err("TRIAGE.RESPONSE", "raw response must contain all five rubric answers")
+    for answer in answers.values():
+        if not isinstance(answer, dict) or answer.get("type", "choice") != "choice" or answer.get("choice") not in ("yes", "no", "unclear"):
+            return err("TRIAGE.RESPONSE", "raw response has an invalid choice answer")
+        confidence = answer.get("confidence")
+        probabilities = answer.get("probabilities")
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
+            return err("TRIAGE.RESPONSE", "raw response confidence must be a probability")
+        if not isinstance(probabilities, dict) or set(probabilities) != {"yes", "no", "unclear"} or any(
+            isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1
+            for value in probabilities.values()
+        ) or abs(sum(probabilities.values()) - 1) > 0.01 * len(probabilities):
+            return err("TRIAGE.RESPONSE", "raw response probabilities are invalid")
     return OK
 
 
@@ -250,11 +312,23 @@ def validate_result(result: dict) -> Check:
         checked = validate_questions(data.get("gate", "planning"), data["sealed_question_set"])
         if isinstance(checked, Err):
             return checked
-        if data["disposition"] == "plan_violation" and (
+        gate = data.get("gate", "planning")
+        allowed = {"anchor_defect", "question_defect"} if gate == "testability" else {"plan_violation", "question_defect"}
+        if data["disposition"] not in allowed:
+            return err("TRIAGE.DISPOSITION", "disposition does not apply to this gate")
+        expected_action = "reopen_affected_tournament" if data["disposition"] == "question_defect" else "unchanged"
+        if data["question_action"] != expected_action:
+            return err("TRIAGE.QUESTION_ACTION", "question action does not match disposition")
+        if gate == "testability":
+            if data["sealed_question_set_digest_before"] != data["sealed_question_set"]["digest"]:
+                return err("TRIAGE.QUESTION_DIGEST", "triage must cite the actual rubric seal")
+            if data["sealed_question_set_digest_after"] != data["sealed_question_set_digest_before"]:
+                return err("TRIAGE.DIGEST_CHANGED", "testability triage diagnoses; a separate tournament changes questions")
+        if data["disposition"] in ("plan_violation", "anchor_defect") and (
             data["sealed_question_set_digest_before"]
             != data["sealed_question_set_digest_after"]
         ):
-            return err("TRIAGE.DIGEST_CHANGED", "plan_violation changed questions")
+            return err("TRIAGE.DIGEST_CHANGED", "accurate failure changed questions")
         return OK
     else:
         return err("VALIDATION.OPERATION", "unknown result operation")
@@ -270,13 +344,26 @@ def _emit(value: dict) -> None:
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
 
 
+def _invalid(error: ToolError) -> Result[dict, ToolError]:
+    """A completed check that found a violation: Ok with data.valid false, exit 0."""
+
+    return Ok({"valid": False, "violation": {"code": error.code, "message": error.message}})
+
+
 def _check_file(kind: str, path: pathlib.Path) -> Result[dict, ToolError]:
-    """Read, decode and check one contract file. Raises only for unexpected failures."""
+    """Read, decode and check one contract file. Err only when the file cannot be read; raises only for unexpected failures."""
 
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
         return err("SCRIPT.IO", "input could not be read")
+    checked = _check_text(kind, text)
+    if isinstance(checked, Err):
+        return _invalid(checked.error)
+    return checked
+
+
+def _check_text(kind: str, text: str) -> Result[dict, ToolError]:
     try:
         value = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -292,11 +379,27 @@ def _check_file(kind: str, path: pathlib.Path) -> Result[dict, ToolError]:
     return Ok({"valid": True, "sha256": sha256(value)})
 
 
+class _UsageError(Exception):
+    pass
+
+
+class _JsonArgumentParser(argparse.ArgumentParser):
+    """Usage errors become a VALIDATION.INPUT envelope (exit 2) instead of argparse's text on stderr."""
+
+    def error(self, message):  # argparse hook; never returns
+        raise _UsageError(f"{self.prog}: {message}")
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
+    parser = _JsonArgumentParser(prog="anchor_tuning_contract.py")
     parser.add_argument("kind", choices=("request", "result"))
     parser.add_argument("path", type=pathlib.Path)
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except _UsageError as exc:
+        _emit({"success": False, "data": None, "error": ToolError(
+            "VALIDATION.INPUT", str(exc), "Run 'anchor_tuning_contract.py --help' for the accepted arguments.").to_json()})
+        return 2
     try:
         outcome = _check_file(args.kind, args.path)
     except Exception as exc:  # noqa: BLE001 - the CLI boundary: a JSON error object beats a traceback
@@ -310,4 +413,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run_main(main))

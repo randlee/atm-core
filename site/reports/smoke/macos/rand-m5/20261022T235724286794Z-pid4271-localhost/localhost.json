@@ -1,0 +1,330 @@
+{
+  "feature": "localhost",
+  "host": "rand-m5",
+  "platform": "macos",
+  "run_id": "20261022T235724286794Z",
+  "status": "PASS",
+  "source_revision": "a97c604db6df8bebb31a305d2f20e3c41aedb329",
+  "cases": [
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 1
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RGP6QDYXD7W8Z364GC95",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 1
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RGR0RJADYDVS4RFP75HS",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 1
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RGSRZ0SJD76YJPG31Q68",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 1
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 2
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RGXK79CT3AEZQQF47ABW",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 2
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RGZEVYHZCQ1J5WCPB12R",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 2
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RH15NKBYA09FNGV7VRF3",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 2
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 3
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RH509F45RXFZ7E0ZHBTY",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 3
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RH6SFC24SFZWEPDQKVRF",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 3
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RH8JMTS1JJ88QXJXHBZP",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 3
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 4
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RHCCTB6H5ZG5NR9KXG24",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 4
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RHE0N8VD9VTT4JKP2713",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 4
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RHFR4XX9JP2EZCMCYYTJ",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 4
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 5
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RHKYEQ2FDYB4FK8GQ0VE",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 5
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RHNMN4313PW2DW3VM2GP",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 5
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RHQ99X34089Z4CG12QPZ",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 5
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 6
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RHV3S7201A9JW10YX3RA",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 6
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RHX8ZA7K29VJRYJWCT2B",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 6
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RHYZ8FA0GD1DS8K52KTF",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 6
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 7
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RJ2S6QJ7MRNEVCRGYETH",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 7
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RJ4E10K08F267WRAMKJJ",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 7
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RJ63K22PQAJM5EHM3R80",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 7
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 8
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RJ9XHFM7DJ6TSW0RGSM1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 8
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RJBRGVCBEHJ6C92DFS56",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 8
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RJDHJW2YD24XD7AJSAH1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 8
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 9
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RJHC6RG5JGXSRMT2F7R9",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 9
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RJK59K031RD9HNS6VFP1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 9
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RJMVBBY6R26V4W2YCQXX",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 9
+    },
+    {
+      "name": "doctor",
+      "status": "PASS",
+      "detail": "READY \u00b7 ATM 1.6.6 \u00b7 warnings: ATM_WARNING_HERDR_UNNAMED_AGENT_TARGET x1",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 10
+    },
+    {
+      "name": "localhost send/read/content",
+      "status": "PASS",
+      "detail": "01M5K0RJRTXT99KKVQTHYYMS9N",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 10
+    },
+    {
+      "name": "localhost requires-ack delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RJTJJ15ACZZYKNPFRNRM",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 10
+    },
+    {
+      "name": "localhost acknowledgement reply delivery/content",
+      "status": "PASS",
+      "detail": "01M5K0RJWD55VT6NMG02Y4BFN5",
+      "origin": "rand-m5",
+      "destination": "rand-m5",
+      "attempt": 10
+    }
+  ]
+}

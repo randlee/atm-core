@@ -1,6 +1,6 @@
 ---
 name: bead-layout
-version: 0.6.1
+version: 0.9.2
 description: The anchor bead tree in beads (bd), the commands to create it, labels, how question overrides live in the child beads, how agents read beads, and how reports are posted back.
 ---
 
@@ -14,7 +14,7 @@ ANC-012 anchor bead            (type decision, labels: anchor, anchor:ANC-012)
 └── dev-questions bead         (type decision, labels: anchor, anchor-questions, anchor:ANC-012, gate:dev)
 ```
 
-REQ and ADR anchors get the same tree under their own ID. Bead IDs carry the repository prefix chosen when the tracker workspace was created (`proj-a3f8`, children `proj-a3f8.1`); `bd-42` in these documents is illustrative.
+REQ and ADR anchors get the same tree under their own ID. Bead IDs carry the repository prefix chosen when the tracker workspace was created (`proj-a3f8`, children `proj-a3f8.1`); `ex-42` in these documents is illustrative.
 
 ## Creating the tree
 
@@ -61,7 +61,7 @@ Edit with `bd update <question bead> --body-file <file>`. Overrides may also liv
 
 ## How the agents read beads
 
-- `bd show <id> --json` prints a **one-element JSON array**. Text fields: `title`, `description`, `design`, `acceptance_criteria`, `notes`; an empty field is **absent**. Agents do not parse it: `python3 "$S" compose-item --show-json <file or -> --out <item.txt>` composes `# Title`, `## Description`, `## Design`, `## Acceptance criteria`, `## Notes` from what is present.
+- `"$ANCHOR_TRACKER" show <id> --json` prints a **one-element JSON array**. Text fields: `title`, `description`, `design`, `acceptance_criteria`, `notes`; an empty field is **absent**. Agents do not parse it: `python3 "$S" compose-item --show-json <file or -> --out <item.txt>` composes `# Title`, `## Description`, `## Design`, `## Acceptance criteria`, `## Notes` from what is present.
 - `bd children <id> --json` lists children with `status`, `title`, `labels`, and for closed children `close_reason` and `closed_at`. `compose-item --children-json <file>` appends `## Closed beads`, one line per closed child.
 - Question beads resolve from `anchors.json` (`beads.plan_questions` / `beads.dev_questions`) first, then `bd children <anchor bead> --json` filtered on the `gate:plan` or `gate:dev` label.
 - The fenced JSON from the question bead's `description` goes into an overrides file keyed by anchor ID, passed as `--overrides-file`; the script merges.
@@ -74,7 +74,7 @@ The planner in the main session writes beads as planning happens.
 The planning gate posts its report on the judged planning bead; the development gate on the sprint bead or the PR. Done in the main session after the agent returns:
 
 ```bash
-python3 "$S" report --run doc/plan/phase-current/anchor-runs/<run>.json --format md > "$W/report.md"
+python3 "$S" report --run "$P/anchor-runs/<run>.json" --format md > "$W/report.md"
 bd comment <bead> --file "$W/report.md"          # or: bd comment <bead> "$(cat "$W/report.md")"
 ```
 

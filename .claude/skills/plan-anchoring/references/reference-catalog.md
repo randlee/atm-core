@@ -1,5 +1,5 @@
 ---
-version: 0.6.1
+version: 0.9.2
 ---
 
 # Reference catalog
@@ -21,15 +21,14 @@ version: 0.6.1
 - `references/triage-and-iteration.md` - the run, triage, apply, re-run, diff loop and the stop conditions
 - `references/plan-size-and-shape.md` - oversized beads and phases: triage order, what Jev reads, `shape` metrics
 - `references/measured-behaviour.md` - the numbers behind every rule
-- `references/planning-gate.md` - inputs, run, exit codes, reading results
-- `references/plan-source-contract.md` - Markdown and bd/br phase discovery, parity, safe copy, and canonical Jev bodies
-- `references/development-gate.md` - inputs, evidence, run, exit codes, reading results
+- `references/planning-gate.md` - inputs, run, exit codes and the outcome field, reading results
+- `references/development-gate.md` - inputs, evidence, run, exit codes and the outcome field, reading results
 - `references/plan-anchor-questions.md` - the planning-gate question set and why it is orthogonal
 - `references/code-review-questions.md` - the development-gate question set and its evidence
 - `references/verdict-gating.md` - answers to verdicts, thresholds, coverage, diffs
 - `references/report-format.md` - the provenance-quoting report and what to do with each verdict
-- `references/jev-api.md` - endpoint, request and response, limits, retries, privacy opt-in, every flag and error code
-- `references/installation-and-troubleshooting.md` - installing python3, bd, and the API key; PATH; Codex
+- `references/jev-api.md` - endpoint, request and response, limits, retries, the `allow_remote_judge` setting, every flag and error code
+- `references/installation-and-troubleshooting.md` - installing the plugin (`install.py`), python3, bd, and the API key; tracker selection and switching; PATH; Codex
 - `references/agent-runner-contract.md` - one trusted agent resolution, strict fenced envelopes, and redacted attestation
 - `assets/questions/plan.json`, `assets/questions/dev.json`, `assets/questions/testability.json`, `assets/questions/dedupe.json` - the question wording of record
 - `assets/templates/intent.md`, `assets/templates/anchor-questions-bead.md`, `assets/examples/` - starting points and a worked example

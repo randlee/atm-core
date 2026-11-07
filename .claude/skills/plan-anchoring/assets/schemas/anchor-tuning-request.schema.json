@@ -88,7 +88,7 @@
     "diagnostic_plan": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/diagnosticPlan"}]},
     "calibration_corpus": {"$ref": "#/$defs/calibrationCorpus"},
     "template": {"oneOf": [{"$ref": "#/$defs/testabilityTemplate"}, {"$ref": "#/$defs/tuneTemplate"}, {"$ref": "#/$defs/triageTemplate"}]},
-    "sealed_question_set": {"$ref": "#/$defs/sealedQuestionSet"},
+    "sealed_question_set": {"oneOf": [{"$ref": "#/$defs/sealedQuestionSet"}, {"$ref": "#/$defs/rubricQuestionSet"}]},
     "review": {
       "type": "object",
       "additionalProperties": false,
@@ -122,8 +122,40 @@
       "not": {"anyOf": [{"required": ["acceptance_threshold"]}, {"required": ["sealed_question_set"]}, {"required": ["review"]}, {"required": ["planner_observation"]}]}
     },
     {
-      "properties": {"operation": {"const": "triage"}, "gate": {"enum": ["planning", "development"]}, "template": {"$ref": "#/$defs/triageTemplate"}},
+      "properties": {"operation": {"const": "triage"}, "gate": {"enum": ["testability", "planning", "development"]}, "template": {"$ref": "#/$defs/triageTemplate"}},
       "required": ["template", "gate", "sealed_question_set", "review", "planner_observation"],
+      "allOf": [{
+        "if": {"properties": {"gate": {"const": "testability"}}},
+        "then": {"properties": {
+          "sealed_question_set": {"$ref": "#/$defs/rubricQuestionSet"},
+          "review": {"properties": {
+            "role": {"enum": ["single_constraint", "observable", "faithful", "scoped", "self_contained"]},
+            "canonical_request": {
+              "required": ["questions", "state"],
+              "properties": {"state": {"type": "object", "required": ["anchor"], "properties": {"anchor": {"$ref": "#/$defs/sourceAnchor"}}}}
+            },
+            "raw_response": {"$ref": "#/$defs/rubricResponse"}
+          }},
+          "authority": {"properties": {"anchors": {"properties": {"records": {
+            "minItems": 1,
+            "items": {
+              "required": ["quote"],
+              "properties": {
+                "quote": {"type": "string", "minLength": 1},
+                "fixtures": {
+                  "type": "object",
+                  "required": ["pass", "fail"],
+                  "properties": {
+                    "pass": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+                    "fail": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+                  }
+                }
+              }
+            }
+          }}}}}
+        }},
+        "else": {"properties": {"sealed_question_set": {"$ref": "#/$defs/sealedQuestionSet"}}}
+      }],
       "not": {"anyOf": [{"required": ["current_questions"]}, {"required": ["candidate_minimum"]}, {"required": ["repeat_count"]}, {"required": ["acceptance_threshold"]}, {"required": ["tournament_protocol_version"]}, {"required": ["production_confidence_threshold"]}, {"required": ["confidence_reference_threshold"]}, {"required": ["tuning_history"]}, {"required": ["diagnostic_plan"]}]}
     }
   ],
@@ -301,6 +333,65 @@
         "id": {"const": "anchor-tuning-review-feedback"},
         "version": {"const": "0.4.1"},
         "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sourceAnchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["statement", "quote", "scope"],
+      "properties": {
+        "statement": {"type": "string", "minLength": 1},
+        "quote": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "minLength": 1}
+      }
+    },
+    "rubricResponse": {
+      "type": "object", "required": ["answers"],
+      "properties": {"answers": {
+        "type": "object", "additionalProperties": false,
+        "required": ["single_constraint", "observable", "faithful", "scoped", "self_contained"],
+        "properties": {
+          "single_constraint": {"$ref": "#/$defs/choiceAnswer"},
+          "observable": {"$ref": "#/$defs/choiceAnswer"},
+          "faithful": {"$ref": "#/$defs/choiceAnswer"},
+          "scoped": {"$ref": "#/$defs/choiceAnswer"},
+          "self_contained": {"$ref": "#/$defs/choiceAnswer"}
+        }
+      }}
+    },
+    "choiceAnswer": {
+      "type": "object", "required": ["choice", "confidence", "probabilities"],
+      "properties": {
+        "type": {"const": "choice"},
+        "choice": {"enum": ["yes", "no", "unclear"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "probabilities": {
+          "type": "object", "additionalProperties": false, "required": ["yes", "no", "unclear"],
+          "properties": {
+            "yes": {"type": "number", "minimum": 0, "maximum": 1},
+            "no": {"type": "number", "minimum": 0, "maximum": 1},
+            "unclear": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        }
+      }
+    },
+    "rubricQuestionSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "questions"],
+      "properties": {
+        "digest": {"$ref": "#/$defs/sha256"},
+        "questions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["single_constraint", "observable", "faithful", "scoped", "self_contained"],
+          "properties": {
+            "single_constraint": {"$ref": "#/$defs/question"},
+            "observable": {"$ref": "#/$defs/question"},
+            "faithful": {"$ref": "#/$defs/question"},
+            "scoped": {"$ref": "#/$defs/question"},
+            "self_contained": {"$ref": "#/$defs/question"}
+          }
+        }
       }
     },
     "sealedQuestionSet": {

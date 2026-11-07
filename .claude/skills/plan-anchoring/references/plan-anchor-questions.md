@@ -1,6 +1,6 @@
 ---
 name: plan-anchor-questions
-version: 0.6.1
+version: 0.9.2
 description: The planning-gate Jev question set, what each question isolates, why the set is orthogonal, and how to word overrides.
 ---
 
@@ -15,7 +15,7 @@ One anchor and one planning bead, nothing else. The bead text is its title, desc
 ```json
 {
   "anchor": {"id": "ANC-012", "statement": "<verbatim>", "scope": "<where it applies>"},
-  "item":   {"id": "bd-42", "title": "<bead title>", "text": "<bead description and acceptance criteria>"}
+  "item":   {"id": "ex-42", "title": "<bead title>", "text": "<bead description and acceptance criteria>"}
 }
 ```
 
@@ -63,7 +63,7 @@ A typical override: for "copy the legacy crates as the starting point", `address
 
 ```bash
 python3 "$S" judge --anchors "$A" --gate plan --anchor ANC-012 \
-  --item-id bd-42 --item-title "Sprint 2 runtime" --item-file "$W/item.txt" --dry-run
+  --item-id ex-42 --item-title "Sprint 2 runtime" --item-file "$W/item.txt" --dry-run
 ```
 
 The run file's `requests[0]` is the exact body that would be sent and `totals.bytes` its size. Review it the first time an anchor is judged; run `check-fixtures --gate plan --id ANC-012` after changing wording.
