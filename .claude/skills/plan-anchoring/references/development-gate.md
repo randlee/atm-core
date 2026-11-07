@@ -1,6 +1,6 @@
 ---
 name: development-gate
-version: 0.6.1
+version: 0.9.2
 description: Running the development gate (sprint review) end to end - what evidence to pass, what Jev sees, the command and exit codes, pairing with deterministic checks, and how to read the results.
 ---
 
@@ -12,26 +12,27 @@ Judges delivered work. The same anchors are asked of an account of what was buil
 
 | Input | Source | Notes |
 | --- | --- | --- |
-| Sprint | the sprint's epic bead ID | Item ID for the run; the script lists its closed children |
+| Sprint | the sprint text the caller already has, as `item_file`: the Markdown sprint file, or `"$ANCHOR_TRACKER" show <id> --json` composed with `compose-item --show-json <file> [--children-json <file>] --for dev`, or text from the caller's context | Item ID and text for the run, unchanged; any layout is accepted |
+| Anchor tracker | `anchor_tracker.py resolve` | Passed as `anchor_tracker`; the agent resolves it again and rejects a mismatch |
 | Evidence | sprint report file, PR number or body file, test summary file | In that order; the request cap at this gate is 64,000 bytes (`jev-api.md`) and Jev reads the start most reliably (measured-behaviour.md) |
-| Anchors | `doc/plan/phase-current/anchors.json` | `locked` and `promoted` only |
+| Anchors | `$A`: `docs/plans/phase-<current>/anchors.json` | `locked` and `promoted` only |
 | Question overrides | each anchor's dev-questions bead | Fenced JSON; `{}` means defaults |
 | Script | `scripts/jev_judge.py` next to `SKILL.md`, absolute | Passed as `script` |
 
 ## What Jev sees per request
 
-One anchor and the account: the sprint bead's title and fields, `## Closed beads` (id, title, `close_reason` per closed child, composed by the script), then `## Sprint report`, `## Pull request`, `## Files changed` (names and counts from `git diff --stat`), `## Tests` (summary lines). What commands printed, never a paraphrase; no full diffs, source files, or logs.
+One anchor and the account: the sprint text as the caller passed it (with `## Closed beads`, id, title and `close_reason` per closed child, when the caller composed it from the tracker), then `## Sprint report`, `## Pull request`, `## Files changed` (names and counts from `git diff --stat`), `## Tests` (summary lines). What commands printed, never a paraphrase; no full diffs, source files, or logs.
 
 ## Run
 
 Delegate to the harness-specific `anchor-sprint-review` definition. Claude Code and Codex use their Agent tool. Cursor uses the Task tool with no model override; the registered agent pins Composer. If that subagent is not registered, stop. The agent runs once:
 
 ```bash
-python3 "$S" judge --anchors "$A" --gate dev --all --item-id <sprint epic> --item-title "<sprint title>" \
-  --item-file "$W/item.txt" [--overrides-file "$W/overrides.json"] --run-dir doc/plan/phase-current/anchor-runs
+python3 "$S" judge --anchors "$A" --gate dev --all --item-id <sprint ID> --item-title "<sprint title>" \
+  --item-file "$W/item.txt" [--overrides-file "$W/overrides.json"] --run-dir "$P/anchor-runs"
 ```
 
-Exit codes as at the planning gate: 0 passed or dry run, 1 failing or `error` verdicts with the run file written, 2 fatal.
+Exit codes as at the planning gate: 0 the run completed with an answer for every anchor (read `data.summary.pass`: false on failing verdicts, with the run file written), 2 fatal, including any anchor Jev gave no answer for (`data.run_path` names the partial run).
 
 ## Pairing with deterministic checks
 
@@ -58,6 +59,6 @@ Set a check with `add --deterministic-check` or later with `update --determinist
 | `excluded` | Not asked: the anchor's `exclude` names this item | `results[].exclusion.reason` | Nothing |
 | `error` | Jev could not be asked after retries | `results[].error.code` | Fix the cause; re-run |
 
-The gate passes when the sprint's latest run exits 0 and every returned deterministic check has been run and recorded.
+The gate passes when the sprint's latest run has `summary.pass: true` and every returned deterministic check has been run and recorded.
 
 Post the report on the sprint bead and, when there is a PR, on the PR. Compare with the previous handover using `diff`.

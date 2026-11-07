@@ -1,14 +1,16 @@
 ---
 name: agent-runner-contract
-version: 0.6.1
+version: 0.9.2
 description: Resolve one trusted harness agent, validate one fenced request and response, and write a credential-safe invocation attestation.
 ---
 
 # Agent runner contract
 
 The planner resolves a harness agent once with
-`scripts/anchor_runner_contract.py resolve`. The resolver reads the selected
-plugin root's registry and agent frontmatter as data, verifies confinement,
+`scripts/anchor_runner_contract.py resolve --install-root <folder>` (the folder
+plan-anchor was installed into: the repository or a parent folder). The resolver
+reads `<folder>/.<harness>/skills/plan-anchoring/registry.yaml` and the agent
+frontmatter as data, verifies confinement,
 regular-file status, identity, version, harness-role model, and SHA-256, and
 returns an immutable runtime descriptor. A failed supplied root or registry
 fails closed; callers do not search for another installation.
@@ -19,7 +21,9 @@ registered subagent through the **Task** tool and do not pass a model argument;
 the descriptor's `model` is `composer` for the gates and `grok[effort=high]`
 for tuning. The invocation contains
 exactly one fenced JSON request. The response must contain exactly one fenced
-JSON result and pass `validate-fence` before any follow-on action.
+JSON result, and `validate-fence` must report `data.valid: true` (exit 0)
+before any follow-on action; `data.valid: false` with `data.violation` is a
+rejected response, and exit 2 means the check itself could not run.
 
 Every result, including a tuning failure, carries top-level
 `schema_version: "1.0.0"`. This versions the shared response envelope, independently

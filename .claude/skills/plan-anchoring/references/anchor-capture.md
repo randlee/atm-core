@@ -1,6 +1,6 @@
 ---
 name: anchor-capture
-version: 0.6.1
+version: 0.9.2
 description: How the planning orchestrator detects candidate anchors, writes each one as a clear testable requirement with the user's verbatim words kept as provenance, deduplicates, and gets the user's approval before locking.
 ---
 
@@ -82,7 +82,7 @@ Record only when the user confirms or says "lock this" or "anchor this". If "loc
 
 ## Deduplication
 
-Before `add`, compare the candidate against every anchor in `anchors.md`, including REQ and ADR entries. Two anchors are duplicates when a plan that satisfies one necessarily satisfies the other. `add` refuses a candidate lexically close to an existing anchor (`ANCHOR.DUPLICATE_CANDIDATE`) and names the match; pass `--allow-similar` only after reading the match and finding a different constraint.
+Before `add`, compare the candidate against every anchor in `anchors.md`, including REQ and ADR entries. Two anchors are duplicates when a plan that satisfies one necessarily satisfies the other. `add` refuses a candidate lexically close to an existing anchor and names the match: exit 0 with `data.added: false`, `data.refused.code: ANCHOR.DUPLICATE_CANDIDATE` and `data.similar`; pass `--allow-similar` only after reading the match and finding a different constraint.
 
 For a set that has grown:
 
@@ -122,4 +122,4 @@ python3 "$S" add --anchors "$A" \
 
 ## Re-opening a plan
 
-When a planning session resumes, read `anchors.md` before the plan and say so: "Loaded 14 anchors for phase-current." The user never re-states a locked fact; if they do, it is the same anchor, not a second. If their wording now implies a different constraint, `update --statement`; if the directive itself changed, add a new anchor and retire the old.
+When a planning session resumes, read `anchors.md` before the plan and say so: "Loaded 14 anchors for phase-b." The user never re-states a locked fact; if they do, it is the same anchor, not a second. If their wording now implies a different constraint, `update --statement`; if the directive itself changed, add a new anchor and retire the old.

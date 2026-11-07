@@ -1,5 +1,5 @@
 ---
-version: 0.6.1
+version: 0.9.2
 ---
 
 # Capture and maintenance workflow
@@ -18,7 +18,7 @@ All three ID'd kinds become Jev questions and are judged the same way. Details: 
 ## Layout
 
 ```
-doc/plan/phase-current/
+docs/plans/phase-<current>/   # $P: plan_dir in .sc/plan-anchor/settings.yaml, e.g. docs/plans/phase-b
 ├── intent.md            # the overview
 ├── anchors.json         # record of truth: every anchor with provenance, status, beads, fixtures
 ├── anchors.md           # rendered from anchors.json; never hand-edited
@@ -36,14 +36,14 @@ Read `references/anchor-capture.md`. Watch for directives about how the work mus
 ### B. Lock and record
 
 ```bash
-mkdir -p doc/plan/phase-current
-[ -f doc/plan/phase-current/intent.md ] || cp "$(dirname "$S")/../assets/templates/intent.md" doc/plan/phase-current/intent.md
+mkdir -p "$P"
+[ -f "$P/intent.md" ] || cp "$(dirname "$S")/../assets/templates/intent.md" "$P/intent.md"
 python3 "$S" add --anchors "$A" --quote "<the user's exact words>" \
   --statement "<one testable requirement: subject, must/must not, action, scope>" \
   --kind directive|prohibition|structural --stated-by "<name>" --context "planning session" --summary "<short label>" \
   --scope "<bead-level signals: adds a CLI subcommand, edits Cargo.toml, touches crates/x>" \
   --deterministic-check "<diff, git log, grep or test that proves it literally>" --status locked   # first add creates anchors.json
-  # add runs the testability lint and refuses near-duplicates (ANCHOR.DUPLICATE_CANDIDATE); see references/anchor-capture.md
+  # add runs the testability lint and refuses near-duplicates (data.added false, data.refused.code ANCHOR.DUPLICATE_CANDIDATE); see references/anchor-capture.md
 python3 "$S" update --anchors "$A" --id ANC-001 --fixture-pass "<a sentence a bead would say if it satisfied this>" \
   --fixture-fail "<a sentence that would violate it>"                                              # draft, then get the user's approval
 python3 "$S" validate --anchors "$A" && python3 "$S" render --anchors "$A"

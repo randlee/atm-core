@@ -1,6 +1,6 @@
 ---
 name: verdict-gating
-version: 0.6.1
+version: 0.9.2
 description: How jev_judge.py turns independent Jev answers into one verdict per anchor and item, the role contract, thresholds, severity order, pass criteria and exit codes, coverage, run diffs, and offline fixtures.
 ---
 
@@ -32,7 +32,7 @@ An anchor whose `exclude` list names the item (`--item-id`, exact match) is not 
 
 ## From answers to a verdict
 
-Each `choice` answer gives a `choice` and a `confidence` in [0, 1]. The threshold `t` defaults to 0.6 (`--threshold`, or `PLAN_ANCHOR_CONFIDENCE_THRESHOLD`). Evaluated in order; the first match wins:
+Each `choice` answer gives a `choice` and a `confidence` in [0, 1]. The threshold `t` defaults to 0.6 (`--threshold`). Evaluated in order; the first match wins:
 
 | # | Condition | Verdict |
 | --- | --- | --- |
@@ -54,14 +54,14 @@ Contradiction outranks underspecification: a confident conflict is actionable ev
 
 ## Pass criteria and exit codes
 
-- A **run** (one item) passes when no result is `contradicted`, `not_addressed`, `asserted_only`, `underspecified`, or `error`; `excluded` passes. `judge` exits 0 on pass or dry run, 1 on a failing run (the run file is still written), 2 on a fatal error before judging.
-- The **planning gate** passes when every planning bead's latest run passes and `coverage` lists no uncovered locked anchor.
+- A **run** (one item) passes when no result is `contradicted`, `not_addressed`, `asserted_only`, `underspecified`, or `error`; `excluded` passes. `judge` exits 0 whenever the run completes with an answer for every cell and reports the outcome in `data.summary.pass` (false on a failing run or a dry run; the run file is still written); it exits 2 on a fatal error, including any cell Jev gave no answer for (an `error` cell; the partial run is written and `data.run_path` names it). The only exit codes are 0, 2 and 130.
+- The **planning gate** passes when every planning bead's latest run passes (`summary.pass`) and `coverage` lists no uncovered locked anchor.
 - The **development gate** passes when the sprint's latest run passes and each returned deterministic check has been run and recorded.
 
 ## Coverage, in code
 
 ```bash
-python3 "$S" coverage --runs doc/plan/phase-current/anchor-runs --gate plan --format md
+python3 "$S" coverage --runs "$P/anchor-runs" --gate plan --format md
 ```
 
 Takes the latest non-dry run per (gate, item), builds the anchor x item matrix, and lists anchors with no `satisfied` cell. Without `--gate`, columns are labelled `gate:item` so plan and dev verdicts are not merged. "Is ANC-012 satisfied anywhere?" is answered here, never by Jev. An anchor `not_applicable` to every bead is reported as uncovered on purpose: its scope is wrong or the plan lacks the bead that should carry it. Excluded cells show as `excluded` and are listed with their reasons (`data.excluded`); they never count as covering.
@@ -69,7 +69,7 @@ Takes the latest non-dry run per (gate, item), builds the anchor x item matrix, 
 ## Diffing runs
 
 ```bash
-python3 "$S" diff --prev anchor-runs/plan-<older>-bd-42.json --next anchor-runs/plan-<newer>-bd-42.json
+python3 "$S" diff --prev anchor-runs/plan-<older>-ex-42.json --next anchor-runs/plan-<newer>-ex-42.json
 ```
 
 Lists changed, added, and removed verdicts for the same gate and item (`RUNS.MISMATCH` otherwise), with `pass_to_fail` and `fail_to_pass` lists (`regressions` is `pass_to_fail`), and pass before and after. Movement is not correctness: on a measured tuning round every `satisfied` to `not_addressed` flip was a correction (measured-behaviour.md). `--expected <json {anchor_id: verdict}>` reports corrections and regressions relative to what is known to be right. Run it after every plan edit. Two runs of one item in the same second get distinct file names (`-2`, `-3`).
@@ -78,7 +78,7 @@ Lists changed, added, and removed verdicts for the same gate and item (`RUNS.MIS
 
 Two different things are called fixtures:
 
-- **Fixture sentences** on an anchor (`fixtures.pass`, `fixtures.fail`, set with `update --fixture-pass/--fixture-fail`): what a bead would say if it satisfied or violated the anchor. `check-fixtures --gate plan --all` sends each sentence to Jev as the item (same key and opt-in as `judge`) and reports whether it landed: pass -> `satisfied`, fail -> `not_addressed` or `contradicted`. Exit 1 on any mismatch. Use it after changing question wording.
+- **Fixture sentences** on an anchor (`fixtures.pass`, `fixtures.fail`, set with `update --fixture-pass/--fixture-fail`): what a bead would say if it satisfied or violated the anchor. `check-fixtures --gate plan --all` sends each sentence to Jev as the item (same key and `allow_remote_judge` setting as `judge`) and reports whether it landed: pass -> `satisfied`, fail -> `not_addressed` or `contradicted`. Any mismatch exits 0 with `data.pass: false` and the rows in `data.mismatches`. Use it after changing question wording.
 - **Fixture answers** (`--answers-file`): Jev-shaped answers keyed by anchor ID (or `*`), injected instead of calling Jev. They exercise the gating table, report format, coverage and diffs offline; `assets/examples/answers.fixture.json` is one, and the maintainer-only `<repository root>/tests/sc-plan-anchor/test_jev_judge.py` uses them. For `check-fixtures`, keys are `<anchor>:pass:<n>` / `<anchor>:fail:<n>`.
 
 `--dry-run` writes the exact requests, plus `totals {requests, bytes}`, to the run directory and no verdicts. Dry runs are never counted by `coverage`.

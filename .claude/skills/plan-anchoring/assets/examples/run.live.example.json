@@ -4,7 +4,7 @@
   "gate": "plan",
   "created_at": "2026-10-10T02:28:47+00:00",
   "anchors_path": "assets/examples/anchors.example.json",
-  "plan": "phase-current",
+  "plan": "phase-a",
   "item": {
     "id": "live-1",
     "title": "Sprint 2 runtime (from scratch)",
