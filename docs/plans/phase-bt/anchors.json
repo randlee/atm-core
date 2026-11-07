@@ -1,0 +1,1096 @@
+{
+  "schema": "plan-anchoring/anchors/1",
+  "plan": "phase-bt",
+  "intent_ref": "docs/plans/phase-bt/intent.md",
+  "anchors": [
+    {
+      "id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A phase plan too large for one sprint must be split into multiple sprints.",
+      "quote": "If plan is too large it MUST be split.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Split too-large plans",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The planning guide states that a plan too large must be split into multiple sprints."
+        ],
+        "fail": [
+          "The planning guide lets an oversized plan stay one sprint."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-te91",
+        "plan_questions": "atm-te91.1",
+        "dev_questions": "atm-te91.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:34+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-te91",
+            "plan_questions": "atm-te91.1",
+            "dev_questions": "atm-te91.2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The plan split must place unrelated, non-intersecting work in separate sprints so the sprint dependency graph stays short.",
+      "quote": "The split should be done to optimize horizontal waves (keep height of graph short), unrelated/un-intersecting work split into separate sprints.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Short wave graph",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "planning.md tells planners to put work items that share no files or code into separate sprints."
+        ],
+        "fail": [
+          "planning.md bundles unrelated work items that touch no common files into one sprint."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-d42v",
+        "plan_questions": "atm-d42v.1",
+        "dev_questions": "atm-d42v.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:35+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-d42v",
+            "plan_questions": "atm-d42v.1",
+            "dev_questions": "atm-d42v.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    },
+    {
+      "id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A large sprint of closely related work must be split into child beads under one dev, one child bead per background subagent.",
+      "quote": "Large sprints w/ closely related work should be split into child beads one per [background] subagent.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Child beads per subagent",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "planning.md directs that a large sprint of closely related work is split into child beads, one per background subagent."
+        ],
+        "fail": [
+          "planning.md splits a large closely related sprint into independent sibling sprints."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-u194",
+        "plan_questions": "atm-u194.1",
+        "dev_questions": "atm-u194.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:37+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-u194",
+            "plan_questions": "atm-u194.1",
+            "dev_questions": "atm-u194.2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-orchestration planning guidance must recommend child beads for concentrated pockets of closely related work managed by a single dev agent.",
+      "quote": "we are adding a new option which we want to highly recommend for efficiency.  It is important to create a well balanced plan of waves with concentrated pockets of work managed by a single dev agent",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Recommend child beads",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "planning.md recommends child beads for concentrated pockets of closely related work, each pocket managed by a single dev agent."
+        ],
+        "fail": [
+          "planning.md presents child beads as an obscure option without recommending them."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-w53l",
+        "plan_questions": "atm-w53l.1",
+        "dev_questions": "atm-w53l.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:22:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:38+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-w53l",
+            "plan_questions": "atm-w53l.1",
+            "dev_questions": "atm-w53l.2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A child bead must declare its subagent's model with the existing beads class fast, normal or frontier.",
+      "quote": "Use already defined 'fast','normal','frontier' classification in beads.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Model class per child",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Each child bead declares its subagent model as fast, normal or frontier."
+        ],
+        "fail": [
+          "Child beads declare a new model field with values opus/sonnet/haiku."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-w0y3",
+        "plan_questions": "atm-w0y3.1",
+        "dev_questions": "atm-w0y3.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:39+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-w0y3",
+            "plan_questions": "atm-w0y3.1",
+            "dev_questions": "atm-w0y3.2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sprint's dev must run each child bead with a background subagent.",
+      "quote": "I think it should be a strategy as part of planning to encourage agents to delegate work to multiple subagents (and specfically handle merging subagent work into their worktree)  when therre is a larger task.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Dev runs children",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The dev template tells the dev to run each child bead with its own background subagent."
+        ],
+        "fail": [
+          "The dev template has the lead dispatch each child bead to a separate dev agent."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-umb4",
+        "plan_questions": "atm-umb4.1",
+        "dev_questions": "atm-umb4.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:41+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-umb4",
+            "plan_questions": "atm-umb4.1",
+            "dev_questions": "atm-umb4.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    },
+    {
+      "id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Subagent work must not get its own PR; the sprint's dev must deliver one working, tested branch.",
+      "quote": "We do not need pr for subagent work.  Primary dev agent is responsible for delivering a single working tested branch.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "One branch, no subagent PRs",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Subagent work is merged into the dev's branch; only the dev's branch gets a PR."
+        ],
+        "fail": [
+          "Each subagent opens its own GitHub pull request for its child bead."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-66vl",
+        "plan_questions": "atm-66vl.1",
+        "dev_questions": "atm-66vl.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:42+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-66vl",
+            "plan_questions": "atm-66vl.1",
+            "dev_questions": "atm-66vl.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    },
+    {
+      "id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each background subagent must run focused lint and tests on its own worktree.",
+      "quote": "Additionally background sub-agents should do small focused test/lint on their worktree.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Subagent focused lint/test",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Each subagent runs a small, focused test and lint pass on its own worktree."
+        ],
+        "fail": [
+          "Subagents skip testing, or each runs the full suite on its own worktree."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-kha6",
+        "plan_questions": "atm-kha6.1",
+        "dev_questions": "atm-kha6.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:43+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-kha6",
+            "plan_questions": "atm-kha6.1",
+            "dev_questions": "atm-kha6.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    },
+    {
+      "id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sprint's dev must delegate the full lint and test run to a background fast-class agent.",
+      "quote": "Dev should delegate running full lint/test to background 'fast' agent.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Full lint/test on fast agent",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The dev template tells the dev to delegate the full lint/test run to a background fast agent."
+        ],
+        "fail": [
+          "The dev runs the full lint/test suite in its own session."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-plmh",
+        "plan_questions": "atm-plmh.1",
+        "dev_questions": "atm-plmh.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:45+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-plmh",
+            "plan_questions": "atm-plmh.1",
+            "dev_questions": "atm-plmh.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    },
+    {
+      "id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev's final rebase onto the top of the stack must happen after full lint and test pass.",
+      "quote": "Final rebase AFTER tests/lint pass.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Final rebase after green",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The dev rebases onto the top of the stack only after full lint and test pass."
+        ],
+        "fail": [
+          "The dev rebases onto the top of the stack, then runs full lint and test."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-ff88",
+        "plan_questions": "atm-ff88.1",
+        "dev_questions": "atm-ff88.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:46+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-ff88",
+            "plan_questions": "atm-ff88.1",
+            "dev_questions": "atm-ff88.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    },
+    {
+      "id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev must not rerun full lint and test after the final rebase unless the rebase required resolving conflicts in code the sprint wrote.",
+      "quote": "Rebasing on top of stack AND make sure tests/lint pass 100% are impossible to both achieve if 5-15 minutes of testing are run after rebase. I have seen agents looping over run tests <-> rebase 10+ times in a row before they can land the stack. 4e could add 'unless conflicts with code written must be resolved' or similar.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "No full rerun after rebase",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "After the final rebase the dev skips the full lint and test rerun, unless the rebase required resolving conflicts in code the sprint wrote."
+        ],
+        "fail": [
+          "After the final rebase the dev reruns the full lint and test suite."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-m1dj",
+        "plan_questions": "atm-m1dj.1",
+        "dev_questions": "atm-m1dj.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:22:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:47+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-m1dj",
+            "plan_questions": "atm-m1dj.1",
+            "dev_questions": "atm-m1dj.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    },
+    {
+      "id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev task must state in a few words that the parent bead closes after its children, with enforcement left to the bd close failure and no hook or script.",
+      "quote": "beads does NOT allow closing parent w/ open children.  This does NOT need much explaination, the agent will be told he can not close parent first so few words in task/prompt need to talk about it.  No hook/python for this at all outside of returning close fail message from failed 'bd close'.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Parent closes after children",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "The dev task text says in one short sentence that the parent bead cannot close before its children."
+        ],
+        "fail": [
+          "The dev task text spends a paragraph explaining child/parent close order."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-q2b3",
+        "plan_questions": "atm-q2b3.1",
+        "dev_questions": "atm-q2b3.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:04+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:48+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-q2b3",
+            "plan_questions": "atm-q2b3.1",
+            "dev_questions": "atm-q2b3.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    },
+    {
+      "id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint must have exactly one sanity bead, and it must name every dev bead of the sprint.",
+      "quote": "There is ONE sanity bead for all dev work.  the sanity task/bead would specify all dev beads for split.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "One sanity bead per sprint",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "A split sprint has one sanity bead covering the parent dev bead and every child bead."
+        ],
+        "fail": [
+          "The pour creates one sanity bead per child bead."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-tyf5",
+        "plan_questions": "atm-tyf5.1",
+        "dev_questions": "atm-tyf5.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:54+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:50+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-tyf5",
+            "plan_questions": "atm-tyf5.1",
+            "dev_questions": "atm-tyf5.2"
+          }
+        },
+        {
+          "at": "2026-11-07T20:36:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938) and plans no sanity beads; sprint sanity beads are atm-bt-2 scope",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938) and plans no sanity beads; sprint sanity beads are atm-bt-2 scope"
+        }
+      ]
+    },
+    {
+      "id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every dev bead, parent and child, must record its git commit so sanity can match each commit to its bead.",
+      "quote": "we should require git commit# per dev bead so sanity can coorelate commit to dev task/bead",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Commit per dev bead",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Each dev bead, parent and child, records the git commit of its work."
+        ],
+        "fail": [
+          "Only the parent dev bead records a commit; child beads have none."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-ggaq",
+        "plan_questions": "atm-ggaq.1",
+        "dev_questions": "atm-ggaq.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:55+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:51+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-ggaq",
+            "plan_questions": "atm-ggaq.1",
+            "dev_questions": "atm-ggaq.2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint must have exactly one QA bead and one QA run on the sprint's single worktree.",
+      "quote": "Single qa bead, subagents would handle all work on single worktree as single qa run.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "One QA bead per sprint",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Each sprint has exactly one QA bead, and QA is one run on the sprint's single worktree."
+        ],
+        "fail": [
+          "The pour creates a QA bead per child bead."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-p2kg",
+        "plan_questions": "atm-p2kg.1",
+        "dev_questions": "atm-p2kg.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:55+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:04+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:22:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:52+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-p2kg",
+            "plan_questions": "atm-p2kg.1",
+            "dev_questions": "atm-p2kg.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    },
+    {
+      "id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Docs, templates and prompts under atm-bd-orchestration must not mention plan-anchoring.",
+      "quote": "don't mention plan-anchoring in atm-bd",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "No plan-anchoring mention",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "grep -ri plan-anchoring plugins/atm-bd-orchestration returns nothing",
+      "fixtures": {
+        "pass": [
+          "atm-bd-orchestration templates and docs make no reference to plan-anchoring."
+        ],
+        "fail": [
+          "The dev template tells the dev to keep bead text under the plan-anchoring cap."
+        ]
+      },
+      "question_overrides": {},
+      "version": 2,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-nmob",
+        "plan_questions": "atm-nmob.1",
+        "dev_questions": "atm-nmob.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:55+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:54+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-nmob",
+            "plan_questions": "atm-nmob.1",
+            "dev_questions": "atm-nmob.2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Prompts and task text for the subtask strategy must contain only necessary words.",
+      "quote": "in general prompts/tasks must be written with NO unnecessary words.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "summary": "Necessary words only",
+      "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
+      "deterministic_check": "",
+      "fixtures": {
+        "pass": [
+          "Every sentence this sprint adds to a prompt or task template for child beads carries only necessary words."
+        ],
+        "fail": [
+          "The dev template adds a paragraph explaining why child beads exist."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-eynt",
+        "plan_questions": "atm-eynt.1",
+        "dev_questions": "atm-eynt.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-07T19:34:55+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:04+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:22:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:32:55+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-eynt",
+            "plan_questions": "atm-eynt.1",
+            "dev_questions": "atm-eynt.2"
+          }
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        }
+      ]
+    }
+  ]
+}
