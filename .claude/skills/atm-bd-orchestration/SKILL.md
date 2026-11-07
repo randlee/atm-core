@@ -157,8 +157,9 @@ atm send <agent> "Operate under <prompt> for every task until told otherwise. Re
 
 Background agents (a subagent or child agent, whichever the harness provides)
 receive a bead piped into their prompt as in `orchestrating.md` ("Passing A
-Bead To A Background Agent"). Only these background subagents never run `bd` and never write to beads
-or ATM; teammates and the lead write beads as the work happens.
+Bead To A Background Agent"). A background subagent is not assumed to be able to run `bd`, so the agent
+that starts one pipes the bead into its prompt. A role runs `bd` when its
+agent definition says so; nothing here forbids it.
 
 ## Stack Discipline
 
@@ -321,7 +322,7 @@ bd ready -l phase-<x> -n 0 --json
 first: dev beads whose prerequisites' sanity checks passed, sanity checks
 whose dev or fix bead closed, QA beads whose sanity check passed, fix beads and
 open findings. Run it after every task close, before any other work, and dispatch every
-ready bead. Assign a bead only while `bd ready` lists it. Order and hold work only with bead edges, gates and `atm task move`;
+ready bead. Assign a bead only while `bd ready` lists it. `stage:subtask` beads are never dispatched by the lead: the dev owning their parent runs them with background subagents and closes them. Order and hold work only with bead edges, gates and `atm task move`;
 never tell an agent not to run a task in its queue. The lead may step in at critical points, preferably through a background developer subagent (Parallel Quick Fix step 3); lead work is never part of the original plan.
 While a workflow outage class bead is open, re-test its cause on each pass
 (Jev: `.claude/skills/atm-bd-orchestration/scripts/jev_client.py --startup --phase <x>`; any other cause: the command
