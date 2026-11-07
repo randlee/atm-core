@@ -820,6 +820,19 @@
             "plan_questions": "atm-tyf5.1",
             "dev_questions": "atm-tyf5.2"
           }
+        },
+        {
+          "at": "2026-11-07T20:36:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938) and plans no sanity beads; sprint sanity beads are atm-bt-2 scope",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938) and plans no sanity beads; sprint sanity beads are atm-bt-2 scope"
         }
       ]
     },

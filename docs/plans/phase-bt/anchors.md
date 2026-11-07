@@ -276,6 +276,9 @@ Summary: One sanity bead per sprint
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938) and plans no sanity beads; sprint sanity beads are atm-bt-2 scope
+
 Beads: anchor `atm-tyf5`, plan questions `atm-tyf5.1`, dev questions `atm-tyf5.2`
 
 Fixtures:
