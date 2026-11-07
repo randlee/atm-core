@@ -29,9 +29,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-te91",
+        "plan_questions": "atm-te91.1",
+        "dev_questions": "atm-te91.2"
       },
       "history": [
         {
@@ -45,6 +45,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:34+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-te91",
+            "plan_questions": "atm-te91.1",
+            "dev_questions": "atm-te91.2"
+          }
         }
       ]
     },
@@ -74,9 +83,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-d42v",
+        "plan_questions": "atm-d42v.1",
+        "dev_questions": "atm-d42v.2"
       },
       "history": [
         {
@@ -97,6 +106,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:35+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-d42v",
+            "plan_questions": "atm-d42v.1",
+            "dev_questions": "atm-d42v.2"
+          }
         }
       ],
       "exclude": [
@@ -132,9 +150,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-u194",
+        "plan_questions": "atm-u194.1",
+        "dev_questions": "atm-u194.2"
       },
       "history": [
         {
@@ -148,6 +166,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:37+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-u194",
+            "plan_questions": "atm-u194.1",
+            "dev_questions": "atm-u194.2"
+          }
         }
       ]
     },
@@ -177,9 +204,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-w53l",
+        "plan_questions": "atm-w53l.1",
+        "dev_questions": "atm-w53l.2"
       },
       "history": [
         {
@@ -200,6 +227,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:38+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-w53l",
+            "plan_questions": "atm-w53l.1",
+            "dev_questions": "atm-w53l.2"
+          }
         }
       ]
     },
@@ -229,9 +265,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-w0y3",
+        "plan_questions": "atm-w0y3.1",
+        "dev_questions": "atm-w0y3.2"
       },
       "history": [
         {
@@ -245,6 +281,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:39+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-w0y3",
+            "plan_questions": "atm-w0y3.1",
+            "dev_questions": "atm-w0y3.2"
+          }
         }
       ]
     },
@@ -274,9 +319,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-umb4",
+        "plan_questions": "atm-umb4.1",
+        "dev_questions": "atm-umb4.2"
       },
       "history": [
         {
@@ -297,6 +342,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:41+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-umb4",
+            "plan_questions": "atm-umb4.1",
+            "dev_questions": "atm-umb4.2"
+          }
         }
       ],
       "exclude": [
@@ -332,9 +386,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-66vl",
+        "plan_questions": "atm-66vl.1",
+        "dev_questions": "atm-66vl.2"
       },
       "history": [
         {
@@ -355,6 +409,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:42+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-66vl",
+            "plan_questions": "atm-66vl.1",
+            "dev_questions": "atm-66vl.2"
+          }
         }
       ],
       "exclude": [
@@ -390,9 +453,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-kha6",
+        "plan_questions": "atm-kha6.1",
+        "dev_questions": "atm-kha6.2"
       },
       "history": [
         {
@@ -413,6 +476,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:43+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-kha6",
+            "plan_questions": "atm-kha6.1",
+            "dev_questions": "atm-kha6.2"
+          }
         }
       ],
       "exclude": [
@@ -448,9 +520,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-plmh",
+        "plan_questions": "atm-plmh.1",
+        "dev_questions": "atm-plmh.2"
       },
       "history": [
         {
@@ -471,6 +543,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:45+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-plmh",
+            "plan_questions": "atm-plmh.1",
+            "dev_questions": "atm-plmh.2"
+          }
         }
       ],
       "exclude": [
@@ -506,9 +587,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-ff88",
+        "plan_questions": "atm-ff88.1",
+        "dev_questions": "atm-ff88.2"
       },
       "history": [
         {
@@ -529,6 +610,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:46+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-ff88",
+            "plan_questions": "atm-ff88.1",
+            "dev_questions": "atm-ff88.2"
+          }
         }
       ],
       "exclude": [
@@ -564,9 +654,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-m1dj",
+        "plan_questions": "atm-m1dj.1",
+        "dev_questions": "atm-m1dj.2"
       },
       "history": [
         {
@@ -594,6 +684,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:47+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-m1dj",
+            "plan_questions": "atm-m1dj.1",
+            "dev_questions": "atm-m1dj.2"
+          }
         }
       ],
       "exclude": [
@@ -629,9 +728,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-q2b3",
+        "plan_questions": "atm-q2b3.1",
+        "dev_questions": "atm-q2b3.2"
       },
       "history": [
         {
@@ -652,6 +751,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:48+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-q2b3",
+            "plan_questions": "atm-q2b3.1",
+            "dev_questions": "atm-q2b3.2"
+          }
         }
       ],
       "exclude": [
@@ -687,9 +795,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-tyf5",
+        "plan_questions": "atm-tyf5.1",
+        "dev_questions": "atm-tyf5.2"
       },
       "history": [
         {
@@ -703,6 +811,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:50+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-tyf5",
+            "plan_questions": "atm-tyf5.1",
+            "dev_questions": "atm-tyf5.2"
+          }
         }
       ]
     },
@@ -732,9 +849,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-ggaq",
+        "plan_questions": "atm-ggaq.1",
+        "dev_questions": "atm-ggaq.2"
       },
       "history": [
         {
@@ -748,6 +865,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:51+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-ggaq",
+            "plan_questions": "atm-ggaq.1",
+            "dev_questions": "atm-ggaq.2"
+          }
         }
       ]
     },
@@ -777,9 +903,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-p2kg",
+        "plan_questions": "atm-p2kg.1",
+        "dev_questions": "atm-p2kg.2"
       },
       "history": [
         {
@@ -807,6 +933,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:52+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-p2kg",
+            "plan_questions": "atm-p2kg.1",
+            "dev_questions": "atm-p2kg.2"
+          }
         }
       ],
       "exclude": [
@@ -842,9 +977,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-nmob",
+        "plan_questions": "atm-nmob.1",
+        "dev_questions": "atm-nmob.2"
       },
       "history": [
         {
@@ -858,6 +993,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:54+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-nmob",
+            "plan_questions": "atm-nmob.1",
+            "dev_questions": "atm-nmob.2"
+          }
         }
       ]
     },
@@ -887,9 +1031,9 @@
       "status": "locked",
       "promoted_to": null,
       "beads": {
-        "anchor": null,
-        "plan_questions": null,
-        "dev_questions": null
+        "anchor": "atm-eynt",
+        "plan_questions": "atm-eynt.1",
+        "dev_questions": "atm-eynt.2"
       },
       "history": [
         {
@@ -917,6 +1061,15 @@
           "fields": [
             "fixtures"
           ]
+        },
+        {
+          "at": "2026-11-07T20:32:55+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-eynt",
+            "plan_questions": "atm-eynt.1",
+            "dev_questions": "atm-eynt.2"
+          }
         }
       ],
       "exclude": [
