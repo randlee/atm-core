@@ -181,7 +181,9 @@ Optional: `model_class` (`astra`, `terra`, `luna`), `release_train`,
 A sprint too large for one agent's context is split at planning: `stage:subtask`
 child beads under the sprint container (`<container>.sub-<n>`), each sized for one
 background subagent, with `metadata.model_class` set where it differs from the
-sprint's. The sprint's dev owns, runs and closes them; the lead never dispatches them.
+sprint's. The sprint's dev runs each with a background subagent, merges every
+result into its own worktree, and closes every child before closing its own bead;
+the lead never dispatches them.
 
 `requirements` and `adrs` are never left empty. The dev reads each listed id
 before coding, QA checks the change against each one, and plan review
