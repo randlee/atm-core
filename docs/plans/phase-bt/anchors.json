@@ -17,11 +17,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The planning guide states that a plan too large must be split into multiple sprints."
+        ],
+        "fail": [
+          "The planning guide lets an oversized plan stay one sprint."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -34,6 +38,13 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -51,11 +62,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "planning.md tells planners to put work items that share no files or code into separate sprints."
+        ],
+        "fail": [
+          "planning.md bundles unrelated work items that touch no common files into one sprint."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -68,6 +83,26 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     },
@@ -85,11 +120,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "planning.md directs that a large sprint of closely related work is split into child beads, one per background subagent."
+        ],
+        "fail": [
+          "planning.md splits a large closely related sprint into independent sibling sprints."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -102,6 +141,13 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -119,11 +165,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "planning.md recommends child beads for concentrated pockets of closely related work, each pocket managed by a single dev agent."
+        ],
+        "fail": [
+          "planning.md presents child beads as an obscure option without recommending them."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -136,6 +186,20 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:22:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -153,11 +217,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Each child bead declares its subagent model as fast, normal or frontier."
+        ],
+        "fail": [
+          "Child beads declare a new model field with values opus/sonnet/haiku."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -170,6 +238,13 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -187,11 +262,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The dev template tells the dev to run each child bead with its own background subagent."
+        ],
+        "fail": [
+          "The dev template has the lead dispatch each child bead to a separate dev agent."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -204,6 +283,26 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     },
@@ -221,11 +320,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Subagent work is merged into the dev's branch; only the dev's branch gets a PR."
+        ],
+        "fail": [
+          "Each subagent opens its own GitHub pull request for its child bead."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -238,6 +341,26 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     },
@@ -255,11 +378,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Each subagent runs a small, focused test and lint pass on its own worktree."
+        ],
+        "fail": [
+          "Subagents skip testing, or each runs the full suite on its own worktree."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -272,6 +399,26 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     },
@@ -289,11 +436,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The dev template tells the dev to delegate the full lint/test run to a background fast agent."
+        ],
+        "fail": [
+          "The dev runs the full lint/test suite in its own session."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -306,6 +457,26 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     },
@@ -323,11 +494,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The dev rebases onto the top of the stack only after full lint and test pass."
+        ],
+        "fail": [
+          "The dev rebases onto the top of the stack, then runs full lint and test."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -340,6 +515,26 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     },
@@ -357,11 +552,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "After the final rebase the dev skips the full lint and test rerun, unless the rebase required resolving conflicts in code the sprint wrote."
+        ],
+        "fail": [
+          "After the final rebase the dev reruns the full lint and test suite."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -374,6 +573,33 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:03+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:22:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     },
@@ -391,11 +617,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "The dev task text says in one short sentence that the parent bead cannot close before its children."
+        ],
+        "fail": [
+          "The dev task text spends a paragraph explaining child/parent close order."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -408,6 +638,26 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:04+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     },
@@ -425,11 +675,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "A split sprint has one sanity bead covering the parent dev bead and every child bead."
+        ],
+        "fail": [
+          "The pour creates one sanity bead per child bead."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -442,6 +696,13 @@
           "at": "2026-11-07T19:34:54+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -459,11 +720,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Each dev bead, parent and child, records the git commit of its work."
+        ],
+        "fail": [
+          "Only the parent dev bead records a commit; child beads have none."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -476,6 +741,13 @@
           "at": "2026-11-07T19:34:55+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -493,11 +765,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Each sprint has exactly one QA bead, and QA is one run on the sprint's single worktree."
+        ],
+        "fail": [
+          "The pour creates a QA bead per child bead."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -510,6 +786,33 @@
           "at": "2026-11-07T19:34:55+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:04+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:22:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     },
@@ -527,11 +830,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "grep -ri plan-anchoring plugins/atm-bd-orchestration returns nothing",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "atm-bd-orchestration templates and docs make no reference to plan-anchoring."
+        ],
+        "fail": [
+          "The dev template tells the dev to keep bead text under the plan-anchoring cap."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -544,6 +851,13 @@
           "at": "2026-11-07T19:34:55+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ]
     },
@@ -561,11 +875,15 @@
       "scope": "atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)",
       "deterministic_check": "",
       "fixtures": {
-        "pass": [],
-        "fail": []
+        "pass": [
+          "Every sentence this sprint adds to a prompt or task template for child beads carries only necessary words."
+        ],
+        "fail": [
+          "The dev template adds a paragraph explaining why child beads exist."
+        ]
       },
       "question_overrides": {},
-      "version": 1,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -578,6 +896,33 @@
           "at": "2026-11-07T19:34:55+00:00",
           "event": "created",
           "status": "locked"
+        },
+        {
+          "at": "2026-11-07T20:20:04+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-07T20:21:33+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-07T20:22:20+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
         }
       ]
     }

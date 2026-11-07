@@ -30,11 +30,15 @@ Anchor: A phase plan too large for one sprint must be split into multiple sprint
 
 > If plan is too large it MUST be split.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Split too-large plans
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Fixtures:
+- pass: The planning guide states that a plan too large must be split into multiple sprints.
+- fail: The planning guide lets an oversized plan stay one sprint.
 
 ## ANC-002
 
@@ -42,11 +46,18 @@ Anchor: The plan split must place unrelated, non-intersecting work in separate s
 
 > The split should be done to optimize horizontal waves (keep height of graph short), unrelated/un-intersecting work split into separate sprints.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Short wave graph
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: planning.md tells planners to put work items that share no files or code into separate sprints.
+- fail: planning.md bundles unrelated work items that touch no common files into one sprint.
 
 ## ANC-003
 
@@ -54,11 +65,15 @@ Anchor: A large sprint of closely related work must be split into child beads un
 
 > Large sprints w/ closely related work should be split into child beads one per [background] subagent.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Child beads per subagent
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Fixtures:
+- pass: planning.md directs that a large sprint of closely related work is split into child beads, one per background subagent.
+- fail: planning.md splits a large closely related sprint into independent sibling sprints.
 
 ## ANC-004
 
@@ -66,11 +81,15 @@ Anchor: atm-bd-orchestration planning guidance must recommend child beads for co
 
 > we are adding a new option which we want to highly recommend for efficiency.  It is important to create a well balanced plan of waves with concentrated pockets of work managed by a single dev agent
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 3.
 
 Summary: Recommend child beads
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Fixtures:
+- pass: planning.md recommends child beads for concentrated pockets of closely related work, each pocket managed by a single dev agent.
+- fail: planning.md presents child beads as an obscure option without recommending them.
 
 ## ANC-005
 
@@ -78,11 +97,15 @@ Anchor: A child bead must declare its subagent's model with the existing beads c
 
 > Use already defined 'fast','normal','frontier' classification in beads.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Model class per child
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Fixtures:
+- pass: Each child bead declares its subagent model as fast, normal or frontier.
+- fail: Child beads declare a new model field with values opus/sonnet/haiku.
 
 ## ANC-006
 
@@ -90,11 +113,18 @@ Anchor: The sprint's dev must run each child bead with a background subagent.
 
 > I think it should be a strategy as part of planning to encourage agents to delegate work to multiple subagents (and specfically handle merging subagent work into their worktree)  when therre is a larger task.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Dev runs children
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: The dev template tells the dev to run each child bead with its own background subagent.
+- fail: The dev template has the lead dispatch each child bead to a separate dev agent.
 
 ## ANC-007
 
@@ -102,11 +132,18 @@ Anchor: Subagent work must not get its own PR; the sprint's dev must deliver one
 
 > We do not need pr for subagent work.  Primary dev agent is responsible for delivering a single working tested branch.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: One branch, no subagent PRs
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: Subagent work is merged into the dev's branch; only the dev's branch gets a PR.
+- fail: Each subagent opens its own GitHub pull request for its child bead.
 
 ## ANC-008
 
@@ -114,11 +151,18 @@ Anchor: Each background subagent must run focused lint and tests on its own work
 
 > Additionally background sub-agents should do small focused test/lint on their worktree.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Subagent focused lint/test
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: Each subagent runs a small, focused test and lint pass on its own worktree.
+- fail: Subagents skip testing, or each runs the full suite on its own worktree.
 
 ## ANC-009
 
@@ -126,11 +170,18 @@ Anchor: The sprint's dev must delegate the full lint and test run to a backgroun
 
 > Dev should delegate running full lint/test to background 'fast' agent.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Full lint/test on fast agent
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: The dev template tells the dev to delegate the full lint/test run to a background fast agent.
+- fail: The dev runs the full lint/test suite in its own session.
 
 ## ANC-010
 
@@ -138,11 +189,18 @@ Anchor: The dev's final rebase onto the top of the stack must happen after full 
 
 > Final rebase AFTER tests/lint pass.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Final rebase after green
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: The dev rebases onto the top of the stack only after full lint and test pass.
+- fail: The dev rebases onto the top of the stack, then runs full lint and test.
 
 ## ANC-011
 
@@ -150,11 +208,18 @@ Anchor: The dev must not rerun full lint and test after the final rebase unless 
 
 > Rebasing on top of stack AND make sure tests/lint pass 100% are impossible to both achieve if 5-15 minutes of testing are run after rebase. I have seen agents looping over run tests <-> rebase 10+ times in a row before they can land the stack. 4e could add 'unless conflicts with code written must be resolved' or similar.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 3.
 
 Summary: No full rerun after rebase
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: After the final rebase the dev skips the full lint and test rerun, unless the rebase required resolving conflicts in code the sprint wrote.
+- fail: After the final rebase the dev reruns the full lint and test suite.
 
 ## ANC-012
 
@@ -162,11 +227,18 @@ Anchor: The dev task must state in a few words that the parent bead closes after
 
 > beads does NOT allow closing parent w/ open children.  This does NOT need much explaination, the agent will be told he can not close parent first so few words in task/prompt need to talk about it.  No hook/python for this at all outside of returning close fail message from failed 'bd close'.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Parent closes after children
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: The dev task text says in one short sentence that the parent bead cannot close before its children.
+- fail: The dev task text spends a paragraph explaining child/parent close order.
 
 ## ANC-013
 
@@ -174,11 +246,15 @@ Anchor: Each sprint must have exactly one sanity bead, and it must name every de
 
 > There is ONE sanity bead for all dev work.  the sanity task/bead would specify all dev beads for split.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: One sanity bead per sprint
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Fixtures:
+- pass: A split sprint has one sanity bead covering the parent dev bead and every child bead.
+- fail: The pour creates one sanity bead per child bead.
 
 ## ANC-014
 
@@ -186,11 +262,15 @@ Anchor: Every dev bead, parent and child, must record its git commit so sanity c
 
 > we should require git commit# per dev bead so sanity can coorelate commit to dev task/bead
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: Commit per dev bead
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Fixtures:
+- pass: Each dev bead, parent and child, records the git commit of its work.
+- fail: Only the parent dev bead records a commit; child beads have none.
 
 ## ANC-015
 
@@ -198,11 +278,18 @@ Anchor: Each sprint must have exactly one QA bead and one QA run on the sprint's
 
 > Single qa bead, subagents would handle all work on single worktree as single qa run.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 3.
 
 Summary: One QA bead per sprint
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: Each sprint has exactly one QA bead, and QA is one run on the sprint's single worktree.
+- fail: The pour creates a QA bead per child bead.
 
 ## ANC-016
 
@@ -210,7 +297,7 @@ Anchor: Docs, templates and prompts under atm-bd-orchestration must not mention 
 
 > don't mention plan-anchoring in atm-bd
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
 Summary: No plan-anchoring mention
 
@@ -218,14 +305,25 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Deterministic check to pair with the development gate: grep -ri plan-anchoring plugins/atm-bd-orchestration returns nothing
 
+Fixtures:
+- pass: atm-bd-orchestration templates and docs make no reference to plan-anchoring.
+- fail: The dev template tells the dev to keep bead text under the plan-anchoring cap.
+
 ## ANC-017
 
 Anchor: Prompts and task text for the subtask strategy must contain only necessary words.
 
 > in general prompts/tasks must be written with NO unnecessary words.
 
-Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 1.
+Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 3.
 
 Summary: Necessary words only
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+
+Fixtures:
+- pass: Every sentence this sprint adds to a prompt or task template for child beads carries only necessary words.
+- fail: The dev template adds a paragraph explaining why child beads exist.
