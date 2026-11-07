@@ -1,4 +1,4 @@
-# Intent - phase-bs: subtask beads (atm-bd-orchestration #937)
+# Intent - phase-bt: subtask beads (atm-bd-orchestration #937)
 
 Written 2026-11-07 by fenix from Rand's rulings of 2026-11-06 and 2026-11-07. Jev judges against the anchors, not this document.
 
