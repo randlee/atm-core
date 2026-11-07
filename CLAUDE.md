@@ -105,43 +105,17 @@ markdown-plan workflow.
 
 ---
 
-## Honest Work and Anti-Ceremony (binding for agents and humans alike)
+## Honest Work, No Ceremony (binding on agents and humans)
 
-The purpose of agent work here is working, deployable capability. Process
-serves that outcome and never becomes the product.
+Goal: working, deployable capability. Process serves it and never becomes the product.
 
-- A process artifact (certificate, ledger, dashboard, matrix, meta-report,
-  speculative check) may be created only if it names a concrete consumer,
-  the named feature it gates, the observed defect class justifying it, and
-  its deletion condition. Otherwise it does not get created. Boundary test:
-  if running code branches on it, it is product; if only humans and status
-  reports read it, it is process and the creation-gate rule above applies;
-  code written just to flip this answer counts as the pathology, not as a
-  consumer. Sole exception: a minimal
-  integrity/recovery control (crash-recovery state, provenance snapshot) is
-  legitimate when it prevents a named evidence-loss or corruption mode and
-  is necessary and minimal.
-- Real code + real tests in the same unit of work. Forbidden: faked tests,
-  fixtures/mocks presented as live proof, weakened assertions, golden
-  regeneration to force green, hard-coded success paths, placeholder macros
-  in commits, editing the spec instead of implementing it, narrowing scope
-  while claiming full success.
-- No self-certification: work is closed by an independent verifier citing
-  evidence at an exact revision. Solo sessions re-verify by re-execution and
-  state what was not independently verified.
-- A typed refusal beats a fabricated result and is less valuable than the
-  real capability; refusal-only work stays open and says so.
-- Truthful null results ("checked X, found no material increment") are
-  successful outcomes. Unsupported claims are worse than silence.
-- Metrics predeclare denominator and countermetric; agreement between
-  agents may raise confidence but is never independent evidence; never
-  silence stderr in evidence-bearing commands.
-- Name these pathologies when they occur (gate self-weakening, proof-class
-  inflation, golden regeneration, tolerance widening, suppression-pragma
-  laundering, refusal farming, follow-up laundering); the names are the
-  deterrent. The full catalog with countermeasures lives in the
-  just-say-no-to-process-porn-and-ceremony skill; ask the operator for it
-  if you cannot resolve that reference.
+- **Process artifacts** (certificates, ledgers, dashboards, matrices, meta-reports, speculative checks) need four things to exist: a named consumer, the feature it gates, the observed defect class that justifies it, and a deletion condition. Missing any of these → don't create it. Test: if running code branches on it, it's product. If only humans or reports read it, it's process and needs the four things. Writing code just to flip that answer is itself the pathology. Exception: a minimal integrity/recovery control (crash-recovery state, provenance snapshot) that prevents a named evidence-loss or corruption mode.
+- **Real code + real tests in the same unit of work.** Forbidden: faked tests, mocks/fixtures presented as live proof, weakened assertions, regenerating goldens to force green, hard-coded success paths, placeholder macros in commits, editing the spec instead of implementing it, narrowing scope while claiming full success.
+- **No self-certification.** An independent verifier closes the work, citing evidence at an exact revision. In solo sessions, re-verify by re-running, and state what wasn't independently verified.
+- **Typed refusal beats fabrication but is worth less than real capability.** Work that ends only in a refusal stays open and says so.
+- **Null results are successes** ("checked X, found no material increment"). Unsupported claims are worse than silence.
+- **Metrics** predeclare their denominator and countermetric. Agreement between agents can raise confidence but is never independent evidence. Never silence stderr in commands that produce evidence.
+- **Name pathologies when they occur:** gate self-weakening, proof-class inflation, golden regeneration, tolerance widening, suppression-pragma laundering, refusal farming, follow-up laundering. The full catalog and countermeasures are in the `just-say-no-to-process-porn-and-ceremony` skill. Ask the operator for it if you can't find it.
 
 ---
 
