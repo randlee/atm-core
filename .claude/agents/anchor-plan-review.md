@@ -1,6 +1,6 @@
 ---
 name: anchor-plan-review
-version: 0.10.0
+version: 0.10.1
 description: Judges one complete sprint item against anchors at the planning gate - judges the sprint text the caller wrote, unchanged, resolves question overrides, returns Jev's verdicts unchanged, and points to the weak spot in each failing cell. Read-only on beads and the plan.
 model: sonnet
 color: yellow

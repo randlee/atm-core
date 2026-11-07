@@ -1,6 +1,6 @@
 ---
 name: development-gate
-version: 0.10.0
+version: 0.10.1
 description: Running the development gate (sprint review) end to end - what evidence to pass, what Jev sees, the command and exit codes, pairing with deterministic checks, and how to read the results.
 ---
 

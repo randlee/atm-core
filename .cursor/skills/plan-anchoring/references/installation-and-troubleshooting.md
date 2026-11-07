@@ -1,6 +1,6 @@
 ---
 name: installation-and-troubleshooting
-version: 0.10.0
+version: 0.10.1
 description: Installing plan-anchor into a repository or a parent folder with the plan-anchor-installer skill (install.py), per-repository overrides and per-folder upgrades, the anchor tracker this install is rendered for and how to switch it, the CLIs and credentials plan-anchoring depends on (python3, PyYAML, bd, sc-compose, jq, TypeSafe API key), minimum versions, PATH issues in Claude Code, Codex and Cursor environment policy, validation, and known issues.
 ---
 
@@ -28,7 +28,7 @@ The marketplace plugin (`/plugin install sc-plan-anchor`, the Codex and Cursor p
 uv run "<installer plugin>/install.py" --dest <folder> --tracker br|bd --allow-remote-judge|--no-remote-judge [--target claude,codex,cursor] [--dry-run]
 ```
 
-`uv` reads the script's inline dependencies (PyYAML and the `sc-compose` wheel) and needs no pip step; from a plan-anchor checkout, `uv run plugins/sc-plan-anchor/install.py ...` is the same command. The installer renders the skill and agent text for one tracker, so an installed copy names only that tracker, and writes `<folder>/.claude/skills/plan-anchoring/` and `<folder>/.claude/agents/anchor-*.md` (`.codex/` or `.cursor/` with `--target`; default `claude`). It records the version, tracker, targets and the sha256 of every file it wrote in `<folder>/.sc/plan-anchor/install-lock.json`; commit that file with the installed files. When no settings file says so yet, the installer skill asks once for the tracker and whether plan text may be sent to TypeSafe (Jev); it never infers that consent from earlier runs.
+`uv` reads the script's inline dependencies (PyYAML and the `sc-compose` wheel) and needs no pip step; from a plan-anchor checkout, `uv run plugins/sc-plan-anchor/install.py ...` is the same command. The installer renders the skill and agent text for one tracker, so an installed copy names only that tracker, and writes `<folder>/.claude/skills/plan-anchoring/` and `<folder>/.claude/agents/anchor-*.md` (and `.codex/`, `.cursor/`: without `--target` every harness the folder uses, meaning the locked targets, existing installs and every harness directory present, `claude` when there is none; `--target` only adds one). It records the version, tracker, targets and the sha256 of every file it wrote in `<folder>/.sc/plan-anchor/install-lock.json`; commit that file with the installed files. When no settings file says so yet, the installer skill asks once for the tracker and whether plan text may be sent to TypeSafe (Jev); it never infers that consent from earlier runs.
 
 **Destination.** `<folder>` is a repository, or a parent folder that holds several repositories (it need not be a git repository). Global locations are refused with `INSTALL.DEST_GLOBAL` (exit 2): the home directory itself, `~/.claude`, `~/.codex`, `~/.cursor`, `~/.agents`, `/etc/codex`, and any plugin cache under them. A parent folder that is not a repository and has no `.beads/` needs `--tracker` (`TRACKER.REQUIRED` otherwise); `--init-br` is ignored there, so run `br init` in each repository. A subfolder of a repository is not a parent folder: without `--tracker` the installer takes the tracker from the nearest `.sc/plan-anchor/settings.yaml` above it, or from the enclosing repository's `.beads/`, and `--init-br` runs at the repository root.
 
