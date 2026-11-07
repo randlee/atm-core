@@ -524,7 +524,7 @@ def generate(repo: Path, index: object, counts: dict[str, int | None], phase: st
              plan_html: Path | None = None, beads: Sequence[BeadRecord] | None = None) -> int:
     index = normalized_index(index)
     if not (RENDERER / 'node_modules/@viz-js/viz').exists():
-        raise RuntimeError(f'DAG renderer dependencies missing; run npm ci --prefix {RENDERER}')
+        raise RuntimeError(f'DAG renderer dependencies missing; run (cd {RENDERER} && npm ci --ignore-scripts)')
     phase = str(phase).removeprefix('phase-')
     output = output or repo / 'scratchpad' / f'phase-{phase}-dag' / f'phase-{phase}-dag'
     output = output if output.is_absolute() else repo / output

@@ -23,8 +23,8 @@ A sprint pours dev <- sanity <- qa under its container. Each blocking finding
 pours fix <- sanity <- qa as siblings under the same container, at
 <sprint>.<ref>-r<round>-<step>; the fix bead carries the finding. Important
 and minor findings are not poured (refused): QA files them as plain finding
-beads. A finding group is not poured once its `filed_by` QA bead is closed:
-quality-mgr pours the groups first, then closes its QA bead.
+beads. Quality-mgr pours fix-verification failures before closing QA; a closed
+FAIL may also pour its own next round when it remains within the QA round cap.
 
 For every target it attaches the group's formula under the target's sprint
 container with `sc-compose bead attach`, together with the relations from
@@ -76,14 +76,18 @@ SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(SCRIPTS.parents[1] / "atm-beads" / "scripts"))
 import bead_formulas  # noqa: E402
+import transitions  # noqa: E402
 import repo_config  # noqa: E402
 import sprint_index_common  # noqa: E402
 from bead_formulas import Bd, BdError, attach_id  # noqa: E402
 from operation_models import JsonObject, JsonValue, matches_typeddict  # noqa: E402
-from stack_top import stack_bead_id  # noqa: E402
+from stack_top import select_stack_top, stack_bead_id  # noqa: E402
 
 SCHEMA = "atm-bd-orchestration/bead-groups/v1"
+SC_COMPOSE_TIMEOUT_SECONDS = 120
 SUCCESS, FAILED, USAGE, PROBLEMS = 0, 2, 3, 5
+from qa_reviewers import qa_capable_reviewer, qa_capable_reviewers
+
 SPRINT_KEYS = ("phase", "sprint", "stack", "layer", "difficulty", "branch", "worktree", "pr_target")
 FINDING_FIELDS = ("ref", "severity", "reviewer", "title", "remedy")
 REF = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
@@ -293,7 +297,7 @@ class ReceiptError(TypedDict):
 
 
 class ReceiptStage(TypedDict):
-    outcome: str
+    outcome: str | dict[str, JsonObject]
     stderr_excerpt: NotRequired[str]
 
 
@@ -400,6 +404,20 @@ def split_ids(values: list[str]) -> list[str]:
     return [v for value in values for v in value.split(",") if v]
 
 
+def row_type_issues(row: JsonObject) -> list[str]:
+    """Name invalid fields without refusing unrelated beads in the phase."""
+    bead = str(row.get("id", "?"))
+    issues: list[str] = []
+    for field, value in row.items():
+        if field == "metadata" and isinstance(value, dict):
+            for name, item in value.items():
+                if not matches_typeddict({name: item}, Metadata):
+                    issues.append(f"{bead}: metadata.{name}: invalid value {item!r}")
+        elif not matches_typeddict({field: value}, BeadRow):
+            issues.append(f"{bead}: {field}: invalid value {value!r}")
+    return issues
+
+
 def schema_issues(bead_schema: Schema, phase: str, prospective: list[JsonObject]) -> list[str]:
     """Schema problems of the phase's live beads plus the prospective pour. Closed beads are history:
     validate-plan skips them too, so a phase whose closed beads predate the models still pours (#578)."""
@@ -409,11 +427,9 @@ def schema_issues(bead_schema: Schema, phase: str, prospective: list[JsonObject]
             # Skipped before the BeadRow check: closed QA beads carry `null`/integer metadata that today's
             # models reject, and reading them as live rows refused every pour in the phase (#639).
             continue
-        payload = raw_bead
-        if not matches_typeddict(raw_bead, BeadRow):
-            raise ValueError("phase beads contain a malformed bead record")
-        current.append(payload)
-    return bead_schema.validate_phase([*current, *prospective])
+        current.append(raw_bead)
+    rows = [*current, *prospective]
+    return [issue for row in rows for issue in row_type_issues(row)] + bead_schema.validate_phase(rows)
 
 
 class Run:
@@ -466,7 +482,8 @@ class Run:
         row = self.show(bead)
         payload = bead_formulas.bead_record_to_json(row)
         if not matches_typeddict(row, BeadRow):
-            raise ValueError(f"{bead}: malformed bead record")
+            details = "; ".join(row_type_issues(payload)) or f"{bead}: malformed bead record"
+            raise TargetError("BEAD_GROUPS_TARGET_INVALID", f"{details}; inspect `bd show {bead} --json` and repair the named field with `bd update {bead} --metadata <full JSON>`")
         return payload, row
 
     def close_compose(self, phase: str, checked_title: str, stack_bead: str | None = None) -> Compose:
@@ -554,22 +571,44 @@ class Run:
         missing = [k for k, value in (("phase", phase), ("sprint", sprint_name), ("stack", stack_name), ("difficulty", difficulty_value)) if not value]
         if missing and not (phase_end and missing == ["difficulty"]):
             raise TargetError("BEAD_GROUPS_TARGET_INVALID", f"{sprint} lacks {', '.join(missing)}")
-        _, filed_by_bead = self.show_typed(filed_by)
+        filed_by_json, filed_by_bead = self.show_typed(filed_by)
         qa_closed = filed_by_bead.get("status") == "closed"
+        reason = filed_by_json.get("close_reason")
+        qa_metadata = bead_metadata(filed_by_bead)
+        qa_round = qa_metadata.get("round")
+        qa_next_ref: str | None = None
+        if type(qa_round) is int and round_ == qa_round + 1:
+            if transitions.next_transition({"qa": {"status": "closed", "close_reason": "FAIL", "metadata": {"round": qa_round}},
+                                            "findings": [{"status": "open", "metadata": {"severity": "blocking"}}]}) == "ROUND_CAP":
+                raise TargetError("BEAD_GROUPS_ROUND_CAP", f"{filed_by}: QA round cap reached; ask the phase lead to rule on the next action")
+            checked = qa_metadata.get("checked_bead")
+            if qa_closed and isinstance(reason, str) and reason.startswith("FAIL") and isinstance(checked, str):
+                _, checked_bead = self.show_typed(checked)
+                checked_meta = bead_metadata(checked_bead)
+                ref = checked_meta.get("finding_ref")
+                labels = checked_bead.get("labels", [])
+                valid_checked = "stage:fix" in labels or ("stage:finding" in labels and checked_bead.get("status") != "closed")
+                if valid_checked and isinstance(ref, str) and checked_meta.get("sprint_bead") == sprint:
+                    qa_next_ref = ref
+                    qa_closed = False
         sidecar = self.sidecar("finding-group")
         option = self.option_for(sidecar)
         import bead_schema
-        stack_id = stack_bead_id(sprint_index_common.load_phase_config(self.repo, phase)['root'])
+        phase_config = sprint_index_common.load_phase_config(self.repo, phase)
+        stack_id = stack_bead_id(phase_config['root'])
         stack_json, stack = self.show_typed(stack_id)
         issues = bead_schema.problems(stack_json, bead_schema.StackBead)
         if issues:
             raise TargetError("BEAD_GROUPS_TARGET_INVALID", "; ".join(issues))
         stack_meta = bead_schema.StackMetadata.model_validate(bead_metadata(stack))
-        pr_target = stack_meta.layers[-1].branch if stack_meta.layers else stack_meta.trunk
+        # This pour needs only the branch; no Git head lookup is needed for the trunk fallback.
+        pr_target, _ = select_stack_top(stack_json, stack_meta.trunk, lambda _: "unused")
         out: list[Target | TargetError] = []
         for finding in findings:
             ref = finding["ref"]
             try:
+                if qa_next_ref is not None and ref != qa_next_ref:
+                    raise TargetError("BEAD_GROUPS_QA_CLOSED", f"{filed_by}: closed FAIL may only repour its own finding {qa_next_ref}; use that finding ref")
                 slug = re.sub(r"[^a-z0-9-]", "-", ref.lower())
                 if not REF.fullmatch(slug):
                     raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"finding ref {ref!r} must normalize to letters, digits and single hyphens")
@@ -580,6 +619,10 @@ class Run:
                     lacking.append("difficulty (a phase-end finding has no sprint to take it from)")
                 if lacking:
                     raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"finding {ref} lacks {', '.join(lacking)}")
+                templates_dir = Path(__file__).resolve().parent.parent / "templates"
+                if not qa_capable_reviewer(finding["reviewer"], templates_dir):
+                    raise TargetError("BEAD_GROUPS_REVIEWER_INVALID", f"finding {ref}: reviewer {finding['reviewer']} is not QA-capable; "
+                                      f"choose --reviewer <agent> from {', '.join(qa_capable_reviewers(templates_dir))}")
                 remedy = finding.get("remedy")
                 if not isinstance(remedy, str):
                     raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"finding {ref} lacks remedy")
@@ -593,7 +636,16 @@ class Run:
                 # Layer records carry no difficulty, so the cut takes it from the finding or the sprint and the fix group carries all four keys together.
                 if not isinstance(finding_difficulty, str) or not finding_difficulty:
                     raise TargetError("BEAD_GROUPS_FINDINGS_INVALID", f"finding {ref} needs difficulty")
-                cut: Compose = {"branch": branch, "worktree": str(Path(self.config["worktree_base"]) / branch), "pr_target": pr_target,
+                checkout = phase_config.get("code_checkout")
+                worktree_base = Path(self.config["worktree_base"])
+                if checkout:
+                    code_root = (self.repo / checkout).resolve()
+                    try:
+                        code_base = Path(repo_config.load(code_root)["worktree_base"])
+                    except repo_config.ConfigNotFound:
+                        code_base = Path(str(code_root) + "-worktrees")
+                    worktree_base = (code_root / code_base).resolve() if not code_base.is_absolute() else code_base
+                cut: Compose = {"branch": branch, "worktree": str(worktree_base / branch), "pr_target": pr_target,
                        "difficulty": finding_difficulty}
                 if finding["severity"] != "blocking":
                     raise TargetError("BEAD_GROUPS_NOT_BLOCKING", f"finding {ref} is {finding['severity']}; only blocking findings are poured, file it as a finding bead")
@@ -668,7 +720,12 @@ class Run:
         path = out / f"{stem}.request.json"
         path.write_text(json.dumps(request, indent=2) + "\n")
         subcommand = operation.replace("_", "-")
-        proc = subprocess.run(["sc-compose", "bead", subcommand, "--request", str(path), "--json"], cwd=self.repo, text=True, capture_output=True)
+        command = ["sc-compose", "bead", subcommand, "--request", str(path), "--json"]
+        try:
+            proc = subprocess.run(command, cwd=self.repo, text=True, capture_output=True, timeout=SC_COMPOSE_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            raise TargetError("BEAD_GROUPS_POUR_TIMEOUT", f"{' '.join(command)} timed out after {SC_COMPOSE_TIMEOUT_SECONDS} seconds; "
+                              f"inspect request {path} and any partially created beads before retrying") from exc
         (out / f"{stem}.{subcommand}.receipt.json").write_text(proc.stdout)
         try:
             decoded: object = json.loads(proc.stdout)
@@ -691,6 +748,8 @@ class Run:
             failed_detail = failed[-1].get("stderr_excerpt", "") if failed else ""
             error_detail = error.get("message", "") if error else ""
             detail = error_detail or failed_detail or diagnostic_message
+            if code_value == "BEADS_GRAPH_CONFLICT" and "provenance_differs" in detail:
+                detail += "; conflicting field: metadata.sc_compose_graph"
             code = code_value if isinstance(code_value, str) else "BEAD_GROUPS_POUR_FAILED"
             raise TargetError(code, f"attach of {target['id']} (sc-compose exit {proc.returncode}): {detail}")
         if "graph" not in payload:
@@ -789,7 +848,14 @@ def main(argv: list[str]) -> int:
         sprint_ids = split_ids(args.sprint)
         for phase in args.phase:
             sprint_ids += [row[0] for row in run.plan(phase).values()]
-        finding_targets = [t for path in args.findings for t in run.finding_targets(path)]
+        finding_targets: list[Target | TargetError] = []
+        for path in args.findings:
+            try:
+                finding_targets.extend(run.finding_targets(path))
+            except (TargetError, BdError, ValueError) as exc:
+                error = exc if isinstance(exc, TargetError) else TargetError("BEAD_GROUPS_TARGET_INVALID", str(exc))
+                error.target_id = str(path)
+                finding_targets.append(error)
     except (repo_config.ConfigError, TargetError, RuntimeError, OSError) as exc:
         result.update({"outcome": "failed", "error": {"code": getattr(exc, "code", "BEAD_GROUPS_CANNOT_RUN"), "message": str(exc)}})
         return report(result, args.json, USAGE)
@@ -821,14 +887,15 @@ def main(argv: list[str]) -> int:
             entry["error"] = {"code": getattr(exc, "code", "BEAD_GROUPS_BD_FAILED"), "message": str(exc)}
     ordered = dependency_order(targets)
     previews: list[tuple[ReportEntry, Target, Attachment]] = []
-    preview_failed = False
+    graph_conflict = False
     for entry, target in ordered:
         try:
             if target.get("qa_closed") and not args.validate:
                 parent = compose_string(target["compose"], "parent")
                 ref = compose_string(target["compose"], "ref")
                 if any(run.bd.show(attach_id(parent, ref, step)) is None for step in run.steps(target)):
-                    raise TargetError("BEAD_GROUPS_QA_CLOSED", f"{compose_string(target['compose'], 'filed_by')} is closed; pour before closing QA")
+                    qa = compose_string(target['compose'], 'filed_by')
+                    raise TargetError("BEAD_GROUPS_QA_CLOSED", f"{qa} is closed and is not a failed verification of this finding; inspect `bd show {qa} --json` and ask the phase lead to resolve the round")
             attachment = run.pour(target, preview=True)
             previews.append((entry, target, attachment))
             entry.update({"ids": attachment["ids"], "nodes": attachment["nodes"], "edges": attachment["edges"]})
@@ -837,7 +904,8 @@ def main(argv: list[str]) -> int:
             edges = [e for e in attachment["edges"] if e["action"] == "add" and e["from"] not in created]
             entry["problems"] += [f"missing edge {e['from']} -{e['type']}-> {e['to']}" for e in edges]
         except (TargetError, BdError, OSError, ValueError, KeyError) as exc:
-            preview_failed = True
+            if str(getattr(exc, "code", "")).startswith("BEADS_GRAPH_"):
+                graph_conflict = True
             entry["error"] = {"code": getattr(exc, "code", "BEAD_GROUPS_BD_FAILED"), "message": str(exc)}
     if previews:
         try:
@@ -846,14 +914,25 @@ def main(argv: list[str]) -> int:
                 prospective = [node for _, target, attachment in previews if compose_string(target["compose"], "phase") == phase
                                for node in run.prospective(attachment)]
                 issues = schema_issues(bead_schema, phase, prospective)
-                if issues:
-                    next(entry for entry, target, _ in previews if compose_string(target["compose"], "phase") == phase)["problems"] += issues
+                for issue in issues:
+                    bead = issue.split(":", 1)[0]
+                    owner = next((entry for entry, target, attachment in previews
+                                  if compose_string(target["compose"], "phase") == phase
+                                  and bead in attachment["ids"].values()), None)
+                    if owner is None:
+                        owner = next((entry for entry in entries if entry["id"] == bead), None)
+                        if owner is None:
+                            owner = ReportEntry(id=bead, kind="bead", problems=[])
+                            entries.append(owner)
+                    owner["problems"].append(issue + f"; Fix: inspect `bd show {bead} --json` and repair the named field with `bd update {bead} --metadata <full JSON>`")
                     result["schema_problems"] = True
         except (OSError, ValueError, KeyError) as exc:
             result.update({"targets": entries, "outcome": "failed", "error": {"code": "BEAD_GROUPS_CANNOT_RUN", "message": str(exc)}})
             return report(result, args.json, FAILED)
-    if not args.validate and not preview_failed and not result.get("schema_problems"):
+    if not args.validate and not graph_conflict:
         for entry, target, _ in previews:
+            if entry.get("error") or (result.get("schema_problems") and any("Fix: inspect `bd show " in p for p in entry["problems"])):
+                continue
             try:
                 attachment = run.pour(target, preview=False)
                 entry.update({"ids": attachment["ids"], "nodes": attachment["nodes"], "edges": attachment["edges"], "problems": []})

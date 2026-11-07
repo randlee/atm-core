@@ -1,7 +1,17 @@
-import copy,json,subprocess,sys,tempfile,unittest
+import copy
+import json
+import os
+import sys
+import tempfile
+import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from subprocess_helpers import isolated_git_env, run_fixture_git, set_fixture_hooks_path
+
 sys.path.insert(0, str(Path(__file__).parents[1]))
 import post_mortem_jev as m
+
 REAL=m.load_client(Path(__file__).resolve().parents[1] / 'jev_client.py')
 
 def response():
@@ -18,9 +28,13 @@ class FakeClient:
 class Tests(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name);self.repo=self.root/'repo';self.repo.mkdir()
-  for args in [('init','-q'),('config','user.name','test'),('config','user.email','test@example.invalid')]:subprocess.run(['git','-C',str(self.repo),*args],check=True,capture_output=True)
+  self.git_env,_=isolated_git_env(self.root)
+  environ=patch.dict(os.environ,self.git_env);environ.start();self.addCleanup(environ.stop)
+  run_fixture_git(['git','-C',str(self.repo),'init','-q'],env=self.git_env)
+  set_fixture_hooks_path(self.repo,env=self.git_env)
+  for args in [('config','user.name','test'),('config','user.email','test@example.invalid')]:run_fixture_git(['git','-C',str(self.repo),*args],env=self.git_env)
   (self.repo/'code.rs').write_text('fn execute() {}\n#[cfg(test)]\nmod tests { fn execute_test() {} }\n')
-  subprocess.run(['git','-C',str(self.repo),'add','.'],check=True);subprocess.run(['git','-C',str(self.repo),'commit','-qm','fixture'],check=True)
+  run_fixture_git(['git','-C',str(self.repo),'add','.'],env=self.git_env);run_fixture_git(['git','-C',str(self.repo),'commit','-qm','fixture'],env=self.git_env)
   self.head=m.resolve_sha(self.repo,'HEAD');self.cover={'scope':'whole_finding','limitations':[],'obligation_ids':['o1']}
   self.man={'finding_id':'f1','phase':'phase-d','integration_sha':self.head,'finding_text':'A complete original defect.','acceptance_predicates':[{'id':'o1','text':'execute exists'}],'coverage':self.cover,'source_selections':[{'path':'code.rs','role':'mixed'}]}
  def packet(self):return m.prepare(self.man,self.repo,FakeClient)
@@ -65,7 +79,7 @@ class Tests(unittest.TestCase):
   self.assertEqual(len(m.summarize(rows)),2)
  def test_concurrent_repeated_packet_keeps_complete_artifact(self):
   p=self.save('same.json',self.packet());rows=m.run([p]*8,FakeClient,self.root/'logs','phase-d',concurrency=4)
-  self.assertTrue(all(r['error'] is None for r in rows));self.assertEqual(len(set(r['packet_path'] for r in rows)),1)
+  self.assertTrue(all(r['error'] is None for r in rows));self.assertEqual(len({r['packet_path'] for r in rows}),1)
   self.assertEqual(Path(rows[0]['packet_path']).read_bytes(),p.read_bytes())
  def test_phase_mismatch_logged(self):
   obj=self.packet();obj['state']['phase']='phase-e';r=m.run([self.save('wrong.json',obj)],FakeClient,self.root/'logs','phase-d')[0];self.assertIsNotNone(r['error'])

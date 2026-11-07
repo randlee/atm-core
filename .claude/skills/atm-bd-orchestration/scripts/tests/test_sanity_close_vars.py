@@ -13,6 +13,12 @@ SPEC = importlib.util.spec_from_loader(LOADER.name, LOADER)
 assert SPEC is not None
 CLOSE = importlib.util.module_from_spec(SPEC)
 LOADER.exec_module(CLOSE)
+READ_TASK_EVENTS = CLOSE.task_events
+
+
+@pytest.fixture(autouse=True)
+def task_events(monkeypatch):
+    monkeypatch.setattr(CLOSE, "task_events", lambda task: [{"event": "assigned"}])
 
 
 @pytest.fixture
@@ -43,6 +49,23 @@ def test_pass_builds_full_close_input_without_waiting_for_stack(inputs):
     assert "stacked" in manifest["close_context"]
 
 
+def test_reopened_assignment_counts_from_task_events_not_old_context(inputs):
+    manifest, selected = inputs
+    manifest["close_context"]["round"] = 1
+    events = [{"event": "assigned"}, {"event": "completed"}, {"event": "reopened"}]
+    assert CLOSE.build(manifest, selected, events=events)["round"] == 2
+
+
+def test_event_reader_requests_complete_history(monkeypatch):
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        return type("Result", (), {"stdout": '{"events": [{"event": "assigned"}]}'})()
+    monkeypatch.setattr(CLOSE.subprocess, "run", run)
+    assert READ_TASK_EVENTS("task") == [{"event": "assigned"}]
+    assert calls == [["atm", "task", "events", "task", "--all", "--json"]]
+
+
 def test_fail_retains_verbatim_deliverable_reason_and_stack_result(inputs):
     manifest, selected = inputs
     selected.update(verdict="FAIL", findings_count=1,
@@ -52,6 +75,12 @@ def test_fail_retains_verbatim_deliverable_reason_and_stack_result(inputs):
     assert result["stacked"] is stack
     assert result["undone"] == [{"number": 2, "reason": "missing required implementation"}]
     assert result["deliverables_complete"] == 1
+
+
+def test_role_fix_finding_carries_forward(inputs):
+    manifest, selected = inputs
+    manifest["checked_bead_data"] = {"title": "finding", "labels": ["stage:finding"], "metadata": {"role": "fix"}}
+    assert CLOSE.build(manifest, selected)["carry_forward"] == manifest["dev_bead"]
 
 
 @pytest.mark.parametrize("field", ["run_id", "commit", "task_id", "checked_bead"])
@@ -71,7 +100,8 @@ def test_lint_only_failure_marks_numbered_deliverables_undone(inputs):
 
 def test_minimal_documented_dev_dispatch_needs_no_hand_built_fields(inputs):
     manifest, selected = inputs
-    manifest["close_context"] = json.loads((ROOT / "examples/task-close-vars-dev.json").read_text())
+    # The dev close hook adds the QA bead's reviewer list to close_context (atm-task-close.py sanity_dispatch, #821).
+    manifest["close_context"] = {**json.loads((ROOT / "examples/task-close-vars-dev.json").read_text()), "reviewers_round1": ["req-qa"]}
     result = CLOSE.build(manifest, selected)
     assert result["evidence"] == "" and result["outcome"] == "fixed"
     assert result["round"] == 1 and result["findings_blocking"] == 0
@@ -119,3 +149,19 @@ def test_stack_input_requires_assignment_budget(inputs, tmp_path):
     manifest["close_context"].pop("budget")
     with pytest.raises(ValueError, match="budget"):
         CLOSE.write_stack_input(stack_file, values, manifest)
+
+
+@pytest.mark.parametrize("reviewers", ["", [], "req-qa", ["req-qa", ""]])
+def test_an_untyped_reviewer_list_is_refused_at_emission_not_at_the_qa_template(inputs, reviewers):
+    """#821: a legacy close_context carried reviewers_round1 as ""; qa-template.xml.j2 iterates a list."""
+    manifest, selected = inputs
+    manifest["close_context"]["reviewers_round1"] = reviewers
+    with pytest.raises(ValueError, match="reviewers_round1 must be a non-empty list of reviewer names"):
+        CLOSE.build(manifest, selected)
+
+
+def test_a_close_context_without_reviewers_is_refused_not_defaulted(inputs):
+    manifest, selected = inputs
+    del manifest["close_context"]["reviewers_round1"]
+    with pytest.raises(ValueError, match="lacks reviewers_round1"):
+        CLOSE.build(manifest, selected)

@@ -6,6 +6,7 @@ import importlib.util
 import importlib.machinery
 import os
 from pathlib import Path
+from subprocess_helpers import HANG_GUARD_SECONDS, run_command
 import subprocess
 import sys
 import tempfile
@@ -41,12 +42,12 @@ class MalformedBeadTests(unittest.TestCase):
     def split_bead(self, directory, fields):
         bead = Path(directory) / "bead.json"
         bead.write_text(json.dumps({"id": "x-1", "description": "## Deliverables\n1. Example", **fields}))
-        return subprocess.run(
+        return run_command(
             [sys.executable, str(SCRIPT), "--task", "x-1-sanity", "--bead", "x-1",
              "--worktree", directory, "--branch", "fixture", "--commit", "abc",
              "--base", "base", "--lint-command", "true", "--scratch", directory,
              "--bead-json", str(bead), "--split-only"],
-            capture_output=True, text=True, check=False,
+            timeout=HANG_GUARD_SECONDS, capture_output=True, text=True, check=False,
         )
 
     def test_manifest_rejects_incorrect_field_types_at_input(self):
@@ -94,9 +95,9 @@ class MalformedBeadTests(unittest.TestCase):
             client = root / "client.json"
             client.write_text(json.dumps({"success": False, "data": None,
                                           "error": {"message": "TYPESAFE_API_KEY is missing; no Jev evaluation ran"}}))
-            result = subprocess.run(
+            result = run_command(
                 [sys.executable, str(WRAPPER), "--assignment", str(assignment), "--client-output", str(client)],
-                capture_output=True, text=True, check=False,
+                timeout=HANG_GUARD_SECONDS, capture_output=True, text=True, check=False,
             )
         self.assertEqual(result.returncode, 1)
         self.assertIn("assignment_fields", result.stderr)

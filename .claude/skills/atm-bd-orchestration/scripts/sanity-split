@@ -306,8 +306,17 @@ def pin(args: SplitArguments) -> tuple[str, str]:
         raise Fail(3, f"worktree {args.worktree} is not a directory")
     sha = git(args.worktree, "rev-parse", "--verify", "--quiet", f"{args.commit}^{{commit}}",
               what=f"commit {args.commit} is not in {args.worktree}").strip()
-    base_sha = git(args.worktree, "rev-parse", "--verify", "--quiet", f"origin/{args.base}^{{commit}}",
-                   what=f"origin/{args.base} is not in {args.worktree}").strip()
+    if re.fullmatch(r"[0-9a-fA-F]{64}", args.base):
+        raise Fail(3, "base must resolve to a full 40-hex commit; ask the dispatcher to correct it")
+    try:
+        if not re.fullmatch(r"[0-9a-f]{40}", args.base):
+            raise Fail(3, "base is not a full commit id")
+        base_sha = git(args.worktree, "rev-parse", "--verify", "--quiet", f"{args.base}^{{commit}}").strip()
+    except Fail:
+        base_sha = git(args.worktree, "rev-parse", "--verify", "--quiet", f"origin/{args.base}^{{commit}}",
+                       what=f"base {args.base} is not in {args.worktree}; fetch origin or supply a valid commit").strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", base_sha):
+        raise Fail(3, "base must resolve to a full 40-hex commit; ask the dispatcher to correct it")
     head = git(args.worktree, "rev-parse", "HEAD").strip()
     if head != sha:
         raise Fail(4, f"HEAD is {head}, not {sha}")
@@ -464,7 +473,12 @@ class Cancelled(Exception):
 def stop_group(pgid: int, child: subprocess.Popen[bytes]) -> bool:
     """TERM the lint process group, wait the grace period, KILL the survivors; True once the group is empty."""
     def empty() -> bool:
-        child.poll()                                # reap the direct child so it does not linger as a zombie
+        # Reap the direct child so it does not linger as a zombie. Not child.poll(): a Cancelled raised
+        # just after Popen.wait acquired its waitpid lock leaves that lock held, and poll() then never reaps.
+        try:
+            os.waitpid(child.pid, os.WNOHANG)
+        except ChildProcessError:                   # already reaped
+            pass
         try:
             os.killpg(pgid, 0)
         except ProcessLookupError:
@@ -476,7 +490,7 @@ def stop_group(pgid: int, child: subprocess.Popen[bytes]) -> bool:
     def signal_group(sig: signal.Signals) -> None:
         try:
             os.killpg(pgid, sig)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):   # macOS: EPERM while only exiting members remain
             pass
 
     def wait_empty(seconds: float) -> bool:
@@ -545,8 +559,8 @@ def main() -> int:
     parser.add_argument("--lint-timeout-seconds", type=int, default=1800)
     try:
         args = parser.parse_args(namespace=SplitArguments())
-    except SystemExit:
-        return 1
+    except SystemExit as error:
+        return 0 if error.code == 0 else 1
     try:
         bead = load_bead(args)
         source = plan_source(args, bead)

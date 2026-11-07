@@ -35,6 +35,7 @@ from typing import Optional
 from pydantic import ValidationError
 
 import bd_models
+import phase_settings as phase_settings_module
 
 SCHEMA_VERSION = 3  # 3: journal.announced_at, state 'resolved' (v2 existed only in prototype scratch runs)
 CACHE_DIR = Path(".atm-bd")
@@ -96,23 +97,26 @@ def now_iso(clock=time.time):
     return datetime.datetime.fromtimestamp(clock(), datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def database_identity(root):
+def database_identity(root, beads_dir=None, phase=None):
     """dolt database name and project id from bd's workspace metadata; no bd process."""
-    beads_dir = Path(os.environ.get("BEADS_DIR") or Path(root) / ".beads")
+    root = Path(root)
+    if beads_dir is None:
+        beads_dir = phase_settings_module.beads_directory(root, phase)
+    beads_dir = Path(beads_dir)
     path = beads_dir / "metadata.json"
     try:
         data = json.loads(path.read_text())
         name, project = data["dolt_database"], data["project_id"]
     except (OSError, ValueError, KeyError) as error:
         raise CacheError("BD_CACHE.NO_DATABASE", f"cannot read dolt_database/project_id from {path}: {error}",
-                         "run from the beads repository root (or set BEADS_DIR) after bd init")
+                         "run from the configured beads repository root after bd init")
     if not name or "/" in name:
         raise CacheError("BD_CACHE.NO_DATABASE", f"invalid dolt_database {name!r} in {path}", "repair .beads/metadata.json")
     return name, project
 
 
-def cache_path(root):
-    name, _ = database_identity(root)
+def cache_path(root, beads_dir=None, phase=None):
+    name, _ = database_identity(root, beads_dir=beads_dir, phase=phase)
     return Path(root) / CACHE_DIR / f"{name}.bd-cache.sqlite3"
 
 
@@ -273,10 +277,12 @@ def command_for(bead, op, args, precondition, actor):
 
 
 class BdCache:
-    def __init__(self, root, runner=subprocess.run, clock=time.time, db_path=None):
+    def __init__(self, root, runner=subprocess.run, clock=time.time, db_path=None, beads_dir=None, phase=None):
         self.root = Path(root)
         self.runner, self.clock = runner, clock
-        self.database, self.project_id = database_identity(self.root)
+        self.beads_dir = (Path(beads_dir) if beads_dir is not None
+                          else phase_settings_module.beads_directory(self.root, phase)).resolve()
+        self.database, self.project_id = database_identity(self.root, beads_dir=self.beads_dir, phase=phase)
         self.path = Path(db_path) if db_path else self.root / CACHE_DIR / f"{self.database}.bd-cache.sqlite3"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
@@ -307,8 +313,10 @@ class BdCache:
 
     # -- backend (bd) --------------------------------------------------------
     def bd(self, command, timeout):
+        env = os.environ.copy()
+        env["BEADS_DIR"] = str(self.beads_dir)
         try:
-            return self.runner(command, cwd=self.root, text=True, capture_output=True, timeout=timeout)
+            return self.runner(command, cwd=self.root, env=env, text=True, capture_output=True, timeout=timeout)
         except (OSError, subprocess.TimeoutExpired) as error:
             raise CacheError("BD_CACHE.BD_UNAVAILABLE", f"{' '.join(command[:3])}: {error}",
                              "transient backend outage: the drain retries; a hook escalates or defers", command=command)

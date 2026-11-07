@@ -1,20 +1,24 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# ///
 """ATM cron module for bd-cache: drain journaled writes, sync active phases, escalate (#557).
 
 Register once per repository (ADR-069), from the beads repository root:
 
     atm cron start bd-cache --phase <current-phase> --cron "*/30 * * * * *" --until-hook \
-      --module <skill>/scripts/bd_cache_cron.py --cwd <repo-root> --custom '{"team": "<team>"}'
+      --module <skill>/scripts/bd_cache_cron.py --cwd <repo-root> --custom '{}'
 
 Each tick drains pending writes, then syncs every phase whose `.atm-bd/phase-<x>.toml`
 root bead is open (`custom.phases`, a list, limits this to the named phases). Every escalated write, and each new sync failure cause, is sent
-once to that phase's `lead` through `atm send --team tool` as `atm-bd@tool`; a backend outage is sent once to every active
+once to that phase's `lead` at its configured team, using the repository's configured tool identity; a backend outage is sent once to every active
 phase's lead, not as per-phase sync failures (bd_cache.UNREACHABLE); an undeliverable
 escalation stays unannounced and is retried next tick. The schedule stops when no
 phase is active and the journal holds no pending or unannounced entries.
 """
 
 import json
-import os
 import subprocess
 import sys
 import time
@@ -22,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bd_cache  # noqa: E402
+import phase_settings  # noqa: E402
 
 try:
     import tomllib
@@ -31,11 +36,11 @@ except ModuleNotFoundError:  # Python < 3.11
 TIMEOUT_MS = 2500
 CRON_TIMEOUT_MS = 30000
 TICK_BUDGET_S = 25.0
-ATM = os.environ.get("ATM_BIN", "atm")
+ATM = "atm"
 
 
 def phases(root, only=None):
-    """{phase: {"root": id, "lead": name}} from `.atm-bd/phase-*.toml`; `only` limits it to the named phases."""
+    """Phase roots, recipients and sender identity from phase/repository config."""
     found = {}
     for path in sorted((root / ".atm-bd").glob("phase-*.toml")):
         if tomllib is None:
@@ -43,8 +48,10 @@ def phases(root, only=None):
                                       "run the cron module with Python 3.11 or newer")
         data = tomllib.loads(path.read_text())
         name = path.stem[len("phase-"):]
-        if data.get("root") and data.get("lead") and (only is None or name in only):
-            found[name] = {"root": data["root"], "lead": data["lead"]}
+        if data.get("root") and (only is None or name in only):
+            settings = phase_settings.phase_settings(root, name)
+            found[name] = {"root": data["root"], "lead": settings.lead,
+                           "team": settings.team, "tool_identity": settings.tool_identity}
     return found
 
 
@@ -65,12 +72,9 @@ def active_phases(cache, configured):
             if (cache.cached(info["root"]) or {}).get("status") not in (None, "closed")}
 
 
-def send(team, lead, body):
-    # atm-bd@tool is the installer's notification member; cron@tool is atm's daemon-owned scheduler principal and
-    # refuses ordinary sends.
-    env = {**os.environ, "ATM_IDENTITY": "atm-bd", "ATM_TEAM": "tool"}
-    result = subprocess.run([ATM, "send", f"{lead}@{team}", "--team", "tool", "--stdin", "--json"], input=body,
-                            capture_output=True, text=True, check=False, timeout=10, env=env)
+def send(team, lead, body, tool_identity):
+    result = subprocess.run([ATM, "send", f"{lead}@{team}", "--as", tool_identity, "--stdin", "--json"], input=body,
+                            capture_output=True, text=True, check=False, timeout=10)
     return result.returncode == 0, (result.stderr or result.stdout).strip()[-300:]
 
 
@@ -89,14 +93,14 @@ def outage_text(outage):
 
 def tick(root, custom, *, cache=None, send_fn=send, clock=time.monotonic):
     deadline = clock() + TICK_BUDGET_S
-    team = custom.get("team")
-    if not team:
-        return {"result": "refused", "message": "bd-cache cron needs custom.team (the ATM team of the phase leads)"}
     only = custom.get("phases")
     if only is not None and not (isinstance(only, list) and all(isinstance(p, str) for p in only)):
         return {"result": "refused", "message": "custom.phases must be a list of phase names"}
     cache = cache or bd_cache.BdCache(root)
-    configured = phases(root, only)
+    try:
+        configured = phases(root, only)
+    except phase_settings.PhaseSettingsError as error:
+        return {"result": "refused", "message": str(error)}
     report = {"drain": cache.drain(deadline=deadline - 5.0, monotonic=clock), "sync": {}, "undelivered": []}
     active = active_phases(cache, configured)
     for name in active:
@@ -112,29 +116,32 @@ def tick(root, custom, *, cache=None, send_fn=send, clock=time.monotonic):
                 continue  # the outage is announced once below, not once per phase
             cause = f"{error.code}: {error.detail}"
             if cache.sync_alert(name) != cause:
-                ok, detail = send_fn(team, active[name]["lead"],
+                info = active[name]
+                ok, detail = send_fn(info["team"], info["lead"],
                                   f"bd-cache sync of phase {name} is failing: {cause}. Fix: {error.fix}. Hooks keep "
-                                  "reading the last synced rows until it recovers.")
+                                     "reading the last synced rows until it recovers.", info["tool_identity"])
                 if ok:
                     cache.set_sync_alert(name, cause)
                 else:
                     report["undelivered"].append({"phase": name, "error": detail})
     outage = cache.outage()
     if outage and not outage["announced_at"]:
-        leads = sorted({info["lead"] for info in (active or configured).values()})
-        failed = [(lead, detail) for lead in leads
-                  for ok, detail in [send_fn(team, lead, outage_text(outage))] if not ok]
-        if leads and not failed:
+        recipients = sorted({(info["team"], info["lead"], info["tool_identity"])
+                             for info in (active or configured).values()})
+        failed = [(team, lead, detail) for team, lead, tool_identity in recipients
+                  for ok, detail in [send_fn(team, lead, outage_text(outage), tool_identity)] if not ok]
+        if recipients and not failed:
             cache.mark_outage_announced()
-        report["undelivered"] += [{"outage": outage["since"], "lead": lead, "error": detail} for lead, detail in failed]
-        if not leads:
+        report["undelivered"] += [{"outage": outage["since"], "team": team, "lead": lead, "error": detail}
+                                  for team, lead, detail in failed]
+        if not recipients:
             report["undelivered"].append({"outage": outage["since"], "error": "no phase lead to tell"})
     for entry in cache.unannounced_escalations():
-        lead = (configured.get(entry["phase"]) or {}).get("lead")
-        if not lead:
+        info = configured.get(entry["phase"])
+        if not info or not info["lead"]:
             report["undelivered"].append({"seq": entry["seq"], "error": f"no lead for phase {entry['phase']!r}"})
             continue
-        ok, detail = send_fn(team, lead, escalation_text(entry))
+        ok, detail = send_fn(info["team"], info["lead"], escalation_text(entry), info["tool_identity"])
         if ok:
             cache.mark_announced(entry["seq"])
         else:
@@ -146,12 +153,20 @@ def tick(root, custom, *, cache=None, send_fn=send, clock=time.monotonic):
 
 def should_stop(root, cache=None, only=None):
     cache = cache or bd_cache.BdCache(root)
-    if active_phases(cache, phases(root, only)):
+    try:
+        configured = phases(root, only)
+    except phase_settings.PhaseSettingsError:
+        return False
+    if active_phases(cache, configured):
         return False
     return not cache.has_open_work()
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print("usage: bd_cache_cron.py [cron.tick|cron.stop|doctor] < request.json")
+        print(__doc__)
+        return
     request = json.load(sys.stdin)
     hook = sys.argv[1] if len(sys.argv) > 1 else request.get("hook", "")
     root = Path.cwd()
