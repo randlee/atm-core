@@ -1,0 +1,29 @@
+---
+required_variables:
+  - runtime
+  - runtime.agent
+  - runtime.path
+  - operation
+  - correlation_id
+  - params
+metadata:
+  id: agent-invocation
+  version: 1.0.0
+  purpose: Strict one-envelope invocation of a resolved plan-anchor agent
+---
+Invoke the resolved `{{ runtime.agent }}` definition at `{{ runtime.path }}` with the harness **Agent** tool. Pass exactly this one fenced JSON params object and no prose:
+
+```json
+{
+  "schema_version": "1.0.0",
+  "runtime": {{ runtime | tojson }},
+  "operation": {{ operation | tojson }},
+  "correlation_id": {{ correlation_id | tojson }},
+  "params": {{ params | tojson }}
+}
+```
+
+Accept exactly one fenced JSON result. Save the response unchanged and validate
+it with `anchor_runner_contract.py validate-fence --kind result --file
+<response-file> --correlation-id <correlation-id>`; use its data only when it
+reports `data.valid: true` (`data.valid: false` names the `violation`).

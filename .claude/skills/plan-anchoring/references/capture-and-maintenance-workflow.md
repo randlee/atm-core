@@ -1,5 +1,5 @@
 ---
-version: 0.9.2
+version: 0.10.0
 ---
 
 # Capture and maintenance workflow
@@ -49,7 +49,7 @@ python3 "$S" update --anchors "$A" --id ANC-001 --fixture-pass "<a sentence a be
 python3 "$S" validate --anchors "$A" && python3 "$S" render --anchors "$A"
 ```
 
-Then create the bead tree and record its IDs with `set-beads` (`references/bead-layout.md`). Requirements and ADRs governing this plan are added the same way with `--source-type REQ|ADR --source-ref <ID>`; they keep their register ID. Fill in `intent.md` if just created. Before the first gate run, every locked anchor must be `lint` clean, have approved fixtures, and pass `check-fixtures` with the default questions; otherwise tune first (B2). Periodically run `dedupe --anchors "$A"` and fold duplicates (`retire --replaced-by`).
+Then create the bead tree and record its IDs with `set-beads` (`references/bead-layout.md`). Requirements and ADRs governing this plan are added the same way with `--source-type REQ|ADR --source-ref <ID>`; they keep their register ID. Fill in `intent.md` if just created. Tune each locked anchor (`lint` clean, approved fixtures, `check-fixtures` passing with the default questions, B2) concurrently with gate runs; the rubric qualifies an anchor's wording and does not gate running `judge`. Periodically run `dedupe --anchors "$A"` and fold duplicates (`retire --replaced-by`).
 
 ### F. Maintain
 

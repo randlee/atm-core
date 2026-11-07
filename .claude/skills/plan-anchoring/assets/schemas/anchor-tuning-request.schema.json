@@ -132,7 +132,10 @@
             "role": {"enum": ["single_constraint", "observable", "faithful", "scoped", "self_contained"]},
             "canonical_request": {
               "required": ["questions", "state"],
-              "properties": {"state": {"type": "object", "required": ["anchor"], "properties": {"anchor": {"$ref": "#/$defs/sourceAnchor"}}}}
+              "properties": {"state": {"type": "object", "required": ["anchor"], "properties": {
+                "anchor": {"$ref": "#/$defs/sourceAnchor"},
+                "intent": {"$ref": "#/$defs/intentDescriptor"}
+              }}}
             },
             "raw_response": {"$ref": "#/$defs/rubricResponse"}
           }},
@@ -333,6 +336,16 @@
         "id": {"const": "anchor-tuning-review-feedback"},
         "version": {"const": "0.4.1"},
         "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "intentDescriptor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "sha256", "content"],
+      "properties": {
+        "id": {"type": "string", "pattern": "\\S"},
+        "version": {"oneOf": [{"type": "integer"}, {"type": "string", "pattern": "\\S"}]},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "content": {"type": "string", "pattern": "\\S"}
       }
     },
     "sourceAnchor": {

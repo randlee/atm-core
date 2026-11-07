@@ -1,6 +1,6 @@
 ---
 name: plan-anchor-questions
-version: 0.9.2
+version: 0.10.0
 description: The planning-gate Jev question set, what each question isolates, why the set is orthogonal, and how to word overrides.
 ---
 
