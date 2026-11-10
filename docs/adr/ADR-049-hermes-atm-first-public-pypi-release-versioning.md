@@ -3,16 +3,17 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Relates to | ADR-042; `.just/check_version_sync.py`; PR #897, #906, #907 |
+| Relates to | ADR-042; `sc_lint.check_version_sync`; PR #897, #906, #907 |
 
 ## Context
 
 `hermes-atm` and `atm-graft-python` have never been published to PyPI. Their
 package versions are kept in lockstep with the internal workspace release
-version via `version.workspace = true` and `.just/check_version_sync.py`
-(the sole canonical version-alignment gate, established in PR #897 after
-consolidating two earlier duplicate/conflicting checks). The workspace is
-currently at `1.4.2`.
+version via `version.workspace = true`; the published sc-lint `sc_lint.check_version_sync`
+step is the canonical package-version alignment gate, established in PR #897
+after consolidating two earlier duplicate/conflicting checks. The separate
+`.just/check_python_dependency_pins.py` check covers sibling dependency pins
+while sc-lint#783 remains open. The workspace is currently at `1.4.2`.
 
 quality-mgr's QA-RELEASE-READINESS-PYPI-1 investigation flagged this as an
 unresolved gap: publishing a package's *first* public release as `1.4.2`
@@ -37,15 +38,15 @@ the internal workspace version, unchanged from current practice. Do not
 introduce a second, independently-tracked public version number for these
 packages.
 
-To address the "implied history" concern without weakening the
-version-alignment guarantee `check_version_sync.py` already enforces,
+To address the "implied history" concern without weakening the package-version
+alignment guarantee already enforced by `sc_lint.check_version_sync`,
 the first published release's PyPI project description/README and GitHub
 release notes must explicitly state that this is the first public release,
 and that the `1.x` starting point reflects the version already reached
 during this project's internal (pre-public) development — not a gap in
 publication history. No `0.x` renumbering, no separate public/internal
-version mapping, and no change to `version.workspace = true` or the
-`check_version_sync.py` gate.
+version mapping, and no change to `version.workspace = true` or the published
+`sc_lint.check_version_sync` gate.
 
 ## Consequences
 
@@ -71,7 +72,7 @@ version mapping, and no change to `version.workspace = true` or the
    building and maintaining a second versioning scheme and an
    internal-to-public version mapping, adds an extra manual step to every
    release, and reopens exactly the kind of dual-canonical-source problem
-   `check_version_sync.py` was built to eliminate (see PR #897's
+   `sc_lint.check_version_sync` was built to eliminate (see PR #897's
    RBQA-F002 finding). Rejected as disproportionate engineering cost for a
    documentation-shaped problem.
 2. **Silently publish at `1.4.2` with no explanation.** Cheapest option,
@@ -85,5 +86,7 @@ version mapping, and no change to `version.workspace = true` or the
 - First-publish README/release notes explicitly state this is the initial
   public release and explain the `1.x` starting version, before the first
   `twine upload` (or equivalent) to PyPI/TestPyPI.
-- `check_version_sync.py` continues to pass unchanged; this ADR introduces
-  no new version-comparison logic to test.
+- The published `sc_lint.check_version_sync` check continues to pass; this
+  ADR introduces no new version-comparison logic to test. Sibling dependency
+  pin enforcement remains in `.just/check_python_dependency_pins.py` pending
+  sc-lint#783.

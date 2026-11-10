@@ -531,6 +531,7 @@ impl AsyncMessageReceivedHookEmitter for TokioTmuxReceivedHook {
 }
 
 impl TokioTmuxReceivedHook {
+    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "The delay preserves the required tmux double-Enter spacing within the request deadline.")]
     async fn emit_nudge(
         target: &boundary::LocalTmuxNudgeTarget,
         deadline: RequestDeadline,

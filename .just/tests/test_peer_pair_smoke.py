@@ -3,11 +3,9 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
-import subprocess
-import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -179,29 +177,33 @@ class PeerPairSmokeTests(unittest.TestCase):
             self.assertIn("required structured rejection event", result["failures"][-1])
 
     def test_teardown_never_deletes_runtime_without_matching_pid_marker(self):
-        with tempfile.TemporaryDirectory() as temp:
-            runtime = Path(temp) / "runtime"
-            runtime.mkdir()
-            owned = runtime / "owned.sock"
-            owned.touch()
-            process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
-            try:
+        for marker_contents in (None, "different-pid"):
+            with self.subTest(marker=marker_contents), tempfile.TemporaryDirectory() as temp:
+                runtime = Path(temp) / "runtime"
+                runtime.mkdir()
+                owned = runtime / "owned.sock"
+                owned.touch()
+                marker = runtime / ".peer-smoke-owned"
+                if marker_contents is not None:
+                    marker.write_text(marker_contents, encoding="utf-8")
+                process = Mock(pid=4242)
+                process.poll.return_value = None
                 config = {"daemon": {
                     "endpoint": "127.0.0.1:1",
                     "runtime_dir": str(runtime),
                     "owned_runtime_paths": [str(owned)],
                     "launch_command": ["atm-daemon"],
                 }}
-                result = RUNNER.stop_owned(process, config)
+                with patch.object(RUNNER, "endpoint_closed", return_value=True) as endpoint_closed:
+                    result = RUNNER.stop_owned(process, config)
                 self.assertEqual(result["status"], "ownership_marker_missing")
+                self.assertEqual(result["launched_pid"], 4242)
                 self.assertTrue(owned.exists())
-            finally:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
+                self.assertEqual(marker.exists(), marker_contents is not None)
+                process.terminate.assert_called_once_with()
+                process.wait.assert_called_once_with(timeout=10)
+                process.kill.assert_not_called()
+                endpoint_closed.assert_called_once_with("127.0.0.1:1")
 
 
 if __name__ == "__main__":

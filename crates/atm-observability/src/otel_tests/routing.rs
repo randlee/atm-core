@@ -66,8 +66,7 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         LogDestination::Both,
     ] {
         let receiver = Receiver::start(false).await;
-        let setup =
-            setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+        let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
         let root = tempfile::tempdir().unwrap();
         let log_dir = root.path().join("logs");
         let logger = Arc::new(

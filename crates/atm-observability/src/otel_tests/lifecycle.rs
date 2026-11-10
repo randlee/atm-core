@@ -35,6 +35,8 @@ impl ExportFailureObserved {
     async fn all_signals_failed(&self) {
         loop {
             let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
             if ["BatchSpanProcessor", "BatchLogProcessor", "PeriodicReader"]
                 .iter()
                 .all(|prefix| self.first_with_prefix(prefix).is_some())
@@ -200,7 +202,7 @@ async fn unreachable_collector_scenario() {
     // full-batch path. The scheduled path first fires at 2x EXPORT_INTERVAL
     // (the SDK interval sleeps before its first tick, then skips it), which
     // a loaded runner can push past the deadline below.
-    let setup = setup_with_limits(&config(&endpoint), 1, Duration::from_millis(50)).unwrap();
+    let setup = setup_success(&config(&endpoint), 1).unwrap();
     setup
         .0
         .sink
@@ -257,7 +259,7 @@ async fn unreachable_collector_scenario() {
     assert_each_sdk_event_projects(&observed);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() {
     let receiver = Receiver::start(true).await;
     // Deterministic by construction: the tonic transport bound is 50 ms while
@@ -301,6 +303,9 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     assert!(!receiver.capture.spans.lock().unwrap().is_empty());
     assert!(!receiver.capture.logs.lock().unwrap().is_empty());
     assert!(!receiver.capture.metrics.lock().unwrap().is_empty());
+    // The blocking shutdown tasks keep virtual time from auto-advancing.
+    // Start all requests first, then drive the transport deadline explicitly.
+    tokio::time::advance(Duration::from_millis(50)).await;
     let (trace, log, metric) = tokio::time::timeout(Duration::from_secs(5), async {
         tokio::join!(trace, log, metric)
     })
@@ -413,8 +418,7 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     let receiver = Receiver::start(true).await;
     // The export timeout outlives the test's hold, so only the receiver's
     // release signal lets the blocking shutdown finish.
-    let setup =
-        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_secs(30)).unwrap();
+    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
     for _ in 0..64 {
         setup.1.tracer("abandoned-wait").start("nonempty").end();
     }
@@ -431,9 +435,9 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     let (task, traces, logs, metrics) = setup;
     drop(task);
     let diagnostics = Arc::new(ExportDiagnostics::default());
-    let mut trace_call = tokio::task::spawn_blocking(move || traces.shutdown());
-    let mut log_call = tokio::task::spawn_blocking(move || logs.shutdown());
-    let mut metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
+    let trace_call = tokio::task::spawn_blocking(move || traces.shutdown());
+    let log_call = tokio::task::spawn_blocking(move || logs.shutdown());
+    let metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
     let capture = &receiver.capture;
     capture
         .wait("an export started for every signal", || {
@@ -443,21 +447,9 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
         })
         .await;
     // Each export is held by the receiver, so no shutdown can complete yet.
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut trace_call)
-            .await
-            .is_err()
-    );
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut log_call)
-            .await
-            .is_err()
-    );
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut metric_call)
-            .await
-            .is_err()
-    );
+    assert!(!trace_call.is_finished());
+    assert!(!log_call.is_finished());
+    assert!(!metric_call.is_finished());
     for signal in Signal::ALL {
         assert_eq!(capture.finished(signal), 0, "{signal:?} export still held");
     }

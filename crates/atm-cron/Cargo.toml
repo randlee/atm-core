@@ -13,6 +13,7 @@ description = "Persistent cron scheduling through ATM's sealed scheduler boundar
 test-utils = ["atm-core/test-utils"]
 
 [dependencies]
+sc-lint-attributes = { workspace = true }
 async-trait.workspace = true
 atm-core.workspace = true
 chrono = { version = "0.4", features = ["serde"] }

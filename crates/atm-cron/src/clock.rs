@@ -32,6 +32,7 @@ impl Clock for SystemClock {
         Utc::now()
     }
 
+    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "The scheduler waits until its target wall-clock time, rechecking after bounded clock steps.")]
     async fn sleep_until(&self, target: DateTime<Utc>) {
         loop {
             let duration = system_sleep_step(self.now(), target);

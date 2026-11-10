@@ -60,6 +60,48 @@ class BootstrapTests(IsolatedHomeTests):
         versions.extend(version for _, version in manifest.python_packages)
         self.assertTrue(all("*" not in version and ">" not in version and "<" not in version for version in versions))
 
+    def test_sc_lint_bootstrap_version_follows_kit_and_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            kit = root / "install.json"
+            requirements = root / "requirements.txt"
+            kit.write_text(json.dumps({"minimum_version": "9.8.7"}), encoding="utf-8")
+            requirements.write_text("other==1.2.3\nsc-lint==9.8.7\n", encoding="utf-8")
+            manifest = bootstrap.load_manifest(install_path=kit, requirements_path=requirements)
+            self.assertEqual(dict(manifest.python_packages)["sc-lint"], "9.8.7")
+            self.assertNotIn("sc-lint", bootstrap.tomllib.loads(bootstrap.MANIFEST_PATH.read_text())["python"])
+
+    def test_sc_lint_bootstrap_rejects_missing_duplicate_or_drifted_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            kit = root / "install.json"
+            requirements = root / "requirements.txt"
+            kit.write_text(json.dumps({"minimum_version": "9.8.7"}), encoding="utf-8")
+            for content in ("", "sc-lint==9.8.6\n", "sc-lint>=9.8.7\n", "sc-lint==9.8.7\nsc-lint==9.8.7\n"):
+                with self.subTest(content=content):
+                    requirements.write_text(content, encoding="utf-8")
+                    with self.assertRaisesRegex(bootstrap.BootstrapError, "sc-lint==9.8.7"):
+                        bootstrap.load_manifest(install_path=kit, requirements_path=requirements)
+
+    def test_sc_lint_bootstrap_rejects_invalid_kit_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            kit = root / "install.json"
+            requirements = root / "requirements.txt"
+            requirements.write_text("sc-lint==9.8.7\n", encoding="utf-8")
+            for value in (None, "latest", "9.8", 987):
+                with self.subTest(value=value):
+                    kit.write_text(json.dumps({"minimum_version": value}), encoding="utf-8")
+                    with self.assertRaisesRegex(bootstrap.BootstrapError, "exact release version"):
+                        bootstrap.load_manifest(install_path=kit, requirements_path=requirements)
+
+    def test_sc_lint_bootstrap_rejects_a_second_manifest_pin(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "bootstrap.toml"
+            manifest.write_text(bootstrap.MANIFEST_PATH.read_text(encoding="utf-8") + '\nsc-lint = "9.8.7"\n', encoding="utf-8")
+            with self.assertRaisesRegex(bootstrap.BootstrapError, "not bootstrap.toml"):
+                bootstrap.load_manifest(manifest)
+
     def test_sc_compose_uses_the_exact_prebuilt_release_asset(self) -> None:
         manifest = bootstrap.load_manifest()
         asset, url = bootstrap.sc_compose_install_command(manifest.sc_compose, "aarch64-apple-darwin")
