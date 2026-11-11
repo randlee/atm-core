@@ -34,6 +34,13 @@ jobs:
         with:
           python-version: "3.x"
 
+      # render_procedure_pages.py imports sc_compose to render the procedure
+      # pages --check compares against, so the gate cannot run without it.
+      # Pinned to the same line the repo's tooling uses (bootstrap-requirements
+      # pins sc-lint the same way); bump both together.
+      - name: Install procedure renderer dependencies
+        run: python3 -m pip install --disable-pip-version-check sc-compose==1.8.0
+
       - name: Verify generated site pages and links
         run: |
           python3 .just/check_site_generated.py
