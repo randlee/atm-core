@@ -36,10 +36,6 @@ error_types = []
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["serde", "unrestricted_constructor"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-CRON-RUN-PERMIT-ISSUER"]
-review_gates = ["sealed_trait", "opaque_capability", "deterministic_test_doubles"]
-
 [status]
 state = "concrete_landed"
 notes = ["The permit is opaque, non-serializable, and scoped to one schedule generation. Only the private scheduler issuer in atm-cron may implement the ADR-001 issuer seam."]

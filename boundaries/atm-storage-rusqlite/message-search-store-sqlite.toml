@@ -37,9 +37,5 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["direct_http_sqlite_reader"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-MESSAGE-SEARCH-STORE"]
-review_gates = ["private_sqlite_impl", "no_http_sqlite_reader"]
-
 [status]
 state = "concrete_landed"

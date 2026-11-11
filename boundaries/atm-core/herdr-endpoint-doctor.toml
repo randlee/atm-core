@@ -67,16 +67,6 @@ allowed_test_double_paths = [
 ]
 forbidden_test_bypasses = ["std::process::Command", "tokio::process::Command"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-HERDR-ENDPOINT-DOCTOR-REFERENCES"]
-review_gates = [
-  "adr_001_sealed_supertrait",
-  "one_production_endpoint_doctor_adapter",
-  "no_aggregate_herdr_state",
-  "privacy_preserving_endpoint_display",
-  "no_herdr_io_at_construction",
-]
-
 [status]
 state = "active"
 notes = [

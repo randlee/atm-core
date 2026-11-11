@@ -7,10 +7,8 @@ name = "LocalIpcClientTransportAdapter"
 trait = "ClientTransport"
 
 [implementation]
-type = "LocalIpcClientTransportAdapter"
-module = "atm::composition"
-visibility = "private"
-constructor = "private"
+visibility = "trait_only"
+constructor = "none"
 
 [composition]
 roots = ["atm::composition::CliComposition::bootstrap"]
@@ -52,18 +50,6 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = [
   "atm_daemon::client",
   "rusqlite::Connection",
-]
-
-[enforcement]
-lint_rules = [
-  "LINT-BOUNDARY-CLIENT-TRANSPORT-CLI-EDGES",
-  "LINT-BOUNDARY-CLIENT-TRANSPORT-CLI-REFERENCES",
-]
-review_gates = [
-  "no_public_impl",
-  "no_public_constructor",
-  "no_cli_to_daemon_edge",
-  "no_cli_to_sqlite_edge",
 ]
 
 [status]

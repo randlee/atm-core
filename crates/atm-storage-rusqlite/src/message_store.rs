@@ -29,6 +29,24 @@ pub(crate) struct SqliteTaskStore {
     pub(crate) db: Arc<SharedDb>,
 }
 
+impl SqliteNudgeTemplateOverrideStore {
+    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
+}
+
+impl SqlitePendingNudgeStore {
+    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
+}
+
+impl SqliteTaskStore {
+    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct SqlitePeerConfigStore {
     pub(crate) db: Arc<SharedDb>,

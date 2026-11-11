@@ -38,10 +38,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["atm_hash_implementation", "atm_yaml_parser", "catalog_persistence"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TEMPLATE-STORAGE-TYPES"]
-review_gates = ["leaf_dto_only", "no_catalog_or_hashing_capability"]
-
 [status]
 state = "concrete_landed"
 notes = ["AN.1 keeps TemplateSha and TemplateFrontmatter in the leaf storage contract. The exact-pinned adapter obtains them from public sc-compose/sc-sha APIs; this crate does not hash, parse, or persist templates."]

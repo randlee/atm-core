@@ -45,10 +45,6 @@ notes = ["The binding delegates all mailbox state and transport to atm-graft; it
 allowed_test_double_paths = ["atm_core::transport::testing::FakeClientTransport"]
 forbidden_test_bypasses = ["rusqlite::Connection", "reqwest::Client", "hyper::Client", "axum::Router"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-HERMES-GRAFT-BINDING-EDGES", "LINT-BOUNDARY-HERMES-GRAFT-BINDING-REFERENCES"]
-review_gates = ["no_binding_owned_sqlite", "no_binding_owned_http", "no_binding_owned_routing"]
-
 [status]
 state = "active"
 notes = ["AI.37 closes the explicit no-SQLite/no-HTTP/no-routing-policy boundary for the Python graft binding."]

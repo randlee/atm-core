@@ -401,8 +401,6 @@ class BoundaryRecord:
     forbidden_test_bypasses: tuple[str, ...]
     io_forbidden_source_modules: tuple[tuple[str, tuple[str, ...]], ...]
     no_in_repo_implementation: bool
-    lint_rules: tuple[str, ...]
-    review_gates: tuple[str, ...]
     status_state: str
     source_path: Path
     start_line: int
@@ -1000,22 +998,6 @@ def build_boundary_record(
     forbidden_references = string_list(("references", "forbidden"))
     allowed_test_double_paths = string_list(("testing", "allowed_test_double_paths"))
     forbidden_test_bypasses = string_list(("testing", "forbidden_test_bypasses"))
-    lint_rules = string_list(("enforcement", "lint_rules"))
-    review_gates = string_list(("enforcement", "review_gates"))
-
-    # atm policy: every boundary names the lint rules and review gates that
-    # enforce it, and those names resolve to registered runners.
-    if not lint_rules:
-        errors.append("enforcement.lint_rules must not be empty")
-    if not review_gates:
-        errors.append("enforcement.review_gates must not be empty")
-    for rule_name in lint_rules:
-        if validate_identifier(rule_name.replace("-", "_"), field_name="enforcement.lint_rules entry"):
-            errors.append(f"invalid enforcement.lint_rules entry: {rule_name!r}")
-    for gate_name in review_gates:
-        if validate_identifier(gate_name.replace("-", "_"), field_name="enforcement.review_gates entry"):
-            errors.append(f"invalid enforcement.review_gates entry: {gate_name!r}")
-
     # atm-only [extensions.atm] policy (randlee/sc-lint#203 keeps it opaque).
     raw_io_forbidden_source_modules = nested_get(
         data, ATM_EXTENSION_PATH + ("io_forbidden_source_modules",)
@@ -1084,8 +1066,6 @@ def build_boundary_record(
         forbidden_test_bypasses=tuple(forbidden_test_bypasses),
         io_forbidden_source_modules=tuple(io_forbidden_source_modules),
         no_in_repo_implementation=no_in_repo_implementation,
-        lint_rules=tuple(lint_rules),
-        review_gates=tuple(review_gates),
         status_state=status_state,
         source_path=source_path,
         start_line=start_line,
@@ -1920,7 +1900,7 @@ def is_test_support_crate(info: ManifestInfo) -> bool:
 # lives only in the named exporting crate (ADR-064); atm-core owns the trait
 # and has no built-in no-op sink. Test-support crates are governed by allowed_test_double_paths.
 TELEMETRY_SINK_IMPLEMENTATION_RULES = {
-    "LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES": "atm-observability",
+    "BOUNDARY-TaskTelemetrySink": ("LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES", "atm-observability"),
 }
 
 
@@ -1932,30 +1912,30 @@ def collect_telemetry_sink_implementation_violations(
     for record in records:
         if record.public_trait is None:
             continue
-        for rule in record.lint_rules:
-            exporter = TELEMETRY_SINK_IMPLEMENTATION_RULES.get(rule)
-            if exporter is None:
+        selected = TELEMETRY_SINK_IMPLEMENTATION_RULES.get(record.boundary_id)
+        if selected is None:
+            continue
+        rule, exporter = selected
+        pattern = re.compile(
+            rf"\bimpl(?:\s*<[^>{{;]*>)?\s+(?:[A-Za-z0-9_:]+::)?{re.escape(record.public_trait)}\s+for\b"
+        )
+        for info in infos:
+            if {record.owner_package, exporter} & set(info.aliases) or is_test_support_crate(info):
                 continue
-            pattern = re.compile(
-                rf"\bimpl(?:\s*<[^>{{;]*>)?\s+(?:[A-Za-z0-9_:]+::)?{re.escape(record.public_trait)}\s+for\b"
-            )
-            for info in infos:
-                if {record.owner_package, exporter} & set(info.aliases) or is_test_support_crate(info):
-                    continue
-                for source_path in source_files_for_crate(info):
-                    lines = source_path.read_text(encoding="utf-8").splitlines()
-                    test_scope = rust_file_test_scope(source_path, lines)
-                    rel_source = source_path.relative_to(repo_root).as_posix()
-                    for index, line in enumerate(lines):
-                        if test_scope[index] or is_comment_line(line) or not pattern.search(line):
-                            continue
-                        violations.append(
-                            BoundaryViolation(
-                                f"{rel_source}:{index + 1}",
-                                f"{rule} production {record.public_trait} implementation outside "
-                                f"{record.owner_package} and {exporter}",
-                            )
+            for source_path in source_files_for_crate(info):
+                lines = source_path.read_text(encoding="utf-8").splitlines()
+                test_scope = rust_file_test_scope(source_path, lines)
+                rel_source = source_path.relative_to(repo_root).as_posix()
+                for index, line in enumerate(lines):
+                    if test_scope[index] or is_comment_line(line) or not pattern.search(line):
+                        continue
+                    violations.append(
+                        BoundaryViolation(
+                            f"{rel_source}:{index + 1}",
+                            f"{rule} production {record.public_trait} implementation outside "
+                            f"{record.owner_package} and {exporter}",
                         )
+                    )
     return violations
 
 

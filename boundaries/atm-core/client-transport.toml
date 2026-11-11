@@ -35,10 +35,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["atm_daemon::client"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-CLIENT-TRANSPORT-REFERENCES"]
-review_gates = ["no_cli_to_daemon_internal_edge"]
-
 [status]
 state = "retired"
 notes = [

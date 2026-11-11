@@ -8,9 +8,10 @@ facade = "SharedDbStateRoot"
 
 [implementation]
 type = "SharedDb"
-module = "atm_storage_rusqlite"
+module = "atm_storage_rusqlite::shared_db_reader_lanes"
+# The crate root and sibling adapters share the database and its reader lanes.
 visibility = "pub(crate)"
-constructor = "pub(crate)"
+constructor = "none"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
@@ -56,16 +57,6 @@ error_types = ["AtmError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
-
-[enforcement]
-lint_rules = [
-  "LINT-BOUNDARY-SHARED-DB-EDGES",
-  "LINT-BOUNDARY-SHARED-DB-REFERENCES",
-]
-review_gates = [
-  "no_public_impl",
-  "no_cross_crate_shared_db_dependency",
-]
 
 [status]
 state = "unix_implemented_windows_pending"

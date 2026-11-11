@@ -51,13 +51,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["atm_daemon::client"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-DAEMON-BOOTSTRAP-DEPENDENCIES"]
-review_gates = [
-  "no_bootstrap_to_daemon_edge",
-  "no_bootstrap_to_sqlite_edge",
-]
-
 [status]
 state = "active"
 notes = [

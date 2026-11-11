@@ -26,7 +26,8 @@
         "SCB-MANIFEST-004",
         "SCB-MANIFEST-005",
         "SCB-MANIFEST-006",
-        "SCB-BOUNDARY-004"
+        "SCB-BOUNDARY-004",
+        "SCB-BOUNDARY-005"
       ],
       "global_dependency_ownership": [
         {

@@ -1,3 +1,4 @@
+#[cfg(test)]
 use std::sync::Arc;
 
 use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
@@ -9,7 +10,6 @@ use atm_storage::{
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use super::SqliteTaskStore;
-use crate::shared_db::SharedDb;
 use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
 use crate::task_sql;
 
@@ -125,10 +125,6 @@ fn drop_legacy_prompt_handoffs(
 }
 
 impl SqliteTaskStore {
-    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
-        Self { db }
-    }
-
     pub(crate) fn decode_row(row: &Row<'_>) -> rusqlite::Result<TaskRow> {
         let team: String = row.get(0)?;
         let task_id: String = row.get(1)?;

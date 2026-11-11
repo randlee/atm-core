@@ -10,7 +10,7 @@ trait = "HookRegistrationStore"
 type = "SqliteHookRegistrationStore"
 module = "atm_storage_rusqlite::hook_registration_store"
 visibility = "private"
-constructor = "pub(crate)"
+constructor = "none"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
@@ -41,10 +41,6 @@ notes = [
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
-
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-HOOK-REGISTRATION-STORE-SQLITE"]
-review_gates = ["private_sqlite_impl", "register_is_upsert"]
 
 [status]
 state = "concrete_landed"

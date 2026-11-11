@@ -37,9 +37,5 @@ error_types = ["AtmError"]
 allowed_test_double_paths = ["atm_runtime_test_support::RecordingCronLifecycleNudgeEmitter"]
 forbidden_test_bypasses = ["std::process::Command"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-CRON-LIFECYCLE-NUDGE-EMITTER-REFERENCES"]
-review_gates = ["sealed_trait", "direct_transport", "no_mail_or_telemetry", "deterministic_test_doubles"]
-
 [status]
 state = "concrete_landed"

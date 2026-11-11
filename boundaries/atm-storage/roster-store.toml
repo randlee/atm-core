@@ -36,10 +36,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-ROSTERSTORE-SHARED-REFERENCES"]
-review_gates = ["no_backend_specific_roster_contract"]
-
 [status]
 state = "concrete_landed"
 notes = ["AC.1 created the shared audited roster-storage trait in crates/atm-storage", "atm-core legacy RosterStore remains compile-bridge surface only until AC.4 consumer cutover closes"]

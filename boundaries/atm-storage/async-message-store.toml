@@ -36,10 +36,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-MESSAGESTORE-REFERENCES"]
-review_gates = ["no_backend_specific_async_contract", "no_tokio_write_spawn_blocking"]
-
 [status]
 state = "concrete_landed"
 notes = ["The SQLite adapter implements this trait with one synchronous transaction thread and a bounded Tokio submission channel."]

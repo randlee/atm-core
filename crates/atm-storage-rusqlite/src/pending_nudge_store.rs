@@ -1,5 +1,4 @@
 use super::SqlitePendingNudgeStore;
-use crate::shared_db::SharedDb;
 use atm_storage::contract::{MessageKey, NudgeClaim};
 use atm_storage::error::AtmError;
 use atm_storage::schema::AtmMessageId;
@@ -11,12 +10,6 @@ use std::sync::Arc;
 /// A queue item is open while unread, or while an acknowledgement is owed.
 const OPEN_ITEM_SQL: &str =
     "(read = 0 OR (pending_ack_at IS NOT NULL AND acknowledged_at IS NULL)) AND deleted_at IS NULL";
-
-impl SqlitePendingNudgeStore {
-    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
-        Self { db }
-    }
-}
 
 impl atm_storage::contract::sealed::Sealed for SqlitePendingNudgeStore {}
 

@@ -39,10 +39,6 @@ error_types = []
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["private_key_material", "resolved_ip_address"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-DAEMONRUNTIMEDOCTORREPORT-REFERENCES"]
-review_gates = ["secret_free_peer_configuration"]
-
 [status]
 state = "concrete_landed"
 notes = ["the contract excludes messages, receipts, cursors, resolved addresses, certificate pins, and private-key references"]
