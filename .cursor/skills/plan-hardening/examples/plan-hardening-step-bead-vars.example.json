@@ -1,0 +1,9 @@
+{
+  "id": "proj-phase-bc-ph-s4-c1",
+  "root": "proj-phase-bc",
+  "phase": "bc",
+  "step": 4,
+  "cycle": 1,
+  "route_to": "critical-plan-reviewer",
+  "blocked_by": ["proj-phase-bc-ph-s3-c1", "proj-phase-bc-ph-s2-c1-plan-scope-001"]
+}

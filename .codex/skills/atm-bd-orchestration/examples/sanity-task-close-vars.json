@@ -1,0 +1,16 @@
+{
+  "task_id": "atm-test-1.sanity",
+  "checked_bead": "atm-test-1.dev",
+  "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "run_id": "run-1",
+  "reviewer": "sanity-selected",
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "deliverable": 1,
+      "issue": "Required behavior missing"
+    }
+  ],
+  "findings_md": "D1 missing",
+  "lint_md": "just lint exit 0"
+}

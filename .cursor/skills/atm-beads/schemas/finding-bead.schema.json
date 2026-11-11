@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "Dependency": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "depends_on_id": {
+          "title": "Depends On Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "depends_on_id"
+      ],
+      "title": "Dependency",
+      "type": "object"
+    },
+    "FindingMetadata": {
+      "additionalProperties": true,
+      "properties": {
+        "severity": {
+          "enum": [
+            "blocking",
+            "important",
+            "minor"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "reviewer": {
+          "minLength": 1,
+          "title": "Reviewer",
+          "type": "string"
+        },
+        "found_at_commit": {
+          "minLength": 1,
+          "title": "Found At Commit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "severity",
+        "reviewer",
+        "found_at_commit"
+      ],
+      "title": "FindingMetadata",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "dependencies": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Dependency"
+      },
+      "title": "Dependencies",
+      "type": "array"
+    },
+    "metadata": {
+      "$ref": "#/$defs/FindingMetadata"
+    }
+  },
+  "required": [
+    "id",
+    "metadata"
+  ],
+  "title": "FindingBead",
+  "type": "object"
+}

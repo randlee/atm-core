@@ -1,0 +1,20 @@
+---
+name: sprint-report
+version: 4.0.0
+description: Sprint status report for phase plans.
+format: markdown
+required_variables:
+  - mode
+  - sprint_rows
+  - integration_row
+---
+{% if mode == "detailed" %}
+{{ sprint_rows }}
+────────────────────────────────────────
+{{ integration_row }}
+{% else %}
+| Sprint | DEV | S | QA | FIND | CI | PR |
+|--------|-----|---|----|------|----|-----|
+{{ sprint_rows }}
+{{ integration_row }}
+{% endif %}

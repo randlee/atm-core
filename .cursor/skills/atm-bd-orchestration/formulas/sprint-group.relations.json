@@ -1,0 +1,61 @@
+{
+  "formula": "sprint-group",
+  "description": "bead-groups data for sprint-group: the attach ref and the relations `sc-compose bead attach` adds with the group. Endpoints are `step:<step>` (a step of this group) or `bead:<id>`, format strings over {vars[<name>]} and, in an `each` relation, {each}. vars, each a list over the sprints the plan file names in depends_on: predecessor_sanity (each one's initial sanity bead) and predecessor_dev (each one's dev bead).",
+  "ref": "group",
+  "default_option": "C",
+  "defaults": {},
+  "options": {
+    "A": {
+      "description": "E1 option A: only dev is poured; the sanity bead is created when dev closes. A predecessor poured under A has no sanity bead yet, so the dependent's dev bead blocks on the predecessor's dev bead.",
+      "relations": [
+        {
+          "description": "the dependent sprint's dev bead blocks on each predecessor's dev bead (option A pours no sanity bead)",
+          "each": "predecessor_dev",
+          "from": "step:dev",
+          "to": "bead:{each}",
+          "type": "blocks"
+        }
+      ]
+    },
+    "B": {
+      "description": "E1 option B: the poured sanity step has no `needs dev`; sanity and QA each `validates` dev.",
+      "relations": [
+        {
+          "from": "step:sanity",
+          "to": "step:dev",
+          "type": "validates"
+        },
+        {
+          "from": "step:qa",
+          "to": "step:dev",
+          "type": "validates"
+        },
+        {
+          "description": "the dependent sprint's dev bead blocks on each predecessor's initial sanity bead (hard dependency)",
+          "each": "predecessor_sanity",
+          "from": "step:dev",
+          "to": "bead:{each}",
+          "type": "blocks"
+        }
+      ]
+    },
+    "C": {
+      "description": "E1 option C, the existing schema: sanity `blocks` dev (poured from `needs`) with metadata.dev_bead; QA `validates` the checked bead.",
+      "relations": [
+        {
+          "from": "step:qa",
+          "to": "step:dev",
+          "type": "validates"
+        },
+        {
+          "description": "the dependent sprint's dev bead blocks on each predecessor's initial sanity bead (hard dependency)",
+          "each": "predecessor_sanity",
+          "from": "step:dev",
+          "to": "bead:{each}",
+          "type": "blocks"
+        }
+      ]
+    }
+  },
+  "relations": []
+}

@@ -1,0 +1,109 @@
+{
+  "$defs": {
+    "Dependency": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "depends_on_id": {
+          "title": "Depends On Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "depends_on_id"
+      ],
+      "title": "Dependency",
+      "type": "object"
+    },
+    "FixMetadata": {
+      "additionalProperties": true,
+      "properties": {
+        "branch": {
+          "minLength": 1,
+          "title": "Branch",
+          "type": "string"
+        },
+        "worktree": {
+          "minLength": 1,
+          "title": "Worktree",
+          "type": "string"
+        },
+        "pr_target": {
+          "minLength": 1,
+          "title": "Pr Target",
+          "type": "string"
+        },
+        "difficulty": {
+          "enum": [
+            "hard",
+            "normal",
+            "fast"
+          ],
+          "title": "Difficulty",
+          "type": "string"
+        },
+        "finding_ref": {
+          "minLength": 1,
+          "title": "Finding Ref",
+          "type": "string"
+        },
+        "severity": {
+          "const": "blocking",
+          "title": "Severity",
+          "type": "string"
+        },
+        "reviewer": {
+          "minLength": 1,
+          "title": "Reviewer",
+          "type": "string"
+        },
+        "found_at_commit": {
+          "minLength": 1,
+          "title": "Found At Commit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branch",
+        "worktree",
+        "pr_target",
+        "difficulty",
+        "finding_ref",
+        "severity",
+        "reviewer",
+        "found_at_commit"
+      ],
+      "title": "FixMetadata",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "dependencies": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Dependency"
+      },
+      "title": "Dependencies",
+      "type": "array"
+    },
+    "metadata": {
+      "$ref": "#/$defs/FixMetadata"
+    }
+  },
+  "required": [
+    "id",
+    "metadata"
+  ],
+  "title": "FixBead",
+  "type": "object"
+}

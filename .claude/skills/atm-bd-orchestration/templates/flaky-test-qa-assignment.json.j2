@@ -18,6 +18,7 @@ defaults:
 ---
 {%- set cf = carry_forward_findings_json | replace(" ", "") -%}
 {%- set locked = cf not in ["", "[]", "null", "[null]", "[\"\"]"] -%}
+{%- set rule = "FLAKY-TEST RULE (mandatory in every repository): flaky tests are prohibited by design. A test that relies on a race, timing, sleep, wall-clock deadline or assertion, poll-until-timeout, event-loop ordering or host load, and any wait that can block forever, is a blocking finding whatever its severity. Its remedy redesigns the test to be deterministic with controlled inputs: an injected clock or fake timers, or an explicit handshake (channel, notify, fifo, readiness signal). A failure-only hang deadline is allowed only as a backstop that fails with captured output, never as the synchronization. A passing run, even repeated under load, is not evidence that no race exists." -%}
 {
   "worktree_path": {{ worktree_path }},
   "branch": {{ branch }},
@@ -31,5 +32,5 @@ defaults:
   "changed_files": [{% for file in changed_files %}{{ file }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "triage_records": [],
   "carry_forward_findings": {{ carry_forward_findings_json | safe }},
-  "notes": {{ notes ~ (" SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`." if locked else "") }}
+  "notes": {{ ((rule ~ " " ~ notes) if notes else rule) ~ (" SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`." if locked else "") }}
 }

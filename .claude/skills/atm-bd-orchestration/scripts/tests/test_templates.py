@@ -436,10 +436,14 @@ class FixRoundReviewerScopeTests(unittest.TestCase):
         self.assertNotIn("full reviewer set", out)
         for reviewer in ("req-qa", "arch-qa", "rust-qa-agent"):  # no automatic panel
             self.assertNotIn(f"`{reviewer}`", out)
-        self.assertNotIn('<step id="f">', out)  # no ceremony screen, as upstream 12be0fad
+        step_f = out[out.index('<step id="f">'):out.index('<step id="f1">')]  # the screen runs every round (Rand, 2026-11-11)
+        self.assertIn("Every round, sprint or fix, run `ceremony-finding-screen`", step_f)
+        self.assertIn("each carried finding still open or regressed, and each unlocked `flaky-test-qa` finding", step_f)
+        self.assertIn("Read `.claude/skills/atm-bd-orchestration/package-policy.md`, then", out)
         self.assertNotIn('<step id="g1">', out)
         step_g = out[out.index('<step id="g">'):out.index('<step id="h">')]
-        self.assertIn("Do not screen or file new findings", step_g)
+        self.assertIn("File no new findings except the unlocked `flaky-test-qa` ones", step_g)
+        self.assertIn("is not poured again", step_g)
         self.assertNotIn("bd import", step_g)
         self.assertNotIn("bd close <finding>", step_g)  # the fixer closes; verification confirms or pours round n+1
         self.assertNotIn("bd reopen", step_g)          # a failed fix verification never reopens
@@ -513,6 +517,34 @@ class FixRoundReviewerScopeTests(unittest.TestCase):
                 data = json.loads(locked.stdout)
                 self.assertEqual(data["carry_forward_findings"], ["RQ-1"])
                 self.assertIn("Report a disposition (fixed | open | regressed) for each id", data["notes"])
+
+
+    def test_flaky_test_qa_assignment_always_carries_the_flaky_test_rule(self):
+        import json
+        base = _example("flaky-test-qa-assignment-vars.json")
+        for vars_ in (base, {**base, "notes": ""}, {**base, "carry_forward_findings_json": '["FT-1"]'}):
+            with self.subTest(vars=sorted(vars_)):
+                out = _render("flaky-test-qa-assignment.json.j2", vars_)
+                self.assertEqual(out.returncode, 0, out.stderr)
+                notes = json.loads(out.stdout)["notes"]
+                self.assertTrue(notes.startswith("FLAKY-TEST RULE (mandatory in every repository)"), notes)
+                self.assertIn("is a blocking finding whatever its severity", notes)
+                self.assertIn("any wait that can block forever", notes)
+                self.assertIn("never as the synchronization", notes)
+        given = _render("flaky-test-qa-assignment.json.j2", {**base, "notes": "Check the watcher tests."})
+        self.assertIn("synchronization. A passing run, even repeated under load, is not evidence that no race exists. "
+                      "Check the watcher tests.", json.loads(given.stdout)["notes"])
+
+    def test_qa_template_runs_flaky_test_qa_when_test_code_changed(self):
+        sprint = _render(self.QA, _example("qa-template-vars.json"))
+        self.assertEqual(sprint.returncode, 0, sprint.stderr)
+        self.assertIn("plus `flaky-test-qa` when the layer changes test code", sprint.stdout)
+        fix = _render(self.QA, {**_example("qa-template-vars.json"), "carry_forward": "x-d-4.qa1-f1-r1-fix"})
+        self.assertEqual(fix.returncode, 0, fix.stderr)
+        self.assertIn("when this fix layer changes test code `flaky-test-qa` also runs, unlocked", fix.stdout)
+        self.assertIn("adding `--tests-changed` when test code changed", fix.stdout)
+        self.assertIn("The unlocked `flaky-test-qa` result is not filtered: file its findings as in round 1, each blocking.",
+                      fix.stdout)
 
 
 class BlockedRefusalTests(unittest.TestCase):
@@ -701,7 +733,7 @@ class PlanFixRoundTests(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn("Run `req-qa` and `arch-qa` as background agents", out.stdout)
         self.assertIn("Run `plan-scope-reviewer` over the whole set", out.stdout)
-        self.assertIn("Run `ceremony-finding-screen`", out.stdout)
+        self.assertIn("Every round, run `ceremony-finding-screen`", out.stdout)
         self.assertNotIn("fix-round-scope", out.stdout)
         self.assertIn("`<bead> <severity> <reviewer> <field>: <what is wrong>`", out.stdout)
 
@@ -714,7 +746,8 @@ class PlanFixRoundTests(unittest.TestCase):
         self.assertIn("fix-round-scope check --plan --carried", text)
         self.assertNotIn("Run `req-qa` and `arch-qa` as background agents", text)
         self.assertNotIn("over the whole set", text)
-        self.assertNotIn("Run `ceremony-finding-screen`", text)
+        self.assertIn("Every round, run `ceremony-finding-screen`", text)  # Rand, 2026-11-11
+        self.assertIn("(each carried finding still open or regressed), except the step b findings", text)
         self.assertIn("files no new findings", text)
         self.assertIn("validate-plan", text)  # step b still runs
 

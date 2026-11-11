@@ -1,0 +1,31 @@
+---
+name: schema-reviewer-assignment
+version: 3.1.0
+description: Render a fenced-JSON assignment for schema-reviewer in atm-bd-orchestration (pinned branch and commit from the QA bead). `carry_forward_findings_json` is a JSON array of the reviewer's own finding ids (`metadata.finding_ref` of the carried finding beads); when it has ids the assignment is a locked fix-round verification.
+format: json
+required_variables:
+  - review_mode
+  - worktree_path
+  - branch
+  - commit
+  - review_targets
+  - policy_path
+defaults:
+  reference_docs: []
+  carry_forward_findings_json: "[]"
+  notes: ""
+---
+{%- set cf = carry_forward_findings_json | replace(" ", "") -%}
+{%- set locked = cf not in ["", "[]", "null", "[null]", "[\"\"]"] -%}
+{
+  "review_mode": {{ review_mode }},
+  "worktree_path": {{ worktree_path }},
+  "branch": {{ branch }},
+  "commit": {{ commit }},
+  "policy_path": {{ policy_path }},
+  "review_targets": [{% for target in review_targets %}{{ target }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "reference_docs": [{% for doc in reference_docs %}{{ doc }}{% if not loop.last %}, {% endif %}{% endfor %}],
+  "carry_forward_findings": {{ carry_forward_findings_json | safe }},
+  "findings_scope_locked": {% if locked %}true{% else %}false{% endif %},
+  "notes": {{ notes ~ (" SCOPE LOCK: this is a fix-round verification dispatch. Report a disposition (fixed | open | regressed) for each id in carry_forward_findings ONLY. Do not add any new finding to the `findings` array beyond those ids, even if you notice something real and unrelated -- put anything else observed under `notes`, not `findings`." if locked else "") }}
+}

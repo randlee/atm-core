@@ -1,0 +1,23 @@
+---
+name: hook-close-escalation
+version: 1.0.0
+format: xml
+required_variables: [task_id, original_task, error_id, code, detail, owner, recovery, state_summary, command, escalation_to]
+metadata:
+  type: hook-close-escalation
+---
+<atm-task id="{{ task_id | string | cdata_escape }}" mode="close-error">
+  <description><![CDATA[Resolve sanity close failure for {{ original_task }}. This tracked escalation belongs to phase-lead {{ escalation_to }} until recovery is verified.]]></description>
+  <error><![CDATA[Correlation: {{ error_id }}
+Code: {{ code }}
+Operation: {{ command | tojson | cdata_escape }}
+Error: {{ detail | string | cdata_escape }}
+Known state: {{ state_summary | string | cdata_escape }}
+Repair owner: {{ owner | string | cdata_escape }}
+Recovery: {{ recovery | string | cdata_escape }}]]></error>
+  <workflow><![CDATA[
+Run atm task start {{ task_id }} "Resolve close failure for {{ original_task }}".
+Inspect the recorded operation and current task/bead state. Route the concrete correction to the named repair owner; phase-lead retains responsibility for this escalation. Required bead data is fixed through bd-validation, not by inventing a verdict or bypassing dependencies. Retry the original close or its existing repair obligation after the cause is corrected. Do not launch Cargo or duplicate completed work merely to repair hook state.
+Close this escalation with atm task close {{ task_id }} completed "<verified recovery and original task/repair state>" only after recovery is verified. If unresolved, retain this task and record the specific blocking cause, responsible owner, and next recovery action; never silently abandon it.
+]]></workflow>
+</atm-task>

@@ -1,0 +1,53 @@
+{
+  "base": "integrate/phase-bj",
+  "branch": "sprint/bj-1-task-close-hook",
+  "checked_bead": "atm-bj-1.group-dev",
+  "checked_title": "Implement the close hook",
+  "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "deliverables_complete": 13,
+  "deliverables_md": "All numbered deliverables implemented.",
+  "deliverables_total": 13,
+  "dev_task_id": "atm-bj-1.group-dev",
+  "evidence": "scripts/example.py:1",
+  "findings_blocking": 0,
+  "findings_ceremony": 0,
+  "findings_count": 0,
+  "findings_important": 0,
+  "findings_md": "No findings.",
+  "findings_minor": 0,
+  "generated_at": "2026-10-19T00:00:00Z",
+  "layer": 1,
+  "lint_md": "Lint passes.",
+  "max_sanity_rounds": 5,
+  "outcome": "fixed",
+  "phase": "bj",
+  "phase_feature": "Mechanical close flow",
+  "policy_path": ".claude/project/quality-policy.md",
+  "pr_number": 351,
+  "pr_url": "https://github.com/example/repo/pull/351",
+  "primary_checkout": "/tmp/consumer",
+  "qa_bead": "atm-bj-1.group-qa",
+  "qa_task_id": "atm-bj-1.group-qa",
+  "reviewers_md": "Required reviewers pass.",
+  "reviewers_round1": [
+    "req-qa"
+  ],
+  "round": 1,
+  "sanity_bead": "atm-bj-1.group-sanity",
+  "sanity_task_id": "atm-bj-1.group-sanity",
+  "sprint": "bj-1",
+  "stack": "phase-bj",
+  "stack_bead": "atm-phase-bj.stack",
+  "stacked": {
+    "result": "stacked",
+    "top": {
+      "branch": "sprint/bj-1-task-close-hook",
+      "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "stack_number": null
+  },
+  "task_id": "atm-bj-1.group-sanity",
+  "undone": [],
+  "verdict": "PASS",
+  "worktree_path": "/tmp/consumer/worktree"
+}
