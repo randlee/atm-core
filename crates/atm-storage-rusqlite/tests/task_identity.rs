@@ -1308,18 +1308,18 @@ fn assigned_at_set_only_by_assignment() {
 fn trailing_refusal_run_counts_raw_stored_event_values() {
     let h = Harness::new();
     let connection = Connection::open(&h.path).unwrap();
-    for (seq, event) in [
-        "refused",
-        "refused",
-        "completed",
-        "refused",
-        "refused",
-        "refused",
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        connection.execute("INSERT INTO task_events(team,task_id,assignee,seq,at,event,actor) VALUES (?1,?2,'alice',?3,?4,?5,'alice')", params![h.team.as_str(), format!("T{seq}"), seq + 1, h.timestamp().to_string(), event]).unwrap();
+    for (seq, event) in (1_i64..).zip(
+        [
+            "refused",
+            "refused",
+            "completed",
+            "refused",
+            "refused",
+            "refused",
+        ]
+        .into_iter(),
+    ) {
+        connection.execute("INSERT INTO task_events(team,task_id,assignee,seq,at,event,actor) VALUES (?1,?2,'alice',?3,?4,?5,'alice')", params![h.team.as_str(), format!("T{}", seq - 1), seq, h.timestamp().to_string(), event]).unwrap();
     }
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
