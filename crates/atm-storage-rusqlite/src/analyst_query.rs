@@ -255,7 +255,6 @@ fn execute_readonly_query(
     }
     let names = statement
         .column_names()
-        .into_iter()
         .map(str::to_owned)
         .collect::<Vec<_>>();
     let values = parameters.iter().map(to_sql_value).collect::<Vec<_>>();
