@@ -1,7 +1,7 @@
 {
   "properties": {
     "tools": {
-      "description": "Optional consumer-declared exact cargo tools and rustup targets that ordinary bootstrap setup provisions through sc_lint.setup_tools (ADR-017 change 6). Absent or empty collections add no work; the product declares no tools.",
+      "description": "Optional consumer-declared exact cargo tools and rustup targets that ordinary bootstrap setup provisions through sc_lint.setup_tools (ADR-017 change 6). The non_windows collection is ignored on Windows. Absent or empty collections add no work; the product declares no tools.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -22,6 +22,32 @@
           "items": {
             "type": "string",
             "pattern": "^\\S+$"
+          }
+        },
+        "non_windows": {
+          "description": "Cargo tools and rustup targets provisioned only on hosts other than Windows.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cargo": {
+              "description": "Cargo package name to exact stable version; the managed helper also validates package names.",
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+              }
+            },
+            "rustup_targets": {
+              "description": "Rustup target identifiers to add when missing.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^\\S+$"
+              }
+            }
           }
         }
       }

@@ -3,8 +3,8 @@
 
 import sys
 
-if sys.version_info < (3, 11):
-    print("setup: Python 3.11 or newer is required (CLI.SC_LINT_PYTHON_UNAVAILABLE)", file=sys.stderr)
+if sys.version_info < (3, 9):
+    print("setup: Python 3.9 or newer is required (CLI.SC_LINT_PYTHON_UNAVAILABLE)", file=sys.stderr)
     sys.exit(1)
 
 import hashlib
@@ -15,7 +15,6 @@ import platform
 import re
 import shutil
 import subprocess
-import sysconfig
 import tarfile
 import tempfile
 import urllib.error
@@ -23,7 +22,8 @@ import urllib.request
 import venv
 import zipfile
 
-USAGE = ("usage: .sc-lint/bootstrap.py <setup|lint|test|upgrade|exec> --config sc-lint.toml [--check] [--dry-run]; "
+USAGE = ("usage: .sc-lint/bootstrap.py setup --config sc-lint.toml [--dry-run]; "
+         ".sc-lint/bootstrap.py upgrade --config sc-lint.toml [--check] [--dry-run]; "
          ".sc-lint/bootstrap.py lint [selector] [host|all|linux|macos|windows] --config sc-lint.toml; "
          ".sc-lint/bootstrap.py lint [--fail-fast] [selector] [host|all|linux|macos|windows] --config sc-lint.toml; "
          ".sc-lint/bootstrap.py test [--fail-fast|--list] [selector [args...]] --config sc-lint.toml; "
@@ -62,7 +62,9 @@ def parse(argv):
             if config is not None or not rest or not rest[0]:
                 usage()
             config, rest = rest[0], rest[1:]
-        elif token in ("--check", "--dry-run") and operation in ("setup", "upgrade"):
+        elif token == "--dry-run" and operation == "setup" and token not in flags:
+            flags.append(token)
+        elif token in ("--check", "--dry-run") and operation == "upgrade" and token not in flags:
             flags.append(token)
         elif (token == "--fail-fast" and operation in ("lint", "test")
               or token == "--list" and operation == "test") and token not in flags:
@@ -81,20 +83,44 @@ def parse(argv):
 
 def run(argv, **kwargs):
     try:
-        return subprocess.run([str(item) for item in argv], check=False, **kwargs).returncode
+        command = [str(item) for item in argv]
+        # Windows otherwise searches the parent Python directory before PATH.
+        command[0] = shutil.which(command[0]) or command[0]
+        return subprocess.run(command, check=False, **kwargs).returncode
     except OSError as error:
         print(f"{argv[0]}: {error}", file=sys.stderr)
         return 127
 
 
-def managed_path():
-    if os.environ.get("SC_LINT_INSTALL_DIR"):
-        directory = Path(os.environ["SC_LINT_INSTALL_DIR"])
-    elif os.name == "nt":
-        directory = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "sc-lint" / "bin"
+def default_install_directory(environ, home_directory, windows):
+    # Mirrors the native installer: SC_LINT_INSTALL_DIR, else the platform data
+    # directory (%APPDATA% on Windows, XDG_DATA_HOME elsewhere) plus sc-lint/bin.
+    # home_directory is a callable so the home lookup runs only when no override
+    # supplies the directory; a host without a home still honours the override.
+    if environ.get("SC_LINT_INSTALL_DIR"):
+        return Path(environ["SC_LINT_INSTALL_DIR"])
+    if windows:
+        data_dir = Path(environ.get("APPDATA") or home_directory() / "AppData" / "Roaming")
     else:
-        directory = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local" / "share"))) / "sc-lint" / "bin"
-    return directory / ("sc-lint.exe" if os.name == "nt" else "sc-lint")
+        data_dir = Path(environ.get("XDG_DATA_HOME") or home_directory() / ".local" / "share")
+    return data_dir / "sc-lint" / "bin"
+
+
+def managed_path():
+    windows = os.name == "nt"
+    try:
+        directory = default_install_directory(os.environ, Path.home, windows)
+    except (RuntimeError, KeyError):
+        # Path.home() raises RuntimeError when no home can be determined, and KeyError
+        # on Python 3.9 when the user has no passwd entry. The native installer
+        # reports the same condition with this code.
+        fail(
+            "sc-lint install directory is unavailable: neither SC_LINT_INSTALL_DIR, APPDATA, "
+            "XDG_DATA_HOME nor a home directory was available; set SC_LINT_INSTALL_DIR to a "
+            "writable directory and rerun (CLI.SC_LINT_INSTALL_PERMISSION_DENIED)",
+            4,
+        )
+    return directory / ("sc-lint.exe" if windows else "sc-lint")
 
 
 def resolve_binary(managed):
@@ -184,12 +210,25 @@ def install_release(config, operation, flags):
             fail(f"setup: could not extract {archive}: {error} (CLI.SC_LINT_RELEASE_UNAVAILABLE)", 4)
 
 
+def venv_directory(config):
+    return Path(config).resolve().parent / ".sc-lint" / "venv"
+
+
+def venv_scripts(config):
+    return venv_directory(config) / ("Scripts" if os.name == "nt" else "bin")
+
+
+def activate(binary, config):
+    os.environ["SC_LINT_BIN"] = str(binary)
+    os.environ["PATH"] = os.pathsep.join([str(Path(binary).parent), str(venv_scripts(config)), os.environ.get("PATH", "")])
+
+
 class Bootstrap:
     def __init__(self, config):
         self.config = config
         self.managed = managed_path()
-        self.directory = Path(config).resolve().parent / ".sc-lint" / "venv"
-        scripts = Path(sysconfig.get_path("scripts", scheme="venv", vars={"base": str(self.directory), "platbase": str(self.directory)}))
+        self.directory = venv_directory(config)
+        scripts = venv_scripts(config)
         self.python = scripts / ("python.exe" if os.name == "nt" else "python3")
         self.install_input = self.directory.parent / "install.json"
         self.binary = None
@@ -257,10 +296,6 @@ class Bootstrap:
             return 4
         return run([self.python, "-m", "sc_lint.setup_tools", "--config", self.config, *([] if mode == "install" else ["--check"])])
 
-    def activate(self):
-        os.environ["SC_LINT_BIN"] = str(self.binary)
-        os.environ["PATH"] = str(Path(self.binary).parent) + os.pathsep + os.environ.get("PATH", "")
-
 
 def main(argv=None):
     operation, config, flags, positional, command = parse(sys.argv[1:] if argv is None else argv)
@@ -271,8 +306,7 @@ def main(argv=None):
         if not binary or not Path(binary).is_file() or (os.name != "nt" and not os.access(binary, os.X_OK)):
             fail(f"sc-lint binary is unavailable at {override or managed}; run just setup", 1)
         binary = os.path.abspath(binary)
-        os.environ["SC_LINT_BIN"] = binary
-        os.environ["PATH"] = str(Path(binary).parent) + os.pathsep + os.environ.get("PATH", "")
+        activate(binary, config or "sc-lint.toml")
         if command[0] == "sc-lint":
             command = [binary, *(["--config", config] if config else []), *command[1:]]
         return run(command)
@@ -293,7 +327,7 @@ def main(argv=None):
     if operation == "setup":
         status = run([bootstrap.binary, "--config", config, "setup", *flags])
         return status or bootstrap.provision_venv(mode) or bootstrap.provision_tools(mode)
-    bootstrap.activate()
+    activate(bootstrap.binary, config)
     status = bootstrap.provision_venv("install")
     if status:
         return status

@@ -1,5 +1,4 @@
 //! Synchronous tmux delivery. Called only through `spawn_blocking`.
-// Delete the SCB-RUNTIME-003 file exclusion when randlee/sc-lint#836 provides item-level support.
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -70,6 +69,7 @@ fn run_tmux_command(mut command: Command, action: &'static str) -> Result<()> {
     ensure_tmux_success(output, action).map_err(Into::into)
 }
 
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-003), reason = "Tmux subprocess polling runs only on the dedicated spawn_blocking thread, with a bounded deadline.")]
 fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Output> {
     let started_at = Instant::now();
     loop {

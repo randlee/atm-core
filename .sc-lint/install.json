@@ -490,13 +490,7 @@
       ]
     },
     "runtime": {
-      "enabled": true,
-      "exclude_paths_by_rule": {
-        "SCB-RUNTIME-003": [
-          "crates/atm/src/commands/internal_nudge/tmux.rs"
-        ]
-      },
-      "reason": "SCB-RUNTIME-003: the isolated tmux sink runs on spawn_blocking. Delete this file exclusion when randlee/sc-lint#836 supports item-level runtime allow (tracking: atm-phase-bg.18)."
+      "enabled": true
     }
   },
   "ci": {
@@ -1468,11 +1462,13 @@
     ]
   },
   "tools": {
-    "cargo": {
-      "cargo-xwin": "0.18.4"
-    },
-    "rustup_targets": [
-      "x86_64-pc-windows-msvc"
-    ]
+    "non_windows": {
+      "cargo": {
+        "cargo-xwin": "0.18.4"
+      },
+      "rustup_targets": [
+        "x86_64-pc-windows-msvc"
+      ]
+    }
   }
 }

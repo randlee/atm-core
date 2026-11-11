@@ -1,22 +1,19 @@
 ---
 name: sc-lint-adoption
-description: Install or update the managed sc-lint contract in a Rust repository. Use when a repository needs unified `just setup`, `just lint`, and `just test` commands, or when reviewing adoption drift.
-version: 1.0.0
+description: Seed the sc-lint contract in a Rust repository. Use when a repository needs unified `just setup`, `just lint`, and `just test` commands, or when reviewing adoption inputs.
+version: 0.8.6
 ---
 
 # sc-lint adoption
 
-Use this skill only in the consumer repository being changed. The adoption kit
-renders its managed files; it never deletes consumer files. Keep the consumer's
-existing commands and configuration unless the rendered contract replaces that
-same responsibility.
-
+Use this skill only in the consumer repository being changed.
 The kit root below is the installed `sc-lint-adoption` package. Set it once for
 the session to its actual installation directory; do not copy its Python code
 into the consumer repository.
 
 ```bash
-export SC_LINT_ADOPTION_ROOT="${CLAUDE_PLUGIN_ROOT:?Claude Code must provide the installed sc-lint-adoption package root}"
+export SC_LINT_ADOPTION_ROOT="${CLAUDE_PLUGIN_ROOT:-plugins/sc-lint}"
+test -f "$SC_LINT_ADOPTION_ROOT/install.py" || { echo "sc-lint-adoption root not found: set CLAUDE_PLUGIN_ROOT to the installed package or vendor the kit at plugins/sc-lint" >&2; exit 1; }
 ```
 
 ## 1. Collect facts
@@ -48,20 +45,12 @@ alias for the declared layer. Keep all consumer-owned recipes that are not
 tests unchanged. This is a scoped consumer-PR migration; the kit does not
 guess commands, scan arbitrary scripts, or delete recipes.
 
-### Resolve recipe and setting collisions
-
-The kit defines `setup`, `lint` and `upgrade`, and no `default`, `test` or `set`.
-Rename or remove any root `lint`, `setup` or `upgrade` recipe, moving its command
-into `profiles.<name>`. The repository owns `just test`: a root `test` recipe
-is kept as is; if there is none, the installer adds sc-lint's recommended one
-(`plugins/sc-lint/templates/test.just`) outside the managed block. Keep a consumer `default` recipe;
-none is added to an existing Justfile. If the root `Justfile` sets `windows-shell`, the kit does not add one;
-set `"justfile": {"windows_shell": false}` to omit it entirely. Never duplicate a `set`.
-
 ## 2. Write and validate `install.json`
 
 Create `install.json` at the consumer root. It has `minimum_version`,
-`profiles`, `ci`, `analyzers`, and optional `test` and `justfile` fields.
+`profiles`, `ci`, `analyzers`, and optional `test` and `justfile` fields. It may
+also set `lint_profiles`, `tools`, `default_lint_profile`, `line_counts`,
+`identities`, `version_sync`, `cargo_shear`, `logging`, and `artifacts`.
 `justfile.windows_shell` is a boolean that defaults to `true`; set it to
 `false` to omit the kit's `set windows-shell` line. The dry-run in step 3
 validates this input against the packaged `install.schema.json` before it
@@ -72,32 +61,31 @@ python3 -m json.tool install.json >/dev/null
 python3 -c 'import json; json.load(open("install.json")); print("install.json: valid JSON")'
 ```
 
-Kit-rendered command arrays must name a shipped binary or `sc_lint` module only;
-profile and test-layer commands are consumer-owned and rendered verbatim. A
-repository-relative script is not authorized in a kit-rendered step.
+## 3. Preview missing kit files
 
-## 3. Run the drift check
-
-Run the installer without writes first and retain both its output and exit code
-in the PR body. Exit 0 means already converged; exit 1 means a safe proposed
-change; exit 2 means an input, managed-marker, pre-existing-file or Justfile
-recipe/setting collision conflict that must be resolved. On every install,
-differing pre-existing kit targets absent from the prior installed manifest are
-listed, and nothing is written. The merged root `Justfile` and `.sc-lint/install.json` when selected as the input
-are exempt from that clash check. When CI is enabled, the generated workflow
+The installer seeds only missing destinations. Existing files, directories,
+and symlinks are left untouched regardless of their contents; the installer
+does not merge or refresh them. Run it without writes first and retain both its output and exit code
+in the PR body. Exit 0 means no destinations are missing; exit 1 means the
+output lists destinations that would be seeded; exit 2 means the input is
+invalid. When CI is enabled, the generated workflow
 uses `./plugins/sc-lint/.github/actions/setup-sc-lint`, vendored at
-`plugins/sc-lint/.github/actions/setup-sc-lint/action.yml`.
+`plugins/sc-lint/.github/actions/setup-sc-lint/action.yml`. The sc-lint GitHub
+Action (`action.yml` at the sc-lint repository root) is an alternative that
+installs a verified release and runs the same lint or test contract; see
+`docs/sc-lint/github-action-requirements.md` in the sc-lint repository. Do not
+mix both in one workflow without a reason recorded in the consumer PR.
 
 ```bash
 set +e; python3 "$SC_LINT_ADOPTION_ROOT/install.py" --dry-run --input install.json .; dry_run_exit=$?; set -e; printf 'sc-lint adoption dry-run exit %s\n' "$dry_run_exit"; test "$dry_run_exit" -le 1
 ```
 
-Continue only for exit 0 or 1. Do not override exit 2 or manually edit a
-managed marker block.
+Continue only for exit 0 or 1.
 
-## 4. Install the managed contract
+## 4. Seed missing destinations
 
-After reviewing the diff, apply exactly the same input.
+After reviewing the preview, use exactly the same input to seed missing
+destinations. The installer does not update existing consumer paths.
 
 ```bash
 python3 "$SC_LINT_ADOPTION_ROOT/install.py" --input install.json .
@@ -130,21 +118,21 @@ deletes these files; the adopting agent makes the scoped consumer-PR change.
 ## 7. Open the consumer PR with evidence
 
 Open one consumer PR. Include collected facts, the `install.json` summary,
-managed-file diff, the literal `sc-lint adoption dry-run exit 0` or exit-1
-result, aggregate-command output, and the removal list. If any post-install
-drift remains, include the new dry-run output instead of claiming convergence.
+seeded-path diff, the literal `sc-lint adoption dry-run exit 0` or exit-1
+result, aggregate-command output, and the removal list. The dry-run reports
+missing destinations, not drift in existing consumer files.
 
 ## How to extend
 
 - **Analyzers:** set `analyzers.<name>` in `install.json`; the kit renders it as
   `[tool.sc-lint.analyzers.<name>]`. The keys are listed in `configuration.md`,
   "Analyzer tables"; any other key fails the install.
-- **Test layers:** declare ordered `[tool.sc-lint.test.<layer>]` lists. `unit`
-  is the default; `just test <layer> *args` passes through and `just test all`
-  follows declared order.
-- **Lint profiles:** declare ordered `[tool.sc-lint.lint.<profile>]` steps.
-- **Consumer-owned recipes:** add non-managed recipes outside the managed
-  `Justfile` import block. Do not alter the marker block.
+- **Test layers:** each `test` entry renders one `[[tool.sc-lint.test]]` row with
+  a `name`. `just test` with no selector runs every row in declared order;
+  `just test <name> *args` runs one row. No layer name is special.
+- **Lint steps and profiles:** each lint step renders one `[[tool.sc-lint.lint]]`
+  row with a `name`. `lint_profiles` renders the `[tool.sc-lint.lint_profiles]`
+  table, which maps a profile name to an ordered list of step names.
 
 See `tests/fixtures/adoption/analyzer-worked-example/` for a complete worked
 configuration showing analyzer reasons, test layers, profiles, and a

@@ -4,32 +4,26 @@ from __future__ import annotations
 
 import argparse
 import difflib
-import hashlib
 import json
 import re
-import subprocess
 import sys
-import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-MARKER_START = "# >>> sc-lint managed integration >>>"
-MARKER_END = "# <<< sc-lint managed integration <<<"
-MANIFEST = Path(".sc-lint/installed.json")
-INSTALL_INPUT = Path(".sc-lint/install.json")
 RENAMED = {Path("README.md"): Path("README.sc-lint.md")}
+# Plugin components sit at the package root so Claude Code's plugin loader finds
+# them; a consumer repository receives them under .claude/ as before.
+PLUGIN_COMPONENTS = frozenset({"skills", "agents"})
 WINDOWS_SHELL = 'set windows-shell := ["cmd.exe", "/c"]\n'
 PYTHON_BINDING = 'python := if os_family() == "windows" { "python" } else { "python3" }\n'
-RECIPE = r"^([A-Za-z_][\w-]*)[^:\n]*:(?!=)"
-JUST_COLLISION = re.compile(r"(?:recipe|setting) `([^`]+)`", re.I)
 TEMPLATES = {
     Path("templates/sc-lint.toml.tmpl"): Path("sc-lint.toml"),
-    Path("templates/Justfile.import.tmpl"): Path("Justfile"),
     Path("templates/sc-lint-workflow.yml.tmpl"): Path(".github/workflows/sc-lint.yml"),
 }
+HELPER_POLICY_TABLES = ("line_counts", "identities", "version_sync", "cargo_shear", "logging", "artifacts")
+
 TEMPLATE_PLACEHOLDERS = {
-    "sc-lint.toml.tmpl": {"minimum_version", "analyzers", "profiles", "test_layers"},
+    "sc-lint.toml.tmpl": {"tool_settings", "analyzers", "profiles", "test_layers", "helper_policies"},
     "Justfile.import.tmpl": {"windows_shell", "python_binding"},
     "sc-lint-workflow.yml.tmpl": {"ci_os", "lint_steps"},
 }
@@ -71,17 +65,6 @@ def load_catalogs() -> dict[str, dict]:
             raise ValueError(f"invalid analyzer catalog: {path}")
         catalogs[name] = catalog
     return catalogs
-
-
-@dataclass(frozen=True)
-class Desired:
-    files: dict[Path, bytes]
-    merged: frozenset[Path]
-    persisted: frozenset[Path]
-
-    @property
-    def special_targets(self) -> frozenset[Path]:
-        return self.merged | self.persisted
 
 
 def _schema_value(value: object, schema: dict, label: str) -> None:
@@ -150,10 +133,11 @@ def values(path: Path) -> dict:
 
 
 def toml_value(value: object) -> str:
-    if isinstance(value, dict): return "{ " + ", ".join(f"{json.dumps(key)} = {toml_value(item)}" for key, item in value.items()) + " }"
+    if value is None: raise ValueError("TOML configuration cannot contain null")
+    if isinstance(value, dict): return "{ " + ", ".join(f"{toml_value(key)} = {toml_value(item)}" for key, item in value.items()) + " }"
     if isinstance(value, list): return "[" + ", ".join(toml_value(item) for item in value) + "]"
     if isinstance(value, bool): return str(value).lower()
-    return json.dumps(value)
+    return json.dumps(value, ensure_ascii=False, allow_nan=False).replace("\x7f", "\\u007f")
 
 
 def substitute_template_variables(source: str, replacements: dict[str, str]) -> str:
@@ -163,19 +147,19 @@ def substitute_template_variables(source: str, replacements: dict[str, str]) -> 
 
 
 def toml_key(name: str) -> str:
-    return name if re.fullmatch(r"[A-Za-z0-9_-]+", name) else json.dumps(name)
+    return name if re.fullmatch(r"[A-Za-z0-9_-]+", name) else toml_value(name)
 
 
 def lint_profiles_table(lint_profiles: dict) -> str:
     if not lint_profiles: return ""
-    rows = "\n".join(f"{toml_key(name)} = {json.dumps(members)}" for name, members in lint_profiles.items())
+    rows = "\n".join(f"{toml_key(name)} = {toml_value(members)}" for name, members in lint_profiles.items())
     return f"[tool.sc-lint.lint_profiles]\n{rows}"
 
 
 def lint_step(name: str, step: object) -> str:
     """Render one lint row; cross-target and command semantics belong to sc-lint."""
     command, tags = (step, {}) if isinstance(step, list) else (step["command"], step)
-    lines = [f"name = {json.dumps(tags.get('name', name))}", f"command = {toml_value(command)}"]
+    lines = [f"name = {toml_value(tags.get('name', name))}", f"command = {toml_value(command)}"]
     lines += [f"{key} = {toml_value(tags[key])}" for key in ("platform", "target", "host", "after_all", "env", "env_paths", "cwd") if key in tags]
     return "[[tool.sc-lint.lint]]\n" + "\n".join(lines)
 
@@ -183,7 +167,7 @@ def lint_step(name: str, step: object) -> str:
 def test_layer(name: str, step: object) -> str:
     """Renders one test row using the fields accepted by the Rust test-step model."""
     command, fields = (step, {}) if isinstance(step, list) else (step["command"], step)
-    lines = [f"name = {json.dumps(name)}", f"command = {toml_value(command)}"]
+    lines = [f"name = {toml_value(name)}", f"command = {toml_value(command)}"]
     if "after_all" in fields:
         lines.append(f"after_all = {toml_value(fields['after_all'])}")
     return "[[tool.sc-lint.test]]\n" + "\n".join(lines)
@@ -218,35 +202,25 @@ def render(template: Path, data: dict) -> str:
     profiles = "\n\n".join(filter(None, [lint_profiles_table(data.get("lint_profiles", {})), *(lint_step(name, step) for name, step in data["profiles"].items())]))
     layers = "\n\n".join(test_layer(name, step) for name, step in data.get("test", {}).items())
     runners = [ {"linux":"ubuntu-latest", "macos":"macos-latest", "windows":"windows-latest"}.get(item, item) for item in data["ci"]["os"] ]
+    policy_tables = [f"[{name}]\n" + "\n".join(f"{toml_key(key)} = {toml_value(value)}" for key, value in data[name].items())
+                     for name in HELPER_POLICY_TABLES if name in data]
+    tool_settings = {"minimum_version": data["minimum_version"]}
+    if "default_lint_profile" in data:
+        tool_settings["default_lint_profile"] = data["default_lint_profile"]
     replacements = {
-        "minimum_version": data["minimum_version"],
+        "windows_shell": WINDOWS_SHELL if data.get("justfile", {}).get("windows_shell", True) else "",
+        "python_binding": PYTHON_BINDING,
+        "helper_policies": "\n\n".join(policy_tables) + "\n\n" if policy_tables else "",
+        "tool_settings": "\n".join(f"{key} = {toml_value(value)}" for key, value in tool_settings.items()),
         "analyzers": analyzers,
         "profiles": profiles,
         "test_layers": layers,
         "ci_os": json.dumps(runners),
         "lint_steps": lint_workflow_steps(data),
     }
-    deferred = {"windows_shell", "python_binding"} if template.name == "Justfile.import.tmpl" else set()
-    if observed - replacements.keys() != deferred:
+    if observed - replacements.keys():
         raise ValueError(f"{template.name}: unresolved template variables after rendering")
     return substitute_template_variables(source, replacements)
-
-
-def unmanaged(text: str) -> str:
-    return re.sub(re.escape(MARKER_START) + r".*?" + re.escape(MARKER_END), "", text, flags=re.S)
-
-
-def justfile_collisions(targets: dict[Path, bytes]) -> list[str]:
-    with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary)
-        for relative in (Path("Justfile"), Path(".sc-lint/justfile")):
-            (root / relative).parent.mkdir(parents=True, exist_ok=True); (root / relative).write_bytes(targets[relative])
-        result = subprocess.run(["just", "--justfile", str(root / "Justfile"), "--working-directory", str(root), "--list"], text=True, capture_output=True, check=False)
-    if result.returncode == 0: return []
-    kit = set(re.findall(RECIPE, targets[Path(".sc-lint/justfile")].decode(), re.M))
-    consumer = set(re.findall(RECIPE, unmanaged(targets[Path("Justfile")].decode()), re.M))
-    named = set(JUST_COLLISION.findall(result.stderr))
-    return sorted(named | (kit & consumer))
 
 
 def package_files() -> dict[Path, bytes]:
@@ -257,100 +231,56 @@ def package_files() -> dict[Path, bytes]:
     }
 
 
-def desired(data: dict, repo: Path, input_path: Path) -> Desired:
+def consumer_path(relative: Path) -> Path:
+    if relative.parts[0] in PLUGIN_COMPONENTS:
+        return Path(".claude", *relative.parts)
+    return RENAMED.get(relative, relative)
+
+
+def desired(data: dict, repo: Path) -> dict[Path, bytes]:
     result = package_files()
     if not data["ci"]["enabled"]:
         result = {path: content for path, content in result.items() if path.parts[2] != ".github"}
     for source in ROOT.rglob("*"):
-        if not source.is_file() or "__pycache__" in source.parts or source.suffix == ".pyc" or source.relative_to(ROOT) in TEMPLATES or source.name in {"install.py", "install.schema.json"} or source.relative_to(ROOT).parts[0] in {"templates", ".claude-plugin", ".github", "schema.d", "analyzer-catalog"}: continue
-        result[RENAMED.get(source.relative_to(ROOT), source.relative_to(ROOT))] = source.read_bytes()
+        if not source.is_file() or "__pycache__" in source.parts or source.suffix == ".pyc" or source.relative_to(ROOT) in TEMPLATES or source.name in {"install.py", "install.schema.json"} or source.relative_to(ROOT).parts[0] in {"tests", "templates", ".claude-plugin", ".github", "schema.d", "analyzer-catalog"}: continue
+        result[consumer_path(source.relative_to(ROOT))] = source.read_bytes()
     for source, target in TEMPLATES.items():
         if source.name == "sc-lint-workflow.yml.tmpl" and not data["ci"]["enabled"]: continue
         result[target] = render(ROOT / source, data).encode()
-    result[INSTALL_INPUT] = json.dumps(data, indent=2, sort_keys=True).encode() + b"\n"
-    justfile = repo / "Justfile"; original = justfile.read_text() if justfile.exists() else (ROOT / "templates/Justfile.default").read_text()
-    if not re.search(r"^test(?![\w-])[^:\n]*:(?!=)", unmanaged(original), re.M): original = (original.rstrip() + "\n\n" + (ROOT / "templates/test.just").read_text()).lstrip("\n")
-    if original.count(MARKER_START) != original.count(MARKER_END) or original.count(MARKER_START) > 1: raise RuntimeError(f"{justfile}: marker conflict")
-    shell = data.get("justfile", {}).get("windows_shell", True) and not re.search(r"^set\s+windows-shell\b", unmanaged(original), re.M)
-    python_binding = not re.search(r"^(?:export\s+)?python\s*:?=", unmanaged(original), re.M)
-    block = substitute_template_variables(
-        render(ROOT / Path("templates/Justfile.import.tmpl"), data),
-        {"windows_shell": WINDOWS_SHELL if shell else "", "python_binding": PYTHON_BINDING if python_binding else ""},
-    ).strip()
-    result[Path("Justfile")] = (re.sub(re.escape(MARKER_START) + r".*?" + re.escape(MARKER_END), block, original, flags=re.S) if MARKER_START in original else (original.rstrip() + "\n\n" + block).lstrip("\n")).encode()
-    persisted = frozenset({INSTALL_INPUT}) if input_path.resolve() == (repo / INSTALL_INPUT).resolve() else frozenset()
-    return Desired(result, frozenset({Path("Justfile")}), persisted)
-
-
-def digest(content: bytes) -> str: return hashlib.sha256(content).hexdigest()
-
-
-def load_manifest(repo: Path) -> dict[str, str] | None:
-    path = repo / MANIFEST
-    if not path.exists(): return None
-    data = json.loads(path.read_text())
-    if not isinstance(data.get("managed"), dict): raise RuntimeError(f"{path}: invalid managed-file manifest")
-    return data["managed"]
+    result[Path("Justfile")] = (
+        (ROOT / "templates/Justfile.default").read_text()
+        + "\n" + (ROOT / "templates/test.just").read_text()
+        + "\n" + render(ROOT / "templates/Justfile.import.tmpl", data)
+    ).encode()
+    return {relative: content for relative, content in result.items()
+            if not (repo / relative).exists()}
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(); parser.add_argument("--input", type=Path); parser.add_argument("--dry-run", action="store_true"); parser.add_argument("repo", type=Path); args = parser.parse_args()
+    parser = argparse.ArgumentParser(
+        description="Seed missing sc-lint adoption files in REPO.",
+        epilog=(
+            "Existing files are left untouched. Exit codes: 0 seeded or already present; "
+            "1 --dry-run found missing files (nothing written); 2 invalid input."
+        ),
+    )
+    parser.add_argument("--input", type=Path, help="install input JSON; defaults to REPO/.sc-lint/install.json")
+    parser.add_argument("--dry-run", action="store_true", help="show missing files without writing")
+    parser.add_argument("repo", type=Path, help="consumer repository root")
+    args = parser.parse_args()
     input_path = args.input or args.repo / ".sc-lint" / "install.json"
-    try: data = values(input_path); targets = desired(data, args.repo, input_path); prior = load_manifest(args.repo)
+    try: targets = desired(values(input_path), args.repo)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error: print(f"conflict: {error}", file=sys.stderr); return 2
-    previously_managed = prior or {}
-    clashes = []
-    for relative, expected in targets.files.items():
-        path = args.repo / relative
-        if (
-            relative in targets.special_targets
-            or relative.as_posix() in previously_managed
-            or not path.exists()
-        ):
-            continue
-        if not path.is_file() or path.read_bytes() != expected:
-            clashes.append(path)
-    if clashes:
-        print(
-            "conflict: install would overwrite pre-existing files:\n"
-            + "\n".join(f"  {path}" for path in clashes),
-            file=sys.stderr,
-        )
-        return 2
-    changes = []
-    retired = []
-    for name, recorded_digest in previously_managed.items():
-        relative = Path(name)
-        if relative.is_absolute() or ".." in relative.parts:
-            print(f"conflict: invalid managed path {name}", file=sys.stderr); return 2
-        if relative in targets.files:
-            continue
-        path = args.repo / relative
-        if not path.resolve().is_relative_to(args.repo.resolve()) or path.is_symlink():
-            print(f"conflict: invalid managed path {name}", file=sys.stderr); return 2
-        if not path.exists():
-            continue
-        if not path.is_file() or digest(path.read_bytes()) != recorded_digest:
-            print(f"conflict: {relative.as_posix()} was modified outside sc-lint", file=sys.stderr); return 2
-        retired.append((path, path.read_bytes()))
-    for relative, expected in targets.files.items():
-        path = args.repo / relative; current = path.read_bytes() if path.exists() else b""
-        if current != expected:
-            if not args.dry_run and prior and relative not in targets.special_targets and relative.as_posix() in prior and digest(current) != prior[relative.as_posix()]: print(f"conflict: {path} was modified outside sc-lint", file=sys.stderr); return 2
-            changes.append((path, current, expected))
     if args.dry_run:
-        try: collisions = justfile_collisions(targets.files)
-        except OSError as error: print(f"conflict: --dry-run needs `just` on PATH to check Justfile collisions: {error}", file=sys.stderr); return 2
-        if collisions: print(f"conflict: Justfile collisions: {', '.join(collisions)}", file=sys.stderr); return 2
-        for path, old, new in changes: print("".join(difflib.unified_diff(old.decode(errors="replace").splitlines(True), new.decode(errors="replace").splitlines(True), fromfile=str(path), tofile=str(path))))
-        for path, old in retired: print("".join(difflib.unified_diff(old.decode(errors="replace").splitlines(True), [], fromfile=str(path), tofile="/dev/null")))
-        return 1 if changes or retired else 0
-    manifest = {relative.as_posix(): digest(content) for relative, content in targets.files.items()}
-    changes.append((args.repo / MANIFEST, (args.repo / MANIFEST).read_bytes() if (args.repo / MANIFEST).exists() else b"", json.dumps({"managed": manifest}, indent=2, sort_keys=True).encode() + b"\n"))
-    for path, _ in retired:
-        path.unlink()
-    for path, _, content in changes:
-        path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(content)
+        for relative, content in targets.items():
+            path = args.repo / relative
+            print("".join(difflib.unified_diff([], content.decode(errors="replace").splitlines(True), fromfile=str(path), tofile=str(path))))
+        return 1 if targets else 0
+    for relative, content in targets.items():
+        path = args.repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("xb") as output:
+            output.write(content)
     return 0
 
 

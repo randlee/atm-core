@@ -616,7 +616,7 @@ class BootstrapTests(IsolatedHomeTests):
         self.assertIn("clippy-windows-macos", install["lint_profiles"]["ci"])
         self.assertEqual(
             install["tools"],
-            {"cargo": {"cargo-xwin": "0.18.4"}, "rustup_targets": ["x86_64-pc-windows-msvc"]},
+            {"non_windows": {"cargo": {"cargo-xwin": "0.18.4"}, "rustup_targets": ["x86_64-pc-windows-msvc"]}},
         )
 
     def test_ci_uses_bootstrap_python_and_requirements_for_all_pydantic_consumers(self) -> None:
