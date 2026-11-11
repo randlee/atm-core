@@ -1,0 +1,11 @@
+{"sprint":"bl-1","wave":1,"depends_on":[],"closure_type":"contract"}
+{"sprint":"bl-2","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
+{"sprint":"bl-3","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
+{"sprint":"bl-4","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
+{"sprint":"bl-5","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
+{"sprint":"bl-6","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
+{"sprint":"bl-7","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
+{"sprint":"bl-8","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
+{"sprint":"bl-10","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
+{"sprint":"bl-13","wave":2,"depends_on":["bl-1"],"closure_type":"boundary"}
+{"sprint":"bl-12","wave":3,"depends_on":["bl-2","bl-3","bl-4","bl-5","bl-6","bl-7","bl-8","bl-10","bl-13"],"closure_type":"integration"}
