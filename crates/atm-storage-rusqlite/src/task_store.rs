@@ -174,7 +174,7 @@ impl SqliteTaskStore {
             team: parse(&row.get::<_, String>(0)?, "event team")?,
             task_id: parse(&row.get::<_, String>(1)?, "event task id")?,
             assignee: parse(&row.get::<_, String>(2)?, "event assignee")?,
-            seq: row.get(3)?,
+            seq: crate::unsigned_column(row, 3)?,
             at: parse(&row.get::<_, String>(4)?, "event timestamp")?,
             event: parse_event(&row.get::<_, String>(5)?)?,
             from_state: row
@@ -261,7 +261,7 @@ impl SqliteTaskStore {
                 "SELECT COALESCE(MAX(seq), 0) + 1 FROM task_events
                  WHERE team = ?1 AND task_id = ?2",
                 params![member.team().as_str(), task_id.as_str()],
-                |row| row.get(0),
+                |row| crate::unsigned_column(row, 0),
             )
             .map_err(|error| {
                 self.db
@@ -277,7 +277,7 @@ impl SqliteTaskStore {
                     member.team().as_str(),
                     task_id.as_str(),
                     member.agent().as_str(),
-                    seq,
+                    crate::sqlite_integer(seq, "task_events.seq")?,
                     at.to_string(),
                     event_name(event),
                     state_name(state),
@@ -639,7 +639,7 @@ impl TaskStore for SqliteTaskStore {
                 .query_row(
                     "SELECT COUNT(*) FROM escalation_recipients WHERE scope_key = ?1",
                     [&scope_key],
-                    |row| row.get(0),
+                    |row| crate::unsigned_column(row, 0),
                 )
                 .map_err(|error| self.db.error("failed to count escalation recipients", error))?;
             if count >= MAX_ESCALATION_RECIPIENTS {

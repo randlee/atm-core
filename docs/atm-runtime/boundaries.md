@@ -29,7 +29,10 @@ Allowed dependents:
 Allowed dependencies:
 - `atm-core`
 - `atm-storage`
-- `atm-storage-rusqlite`
+- `async-trait`
+- `sc-lint-attributes`
+- `tokio`
+- `tracing`
 
 Forbidden edges:
 - `atm-daemon -> atm-storage-rusqlite`

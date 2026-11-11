@@ -492,23 +492,27 @@ fn persist_installer_transition(
     now: &str,
     mutation: Mutation,
 ) -> Result<(), AtmError> {
+    let generation = crate::sqlite_integer(
+        request.registration_generation,
+        "tool_sender_registry.registration_generation",
+    )?;
     match mutation {
         Mutation::Register => {
             transaction.execute(
                 "INSERT INTO tool_sender_registry (sender, installer_id, installer_key_id, host_id, runtime_key_id, runtime_public_key, registration_generation, active, installed_at, revoked_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, NULL) ON CONFLICT(sender) DO UPDATE SET installer_key_id=excluded.installer_key_id, host_id=excluded.host_id, runtime_key_id=excluded.runtime_key_id, runtime_public_key=excluded.runtime_public_key, registration_generation=excluded.registration_generation, active=1, installed_at=excluded.installed_at, revoked_at=NULL WHERE tool_sender_registry.installer_id=excluded.installer_id AND tool_sender_registry.active=0",
-                params![request.sender.as_str(), request.installer_id.as_str(), request.installer_key_id.as_str(), request.host_id.as_str(), request.runtime_key_id.as_str(), request.runtime_public_key, request.registration_generation, now],
+                params![request.sender.as_str(), request.installer_id.as_str(), request.installer_key_id.as_str(), request.host_id.as_str(), request.runtime_key_id.as_str(), request.runtime_public_key, generation, now],
             ).map_err(|error| db_error("failed to persist tool sender registration", error))?;
         }
         Mutation::Rotate => {
             transaction.execute(
                 "UPDATE tool_sender_registry SET installer_key_id=?2, host_id=?3, runtime_key_id=?4, runtime_public_key=?5, registration_generation=?6, installed_at=?7 WHERE sender=?1 AND active=1",
-                params![request.sender.as_str(), request.installer_key_id.as_str(), request.host_id.as_str(), request.runtime_key_id.as_str(), request.runtime_public_key, request.registration_generation, now],
+                params![request.sender.as_str(), request.installer_key_id.as_str(), request.host_id.as_str(), request.runtime_key_id.as_str(), request.runtime_public_key, generation, now],
             ).map_err(|error| db_error("failed to rotate tool sender key", error))?;
         }
         Mutation::Unregister => {
             transaction.execute(
                 "UPDATE tool_sender_registry SET installer_key_id=?2, registration_generation=?3, active=0, revoked_at=?4 WHERE sender=?1 AND active=1",
-                params![request.sender.as_str(), request.installer_key_id.as_str(), request.registration_generation, now],
+                params![request.sender.as_str(), request.installer_key_id.as_str(), generation, now],
             ).map_err(|error| db_error("failed to uninstall tool sender", error))?;
         }
     }
@@ -525,7 +529,7 @@ fn load_registration(
             params![sender],
             |row| Ok(Registration {
                 installer_id: row.get(0)?, installer_key_id: row.get(1)?, host_id: row.get(2)?,
-                runtime_key_id: row.get(3)?, runtime_public_key: row.get(4)?, generation: row.get(5)?,
+                runtime_key_id: row.get(3)?, runtime_public_key: row.get(4)?, generation: crate::unsigned_column(row, 5)?,
                 active: row.get::<_, i64>(6)? == 1, installed_at: row.get(7)?,
             }),
         )
@@ -843,6 +847,32 @@ mod tests {
                 .as_ref(),
         );
         proof
+    }
+
+    #[test]
+    fn registration_generation_overflow_is_rejected_before_insert()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let request = installer_request(
+            &signing_key(1),
+            &signing_key(2),
+            ToolInstallerOperation::Register,
+            u64::MAX,
+            "runtime-v1",
+            None,
+            "overflow-1",
+        );
+        let mut connection = rusqlite::Connection::open_in_memory()?;
+        let transaction = connection.transaction()?;
+        let result = super::persist_installer_transition(
+            &transaction,
+            &request,
+            "2026-10-23T12:00:00Z",
+            super::Mutation::Register,
+        );
+        assert!(
+            matches!(result, Err(error) if error.to_string().contains("tool_sender_registry.registration_generation"))
+        );
+        Ok(())
     }
 
     #[test]

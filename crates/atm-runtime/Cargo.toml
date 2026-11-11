@@ -16,6 +16,7 @@ name = "atm_runtime"
 atm-core.workspace = true
 atm-storage.workspace = true
 async-trait.workspace = true
+sc-lint-attributes.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 

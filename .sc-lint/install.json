@@ -297,6 +297,7 @@
             "agent-team-mail-core",
             "atm-runtime-test-support",
             "atm-storage",
+            "sc-lint-attributes",
             "serde_json",
             "tokio",
             "tracing"
