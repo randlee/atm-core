@@ -1,0 +1,83 @@
+---
+name: dev-sanity-complete
+version: 2.0.1
+description: Selected sanity verdict; FAIL within the round cap sends sanity-fail to the dev and creates no finding bead.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - checked_bead
+  - sprint
+  - verdict
+  - findings_count
+  - findings_md
+  - lint_md
+defaults:
+  base_verified: false
+  qa_task_id: ""
+  sanity_task_id: ""
+  dev_task_id: ""
+  pr_number: ""
+  commit: ""
+  branch: ""
+  run_id: "legacy"
+  reviewer: "sanity-llm"
+  notes_md: ""
+  selection: []
+metadata:
+  type: dev-sanity-complete
+  tags:
+    - stage:dev-sanity
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: dev-sanity-complete
+    stage: dev-sanity
+    transition: complete
+---
+{% set task_id = sanity_task_id if sanity_task_id else task_id %}
+{% if verdict not in ["PASS", "FAIL", "CANNOT_RUN"] %}{{ verdict | verdict_must_be_PASS_or_FAIL }}ERROR: verdict must be PASS, FAIL or CANNOT_RUN, got {{ verdict }}
+{% endif %}# Dev Sanity Check {{ verdict }}
+
+Generated: {{ generated_at }}
+Run: {{ run_id }} · Operational reviewer: {{ reviewer }}
+Bead: {{ task_id }} (sprint {{ sprint }})
+Checked: {{ checked_bead }} on `{{ branch }}` at `{{ commit }}`
+Base verified against ledger: {% if base_verified %}yes{% else %}no{% endif %}
+Verdict: **{{ verdict }}** ({{ findings_count }} findings)
+{% if verdict == "FAIL" %}
+For a FAIL within the configured round cap, the dev was sent `sanity-fail`; a FAIL exceeding the cap triggers lead escalation; no finding beads were filed.
+{% endif %}
+
+## Machine Status (JSON)
+```json
+{
+  "run_id": {{ run_id | tojson }},
+  "reviewer": {{ reviewer | tojson }},
+  "task": {{ task_id | tojson }},
+  "checked_bead": {{ checked_bead | tojson }},
+  "sprint": {{ sprint | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "verdict": {{ verdict | tojson }},
+  "findings": {{ findings_count }},
+  "selection": {{ (selection or []) | tojson }}
+}
+```
+
+## Selection
+{% for item in selection or [] %}
+- D{{ item.deliverable }}: LLM={{ item.llm }}, JEV={{ item.jev }}, selected={{ item.selected }}{% if item.reason %}; {{ item.reason }}{% endif %}
+{% endfor %}
+
+## Findings
+{{ findings_md }}
+
+## Lint
+{{ lint_md }}
+{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

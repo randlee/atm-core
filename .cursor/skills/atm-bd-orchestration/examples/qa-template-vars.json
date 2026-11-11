@@ -1,0 +1,24 @@
+{
+  "task_id": "atm-d-4-qa1",
+  "checked_bead": "atm-d-4",
+  "phase": "d",
+  "phase_feature": "atm-phase-d",
+  "sprint": "d-4",
+  "stack": "phase-d",
+  "layer": 4,
+  "round": 1,
+  "branch": "sprint/d-4-otlp-sync-exporter",
+  "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+  "base": "sprint/d-3-otlp-config",
+  "worktree_path": "../atm-core-worktrees/sprint/d-4-otlp-sync-exporter",
+  "pr_number": 231,
+  "policy_path": ".claude/project/quality-policy.md",
+  "reviewers_round1": [
+    "req-qa",
+    "arch-qa",
+    "rust-qa-agent",
+    "ruthless-boundary-qa",
+    "rust-best-practices-agent",
+    "rust-service-hardening-agent"
+  ]
+}

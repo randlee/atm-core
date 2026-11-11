@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11,<3.12"
-# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.8.0,<2"]
 # ///
 # pyright: strict
 """Fix-verification scope: who may verify a fix, and what the verifier may report.
@@ -18,7 +18,9 @@ and the finding id is `<bead> <field>`. `validate-plan` findings are re-checked 
 the plan review's own validate-plan step, so it is never a dispatched reviewer.
 
     owned  --carried <bd show json> [--plan]              {filing reviewer: [its finding_refs]}
-    check  --carried <bd show json> --dispatch a,b         exit 5 unless the dispatch set is exactly the filing reviewers
+    check  --carried <bd show json> --dispatch a,b [--tests-changed]
+                                                           exit 5 unless the dispatch set is exactly the filing reviewers,
+                                                           plus flaky-test-qa when the fix layer changed test code
     filter --carried <bd show json> --reviewer <name> --result <json>
                                                            the result reduced to dispositions on that reviewer's carried ids
 """
@@ -37,6 +39,7 @@ from operation_models import matches_typeddict
 PLAN_LINE = re.compile(r"^\s*(?:[-*]\s+)?(?P<bead>\S+)\s+(?P<severity>blocking|important|minor)\s+"
                        r"(?P<reviewer>\S+)\s+(?P<field>[^:\s][^:]*):")
 PLAN_SCRIPT = "validate-plan"
+FLAKY_REVIEWER = "flaky-test-qa"  # mandatory, unlocked, in a fix round that changes test code (roles/quality-mgr.md)
 FENCED = re.compile(r"\s*```(?:json)?[ \t]*\n(.*?)\n```\s*", re.S)  # a reviewer result as returned: fenced JSON
 
 
@@ -123,9 +126,12 @@ def plan_carried(text: str) -> list[CarriedFinding]:
     return out
 
 
-def check(carried: list[CarriedFinding], dispatch: list[str]) -> tuple[list[str], list[str]]:
-    """(extra, missing): reviewers dispatched that filed no carried finding, and filing reviewers not dispatched."""
-    want = set(owned(carried)) - {PLAN_SCRIPT}
+def check(carried: list[CarriedFinding], dispatch: list[str], tests_changed: bool = False) -> tuple[list[str], list[str]]:
+    """(extra, missing): reviewers dispatched that filed no carried finding, and filing reviewers not dispatched.
+    With ``tests_changed``, flaky-test-qa is required too."""
+    want: set[str] = set(owned(carried)) - {PLAN_SCRIPT}
+    if tests_changed:
+        want.add(FLAKY_REVIEWER)
     have = set(dispatch)
     return sorted(have - want), sorted(want - have)
 
@@ -165,6 +171,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--carried", required=True, help="bd show <carried ids> --json; with --plan, the carried plan finding lines")
     parser.add_argument("--plan", action="store_true", help="--carried is a plan review's carried finding lines")
     parser.add_argument("--dispatch", default="", help="check: the reviewers to be dispatched, comma-separated")
+    parser.add_argument("--tests-changed", action="store_true",
+                        help="check: the fix layer changed test code, so flaky-test-qa must be dispatched too")
     parser.add_argument("--reviewer", default="")
     parser.add_argument("--result", default="", help="the reviewer's fenced-JSON result")
     args = parser.parse_args(argv)
@@ -187,10 +195,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(filing))
         return 0
     if args.command == "check":
-        extra, missing = check(carried, [n.strip() for n in args.dispatch.split(",") if n.strip()])
+        extra, missing = check(carried, [n.strip() for n in args.dispatch.split(",") if n.strip()], args.tests_changed)
         if extra or missing:
             print("FIX_ROUND_DISPATCH_MISMATCH: not a filing reviewer: " + (" ".join(extra) or "-")
-                  + "; filing reviewer not dispatched: " + (" ".join(missing) or "-"), file=sys.stderr)
+                  + "; filing reviewer not dispatched: " + (" ".join(missing) or "-")
+                  + (f"; with --tests-changed, {FLAKY_REVIEWER} must be dispatched" if FLAKY_REVIEWER in missing else ""),
+                  file=sys.stderr)
             return 5
         return 0
     if args.reviewer not in filing or not args.result:

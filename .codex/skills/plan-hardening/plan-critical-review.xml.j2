@@ -1,0 +1,74 @@
+---
+name: plan-critical-review-task
+version: 1.2.0
+description: assignment template for an agent-run plan review (critical-plan-reviewer, plan-scope-reviewer or ceremony-qa role) during plan hardening.
+format: xml
+required_variables:
+  - task_id
+  - phase
+  - branch
+  - commit
+  - worktree_path
+  - round_index
+  - review_focus
+  - review_questions
+  - references
+optional_variables:
+  - previous_step_json
+  - reviewer
+  - complete_template
+  - lead
+  - cc
+defaults:
+  previous_step_json: ""
+  reviewer: critical-plan-reviewer
+  complete_template: plan-critical-review-complete.md.j2
+  lead: team-lead
+  cc: team-lead
+metadata:
+  type: plan-critical-review
+  tags:
+    - stage:plan
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: plan-critical-review
+    stage: plan
+    transition: critical-review
+    iteration_variable: round_index
+---
+{% autoescape false -%}
+<atm-review id="{{ task_id }}" phase="{{ phase }}" mode="plan-critical-review" round="{{ round_index }}">
+  <branch>{{ branch }}</branch>
+  <commit>{{ commit }}</commit>
+  <worktree>{{ worktree_path }}</worktree>
+
+  <review-focus>
+{{ review_focus }}
+  </review-focus>
+
+  <review-questions>
+{{ review_questions }}
+  </review-questions>
+
+  <references>
+{{ references }}
+  </references>
+
+{% if previous_step_json | trim %}
+  <previous-step-json>
+<![CDATA[
+{{ previous_step_json }}
+]]>
+  </previous-step-json>
+{% endif %}
+
+  <workflow>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "<one line on what you will do first>"`.</step>
+    <step id="b">Assume the `{{ reviewer }}` role from `.claude/agents/{{ reviewer }}.md`. Read every document in `<references>` from `{{ worktree_path }}` at commit `{{ commit }}` with `git show {{ commit }}:<path>`; never review working files.</step>
+    <step id="c">Verify every claim the plan makes about existing code against the branch before recording a finding; cite `file:line` on `{{ commit }}`.</step>
+    <step id="d">Return the fenced JSON that `.claude/agents/{{ reviewer }}.md` specifies with `atm task close {{ task_id }} completed --template .claude/skills/plan-hardening/{{ complete_template }} --vars <scratch>/plan-critical-review-complete-{{ task_id }}-vars.json`, with `status` PASS or FAIL, `result_json` the fenced JSON verbatim, and `task_id`, `phase` and `round_index` unchanged from this assignment; write the vars file outside the repository. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
+  </workflow>
+</atm-review>
+{%- endautoescape %}

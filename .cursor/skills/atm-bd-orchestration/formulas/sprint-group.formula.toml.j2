@@ -1,0 +1,163 @@
+---
+name: sprint-group
+version: 4.3.0
+description: Beads formula for the dev, sanity and QA tasks of one sprint, attached under its sprint container. bead-groups supplies every variable.
+format: toml
+required_variables:
+  - parent
+  - ref
+  - phase
+  - sprint
+  - stack
+  - layer
+  - difficulty
+  - branch
+  - worktree
+  - pr_target
+  - priority
+  - edge_option
+  - stack_bead
+  - checked_title
+  - phase_feature
+  - lint_command
+  - policy_path
+  - max_sanity_rounds
+  - reviewers_round1
+---
+{#
+sc-compose beads formula (sc-compose/beads/v1, ADR-0021): the dev, sanity and
+QA tasks of one sprint, poured directly under its existing sprint container.
+Poured ids are <parent>.<ref>-<step> (see bead_formulas.attach_id).
+
+`{{{ ... }}}` are compose variables, baked at render time; sc-compose escapes
+them for TOML strings. This formula declares no bead variables, so every
+value here is a compose variable;
+this comment names no double-brace example because sc-compose --strict reads
+tokens inside comments (sc-compose#785). layer and priority
+are written bare and must be integers.
+
+Compose variables (bead-groups fills them from the sprint container, the
+repository configuration and sprint-group.relations.json):
+  parent         the sprint container id
+  ref            attach reference, "group"
+  phase, sprint, stack, layer, difficulty, priority
+  stack_bead, checked_title, phase_feature, lint_command, policy_path,
+  max_sanity_rounds
+                 the close fields (close_fields.POURED) every step carries, so
+                 its close reads no other bead; max_sanity_rounds is bare
+  reviewers_round1  the QA step's reviewer list, from the repository configuration
+  edge_option    E1: "C" sanity needs dev (poured `blocks`; the default),
+                 "B" no sanity -> dev edge in the pour (bead-groups adds
+                 `validates`), "A" only dev is poured
+The sanity step carries metadata.dev_bead (N9: it signals that the sanity
+agent runs on this sprint) and difficulty.
+
+No step sets an assignee: every poured bead carries `difficulty` and the lead
+picks the agent at dispatch (`bd update <bead> --assignee <agent>`).
+
+Closers: the dev closes dev; dev-sanity closes sanity on PASS only, and on
+FAIL reopens dev and leaves sanity open, which re-blocks it through
+`needs dev`; quality-mgr closes qa after pouring a finding-group for each
+blocking finding and filing the important and minor ones; the team lead
+closes the sprint container, which bd refuses while any group bead under it
+is open.
+#}
+formula = "sprint-group"
+description = "Sprint {{{ sprint }}}: dev, sanity and QA under sprint container {{{ parent }}}."
+version = 4
+type = "workflow"
+
+[[steps]]
+id = "dev"
+title = "{{{ sprint }}}: dev"
+description = "Dev work for sprint {{{ sprint }}}. The deliverables and acceptance criteria are on the sprint container {{{ parent }}}."
+type = "task"
+priority = {{{ priority }}}
+labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:dev"]
+
+[steps.metadata]
+role = "dev"
+phase = "{{{ phase }}}"
+sprint = "{{{ sprint }}}"
+stack = "{{{ stack }}}"
+layer = {{{ layer }}}
+difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
+sprint_bead = "{{{ parent }}}"
+checked_bead = "{{{ parent }}}.{{{ ref }}}-dev"
+stack_bead = "{{{ stack_bead }}}"
+base = "{{{ pr_target }}}"
+checked_title = "{{{ checked_title }}}"
+sanity_bead = "{{{ parent }}}.{{{ ref }}}-sanity"
+qa_bead = "{{{ parent }}}.{{{ ref }}}-qa"
+phase_feature = "{{{ phase_feature }}}"
+lint_command = "{{{ lint_command }}}"
+policy_path = "{{{ policy_path }}}"
+max_sanity_rounds = {{{ max_sanity_rounds }}}
+{% if edge_option != "A" %}
+
+[[steps]]
+id = "sanity"
+title = "{{{ sprint }}}: sanity check"
+description = "Sanity check of {{{ parent }}}.{{{ ref }}}-dev (sprint {{{ sprint }}}): each numbered deliverable is written and lint passes. This is not QA. Close on PASS only; on FAIL reopen the dev bead and leave this bead open."
+type = "task"
+priority = {{{ priority }}}
+labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:dev-sanity"]
+{% if edge_option == "C" %}needs = ["dev"]
+{% endif %}
+[steps.metadata]
+role = "sanity"
+phase = "{{{ phase }}}"
+sprint = "{{{ sprint }}}"
+stack = "{{{ stack }}}"
+sprint_bead = "{{{ parent }}}"
+checked_bead = "{{{ parent }}}.{{{ ref }}}-dev"
+stack_bead = "{{{ stack_bead }}}"
+base = "{{{ pr_target }}}"
+checked_title = "{{{ checked_title }}}"
+sanity_bead = "{{{ parent }}}.{{{ ref }}}-sanity"
+qa_bead = "{{{ parent }}}.{{{ ref }}}-qa"
+phase_feature = "{{{ phase_feature }}}"
+lint_command = "{{{ lint_command }}}"
+policy_path = "{{{ policy_path }}}"
+max_sanity_rounds = {{{ max_sanity_rounds }}}
+dev_bead = "{{{ parent }}}.{{{ ref }}}-dev"
+difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
+
+[[steps]]
+id = "qa"
+title = "{{{ sprint }}}: QA round 1"
+description = "QA round 1 of {{{ parent }}}.{{{ ref }}}-dev (sprint {{{ sprint }}}), after its sanity check passes."
+type = "task"
+priority = {{{ priority }}}
+labels = ["phase-{{{ phase }}}", "stack:{{{ stack }}}", "stage:qa"]
+needs = ["sanity"]
+
+[steps.metadata]
+role = "qa"
+phase = "{{{ phase }}}"
+sprint = "{{{ sprint }}}"
+stack = "{{{ stack }}}"
+round = 1
+difficulty = "{{{ difficulty }}}"
+branch = "{{{ branch }}}"
+worktree = "{{{ worktree }}}"
+pr_target = "{{{ pr_target }}}"
+checked_bead = "{{{ parent }}}.{{{ ref }}}-dev"
+sprint_bead = "{{{ parent }}}"
+stack_bead = "{{{ stack_bead }}}"
+base = "{{{ pr_target }}}"
+checked_title = "{{{ checked_title }}}"
+sanity_bead = "{{{ parent }}}.{{{ ref }}}-sanity"
+qa_bead = "{{{ parent }}}.{{{ ref }}}-qa"
+phase_feature = "{{{ phase_feature }}}"
+lint_command = "{{{ lint_command }}}"
+policy_path = "{{{ policy_path }}}"
+max_sanity_rounds = {{{ max_sanity_rounds }}}
+reviewers_round1 = [{% for r in reviewers_round1 %}"{{{ r }}}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% endif %}

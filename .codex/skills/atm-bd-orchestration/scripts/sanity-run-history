@@ -1,0 +1,421 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.8.0,<2"]
+# ///
+# pyright: strict
+"""Append a completed sanity run to the repository-local ignored JSONL ledger and print its path."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+from collections.abc import Callable
+from typing import NoReturn, TypeGuard, TypedDict
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads" / "scripts"))
+import sc_render  # noqa: E402
+from operation_models import matches_typeddict  # noqa: E402
+from sanity_shared import ledger_path, primary_root, valid_elapsed_s  # noqa: E402
+from sprint_index_common import JsonObject, JsonValue, is_json_object  # noqa: E402
+
+
+def fail(message: str) -> NoReturn:
+    raise SystemExit(f"sanity-run-history: {message}")
+
+
+class SlotError(TypedDict):
+    code: str
+    message: str
+    recoverable: bool
+    deliverable: int | None
+
+
+class CompletionVars(TypedDict):
+    sprint: str
+    run_id: str
+    reviewer: str
+    commit: str
+    started_at: str
+    completed_at: str
+    verdict: str
+    findings_count: int | None
+    error: JsonValue
+    dev: str | None
+    phase: str
+    jev_elapsed_s: int | float | None
+    kind: str
+    errors: list[SlotError]
+    jev_receipts: list[JsonValue]
+
+
+def read_vars(path: Path) -> CompletionVars:
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"cannot read completion vars {path}: {exc}")
+    if not is_json_object(value):
+        fail("completion vars must be a JSON object")
+    for field in ("sprint", "run_id", "reviewer", "commit", "started_at", "completed_at"):
+        if not isinstance(value.get(field), str) or not value[field]:
+            fail(f"completion vars.{field} must be a nonempty string")
+    if value["reviewer"] not in {"sanity-llm", "sanity-jev"}:
+        fail("invalid reviewer")
+    if value.get("verdict") not in {"PASS", "FAIL", "CANNOT_RUN"}:
+        fail("invalid verdict")
+    count = value.get("findings_count")
+    if value["verdict"] == "CANNOT_RUN":
+        if count is not None or not value.get("error"):
+            fail("CANNOT_RUN requires null findings_count and an error")
+    elif isinstance(count, bool) or not isinstance(count, int) or count < 0:
+        fail("findings_count must be a nonnegative integer")
+    for field in ("started_at", "completed_at"):
+        utc_timestamp(value[field])
+    # The original consumer indexes this field even for CANNOT_RUN.
+    value["findings_count"]
+    sprint, run_id, reviewer, commit, started_at, completed_at = (
+        value[field] for field in ("sprint", "run_id", "reviewer", "commit", "started_at", "completed_at")
+    )
+    verdict = value["verdict"]
+    assert isinstance(sprint, str) and isinstance(run_id, str) and isinstance(reviewer, str)
+    assert isinstance(commit, str) and isinstance(started_at, str) and isinstance(completed_at, str)
+    assert isinstance(verdict, str)
+    assert count is None or (isinstance(count, int) and not isinstance(count, bool))
+    checked = value.get("checked_bead_data")
+    if not isinstance(checked, dict):
+        checked = {}
+    return CompletionVars(sprint=sprint, run_id=run_id, reviewer=reviewer, commit=commit,
+                          started_at=started_at, completed_at=completed_at, verdict=verdict,
+                          findings_count=count, error=value.get("error"), dev=checked_dev(checked),
+                          phase=phase_from_bead(checked, sprint), jev_elapsed_s=reviewer_elapsed(value),
+                          kind=result_kind(value), errors=slot_errors(value), jev_receipts=jev_receipts(value))
+
+
+SLOT_ERROR_KEYS = tuple(SlotError.__annotations__)
+LATER_FIELDS = ("errors", "jev_receipts", "dev", "jev_elapsed_s", "llm_elapsed_s", "kind")
+API_FAILURE_MATCHERS: dict[str, tuple[Callable[[str], bool], ...]] = {
+    "sanity-llm": (lambda code: code == "SANITY.LLM_API_FAILURE",),
+    "sanity-jev": (lambda code: code.startswith("SANITY.JEV_"),),
+}
+
+
+def reviewer_elapsed(value: JsonObject) -> int | float | None:
+    """Concurrent Jev calls contribute their maximum wall time, not their sum."""
+    if value.get("reviewer") != "sanity-jev":
+        return None
+    times: list[int | float] = []
+    results = value.get("reviewer_results") or []
+    if not isinstance(results, list):
+        return None
+    for result in results:
+        if isinstance(result, dict):
+            elapsed = result.get("elapsed_s")
+            if isinstance(elapsed, (int, float)) and valid_elapsed_s(elapsed):
+                times.append(elapsed)
+    return max(times) if times else None
+
+
+def checked_dev(bead: JsonObject) -> str | None:
+    assignee = bead.get("assignee")
+    return assignee if isinstance(assignee, str) and assignee else None
+
+
+def result_kind(value: JsonObject) -> str:
+    error = value.get("error")
+    code = error.get("code") if isinstance(error, dict) else None
+    reviewer = value.get("reviewer")
+    matchers = API_FAILURE_MATCHERS.get(reviewer, ()) if isinstance(reviewer, str) else ()
+    return "API_FAILURE" if isinstance(code, str) and any(matcher(code) for matcher in matchers) else "verdict"
+
+
+def valid_slot_error(error: JsonValue) -> TypeGuard[SlotError]:
+    """`code`, `message`, `recoverable` well typed; `deliverable` a number >= 1, or None when the envelope lacks it."""
+    return (matches_typeddict(error, SlotError) and set(error) == set(SLOT_ERROR_KEYS)
+            and bool(error["code"]) and (error["deliverable"] is None
+            or (not isinstance(error["deliverable"], bool) and error["deliverable"] >= 1)))
+
+
+def slot_errors(value: JsonObject) -> list[SlotError]:
+    """Each failed slot's error, copied verbatim from its failure envelope; vars without reviewer_results have none.
+    A malformed envelope (one whose error is not a well-typed code/message/recoverable) is not a slot error: its
+    reviewer merge is CANNOT_RUN, whose `error` the row carries, so it never keeps the row from being logged."""
+    results = value.get("reviewer_results")
+    if not isinstance(results, list):
+        return []
+    errors: list[JsonObject] = []
+    for result in results:
+        if not isinstance(result, dict) or result.get("success") is not False:
+            continue
+        error = result.get("error")
+        if isinstance(error, dict):
+            errors.append({key: error.get(key) for key in SLOT_ERROR_KEYS})
+    parsed: list[SlotError] = []
+    for error in errors:
+        if valid_slot_error(error):
+            parsed.append(error)
+    return parsed
+
+
+def jev_receipts(value: JsonObject) -> list[JsonValue]:
+    """The receipt (`data.jev`) of every sanity-jev success reply, or each part's receipt of a split reply, copied
+    verbatim; sanity-llm rows carry none."""
+    if value.get("reviewer") != "sanity-jev":
+        return []
+    results = value.get("reviewer_results")
+    if not isinstance(results, list):
+        return []
+    found: list[JsonValue] = []
+    for result in results:
+        if not isinstance(result, dict) or result.get("success") is not True:
+            continue
+        data = result.get("data")
+        if isinstance(data, dict):
+            found.append(data.get("jev"))
+    return [receipt for jev in found for receipt in (
+        [part.get("receipt") if isinstance(part, dict) else part for part in jev] if isinstance(jev, list) else [jev])]
+
+
+def phase_from_sprint(sprint: str) -> str:
+    match = re.fullmatch(r"(?:phase-)?([a-z]+)(?:[-_]?\d+)?", sprint.lower())
+    if not match:
+        fail(f"cannot derive a phase from sprint {sprint!r}")
+    return match.group(1)
+
+
+def phase_from_bead(bead: JsonObject, sprint: str) -> str:
+    metadata = bead.get("metadata")
+    value = metadata.get("phase") if isinstance(metadata, dict) else None
+    match = re.fullmatch(r"(?:phase-)?([a-z][a-z0-9_-]*)", value.lower()) if isinstance(value, str) else None
+    if match:
+        return match.group(1)
+    return phase_from_sprint(sprint)
+
+
+class HistoryRow(TypedDict):
+    run_id: JsonValue
+    reviewer: JsonValue
+    identity: tuple[JsonValue, JsonValue, JsonValue, JsonValue, JsonValue, JsonValue]
+    missing_later_fields: list[str]
+    raw: JsonObject
+
+
+def history_row(value: JsonObject) -> HistoryRow:
+    return {"run_id": value.get("run_id"), "reviewer": value.get("reviewer"),
+            "identity": (value.get("commit"), value.get("task"), value.get("sprint"),
+                         value.get("pr_number"), value.get("iteration"), value.get("final_verdict")),
+            "missing_later_fields": [key for key in LATER_FIELDS if key not in value], "raw": value}
+
+
+def load_log(path: Path) -> list[HistoryRow]:
+    if not path.exists():
+        return []
+    records: list[HistoryRow] = []
+    try:
+        lines = path.read_text().splitlines()
+        for number, line in enumerate(lines, start=1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                # Never append behind malformed/truncated bytes or rewrite history.
+                raise
+            if not is_json_object(record):
+                fail(f"log {path}:{number} is not a JSON object")
+            records.append(history_row(record))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"cannot read log {path}: {exc}")
+    return records
+
+
+def utc_timestamp(value: JsonValue) -> datetime:
+    try:
+        if not isinstance(value, str):
+            raise AttributeError(f"'{type(value).__name__}' object has no attribute 'replace'")
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+            raise ValueError("timestamp must be UTC")
+        return parsed
+    except (ValueError, AttributeError) as exc:
+        fail(f"invalid UTC timestamp {value!r}: {exc}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--vars", required=True, type=Path)
+    parser.add_argument("--task", required=True)
+    parser.add_argument("--bead", required=True)
+    parser.add_argument("--pr-number", required=True, type=int)
+    parser.add_argument("--iteration", required=True, type=int)
+    parser.add_argument("--final-verdict", required=True, choices=("PASS", "FAIL", "CANNOT_RUN"))
+    args = parser.parse_args()
+    if args.pr_number < 1 or args.iteration < 1:
+        fail("--pr-number and --iteration must be positive")
+
+    vars = read_vars(args.vars)
+    completed = utc_timestamp(vars["completed_at"])
+    elapsed = max(0, round(completed.timestamp() - utc_timestamp(vars["started_at"]).timestamp()))
+    phase = vars["phase"]
+    record: JsonObject = {
+        "run_id": vars["run_id"], "reviewer": vars["reviewer"], "commit": vars["commit"],
+        "started_at": vars["started_at"], "duration_seconds": elapsed,
+        "error": vars["error"],
+        "dev": vars["dev"],
+        "jev_elapsed_s": vars["jev_elapsed_s"],
+        "llm_elapsed_s": elapsed if vars["reviewer"] == "sanity-llm" else None,
+        "kind": vars["kind"],
+        "errors": [{"code": error["code"], "message": error["message"], "recoverable": error["recoverable"],
+                    "deliverable": error["deliverable"]} for error in vars["errors"]],
+        "jev_receipts": vars["jev_receipts"],
+        "task": args.task, "sprint": vars["sprint"], "phase": phase,
+        "pr_number": args.pr_number, "findings": vars["findings_count"],
+        "verdict": vars["verdict"], "final_verdict": args.final_verdict,
+        "iteration": args.iteration,
+        "completed_at": completed.isoformat().replace("+00:00", "Z"),
+        "completed_local": completed.astimezone().strftime("%m-%d %H:%M"),
+        "duration": f"{elapsed // 60}m{elapsed % 60:02d}s",
+    }
+    record = render_record(record)
+    try:
+        log_path = ledger_path(primary_root(), phase)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        fail(f"cannot locate sanity ledger: {exc}")
+    append_record(log_path, record)
+    print(log_path)
+
+
+RECORD_TEMPLATE = Path(__file__).resolve().parent.parent / "templates/sanity-run-record.json.j2"
+APPEND_TIMEOUT_SECONDS = 60
+RECORD_TYPES = {
+    "run_id": str, "reviewer": str, "commit": str, "task": str, "sprint": str,
+    "phase": str, "started_at": str, "completed_at": str, "completed_local": str, "duration": str,
+    "duration_seconds": int, "pr_number": int, "iteration": int, "verdict": str,
+    "final_verdict": str,
+}
+
+
+def validate_record(record: JsonValue) -> HistoryRow:
+    if not is_json_object(record) or set(record) != set(RECORD_TYPES) | {"findings", "error", "errors", "jev_receipts", "dev", "jev_elapsed_s", "llm_elapsed_s", "kind"}:
+        fail("rendered record has incorrect fields")
+    if record["dev"] is not None and (not isinstance(record["dev"], str) or not record["dev"]):
+        fail("rendered record.dev must be a nonempty string or null")
+    for field in ("jev_elapsed_s", "llm_elapsed_s"):
+        if record[field] is not None and not valid_elapsed_s(record[field]):
+            fail(f"rendered record.{field} must be a finite nonnegative number or null")
+    if record["kind"] not in {"verdict", "API_FAILURE"}:
+        fail("rendered record.kind must be verdict or API_FAILURE")
+    for field, expected in RECORD_TYPES.items():
+        if type(record[field]) is not expected or (expected is str and not record[field]):
+            fail(f"rendered record.{field} must be {expected.__name__}")
+    if record["reviewer"] not in {"sanity-llm", "sanity-jev"}:
+        fail("rendered record has invalid reviewer")
+    if not isinstance(record["errors"], list) or not all(valid_slot_error(error) for error in record["errors"]):
+        fail("rendered record.errors must be a list of {code, message, recoverable, deliverable}")
+    receipts = record["jev_receipts"]
+    if not isinstance(receipts, list) or not all(isinstance(receipt, dict) for receipt in receipts):
+        fail("rendered record.jev_receipts must be a list of receipt objects")
+    if record["reviewer"] == "sanity-llm" and receipts:
+        fail("a sanity-llm row carries no Jev receipts")
+    if record["reviewer"] == "sanity-jev" and record["verdict"] in {"PASS", "FAIL"} and not receipts:
+        fail("a sanity-jev PASS/FAIL row requires the Jev receipt of every deliverable")
+    if record["final_verdict"] not in {"PASS", "FAIL", "CANNOT_RUN"}:
+        fail("rendered record has invalid final_verdict")
+    commit = record["commit"]
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit):
+        fail("rendered record.commit must be a full commit SHA")
+    pr_number, iteration, duration = record["pr_number"], record["iteration"], record["duration_seconds"]
+    if (not isinstance(pr_number, int) or not isinstance(iteration, int) or not isinstance(duration, int)
+            or pr_number < 1 or iteration < 1 or duration < 0):
+        fail("rendered record has invalid numeric range")
+    started, completed = (utc_timestamp(record[key]) for key in ("started_at", "completed_at"))
+    if completed < started:
+        fail("completion precedes reviewer start")
+    if record["verdict"] == "CANNOT_RUN":
+        error = record["error"]
+        if record["findings"] is not None or not isinstance(error, dict) or not all(
+                isinstance(error.get(key), str) and error[key] for key in ("code", "message")):
+            fail("CANNOT_RUN requires null findings and an error code/message")
+    elif record["verdict"] in {"PASS", "FAIL"}:
+        if type(record["findings"]) is not int or record["findings"] < 0 or record["error"] is not None:
+            fail("completed verdict requires integer findings and null error")
+    else:
+        fail("rendered record has invalid verdict")
+    return history_row(record)
+
+
+def render_record(variables: JsonObject) -> JsonObject:
+    """Strict render, validate typed JSON, then hand to the locked append.
+
+    No shell pipeline: failed render/validation cannot append any output.
+    """
+    try:
+        record = json.loads(sc_render.render(RECORD_TEMPLATE, variables))
+    except sc_render.RenderError as exc:
+        fail(f"record render failed: {sc_render.error_text(exc)}")
+    except json.JSONDecodeError as exc:
+        fail(f"record render failed: {exc}")
+    return validate_record(record)["raw"]
+
+
+def append_record(log_path: Path, record: JsonObject) -> None:
+    """Serialize the whole read/check/append transaction, including duplicate detection.
+
+    This lock is separate from sc-compose's append lock: taking that lock here
+    would deadlock the child. All history writers must use this sidecar lock.
+    """
+    current = validate_record(record)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.with_suffix(log_path.suffix + ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        _append_locked(log_path, current)
+
+
+def _append_locked(log_path: Path, current: HistoryRow) -> None:
+    records = load_log(log_path)
+    record = current["raw"]
+    same_run = [r for r in records if r["run_id"] == current["run_id"]]
+    if any(r["identity"] != current["identity"] for r in same_run):
+        fail("shared run identity disagrees with existing record")
+    prior = [r for r in same_run if r["reviewer"] == current["reviewer"]]
+    if prior:
+        # completed_local follows the process TZ; a retry under another TZ is the same row.
+        # A row logged before a field existed (`errors`, `jev_receipts`) is compared without it.
+        later = prior[-1]["missing_later_fields"]
+        if {**prior[-1]["raw"], "completed_local": None} != {**{k: v for k, v in record.items() if k not in later}, "completed_local": None}:
+            fail("run/reviewer already logged with different results")
+        return
+    original_size = log_path.stat().st_size if log_path.exists() else 0
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as var_file:
+        json.dump(record, var_file)
+    try:
+        try:
+            proc = subprocess.run(["sc-compose", "render", "--strict", "--root", str(RECORD_TEMPLATE.parent),
+                                   "--file", str(RECORD_TEMPLATE), "--var-file", var_file.name, "--append", str(log_path)],
+                                  text=True, capture_output=True, timeout=APPEND_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            try:
+                if original_size or log_path.exists():
+                    with log_path.open("r+b") as log:
+                        log.truncate(original_size)
+            except OSError as exc:
+                fail(f"SANITY.LOG_APPEND_TIMEOUT: sc-compose append to {log_path} exceeded {APPEND_TIMEOUT_SECONDS}s; rollback failed: {exc}")
+            fail(f"SANITY.LOG_APPEND_TIMEOUT: sc-compose append to {log_path} exceeded {APPEND_TIMEOUT_SECONDS}s")
+    finally:
+        os.unlink(var_file.name)
+    if proc.returncode:
+        detail = (proc.stderr or proc.stdout).strip()
+        if "ERR_RENDER_APPEND_NO_FINAL_NEWLINE" in detail:
+            fail(f"{log_path} does not end with a newline; append the newline (printf '\\n' >> {log_path}), then rerun: {detail}")
+        fail(f"append to {log_path} failed: {detail}")
+
+
+if __name__ == "__main__":
+    main()

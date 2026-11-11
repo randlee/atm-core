@@ -8,7 +8,7 @@ before an install writes anything:
 | `uv` | 0.4 | `brew install uv` | runs every package script under Python 3.11 with pydantic, PyYAML and the sc-compose wheel (the scripts' PEP 723 inline metadata); the `python3` on PATH is never used |
 | `bd` | 1.3.0 | `brew install beads` | the plan, the work graph, `bd sync` |
 | `atm` | 1.6.3 | `brew install randlee/tap/atm` | tasks, messages, `atm compose`, `atm hook`, `atm cron` |
-| `sc-compose` | 1.7.0 (below 2), CLI the same version as the wheel `uv run --script` resolves | `brew install randlee/tap/sc-compose`; `uv cache clean sc-compose` refreshes a stale wheel | strict renders of bead and reviewer templates (CLI), the scripts' renders (wheel) |
+| `sc-compose` | 1.8.0 (below 2), CLI the same version as the wheel `uv run --script` resolves | `brew install randlee/tap/sc-compose`; `uv cache clean sc-compose` refreshes a stale wheel | strict renders of bead and reviewer templates (CLI), the scripts' renders (wheel) |
 | `jq` | 1.6 | `brew install jq` | every bead query |
 | `git` | 2.27 | `brew install git` | repository and stack commands |
 | `atm-bd` | 0.1.0 | `uv tool install git+https://github.com/randlee/atm-bd-orchestration.git#subdirectory=apps/atm-bd-console` | phase dashboard and cron |

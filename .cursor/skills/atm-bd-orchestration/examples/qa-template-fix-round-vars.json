@@ -1,0 +1,25 @@
+{
+  "task_id": "atm-d-4.qa1-f1-r1-qa",
+  "checked_bead": "atm-d-4.qa1-f1-r1-fix",
+  "phase": "d",
+  "phase_feature": "atm-phase-d",
+  "sprint": "d-4",
+  "stack": "phase-d",
+  "layer": 6,
+  "round": 2,
+  "branch": "fix/d-4-qa1-f1-retry-jitter",
+  "commit": "9a8b7c6d5e4f30211a2b3c4d5e6f708192a3b4c5",
+  "base": "sprint/d-5-otlp-logs",
+  "worktree_path": "../atm-core-worktrees/fix/d-4-qa1-f1-retry-jitter",
+  "carry_forward": "atm-d-4.qa1-f1-r1-fix",
+  "sprint_bead": "atm-d-4",
+  "policy_path": ".claude/project/quality-policy.md",
+  "reviewers_round1": [
+    "req-qa",
+    "arch-qa",
+    "rust-qa-agent",
+    "ruthless-boundary-qa",
+    "rust-best-practices-agent",
+    "rust-service-hardening-agent"
+  ]
+}

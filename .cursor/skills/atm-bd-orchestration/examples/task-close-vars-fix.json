@@ -1,0 +1,20 @@
+{
+  "base": "integrate/phase-bj",
+  "branch": "sprint/bj-1-task-close-hook",
+  "checked_bead": "atm-bj-1.group-dev",
+  "checked_title": "Implement the close hook",
+  "dev_task_id": "atm-bj-1.group-dev",
+  "lint_command": "just lint",
+  "max_sanity_rounds": 5,
+  "phase": "bj",
+  "pr_target": "integrate/phase-bj",
+  "primary_checkout": "/tmp/consumer",
+  "qa_bead": "atm-bj-1.group-qa",
+  "qa_task_id": "atm-bj-1.group-qa",
+  "sanity_bead": "atm-bj-1.group-sanity",
+  "sanity_task_id": "atm-bj-1.group-sanity",
+  "sprint": "bj-1",
+  "stack_bead": "atm-phase-bj.stack",
+  "task_id": "atm-bj-1.group-dev",
+  "worktree_path": "/tmp/consumer/worktree"
+}

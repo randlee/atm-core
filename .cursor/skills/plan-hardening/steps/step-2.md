@@ -1,0 +1,133 @@
+# Step 2 — Scope Review (`plan-scope-reviewer`, background)
+
+## Execute
+
+**1. Dispatch the reviewer**
+
+Import the step bead (SKILL.md "Beads", `step` 2, `route_to` `plan-scope-reviewer`). Dispatch `plan-scope-reviewer` as your mode reference directs (SKILL.md "Modes").
+Pass a fenced JSON input that includes:
+- `source_of_truth`
+- `references`
+- `worktree_path`
+- `branch`
+- `review_cycle_limit`
+- `review_cycle_index`
+- `step-1` fenced JSON
+
+Expected reviewer launch input shape:
+
+```json
+{
+  "source_of_truth": "docs/plans/phase-bc.jsonl",
+  "references": [
+    "docs/project-plan.md"
+  ],
+  "worktree_path": "/absolute/path/to/worktree",
+  "branch": "plan/phase-bc",
+  "review_cycle_limit": 2,
+  "review_cycle_index": 1,
+  "reviewed_commit": "abc1234",
+  "previous_reviewed_commit": "",
+  "findings_hash": "",
+  "previous_step_json": {
+    "status": "PASS",
+    "mode": "plan-hardening-guidelines-pass",
+    "round_id": "STEP1-R1",
+    "round_index": 1,
+    "reviewed_commit": "abc1234",
+    "previous_reviewed_commit": ""
+  }
+}
+```
+
+Determine `plan_scope_review_cycle_limit` from
+`/tmp/plan-hardening-vars.json`. If it is missing, set it to `2` before
+launching the reviewer. `review_cycle_index` is the count of completed Step 2
+review responses in the current hardening run, starting at `1`.
+
+**2. Check the response**
+
+Read the `plan-scope-reviewer` response and confirm it returns fenced JSON
+findings.
+The expected output shape is specified inside
+`.claude/agents/plan-scope-reviewer.md`.
+Do not proceed to Step 3 until that fenced JSON is present and well formed.
+If the response is incomplete or malformed, send a correction request to
+`plan-scope-reviewer` immediately.
+Save the extracted fenced JSON to `/tmp/step-2.json`.
+
+**3. Route by status**
+
+- `PASS` -> proceed to Step 3
+- `FAIL` -> update `/tmp/plan-hardening-vars.json` so
+  `reviewer_findings_json` contains the Step 2 fenced JSON, then re-run Step 1
+- every Step 2 `FAIL` must be routed to Step 1; there is no accept-and-proceed
+  path
+- after Step 1 returns updated fenced JSON, update:
+  - `previous_reviewed_commit`
+  - `reviewed_commit`
+  - `findings_hash`
+  - `supersedes_task_id`
+  - `replay_nonce`
+  then:
+  - if the just-completed reviewer response used a cycle index lower than
+    `plan_scope_review_cycle_limit`, send the updated payload back to the same
+    `plan-scope-reviewer` agent when possible
+  - if the just-completed reviewer response used cycle index equal to
+    `plan_scope_review_cycle_limit`, do not launch another background review;
+    stop the hardening run after the Step 1 correction pass and report
+    `cap-exhausted / not converged`
+- if the next Step 2 response repeats the same `reviewed_commit` and the same
+  `findings_hash`, classify it as a stale replay and do not open a new Step 1
+  round
+
+Example reinjection command:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+vars_path = Path('/tmp/plan-hardening-vars.json')
+data = json.loads(vars_path.read_text())
+data['reviewer_findings_json'] = Path('/tmp/step-2.json').read_text()
+vars_path.write_text(json.dumps(data, indent=2) + '\\n')
+PY
+```
+
+**Record the round in ATM**
+
+A background reviewer generates no ATM traffic, so the round is invisible to
+`atm search` until it is recorded. After the reviewer returns, send one
+`plan-review-notice` (template
+`.claude/skills/plan-hardening/plan-review-notice.xml.j2`, installed under
+`~/.atm/templates/plan-hardening/`) with `reviewer: plan-scope-reviewer`,
+`round_index`, `verdict`, and a one-paragraph `summary`. Send it to
+the lead; when the lead runs the round itself, send it to the plan
+author from Step 1 with `atm queue` so it never interrupts work in progress.
+The template declares `workflow.stage: plan`, which is what makes the round
+discoverable (`atm search --team <team> --workflow-stage plan`).
+
+Record the round in beads after every Step 2 response (SKILL.md "Beads"):
+file one finding bead per finding (`reviewer` `plan-scope-reviewer`), then close the Step 2
+step bead with the status, counts, `reviewed_commit` and `findings_hash`. Add the plan's `critical_path` and `width` for the round (from the
+`plan-scope-reviewer` `parallelism` block) to the close reason. A round that lengthens the
+critical path or narrows the width is a regression: name the finding that
+caused it, and prefer a boundary re-cut over accepting it.
+
+## Hard stops
+
+- `step-1` fenced JSON from the Step 1 response is missing or malformed: do
+  not advance; send a correction request immediately and identify the missing
+  or malformed fields explicitly
+- reviewer launch input is missing `source_of_truth`, `references`,
+  `worktree_path`, `branch`, `review_cycle_limit`, `review_cycle_index`, or
+  `step-1` fenced JSON: do not advance; correct the launch payload immediately
+- reviewer output is missing or malformed: do not advance; send a correction
+  request immediately and identify the missing or malformed fields explicitly
+- reviewer output repeats the same `reviewed_commit` and the same
+  `findings_hash`: do not advance; mark it as stale replay and request a fresh
+  review cycle only after the plan state changes
+- reviewer has reached `plan_scope_review_cycle_limit` without converging: do
+  not launch another reviewer cycle, do not ask the user what to do, and do
+  not accept the findings silently; finish the Step 1 correction pass and
+  report `cap-exhausted / not converged`

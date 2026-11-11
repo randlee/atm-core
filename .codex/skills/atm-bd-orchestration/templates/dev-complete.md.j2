@@ -1,0 +1,77 @@
+---
+name: dev-complete
+version: 2.2.0
+description: Body of the hook's atm send --template report; the hook closes the dev task at dev complete.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - sprint
+  - rebased_onto
+  - pr_url
+  - deliverables_complete
+  - deliverables_total
+  - deliverables_md
+  - validation_md
+defaults:
+  qa_task_id: ""
+  sanity_task_id: ""
+  dev_task_id: ""
+  pr_number: ""
+  commit: ""
+  branch: ""
+  inventory_md: ""
+  notes_md: ""
+metadata:
+  type: dev-complete
+  tags:
+    - stage:dev
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: dev-complete
+    stage: dev
+    transition: complete
+---
+{% set task_id = dev_task_id if dev_task_id else task_id %}
+# Dev Complete
+
+Generated: {{ generated_at }}
+Bead: {{ task_id }} (sprint {{ sprint }})
+Branch: `{{ branch }}`
+Commit: `{{ commit }}`
+Rebased onto: `{{ rebased_onto }}`
+PR: [#{{ pr_number }}]({{ pr_url }})
+Deliverables: {{ deliverables_complete }}/{{ deliverables_total }}
+
+Sanity is assigned by the close hook; the hook has closed the dev task; sanity runs on its own task and QA follows sanity PASS.
+
+## Machine Status (JSON)
+```json
+{
+  "task": {{ task_id | tojson }},
+  "sprint": {{ sprint | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "rebased_onto": {{ rebased_onto | tojson }},
+  "pr": {{ pr_number | tojson }},
+  "pr_url": {{ pr_url | tojson }},
+  "deliverables": {"complete": {{ deliverables_complete }}, "total": {{ deliverables_total }} }
+}
+```
+
+## Deliverables
+{{ deliverables_md }}
+
+## Validation
+{{ validation_md }}
+
+{% if inventory_md %}
+## Inventory
+{{ inventory_md }}
+{% endif %}{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

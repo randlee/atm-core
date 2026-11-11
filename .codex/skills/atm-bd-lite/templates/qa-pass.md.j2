@@ -1,0 +1,15 @@
+---
+name: lite-qa-pass
+version: 1.0.0
+description: QA pass report for the atm-bd-lite profile.
+format: markdown
+required_variables: [sha]
+metadata:
+  type: qa-pass
+  tags: [stage:qa, profile:lite]
+---
+# QA PASS
+
+Reviewed commit: `{{ sha }}`
+
+All assigned acceptance criteria pass at this commit.
