@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>atm-core v1.4.3 — A smaller transport, templates you write once, and pip-installable agent tooling</title>
+  <meta name="description" content="The Tokio/Axum HTTP runtime replaces hand-written framing, a durable template catalog makes one authored message reusable, and hermes-atm and atm-graft arrive on PyPI.">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <main class="sheet">
+    <nav class="atm-nav" aria-label="Breadcrumb">
+      <a href="../">atm-core</a><span class="sep">/</span><a href="./">announcements</a><span class="sep">/</span><span class="here">v1.4.3</span>
+    </nav>
+
+    <article class="announcement">
+      <header>
+        <p class="meta">
+          <span><b>atm-core</b> v1.4.3</span>
+          <span>Released <b>17 Aug 2026</b></span>
+          <span>Personas as of <b>21 Aug 2026</b></span>
+        </p>
+        <h1>A smaller transport, templates you write once, and pip-installable agent tooling</h1>
+        <p class="lead">Hand-written HTTP framing is gone, replaced by a minimal Tokio/Axum runtime. A message can be authored once as a durable template and fanned out. And the Python surface of ATM installs with <code>pip</code> for the first time.</p>
+      </header>
+
+      <div class="warn">
+        <span class="callout-label">Do not use v1.4.2</span>
+        <p>That tag predated a packaging fix: the isolated <code>cargo publish</code> build failed because the CLI embedded an OpenAPI file from outside the crate directory, so it was absent from the tarball. v1.4.3 republishes all 12 crates from a clean release line. The 11 crates already published at 1.4.2 stay on crates.io permanently. Use <strong>1.4.3</strong>.</p>
+      </div>
+
+      <h2>What you can do now</h2>
+
+      <section class="item" id="templates">
+        <h3>Write a message once, fan it out many times</h3>
+        <p>A durable template catalog with render-on-read means a message is authored once and reused, instead of every send being a hand-built string. Typed search and read-only analyst queries give deterministic lookups into the mailbox, and <code>atm compose</code> wraps the catalog so a template-driven message is a first-class orchestration step. Roster management also gains <code>atm teams remove-member</code>, so a member leaves the roster without anyone touching the store.</p>
+        <pre><code>atm compose --template &lt;name&gt; --var key=value
+atm teams remove-member &lt;TEAM&gt; &lt;MEMBER&gt;</code></pre>
+      </section>
+
+      <section class="item" id="transport">
+        <h3>Embed a transport small enough to audit</h3>
+        <p>The transport layer receives its biggest rewrite since the SQLite backbone: the minimal Tokio/Axum HTTP runtime (<code>atm-http-runtime</code>) replaces hand-written synchronous framing for both local and cross-host listeners. The legacy machinery it superseded (old HTTP framing, local and peer transport workers, resend/replay, and the obsolete cross-host subsystem) is deleted, leaving a daemon that is a clean local-IPC-only singleton with the same mailbox contract.</p>
+        <pre><code>cargo install agent-team-mail
+brew install randlee/tap/agent-team-mail</code></pre>
+      </section>
+
+      <section class="item" id="pypi">
+        <h3>Give an agent ATM without a Rust toolchain</h3>
+        <p><code>hermes-atm</code> and <code>atm-graft</code> publish a full manylinux, musllinux, Windows and aarch64 wheel and sdist pipeline for CPython 3.11 through 3.14: the first PyPI publishing for the ATM Python surface. Agents get native <code>atm_send</code>/<code>atm_read</code> tooling and graft-based injection from <code>pip</code>. Identity still resolves from <code>ATM_TEAM</code>/<code>ATM_IDENTITY</code>, and the auto-start daemon singleton is unchanged.</p>
+        <pre><code>pip install hermes-atm atm-graft</code></pre>
+      </section>
+
+      <section class="item" id="ops">
+        <h3>Keep the daemon lean and steerable</h3>
+        <p>Daemon runtime session and pid observation converges into diagnostic-only heartbeat caching, trading aggressive runtime tracking for a leaner singleton that still reports health through <code>atm doctor</code>. <code>atm-graft</code> remains the out-of-band steering path, now pip-installable and easier to script into fleet operations.</p>
+        <pre><code>pip install atm-graft
+atm doctor</code></pre>
+      </section>
+
+      <section class="item" id="dag">
+        <h3>Give agent pipelines a typed hand-off</h3>
+        <p>The template catalog plus typed search gives workflow authors a reliable, queryable message contract between graph nodes, so a multi-step pipeline passes messages deterministically. Cross-team addressing and pending-ack tracking, the reliability backbone this builds on, are unchanged.</p>
+      </section>
+
+      <h2>Upgrading</h2>
+      <div class="upgrade">
+        <pre><code>brew upgrade randlee/tap/agent-team-mail
+# or
+cargo install agent-team-mail --force
+# Python surface
+pip install --upgrade hermes-atm atm-graft</code></pre>
+      </div>
+
+      <h3>Action needed</h3>
+      <ul>
+        <li>Do not install or pin <strong>v1.4.2</strong>; it is abandoned and its tarball is incomplete. Use v1.4.3.</li>
+        <li>The published crate set grows from 9 to 12: <code>atm-error</code>, <code>atm-http-runtime</code> and <code>atm-template-sc-compose</code> are new.</li>
+        <li>Local workarounds for the legacy peer-transport workers or resend/replay no longer apply: the daemon is local-IPC-only.</li>
+      </ul>
+
+      <h2>What comes next</h2>
+      <p>v1.4.3 carries the full Phase AL/AM/AN feature set (originally authored for the abandoned 1.4.2) plus the recovery fix. With the Tokio runtime in place and legacy transport deleted, subsequent work turns to the PyPI production publish (currently on TestPyPI), Phase AI cross-host targets, and deeper analyst-query surfaces.</p>
+
+      <footer>
+        <h2>Links</h2>
+        <ul>
+          <li><a href="atm-core-v1.4.3.md">Original announcement (markdown, as published)</a></li>
+          <li><a href="https://github.com/randlee/atm-core/blob/main/CHANGELOG.md">Changelog</a></li>
+          <li><a href="https://github.com/randlee/atm-core/releases/tag/v1.4.3">Release notes for v1.4.3</a></li>
+          <li><a href="https://github.com/randlee/atm-core">Repository</a></li>
+        </ul>
+      </footer>
+    </article>
+  </main>
+</body>
+</html>
