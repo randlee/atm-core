@@ -8,7 +8,7 @@ trait = "TaskStore"
 
 [implementation]
 type = "SqliteTaskStore"
-module = "atm_storage_rusqlite::message_store"
+module = "atm_storage_rusqlite::task_store"
 # The crate root constructs the task store; task_store implements its behavior.
 visibility = "pub(crate)"
 constructor = "pub(crate)"

@@ -8,7 +8,7 @@ trait = "PendingNudgeStore"
 
 [implementation]
 type = "SqlitePendingNudgeStore"
-module = "atm_storage_rusqlite::message_store"
+module = "atm_storage_rusqlite::pending_nudge_store"
 # The crate root constructs the pending nudge store; pending_nudge_store implements its behavior.
 visibility = "pub(crate)"
 constructor = "pub(crate)"

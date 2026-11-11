@@ -58,3 +58,6 @@ notes = [
   "Historical ClientTransport trait boundary retired by AI.6.",
   "The live CLI client now uses the sealed DaemonApiClient/HTTP-over-UDS path instead of the retired local socket frame transport contract.",
 ]
+
+[extensions.atm]
+no_in_repo_implementation = true
