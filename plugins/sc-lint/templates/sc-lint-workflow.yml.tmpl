@@ -13,6 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+      - run: rustup component add rustfmt clippy
       - uses: taiki-e/install-action@v2
         with:
           tool: just

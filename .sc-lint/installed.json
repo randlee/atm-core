@@ -33,6 +33,6 @@
     "plugins/sc-lint/templates/sc-lint-workflow.yml.tmpl": "79554e773c0c9d6de568f1349f31d37960bce22cfd2fa732142d6fa9cf7abe96",
     "plugins/sc-lint/templates/sc-lint.toml.tmpl": "0175d6b1d3d642bdb5c7b57a6d5e8d3edbf4092bcc1d94a959ea4851bd3575aa",
     "plugins/sc-lint/templates/test.just": "40265c279d299b40f5478734d8b1172624f819fc0a2d68566366970693d9bb8d",
-    "sc-lint.toml": "65c1568f77fb92508f07889e7c52f36e27d9eefbd66c9e9df315efc5d7ae80fa"
+    "sc-lint.toml": "01e70c0fb4d59f09bf5fea062d430498c2922f76a6a567cb456570d69bdd40c6"
   }
 }

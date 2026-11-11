@@ -8,8 +8,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import pytest
 
 SCRIPT = Path(__file__).parents[1] / "fix-round-scope"
+sys.path.insert(0, str(SCRIPT.parent))
+from subprocess_helpers import run_command
+
 LOADER = importlib.machinery.SourceFileLoader("fix_round_scope", str(Path(__file__).parents[1] / "fix-round-scope"))
 SPEC = importlib.util.spec_from_loader("fix_round_scope", LOADER)
 assert SPEC is not None
@@ -105,7 +109,29 @@ class CliTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_cli(self, *args: str) -> subprocess.CompletedProcess:
-        return subprocess.run([sys.executable, str(SCRIPT), *args], cwd=self.dir, capture_output=True, text=True)
+        command = [sys.executable, str(SCRIPT), *args]
+        return run_command(command, cwd=self.dir, capture_output=True, text=True)
+
+    def test_cli_timeout_is_bounded_and_actionable(self):
+        def timeout(command, **kwargs):
+            raise subprocess.TimeoutExpired(command, kwargs["timeout"], output=b"stdout detail", stderr=b"stderr detail")
+
+        with pytest.raises(pytest.fail.Exception, match="SUBPROCESS.TIMEOUT") as error:
+            run_command([sys.executable, str(SCRIPT)], capture_output=True, text=True, runner=timeout)
+        message = str(error.value)
+        assert "command=" in message
+        assert "cwd=<inherited>" in message
+        assert "timeout=30s" in message
+        assert "stdout detail" in message
+        assert "stderr detail" in message
+
+    def test_non_qa_reviewers_are_refused(self):
+        for reviewer in ("team-lead", "rust-developer", "dev-sanity", "plan-scope-reviewer"):
+            (self.dir / "carried.json").write_text(json.dumps([{"id": "finding", "metadata": {"reviewer": reviewer, "finding_ref": "F1"}}]))
+            out = self.run_cli("owned", "--carried", "carried.json")
+            self.assertEqual(out.returncode, 2)
+            self.assertIn("flaky-test-qa", out.stderr)
+            self.assertIn("--reviewer <agent>", out.stderr)
 
     def test_owned_needs_no_repository_configuration(self):
         out = self.run_cli("owned", "--carried", "carried.json")
@@ -140,6 +166,27 @@ class CliTests(unittest.TestCase):
         (self.dir / "r.json").write_text(json.dumps({"data": {"findings": []}}))
         out = self.run_cli("filter", "--carried", "carried.json", "--reviewer", "req-qa", "--result", "r.json")
         self.assertEqual(out.returncode, 2)
+
+    def test_every_supported_filing_reviewer_can_run_locked_verification(self):
+        for reviewer in ("arch-qa", "flaky-test-qa", "req-qa", "ruthless-boundary-qa", "schema-reviewer",
+                         "rust-qa-agent", "rust-code-reviewer", "rust-best-practices-agent",
+                         "rust-service-hardening-agent"):
+            with self.subTest(reviewer=reviewer):
+                carried = [{"id": "x-f9", "metadata": {"reviewer": reviewer, "finding_ref": "F-9"}}]
+                result = {"data": {"findings": [
+                    {"id": "F-9", "disposition": "fixed", "evidence": "the carried finding is fixed"},
+                    {"id": "UNRELATED", "disposition": "fixed", "evidence": "out of scope"},
+                ]}}
+                (self.dir / "carried.json").write_text(json.dumps(carried))
+                (self.dir / "r.json").write_text(json.dumps(result))
+                out = self.run_cli("filter", "--carried", "carried.json", "--reviewer", reviewer, "--result", "r.json")
+                self.assertEqual(out.returncode, 0, out.stderr)
+                filtered = json.loads(out.stdout)
+                self.assertEqual(filtered["dispositions"], [
+                    {"bead": "x-f9", "finding_ref": "F-9", "disposition": "fixed", "evidence": "the carried finding is fixed"}
+                ])
+                self.assertEqual(filtered["new_findings"], [])
+                self.assertEqual(len(filtered["dropped_out_of_scope"]), 1)
 
     def test_inline_json_or_a_missing_file_is_a_named_error(self):
         out = self.run_cli("filter", "--carried", "carried.json", "--reviewer", "arch-qa", "--result", '{"data": {"findings": []}}')

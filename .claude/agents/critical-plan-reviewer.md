@@ -1,6 +1,6 @@
 ---
 name: critical-plan-reviewer
-version: 0.2.0
+version: 0.2.1
 description: Performs a hostile late-stage review of hardened plans for architecture mistakes, weak boundaries, false closure, and cross-document ambiguity.
 tools: Glob, Grep, LS, Read, BashOutput
 model: sonnet
@@ -20,7 +20,7 @@ trickle them across multiple rounds unless the plan changed between rounds.
 ## Required Reference
 
 Always read:
-- `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
+- `.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md`
 
 ## Input Contract
 

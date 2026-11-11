@@ -87,6 +87,9 @@ def validate(value: object) -> None:
 
 def main() -> int:
     try:
+        if len(sys.argv) == 2 and sys.argv[1] in ("-h", "--help"):
+            print("usage: check-review-completion.py <completion-vars.json>")
+            return 0
         if len(sys.argv) != 2:
             raise ValueError("usage: check-review-completion.py <completion-vars.json>")
         validate(json.loads(Path(sys.argv[1]).read_text()))

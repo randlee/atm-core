@@ -274,6 +274,7 @@ MODELS_BY_STAGE: dict[str, type[Bead]] = {
     "stage:sprint": SprintBead, "stage:dev": DevBead, "stage:dev-sanity": SanityBead,
     "stage:qa": QaBead, "stage:fix": FixBead, "stage:finding": FindingBead,
     "stage:stack": StackBead, "stage:plan": Bead, "stage:plan-review": Bead, "stage:review": Bead,
+    "stage:subtask": Bead,
 }
 MODELS: dict[str, type[Bead]] = {
     "sprint-bead": SprintBead, "dev-bead": DevBead, "sanity-bead": SanityBead,

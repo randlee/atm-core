@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synaptic-canvas.dev/plan-anchor/tune-oracle.schema.json",
+  "title": "Frozen question-tournament oracle",
+  "description": "Authority-derived cases with expected role answers, written by anchor-tuning before the first Jev call and frozen by `jev_judge.py tournament` (canonical JSON SHA-256). The runner refuses an oracle whose expected roles do not derive expected_verdict under the role-to-verdict mapping at threshold 0, one that lacks a required probe, and one that differs from the oracle already frozen in --out or recorded in the tuning history.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "gate",
+    "anchor_id",
+    "authority_citations",
+    "cases"
+  ],
+  "properties": {
+    "schema": {
+      "const": "plan-anchor/tune-oracle/1"
+    },
+    "gate": {
+      "enum": [
+        "planning",
+        "development"
+      ]
+    },
+    "anchor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authority_citations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "probe",
+          "item",
+          "expected_roles",
+          "expected_verdict",
+          "rationale"
+        ],
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "probe": {
+            "enum": [
+              "fixture_pass",
+              "fixture_fail",
+              "compliant",
+              "silent",
+              "topical_only",
+              "conflicting",
+              "irrelevant",
+              "boundary",
+              "exception",
+              "asserted_without_evidence",
+              "evidenced",
+              "diagnostic"
+            ]
+          },
+          "item": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "expected_roles": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "relevant",
+                  "addressed",
+                  "contradicted"
+                ],
+                "properties": {
+                  "relevant": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unclear"
+                    ]
+                  },
+                  "addressed": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unclear"
+                    ]
+                  },
+                  "contradicted": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unclear"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "relevant",
+                  "implemented",
+                  "violated",
+                  "evidenced"
+                ],
+                "properties": {
+                  "relevant": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unclear"
+                    ]
+                  },
+                  "implemented": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unclear"
+                    ]
+                  },
+                  "violated": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unclear"
+                    ]
+                  },
+                  "evidenced": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "unclear"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "expected_verdict": {
+            "enum": [
+              "satisfied",
+              "not_applicable",
+              "asserted_only",
+              "underspecified",
+              "not_addressed",
+              "contradicted"
+            ]
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "gate": {
+            "const": "planning"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cases": {
+            "items": {
+              "properties": {
+                "expected_roles": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "relevant",
+                    "addressed",
+                    "contradicted"
+                  ],
+                  "properties": {
+                    "relevant": {
+                      "enum": [
+                        "yes",
+                        "no",
+                        "unclear"
+                      ]
+                    },
+                    "addressed": {
+                      "enum": [
+                        "yes",
+                        "no",
+                        "unclear"
+                      ]
+                    },
+                    "contradicted": {
+                      "enum": [
+                        "yes",
+                        "no",
+                        "unclear"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "cases": {
+            "items": {
+              "properties": {
+                "expected_roles": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "relevant",
+                    "implemented",
+                    "violated",
+                    "evidenced"
+                  ],
+                  "properties": {
+                    "relevant": {
+                      "enum": [
+                        "yes",
+                        "no",
+                        "unclear"
+                      ]
+                    },
+                    "implemented": {
+                      "enum": [
+                        "yes",
+                        "no",
+                        "unclear"
+                      ]
+                    },
+                    "violated": {
+                      "enum": [
+                        "yes",
+                        "no",
+                        "unclear"
+                      ]
+                    },
+                    "evidenced": {
+                      "enum": [
+                        "yes",
+                        "no",
+                        "unclear"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

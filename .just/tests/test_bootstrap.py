@@ -105,12 +105,12 @@ class BootstrapTests(IsolatedHomeTests):
     def test_sc_compose_uses_the_exact_prebuilt_release_asset(self) -> None:
         manifest = bootstrap.load_manifest()
         asset, url = bootstrap.sc_compose_install_command(manifest.sc_compose, "aarch64-apple-darwin")
-        self.assertEqual(asset, "sc-compose_1.7.0_aarch64-apple-darwin.tar.gz")
-        self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.7.0/" + asset)
-        self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "d7590a41921bef5a428bcbd33dda48006c6f6df5eafa83217cb820240fe6544b")
+        self.assertEqual(asset, "sc-compose_1.8.0_aarch64-apple-darwin.tar.gz")
+        self.assertEqual(url, "https://github.com/randlee/sc-compose/releases/download/v1.8.0/" + asset)
+        self.assertEqual(dict(manifest.sc_compose_checksums)["aarch64-apple-darwin"], "c7b03453d357f36997b27467b02cfe6124713ca1ee9344175c31f8e0dc5f5408")
         self.assertEqual(
             dict(manifest.sc_compose_checksums)["x86_64-pc-windows-msvc"],
-            "80027b651ef86f2abe9ca88a16635fd53994fc0e9ec3c6c14d56ab151cbb3111",
+            "987c33e1a8d66d364c3a3b85e8e54b10f47d60321ac464cd87a15b9245a91335",
         )
 
     def test_sc_compose_install_never_uses_cargo(self) -> None:
@@ -260,7 +260,7 @@ class BootstrapTests(IsolatedHomeTests):
             mock.patch.object(
                 bootstrap,
                 "_download_release",
-                side_effect=[archive, f"{checksum}  sc-compose_1.7.0_aarch64-apple-darwin.tar.gz\n".encode()],
+                side_effect=[archive, f"{checksum}  sc-compose_1.8.0_aarch64-apple-darwin.tar.gz\n".encode()],
             ),
         ):
             bootstrap.install_sc_compose_release(manifest, dry_run=False)
@@ -310,7 +310,7 @@ class BootstrapTests(IsolatedHomeTests):
             dict(manifest.cargo_binstall_checksums)["x86_64-pc-windows-msvc"],
             "0950f5a9f3422f74dea181d11f8b4d4447d1e9d1a9fdadcb72ff5b0b63c95207",
         )
-        self.assertEqual(manifest.sc_compose, "1.7.0")
+        self.assertEqual(manifest.sc_compose, "1.8.0")
         self.assertEqual(manifest.wyvern, "0.8.0")
         self.assertEqual(dict(manifest.python_packages)["maturin"], "1.14.1")
         requirements = (SCRIPT.parents[1] / "tools" / "bootstrap-requirements.txt").read_text(encoding="utf-8")
@@ -485,14 +485,14 @@ class BootstrapTests(IsolatedHomeTests):
 
     def test_sc_compose_wheel_uses_the_manifest_floor(self) -> None:
         python = Path("/repo/.bootstrap-venv/bin/python")
-        command = bootstrap.sc_compose_wheel_install_command(python, "1.7.0")
+        command = bootstrap.sc_compose_wheel_install_command(python, "1.8.0")
         self.assertEqual(Path(command[0]), python)
-        self.assertIn("sc-compose>=1.7.0,<2.0.0", command)
-        self.assertNotIn("sc-compose==1.7.0", command)
+        self.assertIn("sc-compose>=1.8.0,<2.0.0", command)
+        self.assertNotIn("sc-compose==1.8.0", command)
 
     def test_sc_compose_cli_accepts_the_supported_release_line(self) -> None:
         manifest = bootstrap.load_manifest()
-        with mock.patch.object(bootstrap, "command_output", side_effect=["sc-compose 1.7.0"]):
+        with mock.patch.object(bootstrap, "command_output", side_effect=["sc-compose 1.8.0"]):
             self.assertTrue(bootstrap.sc_compose_matches(manifest))
         with mock.patch.object(bootstrap, "command_output", side_effect=["sc-compose 1.8.0"]):
             self.assertTrue(bootstrap.sc_compose_matches(manifest))
@@ -504,7 +504,7 @@ class BootstrapTests(IsolatedHomeTests):
     def test_sc_compose_wheel_accepts_the_supported_release_line(self) -> None:
         manifest = bootstrap.load_manifest()
         python = Path("/repo/.bootstrap-venv/bin/python")
-        for version, expected in (("1.7.0", True), ("1.8.0", True), ("1.6.9", False), ("2.0.0", False)):
+        for version, expected in (("1.8.0", True), ("1.9.0", True), ("1.7.9", False), ("2.0.0", False)):
             with self.subTest(version=version), mock.patch.object(bootstrap, "python_package_version", return_value=version):
                 self.assertEqual(bootstrap.sc_compose_wheel_matches(manifest, python), expected)
 
@@ -614,9 +614,10 @@ class BootstrapTests(IsolatedHomeTests):
                 },
             )
         self.assertIn("clippy-windows-macos", install["lint_profiles"]["ci"])
+        # sc-lint 0.8.6 wheel sc_lint/setup_tools.py:151-160 returns only common tools on Windows (line 155).
         self.assertEqual(
             install["tools"],
-            {"cargo": {"cargo-xwin": "0.18.4"}, "rustup_targets": ["x86_64-pc-windows-msvc"]},
+            {"non_windows": {"cargo": {"cargo-xwin": "0.18.4"}, "rustup_targets": ["x86_64-pc-windows-msvc"]}},
         )
 
     def test_ci_uses_bootstrap_python_and_requirements_for_all_pydantic_consumers(self) -> None:

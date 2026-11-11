@@ -1,5 +1,5 @@
 ---
-version: 0.6.1
+version: 0.10.1
 ---
 
 # Question-tuning workflow
@@ -14,8 +14,10 @@ desired plan verdict. The tuner freezes an oracle, evaluates a larger candidate
 pool through parallel Jev calls, and returns the smallest semantically exact,
 stable role-complete set plus canonical history. Validate its schema and
 `anchor_tuning_contract.py` result (one JSON envelope: exit 0 with
-`data.valid: true`, exit 2 with a typed `error`) before writing the selected questions to the
-`bd` or `br` question record. Leaf review waits for current protocol seals. On
+`data.valid: true`, or `data.valid: false` and `data.violation` for a contract
+violation; exit 2 with a typed `error` when the file cannot be read) and require
+`data.valid: true` before writing the selected questions to the
+`bd` question record. Leaf review waits for current protocol seals. On
 ambiguous authority, present the tuner's clarity-only recommendation to the
 user; the planner never tunes questions itself.
 

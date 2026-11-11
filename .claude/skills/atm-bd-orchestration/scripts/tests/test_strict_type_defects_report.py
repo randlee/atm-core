@@ -2,19 +2,20 @@
 
 import copy
 import json
-from pathlib import Path
-import subprocess
+import os
 import sys
 import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
+from subprocess_helpers import isolated_git_env, run_fixture_git, set_fixture_hooks_path
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(SCRIPTS))
 import post_mortem_jev as jev
 from test_post_mortem_jev import response
-
 
 REAL_CLIENT = jev.load_client(SCRIPTS / "jev_client.py")
 
@@ -49,11 +50,17 @@ class MissingLimitationsTests(unittest.TestCase):
         self.root = Path(self.tempdir.name)
         self.repo = self.root / "repo"
         self.repo.mkdir()
+        self.git_env, _ = isolated_git_env(self.root)
+        environ = patch.dict(os.environ, self.git_env, clear=True)
+        environ.start()
+        self.addCleanup(environ.stop)
         for args in (("init", "-q"), ("config", "user.name", "test"), ("config", "user.email", "test@example.invalid")):
-            subprocess.run(["git", "-C", str(self.repo), *args], check=True, capture_output=True)
+            run_fixture_git(["git", "-C", str(self.repo), *args], env=self.git_env)
+            if args[0] == "init":
+                set_fixture_hooks_path(self.repo, env=self.git_env)
         (self.repo / "code.rs").write_text("fn execute() {}\n")
-        subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True, capture_output=True)
-        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "fixture"], check=True, capture_output=True)
+        run_fixture_git(["git", "-C", str(self.repo), "add", "."], env=self.git_env)
+        run_fixture_git(["git", "-C", str(self.repo), "commit", "-qm", "fixture"], env=self.git_env)
         self.manifest = {
             "finding_id": "f1",
             "phase": "phase-d",

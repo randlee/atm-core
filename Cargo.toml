@@ -69,7 +69,7 @@ cron = "0.17"
 syn = { version = "2", features = ["full", "parsing", "visit"] }
 semver = { version = "1", features = ["serde"] }
 async-trait = "0.1"
-rustix = { version = "1.1", features = ["process"] }
+rustix = { version = "1.1.6", features = ["process"] }
 atm-core = { package = "agent-team-mail-core", path = "crates/atm-core", version = "1.6.5" }
 atm-cron = { path = "crates/atm-cron", version = "1.6.5" }
 atm-observability = { path = "crates/atm-observability", version = "1.6.5" }

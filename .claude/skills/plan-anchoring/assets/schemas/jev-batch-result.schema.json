@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synaptic-canvas.dev/plan-anchor/jev-batch-result.schema.json",
+  "title": "jev_judge.py batch result line",
+  "description": "One JSON line per (item, candidate, repeat), written to stdout and appended, unchanged, to the run log anchor-runs/tournament-<run>.jsonl as soon as the line and every line before it have an answer. Lines come in request order, but consumers key them by item_id, anchor_id, candidate_id and repeat. request_id is <prefix>/<item_id>/<anchor_id>/<candidate_id>/r<repeat>; run_id is the first 16 hex digits of SHA-256 over it; request_sha256 is SHA-256 over the exact request bytes sent. verdict reads the answers at threshold; leaning reads them at 0. The runner writes no tracker record: choosing and sealing a candidate is the anchor-tuning agent's.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "request_id",
+    "run_id",
+    "item_id",
+    "anchor_id",
+    "candidate_id",
+    "repeat",
+    "request_sha256",
+    "questions_sha256",
+    "request",
+    "roles",
+    "kind",
+    "dry_run",
+    "ok",
+    "raw_response",
+    "answers",
+    "model_answered",
+    "threshold",
+    "verdict",
+    "min_confidence",
+    "leaning",
+    "retry_count",
+    "attempts",
+    "error"
+  ],
+  "properties": {
+    "schema": {
+      "const": "plan-anchor/jev-batch-result/1"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{16}$"
+    },
+    "item_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "anchor_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "candidate_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "repeat": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "questions_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "model",
+        "state",
+        "questions"
+      ]
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "kind": {
+      "enum": [
+        "directive",
+        "prohibition",
+        "structural"
+      ]
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "raw_response": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "answers": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "model_answered": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "verdict": {
+      "enum": [
+        "contradicted",
+        "not_addressed",
+        "asserted_only",
+        "underspecified",
+        "satisfied",
+        "not_applicable",
+        "deterministic_only",
+        null
+      ]
+    },
+    "min_confidence": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "leaning": {
+      "enum": [
+        "contradicted",
+        "not_addressed",
+        "asserted_only",
+        "underspecified",
+        "satisfied",
+        "not_applicable",
+        "deterministic_only",
+        null
+      ]
+    },
+    "retry_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "attempt",
+          "ok"
+        ],
+        "properties": {
+          "attempt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message",
+              "recoverable"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "recoverable": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "message",
+            "recoverable"
+          ],
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "recoverable": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

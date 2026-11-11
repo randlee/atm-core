@@ -29,10 +29,10 @@ tokio.workspace = true
 async-trait.workspace = true
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-rusqlite = { version = "0.33.0", features = ["bundled", "hooks"] }
+rusqlite = { version = "0.41.0", features = ["bundled", "hooks"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-rusqlite = { version = "0.33.0", features = ["bundled-windows", "modern_sqlite", "hooks"] }
+rusqlite = { version = "0.41.0", features = ["bundled-windows", "modern_sqlite", "hooks"] }
 
 [dev-dependencies]
 atm-storage = { workspace = true, features = ["test-utils"] }

@@ -1,19 +1,27 @@
 """sanity-merge accepts exactly one result per deliverable, folds in the lint result and re-checks the tree."""
 import copy
-from functools import partial
 import hashlib
 import importlib.machinery
 import importlib.util
 import json
-from pathlib import Path
+import os
 import shutil
 import tempfile
 import time
 import unittest
+from functools import partial
+from pathlib import Path
+from unittest.mock import patch
 
-from subprocess_helpers import HANG_GUARD_SECONDS, run_command
 from jev_receipts import CLIENT, env, receipted, split
 from rendering import render
+from subprocess_helpers import (
+    HANG_GUARD_SECONDS,
+    isolated_git_env,
+    run_command,
+    run_fixture_git,
+    set_fixture_hooks_path,
+)
 
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "scripts/sanity-merge"
@@ -38,7 +46,8 @@ def test_selected_fallback_errors_are_not_counted_twice():
 
 
 def git(cwd, *argv):
-    return run_bounded(["git", "-C", str(cwd), *argv], check=True, capture_output=True, text=True).stdout.strip()
+    env, _ = isolated_git_env(Path(cwd).parent)
+    return run_fixture_git(["git", "-C", str(cwd), *argv], env=env).stdout.strip()
 
 
 def reviewer_vars(run_id, reviewer, results):
@@ -53,7 +62,13 @@ class SanityMerge(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
         self.wt = self.dir / "wt"
         self.wt.mkdir()
+        self.git_env, _ = isolated_git_env(self.dir)
+        self.git_env["UV_CACHE_DIR"] = os.environ.get("UV_CACHE_DIR", str(Path.home() / ".cache" / "uv"))
+        environ = patch.dict(os.environ, self.git_env, clear=True)
+        environ.start()
+        self.addCleanup(environ.stop)
         git(self.wt, "init", "-q", "-b", BRANCH)
+        set_fixture_hooks_path(self.wt, env=self.git_env)
         git(self.wt, "config", "user.email", "t@example.com")
         git(self.wt, "config", "user.name", "t")
         (self.wt / "lib.rs").write_text("fn main() {}\n")
@@ -240,6 +255,7 @@ class SanityMerge(unittest.TestCase):
         out = self.merge([self.result(2), self.result(1)])
         self.assertEqual(out.returncode, 0, out.stderr)
         vars_ = json.loads(out.stdout)
+        self.assertEqual(vars_["base"], "0" * 40)
         self.assertEqual((vars_["verdict"], vars_["findings_count"], vars_["commit"], vars_["branch"], vars_["sprint"]),
                          ("PASS", 0, self.sha, BRANCH, SPRINT))
         self.assertEqual(vars_["findings_md"], "D1: done\nD2: done")

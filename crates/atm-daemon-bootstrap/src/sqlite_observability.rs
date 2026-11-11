@@ -17,6 +17,9 @@ impl SqliteObservability for DaemonSqliteObservability {
                 code,
                 action = event.action,
                 outcome = event.outcome.as_str(),
+                queue_wait_ms = event.queue_wait_ms.unwrap_or(0),
+                run_time_ms = event.run_time_ms.unwrap_or(0),
+                queue_depth = event.queue_depth.unwrap_or(0),
                 "SQLite durable-state operation timed out"
             ),
             SqliteObservabilityOutcome::Failed => tracing::error!(

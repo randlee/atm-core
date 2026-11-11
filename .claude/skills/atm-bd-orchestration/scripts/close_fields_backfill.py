@@ -14,8 +14,8 @@ container, the phase root and stack, and the repository configuration. It fills 
 a field that is set and differs is reported, never overwritten. Each result is checked against bead_schema.
 
 Without --apply it prints the plan. With --apply each bead's fill is one `update --set-metadata` journaled in
-bd-cache (precondition: its status is unchanged), applied by the bd-cache drain or cron. The run refuses to write
-anything when any bead cannot be fully stamped.
+bd-cache (precondition: its status is unchanged), applied by the bd-cache drain or cron. A group with a problem
+is not written; independent groups are still filled.
 """
 
 from __future__ import annotations
@@ -52,10 +52,24 @@ def needs_stamp(row: dict) -> bool:
     return "stage:finding" not in (row.get("labels") or []) or row.get("status") == "in_progress"
 
 
-def member(rows: list[dict], label: str, key: str, checked: str | None) -> str | None:
-    """The one open bead of `label` whose metadata[key] names `checked`; among several, the highest round."""
+class InvalidMember(ValueError):
+    """A group's member cannot be selected safely from malformed metadata."""
+
+
+def validate_round(row: dict) -> None:
+    metadata = row.get("metadata") or {}
+    if "round" in metadata and (type(metadata["round"]) is not int or metadata["round"] < 1):
+        raise InvalidMember(f"{row['id']}: metadata.round must be a positive integer, got {metadata['round']!r}")
+
+
+def member(rows: list[dict], label: str, key: str, checked: str | None, preferred: str | None = None) -> str | None:
+    """Preserve an existing reference; otherwise select the highest-round live member."""
     found = [r for r in rows if label in (r.get("labels") or []) and (r.get("metadata") or {}).get(key) == checked]
-    live = [r for r in found if r.get("status") != "closed"] or found
+    for row in found:
+        validate_round(row)
+    if preferred and any(r["id"] == preferred for r in found):
+        return preferred
+    live = [r for r in found if r.get("status") != "closed"]
     live.sort(key=lambda r: ((r.get("metadata") or {}).get("round") or 0, r["id"]))
     return live[-1]["id"] if live else None
 
@@ -63,20 +77,45 @@ def member(rows: list[dict], label: str, key: str, checked: str | None) -> str |
 def plan(rows: list[dict], *, phase_feature: str, stack_bead: str, config: dict) -> tuple[list[dict], list[str]]:
     by_id = {row["id"]: row for row in rows}
     fills, problems = [], []
+    groups, invalid_groups = {}, set()
     for row in rows:
         role = stage_role(row)
         if role is None or not needs_stamp(row):
             continue
         meta = row.get("metadata") or {}
         checked = {"sanity": meta.get("dev_bead"), "qa": meta.get("checked_bead")}.get(role, row["id"])
+        group = checked or row["id"]
+        groups[row["id"]] = group
+        try:
+            if role in ("sanity", "qa"):
+                validate_round(row)
+        except InvalidMember as error:
+            problems.append(str(error))
+            invalid_groups.add(group)
+            continue
+        before = len(problems)
         work = by_id.get(checked or "")
         if work is None:
             problems.append(f"{row['id']}: its checked bead {checked!r} is not in phase {meta.get('phase')!r}")
+            invalid_groups.add(group)
             continue
         wmeta = work.get("metadata") or {}
         sprint_bead = meta.get("sprint_bead") or wmeta.get("sprint_bead")
         container = by_id.get(sprint_bead or "")
         is_sprint_dev = "stage:dev" in (work.get("labels") or [])
+        try:
+            preferred_sanity = meta.get("sanity_bead")
+            if role == "qa" and not preferred_sanity:
+                work_sanity = wmeta.get("sanity_bead")
+                if work_sanity and any(r.get("id") == work_sanity and r.get("status") != "closed" for r in rows):
+                    preferred_sanity = work_sanity
+            sanity_bead = row["id"] if role == "sanity" else member(rows, "stage:dev-sanity", "dev_bead", checked,
+                                                                       preferred_sanity)
+            qa_bead = row["id"] if role == "qa" else member(rows, "stage:qa", "checked_bead", checked)
+        except InvalidMember as error:
+            problems.append(str(error))
+            invalid_groups.add(group)
+            continue
         derived = {
             "role": role,
             **{k: meta.get(k) or wmeta.get(k) for k in CARRIED},
@@ -84,14 +123,27 @@ def plan(rows: list[dict], *, phase_feature: str, stack_bead: str, config: dict)
             "stack_bead": stack_bead,
             "checked_bead": checked,
             "checked_title": (container or {}).get("title") if is_sprint_dev else work.get("title"),
-            "sanity_bead": row["id"] if role == "sanity" else member(rows, "stage:dev-sanity", "dev_bead", checked),
-            "qa_bead": row["id"] if role == "qa" else member(rows, "stage:qa", "checked_bead", checked),
+            "sanity_bead": sanity_bead,
+            "qa_bead": qa_bead,
             "phase_feature": phase_feature,
             "lint_command": config["lint_command"],
             "policy_path": config["policy_path"],
             "max_sanity_rounds": config["max_sanity_rounds"],
         }
-        derived["base"] = derived["pr_target"]
+        derived["base"] = None if "stage:finding" in (work.get("labels") or []) else derived["pr_target"]
+        if "stage:finding" in (work.get("labels") or []):
+            for related_id in (derived["sanity_bead"], derived["qa_bead"]):
+                related = (by_id.get(related_id or "") or {}).get("metadata") or {}
+                for name in ("branch", "worktree", "pr_target", "base"):
+                    value = related.get(name)
+                    if not value:
+                        continue
+                    current = derived.get(name)
+                    if current and current != value:
+                        problems.append(f"{row['id']}: metadata.{name} is {current!r} but {related_id} gives {value!r}; left unchanged")
+                    elif not current:
+                        derived[name] = value
+        derived["base"] = derived["base"] or derived["pr_target"]
         if role == "qa" and meta.get("quick_fix") and not derived["sanity_bead"]:
             derived["sanity_bead"] = ""
         fill, lacking = {}, []
@@ -108,15 +160,25 @@ def plan(rows: list[dict], *, phase_feature: str, stack_bead: str, config: dict)
             fill[name] = want
         if lacking:
             problems.append(f"{row['id']}: cannot derive {', '.join(lacking)} from its group")
+            invalid_groups.add(group)
             continue
         overlay = {**row, "metadata": {**meta, **fill}}
         issues = bead_schema.validate_phase([overlay])
         if issues:
             problems.extend(issues)
+            invalid_groups.add(group)
+            continue
+        if len(problems) != before:
+            invalid_groups.add(group)
             continue
         if fill:
             fills.append({"bead": row["id"], "status": row.get("status") or "", "set_metadata": fill})
-    return fills, problems
+    fix = ("Fix: for a finding run `bd update <finding> --status in_progress --assignee <dev>`, then "
+           "`bd update <finding> --metadata <full JSON plus branch, worktree, pr_target and base = pr_target>`; "
+           "for another bead correct its named fields with `bd update <bead> --metadata <full JSON>`. "
+           "Run `close_fields_backfill.py --phase <x> --apply` and "
+           "`uv run --script .claude/skills/atm-bd-orchestration/scripts/bd_cache.py --root . drain`.")
+    return [fill for fill in fills if groups[fill["bead"]] not in invalid_groups], [f"{problem}; {fix}" for problem in problems]
 
 
 def main(argv: list[str]) -> int:
@@ -143,8 +205,8 @@ def main(argv: list[str]) -> int:
     report = {"ok": not problems, "phase": args.phase, "apply": args.apply, "beads": len(fills), "fills": fills,
               "problems": problems, "journaled": []}
     if problems:
-        report["fix"] = "Correct each named bead (or its group) with bd, then rerun; nothing was written."
-    elif args.apply:
+        report["fix"] = "Correct each named group and rerun; valid independent groups are still journaled."
+    if args.apply:
         if not args.actor:
             report.update(ok=False, problems=["--actor (or ATM_IDENTITY) is required to journal writes"])
         else:

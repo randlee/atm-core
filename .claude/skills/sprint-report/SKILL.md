@@ -25,7 +25,7 @@ Use `--dag` to refresh the diagram without opening a viewer, or
 `--view` to also open its HTML artifact in Wyvern when available:
 
 ```bash
-npm ci --prefix .claude/skills/sprint-report/renderer --ignore-scripts
+(cd .claude/skills/sprint-report/renderer && npm ci --ignore-scripts)
 .claude/skills/sprint-report/scripts/sprint-report --dag
 .claude/skills/sprint-report/scripts/sprint-report --view
 ```

@@ -8,7 +8,21 @@ single fenced response, then writes a credential-safe attestation.
 
 Expected contract failures are returned as ``Err(ToolError)`` values (see
 ``result.py``) rather than raised; only ``main`` renders them, and it alone
-still catches unreadable input as ``SCRIPT.IO``.
+still catches unreadable input as ``SCRIPT.IO``. Bad arguments are a
+``VALIDATION.INPUT`` envelope and any other unexpected exception is
+``SCRIPT.INTERNAL``, both exit 2; nothing escapes as a traceback.
+
+Exit codes: 0 when the command ran, 2 when it could not; there is no exit 1.
+``validate-fence`` on a readable file exits 0 either way and reports the
+outcome in ``data.valid``: ``{"valid": true, "value": <parsed envelope>}``, or
+``{"valid": false, "violation": {"code", "message"}}`` for a fence or envelope
+that breaks the contract. ``resolve`` returns the runtime descriptor, or exit 2
+with a typed error when no trusted agent can be resolved.
+
+``resolve --install-root <dir>`` reads ``<dir>/.<harness>/skills/plan-anchoring/registry.yaml``,
+which install.py writes next to the skill; registry paths are relative to
+``<dir>``, the folder plan-anchor was installed into (a repository or a parent
+folder). ``--plugin-root`` is accepted as an older name for the same option.
 """
 
 from __future__ import annotations
@@ -25,7 +39,7 @@ import tempfile
 from typing import Any, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from result import Err, Ok, Result, ToolError, err  # noqa: E402
+from result import Err, Ok, Result, ToolError, err, run_main, utf8_stdio  # noqa: E402
 
 
 SCHEMA_VERSION = "1.0.0"
@@ -135,8 +149,11 @@ def _registry_agent_entry(text: str, agent: str) -> Result[dict[str, str], ToolE
     return Ok(entries[agent])
 
 
+REGISTRY_RELPATH = "skills/plan-anchoring/registry.yaml"  # under .<harness>/
+
+
 def resolve_agent(plugin_root: str | Path, harness: str, agent: str) -> Result[dict[str, str], ToolError]:
-    """Resolve and validate one registry entry without executing it."""
+    """Resolve and validate one registry entry without executing it (``plugin_root``: the install root)."""
 
     if harness not in HARNESSES:
         return err("RUNTIME.HARNESS", "harness must be claude, codex, or cursor")
@@ -146,8 +163,8 @@ def resolve_agent(plugin_root: str | Path, harness: str, agent: str) -> Result[d
     try:
         root = Path(plugin_root).resolve(strict=True)
     except OSError:
-        return err("RUNTIME.PATH", "plugin root does not resolve")
-    registry = root / f".{harness}" / "agents" / "registry.yaml"
+        return err("RUNTIME.PATH", "install root does not resolve")
+    registry = root / f".{harness}" / REGISTRY_RELPATH
     try:
         resolved_registry = registry.resolve(strict=True)
     except OSError:
@@ -395,11 +412,23 @@ def _emit(value: dict[str, Any]) -> None:
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
 
 
+class _UsageError(Exception):
+    pass
+
+
+class _JsonArgumentParser(argparse.ArgumentParser):
+    """Usage errors become a VALIDATION.INPUT envelope (exit 2) instead of argparse's text on stderr."""
+
+    def error(self, message):  # argparse hook; never returns
+        raise _UsageError(f"{self.prog}: {message}")
+
+
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser = _JsonArgumentParser(prog="anchor_runner_contract.py", description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True, parser_class=_JsonArgumentParser)
     resolve = sub.add_parser("resolve")
-    resolve.add_argument("--plugin-root", required=True)
+    resolve.add_argument("--install-root", "--plugin-root", dest="install_root", required=True,
+                         help="the folder plan-anchor was installed into (holds .<harness>/skills/plan-anchoring/)")
     resolve.add_argument("--harness", required=True, choices=HARNESSES)
     resolve.add_argument("--agent", required=True, choices=tuple(AGENT_MODELS))
     check = sub.add_parser("validate-fence")
@@ -411,21 +440,31 @@ def _parser() -> argparse.ArgumentParser:
 
 def _run(args: argparse.Namespace) -> Result[dict[str, Any], ToolError]:
     if args.command == "resolve":
-        return resolve_agent(args.plugin_root, args.harness, args.agent)
-    text = Path(args.file).read_text(encoding="utf-8")
-    if args.kind == "request":
-        return parse_request(text)
-    if not args.correlation_id:
+        return resolve_agent(args.install_root, args.harness, args.agent)
+    if args.kind == "result" and not args.correlation_id:
         return err("ENVELOPE.CORRELATION", "result validation requires correlation_id")
-    return parse_result(text, args.correlation_id)
+    text = Path(args.file).read_text(encoding="utf-8")
+    parsed = parse_request(text) if args.kind == "request" else parse_result(text, args.correlation_id)
+    if isinstance(parsed, Err):  # a completed check with a negative answer: exit 0
+        return Ok({"valid": False, "violation": {"code": parsed.error.code, "message": parsed.error.message}})
+    return Ok({"valid": True, "value": parsed.value})
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    try:
+        args = _parser().parse_args(argv)
+    except _UsageError as exc:
+        _emit({"success": False, "data": None, "error": ToolError(
+            "VALIDATION.INPUT", str(exc), "Run 'anchor_runner_contract.py <command> --help' for the accepted arguments.").to_json()})
+        return 2
     try:
         outcome = _run(args)
     except (OSError, UnicodeError):
         _emit({"success": False, "data": None, "error": {"code": "SCRIPT.IO", "message": "input could not be read", "recoverable": False, "suggested_action": None}})
+        return 2
+    except Exception as exc:  # noqa: BLE001 - the CLI boundary: a JSON error object beats a traceback
+        _emit({"success": False, "data": None, "error": ToolError(
+            "SCRIPT.INTERNAL", f"{type(exc).__name__}: {exc}", "Report this with the command line that produced it.").to_json()})
         return 2
     if isinstance(outcome, Err):
         _emit({"success": False, "data": None, "error": outcome.error.to_json()})
@@ -435,4 +474,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_main(main))

@@ -4,6 +4,7 @@ import importlib.util
 import os
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from subprocess_helpers import HANG_GUARD_SECONDS, run_command
 import subprocess
 import sys
 import tempfile
@@ -29,9 +30,9 @@ class StrictTypeDefectTests(unittest.TestCase):
     def test_installer_help_and_dependency_preflight_without_site_packages(self):
         environment = os.environ.copy()
         environment.pop("PYTHONPATH", None)
-        help_result = subprocess.run(
+        help_result = run_command(
             [sys.executable, "-S", str(INSTALLER_PATH), "--help"],
-            capture_output=True,
+            timeout=HANG_GUARD_SECONDS, capture_output=True,
             text=True,
             env=environment,
             check=False,
@@ -41,9 +42,9 @@ class StrictTypeDefectTests(unittest.TestCase):
         self.assertNotIn("Traceback", help_result.stderr)
 
         with tempfile.TemporaryDirectory() as directory:
-            preflight = subprocess.run(
+            preflight = run_command(
                 [sys.executable, "-S", str(INSTALLER_PATH), "--dest", str(Path(directory) / ".claude")],
-                capture_output=True,
+                timeout=HANG_GUARD_SECONDS, capture_output=True,
                 text=True,
                 env=environment,
                 check=False,

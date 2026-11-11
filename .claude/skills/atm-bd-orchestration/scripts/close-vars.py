@@ -10,7 +10,7 @@
 
 Every validated open task bead carries its close fields (close_fields.POURED), so the vars come from that one
 bead: the poured fields, the task ids (equal to the bead ids) and the host paths. A sanity close adds its round
-(the task's `started` events) and the reviewers of its QA bead; a QA close adds its round. Beads are read from the
+(the task's assignment events) and the reviewers of its QA bead; a QA close adds its round. Beads are read from the
 bd-cache (pending journal writes replayed on top); the close hooks write through it, so it holds their recorded
 fields. When a field the vars need is missing there, the beads are re-read from bd once (`bd list --id`) and the
 vars rebuilt; `bd show` is used when the cache cannot be opened. Each fallback is named in `read_fallback`.
@@ -19,9 +19,9 @@ It writes `--out` and prints JSON: role, the fields the closing agent still supp
 manual close commands. A bead missing a poured field is refused with the fix; never assemble its fields from
 other beads.
 
-`--qa-assignment` instead writes the `templates.qa` vars of a QA bead: its poured fields plus the commit,
-branch and PR its checked bead recorded at close (close_fields.qa_assignment_vars), and prints the
-`atm task assign` command. A checked bead with no recorded PR is refused, never sent with an empty PR.
+`--qa-assignment` instead writes the `templates.qa` vars of a QA bead: its poured fields plus the current PR's
+head SHA, base ref, branch and number (close_fields.qa_assignment_vars), and prints the `atm task assign` command.
+A checked bead with no recorded PR or no readable current PR is refused, never sent with stale first-close context.
 """
 
 from __future__ import annotations
@@ -37,13 +37,19 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "atm-beads" / "scripts"))
 import bd_cache  # noqa: E402
 import close_fields  # noqa: E402
+import task_close_validation  # noqa: E402
 
 ATM_TIMEOUT_S = 10
 BD_SHOW_TIMEOUT_S = 30
+GH_PR_TIMEOUT_S = 30
 
 
 # Refusals that a cached row lagging a direct `bd update` could cause; a fresh read from bd settles them.
 MISSING = ("CLOSE_VARS.NOT_POURED", "ASSIGN_VARS.NOT_RECORDED", "ASSIGN_VARS.NOT_PLANNED")
+NOT_POURED_FIX = ("For a finding, run `bd update <finding> --status in_progress --assignee <dev>`, then "
+                  "`bd update <finding> --metadata <full JSON plus branch, worktree, pr_target and base = pr_target>`; "
+                  "run `close_fields_backfill.py --phase <x> --apply` and "
+                  "`uv run --script .claude/skills/atm-bd-orchestration/scripts/bd_cache.py --root . drain`, then retry.")
 
 
 def read(repo: Path, bead: str, fallback: list[str], cache_factory=bd_cache.BdCache, *, fresh: bool = False) -> dict:
@@ -92,7 +98,7 @@ def show(repo: Path, bead: str) -> dict:
                                             "Check the bead id and the bd version.") from error
 
 
-def started_runs(task: str) -> int:
+def task_events(task: str) -> list[dict]:
     try:
         events = subprocess.run(["atm", "task", "events", task, "--all", "--json"], capture_output=True, text=True,
                                 timeout=ATM_TIMEOUT_S, check=False)
@@ -103,21 +109,30 @@ def started_runs(task: str) -> int:
         raise close_fields.CloseFieldsError("CLOSE_VARS.EVENTS_FAILED", f"atm task events {task} exited {events.returncode}: "
                                             f"{(events.stderr or events.stdout).strip()[-300:]}", "Check that atm can read this task.")
     try:
-        count = sum(1 for event in json.loads(events.stdout)["events"] if event.get("event") == "started")
+        history = json.loads(events.stdout)["events"]
     except (ValueError, KeyError, TypeError) as error:
         raise close_fields.CloseFieldsError("CLOSE_VARS.EVENTS_FAILED", f"atm task events {task} printed no events: {error}",
                                             "Check the atm version.") from error
-    if count < 1:
+    if not any(event.get("event") == "started" for event in history):
         raise close_fields.CloseFieldsError("CLOSE_VARS.NOT_STARTED", f"{task} has no started event",
                                             f"Run `atm task start {task} \"<plan>\"` first.")
-    return count
+    return history
 
 
-def build(repo: Path, bead: str, *, runs=started_runs) -> dict:
-    return cached_then_fresh(lambda fresh, fallback: _build(repo, bead, runs, fresh, fallback))
+def sanity_round_from_events(task: str, events: list[dict]) -> int:
+    """Use the close hook's shared assignment-event producer for the sanity round."""
+    try:
+        _, _, round_number = task_close_validation.assignment_details(events, task)
+    except task_close_validation.CloseError as error:
+        raise close_fields.CloseFieldsError("CLOSE_VARS.EVENTS_FAILED", str(error), error.fix) from error
+    return round_number
 
 
-def _build(repo, bead, runs, fresh, fallback):
+def build(repo: Path, bead: str, *, events_for_task=task_events) -> dict:
+    return cached_then_fresh(lambda fresh, fallback: _build(repo, bead, events_for_task, fresh, fallback))
+
+
+def _build(repo, bead, events_for_task, fresh, fallback):
     row = read(repo, bead, fallback, fresh=fresh)
     role, values, remaining = close_fields.close_vars(row, repo)
     metadata = row.get("metadata") or {}
@@ -125,7 +140,7 @@ def _build(repo, bead, runs, fresh, fallback):
     if role == "qa":
         derived["round"] = metadata.get("round")
     if role == "sanity":
-        derived["round"] = runs(bead)
+        derived["round"] = sanity_round_from_events(bead, events_for_task(bead))
         derived["reviewers_round1"] = (read(repo, metadata["qa_bead"], fallback, fresh=fresh).get("metadata") or {}).get("reviewers_round1")
     for name, value in derived.items():
         if name in remaining and value not in (None, "", []):
@@ -134,17 +149,55 @@ def _build(repo, bead, runs, fresh, fallback):
     return {"bead": bead, "role": role, "vars": values, "remaining": remaining, "read_fallback": fallback}
 
 
-def build_qa_assignment(repo: Path, bead: str) -> dict:
-    return cached_then_fresh(lambda fresh, fallback: _build_qa_assignment(repo, bead, fresh, fallback))
+def read_current_pr(repo: Path, number: str) -> dict:
+    argv = ["gh", "pr", "view", number, "--json", "number,baseRefName,headRefName,headRefOid"]
+    try:
+        result = subprocess.run(argv, cwd=repo, capture_output=True, text=True, timeout=GH_PR_TIMEOUT_S, check=False)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise close_fields.CloseFieldsError(
+            "ASSIGN_VARS.PR_READ_FAILED", f"gh pr view {number} failed: {error}",
+            f"Check GitHub access and retry `gh pr view {number} --json number,baseRefName,headRefName,headRefOid`; "
+            "do not use first-close base or commit values.",
+        ) from error
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()[-300:]
+        raise close_fields.CloseFieldsError(
+            "ASSIGN_VARS.PR_READ_FAILED", f"gh pr view {number} exited {result.returncode}: {detail}",
+            f"Check that PR #{number} is readable here and retry `gh pr view {number} --json "
+            "number,baseRefName,headRefName,headRefOid`; do not use first-close base or commit values.",
+        )
+    try:
+        row = json.loads(result.stdout)
+    except ValueError as error:
+        raise close_fields.CloseFieldsError(
+            "ASSIGN_VARS.PR_READ_FAILED", f"gh pr view {number} printed invalid JSON: {error}",
+            f"Retry `gh pr view {number} --json number,baseRefName,headRefName,headRefOid` and inspect its output.",
+        ) from error
+    if not isinstance(row, dict):
+        raise close_fields.CloseFieldsError(
+            "ASSIGN_VARS.PR_READ_FAILED", f"gh pr view {number} did not print a PR object",
+            f"Retry `gh pr view {number} --json number,baseRefName,headRefName,headRefOid` and inspect its output.",
+        )
+    return {"number": row.get("number"), "base": row.get("baseRefName"),
+            "head": row.get("headRefName"), "head_sha": row.get("headRefOid")}
 
 
-def _build_qa_assignment(repo, bead, fresh, fallback):
+def build_qa_assignment(repo: Path, bead: str, *, pr_reader=None) -> dict:
+    reader = pr_reader or read_current_pr
+    return cached_then_fresh(lambda fresh, fallback: _build_qa_assignment(repo, bead, fresh, fallback, reader))
+
+
+def _build_qa_assignment(repo, bead, fresh, fallback, pr_reader):
     row = read(repo, bead, fallback, fresh=fresh)
     checked = (row.get("metadata") or {}).get("checked_bead")
     if not checked:
         raise close_fields.CloseFieldsError("CLOSE_VARS.NOT_POURED", f"{bead}: metadata lacks checked_bead",
                                             "Ask the phase lead to run close_fields_backfill.py for its phase.")
-    values = close_fields.qa_assignment_vars(row, read(repo, checked, fallback, fresh=fresh), repo)
+    checked_row = read(repo, checked, fallback, fresh=fresh)
+    checked_meta = checked_row.get("metadata") or {}
+    recorded_number = checked_meta.get("pr_number")
+    current_pr = pr_reader(repo, str(recorded_number)) if recorded_number not in (None, "") else None
+    values = close_fields.qa_assignment_vars(row, checked_row, repo, current_pr)
     return {"bead": bead, "role": "qa-assignment", "vars": values, "remaining": [], "read_fallback": fallback}
 
 
@@ -156,7 +209,7 @@ def cached_then_fresh(attempt) -> dict:
     except close_fields.CloseFieldsError as error:
         if error.code not in MISSING:
             raise
-        fallback.append(f"{error.code} on cached rows ({error}); re-read from bd")
+        fallback.append(f"{error.code} on cached rows ({error}); informational: the cache lagged bd; the row was re-read; no action needed")
         return attempt(True, fallback)
 
 
@@ -194,7 +247,10 @@ def main(argv: list[str]) -> int:
         steps = (assign_command(repo, result["vars"], args.out) if args.qa_assignment
                  else commands(result["role"], args.bead, args.out))
     except close_fields.CloseFieldsError as error:
-        print(json.dumps({"ok": False, "error": error.as_json()}, indent=2))
+        report = error.as_json()
+        if error.code == "CLOSE_VARS.NOT_POURED":
+            report["fix"] = NOT_POURED_FIX
+        print(json.dumps({"ok": False, "error": report}, indent=2))
         return 2
     for message in result["read_fallback"]:
         print(f"close-vars: {message}", file=sys.stderr)

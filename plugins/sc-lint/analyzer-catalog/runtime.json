@@ -5,6 +5,10 @@
   "rules": [
     "SCB-RUNTIME-001",
     "SCB-RUNTIME-002",
-    "SCB-RUNTIME-003"
+    "SCB-RUNTIME-003",
+    "SCB-RUNTIME-004",
+    "SCB-RUNTIME-005",
+    "SCB-RUNTIME-006",
+    "SCB-RUNTIME-007"
   ]
 }

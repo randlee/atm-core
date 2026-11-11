@@ -137,8 +137,7 @@ Fix your malformed result; the phase lead fixes planning data; the hook maintain
 fixes schema/producer defects. Retry atm task close after correction.
 Bead writes are journaled in bd-cache and applied to bd by its drain; a write
 that cannot be applied is escalated to the phase lead by the bd-cache cron.
-Do not retry bead writes or start Cargo work. A bd-repair task assigned
-before this change is still finished with its repair runner, as assigned.
+Do not retry bead writes or start Cargo work.
 After successful PASS, prepare stack-input.json with
 checked_bead, branch, commit, pr_number, worktree_path, and stack_bead/budget/lead
 from current task/bead context (phase_lead supplies lead). This requires no

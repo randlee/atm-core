@@ -23,10 +23,12 @@ import sys
 import time
 from typing import Literal, NotRequired, TypedDict
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
 import repo_config
+import phase_settings as phase_settings_module
 from operation_models import matches_typeddict
-from sprint_index_common import JsonObject, JsonValue, is_json_object, is_json_value, load_phase_config, string_list
+from sprint_index_common import JsonObject, JsonValue, is_json_object, is_json_value, string_list
 
 MODEL = "jev-1.13.0"
 HOST = "api.typesafe.ai"
@@ -250,15 +252,20 @@ def evaluate(request: JsonObject, *, sleep: Callable[[float], None] | None = Non
         finally:
             if conn is not None:
                 conn.close()
+        error_type = jev_error_type(raw) if 400 <= status < 500 else None
         if status == 413:
             raise oversize(request)
+        if error_type == "max_tokens_exceeded":
+            raise oversize(request, limit="over Jev's token limit")
         if status in (429, 502, 529) and budget.remaining > 0:
             delay = retry_delay(retry_after)
             if delay:
                 sleeper(delay)
             continue
         if status != 200:
-            raise JevError("SANITY.JEV_UNAVAILABLE", f"Jev HTTP {status}; response body withheld", status in (429, 502, 529))
+            named = f" error_type={error_type}" if error_type else ""
+            raise JevError("SANITY.JEV_UNAVAILABLE", f"Jev HTTP {status}{named}; response body withheld",
+                           status in (429, 502, 529))
         if len(raw) > MAX_RESPONSE_BYTES:
             raise JevError("SANITY.JEV_RESPONSE_INVALID", "Jev response exceeded size limit")
         try:
@@ -277,8 +284,8 @@ CLIENT_MESSAGES = re.compile("|".join([
     r"Unexpected Jev response model or shape", r"Missing or unexpected answer IDs", r"Answer must be an object",
     r"Invalid Choice answer", r"Expected pinned model, state and nonempty questions",
     r"Pilot supports well-formed Choice questions only", r"Request must contain finite JSON values",
-    r"Jev request oversized \(\d+ bytes > \d+\); no further split fits the remaining attempt budget",
-    r"Jev connection failed or timed out", r"Jev HTTP \d{3}; response body withheld",
+    r"Jev request oversized \(\d+ bytes (> \d+|over Jev's token limit)\); no further split fits the remaining attempt budget",
+    r"Jev connection failed or timed out", r"Jev HTTP \d{3}( error_type=[a-z0-9_.-]+)?; response body withheld",
     r"Jev response exceeded size limit", r"Jev response was not JSON", r"Jev retry budget exhausted",
     r"Startup probe returned the wrong literal choice", r"Request file unavailable or invalid JSON",
     r"Assignment lacks deliverable text, worktree, commits or file lists",
@@ -399,13 +406,26 @@ def written_request(text: str, evidence: str, context: dict[str, str] | None = N
         "type": "choice", "instructions": instructions, "criteria": {"yes": "delivered", "no": "not delivered"}}}}
 
 
+def jev_error_type(raw: bytes) -> str | None:
+    """`detail.error_type` from a Jev 4xx body (e.g. max_tokens_exceeded); only that short identifier leaves the
+    client, never the rest of the body."""
+    try:
+        value = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return None
+    detail = value.get("detail") if is_json_object(value) else None
+    error_type = detail.get("error_type") if is_json_object(detail) else None
+    return error_type if isinstance(error_type, str) and re.fullmatch(r"[a-z0-9_.-]{1,64}", error_type) else None
+
+
 def size(request: JsonValue) -> int:
     return len(json.dumps(request, allow_nan=False).encode("utf-8"))
 
 
-def oversize(request: JsonValue, fix: str | None = None) -> JevError:
+def oversize(request: JsonValue, fix: str | None = None, limit: str | None = None) -> JevError:
     request_size = size(request)
-    exc = JevError("SANITY.JEV_REQUEST_TOO_LARGE", f"Jev request oversized ({request_size} bytes > {MAX_REQUEST_BYTES}); no further split fits the remaining attempt budget", True)
+    bound = limit or f"> {MAX_REQUEST_BYTES}"
+    exc = JevError("SANITY.JEV_REQUEST_TOO_LARGE", f"Jev request oversized ({request_size} bytes {bound}); no further split fits the remaining attempt budget", True)
     exc.size = request_size
     exc.fix = fix and fix.format(size=exc.size)
     return exc
@@ -825,32 +845,42 @@ class EscalationList(TypedDict):
 
 def parse_escalation_list(value: JsonValue) -> EscalationList:
     recipients = value.get("recipients") if isinstance(value, dict) else None
-    return {"recipients": [r for r in recipients if isinstance(r, str) and r] if isinstance(recipients, list) else []}
+    return {"recipients": [item for item in recipients if isinstance(item, str) and item]
+            if isinstance(recipients, list) else []}
 
 
-def escalation_recipients() -> list[str]:
-    """ATM's escalation recipients: the team's (`ATM_TEAM`), else the daemon default; [] when neither is set or readable."""
-    team = os.environ.get("ATM_TEAM", "")
-    for argv in ([["atm", "escalation", "list", "--team", team, "--json"]] if team else []) + [["atm", "escalation", "list", "--json"]]:
-        try:
-            listed = subprocess.run(argv, text=True, capture_output=True, timeout=15)
-            value: JsonValue = json.loads(listed.stdout) if listed.returncode == 0 else {}
-        except (OSError, subprocess.TimeoutExpired, ValueError):
-            value = {}
-        found = parse_escalation_list(value)["recipients"]
-        if found:
-            return found
-    return []
+def escalation_recipients(team: str | None = None) -> list[str]:
+    """Read a team's escalation list, or the daemon default when no team is supplied."""
+    argv = ["atm", "escalation", "list"]
+    if team:
+        argv.extend(("--team", team))
+    argv.append("--json")
+    try:
+        result = subprocess.run(argv, text=True, capture_output=True, timeout=15)
+        value: JsonValue = json.loads(result.stdout) if result.returncode == 0 else {}
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        value = {}
+    return parse_escalation_list(value)["recipients"]
 
 
-def announce(message: str, lead: str) -> None:
-    """Send `message` to ATM's escalation recipients, else to `lead` saying none is set."""
+def oversight_recipients(settings: phase_settings_module.PhaseSettings) -> tuple[list[str], bool]:
+    """Use phase oversight, then daemon oversight, then the lead with an explicit fallback note."""
+    recipients = escalation_recipients(settings.team)
+    if recipients:
+        return recipients, False
     recipients = escalation_recipients()
-    if not recipients:
-        recipients, message = [lead], message + " No escalation recipient is set."
+    if recipients:
+        return recipients, False
+    return [f"{settings.lead}@{settings.team}"], True
+
+
+def announce(message: str, recipients: list[str], tool_identity: str, *, no_recipient_fallback: bool = False) -> None:
+    """Send `message` to oversight as the repository-configured atm-bd tool identity."""
+    if no_recipient_fallback:
+        message = f"No escalation recipient is set; sending to the phase lead. {message}"
     for recipient in recipients:
         try:
-            sent = subprocess.run(["atm", "send", recipient, "--stdin"], input=message,
+            sent = subprocess.run(["atm", "send", recipient, "--as", tool_identity, "--stdin"], input=message,
                                   text=True, capture_output=True, timeout=15)
             if sent.returncode:
                 print(f"Announcement to {recipient} failed; coordinator must report the error via ATM.", file=sys.stderr)
@@ -946,28 +976,36 @@ def main(argv: list[str] | None = None, *, clock: Callable[[], float] = time.mon
         parser.error("--announce requires --startup or --error and an explicit --phase")
     if args.error is not None and (not args.announce or not args.error.strip()):
         parser.error("--error requires --announce and a nonempty error")
-    phase_lead = None
+    recipients: list[str] = []
+    no_recipient_fallback = False
+    tool_identity = None
     if args.phase:
         try:
-            phase_lead = load_phase_config(repo_config.repo_root(), args.phase)["lead"]
+            settings = phase_settings_module.phase_settings(repo_config.repo_root(), args.phase)
+            if args.announce:
+                recipients, no_recipient_fallback = oversight_recipients(settings)
+            tool_identity = settings.tool_identity
         except (repo_config.ConfigError, RuntimeError, OSError, ValueError) as exc:
             parser.error(str(exc))
     if args.error is not None:
-        assert phase_lead is not None
+        assert recipients and tool_identity is not None
         if args.error.startswith("SANITY.JEV_REQUEST_TOO_LARGE"):
             # An oversized request is the caller's to rebuild; it never hands the slot to an LLM or haiku check (#365).
             announce(f"dev-sanity Jev request oversized after the lossless split: {args.error}. The deliverable's Jev slot "
-                     "keeps this error; no LLM or haiku check replaces Jev for it.", phase_lead)
+                     "keeps this error; no LLM or haiku check replaces Jev for it.", recipients, tool_identity,
+                     no_recipient_fallback=no_recipient_fallback)
         else:
-            announce(f"dev-sanity Jev child failed: {args.error}. Selection takes the LLM reply for JEV slots until a Jev child succeeds.", phase_lead)
+            announce(f"dev-sanity Jev child failed: {args.error}. Selection takes the LLM reply for JEV slots until a Jev child succeeds.",
+                     recipients, tool_identity, no_recipient_fallback=no_recipient_fallback)
         print(json.dumps({"success": True, "data": {"announced": args.error}, "error": None}))
         return 0
     result = evaluation_result(args, clock=clock, sleep=sleep)
     if args.announce and not result["success"]:
-        assert phase_lead is not None
+        assert recipients and tool_identity is not None
         error = result["error"]
         assert isinstance(error, dict)
-        announce(f"dev-sanity Jev startup failed: {error['code']}: {error['message']}. No sc-sanity-jev checks run; dev-sanity records every JEV slot as unavailable until a startup probe passes.", phase_lead)
+        announce(f"dev-sanity Jev startup failed: {error['code']}: {error['message']}. No sc-sanity-jev checks run; dev-sanity records every JEV slot as unavailable until a startup probe passes.",
+                 recipients, tool_identity, no_recipient_fallback=no_recipient_fallback)
     print(json.dumps(result, allow_nan=False))
     return 0 if result["success"] else 2
 

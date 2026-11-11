@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synaptic-canvas.dev/plan-anchor/jev-batch-request.schema.json",
+  "title": "jev_judge.py batch request line",
+  "description": "One JSON object per line of the batch input (stdin or --input; the same parser reads both). Each line pairs one item with one anchor and the candidate question sets to judge it with; batch sends one Jev request per (item, candidate, repeat). The low layer is tracker-neutral: bead-batch builds these lines from beads, and the tournament builds them from its oracle and candidates.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "item",
+    "anchor",
+    "questions"
+  ],
+  "properties": {
+    "item": {
+      "type": "object",
+      "required": [
+        "id",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "required": [
+        "id",
+        "statement"
+      ],
+      "description": "Jev sees id, statement and scope; kind (directive, prohibition, structural) sets how the verdict is read.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "directive",
+            "prohibition",
+            "structural"
+          ]
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Candidates; candidate_id is unique within the line.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidate_id",
+          "questions"
+        ],
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "questions": {
+            "type": "object",
+            "minProperties": 1,
+            "description": "The complete question set sent to Jev, keyed by question id."
+          },
+          "roles": {
+            "type": "object",
+            "description": "Role -> question id; default the --gate question set's roles.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

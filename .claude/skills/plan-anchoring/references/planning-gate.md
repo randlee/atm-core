@@ -1,6 +1,6 @@
 ---
 name: planning-gate
-version: 0.6.1
+version: 0.10.1
 description: Running the planning gate end to end - what to pass, what Jev sees, the command and exit codes, and how to read results for one sprint item and a whole phase.
 ---
 
@@ -14,32 +14,21 @@ compression failure before any code exists.
 
 | Input | Source | Notes |
 | --- | --- | --- |
-| Planning items | `plan_source.py discover-markdown <phase file/directory>` or `discover-tracker --tracker bd\|br --epic <id>` | One agent run per complete sprint document, in descriptor order |
-| Anchors | `doc/plan/phase-current/anchors.json` | `locked` and `promoted` only; `validate` must pass and each anchor's questions must have passed tuning (`question-tuning.md`) |
+| Planning item | the sprint text the caller already has, as `item_file`: the Markdown sprint file, `"$ANCHOR_TRACKER" show <id> --json` composed with `compose-item --show-json <file> --for plan`, or text from the caller's context | One agent run per complete sprint item; any layout is accepted |
+| Anchors | `$A`: `docs/plans/phase-<current>/anchors.json` | `locked` and `promoted` only; `validate` must pass and each anchor's questions must have passed tuning (`question-tuning.md`) |
 | Question overrides | each anchor's plan-questions bead | Fenced JSON in the bead description; `{}` means defaults |
 | Script | `scripts/jev_judge.py` next to `SKILL.md`, absolute | Passed to the agent as `script` |
 
 ## What Jev sees per request
 
 One anchor (`id`, `statement`, `scope`; the quote is not sent), one complete
-normalized sprint document, and the three questions. The phase index/epic,
+sprint item as the caller passed it, and the three questions. The phase index/epic,
 intent, source paths, tracker identifiers, revisions, and other sprints are not
-sent. For a tracker source, the planning item is only the copied issue
-description; title, acceptance, design, and notes remain workflow metadata. See
-`plan-source-contract.md`.
+sent.
 
 ## Run
 
-First discover the source and, when Markdown has an epic copy, verify parity:
-
-```bash
-P="$(dirname "$S")/plan_source.py"
-python3 "$P" discover-markdown docs/plans/phase-a/
-python3 "$P" discover-tracker --tracker br --epic pa-sza
-python3 "$P" copy docs/plans/phase-a/ --tracker br --epic pa-sza
-```
-
-Delegate each ordered descriptor to the harness-specific `anchor-plan-review`
+Delegate each sprint item to the harness-specific `anchor-plan-review`
 definition. Claude Code and Codex use their Agent tool. Cursor uses the Task
 tool with no model override; the registered agent pins Composer. If that
 subagent is not registered, stop. The planner does not substitute for
@@ -47,19 +36,18 @@ independent question tuning. The gate agent runs once per item:
 
 ```bash
 python3 "$S" judge --anchors "$A" --gate plan --all --item-id <sprint-id> --item-title "<title>" \
-  --item-file "$W/item.txt" [--overrides-file "$W/overrides.json"] --run-dir doc/plan/phase-current/anchor-runs
+  --item-file "$W/item.txt" [--overrides-file "$W/overrides.json"] --run-dir "$P/anchor-runs"
 ```
 
 | Exit | Meaning |
 | --- | --- |
-| 0 | Every anchor `satisfied`, `not_applicable`, `deterministic_only` or `excluded`, or a dry run |
-| 1 | At least one `contradicted`, `not_addressed`, `underspecified` or `error` verdict; the run file was written |
-| 2 | Fatal before judging: credentials, opt-in, malformed record or override, unknown anchor, or `PLAN.TOO_LARGE` (a symptom; `plan-size-and-shape.md`) |
+| 0 | The run completed with an answer for every anchor; read `data.summary.pass`: true when every anchor is `satisfied`, `not_applicable`, `deterministic_only` or `excluded`, false on at least one `contradicted`, `not_addressed`, `asserted_only` or `underspecified` verdict; the run file was written. A dry run (`data.dry_run`) judges nothing and is never a pass: `data.summary.pass` is false |
+| 2 | The tool could not do its job: credentials, `allow_remote_judge` not `true`, malformed record or override, unknown anchor, `PLAN.TOO_LARGE` (a symptom; `plan-size-and-shape.md`), or any anchor Jev gave no answer for after retries (`JEV.*`, `FIXTURE.MISSING`); the partial run is still written and `data.run_path` names it |
 
 Then, across all sprint items:
 
 ```bash
-python3 "$S" coverage --runs doc/plan/phase-current/anchor-runs --gate plan --format md
+python3 "$S" coverage --runs "$P/anchor-runs" --gate plan --anchors "$A" --format md
 ```
 
 ## Reading results
@@ -76,9 +64,9 @@ python3 "$S" coverage --runs doc/plan/phase-current/anchor-runs --gate plan --fo
 
 To mark an anchor not relevant to one sprint item when its scope is right, use `exclude` (`anchor-document.md`), not a scope change or a smaller `--anchor` list. Check exclusion ids against the plan with `lint --plan-items <discover output>`.
 | `error` | Jev could not be asked after retries | `results[].error.code` | Fix the cause; re-run that bead |
-| `PLAN.TOO_LARGE` | The sprint does not fit one request | `plan_source.py shape <sprint path>`; scope-anchor verdicts | Judge the cause: unapproved work, then prose and ceremony, then split (`plan-size-and-shape.md`) |
+| `PLAN.TOO_LARGE` | The sprint does not fit one request | `shape` on the sprint text; scope-anchor verdicts | Judge the cause: unapproved work, then prose and ceremony, then split (`plan-size-and-shape.md`) |
 
-The gate passes when every sprint's latest run exits 0 and `coverage` lists no
+The gate passes when every sprint's latest run has `summary.pass: true` and `coverage` lists no
 uncovered locked anchor. An anchor uncovered everywhere has the wrong scope, or
 the phase lacks the sprint that should carry it. Triage and stop conditions:
 `triage-and-iteration.md`.

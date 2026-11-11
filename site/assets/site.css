@@ -1,0 +1,352 @@
+/* Synaptic Canvas site — design system
+ *
+ * World: engineering service manual / drawing sheet. Hairline dimension rules,
+ * numbered sections, monospace field labels, a drafting-blue accent, one warm
+ * marker reserved for "action needed". Structure comes from rules and rhythm,
+ * never from cards, shadows or gradients.
+ *
+ * Constraints this file is written against:
+ *   - GitHub Pages serves site/ verbatim: no build step, no CDN, no hosted fonts.
+ *   - Read surface: measure and hierarchy first; the page must be readable as
+ *     plain HTML with CSS absent.
+ *   - WCAG AA: every ink/ground pair below is >= 4.5:1 for body text.
+ */
+
+:root {
+  /* ground and ink */
+  --paper: #eef1f4;          /* drafting paper, cool grey */
+  --sheet: #ffffff;          /* the page sheet itself */
+  --ink: #10151c;            /* 16.9:1 on sheet */
+  --ink-soft: #4a5462;       /* 7.4:1 on sheet */
+  --ink-faint: #6b7686;      /* 5.1:1 on sheet */
+  --rule: #c9d1da;           /* hairline */
+  --rule-strong: #96a3b3;
+
+  /* accents: one job each */
+  --draft: #1f5f8b;          /* links, structure marks — 6.2:1 on sheet */
+  --draft-wash: #e7eef4;
+  --marker: #b3400b;         /* action needed only — 5.9:1 on sheet */
+  --marker-wash: #fbeee7;
+
+  /* type */
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* scale: fluid, but never smaller than a readable floor */
+  --step--1: clamp(0.78rem, 0.76rem + 0.1vw, 0.84rem);
+  --step-0: clamp(1rem, 0.97rem + 0.15vw, 1.06rem);
+  --step-1: clamp(1.2rem, 1.13rem + 0.35vw, 1.35rem);
+  --step-2: clamp(1.45rem, 1.3rem + 0.75vw, 1.8rem);
+  --step-3: clamp(1.9rem, 1.6rem + 1.5vw, 2.6rem);
+
+  /* measure and rhythm */
+  --measure: 68ch;
+  --gutter: clamp(1rem, 4vw, 2.5rem);
+  --space-1: 0.4rem;
+  --space-2: 0.75rem;
+  --space-3: 1.25rem;
+  --space-4: 2rem;
+  --space-5: 3.25rem;
+  --space-6: 5rem;
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.62;
+  /* faint drafting grid: reads as paper texture, never as decoration */
+  background-image: linear-gradient(var(--rule) 1px, transparent 1px);
+  background-size: 100% 2.5rem;
+  background-position: 0 -1px;
+}
+
+/* the sheet the text sits on */
+main,
+.sheet {
+  max-width: calc(var(--measure) + 8rem);
+  margin: 0 auto;
+  padding: var(--space-5) var(--gutter) var(--space-6);
+  background: var(--sheet);
+  border-inline: 1px solid var(--rule);
+  min-height: 100vh;
+}
+
+/* ---------- navigation ---------- */
+
+.atm-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.atm-nav a {
+  color: var(--draft);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.atm-nav a:hover,
+.atm-nav a:focus-visible { border-bottom-color: currentColor; }
+
+.atm-nav .sep { color: var(--rule-strong); }
+
+.atm-nav .here { color: var(--ink); }
+
+/* ---------- headings ---------- */
+
+h1, h2, h3 {
+  font-family: var(--font-body);
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  line-height: 1.16;
+  text-wrap: balance;
+}
+
+h1 { font-size: var(--step-3); margin: 0 0 var(--space-3); }
+h2 { font-size: var(--step-2); margin: var(--space-5) 0 var(--space-2); }
+h3 { font-size: var(--step-1); margin: var(--space-4) 0 var(--space-1); }
+
+/* numbered section marks: the manual's spine */
+h2 { display: flex; align-items: baseline; gap: var(--space-2); }
+h2::before {
+  counter-increment: section;
+  content: counter(section, decimal-leading-zero);
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  font-weight: 500;
+  color: var(--draft);
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--rule-strong);
+  background: var(--draft-wash);
+  flex: none;
+  transform: translateY(-0.15rem);
+}
+
+article.announcement { counter-reset: section; }
+
+/* ---------- front matter ---------- */
+
+.announcement header {
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  margin: 0 0 var(--space-2);
+}
+
+.meta b { color: var(--ink); font-weight: 600; }
+
+.lead {
+  font-size: var(--step-1);
+  line-height: 1.5;
+  color: var(--ink-soft);
+  margin: var(--space-2) 0 0;
+  max-width: 58ch;
+}
+
+/* ---------- body ---------- */
+
+p, ul, ol { max-width: var(--measure); }
+p { margin: 0 0 var(--space-2); }
+
+ul, ol { padding-left: 1.35rem; margin: 0 0 var(--space-3); }
+li { margin-bottom: var(--space-1); }
+
+a { color: var(--draft); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+
+:focus-visible {
+  outline: 2px solid var(--draft);
+  outline-offset: 2px;
+}
+
+strong { font-weight: 660; }
+
+/* ---------- section items: no boxes, just a rule and a label ---------- */
+
+.item {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+  margin-top: var(--space-3);
+}
+
+.item:first-of-type { border-top: 0; padding-top: 0; margin-top: var(--space-3); }
+
+.item h3 { margin-top: 0; }
+.item p { color: var(--ink-soft); max-width: 60ch; }
+.item p:last-child { margin-bottom: 0; }
+
+/* ---------- code ---------- */
+
+code, pre, kbd {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+p code, li code, kbd {
+  background: var(--draft-wash);
+  color: var(--ink);
+  padding: 0.1rem 0.32rem;
+  border: 1px solid #d5e0e9;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+pre {
+  background: #0f1620;
+  color: #e8eef5;
+  padding: var(--space-3);
+  overflow-x: auto;
+  border-left: 3px solid var(--draft);
+  margin: 0 0 var(--space-3);
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+pre code { background: none; border: 0; padding: 0; color: inherit; }
+
+/* ---------- callouts: two jobs, two colours ---------- */
+
+.note,
+.warn {
+  margin: var(--space-4) 0;
+  padding: var(--space-3);
+  border-left: 3px solid var(--rule-strong);
+  background: #f6f8fa;
+}
+
+.note { border-left-color: var(--draft); background: var(--draft-wash); }
+.warn { border-left-color: var(--marker); background: var(--marker-wash); }
+
+.note > :first-child,
+.warn > :first-child { margin-top: 0; }
+.note > :last-child,
+.warn > :last-child { margin-bottom: 0; }
+
+.callout-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-1);
+}
+
+.warn .callout-label { color: var(--marker); }
+.note .callout-label { color: var(--draft); }
+
+/* ---------- upgrade block ---------- */
+
+.upgrade {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--rule);
+}
+
+/* ---------- footer ---------- */
+
+.announcement footer {
+  margin-top: var(--space-5);
+  padding-top: var(--space-3);
+  border-top: 2px solid var(--ink);
+}
+
+.announcement footer ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--step--1);
+}
+
+.announcement footer li::before {
+  content: "→ ";
+  font-family: var(--font-mono);
+  color: var(--ink-faint);
+}
+
+/* ---------- index list ---------- */
+
+.announcement-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0 0;
+  border-top: 2px solid var(--ink);
+}
+
+.announcement-list li {
+  margin: 0;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.announcement-list .when {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
+
+.announcement-list a {
+  font-size: var(--step-1);
+  font-weight: 620;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+.announcement-list a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.announcement-list .what { color: var(--ink-soft); max-width: 62ch; }
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 40rem) {
+  main, .sheet { border-inline: 0; padding-top: var(--space-4); }
+  h2 { flex-direction: row; align-items: flex-start; gap: var(--space-1); }
+  .meta { gap: var(--space-1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+@media print {
+  body { background: #fff; }
+  main, .sheet { border: 0; padding: 0; max-width: none; }
+  .atm-nav, .announcement footer { display: none; }
+  pre { background: #f4f4f4; color: #000; border-left-color: #999; }
+  a { color: #000; text-decoration: underline; }
+  h2 { break-after: avoid; }
+  .item, .note, .warn { break-inside: avoid; }
+}

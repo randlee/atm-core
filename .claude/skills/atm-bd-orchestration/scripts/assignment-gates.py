@@ -25,7 +25,7 @@ from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from command_timeout import DEFAULT_COMMAND_TIMEOUT, RAISE_FIX, TIMEOUT_ENV, command_timeout, import_timeout, repo_timeout
-from stack_top import select_stack_top, stack_bead_id
+from stack_top import StackTop, StackTopMismatch, select_confirmed_stack_top, select_passed_unlinked_top, stack_bead_id
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 IGNORED_STATUS_PATHS = (".beads.gate.lock", ".sc-compose/")
@@ -131,11 +131,41 @@ def stack_top(runner: Runner, args: argparse.Namespace) -> str:
     rows = json.loads(run(runner, "bd", "show", stack_bead_id(args.root), "--json", cwd=str(PRIMARY)))
     if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
         raise ValueError("stack bead lookup must return exactly one bead object")
-    branch, _head = select_stack_top(
-        rows[0], args.pr_target,
-        lambda target: run(runner, "git", *git_dir(args), "rev-parse", f"origin/{target}"),
-    )
-    return branch
+    if rows[0].get("metadata") is not None and not isinstance(rows[0]["metadata"], dict):
+        raise ValueError("stack bead metadata must be an object or null")
+    meta = metadata(rows[0])
+    layers = meta.get("layers", [])
+    if not isinstance(layers, list):
+        raise ValueError("stack bead metadata.layers must be an array")
+    raw = run(runner, "gh", "api", "repos/{owner}/{repo}/stacks", "--paginate", "--jq",
+              ".[] | {number, base: .base.ref, prs: [.pull_requests[].number]}", cwd=args.worktree or None)
+    try:
+        decoded = json.loads(raw) if raw else []
+        stacks = decoded if isinstance(decoded, list) else [decoded]
+    except json.JSONDecodeError:
+        stacks = [json.loads(line) for line in raw.splitlines() if line.strip()]
+    if any(not isinstance(stack, dict) or type(stack.get("number")) is not int or
+           not isinstance(stack.get("base"), str) or not isinstance(stack.get("prs"), list) or
+           any(type(pr) is not int for pr in stack["prs"]) for stack in stacks):
+        raise ValueError("hosted stack list has invalid fields")
+    known = {layer.get("pr") for layer in layers if isinstance(layer, dict)}
+    matches = [stack for stack in stacks if
+               (meta.get("stack_number") is not None and stack["number"] == meta["stack_number"] or
+                stack["base"] == meta.get("trunk", args.pr_target) and
+                (bool(known.intersection(stack["prs"])) or not layers and meta.get("stack_number") is None))]
+    if len(matches) > 1:
+        raise ValueError("ambiguous hosted stacks overlap the ledger")
+    hosted_prs = matches[0]["prs"] if matches else []
+    selected = select_confirmed_stack_top(layers, hosted_prs)
+    if isinstance(selected, StackTopMismatch):
+        raise ValueError(f"stack top mismatch: ledger {selected.ledger_top}; hosted {selected.hosted_top}")
+    if isinstance(selected, StackTop) and selected.branch is not None:
+        return selected.branch
+    passed = select_passed_unlinked_top(layers)
+    if passed is not None and passed.branch is not None:
+        return passed.branch
+    run(runner, "git", *git_dir(args), "rev-parse", f"origin/{args.pr_target}")
+    return args.pr_target
 
 
 def dev_gate(args: argparse.Namespace, runner: Runner, identity: str) -> str:

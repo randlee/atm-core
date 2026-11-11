@@ -1,12 +1,12 @@
 ---
 name: anchor-document
-version: 0.6.1
+version: 0.10.1
 description: The intent document, the anchors.json record of truth and its rendered anchors.md, ID rules, provenance, versioning, promotion, and retirement.
 ---
 
 # The anchor documents
 
-Two documents in `doc/plan/phase-current/` are for people; one machine record feeds everything else. Keep all of them in git with the plan.
+Two documents in the current phase folder, `docs/plans/phase-<current>/` (`$P`: `plan_dir` in `.sc/plan-anchor/settings.yaml`), are for people; one machine record feeds everything else. Keep all of them in git with the plan.
 
 | File | Who edits | Purpose |
 | --- | --- | --- |
@@ -20,8 +20,8 @@ Two documents in `doc/plan/phase-current/` are for people; one machine record fe
 ```json
 {
   "schema": "plan-anchoring/anchors/1",
-  "plan": "phase-current",
-  "intent_ref": "doc/plan/phase-current/intent.md",
+  "plan": "phase-b",
+  "intent_ref": "docs/plans/phase-b/intent.md",
   "anchors": [ { ...anchor record... } ]
 }
 ```
@@ -58,16 +58,17 @@ Full example: `assets/examples/anchors.example.json`. Run `validate` after any c
 "exclude": [{"item": "atm-bi-2", "reason": "Data-only sprint; the skill CLI options belong to bi-3."}]
 ```
 
-- `item` is the plan item id exactly as `judge --item-id` receives it (the sprint id from `plan_source.py discover-*`, or the bead id). `reason` is one non-empty sentence. One entry per item; `validate` rejects an empty reason, unknown keys and duplicates.
+- `item` is the plan item id exactly as `judge --item-id` receives it (the sprint or bead id the caller names). `reason` is one non-empty sentence. One entry per item; `validate` rejects an empty reason, unknown keys and duplicates.
 - Record it with `exclude --id ANC-011 --item atm-bi-2 --reason "..."`; drop it with `exclude --id ANC-011 --item atm-bi-2 --remove`. Both append a history event and do not bump `version`, so no earlier run of any cell is invalidated. A locked or promoted anchor stays editable this way: locking is the `status` field, and nothing hashes the anchor record (the tuner's `authority.anchors` digest covers a fixed projection of fields that has no `exclude`).
+- Many at once: `exclude --from <file.jsonl>`, one `{"id": "ANC-011", "item": "atm-bi-2", "reason": "..."}` or `{"id": ..., "item": ..., "remove": true}` per line. The file is applied all or nothing: a bad line, a pair listed twice or an unknown anchor saves nothing, and the error names `file:line`. `data.applied` holds one entry per line, as the single-cell form returns.
 - `judge` makes no Jev call for an excluded cell and reports verdict `excluded`, `exclusion: {item, reason}`, in `summary.excluded`. It counts as passing. `report` always lists it with the reason; `coverage` and `diff` carry the reason; `anchors.md` lists it under the anchor.
 - No approval or frozen expected verdict is needed, and nobody verifies it: the reason is the record. Use it when the anchor's `scope` is right and this item simply does not touch it. If the scope is wrong for many items, fix the scope instead (`triage-and-iteration.md`).
-- `lint --plan-items <discover output>` (or `--plan-item ID`, repeatable) warns about an exclusion naming an item the plan does not have. It is a warning only: it does not change lint's exit code, and `judge` ignores an exclusion for another item.
+- `lint --plan-items <file>` (the selected tracker's `show --json` output or a JSON list of ids; or `--plan-item ID`, repeatable) warns about an exclusion naming an item the plan does not have. It is a warning only: it does not change `data.clean`, and `judge` ignores an exclusion for another item.
 
 ## IDs
 
 - `ANC-NNN` is max existing plus one, zero-padded to three digits; never reused, even after retirement.
-- REQ and ADR anchors use their register ID, so `bd-42 · REQ-014 · not addressed` points at the register.
+- REQ and ADR anchors use their register ID, so `ex-42 · REQ-014 · not addressed` points at the register.
 - Bead IDs are recorded on the anchor, not the reverse; the record is the single place to look.
 
 ## Lifecycle
