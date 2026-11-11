@@ -1,5 +1,5 @@
 {"sprint":"bu-1"}
-{"sprint":"bu-2","depends_on":["bu-1"]}
-{"sprint":"bu-3","depends_on":["bu-2"]}
-{"sprint":"bu-4","depends_on":["bu-3"]}
-{"sprint":"bu-5","depends_on":["bu-4"]}
+{"sprint":"bu-2"}
+{"sprint":"bu-3"}
+{"sprint":"bu-4"}
+{"sprint":"bu-5","depends_on":["bu-1","bu-2","bu-3","bu-4"]}
