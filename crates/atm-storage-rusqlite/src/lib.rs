@@ -7,6 +7,32 @@
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
 
+fn unsigned_column<T>(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<T>
+where
+    T: TryFrom<i64>,
+    T::Error: std::error::Error + Send + Sync + 'static,
+{
+    let value: i64 = row.get(index)?;
+    T::try_from(value).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            index,
+            rusqlite::types::Type::Integer,
+            Box::new(error),
+        )
+    })
+}
+
+fn sqlite_integer<T>(value: T, column: &str) -> Result<i64, atm_storage::AtmError>
+where
+    i64: TryFrom<T>,
+    <i64 as TryFrom<T>>::Error: std::error::Error + Send + Sync + 'static,
+{
+    i64::try_from(value).map_err(|error| {
+        atm_storage::AtmError::validation(format!("{column} exceeds SQLite integer range"))
+            .with_cause(error)
+    })
+}
+
 mod analyst_query;
 mod cron_schedule_store;
 mod cron_transition_store;

@@ -201,14 +201,14 @@ impl AnalystQueryStore for SqliteAnalystQueryStore {
         max_bytes: usize,
     ) -> Result<Vec<AnalystQueryRow>, AtmError> {
         reject_executable_tail(sql)?;
-        let connection = open_defensive_connection(&self.path)?;
-        install_query_budget(&connection, deadline);
+        let mut connection = open_defensive_connection(&self.path)?;
+        install_query_budget(&mut connection, deadline)?;
         execute_readonly_query(&connection, sql, parameters, max_rows, max_bytes)
     }
 }
 
 fn open_defensive_connection(path: &Path) -> Result<Connection, AtmError> {
-    let connection = Connection::open_with_flags(
+    let mut connection = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
@@ -221,15 +221,22 @@ fn open_defensive_connection(path: &Path) -> Result<Connection, AtmError> {
             AtmError::mailbox_read("analyst query could not configure read-only connection")
                 .with_cause(error)
         })?;
-    connection.authorizer(Some(authorizer));
+    connection.authorizer(Some(authorizer)).map_err(|error| {
+        AtmError::mailbox_read("analyst query could not install authorizer").with_cause(error)
+    })?;
     #[cfg(test)]
     record_opened_connection(&SharedDbTarget::Path(path.to_path_buf()));
     Ok(connection)
 }
 
-fn install_query_budget(connection: &Connection, deadline: Duration) {
+fn install_query_budget(connection: &mut Connection, deadline: Duration) -> Result<(), AtmError> {
     let started = Instant::now();
-    connection.progress_handler(1_000, Some(move || started.elapsed() > deadline));
+    connection
+        .progress_handler(1_000, Some(move || started.elapsed() > deadline))
+        .map_err(|error| {
+            AtmError::mailbox_read("analyst query could not install progress handler")
+                .with_cause(error)
+        })
 }
 
 fn execute_readonly_query(

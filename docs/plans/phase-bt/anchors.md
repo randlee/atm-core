@@ -121,7 +121,7 @@ Fixtures:
 
 Anchor: The sprint's dev must run each child bead with a background subagent.
 
-> I think it should be a strategy as part of planning to encourage agents to delegate work to multiple subagents (and specfically handle merging subagent work into their worktree)  when therre is a larger task.
+> I think it should be a strategy as part of planning to encourage agents to delegate work to multiple subagents (and specifically handle merging subagent work into their worktree)  when therre is a larger task.
 
 Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 
@@ -247,7 +247,7 @@ Fixtures:
 
 Anchor: The dev task must state in a few words that the parent bead closes after its children, with enforcement left to the bd close failure and no hook or script.
 
-> beads does NOT allow closing parent w/ open children.  This does NOT need much explaination, the agent will be told he can not close parent first so few words in task/prompt need to talk about it.  No hook/python for this at all outside of returning close fail message from failed 'bd close'.
+> beads does NOT allow closing parent w/ open children.  This does NOT need much explanation, the agent will be told he can not close parent first so few words in task/prompt need to talk about it.  No hook/python for this at all outside of returning close fail message from failed 'bd close'.
 
 Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-11-07. Status: locked. Version 2.
 

@@ -423,7 +423,11 @@ fn release_previous_assignment(
             params![
                 record.team.as_str(),
                 row.assignee.as_str(),
-                old_order.len() + 1
+                crate::sqlite_integer(old_order.len(), "tasks.position")?
+                    .checked_add(1)
+                    .ok_or_else(|| AtmError::validation(
+                        "tasks.position exceeds SQLite integer range"
+                    ))?
             ],
         )
         .map_err(|error| sqlite_error(target, "failed to release old task position", error))?;
@@ -925,7 +929,7 @@ pub(super) fn append_task_event(
         .query_row(
             "SELECT COALESCE(MAX(seq),0)+1 FROM task_events WHERE team=?1 AND task_id=?2",
             params![team.as_str(), task_id.as_str()],
-            |row| row.get(0),
+            |row| crate::unsigned_column(row, 0),
         )
         .map_err(|error| sqlite_error(target, "failed to allocate task event sequence", error))?;
     connection
@@ -937,7 +941,7 @@ pub(super) fn append_task_event(
                 team.as_str(),
                 task_id.as_str(),
                 assignee.as_str(),
-                seq,
+                crate::sqlite_integer(seq, "task_events.seq")?,
                 at.to_string(),
                 event.as_str(),
                 from_tag.map(task_state_tag_name),
