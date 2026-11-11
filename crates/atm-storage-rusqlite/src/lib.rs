@@ -3695,6 +3695,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn invalid_read_batch_rolls_back_earlier_message_updates_and_watermark() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let original = message("atm:rollback-read", "read state");
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+        let missing = "atm:missing-read".parse().expect("missing key");
+        let error = backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![original.message_key.clone(), missing],
+                Some(IsoTimestamp::now()),
+            )
+            .await
+            .expect_err("missing member invalidates the entire transition");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::MessageValidationFailed
+        );
+        let stored = backend
+            .message_store()
+            .load_message(&original.message_key)
+            .expect("load message")
+            .expect("message remains");
+        assert!(!stored.envelope.read, "earlier read update rolled back");
+        let count: i64 = backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT COUNT(*) FROM mail_seen_watermarks WHERE team = ?1 AND agent = ?2",
+                        params![team().as_str(), agent().as_str()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))
+            })
+            .expect("watermark count");
+        assert_eq!(count, 0, "failed transition did not update watermark");
+    }
+
+    #[tokio::test]
     async fn deleted_message_read_transition_reports_permanent_validation_failure() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let original = message("atm:deleted-read", "read state");

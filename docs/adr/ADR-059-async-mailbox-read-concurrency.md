@@ -73,8 +73,9 @@ a pending acknowledgement reminder. Doctor exposes state and restart counts.
 The concrete AV.1b contract types are `StateHandoffSupervisor` and
 `HandoffConfig`, with the transition represented by
 `WriteOp::ApplyReadDisplayState`. They are documented in
-[`sprint-AV.1b-read-handler-cutover.md`](../sprint-AV.1b-read-handler-cutover.md)
-§D2 and are not a second reader/writer queue.
+[`sprint-AV.1b-read-handler-cutover.md`](../plans/phase-av/sprint-AV.1b-read-handler-cutover.md)
+§D2; its historical restart-budget contract is superseded by this D2/D5 amendment
+(PR #2419). These types do not form a second reader/writer queue.
 
 ### D3. Explicit bridge retirement boundary
 

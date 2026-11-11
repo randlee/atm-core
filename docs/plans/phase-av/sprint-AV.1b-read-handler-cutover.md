@@ -97,6 +97,7 @@ sprint.
          convenience.
       4. *Permitted races:* once buffered, ordering/visibility races
          with concurrent reads are "don't care" per phase plan §1.2.
+      Superseded by the ADR-059 D2/D5 amendment (PR #2419).
       5. *Supervisor lifecycle and fault contract:* the supervisor task
          is owned by the `AsyncMailboxRuntime` composition, which holds
          its monitored `JoinHandle`. **Startup readiness:** handlers do
@@ -119,6 +120,7 @@ sprint.
          (ready/unavailable/restarting), restart count, retry-deadline
          exhaustions, buffered depth.
 
+      Restart-exhaustion expectations below are superseded by the ADR-059 D2/D5 amendment (PR #2419).
       Tests: writer ingress saturated (read returns within budget,
       supervisor applies the transition once capacity frees); writer
       lane unavailable then recovers (transition applied after recovery,
@@ -220,6 +222,7 @@ impl StateHandoffSupervisor {
     pub fn try_push(&self, op: WriteOp) -> Result<(), HandoffRejected>; // BufferFull | Unavailable
     pub fn state(&self) -> SupervisorState;                              // Ready | Unavailable | Restarting
 }
+// This historical restart-budget field is superseded by the ADR-059 D2/D5 amendment (PR #2419).
 pub struct HandoffConfig { handoff_buffer: usize, handoff_retry_deadline: Duration, supervisor_max_restarts: u32 }
 ```
 

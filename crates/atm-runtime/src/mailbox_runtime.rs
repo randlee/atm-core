@@ -1180,7 +1180,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn cron_origin_survives_read_handoff_until_writer_admission() {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let writer = Arc::new(OriginCaptureWriter {
@@ -1203,42 +1203,46 @@ mod tests {
             .expect("read transition enters the handoff queue");
 
         assert_eq!(
-            receiver.await.expect("writer receives queued transition"),
+            tokio::time::timeout(Duration::from_secs(30), receiver)
+                .await
+                .expect("writer admission deadline")
+                .expect("writer receives queued transition"),
             origin
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn handoff_returns_without_waiting_for_writer_execution() {
-        let writer = Arc::new(RecordingWriter::default());
+        let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
         let supervisor = StateHandoffSupervisor::start(
-            HandoffConfig {
-                handoff_buffer: 2,
-                handoff_retry_deadline: Duration::from_secs(1),
-            },
-            writer.clone(),
+            HandoffConfig::default(),
+            Arc::new(ControlledWriter {
+                attempts: tx,
+                applied: Default::default(),
+            }),
         )
         .expect("supervisor starts");
-
         supervisor
             .try_push(scope(), vec!["unread".parse().expect("key")], None)
             .expect("synchronous handoff admission");
         assert!(
-            writer.applied().is_empty(),
+            attempts.try_recv().is_err(),
             "try_push never awaits writer work"
         );
-
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if writer.applied().len() == 1 {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("supervisor applies transition asynchronously");
-        assert_eq!(supervisor.buffered_depth(), 0);
+        let (keys, reply) = next_attempt(&mut attempts).await;
+        assert_eq!(keys[0].as_str(), "unread");
+        assert_eq!(supervisor.buffered_depth(), 1, "writer has not replied");
+        reply.send(Ok(())).expect("writer waiting");
+        supervisor
+            .try_push(scope(), vec!["barrier".parse().expect("key")], None)
+            .expect("barrier queued");
+        let (_, barrier) = next_attempt(&mut attempts).await;
+        assert_eq!(
+            supervisor.buffered_depth(),
+            1,
+            "first transition was removed"
+        );
+        barrier.send(Ok(())).expect("writer waiting");
     }
 
     #[tokio::test]
@@ -1267,47 +1271,57 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn handoff_retries_a_transient_writer_failure_without_losing_the_transition() {
-        let writer = Arc::new(RecordingWriter::with_failures(1));
+        let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
         let supervisor = StateHandoffSupervisor::start(
-            HandoffConfig {
-                handoff_buffer: 1,
-                handoff_retry_deadline: Duration::from_secs(1),
-            },
-            writer.clone(),
+            HandoffConfig::default(),
+            Arc::new(ControlledWriter {
+                attempts: tx,
+                applied: Default::default(),
+            }),
         )
         .expect("supervisor starts");
-
         supervisor
             .try_push(scope(), vec!["retry".parse().expect("key")], None)
-            .expect("transition enters buffer");
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if writer.applied().len() == 1 {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("transition survives transient writer failure");
-        assert_eq!(writer.attempts(), 2);
-        assert_eq!(supervisor.buffered_depth(), 0);
+            .expect("queued");
+        let (first_keys, first) = next_attempt(&mut attempts).await;
+        first
+            .send(Err(AtmError::daemon_unavailable(
+                "controlled transient failure",
+            )))
+            .expect("writer waiting");
+        let (retry_keys, retry) = next_attempt(&mut attempts).await;
+        assert_eq!(first_keys, retry_keys);
+        assert_eq!(supervisor.buffered_depth(), 1);
+        retry.send(Ok(())).expect("writer waiting");
+        supervisor
+            .try_push(scope(), vec!["barrier".parse().expect("key")], None)
+            .expect("barrier queued");
+        let (_, barrier) = next_attempt(&mut attempts).await;
+        assert_eq!(
+            supervisor.buffered_depth(),
+            1,
+            "the retried transition was removed"
+        );
+        barrier.send(Ok(())).expect("writer waiting");
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn runtime_read_returns_before_its_writer_state_followup_commits() {
-        let writer = Arc::new(RecordingWriter::default());
+        let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
+        let writer = Arc::new(ControlledWriter {
+            attempts: tx,
+            applied: Default::default(),
+        });
         let runtime = StorageAsyncMailboxRuntime::new(
             Arc::new(InMemoryMailboxReader::with_messages(vec![message(
                 "unread", false,
             )])),
-            writer.clone(),
+            writer,
         )
         .with_state_handoff(HandoffConfig::default())
         .expect("runtime handoff starts");
-
         let response = runtime
             .read_mail(
                 scope(),
@@ -1318,17 +1332,9 @@ mod tests {
             .await
             .expect("read selection returns without writer completion");
         assert_eq!(response.selected.len(), 1);
-
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if writer.applied().len() == 1 {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("writer followup eventually commits");
+        let (keys, reply) = next_attempt(&mut attempts).await;
+        assert_eq!(keys[0].as_str(), "unread");
+        reply.send(Ok(())).expect("writer waiting");
     }
 
     #[tokio::test]
@@ -1452,9 +1458,13 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn command_read_displays_and_handoffs_only_the_newest_message() {
-        let writer = Arc::new(RecordingWriter::default());
+        let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
+        let writer = Arc::new(ControlledWriter {
+            attempts: tx,
+            applied: Default::default(),
+        });
         let runtime = StorageAsyncMailboxRuntime::new(
             Arc::new(InMemoryMailboxReader::with_messages(vec![
                 message("first", false),
@@ -1493,21 +1503,9 @@ mod tests {
         assert_eq!(outcome.count, 1);
         assert_eq!(outcome.match_count, 2, "response preserves all-match count");
 
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                let applied = writer.applied();
-                if !applied.is_empty() {
-                    return applied;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("handoff applies")
-        .iter()
-        .for_each(|transition| {
-            assert_eq!(transition.len(), 1, "only the displayed message is mutated");
-        });
+        let (selected, reply) = next_attempt(&mut attempts).await;
+        assert_eq!(selected.len(), 1, "only the displayed message is mutated");
+        reply.send(Ok(())).expect("writer waiting");
     }
 
     type ControlledAttempt = (
