@@ -34,7 +34,7 @@ pub(super) fn execute_read_display_state(
             )
             .map_err(|error| sqlite_error(target, "failed to mark mailbox message read", error))?;
         if updated != 1 {
-            return Err(AtmError::mailbox_read(format!(
+            return Err(AtmError::validation(format!(
                 "message {} was not found for {}@{} while applying read display state",
                 message_key.as_str(),
                 mailbox.agent.as_str(),

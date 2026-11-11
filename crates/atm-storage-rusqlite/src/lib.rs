@@ -3695,6 +3695,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn deleted_message_read_transition_reports_permanent_validation_failure() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let original = message("atm:deleted-read", "read state");
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+        backend
+            .message_store()
+            .delete_message(&original.message_key)
+            .expect("delete message");
+        let error = backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![original.message_key],
+                None,
+            )
+            .await
+            .expect_err("deleted message is a permanent transition failure");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::MessageValidationFailed
+        );
+    }
+
+    #[tokio::test]
     async fn timed_out_read_retry_rearms_once_and_later_read_still_applies() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.async_message_store();
