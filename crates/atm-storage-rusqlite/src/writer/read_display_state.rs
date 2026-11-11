@@ -47,7 +47,7 @@ pub(super) fn execute_read_display_state(
             .execute(
                 "INSERT INTO mail_seen_watermarks(team, agent, watermark)
                  VALUES (?1, ?2, ?3)
-                 ON CONFLICT(team, agent) DO UPDATE SET watermark = excluded.watermark",
+                 ON CONFLICT(team, agent) DO UPDATE SET watermark = MAX(mail_seen_watermarks.watermark, excluded.watermark)",
                 params![
                     mailbox.team.as_str(),
                     mailbox.agent.as_str(),

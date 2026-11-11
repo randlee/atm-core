@@ -3695,6 +3695,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn timed_out_read_retry_rearms_once_and_later_read_still_applies() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.async_message_store();
+        let original = message("atm:read-retry", "read state");
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+        backend.shared_db_for_test().with_connection(|connection| {
+            connection.execute_batch("CREATE TABLE test_read_rearms (nudge TEXT); CREATE TRIGGER test_read_rearm AFTER UPDATE OF read ON mail_message_states BEGIN INSERT INTO test_read_rearms(nudge) VALUES (NEW.nudge_pending_at); END;").map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            connection.execute("UPDATE mail_message_states SET pending_ack_at = '2000-01-01T00:00:00+00:00', nudge_pending_at = '2000-01-01T00:00:00+00:00' WHERE message_key = ?1", params![original.message_key.as_str()]).map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            Ok(())
+        }).expect("seed pending acknowledgement and observe rearms");
+        let scope = MailboxScope::new(team(), agent());
+        let newer: IsoTimestamp = "2026-01-02T00:00:00Z".parse().expect("timestamp");
+        let older: IsoTimestamp = "2026-01-01T00:00:00Z".parse().expect("timestamp");
+        for watermark in [newer, newer, older] {
+            store
+                .apply_read_display_state_async(
+                    scope.clone(),
+                    vec![original.message_key.clone()],
+                    Some(watermark),
+                )
+                .await
+                .expect("read state applied");
+        }
+        let (events, cleared, read, pending, watermark): (i64, i64, i64, Option<String>, String) = backend.shared_db_for_test().with_connection(|connection| {
+            let (events, cleared) = connection.query_row("SELECT COUNT(*), COUNT(*) - COUNT(nudge) FROM test_read_rearms", [], |row| Ok((row.get(0)?, row.get(1)?))).map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            let (read, pending) = connection.query_row("SELECT read, pending_ack_at FROM mail_message_states WHERE message_key = ?1", params![original.message_key.as_str()], |row| Ok((row.get(0)?, row.get(1)?))).map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            let watermark = connection.query_row("SELECT watermark FROM mail_seen_watermarks WHERE team = ?1 AND agent = ?2", params![team().as_str(), agent().as_str()], |row| row.get(0)).map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            Ok((events, cleared, read, pending, watermark))
+        }).expect("read effects");
+        assert_eq!(
+            events, 3,
+            "initial read, one retry, and one later distinct read each rearm once"
+        );
+        assert_eq!(cleared, 0, "pending acknowledgement remains armed");
+        assert_eq!(read, 1);
+        assert!(pending.is_some());
+        assert_eq!(
+            watermark,
+            newer.into_inner().to_rfc3339(),
+            "older later reads do not regress the watermark"
+        );
+    }
+
+    #[tokio::test]
     async fn dedicated_mailbox_reader_enforces_scope_and_reads_without_writer_submission() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let first = message("atm:reader-first", "first");

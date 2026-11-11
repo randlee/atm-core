@@ -31,6 +31,9 @@ pub(crate) fn writer_loop(
                     &mut shutting_down,
                     batch_time_budget,
                 ));
+                for item in &batch {
+                    item.timing.start();
+                }
                 serial_queue.with_connection(|connection| {
                     process_batch(&target, connection, &mut cache, batch);
                 });
@@ -74,8 +77,8 @@ pub(crate) async fn receive_next_work(
 ) -> Option<WriterWork> {
     if shutting_down {
         match receiver.try_recv() {
-            Ok(WriterMessage::Submit { op, reply }) => {
-                Some(WriterWork::Primary(QueuedWrite { op, reply }))
+            Ok(WriterMessage::Submit { op, reply, timing }) => {
+                Some(WriterWork::Primary(QueuedWrite { op, reply, timing }))
             }
             Ok(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
@@ -88,8 +91,8 @@ pub(crate) async fn receive_next_work(
         }
     } else {
         match receiver.try_recv() {
-            Ok(WriterMessage::Submit { op, reply }) => {
-                Some(WriterWork::Primary(QueuedWrite { op, reply }))
+            Ok(WriterMessage::Submit { op, reply, timing }) => {
+                Some(WriterWork::Primary(QueuedWrite { op, reply, timing }))
             }
             Ok(WriterMessage::Shutdown) => {
                 drain_submit_replies(receiver);
@@ -100,7 +103,7 @@ pub(crate) async fn receive_next_work(
                 tokio::select! {
                     biased;
                     message = receiver.recv() => match message {
-                        Some(WriterMessage::Submit { op, reply }) => Some(WriterWork::Primary(QueuedWrite { op, reply })),
+                        Some(WriterMessage::Submit { op, reply, timing }) => Some(WriterWork::Primary(QueuedWrite { op, reply, timing })),
                         Some(WriterMessage::Shutdown) => {
                             drain_submit_replies(receiver);
                             None
@@ -215,8 +218,8 @@ pub(crate) async fn collect_batch(
     // window is not expanded by host scheduler granularity.
     loop {
         match receiver.try_recv() {
-            Ok(WriterMessage::Submit { op, reply }) => {
-                batch.push(QueuedWrite { op, reply });
+            Ok(WriterMessage::Submit { op, reply, timing }) => {
+                batch.push(QueuedWrite { op, reply, timing });
                 continue;
             }
             Ok(WriterMessage::Shutdown) => {

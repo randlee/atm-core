@@ -411,6 +411,7 @@ dependencies = [
  "async-trait",
  "atm-runtime-test-support",
  "atm-storage",
+ "sc-lint-attributes 0.8.4",
  "serde_json",
  "tokio",
  "tracing",

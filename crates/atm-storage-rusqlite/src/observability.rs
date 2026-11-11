@@ -21,6 +21,9 @@ pub struct SqliteObservabilityEvent {
     pub outcome: SqliteObservabilityOutcome,
     pub message: String,
     pub error_code: Option<AtmErrorCode>,
+    pub queue_wait_ms: Option<u64>,
+    pub run_time_ms: Option<u64>,
+    pub queue_depth: Option<u64>,
 }
 
 impl SqliteObservabilityEvent {
@@ -35,6 +38,9 @@ impl SqliteObservabilityEvent {
             outcome,
             message: message.into(),
             error_code,
+            queue_wait_ms: None,
+            run_time_ms: None,
+            queue_depth: None,
         }
     }
 }

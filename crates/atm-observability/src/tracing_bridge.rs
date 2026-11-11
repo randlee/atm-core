@@ -553,6 +553,28 @@ mod tests {
     }
 
     #[test]
+    fn handoff_and_writer_diagnostics_keep_safe_structured_context() {
+        let (tempdir, bridge) = bridge();
+        with_bridge(&bridge, || {
+            tracing::error!(target: "atm_runtime::mailbox_runtime", code = "ATM_MAILBOX_HANDOFF_FAILED", failure_class = "ATM_DAEMON_UNAVAILABLE", "secret-free message");
+            tracing::warn!(target: "atm_daemon_bootstrap::sqlite_observability", code = "ATM_SQLITE_WRITER_TIMEOUT", action = "writer_reply", queue_wait_ms = 12_u64, run_time_ms = 34_u64, queue_depth = 5_u64, "secret-free message");
+        });
+        let content = lines(&tempdir, &bridge, 2);
+        let events: Vec<Value> = content
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("JSON event"))
+            .collect();
+        assert_eq!(
+            events[0]["fields"]["failure_class"],
+            "ATM_DAEMON_UNAVAILABLE"
+        );
+        assert_eq!(events[1]["fields"]["queue_wait_ms"], 12);
+        assert_eq!(events[1]["fields"]["run_time_ms"], 34);
+        assert_eq!(events[1]["fields"]["queue_depth"], 5);
+        assert!(!content.contains("secret-free message"));
+    }
+
+    #[test]
     fn diagnostic_sink_receives_runtime_error_codes() {
         let (_tempdir, bridge) = bridge();
         let sink = Arc::new(RecordingDiagnosticSink::default());

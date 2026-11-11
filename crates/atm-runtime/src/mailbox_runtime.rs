@@ -30,6 +30,7 @@ use atm_storage::{
 pub struct HandoffConfig {
     pub handoff_buffer: usize,
     pub handoff_retry_deadline: Duration,
+    /// Kept for API compatibility; supervisor recovery is no longer capped.
     pub supervisor_max_restarts: u32,
 }
 
@@ -37,7 +38,7 @@ impl Default for HandoffConfig {
     fn default() -> Self {
         Self {
             handoff_buffer: 64,
-            handoff_retry_deadline: Duration::from_secs(5),
+            handoff_retry_deadline: atm_storage::SQLITE_WRITER_REPLY_TIMEOUT.saturating_mul(2),
             supervisor_max_restarts: 3,
         }
     }
@@ -101,16 +102,17 @@ struct StateHandoffInner {
 /// Owns the manager handle outside the state shared with the task itself.
 ///
 /// Keeping this handle in `StateHandoffInner` would form an `Arc` cycle:
-/// manager task -> inner -> its own JoinHandle.  This separate owner aborts
-/// the task when the final runtime clone goes away and therefore releases the
+/// manager task -> inner -> its own JoinHandle. This separate owner signals
+/// the task to stop when the final runtime clone goes away, releasing the
 /// reader/writer boundary promptly in test and production shutdown paths.
 struct ManagerTask {
     handle: tokio::task::JoinHandle<()>,
+    shutdown: tokio::sync::watch::Sender<bool>,
 }
 
 impl Drop for ManagerTask {
     fn drop(&mut self) {
-        self.handle.abort();
+        let _ = self.shutdown.send(true);
     }
 }
 
@@ -129,6 +131,12 @@ impl StateHandoffSupervisor {
                 "state-handoff supervisor must start inside the Tokio runtime",
             )
         })?;
+        let config = HandoffConfig {
+            handoff_retry_deadline: config.handoff_retry_deadline.max(
+                atm_storage::SQLITE_WRITER_REPLY_TIMEOUT.saturating_add(Duration::from_secs(1)),
+            ),
+            ..config
+        };
         let inner = Arc::new(StateHandoffInner {
             config,
             writer,
@@ -142,8 +150,12 @@ impl StateHandoffSupervisor {
             active_worker: Mutex::new(None),
         });
         let manager_inner = Arc::clone(&inner);
+        let (shutdown, shutdown_rx) = tokio::sync::watch::channel(false);
         let manager = Arc::new(ManagerTask {
-            handle: tokio::spawn(async move { supervise_handoff_worker(manager_inner).await }),
+            handle: tokio::spawn(async move {
+                supervise_handoff_worker(manager_inner, shutdown_rx).await
+            }),
+            shutdown,
         });
         Ok(Self { inner, manager })
     }
@@ -272,54 +284,71 @@ impl StateHandoffSupervisor {
     }
 }
 
-async fn supervise_handoff_worker(inner: Arc<StateHandoffInner>) {
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "restart backoff delay between supervisor attempts; cancelled by daemon shutdown")]
+async fn supervise_handoff_worker(
+    inner: Arc<StateHandoffInner>,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
+) {
+    // Dropping the manager must also abort its spawned worker; dropping a
+    // JoinHandle alone would detach it and retain the storage boundary.
+    struct AbortWorker(tokio::task::AbortHandle);
+    impl Drop for AbortWorker {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
+    let mut backoff = Duration::from_millis(50);
     loop {
         let worker_inner = Arc::clone(&inner);
         let worker = tokio::spawn(async move { run_handoff_worker(worker_inner).await });
+        let guard = AbortWorker(worker.abort_handle());
         *inner
             .active_worker
             .lock()
             .expect("state-handoff worker mutex poisoned") = Some(worker.abort_handle());
-        match worker.await {
-            Ok(Ok(())) => {
-                inner
-                    .state
-                    .store(STATE_UNAVAILABLE, std::sync::atomic::Ordering::Release);
-                return;
-            }
-            Ok(Err(error)) => {
-                inner
-                    .state
-                    .store(STATE_UNAVAILABLE, std::sync::atomic::Ordering::Release);
-                tracing::error!(%error, "mailbox read-state handoff retry deadline exhausted");
-                return;
-            }
-            Err(error) => {
-                let restart = inner
-                    .restart_count
-                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
-                    + 1;
-                if restart > inner.config.supervisor_max_restarts {
-                    inner
-                        .state
-                        .store(STATE_UNAVAILABLE, std::sync::atomic::Ordering::Release);
-                    tracing::error!(%error, restart, "mailbox read-state handoff restart budget exhausted");
-                    return;
-                }
-                inner
-                    .state
-                    .store(STATE_RESTARTING, std::sync::atomic::Ordering::Release);
-                tracing::warn!(%error, restart, "restarting mailbox read-state handoff worker");
-                tokio::task::yield_now().await;
-                inner
-                    .state
-                    .store(STATE_READY, std::sync::atomic::Ordering::Release);
-            }
-        }
+        let result = tokio::select! {
+            result = worker => result,
+            _ = shutdown.changed() => return,
+        };
         *inner
             .active_worker
             .lock()
             .expect("state-handoff worker mutex poisoned") = None;
+        drop(guard);
+        let cause = match result {
+            Ok(Err(error)) => {
+                tracing::error!(
+                    code = "ATM_MAILBOX_HANDOFF_FAILED",
+                    failure_class = error.code().as_str(),
+                    "read-state worker failed"
+                );
+                "writer_error"
+            }
+            Ok(Ok(())) => "worker_exited",
+            Err(error) if error.is_panic() => "worker_panic",
+            Err(_) => "worker_cancelled",
+        };
+        let restart = inner
+            .restart_count
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
+            .saturating_add(1);
+        inner
+            .state
+            .store(STATE_RESTARTING, std::sync::atomic::Ordering::Release);
+        tracing::warn!(
+            code = "ATM_MAILBOX_HANDOFF_RESTART",
+            failure_class = cause,
+            attempt = restart,
+            "restarting read-state worker"
+        );
+        tokio::select! {
+            _ = tokio::time::sleep(backoff) => {},
+            _ = shutdown.changed() => return,
+        }
+        backoff = backoff.saturating_mul(2).min(Duration::from_secs(5));
+        inner
+            .state
+            .store(STATE_READY, std::sync::atomic::Ordering::Release);
     }
 }
 
@@ -365,7 +394,11 @@ async fn run_handoff_worker(inner: Arc<StateHandoffInner>) -> Result<(), AtmErro
                     return Err(error);
                 }
                 Err(error) => {
-                    tracing::warn!(%error, "retrying mailbox read-state handoff");
+                    tracing::warn!(
+                        code = "ATM_MAILBOX_HANDOFF_RETRY",
+                        failure_class = error.code().as_str(),
+                        "retrying mailbox read-state handoff"
+                    );
                     tokio::time::sleep(Duration::from_millis(10)).await;
                 }
             }
@@ -374,7 +407,6 @@ async fn run_handoff_worker(inner: Arc<StateHandoffInner>) -> Result<(), AtmErro
 }
 
 const STATE_READY: u8 = 0;
-const STATE_UNAVAILABLE: u8 = 1;
 const STATE_RESTARTING: u8 = 2;
 
 #[async_trait::async_trait]
@@ -1411,142 +1443,151 @@ mod tests {
         });
     }
 
-    #[tokio::test]
-    async fn handoff_fails_closed_after_a_permanent_writer_failure_without_discarding_queue() {
-        let supervisor = StateHandoffSupervisor::start(
-            HandoffConfig {
-                handoff_buffer: 2,
-                handoff_retry_deadline: Duration::from_millis(30),
-                supervisor_max_restarts: 1,
-            },
-            Arc::new(RecordingWriter::with_failures(usize::MAX)),
-        )
-        .expect("supervisor starts");
-        supervisor
-            .try_push(scope(), vec!["unread".parse().expect("key")], None)
-            .expect("first transition accepted");
-
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if matches!(supervisor.state(), super::SupervisorState::Unavailable) {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("permanent writer failure becomes an explicit runtime fault");
-        assert_eq!(
-            supervisor.buffered_depth(),
-            1,
-            "transition was not silently discarded"
-        );
-        assert_eq!(
-            supervisor.try_push(scope(), vec!["later".parse().expect("key")], None),
-            Err(HandoffRejected::Unavailable),
-            "runtime fails closed after permanent writer failure"
-        );
-        let diagnostics = supervisor.diagnostics();
-        assert_eq!(diagnostics.retry_deadline_exhaustions, 1);
-        assert_eq!(diagnostics.rejected_unavailable, 1);
+    struct ControlledWriter {
+        attempts:
+            tokio::sync::mpsc::UnboundedSender<tokio::sync::oneshot::Sender<Result<(), AtmError>>>,
     }
 
-    #[tokio::test]
+    impl atm_storage::contract::sealed::Sealed for ControlledWriter {}
+
+    impl atm_storage::MessageStore for ControlledWriter {
+        fn save_message(&self, _: &Message) -> Result<(), AtmError> {
+            unreachable!()
+        }
+        fn admit_message_with_provenance(
+            &self,
+            _: &Message,
+            _: MessageWriteOrigin,
+        ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+        {
+            unreachable!()
+        }
+        fn save_messages_atomically(&self, _: &[Message]) -> Result<(), AtmError> {
+            unreachable!()
+        }
+        fn load_message(&self, _: &MessageKey) -> Result<Option<Message>, AtmError> {
+            unreachable!()
+        }
+        fn list_messages(&self, _: &atm_storage::MessageQuery) -> Result<Vec<Message>, AtmError> {
+            unreachable!()
+        }
+        fn delete_message(&self, _: &MessageKey) -> Result<(), AtmError> {
+            unreachable!()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AsyncMessageStore for ControlledWriter {
+        async fn apply_read_display_state_async(
+            &self,
+            _: atm_storage::MailboxScope,
+            _: Vec<MessageKey>,
+            _: Option<IsoTimestamp>,
+        ) -> Result<(), AtmError> {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            self.attempts.send(tx).expect("test receives attempt");
+            rx.await.expect("test releases writer")
+        }
+        async fn admit_message_with_provenance_async(
+            &self,
+            _: Message,
+            _: MessageWriteOrigin,
+        ) -> Result<atm_storage::CommittedTaskWrite<atm_storage::MessageAdmissionOutcome>, AtmError>
+        {
+            unreachable!()
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn handoff_recovers_after_writer_failure_without_discarding_queue() {
+        let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
+        let config = HandoffConfig::default();
+        assert!(config.handoff_retry_deadline > atm_storage::SQLITE_WRITER_REPLY_TIMEOUT);
+        let supervisor =
+            StateHandoffSupervisor::start(config, Arc::new(ControlledWriter { attempts: tx }))
+                .expect("supervisor starts");
+        supervisor
+            .try_push(scope(), vec!["unread".parse().expect("key")], None)
+            .expect("queued");
+        let first = attempts.recv().await.expect("first attempt");
+        tokio::time::advance(config.handoff_retry_deadline).await;
+        first
+            .send(Err(AtmError::daemon_unavailable("controlled failure")))
+            .expect("worker waiting");
+        let second = attempts.recv().await.expect("restarted attempt");
+        assert_eq!(supervisor.restart_count(), 1);
+        assert_eq!(supervisor.buffered_depth(), 1);
+        second.send(Ok(())).expect("worker waiting");
+        // A subsequent queued request is an acknowledgement that the first
+        // completed and was removed; no scheduling assumptions are needed.
+        supervisor
+            .try_push(scope(), vec!["next".parse().expect("key")], None)
+            .expect("queued next");
+        let third = attempts.recv().await.expect("next attempt");
+        assert_eq!(supervisor.buffered_depth(), 1);
+        third.send(Ok(())).expect("worker waiting");
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn handoff_restarts_after_a_forced_worker_exit_and_drains_the_retained_transition() {
-        let writer = Arc::new(RecordingWriter::with_failures(usize::MAX));
+        let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
         let supervisor = StateHandoffSupervisor::start(
-            HandoffConfig {
-                handoff_buffer: 2,
-                handoff_retry_deadline: Duration::from_secs(1),
-                supervisor_max_restarts: 1,
-            },
-            writer.clone(),
+            HandoffConfig::default(),
+            Arc::new(ControlledWriter { attempts: tx }),
         )
         .expect("supervisor starts");
         supervisor
             .try_push(scope(), vec!["retry".parse().expect("key")], None)
-            .expect("transition is retained before worker fault");
-
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if writer.attempts() > 0 {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("worker begins retrying the retained transition");
-        assert!(
-            supervisor.abort_active_worker_for_test(),
-            "test forces the active worker to exit without touching the retained queue"
-        );
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if supervisor.restart_count() == 1 {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("supervisor restarts a cancelled worker within its restart budget");
-        writer.set_failures(0);
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if writer.applied().len() == 1 {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("restarted worker drains the preserved transition");
-        assert_eq!(supervisor.buffered_depth(), 0);
+            .expect("queued");
+        let _blocked_reply = attempts.recv().await.expect("worker is blocked");
+        assert!(supervisor.abort_active_worker_for_test());
+        let retry = attempts
+            .recv()
+            .await
+            .expect("restarted worker receives transition");
+        assert_eq!(supervisor.restart_count(), 1);
+        assert_eq!(supervisor.buffered_depth(), 1);
+        retry.send(Ok(())).expect("worker waiting");
+        supervisor
+            .try_push(scope(), vec!["next".parse().expect("key")], None)
+            .expect("queued next");
+        let _next = attempts.recv().await.expect("first transition was removed");
+        assert_eq!(supervisor.buffered_depth(), 1);
     }
 
-    #[tokio::test]
-    async fn handoff_fails_closed_when_forced_worker_exit_exhausts_restart_budget() {
-        let writer = Arc::new(RecordingWriter::with_failures(usize::MAX));
+    #[tokio::test(start_paused = true)]
+    async fn handoff_recovers_after_worker_panic() {
+        let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
         let supervisor = StateHandoffSupervisor::start(
-            HandoffConfig {
-                handoff_buffer: 2,
-                handoff_retry_deadline: Duration::from_secs(1),
-                supervisor_max_restarts: 0,
-            },
-            writer.clone(),
+            HandoffConfig::default(),
+            Arc::new(ControlledWriter { attempts: tx }),
         )
         .expect("supervisor starts");
         supervisor
-            .try_push(scope(), vec!["retained".parse().expect("key")], None)
-            .expect("transition is retained before worker fault");
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if writer.attempts() > 0 {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("worker begins retrying");
-        assert!(supervisor.abort_active_worker_for_test());
-        tokio::time::timeout(Duration::from_secs(1), async {
-            loop {
-                if matches!(supervisor.state(), super::SupervisorState::Unavailable) {
-                    return;
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("restart-budget exhaustion becomes a runtime fault");
-        assert_eq!(supervisor.buffered_depth(), 1, "fault never discards state");
-        assert_eq!(
-            supervisor.try_push(scope(), vec!["later".parse().expect("key")], None),
-            Err(HandoffRejected::Unavailable),
-            "future handoffs fail closed after restart-budget exhaustion"
-        );
+            .try_push(scope(), vec!["retry".parse().expect("key")], None)
+            .expect("queued");
+        let first = attempts.recv().await.expect("first attempt");
+        drop(first); // The test writer panics when its release channel closes.
+        let retry = attempts.recv().await.expect("worker restarted");
+        assert_eq!(supervisor.restart_count(), 1);
+        assert_eq!(supervisor.buffered_depth(), 1);
+        retry.send(Ok(())).expect("worker waiting");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn dropping_supervisor_aborts_a_blocked_worker() {
+        let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
+        let supervisor = StateHandoffSupervisor::start(
+            HandoffConfig::default(),
+            Arc::new(ControlledWriter { attempts: tx }),
+        )
+        .expect("supervisor starts");
+        supervisor
+            .try_push(scope(), vec!["blocked".parse().expect("key")], None)
+            .expect("queued");
+        let mut reply = attempts.recv().await.expect("worker blocked");
+        drop(supervisor);
+        reply.closed().await;
     }
 
     #[test]

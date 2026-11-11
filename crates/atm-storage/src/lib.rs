@@ -144,3 +144,6 @@ pub use types::{
 };
 pub use validation::RETIRED_TEMPLATE_KINDS;
 pub use validation::{validate_agent_at_team, validate_path_segment};
+
+/// Maximum time the SQLite writer waits for a submitted operation reply.
+pub const SQLITE_WRITER_REPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
