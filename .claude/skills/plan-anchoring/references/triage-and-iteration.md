@@ -1,6 +1,6 @@
 ---
 name: triage-and-iteration
-version: 0.6.1
+version: 0.10.1
 description: The loop at both gates - run, triage every failing verdict into plan defect, anchor defect, question defect or Jev error, apply the fix in the right place, re-run only what changed, diff, and stop conditions.
 ---
 
@@ -30,7 +30,7 @@ For each `contradicted`, `not_addressed`, `asserted_only`, `underspecified` or `
 | **Anchor does not apply to this item** | The anchor's `scope` is right, and this item simply does not touch it (e.g. a data-only sprint against an anchor on CLI options that belong to the next sprint); the cell is `underspecified` or `not_addressed` only because Jev wavers on relevance | The anchor's `exclude` list; no approval or frozen expectation needed | `exclude --id <ANC> --item <item id> --reason "<one sentence>"`, `render`, re-judge that item only. No version bump; other cells' runs stay valid |
 | **Question defect** | Frozen, user-approved fixtures or known examples land wrong; a live gate failure alone is insufficient | The question bead | Override the question (`question-tuning.md`), `check-fixtures`, re-run against the frozen set |
 | **Oversized bead** (`PLAN.TOO_LARGE`) | The bead does not fit one Jev request after code reduction | The plan, in this order: unapproved work, then prose and ceremony, then split | `shape`, scope-anchor verdicts, the reviewing-ceremony skill when installed; see `plan-size-and-shape.md`. Never split to pass |
-| **Jev error** | `verdict: error`; `results[].error.code` | Environment | `JEV.CONTEXT_EXCEEDED`: shorten the evidence; transport codes: re-run later (the script already retried three times); `AUTH`/`POLICY`: fix credentials or opt-in |
+| **Jev error** | `verdict: error`; `results[].error.code` | Environment | `JEV.CONTEXT_EXCEEDED`: shorten the evidence; transport codes: re-run later (the script already retried three times); `AUTH`: fix credentials; `POLICY`: ask the user once if `allow_remote_judge` is absent, never infer it |
 
 Rules of triage:
 
@@ -49,7 +49,7 @@ Rules of triage:
 One class of change per iteration, so the diff is attributable:
 
 - Plan edits: change the bead text, then re-judge that bead.
-- Exclusions: `exclude`, `render`, then re-judge only the excluded item.
+- Exclusions: `exclude` (`exclude --from <file.jsonl>` for a triage batch), `render`, then re-judge only the excluded item.
 - Anchor edits: change the statement or scope, `validate`, `render`, re-run `check-fixtures`, then re-judge every bead that was not `not_applicable` for that anchor.
 - Question edits: the independent Opus/Sol tuner returns an oracle-backed override; the planner never edits it. Record the oracle digest, run `check-fixtures`, then re-judge affected beads as a regression check rather than a tuning target.
 
@@ -66,7 +66,7 @@ python3 "$S" coverage --runs anchor-runs --gate plan --format md
 
 ## 5. Stop conditions
 
-- **Pass.** Every bead's latest run exits 0 and `coverage` lists no uncovered locked anchor (planning gate); the sprint's latest run exits 0 and every deterministic check is recorded (development gate).
+- **Pass.** Every bead's latest run has `summary.pass: true` and `coverage` lists no uncovered locked anchor (planning gate); the sprint's latest run has `summary.pass: true` and every deterministic check is recorded (development gate).
 - **Hard stop: three identical failures.** Three consecutive runs of one bead with the same failing set. Stop editing; post the report and ask the user.
 - **Hard stop: anchor churn.** A statement updated three times. Retire the anchor and lock a new one with the user.
 

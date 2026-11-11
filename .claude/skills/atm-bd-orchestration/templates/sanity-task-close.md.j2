@@ -5,9 +5,14 @@ format: markdown
 required_variables:
   - task_id
 defaults:
+  assignment_id: ""
   checked_bead: ""
   verdict: ""
   commit: ""
+  base: ""
+  base_verified: null
+  base_source: ""
+  nr: false
   run_id: ""
   findings: []
   findings_md: ""
@@ -18,7 +23,12 @@ metadata:
 ---
 # Sanity {{ verdict }}
 Task: {{ task_id }}
+Assignment: {{ assignment_id }}
 Checked bead: {{ checked_bead }} at {{ commit }}
+Base: {{ base }}
+Base verified against ledger: {% if base_verified %}yes{% else %}no{% endif %}
+{% if nr %}Base source: {{ base_source }} (not reproducible; no new stack head)
+{% endif %}
 Run: {{ run_id }}
 
 {{ findings_md }}

@@ -12,7 +12,7 @@ import sys
 from sc_lint.lint_common import discover_repo_root
 
 
-# sc-compose 1.7.0 reports these Jinja keywords as undeclared tokens
+# sc-compose 1.8.0 reports these Jinja keywords as undeclared tokens
 # (randlee/sc-compose#784). Drop this set when that issue is fixed.
 SC_COMPOSE_784_TOKENS = frozenset({"autoescape", "endautoescape", "is", "defined"})
 UNDECLARED = re.compile(r"ERR_VAL_UNDECLARED_TOKEN: undeclared referenced token: (\S+)")

@@ -104,6 +104,7 @@ message state (read/ack/seen) is race-tolerant — a read racing a state
 change may return either value. No requirement may demand read-your-writes,
 snapshot pinning, or reader/writer fencing on mailbox reads.
 
+Superseded by the ADR-059 D2/D5 amendment (PR #2419).
 R-STATE-HANDOFF-1 (MUST): Read-flow state transitions MUST be handed to a
 supervised, bounded, non-blocking in-process handoff that owns writer
 admission and retry; the read path MUST NOT await the writer lane. A

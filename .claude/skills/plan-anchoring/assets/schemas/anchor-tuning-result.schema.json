@@ -648,12 +648,14 @@
         },
         "gate": {
           "enum": [
+            "testability",
             "planning",
             "development"
           ]
         },
         "disposition": {
           "enum": [
+            "anchor_defect",
             "plan_violation",
             "question_defect"
           ]
@@ -673,7 +675,10 @@
           "pattern": "^[a-f0-9]{64}$"
         },
         "sealed_question_set": {
-          "$ref": "#/$defs/sealedQuestionSet"
+          "oneOf": [
+            {"$ref": "#/$defs/sealedQuestionSet"},
+            {"$ref": "#/$defs/rubricQuestionSet"}
+          ]
         },
         "candidate_rankings": {
           "type": "array"
@@ -709,6 +714,21 @@
         }
       },
       "allOf": [
+        {
+          "if": {"properties": {"gate": {"const": "testability"}}},
+          "then": {"properties": {
+            "sealed_question_set": {"$ref": "#/$defs/rubricQuestionSet"},
+            "disposition": {"enum": ["anchor_defect", "question_defect"]}
+          }},
+          "else": {"properties": {
+            "sealed_question_set": {"$ref": "#/$defs/sealedQuestionSet"},
+            "disposition": {"enum": ["plan_violation", "question_defect"]}
+          }}
+        },
+        {
+          "if": {"properties": {"disposition": {"const": "anchor_defect"}}},
+          "then": {"properties": {"question_action": {"const": "unchanged"}}}
+        },
         {
           "if": {
             "properties": {

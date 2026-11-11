@@ -40,6 +40,9 @@ PLAN_SCRIPT = "validate-plan"
 FENCED = re.compile(r"\s*```(?:json)?[ \t]*\n(.*?)\n```\s*", re.S)  # a reviewer result as returned: fenced JSON
 
 
+from qa_reviewers import qa_capable_reviewer, qa_capable_reviewers
+
+
 class ScopeError(ValueError):
     """A carried finding cannot be locked to its filing reviewer."""
 
@@ -168,6 +171,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         carried = plan_carried(open(args.carried).read()) if args.plan else carried_findings(json.load(open(args.carried)))
         filing = owned(carried)
+        if not args.plan:
+            templates_dir = Path(__file__).resolve().parent.parent / "templates"
+            for reviewer in filing:
+                if not qa_capable_reviewer(reviewer, templates_dir):
+                    raise ScopeError(f"reviewer {reviewer} is not QA-capable; choose --reviewer <agent> from "
+                                     + ", ".join(qa_capable_reviewers(templates_dir)))
     except ScopeError as exc:
         print(f"fix-round-scope: {exc}", file=sys.stderr)
         return 2

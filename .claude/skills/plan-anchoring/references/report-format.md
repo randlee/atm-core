@@ -1,6 +1,6 @@
 ---
 name: report-format
-version: 0.6.1
+version: 0.10.1
 description: The provenance-quoting report format for gate results, what the planning agent or quality manager should do with each verdict, and where reports are posted.
 ---
 
@@ -11,15 +11,15 @@ Every failing verdict names the anchor and quotes the user's words behind it. `p
 ## Shape
 
 ```markdown
-## Anchor gate: plan · bd-42 - Sprint 2 runtime
+## Anchor gate: plan · ex-42 - Sprint 2 runtime
 
-Run `plan-20261009T183000Z-bd-42`, model `jev-1.13.0`, threshold 0.6. Counts: not_addressed 1, satisfied 3, not_applicable 9.
+Run `plan-20261009T183000Z-ex-42`, model `jev-1.13.0`, threshold 0.6. Counts: not_addressed 1, satisfied 3, not_applicable 9.
 
-> **bd-42 · ANC-012 · not addressed** Anchor: The runtime crates are created by copying the legacy repo's runtime crates and deleting the legacy-specific modules; no runtime crate is written from scratch. You said (planning session, Oct 9): "copy the libraries from the legacy repo as the starting point and remove the legacy-specific code" This bead does not carry the directive forward.
+> **ex-42 · ANC-012 · not addressed** Anchor: The runtime crates are created by copying the legacy repo's runtime crates and deleting the legacy-specific modules; no runtime crate is written from scratch. You said (planning session, Oct 9): "copy the libraries from the legacy repo as the starting point and remove the legacy-specific code" This bead does not carry the directive forward.
 
-> **bd-42 · REQ-014 · contradicted** Anchor: All public CLI commands must support --json output with a stable schema. This bead proposes something the anchor rules out.
+> **ex-42 · REQ-014 · contradicted** Anchor: All public CLI commands must support --json output with a stable schema. This bead proposes something the anchor rules out.
 
-> **bd-42 · ANC-003 · error** Anchor: Sprint 2 adds no new [dependencies] entry to any Cargo.toml. You said (planning session, Oct 9): "no new dependency for this" Judging failed; see error.
+> **ex-42 · ANC-003 · error** Anchor: Sprint 2 adds no new [dependencies] entry to any Cargo.toml. You said (planning session, Oct 9): "no new dependency for this" Judging failed; see error.
 >   Error JEV.CONTEXT_EXCEEDED: item could not be shortened below 2000 characters
 ```
 
@@ -47,10 +47,10 @@ Before acting on a failing verdict, re-read the sent text (the composed item fil
   python3 "$S" report --run <run.json> --format md > "$W/report.md" && bd comment <bead> --file "$W/report.md"
   ```
 - Development gate: comment on the sprint bead and, when there is a PR, on the PR, with the deterministic check outcomes beneath.
-- Both: the run JSON stays in `doc/plan/phase-current/anchor-runs/` and is committed with the plan.
+- Both: the run JSON stays in `docs/plans/phase-<current>/anchor-runs/` (`$P/anchor-runs/`) and is committed with the plan.
 
-The skill posts in the main session; agents return JSON and never write to beads or PRs.
+The skill posts in the main session; the gate agents return JSON and never write to beads or PRs.
 
 ## Coverage report
 
-`coverage --format md` renders the anchor x item matrix with a Covered column and a list of uncovered anchors. Include it at the end of a planning-gate pass so the user sees the whole plan's state.
+`coverage --format md` renders the anchor x item matrix with a Covered column and a list of uncovered anchors. Include it at the end of a planning-gate pass so the user sees the whole plan's state. Each cell is the latest result for that anchor and item, so re-running some anchors keeps the others; a cell taken from an earlier run than the item's latest is listed under `carried_from_earlier_run`. With `--anchors`, the record's current exclusions apply: an exclusion recorded after a run shows as `excluded`, and one removed since is listed to re-judge and does not count.

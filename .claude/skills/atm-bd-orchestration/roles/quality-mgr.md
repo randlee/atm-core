@@ -189,9 +189,11 @@ depends on the verdict:
   to the import JSONL, so a finding the template rejects stops you instead of
   disappearing.
 - A round with only minor findings is PASS; its open finding beads remain
-  backlog. Any blocking or important finding is FAIL and receives exactly one
-  fix round, verified as "Fix verification takes precedence" says. A second FAIL is `ROUND_CAP`: stop dispatch and record the root
-  cause rather than creating another fix round.
+  backlog. Any blocking or important finding is FAIL and receives a fix round,
+  verified as "Fix verification takes precedence" says. After a fix-verification
+  FAIL, pour the next fix round for each carried finding that remains open while
+  round N+1 is within `max_rounds`; `ROUND_CAP` applies only when round N+1
+  would exceed `max_rounds`.
 - `difficulty` is required when rendering a finding. Copy it from the
   checked sprint/finding; never select a default. The dispatch report prints
   `UNCLASSIFIED` and no agent for a live bead missing it.

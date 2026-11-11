@@ -258,7 +258,7 @@ fn persist_peer_binding(
                 |row| Ok(PeerBindingRecord {
                     origin_host: row.get(0)?,
                     sender: row.get(1)?,
-                    registration_generation: row.get(2)?,
+                    registration_generation: crate::unsigned_column(row, 2)?,
                     message_id: row.get(3)?,
                     message_digest: row.get(4)?,
                     signature: row.get(5)?,
@@ -287,7 +287,7 @@ fn persist_peer_binding(
                     binding.origin_host,
                     binding.sender,
                     replay_key.2,
-                    binding.registration_generation,
+                    crate::sqlite_integer(binding.registration_generation, "tool_sender_peer_binding.registration_generation")?,
                     binding.message_id,
                     binding.message_digest,
                     binding.signature,

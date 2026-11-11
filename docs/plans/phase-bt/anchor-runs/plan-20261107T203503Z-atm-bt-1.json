@@ -1,0 +1,964 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261107T203503Z-atm-bt-1",
+  "gate": "plan",
+  "created_at": "2026-11-07T20:35:03+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core-worktrees/docs/phase-bs-anchors/docs/plans/phase-bt/anchors.json",
+  "plan": "phase-bt",
+  "item": {
+    "id": "atm-bt-1",
+    "title": "ceremony-finding-screen shipped, always run, measured (#938)",
+    "source": "/Users/randlee/github/atm-core-worktrees/docs/phase-bs-anchors/docs/plans/phase-bt/.items/atm-bt-1.txt",
+    "chars": 2007,
+    "truncated": false,
+    "chars_before_reduction": 2007,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "extra_questions": [
+    {
+      "path": "/Users/randlee/github/atm-core-worktrees/docs/phase-bs-anchors/.sc/plan-anchor/triage/plan-questions.jsonl",
+      "sha256": "68180fbd2de8a3dee2421351672f9a321506af1f4bb19531c2c26d7d21c2c521",
+      "ids": [
+        "owns",
+        "specific",
+        "stated",
+        "paraphrase",
+        "partial"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "anchor_id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint must have exactly one sanity bead, and it must name every dev bead of the sprint.",
+      "quote": "There is ONE sanity bead for all dev work.  the sanity task/bead would specify all dev beads for split.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "extra_questions_sha256": "2c336ccce283f2c51d6ae8000e7531cc7f44a06907bc0a28a13ead14170d7fb6",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.58,
+          "probabilities": {
+            "yes": 0.27,
+            "no": 0.72,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.96,
+            "unclear": 0.01
+          }
+        }
+      },
+      "verdict_first": "not_applicable",
+      "verdict_second": "underspecified",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.64,
+          "probabilities": {
+            "yes": 0.23,
+            "no": 0.76,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.96,
+          "probabilities": {
+            "yes": 0.03,
+            "no": 0.97,
+            "unclear": 0.0
+          }
+        },
+        "owns": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        },
+        "specific": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "stated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "paraphrase": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "partial": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.86,
+          "probabilities": {
+            "yes": 0.09,
+            "no": 0.91,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.58,
+      "explanation": "Jev was not confident (min confidence 0.58); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1575,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "second",
+          "role": "relevance",
+          "question_id": "relevant",
+          "choice": "no",
+          "confidence": 0.58
+        }
+      ],
+      "triage_questions": [
+        "owns",
+        "specific",
+        "stated",
+        "paraphrase",
+        "partial"
+      ],
+      "triage_attempts": 1,
+      "attempts": 2,
+      "item_chars_sent": 2007,
+      "item_shortened": false,
+      "request_bytes": 5048
+    },
+    {
+      "anchor_id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Docs, templates and prompts under atm-bd-orchestration must not mention plan-anchoring.",
+      "quote": "don't mention plan-anchoring in atm-bd",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "grep -ri plan-anchoring plugins/atm-bd-orchestration returns nothing",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "extra_questions_sha256": "2c336ccce283f2c51d6ae8000e7531cc7f44a06907bc0a28a13ead14170d7fb6",
+      "verdict": "satisfied",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.94,
+            "no": 0.06,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.99,
+            "no": 0.01,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.91,
+      "explanation": "The directive is carried forward.",
+      "usage": {
+        "input_tokens": 1576,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 2007,
+      "item_shortened": false,
+      "request_bytes": 5042
+    },
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A phase plan too large for one sprint must be split into multiple sprints.",
+      "quote": "If plan is too large it MUST be split.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": true
+      },
+      "questions_sha256": "d2beb837ef71ff2c63b031fd26c8a1c65550b09214c8b070ae1d2fdde86f4ed7",
+      "extra_questions_sha256": "2c336ccce283f2c51d6ae8000e7531cc7f44a06907bc0a28a13ead14170d7fb6",
+      "questions": {
+        "relevant": {
+          "criteria": {
+            "no": "The item is about a different subject, such as a command, flag, or file unrelated to plan size or dividing work.",
+            "unclear": "The item text is too vague to tell whether it concerns plan size or dividing work.",
+            "yes": "The item plans, changes, or depends on guidance or decisions about plan or sprint size, or about dividing a plan's work into sprints or smaller parts."
+          },
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one anchor (`anchor.statement`, `anchor.scope`). The subject of `anchor.statement` is whether a phase plan is too large for one sprint and must be divided into sprints. Does the work in `item.text` touch that subject, for example by writing or changing planning guidance about plan size, sprint size, or how a plan's work is divided? An item on this subject counts whether it follows the anchor, ignores it, or conflicts with it. Judge subject overlap only.",
+          "type": "choice"
+        },
+        "addressed": {
+          "criteria": {
+            "no": "The item does not state this rule: it is silent, names only the topic, covers only plans that fit one sprint, or divides work only into child beads or tasks inside one sprint.",
+            "unclear": "The item mentions splitting plans, but it cannot be told whether it requires an oversized plan to become multiple sprints.",
+            "yes": "The item states, as a rule or a step, that a plan too large for one sprint is split into multiple sprints, in any wording."
+          },
+          "instructions": "Does `item.text` state that a phase plan too large for one sprint must be split into multiple sprints? Any wording with that content counts, for example: an oversized plan is divided across several sprints; work that does not fit one sprint goes into separate sprints. Judge presence of this rule only, not whether the item also conflicts with it.",
+          "type": "choice"
+        },
+        "contradicted": {
+          "criteria": {
+            "no": "Nothing in the item lets an oversized plan stay one sprint: the item states the split, is silent about it, or covers other cases only.",
+            "unclear": "The item could be read as letting an oversized plan stay one sprint, but it is ambiguous.",
+            "yes": "The item lets or tells a plan too large for one sprint stay a single sprint, or makes its split optional or waivable."
+          },
+          "instructions": "Does `item.text` allow or require something that `anchor.statement` rules out: keeping a plan too large for one sprint as a single sprint, or making the split of an oversized plan optional or subject to an exception? Silence about splitting is not a conflict. A rule for plans that fit in one sprint is not a conflict. Dividing work inside a sprint into child beads is not a conflict. Judge conflict only.",
+          "type": "choice"
+        },
+        "owns": {
+          "type": "choice",
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one requirement (`anchor.statement`). Is this item itself responsible for delivering the requirement, meaning the item's own work implements, changes or tests the specific behavior `anchor.statement` requires? Answer no if the item only depends on that behavior, consumes it, re-runs or audits it as final validation, defers it to another sprint or item, or does not touch it. Judge responsibility only, not whether the item states the requirement clearly or obeys it.",
+          "criteria": {
+            "yes": "The item's own deliverables implement, change or test the behavior the requirement is about.",
+            "no": "The item only depends on, consumes, re-validates or defers this behavior, or works on something else.",
+            "unclear": "The item text does not make it possible to tell whether it delivers this behavior itself."
+          }
+        },
+        "specific": {
+          "type": "choice",
+          "instructions": "Imagine a developer who reads only `item.text` and has never seen `anchor.statement`. Working from `item.text` alone, would they know that they must deliver exactly what `anchor.statement` requires: the same condition (mode, command, input or artifact) and the same specific result (behavior, error, value, count or prohibition)? Answer no if they could follow `item.text` faithfully and still miss or get wrong any specific part of the requirement, for example because the item names only the topic, refers to it only through a test name, or covers it with a general phrase such as 'existing behavior remains'. Judge only whether the item text alone conveys the requirement, not whether the item is responsible for it.",
+          "criteria": {
+            "yes": "Reading only the item, a developer would know to deliver the requirement's condition and its specific result.",
+            "no": "A developer following only the item could miss or get wrong a specific part of the requirement.",
+            "unclear": "The item conveys part of the requirement, and it is not possible to tell whether the rest is implied."
+          }
+        },
+        "stated": {
+          "type": "choice",
+          "instructions": "Does `item.text` state the specific requirement in `anchor.statement` as something the item must do or verify, in a sentence or clause of its own? Answer no when the requirement is only implied, appears only as a detail inside a test name or a list of other things, is covered only by a generic phrase (for example 'existing behavior remains'), or is absent. Judge how explicitly it is stated, not whether the item is responsible for it.",
+          "criteria": {
+            "yes": "A sentence or clause in the item states this requirement's specific content as a step, constraint or acceptance criterion.",
+            "no": "The requirement's specific content is only implied, buried in a test name or list, covered by a generic phrase, or absent.",
+            "unclear": "Some text may state the requirement, but it is not possible to tell whether it states this specific content."
+          }
+        },
+        "paraphrase": {
+          "type": "choice",
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one requirement (`anchor.statement`, area in `anchor.scope`). Does `item.text` contain a passage that means the same thing as `anchor.statement` but uses different words, numbers or structure (for example a count instead of a list, a synonym, or a summary phrase that a domain reader would take as equivalent)? Judge equivalence of meaning, not wording.",
+          "criteria": {
+            "yes": "A passage in the item means the same as the requirement in different words.",
+            "no": "No passage in the item means the same as the requirement.",
+            "unclear": "A passage is close in meaning but it is not possible to tell whether a domain reader would take it as equivalent."
+          }
+        },
+        "partial": {
+          "type": "choice",
+          "instructions": "The state holds one planning item (`item.title`, `item.text`) and one requirement (`anchor.statement`, area in `anchor.scope`). Split `anchor.statement` into its specific parts: the condition (mode, command, input or artifact) and each required result (behavior, error, value, count or prohibition). Does `item.text` state at least one of these parts but omit or blur at least one other? Judge completeness only.",
+          "criteria": {
+            "yes": "The item states some parts of the requirement and omits or blurs at least one other part.",
+            "no": "The item states every part, or states none of them.",
+            "unclear": "It is not possible to tell which parts the item covers."
+          }
+        }
+      },
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "no": 0.98,
+            "unclear": 0.0,
+            "yes": 0.02
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.94,
+          "probabilities": {
+            "no": 0.96,
+            "unclear": 0.0,
+            "yes": 0.04
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "no": 1.0,
+            "unclear": 0.0,
+            "yes": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.94,
+      "explanation": "The anchor does not govern this bead.",
+      "usage": {
+        "input_tokens": 1614,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 2007,
+      "item_shortened": false,
+      "request_bytes": 5129
+    },
+    {
+      "anchor_id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A large sprint of closely related work must be split into child beads under one dev, one child bead per background subagent.",
+      "quote": "Large sprints w/ closely related work should be split into child beads one per [background] subagent.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "extra_questions_sha256": "2c336ccce283f2c51d6ae8000e7531cc7f44a06907bc0a28a13ead14170d7fb6",
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.8,
+          "probabilities": {
+            "yes": 0.13,
+            "no": 0.87,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.8,
+      "explanation": "The anchor does not govern this bead.",
+      "usage": {
+        "input_tokens": 1580,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 2007,
+      "item_shortened": false,
+      "request_bytes": 5079
+    },
+    {
+      "anchor_id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-orchestration planning guidance must recommend child beads for concentrated pockets of closely related work managed by a single dev agent.",
+      "quote": "we are adding a new option which we want to highly recommend for efficiency.  It is important to create a well balanced plan of waves with concentrated pockets of work managed by a single dev agent",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 3,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "extra_questions_sha256": "2c336ccce283f2c51d6ae8000e7531cc7f44a06907bc0a28a13ead14170d7fb6",
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.83,
+          "probabilities": {
+            "yes": 0.1,
+            "no": 0.89,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 1.0,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 1.0,
+            "unclear": 0.0
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.98,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.83,
+      "explanation": "The anchor does not govern this bead.",
+      "usage": {
+        "input_tokens": 1581,
+        "output_tokens": 117
+      },
+      "attempts": 1,
+      "item_chars_sent": 2007,
+      "item_shortened": false,
+      "request_bytes": 5100
+    },
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A child bead must declare its subagent's model with the existing beads class fast, normal or frontier.",
+      "quote": "Use already defined 'fast','normal','frontier' classification in beads.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "extra_questions_sha256": "2c336ccce283f2c51d6ae8000e7531cc7f44a06907bc0a28a13ead14170d7fb6",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.66,
+          "probabilities": {
+            "yes": 0.22,
+            "no": 0.77,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.0,
+            "no": 0.99,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.66,
+      "explanation": "The anchor does not govern this bead.",
+      "usage": {
+        "input_tokens": 1576,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 2007,
+      "item_shortened": false,
+      "request_bytes": 5057
+    },
+    {
+      "anchor_id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every dev bead, parent and child, must record its git commit so sanity can match each commit to its bead.",
+      "quote": "we should require git commit# per dev bead so sanity can coorelate commit to dev task/bead",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": "not_applicable",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "extra_questions_sha256": "2c336ccce283f2c51d6ae8000e7531cc7f44a06907bc0a28a13ead14170d7fb6",
+      "near_threshold": true,
+      "confirmed": true,
+      "verdict": "not_applicable",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.68,
+          "probabilities": {
+            "yes": 0.2,
+            "no": 0.79,
+            "unclear": 0.01
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.91,
+          "probabilities": {
+            "yes": 0.05,
+            "no": 0.94,
+            "unclear": 0.01
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        }
+      },
+      "min_confidence": 0.68,
+      "explanation": "The anchor does not govern this bead.",
+      "usage": {
+        "input_tokens": 1578,
+        "output_tokens": 117
+      },
+      "attempts": 2,
+      "item_chars_sent": 2007,
+      "item_shortened": false,
+      "request_bytes": 5060
+    },
+    {
+      "anchor_id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The plan split must place unrelated, non-intersecting work in separate sprints so the sprint dependency graph stays short.",
+      "quote": "The split should be done to optimize horizontal waves (keep height of graph short), unrelated/un-intersecting work split into separate sprints.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sprint's dev must run each child bead with a background subagent.",
+      "quote": "I think it should be a strategy as part of planning to encourage agents to delegate work to multiple subagents (and specfically handle merging subagent work into their worktree)  when therre is a larger task.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Subagent work must not get its own PR; the sprint's dev must deliver one working, tested branch.",
+      "quote": "We do not need pr for subagent work.  Primary dev agent is responsible for delivering a single working tested branch.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each background subagent must run focused lint and tests on its own worktree.",
+      "quote": "Additionally background sub-agents should do small focused test/lint on their worktree.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sprint's dev must delegate the full lint and test run to a background fast-class agent.",
+      "quote": "Dev should delegate running full lint/test to background 'fast' agent.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev's final rebase onto the top of the stack must happen after full lint and test pass.",
+      "quote": "Final rebase AFTER tests/lint pass.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev must not rerun full lint and test after the final rebase unless the rebase required resolving conflicts in code the sprint wrote.",
+      "quote": "Rebasing on top of stack AND make sure tests/lint pass 100% are impossible to both achieve if 5-15 minutes of testing are run after rebase. I have seen agents looping over run tests <-> rebase 10+ times in a row before they can land the stack. 4e could add 'unless conflicts with code written must be resolved' or similar.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 3,
+      "deterministic_check": "",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev task must state in a few words that the parent bead closes after its children, with enforcement left to the bd close failure and no hook or script.",
+      "quote": "beads does NOT allow closing parent w/ open children.  This does NOT need much explaination, the agent will be told he can not close parent first so few words in task/prompt need to talk about it.  No hook/python for this at all outside of returning close fail message from failed 'bd close'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint must have exactly one QA bead and one QA run on the sprint's single worktree.",
+      "quote": "Single qa bead, subagents would handle all work on single worktree as single qa run.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 3,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Prompts and task text for the subtask strategy must contain only necessary words.",
+      "quote": "in general prompts/tasks must be written with NO unnecessary words.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 3,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-1",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2.",
+      "attempts": 0
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1,
+      "satisfied": 1,
+      "not_applicable": 5,
+      "excluded": 10
+    },
+    "failing": [
+      "ANC-013"
+    ],
+    "leaning_counts": {
+      "not_applicable": 6,
+      "satisfied": 1
+    },
+    "unstable": [
+      "ANC-013"
+    ],
+    "errors": [],
+    "excluded": [
+      {
+        "anchor_id": "ANC-002",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      {
+        "anchor_id": "ANC-006",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      {
+        "anchor_id": "ANC-007",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      {
+        "anchor_id": "ANC-008",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      {
+        "anchor_id": "ANC-009",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      {
+        "anchor_id": "ANC-010",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      {
+        "anchor_id": "ANC-011",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      {
+        "anchor_id": "ANC-012",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      {
+        "anchor_id": "ANC-015",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      },
+      {
+        "anchor_id": "ANC-017",
+        "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+      }
+    ],
+    "shortened": [],
+    "pass": false
+  }
+}

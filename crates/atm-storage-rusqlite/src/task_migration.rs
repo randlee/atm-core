@@ -217,7 +217,7 @@ fn migrate_transaction(
     let demoted_active_conflicts = transaction
         .query_row(
             "SELECT COUNT(*) FROM task_events WHERE event = 'migrated' AND detail = 'demoted because another active task for this member wins by original assignment time and task id'",
-            [], |row| row.get(0),
+            [], |row| crate::unsigned_column(row, 0),
         )
         .map_err(|error| sqlite_error(target, "failed to count migrated active conflicts", error))?;
 
@@ -284,7 +284,7 @@ fn count(
 ) -> Result<u64, AtmError> {
     connection
         .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-            row.get(0)
+            crate::unsigned_column(row, 0)
         })
         .map_err(|error| sqlite_error(target, format!("failed to count {table}"), error))
 }

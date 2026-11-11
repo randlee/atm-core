@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synaptic-canvas.dev/plan-anchor/tune-candidates.schema.json",
+  "title": "Question-tournament candidates",
+  "description": "Candidate wordings per role (role = the gate's question id) and the role-complete bundles `jev_judge.py tournament` evaluates. Without `bundles` the runner evaluates the cross product (at most 64). Each role needs at least the request's candidate_minimum candidates. The baseline bundle is the request's current_questions when they are a complete role set, else `baseline` names one candidate per role.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "gate",
+    "anchor_id",
+    "candidates"
+  ],
+  "properties": {
+    "schema": {
+      "const": "plan-anchor/tune-candidates/1"
+    },
+    "gate": {
+      "enum": [
+        "planning",
+        "development"
+      ]
+    },
+    "anchor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidates": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 3,
+        "propertyNames": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "additionalProperties": {
+          "$ref": "#/$defs/question"
+        }
+      },
+      "minProperties": 3
+    },
+    "bundles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bundle_id",
+          "roles"
+        ],
+        "properties": {
+          "bundle_id": {
+            "allOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+              },
+              {
+                "not": {
+                  "const": "baseline"
+                }
+              }
+            ]
+          },
+          "roles": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            }
+          }
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+      }
+    }
+  },
+  "$defs": {
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "instructions",
+        "criteria"
+      ],
+      "properties": {
+        "type": {
+          "const": "choice"
+        },
+        "instructions": {
+          "type": "string",
+          "minLength": 1
+        },
+        "criteria": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "yes",
+            "no",
+            "unclear"
+          ],
+          "properties": {
+            "yes": {
+              "type": "string",
+              "minLength": 1
+            },
+            "no": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unclear": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

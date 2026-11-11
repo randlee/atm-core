@@ -42,11 +42,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import NotRequired, TypedDict
-from operation_models import JsonValue, matches_typeddict
+from operation_models import JsonValue, is_object_mapping, matches_typeddict
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -80,6 +81,7 @@ class Bead(TypedDict):
     issue_type: NotRequired[str]
     created_at: NotRequired[str]
     assignee: NotRequired[str]
+    description: NotRequired[str | None]
 
 
 class BeadRows(TypedDict):
@@ -299,6 +301,26 @@ def warnings(beads: Beads, root_id: str, file_beads: list[Bead] | None) -> None:
     if not since and root_bead:
         since = root_bead.get("created_at") or ""
     for b in everything:
+        if SPRINT_LABEL in (b.get("labels") or []):
+            section = re.search(r"^## Deliverables[ \t]*$([\s\S]*?)(?=^#{1,2}\s|\Z)", b.get("description") or "", re.M)
+            if section:
+                numbers: list[int] = []
+                fence = ""
+                for line in section.group(1).splitlines():
+                    marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+                    if marker:
+                        token = marker.group(1)
+                        if not fence:
+                            fence = token
+                        elif token[0] == fence[0] and len(token) >= len(fence):
+                            fence = ""
+                        continue
+                    if not fence:
+                        item = re.match(r"^(\d+)\.[ \t]+", line)
+                        if item:
+                            numbers.append(int(item.group(1)))
+                if numbers and numbers != list(range(1, len(numbers) + 1)):
+                    warn(f"{b['id']}: Deliverables numbering is not contiguous: {numbers}")
         if b.get("status") != "closed" and not parent_of(b) and b.get("issue_type") != "epic" \
                 and (b.get("created_at") or "") >= since:
             warn(f"{b['id']}: {b.get('issue_type')} at the top level; only epics live at the top level")
@@ -311,6 +333,11 @@ def doctor() -> None:
     proc = subprocess.run(["bd", "doctor", "--json"], capture_output=True, text=True)
     try:
         doctor_report: object = json.loads(proc.stdout)
+        if is_object_mapping(doctor_report):
+            payload = doctor_report.get("data", doctor_report)
+            if is_object_mapping(payload) and payload.get("code") == "proxy.doctor.unsupported":
+                warn(f"bd doctor: {payload['code']}: {payload.get('error', '')}")
+                return
         if not matches_typeddict(doctor_report, DoctorReport):
             raise CannotRun("bd doctor returned malformed JSON")
         report = doctor_report

@@ -6,8 +6,17 @@ build-backend = "maturin"
 name = "atm-graft"
 # Keep the wheel metadata aligned with the workspace release version.
 version = "1.6.5"
+description = "Python bindings for the ATM graft client: embed an agent host in an ATM team"
+readme = "README.md"
 requires-python = ">=3.11,<3.15"
+authors = [{ name = "atm-core contributors" }]
+license = { text = "MIT OR Apache-2.0" }
 dependencies = ["pydantic>=2,<3"]
+
+[project.urls]
+Homepage = "https://github.com/randlee/atm-core"
+Repository = "https://github.com/randlee/atm-core"
+Issues = "https://github.com/randlee/atm-core/issues"
 
 [tool.maturin]
 # A mixed wheel needs a Python package matching the first component.  The

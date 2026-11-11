@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "report_type": "smoke",
+  "generated_at": "2026-10-22T23:57:24.346542+00:00",
+  "host_label": "rand-m5",
+  "report_html": "smoke/macos/rand-m5/20261022T235724286794Z-pid4271-localhost/index.html",
+  "status": "PASS",
+  "source_revision": "a97c604db6df8bebb31a305d2f20e3c41aedb329"
+}

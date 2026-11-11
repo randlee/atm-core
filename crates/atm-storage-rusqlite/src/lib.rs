@@ -7,6 +7,32 @@
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
 
+fn unsigned_column<T>(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<T>
+where
+    T: TryFrom<i64>,
+    T::Error: std::error::Error + Send + Sync + 'static,
+{
+    let value: i64 = row.get(index)?;
+    T::try_from(value).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            index,
+            rusqlite::types::Type::Integer,
+            Box::new(error),
+        )
+    })
+}
+
+fn sqlite_integer<T>(value: T, column: &str) -> Result<i64, atm_storage::AtmError>
+where
+    i64: TryFrom<T>,
+    <i64 as TryFrom<T>>::Error: std::error::Error + Send + Sync + 'static,
+{
+    i64::try_from(value).map_err(|error| {
+        atm_storage::AtmError::validation(format!("{column} exceeds SQLite integer range"))
+            .with_cause(error)
+    })
+}
+
 mod analyst_query;
 mod cron_schedule_store;
 mod cron_transition_store;
@@ -3692,6 +3718,123 @@ mod tests {
             .expect("message remains durable");
         assert!(stored.envelope.read);
         assert_eq!(stored.envelope.text, original.envelope.text);
+    }
+
+    #[tokio::test]
+    async fn invalid_read_batch_rolls_back_earlier_message_updates_and_watermark() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let original = message("atm:rollback-read", "read state");
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+        let missing = "atm:missing-read".parse().expect("missing key");
+        let error = backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![original.message_key.clone(), missing],
+                Some(IsoTimestamp::now()),
+            )
+            .await
+            .expect_err("missing member invalidates the entire transition");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::MessageValidationFailed
+        );
+        let stored = backend
+            .message_store()
+            .load_message(&original.message_key)
+            .expect("load message")
+            .expect("message remains");
+        assert!(!stored.envelope.read, "earlier read update rolled back");
+        let count: i64 = backend
+            .shared_db_for_test()
+            .with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT COUNT(*) FROM mail_seen_watermarks WHERE team = ?1 AND agent = ?2",
+                        params![team().as_str(), agent().as_str()],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| AtmError::mailbox_read(error.to_string()))
+            })
+            .expect("watermark count");
+        assert_eq!(count, 0, "failed transition did not update watermark");
+    }
+
+    #[tokio::test]
+    async fn deleted_message_read_transition_reports_permanent_validation_failure() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let original = message("atm:deleted-read", "read state");
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+        backend
+            .message_store()
+            .delete_message(&original.message_key)
+            .expect("delete message");
+        let error = backend
+            .async_message_store()
+            .apply_read_display_state_async(
+                MailboxScope::new(team(), agent()),
+                vec![original.message_key],
+                None,
+            )
+            .await
+            .expect_err("deleted message is a permanent transition failure");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::MessageValidationFailed
+        );
+    }
+
+    #[tokio::test]
+    async fn timed_out_read_retry_rearms_once_and_later_read_still_applies() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.async_message_store();
+        let original = message("atm:read-retry", "read state");
+        backend
+            .message_store()
+            .save_message(&original)
+            .expect("seed mailbox");
+        backend.shared_db_for_test().with_connection(|connection| {
+            connection.execute_batch("CREATE TABLE test_read_rearms (nudge TEXT); CREATE TRIGGER test_read_rearm AFTER UPDATE OF read ON mail_message_states BEGIN INSERT INTO test_read_rearms(nudge) VALUES (NEW.nudge_pending_at); END;").map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            connection.execute("UPDATE mail_message_states SET pending_ack_at = '2000-01-01T00:00:00+00:00', nudge_pending_at = '2000-01-01T00:00:00+00:00' WHERE message_key = ?1", params![original.message_key.as_str()]).map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            Ok(())
+        }).expect("seed pending acknowledgement and observe rearms");
+        let scope = MailboxScope::new(team(), agent());
+        let newer: IsoTimestamp = "2026-01-02T00:00:00Z".parse().expect("timestamp");
+        let older: IsoTimestamp = "2026-01-01T00:00:00Z".parse().expect("timestamp");
+        for watermark in [newer, newer, older] {
+            store
+                .apply_read_display_state_async(
+                    scope.clone(),
+                    vec![original.message_key.clone()],
+                    Some(watermark),
+                )
+                .await
+                .expect("read state applied");
+        }
+        let (events, cleared, read, pending, watermark): (i64, i64, i64, Option<String>, String) = backend.shared_db_for_test().with_connection(|connection| {
+            let (events, cleared) = connection.query_row("SELECT COUNT(*), COUNT(*) - COUNT(nudge) FROM test_read_rearms", [], |row| Ok((row.get(0)?, row.get(1)?))).map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            let (read, pending) = connection.query_row("SELECT read, pending_ack_at FROM mail_message_states WHERE message_key = ?1", params![original.message_key.as_str()], |row| Ok((row.get(0)?, row.get(1)?))).map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            let watermark = connection.query_row("SELECT watermark FROM mail_seen_watermarks WHERE team = ?1 AND agent = ?2", params![team().as_str(), agent().as_str()], |row| row.get(0)).map_err(|e| AtmError::mailbox_read(e.to_string()))?;
+            Ok((events, cleared, read, pending, watermark))
+        }).expect("read effects");
+        assert_eq!(
+            events, 3,
+            "initial read, one retry, and one later distinct read each rearm once"
+        );
+        assert_eq!(cleared, 0, "pending acknowledgement remains armed");
+        assert_eq!(read, 1);
+        assert!(pending.is_some());
+        assert_eq!(
+            watermark,
+            newer.into_inner().to_rfc3339(),
+            "older later reads do not regress the watermark"
+        );
     }
 
     #[tokio::test]

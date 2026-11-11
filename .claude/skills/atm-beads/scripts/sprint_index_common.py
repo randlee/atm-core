@@ -72,6 +72,7 @@ class PhaseConfig(TypedDict):
     lead: str
     templates: PhaseTemplates
     code_checkout: NotRequired[str]
+    team: NotRequired[str]
 
 
 class IndexSprint(TypedDict):
@@ -179,7 +180,7 @@ def validate_phase_config(repo: Path, phase: str, raw_data: object) -> PhaseConf
         value = data.get(key)
         if not isinstance(value, str) or not value.strip():
             problems.append(f"{key}: required nonempty string")
-    unknown = set(data) - set(PHASE_KEYS) - {"lead", "templates", "code_checkout"}
+    unknown = set(data) - set(PHASE_KEYS) - {"lead", "templates", "code_checkout", "team"}
     if unknown:
         problems.append(f"unknown key(s): {', '.join(sorted(unknown))}")
     code_checkout = data.get("code_checkout")
@@ -253,6 +254,8 @@ def validate_phase_config(repo: Path, phase: str, raw_data: object) -> PhaseConf
     }
     if "code_checkout" in data:
         result["code_checkout"] = required_config_string(data, "code_checkout")
+    if "team" in data:
+        result["team"] = required_config_string(data, "team")
     return result
 
 

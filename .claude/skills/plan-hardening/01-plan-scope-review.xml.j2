@@ -1,6 +1,6 @@
 ---
 name: 01-plan-scope-review-task
-version: 2.1.0
+version: 2.3.0
 description: lead assignment template for the initial developer guidelines pass before background scope review.
 format: xml
 required_variables:
@@ -72,10 +72,16 @@ metadata:
 
     Read the current plan docs from disk first, using `<source-of-truth>` and
     `<references>`, before doing anything else. Then read
-    `.claude/skills/plan-hardening/sprint-planning-guidelines.md` and make
+    `.claude/skills/atm-beads/resources/atm-beads-plan-guidelines.md` and make
     sure the current plan state follows it before any reviewer is launched.
     The current phase plan already exists in repo docs, but sprint docs may
     still be partial or missing.
+
+    The plan is in beads: the plan file is `docs/plans/phase-{{ phase }}.jsonl`
+    (one sprint bead per line); read "plan docs" as that file and "sprint doc"
+    as "sprint bead". After editing it, run `validate-plan` as
+    `.claude/skills/atm-beads/SKILL.md` "Validation" directs and fix what it
+    reports before you commit.
 
     In this pass:
     - tighten the current plan docs to match the sprint-planning guidelines
@@ -138,7 +144,7 @@ metadata:
     <step id="d">As soon as the guidelines pass is complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send {{ lead }} --stdin` so scope review can begin in parallel; never close the task on a push. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="e">After the push report, run the required validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">Return fenced JSON only after the current pass converges, delivered as the close: `atm task close {{ task_id }} completed --template .claude/skills/plan-hardening/plan-scope-review-complete.md.j2 --vars <scratch>/plan-scope-review-complete-{{ task_id }}-vars.json`, with `status` the PASS/FAIL line, `result_json` the fenced JSON body verbatim, and `task_id`, `phase` and `round_index` unchanged from this assignment; write the vars file outside the repository. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. If `reviewer-findings-json` is present, treat it as the current correction target from `plan-scope-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
+    <step id="g">Return fenced JSON only after the current pass converges, delivered as the close: `atm task close {{ task_id }} completed --template .claude/skills/plan-hardening/plan-scope-review-complete.md.j2 --vars <scratch>/plan-scope-review-complete-{{ task_id }}-vars.json`, with `status` the PASS/FAIL line, `result_json` the fenced JSON body verbatim, and `task_id`, `phase` and `round_index` unchanged from this assignment; write the vars file outside the repository. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. The reviewer findings are also open finding beads: `bd list -l phase-{{ phase }},stage:plan-finding --json`. Before your close, close each with your ruling: `bd close <id> --reason "fixed: <change>"` or `bd close <id> --reason "rejected: <why>"`. If `reviewer-findings-json` is present, treat it as the current correction target from `plan-scope-reviewer` and return updated fenced JSON to `{{ lead }}`. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="h">After the close, read ATM again: the next queued task starts only now.</step>
   </workflow>
 </atm-task>

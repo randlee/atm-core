@@ -346,7 +346,7 @@ fn execute_diagnostic_prune(
     let expired_rows = connection
         .execute(
             "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events WHERE ts_unix_ms < ?1 ORDER BY id LIMIT ?2)",
-            params![cutoff, crate::DIAGNOSTIC_PRUNE_BATCH],
+            params![cutoff, crate::sqlite_integer(crate::DIAGNOSTIC_PRUNE_BATCH, "diagnostic prune batch")?],
         )
         .map_err(|error| sqlite_error(target, "failed to prune expired diagnostic events", error))?;
     if expired_rows > 0 {
@@ -354,7 +354,7 @@ fn execute_diagnostic_prune(
     }
     let excess_rows = connection.execute(
         "DELETE FROM diagnostic_events WHERE id IN (SELECT id FROM diagnostic_events ORDER BY ts_unix_ms DESC, id DESC LIMIT ?1 OFFSET ?2)",
-        params![crate::DIAGNOSTIC_PRUNE_BATCH, crate::DIAGNOSTIC_MAX_ROWS],
+        params![crate::sqlite_integer(crate::DIAGNOSTIC_PRUNE_BATCH, "diagnostic prune batch")?, crate::sqlite_integer(crate::DIAGNOSTIC_MAX_ROWS, "diagnostic max rows")?],
     ).map_err(|error| sqlite_error(target, "failed to prune excess diagnostic events", error))?;
     Ok(WriteOpResult::DiagnosticsPruned(excess_rows as u64))
 }

@@ -415,7 +415,7 @@ class AssignmentGateTests(unittest.TestCase):
         bead = ("bd", "show", "atm-phase-bj.stack", "--json")
         head = ("git", "-C", "/wt", "rev-parse", "origin/integrate")
         cases = [
-            ("last layer", {bead: (0, dumped([{"metadata": {"layers": [{"branch": "first", "head": "a"}, {"branch": "last", "head": "b"}]}}]))}, ("last", 0)),
+            ("last layer", {bead: (0, dumped([{"metadata": {"trunk": "integrate", "stack_number": 7, "layers": [{"pr": 1, "branch": "first", "head": "a", "linked": True}, {"pr": 2, "branch": "last", "head": "b", "linked": True}]}}])), ("gh", "api", "repos/{owner}/{repo}/stacks", "--paginate", "--jq", ".[] | {number, base: .base.ref, prs: [.pull_requests[].number]}"): (0, dumped([{"number": 7, "base": "integrate", "prs": [1, 2]}]))}, ("last", 0)),
             ("empty", {bead: (0, dumped([{"metadata": {"layers": []}}])), head: (0, "abc")}, ("integrate", 0)),
             ("null metadata", {bead: (0, dumped([{"metadata": None}])), head: (0, "abc")}, ("integrate", 0)),
             ("missing bead", {bead: (0, "[]")}, ("GATE_CANNOT_RUN", 2)),
@@ -424,12 +424,27 @@ class AssignmentGateTests(unittest.TestCase):
             ("bd fails", {bead: (1, "", "database down")}, ("GATE_CANNOT_RUN", 2)),
             ("invalid metadata", {bead: (0, dumped([{"metadata": "bad"}]))}, ("GATE_CANNOT_RUN", 2)),
             ("invalid layers", {bead: (0, dumped([{"metadata": {"layers": "bad"}}]))}, ("GATE_CANNOT_RUN", 2)),
-            ("missing head", {bead: (0, dumped([{"metadata": {"layers": [{"branch": "top"}]}}]))}, ("GATE_CANNOT_RUN", 2)),
+            ("missing head", {bead: (0, dumped([{"metadata": {"layers": [{"pr": 1, "branch": "top", "linked": True}]}}]))}, ("GATE_CANNOT_RUN", 2)),
             ("missing fallback", {bead: (0, "[{}]"), head: (1, "", "unknown ref")}, ("GATE_CANNOT_RUN", 2)),
         ]
         for name, responses, expected in cases:
             with self.subTest(name):
                 self.assertEqual(self.stack_top(responses), expected)
+
+    def test_stack_top_rejects_hosted_ledger_mismatch(self):
+        bead = ("bd", "show", "atm-phase-bj.stack", "--json")
+        api = ("gh", "api", "repos/{owner}/{repo}/stacks", "--paginate", "--jq", ".[] | {number, base: .base.ref, prs: [.pull_requests[].number]}")
+        layer = {"pr": 1, "branch": "one", "head": "abc", "linked": True}
+        responses = {bead: (0, dumped([{"metadata": {"trunk": "integrate", "stack_number": 7, "layers": [layer]}}])),
+                     api: (0, dumped([{"number": 7, "base": "integrate", "prs": [1, 2]}]))}
+        self.assertEqual(self.stack_top(responses), ("GATE_CANNOT_RUN", 2))
+
+    def test_empty_ledger_with_hosted_stack_is_not_a_fallback(self):
+        bead = ("bd", "show", "atm-phase-bj.stack", "--json")
+        api = ("gh", "api", "repos/{owner}/{repo}/stacks", "--paginate", "--jq", ".[] | {number, base: .base.ref, prs: [.pull_requests[].number]}")
+        responses = {bead: (0, dumped([{"metadata": {"trunk": "integrate", "stack_number": None, "layers": []}}])),
+                     api: (0, dumped([{"number": 7, "base": "integrate", "prs": [1]}]))}
+        self.assertEqual(self.stack_top(responses), ("GATE_CANNOT_RUN", 2))
 
     def test_stack_top_requires_root(self):
         with self.assertRaises(SystemExit):
@@ -442,6 +457,8 @@ class AssignmentGateTests(unittest.TestCase):
             assert gates.main(["stack-top", "--root", "phase", "--pr-target", "trunk", "--worktree", "/wt"], runner) == 0
         stack_id.assert_called_once_with("phase")
         assert runner.calls == [(str(gates.PRIMARY), ("bd", "show", "phase.stack", "--json")),
+                                ("/wt", ("gh", "api", "repos/{owner}/{repo}/stacks", "--paginate", "--jq",
+                                         ".[] | {number, base: .base.ref, prs: [.pull_requests[].number]}")),
                                 (None, ("git", "-C", "/wt", "rev-parse", "origin/trunk"))]
 
     def test_gate_kinds_still_require_root_and_bead(self):

@@ -1,7 +1,7 @@
 ---
 name: finding-bead
 version: 0.3.0
-description: One important or minor QA finding, or a phase-end review finding, as a plain finding bead under `parent` (the phase or feature bead); a blocking QA finding is poured as a fix group by bead-groups instead. It carries the governing `requirements` and `adrs` of the sprint it traces to (`sprint_bead`), so every fix and fix QA has them, however deep the fix-on-fix chain. Priority follows severity (blocking 1, important 2, minor 4) so `bd ready` queues blocking findings ahead of planned dev. Render strictly, then `jq -c .` into the import JSONL.
+description: One important or minor QA finding, or a phase-end review finding, as a plain finding bead under `parent` (the phase or feature bead); a blocking QA finding is poured as a fix group by bead-groups instead. It carries the governing `requirements` and `adrs` of the sprint it traces to (`sprint_bead`), so every fix and fix QA has them, however deep the fix-on-fix chain. The reviewer must be QA-capable, with either an installed sprint QA assignment template requiring review_targets, branch, commit and worktree_path, or a supported Rust reviewer with its own agent contract. Priority follows severity (blocking 1, important 2, minor 4) so `bd ready` queues blocking findings ahead of planned dev. Render strictly, then `jq -c .` into the import JSONL.
 format: json
 required_variables:
   - id

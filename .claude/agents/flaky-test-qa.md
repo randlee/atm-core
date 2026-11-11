@@ -21,6 +21,8 @@ with free-form input.
 ```json
 {
   "worktree_path": "/absolute/path/to/worktree",
+  "branch": "optional branch name",
+  "commit": "optional reviewed commit",
   "scope": {
     "phase": "optional string",
     "sprint": "optional string"
@@ -28,9 +30,20 @@ with free-form input.
   "review_targets": [
     "optional paths"
   ],
+  "round_limit": false,
+  "changed_files": [
+    "optional changed-file hint"
+  ],
+  "triage_records": [],
+  "carry_forward_findings": [],
   "notes": "optional context"
 }
 ```
+
+When `commit` is given, review the tests at that commit (`git show <commit>:<path>`),
+not the moving branch tip. When `carry_forward_findings` is non-empty, report a
+disposition (fixed | open | regressed) for each of those ids only, and put
+anything else you notice under `notes`, not `findings`.
 
 ## Scope
 

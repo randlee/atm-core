@@ -1,0 +1,70 @@
+{
+  "schema": "plan-anchoring/triage-rules/1",
+  "gate": "plan",
+  "applies_to": [
+    "not_addressed",
+    "contradicted",
+    "underspecified"
+  ],
+  "default_route": "human",
+  "routes": [
+    {
+      "route": "exclude",
+      "action": "Record an exclusion: this item does not deliver the requirement.",
+      "when": [
+        {
+          "question": "owns",
+          "is": "no",
+          "min_confidence": 0.6
+        },
+        {
+          "question": "contradicted",
+          "is_not": "yes"
+        }
+      ]
+    },
+    {
+      "route": "plan",
+      "action": "Ask the plan owner to state the requirement in the item text.",
+      "when": [
+        {
+          "question": "owns",
+          "is": "yes"
+        },
+        {
+          "question": "specific",
+          "is": "no",
+          "min_confidence": 0.6
+        }
+      ],
+      "notes": [
+        {
+          "when": {
+            "question": "partial",
+            "is": "yes"
+          },
+          "text": "The item states part of the requirement; add the missing part."
+        }
+      ]
+    },
+    {
+      "route": "question",
+      "action": "Tune the gate question; the item text is a candidate pass fixture.",
+      "when": [
+        {
+          "question": "owns",
+          "is": "yes"
+        },
+        {
+          "question": "stated",
+          "is": "yes",
+          "min_confidence": 0.6
+        },
+        {
+          "question": "specific",
+          "is_not": "no"
+        }
+      ]
+    }
+  ]
+}

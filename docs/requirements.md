@@ -2107,23 +2107,22 @@ adapter.
   mailbox-read requirement may demand read-your-writes, snapshot pinning, or
   reader/writer fencing.
 - `R-STATE-HANDOFF-1` Read-flow read/seen state transitions MUST be submitted
-  to a supervised, bounded, non-blocking in-process handoff. That handoff
-  owns writer admission and retry; the read path MUST NOT await the writer
-  lane. A transition MAY be lost only when the handoff buffer overflows or
-  the process exits. Buffer overflow MUST be counted and surfaced by
-  `atm doctor`. In either loss case the behavior MUST be fail-safe: the
-  affected message remains unread/unseen and is re-presented on a subsequent
-  read; it MUST NOT be hidden or discarded.
-  Its lifecycle MUST include readiness-gated startup, a monitored supervisor
-  task, and an atomic `Unavailable` state that rejects new handoffs while
-  preserving the buffered work if the task faults. The supervisor MUST
-  restart within a bounded budget. Restart exhaustion or permanent writer
-  failure MUST fail the runtime closed. `R-STATE-RACE-1` governs observation
-  only and MUST NOT authorize discarding a transition.
+  to a supervised, bounded, non-blocking in-process handoff. The read path
+  MUST NOT await writer admission or retry. Buffer overflow MUST be counted
+  and surfaced by `atm doctor`; rejected transitions remain unread/unseen.
+  The monitored supervisor MUST restart failed workers without a restart
+  limit, using bounded backoff and retaining queued transient failures.
+  Doctor MUST expose the existing restart count and handoff state. A
+  permanently invalid transition, such as one whose message was deleted,
+  MUST be discarded with a typed retained diagnostic so later transitions
+  can proceed. A transient failure MUST NOT cause that discard. Process
+  exit may lose queued transitions; retries after uncertain commits are
+  at-least-once and can rearm a pending acknowledgement reminder again.
+  `R-STATE-RACE-1` governs concurrent read observation.
 
 The handoff behavior is a product decision recorded in ADR-059. The ADR
-records permanent drop and synchronous write-through as rejected alternatives
-and their operator consequences.
+records the limited permanent-failure discard and the rejection of synchronous
+write-through, together with their operator consequences.
 
 ### 7.14 Write-Source Preflight Concurrency
 

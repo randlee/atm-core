@@ -1,25 +1,25 @@
 ---
 name: jev-api
-version: 0.6.1
-description: How jev_judge.py talks to TypeSafe's Jev - endpoint, auth, request and response shape, validation, limits, the retry and context-shortening policy, every error code and flag, model pinning, and the privacy opt-in that gates every call.
+version: 0.10.1
+description: How jev_judge.py talks to TypeSafe's Jev - endpoint, auth, request and response shape, validation, limits, the retry and context-shortening policy, every error code and flag, model pinning, and the committed allow_remote_judge setting that gates every call.
 ---
 
 # Jev API as used by this skill
 
 Jev is TypeSafe's decision model: it answers typed questions about a piece of state with probabilities and confidence, in parallel, and generates no text. `scripts/jev_judge.py` implements everything below; this document is for troubleshooting, not for hand-rolling requests.
 
-## Privacy opt-in (read first)
+## Remote judging consent (read first)
 
 A gate run sends the anchor statement and scope and the item text (a plan bead or an account of delivered work) off the machine. `rubric` also sends the verbatim quote; `dedupe --jev` sends pairs of statements and quotes. Sending a plan to TypeSafe is the user's decision, so the script fails closed:
 
-- `TYPESAFE_API_KEY` must be set and well-formed (non-empty, ASCII, no control characters), and
-- `PLAN_ANCHOR_ALLOW_REMOTE_JUDGE=1` must be set for the session (or `--allow-remote` passed).
+- `TYPESAFE_API_KEY`, when present, must be well-formed (non-empty, ASCII, no control characters); when it is absent the script tries the documented platform credential store, and
+- the repository's committed `.sc/plan-anchor/settings.yaml` must set `allow_remote_judge: true`. `false` is the user's no; an absent resolved credential means the live call is refused. Both are refused.
 
-Without both, `judge`, `check-fixtures`, `rubric` and `dedupe --jev` return `AUTH.CREDENTIALS` or `POLICY.REMOTE_JUDGE_DISABLED` and send nothing. `--dry-run` writes the exact request bodies and `totals {requests, bytes}` to the run directory. `--answers-file` runs the gating with fixture answers, offline. The key is never printed, logged, written to a run file, or included in an error. Set the opt-in per plan, not globally.
+Without both, `judge`, `check-fixtures`, `rubric`, `add --rubric` and `dedupe --jev` return `AUTH.CREDENTIALS` or `POLICY.REMOTE_JUDGE_DISABLED` and send nothing. The answer is recorded once per repository, never per session: ask the user, then `python3 scripts/plan_anchor_settings.py set allow_remote_judge true|false` (or the installer's `--allow-remote-judge` / `--no-remote-judge`), and commit the file. Only the user decides it: agents never write it and never infer it from existing run files or past runs. The setting is found from `--repository-root` (default `.`) by the same lookup as `anchor_tracker.py`; reading a present settings file needs PyYAML (`DEPENDENCY.PYYAML`, exit 2, otherwise), and nothing else in `jev_judge.py` does. `--dry-run` writes request previews after normal presentation redaction and `totals {requests, bytes}` to the run directory. Previews may differ from canonical request bodies when text is redacted. `--answers-file` runs the gating with fixture answers, offline. The key is never printed, logged, written to a run file, or included in an error.
 
 ## Endpoint and auth
 
-- `POST https://api.typesafe.ai/v1/systemone` (override with `PLAN_ANCHOR_JEV_URL` for a proxy or mock)
+- `POST https://api.typesafe.ai/v1/systemone`
 - `Authorization: Bearer $TYPESAFE_API_KEY`, `Content-Type: application/json`
 
 ## Request
@@ -29,7 +29,7 @@ Without both, `judge`, `check-fixtures`, `rubric` and `dedupe --jev` return `AUT
   "model": "jev-latest",
   "state": {
     "anchor": {"id": "ANC-012", "statement": "...", "scope": "..."},
-    "item": {"id": "bd-42", "title": "...", "text": "..."}
+    "item": {"id": "ex-42", "title": "...", "text": "..."}
   },
   "questions": {
     "relevant":     {"type": "choice", "instructions": "...", "criteria": {"yes": "...", "no": "...", "unclear": "..."}},
@@ -40,6 +40,8 @@ Without both, `judge`, `check-fixtures`, `rubric` and `dedupe --jev` return `AUT
 ```
 
 - `state` may be a string, object, or array; questions reference fields with backticked paths such as `item.text`.
+- Rubric requests contain `state.anchor {statement, quote, scope}`. Optional `rubric --approved-intent-file` adds `state.intent {id, version, sha256, content}`; `sha256` hashes the exact UTF-8 content. Optional `rubric --questions` selects a sealed `{questions,digest}` file. Both are confined to the repository, integrity-checked before transport, and never imply approval or calibration acceptance. See `question-tuning.md` for selection and consent rules.
+- With either optional input, rubric entries record `inputs {question_seal, request_sha256, intent?}`. Both request and question seals hash sorted-key compact UTF-8 JSON without ASCII escaping; the question seal hashes `{questions}`, and the request hash covers the entire body before presentation redaction. Dry-run displays redact credentials and bearer-shaped text, including synthetic examples. Reconstruct any redacted canonical request from frozen validated inputs, the selected anchor and model, and verify the recorded hash before triage. Live results do not repeat intent content.
 - `questions` is keyed by your own IDs; the `instructions` are sent, the ID is not.
 - Types: `choice` (criteria map option to description; up to 255 options), `score` (2 to 10 ordered level descriptions), `noul` (probability of yes, no confidence). This skill uses `choice` so every answer carries a confidence.
 
@@ -76,54 +78,89 @@ Per anchor, per request:
 | 422 token limit | Shorten and retry as above (counts toward the 3 attempts) |
 | 422 other | Not retried; `JEV.VALIDATION` with up to 300 characters of the body, which names the bad field |
 | 401 | Not retried; the whole run aborts with `AUTH.CREDENTIALS` (body withheld) |
-| Missing opt-in or key | Checked before any request; the run aborts |
+| Missing key, or `allow_remote_judge` not `true` | Checked before any request; the run aborts |
 
 Agents and the skill never add a retry loop around the script. `attempts` is recorded on every result. Questions in one request are answered independently and in parallel: one round trip per anchor.
 
 ## Models
 
-`jev-latest` moves with releases. Once thresholds are tuned, pin the version the response reported (`model_answered` in the run file) via `PLAN_ANCHOR_JEV_MODEL=jev-1.13.0` or `--model`.
+`jev-latest` moves with releases. Once thresholds are tuned, pin the version the response reported (`model_answered` in the run file) with `--model jev-1.13.0`.
 
 ## Error codes
 
 | Code | Emitted by | Meaning and action |
 | --- | --- | --- |
 | `AUTH.CREDENTIALS` | pre-flight, 401 | Key missing, malformed, or rejected. Not retried |
-| `POLICY.REMOTE_JUDGE_DISABLED` | pre-flight | Opt-in not set. Use `--dry-run` or set `PLAN_ANCHOR_ALLOW_REMOTE_JUDGE=1` |
-| `JEV.RATE_LIMITED`, `JEV.OVERLOADED`, `JEV.HTTP`, `JEV.NETWORK` | transport | Transient; retried 3 times, then per-anchor `error` |
-| `JEV.RESPONSE_INVALID` | validation | Malformed or oversized response; retried, then per-anchor `error` |
+| `POLICY.REMOTE_JUDGE_DISABLED` | pre-flight | `allow_remote_judge` is `false` or absent. Absent: ask the user once, record it with `plan_anchor_settings.py set`, commit. `false`: only the user changes it. `--dry-run` works either way |
+| `DEPENDENCY.PYYAML`, `SETTINGS.*`, `REPO.NOT_FOUND` | pre-flight | The settings file could not be read; fix what the error names. Never a silent default |
+| `JEV.RATE_LIMITED`, `JEV.OVERLOADED`, `JEV.HTTP`, `JEV.NETWORK` | transport | Transient; retried 3 times, then the command exits 2 (the cell is `error` in the partial run) |
+| `JEV.RESPONSE_INVALID` | validation | Malformed or oversized response; retried, then the command exits 2 (the cell is `error` in the partial run) |
 | `JEV.CONTEXT_EXCEEDED` | 422 token limit (development gate) | Evidence could not be shortened enough; shorten it |
 | `PLAN.TOO_LARGE` | planning-gate pre-flight or 422 | The bead does not fit one request after code reduction; triage per `plan-size-and-shape.md`. Never trim or raise the cap to pass |
 | `JEV.VALIDATION` | 422 other | Request rejected; usually a malformed override |
 | `VALIDATION.ANCHORS`, `VALIDATION.INPUT` | record / arguments | Fix `anchors.json` (`validate`) or the flags |
 | `QUESTIONS.ROLES` | question set | An override renamed a question ID; keep the default IDs |
-| `ANCHOR.UNKNOWN`, `ANCHOR.DUPLICATE`, `ANCHOR.NONE`, `ANCHOR.NOT_LOCKED` | record | Wrong ID; already recorded; nothing locked; `--anchor` named a proposed or retired anchor (`--include-unlocked` is for fixtures only) |
-| `ANCHOR.DUPLICATE_CANDIDATE` | `add` | Statement or quote lexically close to an existing anchor; read the match, then `--allow-similar` only for a different constraint |
-| `ANCHOR.NOT_TESTABLE` | `add --rubric`, tuner | The statement failed the testability rubric or lint; rewrite it (`anchor-capture.md`) |
-| `ANCHOR.LINT` | `add --strict`, `update --strict` | The statement has lint warnings and strict mode was requested |
+| `ANCHOR.UNKNOWN`, `ANCHOR.NONE`, `ANCHOR.NOT_LOCKED` | record | Wrong ID; nothing locked; `--anchor` named a proposed or retired anchor (`--include-unlocked` is for fixtures only) |
+| `ANCHOR.DUPLICATE` | `add` (exit 0, `data.refused.code`) | The ID is already recorded; `update` it instead |
+| `ANCHOR.DUPLICATE_CANDIDATE` | `add` (exit 0, `data.refused.code`) | Statement or quote lexically close to an existing anchor; read the match, then `--allow-similar` only for a different constraint |
+| `ANCHOR.NOT_TESTABLE` | `add --rubric` (exit 0, `data.refused.code`), tuner | The statement failed the testability rubric or lint; rewrite it (`anchor-capture.md`) |
+| `ANCHOR.LINT` | `add --strict`, `update --strict` (exit 0, `data.refused.code`) | The statement has lint warnings and strict mode was requested |
 | `FIXTURES.MISSING` | tuner | No pass or fail fixture sentence; draft them with the user (`update --fixture-pass/--fixture-fail`) |
 | `INPUT.MISSING`, `INPUT.MALFORMED`, `INPUT.EMPTY` | files | A path is not a file, not JSON, or the item text is empty |
 | `FIXTURE.MISSING`, `FIXTURE.NONE` | `--answers-file`, `check-fixtures` | No fixture answer for an anchor; no anchor has fixtures |
 | `RUNS.NONE`, `RUNS.MISMATCH` | `coverage`, `diff` | No run files; runs for different gates or items |
+| `TRACKER.READ` | `bead-batch` | `bd show` or the children listing failed or printed no JSON; check the bead id |
+| `QUESTIONS.BEAD_UNRESOLVED`, `QUESTIONS.BEAD_MALFORMED` | `bead-batch` | The anchor records no question bead for the gate (`set-beads`); a question or candidate bead lacks exactly one fenced json object |
+| `TOURNAMENT.REQUEST_INVALID`, `TOURNAMENT.GATE_UNSUPPORTED`, `TOURNAMENT.AUTHORITY_DIGEST` | `tournament` | The tune request fails `anchor_tuning_contract.py` (`data.violation` names the rule); the gate is `testability` (not run by the runner); an authority digest does not match its content |
+| `TOURNAMENT.ORACLE_INVALID`, `TOURNAMENT.ORACLE_INCONSISTENT`, `TOURNAMENT.ORACLE_COVERAGE`, `TOURNAMENT.ORACLE_CHANGED` | `tournament` | The oracle breaks `tune-oracle.schema.json`; an expected verdict does not follow from its expected roles; a required probe is missing; the oracle differs from the one frozen in `--out` or in the tuning history (tampering is refused, never re-frozen) |
+| `TOURNAMENT.CANDIDATES_INVALID`, `TOURNAMENT.QUESTION_META`, `TOURNAMENT.BUNDLES`, `TOURNAMENT.BASELINE` | `tournament` | The candidates break `tune-candidates.schema.json`; a question mentions confidence, thresholds or the oracle; a bundle names an unknown candidate or there are too many; the baseline set is unusable |
+| `TOURNAMENT.CHOICE_INVALID` | `tournament --choose` | The chosen bundle is not a leader of the stream (the unchosen run lists them in `evidence.tie.co_leaders`) |
+| `TOURNAMENT.EVIDENCE_MISMATCH`, `TOURNAMENT.OUT_EXISTS`, `TOURNAMENT.RESULT_INVALID`, `EXECUTION.JEV` | `tournament` | A stream line answers another request or its answers differ from its raw response; `--out` already holds a stream (pass a new one or `--results`); the assembled result fails the contract; no call of the chosen bundle has an answer |
 | `SCRIPT.INTERNAL` | anywhere | Unexpected exception, reported as JSON with exit 2 |
 
-Fatal codes abort with exit 2 and `success: false`. Transient codes land in `results[].error` inside a successful run that exits 1.
+Fatal codes abort with exit 2 and `success: false`. A Jev failure is never a negative result: when any cell, pair or candidate still has no answer after retries, `judge`, `check-fixtures`, `dedupe --jev`, `rubric` and `add --rubric` exit 2 with the first failure's code. The partial run is still written: `data.run_path` names it (`judge`, `check-fixtures`) and `data.failures` lists `{id, code, message}` for each item without an answer. `add --rubric` records nothing, with or without `--allow-untestable`.
 
 ## Exit codes
 
-| Code | `judge` | `check-fixtures` | `validate` | `lint` | `rubric` | `dedupe` | `shape` |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 0 | gate passed, or dry run | every fixture landed as expected | no problems | no warnings | all testable | no likely duplicates | always |
-| 1 | a failing or `error` verdict; run file written | a mismatch | problems listed | warnings | some `needs_work` | likely duplicates | never |
-| 2 | fatal `JudgeError` or `SCRIPT.INTERNAL` | same | same | same | same | same | fatal only |
+A tool failure is the only nonzero exit. Exit 0 means the command ran (`success: true`); read the outcome from `data`, never from the exit code. Exit 2 means it could not do its job (`success: false` with a typed `error`). The only other exit code is 130, an interrupt.
+
+| Subcommand | Outcome field (exit 0) |
+| --- | --- |
+| `judge` | `data.summary.pass` (false on a failing verdict or a dry run; the run file is written), `data.dry_run` |
+| `check-fixtures` | `data.pass`, `data.mismatches`, `data.judged` (`pass` is false when nothing was judged, e.g. every check is `deterministic_only`; `data.note` says so) |
+| `validate` | `data.valid`, `data.problems`, `data.warnings` |
+| `lint` | `data.clean`, `data.warning_count` |
+| `rubric` | `data.pass` (false when any anchor is `needs_work`) |
+| `dedupe` | `data.likely_duplicates` (empty when none) |
+| `add` | `data.added`; a refusal is `added: false` with `data.refused` `{code, message, recoverable, suggested_action}` (`ANCHOR.DUPLICATE`, `ANCHOR.LINT`, `ANCHOR.DUPLICATE_CANDIDATE`, `ANCHOR.NOT_TESTABLE`, or `VALIDATION.INPUT` when the statement repeats the quote) and nothing written |
+| `update` | `data.updated`; a `--strict` refusal is `updated: false` with `data.refused.code: ANCHOR.LINT`; nothing to change is `updated: false, changed: false` |
+| `retire`, `exclude --remove` | `data.changed` (false when the anchor is already retired, or there was no exclusion to remove) |
+| `exclude --from` | `data.applied` (one entry per line), `data.count`, `data.changed` (lines that changed the record) |
+| `report`, `coverage`, `diff` | `data.pass`; `data.uncovered_anchors`; `data.pass_after`, `data.regressions` |
+| `batch`, `bead-batch` | No envelope: stdout is the result lines (or, with `bead-batch --emit`, the request lines). Exit 0 when every line has an answer; exit 2 with the error envelope on stderr when any line has `ok: false` |
+| `tournament` | `data.accepted`, `data.selected_bundle`, `data.decision`, `data.result_vars` (the `anchor-tuning-result.md.j2` variables); on a tie `data.tie_needs_choice` true, `data.co_leaders` the tied bundles, `accepted` false and nothing sealed until a `--results ... --choose <bundle_id>` run |
+
+Exit 2 covers bad arguments, missing or unreadable files, invalid settings, `POLICY.REMOTE_JUDGE_DISABLED`, credential failure, any Jev call left without an answer, a missing dependency, and `SCRIPT.INTERNAL`. Exit 130 (`CANCELED`, `recoverable: true`) is an interrupt.
 
 ## Other Jev-backed subcommands
 
 | Subcommand | Sends | Question set | Verdict |
 | --- | --- | --- | --- |
-| `rubric` | one anchor's statement, quote and scope | `assets/questions/testability.json` (single constraint, observable, requirement form, faithful to quote, scoped, positive form) | `testable` when every answer is yes at `--threshold` (default 0.6) and the lint has no error; else `needs_work` with the failing criteria; exit 1 on any `needs_work` |
-| `dedupe --jev` | one pair of anchors (statements and quotes) per request, only for pairs the lexical pass flagged at `--threshold` (Jaccard, default 0.5) | `assets/questions/dedupe.json` (same constraint?) | pairs with `jev.choice` and confidence; likely duplicates are `yes` at the global confidence threshold, or Jaccard >= 0.8 without Jev; exit 1 when any remain. `--answers-file` implies `--jev` |
+| `rubric` | one anchor's statement, quote and scope | `assets/questions/testability.json` (single constraint, observable, requirement form, faithful to quote, scoped, positive form) | `testable` when every answer is yes at `--threshold` (default 0.6) and the lint has no error; else `needs_work` with the failing criteria and a `next` hint (`judge`/`report`, anchor-tuning `triage`); `next` is absent on `testable`; `data.pass` false on any `needs_work` |
+| `dedupe --jev` | one pair of anchors (statements and quotes) per request, only for pairs the lexical pass flagged at `--threshold` (Jaccard, default 0.5) | `assets/questions/dedupe.json` (same constraint?) | pairs with `jev.choice` and confidence; likely duplicates are `yes` at the global confidence threshold, or Jaccard >= 0.8 without Jev; `data.likely_duplicates` lists any that remain. `--answers-file` implies `--jev` |
 | `check-fixtures` | one fixture sentence as the item | the gate's set | pass -> `satisfied`, fail -> `not_addressed` or `contradicted` |
+
+## Batch runner and tournament
+
+Two layers and a logged stream. Nothing in them writes to the tracker: reading the results, choosing a candidate and sealing it stay with the anchor-tuning agent.
+
+| Subcommand | Input | Output |
+| --- | --- | --- |
+| `batch` (low layer, tracker-neutral) | JSONL request lines on stdin or `--input <file>` (one parser for both), each `{"item": {id, title, text}, "anchor": {id, statement, scope, kind}, "questions": [{candidate_id, questions, roles?}, ...]}` (`assets/schemas/jev-batch-request.schema.json`) | One JSONL result line per (item, candidate, repeat) on stdout, written as soon as that line and every line before it have an answer, never held for the end; each carries `request_id` (`<prefix>/<item>/<anchor>/<candidate>/r<n>`), `run_id`, `request_sha256`, `answers` with probabilities, `verdict` at `--threshold`, `leaning` at 0, `retry_count` and `attempts` (`assets/schemas/jev-batch-result.schema.json`) |
+| `bead-batch` (high layer, bead adapter) | `--anchors`, `--gate`, `--anchor`, `--item <bead>` (repeatable); the question bead is the anchor's `beads.<gate>_questions`, and `--candidates` adds each open child bead as a candidate (closed children are skipped) | The same request lines (`--emit` prints them and calls nothing), else piped in-process through `batch`; it only reads beads |
+| `tournament` | `--request` (the tune request), `--oracle` (`tune-oracle.schema.json`), `--candidates` (`tune-candidates.schema.json`), `--out` | Builds oracle case x bundle request lines, runs them through `batch` into `<out>/results.jsonl`, scores the stream and writes `<out>/result_vars.json` for `anchor-tuning-result.md.j2`. `--results` rescores an existing stream; `--dry-run` writes `requests.dry-run.jsonl` |
+
+Every result line is also teed, unchanged, to an append-only log, flushed after every line: `batch` and `bead-batch` write `<anchors dir>/anchor-runs/tournament-<run>.jsonl` (`--run-dir`, `--run-name`; default name a UTC timestamp), so the log exists even when the caller consumes stdout; the tournament's log is `<out>/results.jsonl`. At most 4 calls run at once (`--max-workers`, 1 to 4). A failed call is retried once (recorded in `retry_count` and `attempts`); `AUTH.CREDENTIALS` and `POLICY.*` stop the remaining calls. Every request line is validated, and every request size checked against `--max-request-bytes`, before the first call. A live run needs a key and `allow_remote_judge: true` (`--repository-root`); `--dry-run` and `--answers-file` (keys `<item>/<candidate>/r<n>`, `<item>/<candidate>`, `<candidate>`, `*`; a list gives successive attempts; `{"__error__": "<code>"}` simulates a failure) never contact Jev.
 
 `lint` and `shape` are deterministic and never contact Jev. `lint` with neither `--id` nor `--all` lints every non-retired anchor.
 
@@ -135,14 +172,17 @@ Fatal codes abort with exit 2 and `success: false`. Transient codes land in `res
 | `--threshold` | 0.6 | Confidence gate (`verdict-gating.md`) |
 | `--questions` | `assets/questions/<gate>.json` | Alternative question-set file |
 | `--overrides-file` | none | Per-anchor overrides read from the question beads |
+| `--extra-questions` | none | Repeatable JSONL file of consumer questions, one `{id, type, instructions, criteria}` per line. Added to the set for every cell, answered and recorded in `results[].answers`, listed with path, sha256 and ids in the run's `extra_questions`; never gating. An id already in the set, or a role mapped to an extra question, is refused before any call |
+| `--no-triage-questions` | off | Skip the default triage questions. Without it, `judge --gate plan` adds `.sc/plan-anchor/triage/plan-questions.jsonl` next to the nearest `settings.yaml` (from `--repository-root`), else the shipped `assets/triage/plan-questions.jsonl`. Extra answers are optional: an answer missing from the response or fixture is skipped, and when the body exceeds `--max-request-bytes` the extras are dropped (`extra_questions_dropped`) rather than the item refused. `questions_sha256` covers the gate questions only; `extra_questions_sha256` covers the extras |
 | `--max-item-chars` | 24,000 | Development gate: truncate the evidence to this. Planning gate: refuse a larger bead with `PLAN.TOO_LARGE` |
 | `--max-request-bytes` | 24,000 plan / 64,000 dev | Pre-flight cap on the serialised request (planning gate: refuse; development gate: shorten) |
-| `--confirm-near-threshold` | on | Re-ask once when a required-role confidence is within 0.10 of the threshold; disagreement makes the cell `underspecified` with `unstable: true` (`--no-confirm`, `PLAN_ANCHOR_CONFIRM_NEAR=0`) |
+| `--confirm-near-threshold` | on | Re-ask once when a required-role confidence is within 0.10 of the threshold; disagreement makes the cell `underspecified` with `unstable: true` (`--no-confirm` turns it off) |
 | `--max-code-lines` | 8 | Planning gate: the shortest fenced block that may be sent as signatures plus a redaction marker, only when the bead would not otherwise fit (`plan-size-and-shape.md`) |
 | `--min-item-chars` | 2,000 | Development gate: floor for context shortening |
 | `--timeout` | 30 s | Per-request socket timeout |
 | `--run-dir` / `--out` | `<anchors dir>/anchor-runs` | Where the run file goes |
-| `--dry-run`, `--answers-file`, `--allow-remote`, `--include-unlocked` | | See above |
+| `--repository-root` | `.` | Any path inside the repository whose settings file holds `allow_remote_judge` (live calls only) |
+| `--dry-run`, `--answers-file`, `--include-unlocked` | | See above |
 
 ## Cost and latency
 
@@ -152,12 +192,8 @@ TypeSafe prices input tokens only (output is free) at a fraction of a cent per m
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TYPESAFE_API_KEY` | none | Required for live runs |
-| `PLAN_ANCHOR_ALLOW_REMOTE_JUDGE` | unset | Must be `1` for live runs |
-| `PLAN_ANCHOR_JEV_MODEL` | `jev-latest` | Model alias or pinned version |
-| `PLAN_ANCHOR_JEV_URL` | TypeSafe endpoint | Proxy or mock server |
-| `PLAN_ANCHOR_CONFIDENCE_THRESHOLD` | `0.6` | Gating threshold |
-| `PLAN_ANCHOR_MAX_ITEM_CHARS` | `24000` | Evidence truncation (development gate) and bead size limit (planning gate) |
-| `PLAN_ANCHOR_MAX_CODE_LINES` | `8` | Default for `--max-code-lines` |
+| `TYPESAFE_API_KEY` | none | Preferred TypeSafe credential for live runs; when absent, use the documented platform credential store |
+
+It is the only environment variable the plugin reads. Model, threshold, size limits and near-threshold confirmation are the flags above, with checked-in defaults. The installed troubleshooting reference specifies the Keychain, Credential Manager, and Secret Service fallback entries.
 
 Codex environment policy for `TYPESAFE_API_KEY`: `installation-and-troubleshooting.md`.

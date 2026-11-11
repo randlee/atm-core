@@ -22,12 +22,14 @@ def no_beads_dir(monkeypatch):
 class Sender:
     def __init__(self):
         self.sent, self.fail = [], 0
+        self.identities = []
 
-    def __call__(self, team, lead, body):
+    def __call__(self, team, lead, body, tool_identity):
         if self.fail:
             self.fail -= 1
             return False, "atm send failed"
         self.sent.append((team, lead, body))
+        self.identities.append(tool_identity)
         return True, ""
 
 
@@ -35,8 +37,11 @@ class Sender:
 def setup(tmp_path):
     root = workspace(tmp_path)
     (root / ".atm-bd").mkdir(exist_ok=True)
-    (root / ".atm-bd" / "phase-x.toml").write_text('root = "root-x"\nlead = "lead-x"\n')
-    (root / ".atm-bd" / "phase-y.toml").write_text('root = "root-y"\nlead = "lead-y"\n')
+    (root / ".atm-bd" / "phase-x.toml").write_text('root = "root-x"\nlead = "lead-x"\nteam = "team-x"\n')
+    (root / ".atm-bd" / "phase-y.toml").write_text('root = "root-y"\nlead = "lead-y"\nteam = "team-y"\n')
+    config = root / ".claude/project/atm-bd-orchestration.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text("max_sanity_rounds: 5\ntool_identity: configured-bot@tools\n")
     bd = FakeBd()
     bd.add("root-x", labels=["phase-x"])
     bd.add("root-y", labels=["phase-y"], status="closed")
@@ -46,7 +51,7 @@ def setup(tmp_path):
 
 def run(setup, **custom):
     root, bd, cache, sender = setup
-    return cron.tick(root, custom or {"team": "t"}, cache=cache, send_fn=sender)
+    return cron.tick(root, custom, cache=cache, send_fn=sender)
 
 
 def escalate(bd, cache):
@@ -67,7 +72,8 @@ def test_escalation_is_sent_once_to_the_phase_lead(setup):
     root, bd, cache, sender = setup
     escalate(bd, cache)
     assert run(setup) == {"result": "pass-through"}
-    assert [(t, lead) for t, lead, _ in sender.sent] == [("t", "lead-x")]
+    assert [(t, lead) for t, lead, _ in sender.sent] == [("team-x", "lead-x")]
+    assert sender.identities == ["configured-bot@tools"]
     assert "b1" in sender.sent[0][2] and "resolve 1" in sender.sent[0][2]
     run(setup)
     assert len(sender.sent) == 1
@@ -94,9 +100,23 @@ def test_sync_failure_is_announced_once_per_cause(setup):
     assert cache.sync_alert("x") is None
 
 
-def test_missing_team_is_refused(setup):
+def test_custom_team_is_not_required(setup):
     root, bd, cache, sender = setup
+    assert cron.tick(root, {}, cache=cache, send_fn=sender) == {"result": "pass-through"}
+
+
+def test_phase_team_falls_back_to_repository_default(setup):
+    root, _bd, _cache, _sender = setup
+    (root / ".atm-bd" / "phase-x.toml").write_text('root = "root-x"\nlead = "lead-x"\n')
+    (root / ".atm.toml").write_text('[atm]\ndefault_team = "repo-team"\n')
+    assert cron.phases(root)["x"]["team"] == "repo-team"
+
+
+def test_missing_phase_and_repository_team_is_refused(setup):
+    root, _bd, cache, sender = setup
+    (root / ".atm-bd" / "phase-x.toml").write_text('root = "root-x"\nlead = "lead-x"\n')
     assert cron.tick(root, {}, cache=cache, send_fn=sender)["result"] == "refused"
+    assert cron.should_stop(root, cache) is False
 
 
 def test_stop_only_when_no_active_phase_and_no_open_work(setup):
@@ -115,16 +135,16 @@ def test_tick_budget_defers_drain_entries(setup):
     root, bd, cache, sender = setup
     cache.write("b1", "close", {}, idem_key="w", actor="san")
     times = iter([0.0] + [100.0] * 20)
-    result = cron.tick(root, {"team": "t"}, cache=cache, send_fn=sender, clock=lambda: next(times))
+    result = cron.tick(root, {}, cache=cache, send_fn=sender, clock=lambda: next(times))
     assert result == {"result": "pass-through"}
     assert cache.db.execute("SELECT state FROM journal").fetchone()["state"] == "pending"
 
 
 def test_custom_phases_limits_sync_and_stop(setup):
     root, bd, cache, sender = setup
-    (root / ".atm-bd" / "phase-z.toml").write_text('root = "root-z"\nlead = "lead-z"\n')
+    (root / ".atm-bd" / "phase-z.toml").write_text('root = "root-z"\nlead = "lead-z"\nteam = "team-z"\n')
     bd.add("root-z", labels=["phase-z"])
-    assert run(setup, team="t", phases=["z"]) == {"result": "pass-through"}
+    assert run(setup, phases=["z"]) == {"result": "pass-through"}
     synced = [c[c.index("-l") + 1] for c in bd.calls if c[1] == "list" and "-l" in c]
     assert synced == ["phase-z"]
     bd.rows["root-z"]["status"] = "closed"
@@ -135,7 +155,7 @@ def test_custom_phases_limits_sync_and_stop(setup):
 
 
 def test_malformed_custom_phases_is_refused(setup):
-    assert run(setup, team="t", phases="bk")["result"] == "refused"
+    assert run(setup, phases="bk")["result"] == "refused"
 
 
 def down(bd):
@@ -151,7 +171,9 @@ def test_backend_outage_is_announced_once_and_sync_failures_are_not(setup):
     down(bd)
     for _ in range(bc.MAX_ATTEMPTS + 2):
         assert run(setup) == {"result": "pass-through"}
-    assert [(lead, "unreachable" in body) for _, lead, body in sender.sent] == [("lead-x", True)]
+    assert [(team, lead, "unreachable" in body) for team, lead, body in sender.sent] == [
+        ("team-x", "lead-x", True)
+    ]
     assert cache.status()["escalated"] == []
     bd.fail.clear()
     assert run(setup) == {"result": "pass-through"}
@@ -165,7 +187,9 @@ def test_outage_with_uncached_roots_still_tells_every_configured_lead(setup):
     root, bd, cache, sender = setup
     down(bd)
     assert run(setup) == {"result": "pass-through"}
-    assert sorted(lead for _, lead, _ in sender.sent) == ["lead-x", "lead-y"]
+    assert sorted((team, lead) for team, lead, _ in sender.sent) == [
+        ("team-x", "lead-x"), ("team-y", "lead-y")
+    ]
 
 
 def test_outage_is_not_cleared_while_only_the_backend_check_answers(setup):
@@ -189,9 +213,7 @@ def test_undelivered_outage_announcement_is_retried(setup):
 
 
 @pytest.mark.parametrize("code, delivered", [(0, True), (1, False)])
-def test_send_runs_atm_send_as_atm_bd_at_tool_and_reports_delivery(monkeypatch, code, delivered):
-    # cron@tool is atm's daemon-owned scheduler principal and refuses ordinary sends; the module sends as the
-    # installer's atm-bd@tool member, and a refused send stays undelivered.
+def test_send_uses_configured_tool_identity_and_reports_delivery(monkeypatch, code, delivered):
     calls = []
 
     def run(argv, **kwargs):
@@ -199,11 +221,12 @@ def test_send_runs_atm_send_as_atm_bd_at_tool_and_reports_delivery(monkeypatch, 
         return subprocess.CompletedProcess(argv, code, "", "" if code == 0 else "refused")
 
     monkeypatch.setattr(cron.subprocess, "run", run)
+    monkeypatch.setenv("ATM_BIN", "/wrong/atm")
     monkeypatch.setenv("ATM_IDENTITY", "someone")
     monkeypatch.setenv("ATM_TEAM", "elsewhere")
-    ok, _detail = cron.send("dev-team", "lead", "body")
+    ok, _detail = cron.send("dev-team", "lead", "body", "configured-bot@tools")
     assert ok is delivered
     [(argv, kwargs)] = calls
-    assert argv == [cron.ATM, "send", "lead@dev-team", "--team", "tool", "--stdin", "--json"]
+    assert argv == ["atm", "send", "lead@dev-team", "--as", "configured-bot@tools", "--stdin", "--json"]
     assert kwargs["input"] == "body"
-    assert (kwargs["env"]["ATM_IDENTITY"], kwargs["env"]["ATM_TEAM"]) == ("atm-bd", "tool")
+    assert "env" not in kwargs

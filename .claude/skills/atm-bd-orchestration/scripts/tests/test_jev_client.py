@@ -3,11 +3,17 @@ import contextlib
 import importlib.util
 import io
 import json
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+from subprocess_helpers import (
+    isolated_git_env,
+    run_fixture_git,
+    set_fixture_hooks_path,
+)
 
 spec = importlib.util.spec_from_file_location("jev_client", Path(__file__).parents[1] / "jev_client.py")
 assert spec is not None and spec.loader is not None
@@ -45,24 +51,45 @@ class FakeClock:
 
 
 class JevClientTests(unittest.TestCase):
+    def fixture_repo(self, root):
+        root = Path(root)
+        repo = root / "repo"
+        repo.mkdir()
+        env, _ = isolated_git_env(root)
+        self.git(repo, env, "init", "-q")
+        set_fixture_hooks_path(repo, env=env)
+        return repo, env
+
+    def git(self, repo, env, *args):
+        return run_fixture_git(
+            ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            env=env,
+        ).stdout.strip()
+
     def test_missing_key_no_network(self):
         with patch.dict(client.os.environ, {}, clear=True), patch.object(client.http.client, "HTTPSConnection") as http:
             with self.assertRaises(client.JevError):
                 client.evaluate(client.startup_request(), sleep=no_sleep)
             http.assert_not_called()
 
-    def startup(self, argv, team, daemon, environ=None, phase_lead="appointed-lead"):
-        """Run the startup probe without a key; `atm escalation list` answers with `team` / `daemon` recipients."""
+    def startup(self, argv, team, daemon, environ=None, phase_lead="appointed-lead", tool_identity="atm-bd@tool"):
+        """Run the startup probe with an explicit repository and phase configuration."""
         def run(cmd, **kwargs):
-            listed = {"--team": team} if "--team" in cmd else {"": daemon}
-            recipients = next(iter(listed.values()))
+            if "--team" in cmd:
+                requested_team = cmd[cmd.index("--team") + 1]
+                recipients = team if requested_team == "phase-team" else []
+            else:
+                recipients = daemon
             return MagicMock(returncode=0 if recipients is not None else 1, stdout=json.dumps({"recipients": recipients or []}))
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
             write_phase(repo, "x", lead=phase_lead)
+            phase_path = repo / ".atm-bd" / "phase-x.toml"
+            phase_text = phase_path.read_text()
+            phase_path.write_text(phase_text.replace("\n[templates]", '\nteam = "phase-team"\n\n[templates]'))
             config = repo / ".claude/project/atm-bd-orchestration.yaml"
             config.parent.mkdir(parents=True)
-            config.write_text("lead: stale-repository-lead\n")
+            config.write_text(f"tool_identity: {tool_identity}\n")
             return self.run_startup(argv, environ, repo, run)
 
     def run_startup(self, argv, environ, repo, run):
@@ -72,23 +99,30 @@ class JevClientTests(unittest.TestCase):
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 rc = client.main(argv, sleep=no_sleep)
-        sends = [(c.args[0][2], c.kwargs["input"]) for c in send.call_args_list if c.args[0][:2] == ["atm", "send"]]
+        sends = [(c.args[0][2], c.kwargs["input"], c.args[0]) for c in send.call_args_list if c.args[0][:2] == ["atm", "send"]]
         return rc, json.loads(output.getvalue()), sends
 
-    def test_startup_announces_to_escalation_recipients_else_lead(self):
-        rc, result, sends = self.startup(["--startup", "--announce", "--phase", "x"], ["oversight@team"], ["daemon@host"])
+    def test_startup_announcement_uses_configured_phase_recipients_despite_conflicting_environment(self):
+        rc, result, sends = self.startup(["--startup", "--announce", "--phase", "x"],
+                                         ["oversight-one@phase-team", "oversight-two@phase-team"], ["daemon@host"],
+                                         environ={"ATM_TEAM": "conflicting-team"})
         self.assertEqual(rc, 2)
         self.assertTrue(result["error"]["recoverable"])
         self.assertEqual(set(result["error"]), {"code", "message", "recoverable", "suggested_action"})
-        self.assertEqual([to for to, _ in sends], ["oversight@team"])
-        self.assertIn(result["error"]["message"], sends[0][1])
-        _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], [], ["daemon@host"])
-        self.assertEqual([to for to, _ in sends], ["daemon@host"])
-        _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], [], None)
-        self.assertEqual([to for to, _ in sends], ["appointed-lead"])
-        self.assertTrue(sends[0][1].endswith("No escalation recipient is set."))
-        _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], None, ["daemon@host"], environ={})
-        self.assertEqual([to for to, _ in sends], ["daemon@host"])
+        self.assertEqual([to for to, _, _ in sends], ["oversight-one@phase-team", "oversight-two@phase-team"])
+        for _, text, argv in sends:
+            self.assertIn(result["error"]["message"], text)
+            self.assertEqual(argv[argv.index("--as") + 1], "atm-bd@tool")
+        self.assertEqual(len(sends), 2)
+
+    def test_announcement_falls_back_to_daemon_recipients(self):
+        _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], [], ["daemon-one@host", "daemon-two@host"])
+        self.assertEqual([to for to, _, _ in sends], ["daemon-one@host", "daemon-two@host"])
+
+    def test_announcement_uses_repository_tool_identity_override(self):
+        _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], [], None,
+                                   tool_identity="custom-bot@tools")
+        self.assertEqual(sends[0][2][sends[0][2].index("--as") + 1], "custom-bot@tools")
 
     def test_startup_without_announce_sends_nothing(self):
         rc, _, sends = self.startup(["--startup"], ["oversight@team"], ["daemon@host"])
@@ -116,24 +150,21 @@ class JevClientTests(unittest.TestCase):
                                              environ={"ATM_TEAM": "t", "TYPESAFE_API_KEY": "test-only-key"})
             http.assert_not_called()
         self.assertEqual((rc, result), (0, {"success": True, "data": {"announced": error}, "error": None}))
-        self.assertEqual([to for to, _ in sends], ["oversight@team"])
+        self.assertEqual([to for to, _, _ in sends], ["oversight@team"])
         self.assertIn(error, sends[0][1])
-        _, _, sends = self.startup(["--announce", "--error", error, "--phase", "x"], [], None)
-        self.assertEqual([to for to, _ in sends], ["appointed-lead"])
-        self.assertIn(error, sends[0][1])
-        self.assertTrue(sends[0][1].endswith("No escalation recipient is set."))
         for argv in (["--error", error], ["--announce", "--error", "", "--phase", "x"],
                      ["--announce", "--error", error], ["--startup", "--error", error, "--announce", "--phase", "x"],
                      ["--request", "r.json", "--announce", "--phase", "x"]):
             with self.subTest(argv=argv), self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 client.main(argv, sleep=no_sleep)
 
-    def test_announcement_uses_the_selected_phase_lead_despite_environment_and_yaml(self):
+    def test_announcement_falls_back_to_phase_lead_with_no_recipient_note(self):
         for lead in ("phase-owner-one", "phase-owner-two"):
             with self.subTest(lead=lead):
                 _, _, sends = self.startup(["--startup", "--announce", "--phase", "x"], [], None,
                                            environ={"ATM_IDENTITY": "wrong-environment-lead"}, phase_lead=lead)
-                self.assertEqual([recipient for recipient, _ in sends], [lead])
+                self.assertEqual([recipient for recipient, _, _ in sends], [f"{lead}@phase-team"])
+                self.assertIn("no escalation recipient is set", sends[0][1].lower())
 
     def test_missing_phase_settings_stop_before_probe_or_send(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -334,6 +365,59 @@ class JevClientTests(unittest.TestCase):
         self.assertEqual(conn.request.call_count, 4)
         self.assertEqual(raised.exception.message, "Jev retry budget exhausted")
 
+    def test_400_max_tokens_exceeded_splits_like_413(self):
+        request = client.written_request("delivery", "x" * 20000)
+        answer = {"model": client.MODEL, "answers": {"written": {
+            "type": "choice", "choice": "yes", "confidence": 1.0, "probabilities": {"yes": 1.0, "no": 0.0}}}}
+        good = MagicMock(status=200)
+        good.read.return_value = json.dumps(answer).encode()
+        too_many_tokens = MagicMock(status=400)
+        too_many_tokens.read.return_value = b'{"detail":{"error_type":"max_tokens_exceeded"}}'
+        conn = MagicMock()
+        conn.getresponse.side_effect = [too_many_tokens, good, good, good]
+        with patch.dict(client.os.environ, {"TYPESAFE_API_KEY": "test-only-key"}), \
+             patch.object(client.http.client, "HTTPSConnection", return_value=conn):
+            result = client.evaluate_parts([request], "test-only-key", ["x"], sleep=no_sleep)
+        self.assertGreaterEqual(len(result["parts"]), 2)
+        sent = [json.loads(call.kwargs["body"]) for call in conn.request.call_args_list[1:]]
+        self.assertEqual("".join(part["state"]["evidence"] for part in sent), "x" * 20000)
+
+    def test_400_max_tokens_exceeded_on_every_attempt_names_the_token_limit(self):
+        request = client.written_request("delivery", "x" * 50000, part=("1 of 1", ["x"]))
+        conn = MagicMock()
+        conn.getresponse.return_value.status = 400
+        conn.getresponse.return_value.read.return_value = b'{"detail":{"error_type":"max_tokens_exceeded"}}'
+        with patch.dict(client.os.environ, {"TYPESAFE_API_KEY": "test-only-key"}), \
+             patch.object(client.http.client, "HTTPSConnection", return_value=conn), \
+             self.assertRaises(client.JevError) as raised:
+            client.evaluate_parts([request], "test-only-key", sleep=no_sleep)
+        self.assertEqual(conn.request.call_count, 4)
+        self.assertEqual(raised.exception.code, "SANITY.JEV_REQUEST_TOO_LARGE")
+        self.assertRegex(raised.exception.message, r"^Jev request oversized \(\d+ bytes over Jev's token limit\);")
+        self.assertIsNotNone(client.CLIENT_MESSAGES.fullmatch(raised.exception.message))
+
+    def test_4xx_names_the_parsed_error_type_and_nothing_else_from_the_body(self):
+        cases = [(400, b'{"detail":{"error_type":"invalid_request","msg":"private"}}',
+                  "Jev HTTP 400 error_type=invalid_request; response body withheld"),
+                 (401, b'{"detail":{"error_type":"invalid_api_key"}}',
+                  "Jev HTTP 401 error_type=invalid_api_key; response body withheld"),
+                 (400, b'{"detail":{"error_type":"Private Body Text"}}', "Jev HTTP 400; response body withheld"),
+                 (400, b'{"detail":"private"}', "Jev HTTP 400; response body withheld"),
+                 (503, b'{"detail":{"error_type":"overloaded"}}', "Jev HTTP 503; response body withheld")]
+        for status, body, message in cases:
+            with self.subTest(status=status, body=body):
+                conn = MagicMock()
+                conn.getresponse.return_value.status = status
+                conn.getresponse.return_value.read.return_value = body
+                with patch.dict(client.os.environ, {"TYPESAFE_API_KEY": "test-only-key"}), \
+                     patch.object(client.http.client, "HTTPSConnection", return_value=conn), \
+                     self.assertRaises(client.JevError) as raised:
+                    client.evaluate(client.startup_request(), sleep=no_sleep)
+                self.assertEqual(conn.request.call_count, 1)
+                self.assertEqual(raised.exception.code, "SANITY.JEV_UNAVAILABLE")
+                self.assertEqual(raised.exception.message, message)
+                self.assertIsNotNone(client.CLIENT_MESSAGES.fullmatch(raised.exception.message))
+
     def test_elapsed_includes_retries_and_is_present_on_failure(self):
         for outcomes, elapsed, status in [([529, 200], 4.5, 0), ([OSError("down")] * 4, 5.0, 2),
                                            ([502] * 4, 11.0, 2), ([529] * 4, 11.0, 2), ([429] * 4, 11.0, 2),
@@ -479,23 +563,21 @@ class JevClientTests(unittest.TestCase):
         self.assertFalse(client.verify_receipt({k: v for k, v in receipt.items() if k != "mac"}, "test-only-key"))
 
     def test_assignment_request_carries_the_deliverable_verbatim_and_the_committed_diff(self):
-        import subprocess, tempfile
-        with tempfile.TemporaryDirectory() as tmp:
-            def git(*args):
-                return subprocess.run(["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", *args],
-                                      check=True, capture_output=True, text=True).stdout.strip()
-            git("init", "-q")
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            tmp, env = self.fixture_repo(directory)
             Path(tmp, "server.py").write_text("bind()\ndrop()\nrebind()\n")
             Path(tmp, "notes.md").write_text("context note\n")
-            git("add", "-A"); git("commit", "-qm", "base")
-            base = git("rev-parse", "HEAD")
+            self.git(tmp, env, "add", "-A"); self.git(tmp, env, "commit", "-qm", "base")
+            base = self.git(tmp, env, "rev-parse", "HEAD")
             Path(tmp, "server.py").write_text("bind()\nhand_off_fd()\n")
-            git("commit", "-qam", "fix")
-            commit = git("rev-parse", "HEAD")
+            self.git(tmp, env, "commit", "-qam", "fix")
+            commit = self.git(tmp, env, "rev-parse", "HEAD")
             assignment = {"deliverable": {"number": 1, "text": "Keep the listener open and hand its fd to the child."},
-                          "worktree_path": tmp, "commit": commit, "base_sha": base,
+                          "worktree_path": str(tmp), "commit": commit, "base_sha": base,
                           "changed_files": ["server.py"], "context": ["notes.md"]}
-            (request,) = client.assignment_requests(assignment)
+            with patch.dict(client.os.environ, env):
+                (request,) = client.assignment_requests(assignment)
             self.assertEqual(request["state"]["deliverable"], assignment["deliverable"]["text"])
             self.assertIn("+hand_off_fd()", request["state"]["evidence"])
             self.assertIn("-rebind()", request["state"]["evidence"])
@@ -511,7 +593,7 @@ class JevClientTests(unittest.TestCase):
             file.write_text(json.dumps(assignment))
             try:
                 output = io.StringIO()
-                with patch.dict(client.os.environ, {"TYPESAFE_API_KEY": "test-only-key"}), \
+                with patch.dict(client.os.environ, {**env, "TYPESAFE_API_KEY": "test-only-key"}), \
                      patch.object(client.http.client, "HTTPSConnection", return_value=conn), contextlib.redirect_stdout(output):
                     self.assertEqual(client.main(["--assignment", str(file)], sleep=no_sleep), 0)
                 sent = json.loads(conn.request.call_args.kwargs["body"])
@@ -525,7 +607,7 @@ class JevClientTests(unittest.TestCase):
                                          "Assignment lacks deliverable text, worktree, commits or file lists")):
                     file.write_text(json.dumps(broken))
                     output = io.StringIO()
-                    with patch.dict(client.os.environ, {"TYPESAFE_API_KEY": "test-only-key"}), contextlib.redirect_stdout(output):
+                    with patch.dict(client.os.environ, {**env, "TYPESAFE_API_KEY": "test-only-key"}), contextlib.redirect_stdout(output):
                         self.assertEqual(client.main(["--assignment", str(file)], sleep=no_sleep), 2)
                     error = json.loads(output.getvalue())["error"]
                     self.assertEqual((error["code"], error["message"]), ("VALIDATION.INPUT", message))
@@ -533,77 +615,74 @@ class JevClientTests(unittest.TestCase):
                 file.unlink()
 
     def test_oversize_assignment_splits_and_preserves_context(self):
-        import subprocess, tempfile
-        with tempfile.TemporaryDirectory() as tmp:
-            def git(*args):
-                return subprocess.run(["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", *args],
-                                      check=True, capture_output=True, text=True).stdout.strip()
-            git("init", "-q")
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            tmp, env = self.fixture_repo(directory)
             Path(tmp, "server.py").write_text("bind()\n")
             big = "".join(f"line {i} " + "x" * 90 + "\n" for i in range(1, 1201))  # ~120 KB, over the cap
             Path(tmp, "big.md").write_text(big)
-            git("add", "-A"); git("commit", "-qm", "base")
-            base = git("rev-parse", "HEAD")
+            self.git(tmp, env, "add", "-A"); self.git(tmp, env, "commit", "-qm", "base")
+            base = self.git(tmp, env, "rev-parse", "HEAD")
             Path(tmp, "server.py").write_text("bind()\nhand_off_fd()\n")
-            git("commit", "-qam", "fix")
-            assignment = {"deliverable": {"number": 1, "text": "Hand the fd to the child."}, "worktree_path": tmp,
-                          "commit": git("rev-parse", "HEAD"), "base_sha": base,
+            self.git(tmp, env, "commit", "-qam", "fix")
+            assignment = {"deliverable": {"number": 1, "text": "Hand the fd to the child."}, "worktree_path": str(tmp),
+                          "commit": self.git(tmp, env, "rev-parse", "HEAD"), "base_sha": base,
                           "changed_files": ["server.py"], "context": ["big.md"]}
             file = Path(tmp, "..", Path(tmp).name + "-assignment.json").resolve()
             file.write_text(json.dumps(assignment))
             try:
-                requests = client.assignment_requests(assignment)
+                with patch.dict(client.os.environ, env):
+                    requests = client.assignment_requests(assignment)
                 self.assertGreater(len(requests), 1)
                 self.assertEqual("".join(r["state"].get("context", {}).get("big.md", "") for r in requests), big)
                 self.assertTrue(all(client.size(r) <= client.MAX_REQUEST_BYTES for r in requests))
-                (rebuilt,) = client.assignment_requests({**assignment, "context": ["big.md:600-602"]})  # the rebuild fits
+                with patch.dict(client.os.environ, env):
+                    (rebuilt,) = client.assignment_requests({**assignment, "context": ["big.md:600-602"]})  # the rebuild fits
                 client.validate_request(rebuilt)
                 self.assertEqual(rebuilt["state"]["context"], {"big.md:600-602": "".join(big.splitlines(keepends=True)[599:602])})
-                (retry,) = client.assignment_requests({**assignment, "context": []})
+                with patch.dict(client.os.environ, env):
+                    (retry,) = client.assignment_requests({**assignment, "context": []})
                 client.validate_request(retry)
             finally:
                 file.unlink()
 
     def test_a_line_range_context_entry_sends_only_those_lines_and_a_bad_range_is_rejected(self):
         import tempfile
-        with tempfile.TemporaryDirectory() as tmp:
-            base, commit = self.split_repo(tmp, {"a.py": "start\nchanged\n"})
+        with tempfile.TemporaryDirectory() as directory:
+            tmp, env = self.fixture_repo(directory)
+            base, commit = self.split_repo(tmp, env, {"a.py": "start\nchanged\n"})
             Path(tmp, "notes.md").write_text("one\ntwo\nthree\nfour\n")
-            client.subprocess.run(["git", "-C", tmp, "add", "notes.md"], check=True)
-            client.subprocess.run(["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "notes"],
-                                  check=True, capture_output=True)
-            commit = client.subprocess.run(["git", "-C", tmp, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-            assignment = {"deliverable": {"number": 1, "text": "d"}, "worktree_path": tmp, "commit": commit,
+            self.git(tmp, env, "add", "notes.md")
+            self.git(tmp, env, "commit", "-qm", "notes")
+            commit = self.git(tmp, env, "rev-parse", "HEAD")
+            assignment = {"deliverable": {"number": 1, "text": "d"}, "worktree_path": str(tmp), "commit": commit,
                           "base_sha": base, "changed_files": ["a.py"], "context": ["notes.md:2-3", "notes.md"]}
-            (request,) = client.assignment_requests(assignment)
+            with patch.dict(client.os.environ, env):
+                (request,) = client.assignment_requests(assignment)
             self.assertEqual(request["state"]["context"], {"notes.md:2-3": "two\nthree\n", "notes.md": "one\ntwo\nthree\nfour\n"})
             for entry in ("notes.md:0-2", "notes.md:3-2", "notes.md:4-5"):
-                with self.subTest(entry=entry), self.assertRaises(client.JevError) as raised:
+                with self.subTest(entry=entry), patch.dict(client.os.environ, env), \
+                     self.assertRaises(client.JevError) as raised:
                     client.assignment_requests({**assignment, "context": [entry]})
                 self.assertEqual((raised.exception.code, raised.exception.message),
                                  ("VALIDATION.INPUT", f"Context entry {entry} names lines outside its file at the pinned commit"))
                 self.assertIn("Fix that `context` entry", client.failure(raised.exception)["error"]["suggested_action"])
-            with self.assertRaises(client.JevError) as raised:
+            with patch.dict(client.os.environ, env), self.assertRaises(client.JevError) as raised:
                 client.assignment_requests({**assignment, "context": ["missing.md:1-2"]})
             self.assertEqual(raised.exception.message, "Committed evidence unreadable at the pinned commits")
 
-    def split_repo(self, tmp, files):
+    def split_repo(self, tmp, env, files):
         """A repository whose one commit changes `files` (name -> new text) from a one-line base."""
-        import subprocess
-        def git(*args):
-            return subprocess.run(["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", *args],
-                                  check=True, capture_output=True, text=True).stdout.strip()
-        git("init", "-q")
         for name in files:
             Path(tmp, name).write_text("start\n" + "\n".join(f"keep {i}" for i in range(0, 4000, 40)) + "\n")
-        git("add", "-A"); git("commit", "-qm", "base")
-        base = git("rev-parse", "HEAD")
+        self.git(tmp, env, "add", "-A"); self.git(tmp, env, "commit", "-qm", "base")
+        base = self.git(tmp, env, "rev-parse", "HEAD")
         for name, text in files.items():
             Path(tmp, name).write_text(text)
-        git("commit", "-qam", "change")
-        return base, git("rev-parse", "HEAD")
+        self.git(tmp, env, "commit", "-qam", "change")
+        return base, self.git(tmp, env, "rev-parse", "HEAD")
 
-    def run_split(self, assignment, choices):
+    def run_split(self, assignment, choices, env):
         """Run `--assignment` with Jev answering each part in turn from `choices`; the sent requests and the output."""
         sent, replies = [], iter(choices)
         def connection(*_args, **_kwargs):
@@ -621,7 +700,7 @@ class JevClientTests(unittest.TestCase):
         file.write_text(json.dumps(assignment))
         try:
             output = io.StringIO()
-            with patch.dict(client.os.environ, {"TYPESAFE_API_KEY": "test-only-key"}), \
+            with patch.dict(client.os.environ, {**env, "TYPESAFE_API_KEY": "test-only-key"}), \
                  patch.object(client.http.client, "HTTPSConnection", side_effect=connection), contextlib.redirect_stdout(output):
                 rc = client.main(["--assignment", str(file)], sleep=no_sleep)
         finally:
@@ -630,17 +709,18 @@ class JevClientTests(unittest.TestCase):
 
     def test_a_diff_over_the_cap_is_split_by_hunks_and_every_part_returns_its_own_result(self):
         import tempfile
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp, env = self.fixture_repo(directory)
             # one file whose diff alone is over the cap: 100 changed hunks of ~1.5 KB each, plus a small file
             big = "start\n" + "\n".join(f"keep {i}\n" + "\n".join(f"added {i}.{j} " + "y" * 60 for j in range(20))
                                        for i in range(0, 4000, 40)) + "\n"
-            base, commit = self.split_repo(tmp, {"big.py": big, "small.py": "start\nsmall change\n"})
-            assignment = {"deliverable": {"number": 1, "text": "Add the generated lines."}, "worktree_path": tmp,
+            base, commit = self.split_repo(tmp, env, {"big.py": big, "small.py": "start\nsmall change\n"})
+            assignment = {"deliverable": {"number": 1, "text": "Add the generated lines."}, "worktree_path": str(tmp),
                           "commit": commit, "base_sha": base, "changed_files": ["big.py", "small.py"], "context": []}
-            whole = client.subprocess.run(["git", "-C", tmp, "diff", "--no-color", f"{base}...{commit}", "--", "big.py"],
-                                          capture_output=True, text=True).stdout
+            whole = self.git(tmp, env, "diff", "--no-color", f"{base}...{commit}", "--", "big.py")
             self.assertGreater(len(whole.encode()), client.MAX_REQUEST_BYTES)
-            requests = client.assignment_requests(assignment)
+            with patch.dict(client.os.environ, env):
+                requests = client.assignment_requests(assignment)
             self.assertGreater(len(requests), 1)
             for i, request in enumerate(requests, 1):
                 self.assertLessEqual(len(client.validate_request(request)), client.MAX_REQUEST_BYTES)
@@ -657,7 +737,7 @@ class JevClientTests(unittest.TestCase):
                 self.assertNotIn("every part", instruction)  # a part is asked only about its own share
 
             choices = ["yes"] + ["no"] + ["yes"] * (len(requests) - 2)
-            rc, sent, result = self.run_split(assignment, choices)
+            rc, sent, result = self.run_split(assignment, choices, env)
             self.assertEqual((rc, result["error"]), (0, None))
             self.assertEqual([json.loads(b) for b in sent], requests)
             data = result["data"]
@@ -686,11 +766,12 @@ class JevClientTests(unittest.TestCase):
 
     def test_deliverable_text_alone_over_the_cap_names_the_plan_fix(self):
         import tempfile
-        with tempfile.TemporaryDirectory() as tmp:
-            base, commit = self.split_repo(tmp, {"a.py": "start\nchanged\n"})
-            with self.assertRaises(client.JevError) as raised:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp, env = self.fixture_repo(directory)
+            base, commit = self.split_repo(tmp, env, {"a.py": "start\nchanged\n"})
+            with patch.dict(client.os.environ, env), self.assertRaises(client.JevError) as raised:
                 client.assignment_requests({"deliverable": {"number": 1, "text": "d" * client.MAX_REQUEST_BYTES},
-                                            "worktree_path": tmp, "commit": commit, "base_sha": base,
+                                            "worktree_path": str(tmp), "commit": commit, "base_sha": base,
                                             "changed_files": ["a.py"], "context": []})
             action = client.failure(raised.exception)["error"]["suggested_action"]
             self.assertIn("split into smaller numbered deliverables", action)
@@ -772,29 +853,28 @@ class JevClientTests(unittest.TestCase):
             self.assertEqual(raised.exception.message, "External evidence unreadable: pr_body o/r#460")
 
     def test_layered_source_reads_lower_layer_context_at_the_pinned_top(self):
-        import subprocess, tempfile
-        with tempfile.TemporaryDirectory() as tmp:
-            def git(*args):
-                return subprocess.run(["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", *args],
-                                      check=True, capture_output=True, text=True).stdout.strip()
-            git("init", "-q")
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            tmp, env = self.fixture_repo(directory)
             Path(tmp, "lib.py").write_text("def old(): pass\n")
             Path(tmp, "server.py").write_text("old()\n")
-            git("add", "-A"); git("commit", "-qm", "trunk")
-            trunk = git("rev-parse", "HEAD")
+            self.git(tmp, env, "add", "-A"); self.git(tmp, env, "commit", "-qm", "trunk")
+            trunk = self.git(tmp, env, "rev-parse", "HEAD")
             Path(tmp, "lib.py").write_text("def hand_off(fd): pass\n")  # lower layer
-            git("commit", "-qam", "layer 1")
-            lower = git("rev-parse", "HEAD")
+            self.git(tmp, env, "commit", "-qam", "layer 1")
+            lower = self.git(tmp, env, "rev-parse", "HEAD")
             Path(tmp, "server.py").write_text("hand_off(3)\n")  # top layer, the one checked
-            git("commit", "-qam", "layer 2")
-            top = git("rev-parse", "HEAD")
-            assignment = {"deliverable": {"number": 1, "text": "Call hand_off with the listener fd."}, "worktree_path": tmp,
+            self.git(tmp, env, "commit", "-qam", "layer 2")
+            top = self.git(tmp, env, "rev-parse", "HEAD")
+            assignment = {"deliverable": {"number": 1, "text": "Call hand_off with the listener fd."}, "worktree_path": str(tmp),
                           "commit": top, "base_sha": lower, "changed_files": ["server.py"], "context": ["lib.py"]}
-            (request,) = client.assignment_requests(assignment)
+            with patch.dict(client.os.environ, env):
+                (request,) = client.assignment_requests(assignment)
             self.assertEqual(request["state"]["context"], {"lib.py": "def hand_off(fd): pass\n"})
             self.assertIn("+hand_off(3)", request["state"]["evidence"])
             self.assertNotIn("lib.py", request["state"]["evidence"])
-            (layered,) = client.assignment_requests({**assignment, "base_sha": trunk, "changed_files": ["lib.py", "server.py"]})
+            with patch.dict(client.os.environ, env):
+                (layered,) = client.assignment_requests({**assignment, "base_sha": trunk, "changed_files": ["lib.py", "server.py"]})
             self.assertIn("+def hand_off(fd): pass", layered["state"]["evidence"])
             self.assertIn("+hand_off(3)", layered["state"]["evidence"])
 
@@ -829,10 +909,18 @@ class JevClientTests(unittest.TestCase):
         import re
         literals = re.findall(r'JevError\("[A-Z_.]+", f?"([^"]+)"', source)
         self.assertGreaterEqual(len(literals), 15)
+        # Placeholders computed before the literal take each value the client can give them.
+        variants = {"{bound}": [f"> {client.MAX_REQUEST_BYTES}", "over Jev's token limit"],
+                    "{named}": ["", " error_type=max_tokens_exceeded"]}
         for literal in literals:
-            with self.subTest(message=literal):
-                self.assertTrue(client.is_client_message(literal.replace("{status}", "503").replace(
-                    "{request_size}", "123456").replace("{MAX_REQUEST_BYTES}", str(client.MAX_REQUEST_BYTES))))
+            filled = [literal.replace("{status}", "503").replace("{request_size}", "123456").replace(
+                "{MAX_REQUEST_BYTES}", str(client.MAX_REQUEST_BYTES))]
+            for placeholder, values in variants.items():
+                filled = [text.replace(placeholder, value) for text in filled for value in values] \
+                    if placeholder in literal else filled
+            for message in filled:
+                with self.subTest(message=message):
+                    self.assertTrue(client.is_client_message(message))
         self.assertFalse(client.is_client_message("Selected model is at capacity"))
 
 

@@ -1,6 +1,6 @@
 ---
 name: question-tuning
-version: 0.6.1
+version: 0.10.1
 description: When and how to replace the generic Jev questions with anchor-specific wording, where the overrides live, how to test a question set with fixtures and known beads before trusting it, and when to stop tuning.
 ---
 
@@ -16,6 +16,47 @@ Before tuning, run the rubric:
 python3 "$S" rubric --anchors "$A" --id ANC-012            # a locked anchor
 python3 "$S" rubric --statement "<candidate>" --quote "<words>" --scope "<scope>"   # before add
 ```
+
+When an approved clarification is needed, explicitly select it with
+`rubric --approved-intent-file <JSON>`. The file contains exactly
+`{id, version, sha256, content}`; `sha256` hashes the UTF-8 content. The
+integer or nonblank string version identifies the recorded approval packet.
+The request includes this object as `state.intent`, alongside the unchanged
+`state.anchor` quote, statement, and scope. The question must explicitly use
+that context; supplying it cannot fix a question that restricts evidence to
+the quote. Only already approved provenance belongs here. A valid hash proves
+integrity, not human approval; never infer approval from a supplied file.
+
+`rubric --questions <JSON>` selects an independently accepted calibration's
+sealed `{questions, digest}` object. The digest hashes canonical JSON
+`{questions}` (sorted keys, compact separators, UTF-8, no ASCII escaping).
+It must contain exactly the five rubric role IDs, each a choice question with
+instructions and yes/no/unclear criteria. The seal proves integrity, not
+calibration acceptance: retain the independently accepted tournament result
+and frozen oracle before selecting its seal. Neither option edits installed
+assets; absent options retain the existing request and defaults. These flags
+apply only to `rubric`; `add --rubric` retains its default instrument.
+
+Both optional inputs must be regular UTF-8 JSON files under the actual git
+repository containing `--repository-root`; relative paths start at that root.
+Symlink escapes, duplicate JSON keys, malformed descriptors and mismatched
+digests are refused before credential lookup or transport. Dry-run and fixture
+modes remain offline. Live use still requires the repository's recorded
+`allow_remote_judge: true`; context does not grant consent. Oversized requests
+with explicit inputs fail before sending or emitting a partial request; intent
+is never truncated.
+
+Each context/custom-rubric entry records `inputs.question_seal`,
+`inputs.request_sha256` (canonical JSON of the complete request before output
+redaction), and optional `inputs.intent` ID/version/content hash. Dry-run output
+uses the same presentation redaction as every emitted value: credentials and
+bearer-shaped text, including synthetic examples, may become `<redacted>`.
+Its displayed body can therefore differ from the canonical request. Preserve
+the frozen validated inputs; when output is redacted, reconstruct the body from
+those inputs, the selected anchor and model, then verify its canonical hash
+against the live entry before triage. Do not treat the redacted display as the
+original request or disable redaction. Live output retains hashes rather than
+repeating the full intent.
 
 It first runs deterministic requirement-form linting, then asks Jev five
 semantic questions about the statement: one constraint, observable outcome,
@@ -51,6 +92,32 @@ its canonical JSON SHA-256 and semantic case count; do not require these format
 identities to match or relabel the frozen corpus. Its legacy expected role
 `atomicity` corresponds to the rubric's `single_constraint` role.
 
+For a disputed result on an approved anchor after calibration, delegate
+`operation: triage`, `gate: testability` through
+`templates/anchor-tuning-review-feedback.md.j2`. Pass the actual request and raw
+response, the disputed rubric role ID, the five-role sealed rubric, and the
+approved locked anchor and fixtures. The evaluator may return `anchor_defect`
+with a clarity recommendation or `question_defect` with authority for reopening
+the affected rubric tournament. An anchor defect keeps the rubric digest
+unchanged. Insufficient evidence or low confidence alone produces
+`EVIDENCE.INCOMPLETE`; adjudication never waives the rubric or confidence rule.
+The plan-independent calibration corpus remains frozen and separate from this
+single-anchor diagnosis.
+
+Testability triage binds the exact sealed questions to the actual request and
+all five valid raw answers. `review.source_digest` hashes the canonical JSON
+`canonical_request.state.anchor` object (`statement`, `quote`, `scope`), which
+must match a locked authority record with nonempty approved `pass` and `fail`
+fixture arrays. The authority's record digest hashes canonical JSON records;
+the intent digest hashes its UTF-8 `content`. Both result digest fields retain
+the actual rubric seal: triage diagnoses, and a separate tournament changes
+questions. Planning/development payloads retain their existing contracts.
+
+When the actual request includes `state.intent`, triage requires its exact
+descriptor to match `authority.intent`, including ID, version, content and
+digest. Legacy requests without context remain accepted; the source-anchor
+digest still hashes only `state.anchor`.
+
 ## Who tunes
 
 The planner never tunes questions. It launches the harness-specific
@@ -84,9 +151,17 @@ An override has the shape of the default set and contains only the questions to 
 - **Per anchor, per gate, in the question bead** (preferred): the fenced
   `json` block in the plan-questions or dev-questions bead
   (`bead-layout.md`). Use the tracker selected at the orchestration boundary:
-  `bd update <id> --body-file <file>` or the equivalent `br update` operation.
+  `bd update <id> --body-file <file>`.
 - **In the record**: `question_overrides.plan` / `.dev` in `anchors.json`, for a plan with no beads. The bead wins if both exist.
 - **For a whole plan**: a complete alternative set passed with `--questions <file>`. Rare.
+
+## Extra questions
+
+Extra questions add to the set; they never replace or gate. Pass a JSONL file with `--extra-questions <file>` (repeatable): one question per line, `{"id": "...", "type": "choice", "instructions": "...", "criteria": {"yes": "...", "no": "...", "unclear": "..."}}`. Each is asked in the same request as the gate questions and its answer is recorded with the cell, so triage can read why a cell failed (for example: does the item own the requirement, or only consume it?) without a second run. `decide()` ignores them. An `--answers-file` fixture may omit them; a missing extra answer is skipped, while a missing gate answer or an unknown id is still refused.
+
+### Default triage questions
+
+The planning gate adds five measured triage questions by default (`owns`, `specific`, `stated`, `paraphrase`, `partial`), with routing rules in `rules.json` and the evidence in the folder's `README.md`. The installer seeds them once into `.sc/plan-anchor/triage/` in the repository; the repository owns that folder: edit, extend or delete the files, and later installs never overwrite them. `judge` reads `.sc/plan-anchor/triage/plan-questions.jsonl` when present, else the copy shipped under `assets/triage/`. Pass `--no-triage-questions` to skip them. The development gate has no default triage questions. Add a new default only after measurements across plans; keep an unmeasured question in the consuming repository's own file.
 
 ## How to write an anchor-specific question
 
@@ -186,11 +261,69 @@ contract reports `HISTORY.PREDECESSOR` when that object is absent.
 Authority record `id` and history `anchor_id` preserve nonempty evaluator IDs,
 including REQ/ADR source references and ANC IDs above 999. Source-specific
 record validation remains the evaluator's responsibility.
-Markdown and `bd`/`br` copies store byte-identical canonical JSON and SHA-256;
+Markdown and `bd` copies store byte-identical canonical JSON and SHA-256;
 paths, tracker IDs/revisions, timestamps that differ by source, credentials, and
 source kind remain outside it as local bindings. A v1 result can become a v2
 seal only through digest-verified offline re-evaluation that preserves the
 original decision and all raw evidence.
+
+## Running a tournament
+
+`jev_judge.py tournament` runs and scores a tune tournament; the anchor-tuning
+agent never hand-rolls one (`jev-api.md`, "Batch runner and tournament").
+
+```
+python3 scripts/jev_judge.py tournament --request tune-request.json \
+  --oracle oracle.json --candidates candidates.json --out <plan>/anchor-runs/tune-ANC-012-1
+```
+
+- **Request.** The anchor-tuning tune request. The runner checks it with
+  `anchor_tuning_contract.py` and recomputes the authority digests before
+  anything else; `testability` is not run by the runner.
+- **Oracle** (`assets/schemas/tune-oracle.schema.json`). `cases[]` of
+  `{case_id, probe, item: {title, text}, expected_roles, expected_verdict,
+  rationale}` plus `authority_citations`. Every expected verdict must follow
+  from its expected roles at threshold `0.0`, and the planning probes
+  (`compliant`, `silent`, `topical_only`, `conflicting`, `irrelevant`,
+  `boundary`, `exception`, plus `fixture_pass`/`fixture_fail` when the record
+  has fixtures; development adds `asserted_without_evidence` and `evidenced`) must all be
+  present. The runner freezes it in `--out` as `oracle.frozen.json` and refuses
+  a different oracle there, or one that differs from the last event in the
+  tuning history.
+- **Candidates** (`assets/schemas/tune-candidates.schema.json`).
+  `candidates.<role>.<candidate id>` is one question object per wording, at
+  least `candidate_minimum` per role; `bundles[]` of `{bundle_id, roles:
+  {<role>: <candidate id>}}` are the role-complete sets to evaluate (default
+  the cross product, at most 64). The request's `current_questions` are the
+  `baseline` bundle every regression is counted against.
+- **Run.** Every oracle case x bundle x `repeat_count` becomes one request line
+  of the low-layer `batch` runner (at most four parallel calls, one recorded
+  retry each); every result line is logged, unchanged, to `<out>/results.jsonl`.
+- **Score.** Bundles rank lexicographically: semantic acceptance, exact role
+  cells, exact threshold-`0.0` verdicts, stable cases, fewer regressions, then
+  confidence diagnostics (cells at or above the `0.8` reference, min, p10,
+  median, mean), then complexity (smaller wins) and bundle id. The selected
+  bundle is the top-ranked accepted one; with none accepted, the decision is
+  `unstable`, `evidence_incomplete` or `rejected`.
+- **Ties.** When two or more accepted bundles tie on every key except
+  complexity and bundle id, the runner picks none: the decision is `rejected`
+  with reason `TOURNAMENT.TIE_NEEDS_CHOICE`, the sealed-set fields are null,
+  and `evidence.tie.co_leaders` lists each co-leader with its questions,
+  score, confidence diagnostics and acceptance table. The anchor-tuning agent
+  chooses one and seals it with `--results <out>/results.jsonl --choose
+  <bundle_id>` into a new `--out`; no call is repeated.
+- **Output.** `<out>/result_vars.json` holds the `anchor-tuning-result.md.j2`
+  variables, already checked by `anchor_tuning_contract.py`. The runner never
+  writes a bead: reading the result, choosing and sealing stay with the
+  anchor-tuning agent. `--results <out>/results.jsonl` rescores the logged
+  stream without calling Jev; lines are matched by request id, so their order
+  does not matter.
+
+To judge question beads directly, without an oracle, `bead-batch --anchor
+ANC-012 --gate plan --item <bead> --candidates` runs the gate question bead
+and each open child candidate bead against the items and streams one result
+line per (item, candidate, repeat) to stdout and to
+`anchor-runs/tournament-<run>.jsonl`.
 
 ## Testing a new anchor before the first gate run
 

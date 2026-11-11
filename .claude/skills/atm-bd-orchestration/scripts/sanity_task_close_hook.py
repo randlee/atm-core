@@ -30,6 +30,7 @@ from typing import Any, Callable
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import subprocess
 import sys
@@ -38,7 +39,10 @@ import time
 import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads" / "scripts"))
 import bd_cache  # noqa: E402
+import close_fields  # noqa: E402
+import repo_config  # noqa: E402
 
 TIMEOUT_MS = 2500
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
@@ -140,10 +144,29 @@ class Runtime:
         except (ValueError, TypeError) as error:
             raise Failure("SANITY_CLOSE.DATA", f"invalid JSON from {command}: {error}", command=command) from error
 
+    def check_base(self, worktree, base, commit):
+        command = ["git", "-C", str(worktree), "merge-base", "--is-ancestor", base, commit]
+        remaining = self.deadline - self.clock()
+        if remaining <= 0:
+            raise Failure("SANITY_CLOSE.COMMAND", "hook work budget exhausted; retry the close", command=command)
+        try:
+            result = self.runner(command, cwd=self.root, env=self.env, text=True,
+                                 capture_output=True, timeout=remaining)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise Failure("SANITY_CLOSE.COMMAND", str(error), command=command) from error
+        if result.returncode == 1:
+            raise Failure("SANITY_CLOSE.BASE", f"base {base} is not an ancestor of checked commit {commit}; restart the review with the assigned base", "sanity", command)
+        if result.returncode:
+            raise Failure("SANITY_CLOSE.COMMAND", (result.stderr or result.stdout).strip(), command=command)
+
     def cache(self):
         if self.beads is None:
             try:
-                self.beads = bd_cache.BdCache(self.root, runner=self.runner)
+                def bounded_runner(command, **kwargs):
+                    remaining = max(0.001, self.deadline - self.clock())
+                    kwargs["timeout"] = min(kwargs.get("timeout", remaining), remaining)
+                    return self.runner(command, **kwargs)
+                self.beads = bd_cache.BdCache(self.root, runner=bounded_runner)
             except bd_cache.CacheError as error:
                 raise Failure(error.code, f"{error.detail}; {error.fix}") from error
         return self.beads
@@ -172,7 +195,7 @@ class Runtime:
         return [self.bead(bead) for bead in ids]
 
     def events(self, task):
-        data = self.read_json(["atm", "task", "events", task, "--json"])
+        data = self.read_json(["atm", "task", "events", task, "--all", "--json"])
         require(isinstance(data, dict) and isinstance(data.get("events"), list),
                 "events", f"missing history for {task}", "phase-lead")
         return data["events"]
@@ -197,12 +220,12 @@ class Runtime:
                       "origin_message_id", "origin_timestamp", "acknowledges_message_id",
                       "activity_observation", "caller_chat_id"):
             request.pop(field, None)
-        path = TEMPLATES / template
+        path = Path(template) if Path(template).is_absolute() else TEMPLATES / template
         request.update(caller_identity=identity, caller_team=self.team, task_id=task,
                        to=({"agent": recipient.split("@", 1)[0], "team": self.team} if recipient else None),
                        requires_ack=False, summary_override=None,
                        classification={"category": None, "tags": [], "content_format": None}, message_source={"Template": {
-                           "canonical_template_path": str(path), "canonical_template_root": str(TEMPLATES),
+                           "canonical_template_path": str(path), "canonical_template_root": str(path.parent),
                            "raw_file_bytes": list(path.read_bytes()), "input_defaults": {},
                            "var_file_values": values, "explicit_values": {}, "environment_values": {}}})
         if command == "task.close":
@@ -291,9 +314,19 @@ def prepare(runtime, sanity):
     direct_finding_fix = "stage:finding" in labels and (dev.get("metadata") or {}).get("sanity_bead") == task
     require(bool({"stage:dev", "stage:fix"}.intersection(labels)) or direct_finding_fix,
             "checked_bead", "must be a dev/fix bead or a finding linked to this sanity bead", "phase-lead")
-    # Commit is descriptive evidence, not a frozen implementation constraint.
-    commit = values.get("commit") or (dev.get("metadata") or {}).get("commit") or "unspecified"
+    checked_commit = (dev.get("metadata") or {}).get("commit")
+    require(isinstance(checked_commit, str) and checked_commit,
+            "checked_bead.metadata.commit", "current checked commit is required", "phase-lead")
+    commit = values.get("commit")
+    require(isinstance(commit, str) and commit, "commit", "selected result must name the checked commit")
+    require(commit == checked_commit, "commit", "does not match the checked bead's current commit", "phase-lead")
     values["commit"] = commit
+    base = values.get("base")
+    if not isinstance(base, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", base):
+        raise Failure("SANITY_CLOSE.BASE", "base must be the full 40-hex SHA from the sanity assignment; ask the dispatcher to repair a branch-name base, then copy the corrected SHA into the selected result", "sanity")
+    worktree = (dev.get("metadata") or {}).get("worktree")
+    require(isinstance(worktree, str) and bool(worktree), "checked_bead.metadata.worktree", "required to verify base ancestry", "phase-lead")
+    runtime.check_base((runtime.root / worktree).resolve(), base, commit)
     require(values.get("reviewer") == "sanity-selected", "reviewer", "must be sanity-selected")
     require(isinstance(values.get("run_id"), str) and values["run_id"], "run_id", "selected run ID required")
     verdict = values.get("verdict")
@@ -317,8 +350,16 @@ def prepare(runtime, sanity):
     history = runtime.events(task)
     assignments = [event for event in history if event.get("event") in ASSIGNMENTS]
     require(bool(assignments), "assignment", "sanity task has no assignment", "phase-lead")
+    values["round"] = len(assignments)
     assignment = assignments[-1]
     require(assignment.get("assignee") == runtime.identity, "caller", "only assigned sanity agent may close")
+    assignment_ref = assignment.get("message_id") or assignment.get("seq")
+    require(assignment_ref is not None, "assignment", "current assignment has no message id or sequence", "phase-lead")
+    submitted_assignment_ref = values.get("assignment_id")
+    require(isinstance(submitted_assignment_ref, str) and submitted_assignment_ref,
+            "assignment_id", "selected result must name the current assignment")
+    require(submitted_assignment_ref == str(assignment_ref), "assignment_id",
+            "does not match the newest sanity assignment", "phase-lead")
     dev_history = runtime.events(dev_id)
     dev_assignments = [event for event in dev_history if event.get("event") in ASSIGNMENTS]
     require(bool(dev_assignments), "dev assignment", "dev task has no assignment", "phase-lead")
@@ -326,25 +367,37 @@ def prepare(runtime, sanity):
     require(isinstance(dev_agent, str) and bool(dev_agent), "dev assignee", "missing dev task assignee", "phase-lead")
     require(dev.get("assignee") == dev_agent, "dev assignee", "bead and task assignees differ", "phase-lead")
     lead = runtime.lead()
-    key = digest([runtime.team, task, assignment.get("message_id") or assignment.get("seq")])
-    signature = digest([values.get("run_id"), verdict, findings])
+    key = digest([runtime.team, task, assignment_ref])
+    signature = digest([submitted_assignment_ref, commit, base, values.get("run_id"), verdict, findings])
     prior = runtime.state().get(key)
     require(prior is None or prior["signature"] == signature, "result", "conflicts with an already prepared close; lead must reconcile", "phase-lead")
     done = bool(dev_history and dev_history[-1].get("to_state") == "complete")
     # [bead, op, args, precondition]; the precondition is re-checked against fresh bd rows at drain.
     writes = []
+    template, dispatch = Path(), {}
     if verdict == "PASS":
         if sanity.get("status") != "closed":
             writes.append([task, "close", {"reason": f"PASS at {commit}"}, {}])
     else:
+        try:
+            template, dispatch = close_fields.reassignment(runtime.root, runtime.envelope["phase"], dev,
+                                                            repo_config.load(runtime.root))
+            template.read_bytes()
+        except (OSError, ValueError, KeyError) as error:
+            raise Failure("SANITY_CLOSE.CONFIG", f"reassignment configuration: {error}", "phase-lead") from error
+        notes = f"sanity FAIL round {values.get('round', 1)} at {commit}:\n" + "\n".join(
+            f"{item['deliverable']}. {item['issue']}" for item in findings)
+        writes.append([dev_id, "update", {"append_notes": notes}, {"assignee": dev_agent}])
         if dev.get("status") != "open":
             writes.append([dev_id, "update", {"status": "open"}, {"assignee": dev_agent}])
         if sanity.get("status") != "open" or sanity.get("assignee"):
             writes.append([task, "update", {"status": "open", "assignee": ""}, {"assignee": sanity.get("assignee") or ""}])
     return {"key": key, "signature": signature, "task_id": task, "dev_id": dev_id,
-            "dev_agent": dev_agent, "lead": lead, "values": values, "writes": writes,
+            "dev_agent": dev_agent, "lead": lead, "values": values, "writes": (prior or {}).get("writes", writes),
             "dev_complete": done, "journaled": (prior or {}).get("journaled", []),
-            "phase": runtime.envelope["phase"], "team": runtime.team}
+            "phase": runtime.envelope["phase"], "team": runtime.team,
+            "reassignment_template": str(template) if verdict == "FAIL" else "",
+            "reassignment_vars": dispatch}
 
 
 def close_actions(runtime, plan):
@@ -354,8 +407,8 @@ def close_actions(runtime, plan):
         actions.append(runtime.action("task.close", plan["dev_id"], plan["dev_agent"],
                                       "sanity-dev-close.md.j2", values))
     if values["verdict"] == "FAIL":
-        actions.append(runtime.action("send", None, runtime.identity, "sanity-failed-template.md.j2", values,
-                                      recipient=f"{plan['dev_agent']}@{runtime.team}"))
+        actions.append(runtime.action("task.assign", plan["dev_id"], plan["lead"], plan["reassignment_template"],
+                                      plan["reassignment_vars"], recipient=f"{plan['dev_agent']}@{runtime.team}"))
     original = copy.deepcopy(runtime.request)
     original["task_op"] = {"op": "close", "outcome": "completed"}
     actions.append({"command": "task.close", "request": original})
@@ -377,7 +430,17 @@ def execute(runtime, plan):
             plan["journaled"].append(entry["seq"])
         state.put(plan["key"], plan)
     plan["beads_applied"] = "journaled"
-    if plan["writes"]:
+    if plan["values"]["verdict"] == "FAIL":
+        runtime.cache().drain(deadline=runtime.deadline, monotonic=runtime.clock)
+        entries = [runtime.cache().entry(seq) for seq in plan["journaled"]]
+        escalated = next((entry for entry in entries if entry["state"] == "escalated"), None)
+        if escalated:
+            raise Failure("BEADS.WRITE_ESCALATED", f"journal #{escalated['seq']}: {escalated['last_error']}; "
+                          f"phase lead: repair the bead and run bd_cache.py resolve {escalated['seq']} --note <what> --actor <lead>")
+        if any(entry["state"] != "applied" for entry in entries):
+            drain_now(runtime, plan)
+            raise Failure("BEADS.WRITE_PENDING", "FAIL bead writes are pending; rerun the same close after the bd-cache drain applies them", "sanity")
+    elif plan["writes"]:
         drain_now(runtime, plan)
     state.put(plan["key"], plan)
     return {"result": "handled", "atm-action": close_actions(runtime, plan)}
@@ -406,18 +469,6 @@ def hook(envelope, runner=subprocess.run, clock=time.monotonic, spawn: Callable[
         return {"result": "not-applicable"}
     if ".close-error-" in runtime.task:
         return {"result": "pass-through"}
-    if ".bd-repair-" in runtime.task:
-        # Repair tasks assigned before the bd-cache cutover finish with sanity-close-repair.py;
-        # delete this branch, the runner and its template once none remains open.
-        try:
-            rows = runtime.state().db.execute("SELECT value FROM records").fetchall()
-            matches = [p for p in map(lambda row: json.loads(row[0]), rows) if p.get("repair_task") == runtime.task]
-            require(len(matches) == 1, "repair record", "expected one durable obligation", "phase-lead")
-            runtime.plan = matches[0]
-            require(runtime.plan.get("repaired"), "repair", "bead repair is unfinished; run the assigned repair command", "phase-lead")
-            return {"result": "pass-through"}
-        except Failure as error:
-            return runtime.validation_error(error)
     # Explicit rollout routing keeps unrelated agents off bd entirely under load.
     members = runtime.custom.get("sanity_agents")
     if isinstance(members, list) and runtime.identity not in members:
@@ -433,6 +484,8 @@ def hook(envelope, runner=subprocess.run, clock=time.monotonic, spawn: Callable[
             return execute(runtime, plan)
     except Exception as error:
         failure = error if isinstance(error, Failure) else Failure("SANITY_CLOSE.INTERNAL", f"{type(error).__name__}: {error}", "hook-maintainer")
+        if failure.code == "BEADS.WRITE_PENDING":
+            return {"result": "refused", "message": json.dumps({"code": failure.code, "message": str(failure)})}
         return runtime.validation_error(failure)
 
 
@@ -449,9 +502,6 @@ def doctor(envelope):
                     findings.append({"severity": "warning", "code": "SANITY_CLOSE.ESCALATION_PENDING",
                                      "message": f"{row['task_id']}: {row['detail']}; owner={row['owner']}",
                                      "remediation": "Lead: inspect the journal and deliver the pending escalation."})
-                elif row.get("repair_task") and not row.get("repaired"):
-                    findings.append({"severity": "warning", "code": "SANITY_CLOSE.REPAIR_PENDING",
-                                     "message": row["repair_task"], "remediation": "Run the assigned bead repair task."})
         except (sqlite3.Error, ValueError) as error:
             findings.append({"severity": "warning", "code": "SANITY_CLOSE.JOURNAL_UNREADABLE",
                              "message": f"{path}: {error}",
@@ -460,6 +510,9 @@ def doctor(envelope):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print("usage: sanity_task_close_hook.py [doctor] < request.json")
+        raise SystemExit(0)
     envelope = {}
     try:
         envelope = json.load(sys.stdin)

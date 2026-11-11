@@ -131,6 +131,7 @@ def lint_command(lint: LintDescriptor) -> JsonValue:
 
 class Manifest(TypedDict):
     sha: str
+    base: str
     branch: str
     deliverables_total: int
     lint: LintDescriptor
@@ -175,7 +176,7 @@ def load_manifest(path: str | Path) -> Manifest:
             parsed = parse_assignment_text(assignment)
             if parsed is not None:
                 parsed_assignments.append(parsed)
-    return {"sha": sha, "branch": branch, "deliverables_total": total, "lint": parse_lint_descriptor(lint),
+    return {"sha": sha, "base": str(manifest.get("base_sha") or ""), "branch": branch, "deliverables_total": total, "lint": parse_lint_descriptor(lint),
             "worktree_path": worktree if isinstance(worktree, str) else None,
             "invalid_worktree": None if isinstance(worktree, str) else worktree,
             "run_id": run_id, "has_run_id": "run_id" in manifest,
@@ -764,8 +765,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--client", help="the Jev client that verifies sanity-jev receipts (default .claude/skills/atm-bd-orchestration/scripts/jev_client.py)")
     try:
         args = parser.parse_args(argv[1:], namespace=MergeArguments())
-    except SystemExit:
-        return 1
+    except SystemExit as error:
+        return 0 if error.code == 0 else 1
     manifest_path, sanity_bead, dev_bead, sprint = args.manifest_path, args.sanity_bead, args.dev_bead, args.sprint
     manifest: Manifest | None = None
     results: list[JsonValue] = []
@@ -781,7 +782,7 @@ def main(argv: list[str]) -> int:
         if not manifest["has_operational_reviewer"]:
             raise KeyError("operational_reviewer")
         completed = datetime.fromtimestamp(args.completed_at, timezone.utc)
-        return {"run_id": manifest["run_id"], "reviewer": args.reviewer,
+        return {"run_id": manifest["run_id"], "base": manifest["base"], "reviewer": args.reviewer,
                 "operational_reviewer": manifest["operational_reviewer"],
                 "started_at": datetime.fromtimestamp(args.started_at, timezone.utc).isoformat().replace("+00:00", "Z"),
                 "completed_at": completed.isoformat().replace("+00:00", "Z"),
@@ -913,7 +914,7 @@ def main(argv: list[str]) -> int:
         **metadata(),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "task_id": sanity_bead, "checked_bead": dev_bead, "sprint": sprint,
-        "branch": manifest["branch"], "commit": manifest["sha"],
+        "branch": manifest["branch"], "commit": manifest["sha"], "base": manifest["base"],
         "verdict": "PASS" if all(not findings for findings in report_findings.values()) and lint_exit == 0 else "FAIL",
         "findings_count": count, "findings": finding_records, "selection": selection,
         "findings_md": "\n".join(blocks), "lint_md": lint_md,

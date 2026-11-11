@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from subprocess_helpers import HANG_GUARD_SECONDS, run_command
 
 from test_templates import ROOT, _example, _render
 
@@ -44,7 +45,7 @@ def _produce(step: str, workdir: Path, findings: list[dict] | None = None,
     env = {**os.environ, "NOW": "2026-10-02T12:00:00Z", "LOCAL": "05:00", "DURATION": "3m",
            "VERDICT": "PASS", "TESTED": "x"}
     script = "set -eu\nmkdir -p .sc/qa-log\n" + counts + "\n" + round_cmd + "\n" + stats_cmd + "\n"
-    subprocess.run(["bash", "-c", script], cwd=workdir, env=env, check=True, capture_output=True, text=True)
+    run_command(["bash", "-c", script], timeout=HANG_GUARD_SECONDS, cwd=workdir, env=env, check=True, capture_output=True, text=True)
     logs = workdir / ".sc/qa-log"
     round_rows = (logs / "phase-d.jsonl").read_text().splitlines()
     stats_rows = (logs / "phase-d-stats.jsonl").read_text().splitlines()

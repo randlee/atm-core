@@ -51,7 +51,7 @@ pub(crate) const DIAGNOSTIC_QUEUE_BATCHES: usize = 8;
 const BATCH_TIME_BUDGET: Duration = Duration::from_millis(1);
 // Bound one write request long enough for a short lock wait + flush cycle while
 // still surfacing wedged durable-state work as an actionable timeout.
-const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
+const WRITE_OP_DEADLINE: Duration = atm_storage::SQLITE_WRITER_REPLY_TIMEOUT;
 // Keep shutdown bounded if the writer thread stalls after a queue drain or
 // filesystem delay; callers can restart cleanly after this deadline expires.
 const WRITER_SHUTDOWN_JOIN_DEADLINE: Duration = Duration::from_secs(5);
@@ -107,8 +107,40 @@ impl ReplyTx {
     }
 }
 
+#[derive(Debug)]
+pub(crate) struct WriteTiming {
+    enqueued: Instant,
+    started: Mutex<Option<Instant>>,
+}
+impl WriteTiming {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            enqueued: Instant::now(),
+            started: Mutex::new(None),
+        })
+    }
+    fn start(&self) {
+        *self.started.lock().unwrap_or_else(|p| p.into_inner()) = Some(Instant::now());
+    }
+    fn snapshot(&self) -> (u64, u64) {
+        let now = Instant::now();
+        let started = *self.started.lock().unwrap_or_else(|p| p.into_inner());
+        let ms = |d: Duration| u64::try_from(d.as_millis()).unwrap_or(u64::MAX);
+        (
+            ms(started
+                .unwrap_or(now)
+                .saturating_duration_since(self.enqueued)),
+            started.map_or(0, |at| ms(now.saturating_duration_since(at))),
+        )
+    }
+}
+
 pub(crate) enum WriterMessage {
-    Submit { op: Box<WriteOp>, reply: ReplyTx },
+    Submit {
+        op: Box<WriteOp>,
+        reply: ReplyTx,
+        timing: Arc<WriteTiming>,
+    },
     Shutdown,
 }
 
@@ -174,6 +206,7 @@ impl DiagnosticTimelinePersistenceStats {
 pub(crate) struct QueuedWrite {
     op: Box<WriteOp>,
     reply: ReplyTx,
+    timing: Arc<WriteTiming>,
 }
 
 pub(crate) struct SqliteWriter {
@@ -325,7 +358,9 @@ impl SqliteWriter {
         })?;
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         let deadline = Instant::now() + self.write_op_deadline;
+        let timing = WriteTiming::new();
         let mut message = WriterMessage::Submit {
+            timing: Arc::clone(&timing),
             op: Box::new(op),
             reply: ReplyTx::Sync(reply_tx),
         };
@@ -357,12 +392,7 @@ impl SqliteWriter {
         reply_rx
             .recv_timeout(self.write_op_deadline)
             .map_err(|error| match error {
-                RecvTimeoutError::Timeout => fail_submit(
-                    self.observability.as_ref(),
-                    "writer_reply",
-                    SqliteObservabilityOutcome::Timeout,
-                    writer_reply_timeout_error(self.write_op_deadline),
-                ),
+                RecvTimeoutError::Timeout => self.writer_reply_timeout(&timing, sender),
                 RecvTimeoutError::Disconnected => fail_submit(
                     self.observability.as_ref(),
                     "writer_reply",
@@ -391,7 +421,9 @@ impl SqliteWriter {
             )
         })?;
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        let timing = WriteTiming::new();
         let message = WriterMessage::Submit {
+            timing: Arc::clone(&timing),
             op: Box::new(op),
             reply: ReplyTx::Async(reply_tx),
         };
@@ -415,14 +447,7 @@ impl SqliteWriter {
             })?;
         tokio::time::timeout(self.write_op_deadline, reply_rx)
             .await
-            .map_err(|_| {
-                fail_submit(
-                    self.observability.as_ref(),
-                    "writer_reply",
-                    SqliteObservabilityOutcome::Timeout,
-                    writer_reply_timeout_error(self.write_op_deadline),
-                )
-            })?
+            .map_err(|_| self.writer_reply_timeout(&timing, sender))?
             .map_err(|_| {
                 fail_submit(
                     self.observability.as_ref(),
@@ -431,6 +456,26 @@ impl SqliteWriter {
                     writer_reply_channel_closed_error(),
                 )
             })?
+    }
+
+    fn writer_reply_timeout(
+        &self,
+        timing: &WriteTiming,
+        sender: &tokio::sync::mpsc::Sender<WriterMessage>,
+    ) -> AtmError {
+        let error = writer_reply_timeout_error(self.write_op_deadline);
+        let (queue_wait_ms, run_time_ms) = timing.snapshot();
+        let mut event = SqliteObservabilityEvent::new(
+            "writer_reply",
+            SqliteObservabilityOutcome::Timeout,
+            error.message().to_owned(),
+            Some(error.code()),
+        );
+        event.queue_wait_ms = Some(queue_wait_ms);
+        event.run_time_ms = Some(run_time_ms);
+        event.queue_depth = Some((sender.max_capacity() - sender.capacity()) as u64);
+        self.observability.emit_or_warn(event);
+        error
     }
 
     /// Offers a complete diagnostic batch without ever waiting for the SQLite
@@ -634,6 +679,7 @@ mod tests {
             primary_tx
                 .try_send(WriterMessage::Submit {
                     op: Box::new(WriteOp::UpsertMessages(Vec::new())),
+                    timing: WriteTiming::new(),
                     reply: ReplyTx::Sync(reply),
                 })
                 .expect("primary queue capacity is sized for the test");
@@ -716,6 +762,7 @@ mod tests {
             .try_send(WriterMessage::Submit {
                 op: primary.op,
                 reply: primary.reply,
+                timing: primary.timing,
             })
             .expect("admit primary write while diagnostics are saturated");
 
@@ -787,6 +834,7 @@ mod tests {
             .try_send(WriterMessage::Submit {
                 op: primary.op,
                 reply: primary.reply,
+                timing: primary.timing,
             })
             .expect("admit primary write while prune lane is saturated");
 
@@ -938,6 +986,7 @@ mod tests {
                     provenance: MessageWriteOrigin::Local,
                 }),
                 reply: ReplyTx::Sync(reply),
+                timing: WriteTiming::new(),
             },
             receiver,
         )
@@ -973,6 +1022,7 @@ mod tests {
         let (reply, _receiver) = mpsc::sync_channel(1);
         WriterMessage::Submit {
             op: Box::new(WriteOp::UpsertMessages(Vec::new())),
+            timing: WriteTiming::new(),
             reply: ReplyTx::Sync(reply),
         }
     }
@@ -980,10 +1030,11 @@ mod tests {
     fn first_queued_write(
         receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
     ) -> QueuedWrite {
-        let WriterMessage::Submit { op, reply } = receiver.try_recv().expect("first write") else {
+        let WriterMessage::Submit { op, reply, timing } = receiver.try_recv().expect("first write")
+        else {
             panic!("test queue contains only submit messages");
         };
-        QueuedWrite { op, reply }
+        QueuedWrite { op, reply, timing }
     }
 
     #[tokio::test(start_paused = true)]

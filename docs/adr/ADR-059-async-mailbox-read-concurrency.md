@@ -61,19 +61,21 @@ non-blocking `try_push` to the bounded `StateHandoffSupervisor` specified by
 AV.1b D2. The read path never awaits writer admission or retry.
 
 `R-STATE-HANDOFF-1` is a product decision. The supervisor is readiness-gated,
-monitored, and owns retry. On task fault it atomically enters `Unavailable`,
-preserves buffered work, and attempts restart within a bounded budget.
-Handoff-buffer overflow (counted and surfaced by `atm doctor`) and process
-exit are the only permitted loss cases. Both are fail-safe: the message stays
-unread/unseen and is re-presented. Restart exhaustion or permanent writer
-failure fails the runtime closed. `R-STATE-RACE-1` describes observation
-under concurrent state changes; it never authorizes dropping a transition.
+monitored, and owns retry. A failed worker is restarted without a restart
+limit using bounded backoff; queued transient failures remain in order. During
+restart the handoff rejects new submissions, which remain unread/unseen.
+Permanent validation failures, including a deleted message, are discarded with
+a typed retained diagnostic so subsequent transitions are not blocked. Buffer
+overflow is counted and surfaced by `atm doctor`; process exit can lose queued
+work. A reply timeout can cause a committed read to be applied again and rearm
+a pending acknowledgement reminder. Doctor exposes state and restart counts.
 
 The concrete AV.1b contract types are `StateHandoffSupervisor` and
 `HandoffConfig`, with the transition represented by
 `WriteOp::ApplyReadDisplayState`. They are documented in
-[`sprint-AV.1b-read-handler-cutover.md`](../sprint-AV.1b-read-handler-cutover.md)
-§D2 and are not a second reader/writer queue.
+[`sprint-AV.1b-read-handler-cutover.md`](../plans/phase-av/sprint-AV.1b-read-handler-cutover.md)
+§D2; its historical restart-budget contract is superseded by this D2/D5 amendment
+(PR #2419). These types do not form a second reader/writer queue.
 
 ### D3. Explicit bridge retirement boundary
 
@@ -107,20 +109,12 @@ boundary:
 
 ### D5. Product alternatives and operator consequences
 
-Two alternatives were considered and rejected:
-
-* **Permanent drop:** return the read response and discard a rejected
-  read/seen transition. This can permanently hide a message and makes
-  operator state unverifiable; it violates the fail-safe unread/unseen
-  consequence.
-* **Synchronous write-through:** await the writer before returning the read
-  response. This restores head-of-line blocking, couples read latency to
-  writer health, and defeats the independent reader deadline.
-
-The chosen bounded handoff exposes overflow, supervisor state, restart count,
-retry-deadline exhaustion, and buffered depth to `atm doctor`. Operators can
-therefore distinguish a safely re-presented message from a runtime that has
-failed closed.
+The handoff rejects synchronous write-through because it couples reader
+latency to writer health. It retains and retries transient failures, but drops
+permanently invalid transitions with a typed diagnostic so a deleted message
+cannot block the lane indefinitely. The bounded handoff exposes overflow,
+supervisor state, restart count, retry-deadline exhaustion, and buffered depth
+to `atm doctor`.
 
 ### D6. Read JSON observation contract addendum
 

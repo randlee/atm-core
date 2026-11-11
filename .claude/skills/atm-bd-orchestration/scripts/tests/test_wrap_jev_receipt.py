@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from subprocess_helpers import HANG_GUARD_SECONDS, run_command
 import shutil
 import subprocess
 import sys
@@ -69,7 +70,7 @@ class WrapJevReceipt(unittest.TestCase):
             argv += ["--findings", str(self.write("findings.json", findings))]
         if final is not None:
             argv += ["--final", str(self.write("final.json", final))]
-        return subprocess.run([*argv, *extra], capture_output=True, text=True, env=environ or env())
+        return run_command([*argv, *extra], timeout=HANG_GUARD_SECONDS, capture_output=True, text=True, env=environ or env())
 
     def wrapped(self, *args, **kwargs):
         done = self.run_wrap(*args, **kwargs)

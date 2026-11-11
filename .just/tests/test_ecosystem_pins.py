@@ -63,7 +63,7 @@ class EcosystemPinTests(unittest.TestCase):
         _latest_wyvern: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.7.0",
+            "sc-composer": "1.8.0",
             "sc-observability": "1.5.0",
             "sc-observability-log": "1.5.0",
             "sc-observability-types": "1.5.0",
@@ -89,7 +89,7 @@ class EcosystemPinTests(unittest.TestCase):
         file_issue: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.7.0",
+            "sc-composer": "1.8.0",
             "sc-observability": "1.6.0",
             "sc-observability-log": "1.6.0",
             "sc-observability-types": "1.6.0",
@@ -136,7 +136,7 @@ class EcosystemPinTests(unittest.TestCase):
             # known-good map below intentionally models the older recovery pin.
             evidence = root / "evidence.md"
             latest_registry.side_effect = lambda _root, dependency: {
-                "sc-composer": "1.7.0",
+                "sc-composer": "1.8.0",
                 "sc-observability": "1.5.0",
                 "sc-observability-log": "1.5.0",
                 "sc-observability-types": "1.5.0",
@@ -166,7 +166,7 @@ class EcosystemPinTests(unittest.TestCase):
                     return_value=subprocess.CompletedProcess(
                         args=["/usr/bin/tool", "--version"],
                         returncode=0,
-                        stdout="sc-compose 1.7.0\n",
+                        stdout="sc-compose 1.8.0\n",
                         stderr="",
                     ),
                 ),
@@ -199,7 +199,7 @@ class EcosystemPinTests(unittest.TestCase):
         _latest_wyvern: mock.Mock,
     ) -> None:
         latest_registry.side_effect = lambda _root, dependency: {
-            "sc-composer": "1.7.0",
+            "sc-composer": "1.8.0",
             "sc-observability": "1.5.0",
             "sc-observability-types": "1.5.0",
             "sc-observability-log": "1.5.0",
@@ -251,7 +251,7 @@ class EcosystemPinTests(unittest.TestCase):
                 )
             }
             latest_registry = {
-                "sc-composer": "1.7.0",
+                "sc-composer": "1.8.0",
                 "sc-observability": "1.5.0",
                 "sc-observability-log": "1.5.0",
                 "sc-observability-types": "1.5.0",
@@ -267,7 +267,7 @@ class EcosystemPinTests(unittest.TestCase):
                     return_value=subprocess.CompletedProcess(
                         args=["/usr/bin/tool", "--version"],
                         returncode=0,
-                        stdout="sc-compose 1.7.0\n",
+                        stdout="sc-compose 1.8.0\n",
                         stderr="",
                     ),
                 ),
@@ -301,7 +301,7 @@ class EcosystemPinTests(unittest.TestCase):
         self.assertFalse(accepted)
         self.assertEqual(len(findings), 1)
         self.assertIn("does not match", findings[0].summary)
-        self.assertIn("expected exactly 1.7.0", findings[0].detail)
+        self.assertIn("expected exactly 1.8.0", findings[0].detail)
 
     def test_release_preflight_accepts_the_manifest_sc_compose_binary(self) -> None:
         findings: list[VALIDATE_RELEASE.Finding] = []
@@ -311,7 +311,7 @@ class EcosystemPinTests(unittest.TestCase):
             return_value=subprocess.CompletedProcess(
                 args=["sc-compose", "--version"],
                 returncode=0,
-                stdout="sc-compose 1.7.0\n",
+                stdout="sc-compose 1.8.0\n",
                 stderr="",
             ),
         ):
