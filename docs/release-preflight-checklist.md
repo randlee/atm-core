@@ -30,7 +30,7 @@ For a concrete release candidate, the workflow-equivalent local invocation is:
 ```bash
 python3 scripts/validate_release.py all \
   --version <X.Y.Z> \
-  --findings release-findings.json
+  --findings artifacts/findings/release-findings.json
 ```
 
 ## `validate_release.py` Target Inventory
