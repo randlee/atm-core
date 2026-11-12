@@ -7,7 +7,7 @@ use crate::schema::AtmMessageId;
 use crate::types::{AgentName, ChatId, HostName, PaneId, TaskId, TeamName};
 /// Durable roster store used by replacement-runtime maintenance projections.
 #[doc(inline)]
-pub use atm_storage::contract::RosterStore as DurableRosterStore;
+pub use atm_storage::contract::RosterStore;
 pub use atm_storage::contract::{
     AckTransition, AsyncMailboxReader, MailboxScope, Message, MessageKey, MessageQuery,
     ReadLaneError,
@@ -60,8 +60,7 @@ impl NudgeKind {
 
 /// The retained tmux receiver nudge confirms its literal payload with two
 /// `send-keys Enter` events separated by this bounded delay. The active Tokio
-/// runtime and CLI command share this contract; frozen legacy daemon source
-/// remains reference-only until Phase AM removes it.
+/// runtime and CLI command share this contract.
 pub const TMUX_DOUBLE_ENTER_DELAY: std::time::Duration = std::time::Duration::from_millis(275);
 
 /// Literal tmux key used for each confirmation in the shared nudge sequence.

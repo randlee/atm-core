@@ -15,7 +15,7 @@ use std::time::Duration;
 use atm_core::LocalServiceRuntime;
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{
-    DurableRosterStore, MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore,
+    MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore, RosterStore,
 };
 use atm_core::delivery_channel::{HerdrAgentName, HerdrSession, local_message_received_backend};
 use atm_core::error::{AtmError, AtmErrorCode};
@@ -307,7 +307,7 @@ impl HerdrQueueWakePump {
 
     async fn load_candidates(
         &self,
-        roster_store: Arc<dyn DurableRosterStore + Send + Sync>,
+        roster_store: Arc<dyn RosterStore + Send + Sync>,
         pending_set: HashSet<MemberKey>,
     ) -> Result<Vec<HerdrCandidate>, AtmError> {
         self.blocking_bridge
@@ -940,7 +940,7 @@ struct MemberObservation {
 }
 
 fn herdr_candidates(
-    roster_store: &dyn DurableRosterStore,
+    roster_store: &dyn RosterStore,
     pending: &HashSet<MemberKey>,
 ) -> Result<Vec<HerdrCandidate>, AtmError> {
     let mut candidates = Vec::new();

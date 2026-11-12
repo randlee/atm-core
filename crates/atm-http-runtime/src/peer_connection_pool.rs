@@ -96,6 +96,8 @@ struct PoolShared {
     eviction_task: Mutex<Option<JoinHandle<()>>>,
     #[cfg(test)]
     completed_drivers: Arc<AtomicUsize>,
+    #[cfg(test)]
+    driver_signal: Arc<tokio::sync::Notify>,
 }
 
 #[derive(Default)]
@@ -150,6 +152,8 @@ impl PeerConnectionPool {
             eviction_task: Mutex::new(None),
             #[cfg(test)]
             completed_drivers: Arc::new(AtomicUsize::new(0)),
+            #[cfg(test)]
+            driver_signal: Arc::new(tokio::sync::Notify::new()),
         });
         spawn_idle_eviction_task(&shared);
         Self { shared }
@@ -311,12 +315,17 @@ impl PeerConnectionPool {
         })?;
         #[cfg(test)]
         let completed_drivers = Arc::clone(&self.shared.completed_drivers);
+        #[cfg(test)]
+        let driver_signal = Arc::clone(&self.shared.driver_signal);
         let driver = tokio::spawn(async move {
             if let Err(error) = connection.await {
                 tracing::debug!(%error, "pooled opaque peer HTTP client connection ended");
             }
             #[cfg(test)]
-            completed_drivers.fetch_add(1, Ordering::SeqCst);
+            {
+                completed_drivers.fetch_add(1, Ordering::SeqCst);
+                driver_signal.notify_one();
+            }
         });
         Ok((sender, driver))
     }
@@ -608,10 +617,6 @@ mod tests {
     use crate::http1_server::serve_connection;
     use crate::{AcceptedPeerStream, EstablishedPeerStream, PeerStreamAdapter, PeerStreamFuture};
 
-    // A test-only allowance for resolving `localhost` to the IPv4-only test
-    // listener on Windows. Production callers retain their supplied deadline.
-    const AUTHORITY_ISOLATION_TEST_DEADLINE: Duration = Duration::from_secs(5);
-
     #[derive(Default)]
     struct CountingPassthroughAdapter {
         connects: AtomicUsize,
@@ -772,13 +777,15 @@ mod tests {
     }
 
     async fn assert_driver_completions(pool: &PeerConnectionPool, minimum: usize, context: &str) {
-        tokio::time::timeout(std::time::Duration::from_secs(1), async {
-            while pool.completed_driver_count() < minimum {
-                tokio::task::yield_now().await;
+        loop {
+            let notified = pool.shared.driver_signal.notified();
+            if pool.completed_driver_count() >= minimum {
+                return;
             }
-        })
-        .await
-        .unwrap_or_else(|_| panic!("connection driver did not complete after {context}"));
+            tokio::time::timeout(Duration::from_secs(30), notified)
+                .await
+                .unwrap_or_else(|_| panic!("connection driver did not complete after {context}"));
+        }
     }
 
     #[tokio::test]
@@ -813,13 +820,22 @@ mod tests {
         let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
         let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
+        let localhost = "localhost".parse().expect("peer authority");
+        pool.shared.addresses.store(
+            &localhost,
+            std::num::NonZeroU16::new(port).expect("non-zero test port"),
+            crate::peer_dial::order_connect_candidates([std::net::SocketAddr::from((
+                [127, 0, 0, 1],
+                port,
+            ))]),
+        );
         for peer in ["127.0.0.1", "localhost"] {
             let peer = peer.parse().expect("peer authority");
             let mut connection = pool
                 .acquire(
                     &peer,
                     std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                    atm_core::api::RequestDeadline::after(AUTHORITY_ISOLATION_TEST_DEADLINE),
+                    atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
                 )
                 .await
                 .expect("pool acquires peer connection");

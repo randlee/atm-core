@@ -157,8 +157,8 @@ Phase-AA simplification note:
   instead of daemon-local backend-aware helpers
 - top-level doctor code may aggregate subsystem reports and daemon-owned
   runtime state, but must not reimplement backend-specific diagnosis logic
-- `MailStore` and `RosterStore` remain the primary storage-neutral capability
-  traits in the simplification line described here
+- Phase `AC` supersedes the transitional store traits: `MessageStore` and
+  `RosterStore` in `atm-storage` are the canonical shared storage contracts
 - backend-specific implementations such as SQLite-backed and Claude-JSON-backed
   adapters are allowed to satisfy the approved behavior-named trait family
 - `AA.5` relocks the daemon-to-SQLite edge in both the runtime-composition and

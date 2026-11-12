@@ -864,11 +864,62 @@ pub(crate) struct PendingStoreState {
     mark_failure: Option<AtmError>,
     mark_failures_remaining: std::sync::atomic::AtomicUsize,
     rearm_failure: Option<AtmError>,
-    release_started: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-    release_blocker: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    release_blocker: Option<std::sync::Arc<ReleaseBlocker>>,
     operation_calls: std::sync::atomic::AtomicUsize,
     rearm_calls: std::sync::atomic::AtomicUsize,
     mark_pending_calls: std::sync::Mutex<Vec<(MemberKey, AtmMessageId)>>,
+}
+
+/// A bounded, signal-driven blocker for synchronous pending-store tests.
+#[derive(Default)]
+pub struct ReleaseBlocker {
+    state: std::sync::Mutex<ReleaseBlockerState>,
+    changed: std::sync::Condvar,
+}
+
+#[derive(Default)]
+struct ReleaseBlockerState {
+    entered: bool,
+    released: bool,
+}
+
+impl ReleaseBlocker {
+    pub fn release(&self) {
+        self.state.lock().expect("release blocker lock").released = true;
+        self.changed.notify_all();
+    }
+
+    pub fn enter_and_wait(&self) {
+        let mut state = self.state.lock().expect("release blocker lock");
+        state.entered = true;
+        self.changed.notify_all();
+        let (state, result) = self
+            .changed
+            .wait_timeout_while(state, std::time::Duration::from_secs(60), |state| {
+                !state.released
+            })
+            .expect("release blocker state is not poisoned");
+        assert!(state.released, "release gate released within 60 seconds");
+        assert!(
+            !result.timed_out(),
+            "release gate was not released within 60 seconds"
+        );
+    }
+
+    pub fn wait_until_entered(&self) {
+        let state = self.state.lock().expect("release blocker lock");
+        let (state, result) = self
+            .changed
+            .wait_timeout_while(state, std::time::Duration::from_secs(10), |state| {
+                !state.entered
+            })
+            .expect("release blocker state is not poisoned");
+        assert!(state.entered, "release gate entered within 10 seconds");
+        assert!(
+            !result.timed_out(),
+            "release gate did not enter within 10 seconds"
+        );
+    }
 }
 
 impl Default for DummyPendingNudgeStore {
@@ -878,7 +929,6 @@ impl Default for DummyPendingNudgeStore {
             mark_failure: None,
             mark_failures_remaining: std::sync::atomic::AtomicUsize::new(0),
             rearm_failure: None,
-            release_started: None,
             release_blocker: None,
             operation_calls: std::sync::atomic::AtomicUsize::new(0),
             rearm_calls: std::sync::atomic::AtomicUsize::new(0),
@@ -912,12 +962,7 @@ impl DummyPendingNudgeStore {
     /// Blocks release operations until `blocker` becomes false, exposing the
     /// synchronous-store stall needed by bounded-shutdown tests.
     #[must_use]
-    pub fn with_release_blocker(
-        mut self,
-        started: std::sync::Arc<std::sync::atomic::AtomicBool>,
-        blocker: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    ) -> Self {
-        self.0.release_started = Some(started);
+    pub fn with_release_blocker(mut self, blocker: std::sync::Arc<ReleaseBlocker>) -> Self {
         self.0.release_blocker = Some(blocker);
         self
     }
@@ -1003,13 +1048,8 @@ impl DummyPendingNudgeStore {
 
     pub(crate) fn release(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
         self.record_operation();
-        if let Some(started) = &self.0.release_started {
-            started.store(true, std::sync::atomic::Ordering::Release);
-        }
         if let Some(blocker) = &self.0.release_blocker {
-            while blocker.load(std::sync::atomic::Ordering::Acquire) {
-                std::thread::yield_now();
-            }
+            blocker.enter_and_wait();
         }
         self.0
             .inner

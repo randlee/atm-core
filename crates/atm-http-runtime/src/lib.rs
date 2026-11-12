@@ -1083,6 +1083,8 @@ mod tests {
     }
 
     impl CountingLoopbackRouter {
+        const ENTERED_WAIT: Duration = Duration::from_secs(10);
+
         fn new() -> Self {
             Self {
                 calls: AtomicUsize::new(0),
@@ -1092,10 +1094,23 @@ mod tests {
             }
         }
 
-        async fn wait_until_entered(&self) {
-            while !self.entered.load(Ordering::SeqCst) {
-                self.entered_notify.notified().await;
-            }
+        async fn wait_until_entered(&self, step: &str) {
+            tokio::time::timeout(Self::ENTERED_WAIT, async {
+                while !self.entered.load(Ordering::SeqCst) {
+                    // Register before checking: `notify_waiters` does not keep a permit.
+                    let notified = self.entered_notify.notified();
+                    tokio::pin!(notified);
+                    notified.as_mut().enable();
+                    if self.entered.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    notified.await;
+                }
+            })
+            .await
+            .unwrap_or_else(|_| {
+                panic!("timed out waiting for {step} to enter the loopback router")
+            });
         }
     }
 
@@ -1147,10 +1162,17 @@ mod tests {
             Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
         > {
             Box::pin(async move {
+                // The test releases immediately after observing entry; subscribe first.
+                let released = self.release.notified();
+                tokio::pin!(released);
+                released.as_mut().enable();
+
                 self.calls.fetch_add(1, Ordering::SeqCst);
                 self.entered.store(true, Ordering::SeqCst);
                 self.entered_notify.notify_waiters();
-                self.release.notified().await;
+                tokio::time::timeout(Duration::from_secs(10), released)
+                    .await
+                    .expect("timed out waiting for loopback handler release");
                 Ok(ApiResponse::new(ResponseEnvelope::Error(
                     AtmError::validation("loopback test handler reached"),
                 )))
@@ -1238,10 +1260,21 @@ mod tests {
             }
         }
 
-        async fn wait_until_entered(&self) {
-            while !self.entered.load(Ordering::SeqCst) {
-                self.entered_notify.notified().await;
-            }
+        async fn wait_until_entered(&self, step: &str) {
+            tokio::time::timeout(Duration::from_secs(10), async {
+                while !self.entered.load(Ordering::SeqCst) {
+                    // Register before checking: `notify_waiters` does not keep a permit.
+                    let notified = self.entered_notify.notified();
+                    tokio::pin!(notified);
+                    notified.as_mut().enable();
+                    if self.entered.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    notified.await;
+                }
+            })
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for {step} to enter the UDS router"));
         }
     }
 
@@ -1259,9 +1292,16 @@ mod tests {
             Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
         > {
             Box::pin(async move {
+                // The test releases immediately after observing entry; subscribe first.
+                let released = self.release.notified();
+                tokio::pin!(released);
+                released.as_mut().enable();
+
                 self.entered.store(true, Ordering::SeqCst);
                 self.entered_notify.notify_waiters();
-                self.release.notified().await;
+                tokio::time::timeout(Duration::from_secs(10), released)
+                    .await
+                    .expect("timed out waiting for UDS handler release");
                 Ok(ApiResponse::new(ResponseEnvelope::Error(
                     AtmError::validation("UDS drain fixture released"),
                 )))
@@ -1933,7 +1973,9 @@ mod tests {
         let request =
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
 
-        handler.wait_until_entered().await;
+        handler
+            .wait_until_entered("unix_socket_shutdown_drains_in_flight_request")
+            .await;
         let drain = tokio::spawn(async move {
             running
                 .begin_shutdown()
@@ -2386,7 +2428,9 @@ mod tests {
             tokio::spawn(
                 async move { first_client.execute(ApiRequest::new(write_request())).await },
             );
-        handler.wait_until_entered().await;
+        handler
+            .wait_until_entered("loopback_connection_admission")
+            .await;
 
         let second_client = super::loopback_tcp_client(&record_path, Duration::from_millis(25))
             .expect("second loopback client");
@@ -2736,7 +2780,9 @@ mod tests {
             .body(body)
             .send();
         let valid_request = tokio::spawn(valid_request);
-        handler.wait_until_entered().await;
+        handler
+            .wait_until_entered("duplicate_capability_valid_request")
+            .await;
         assert_eq!(handler.calls.load(Ordering::SeqCst), 1);
         handler.release.notify_waiters();
         assert_eq!(
@@ -2956,7 +3002,9 @@ mod tests {
         let request =
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
 
-        handler.wait_until_entered().await;
+        handler
+            .wait_until_entered("loopback_shutdown_drains_in_flight_request")
+            .await;
         let drain = tokio::spawn(async move {
             running
                 .begin_shutdown()
@@ -3017,7 +3065,9 @@ mod tests {
         let request =
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
 
-        handler.wait_until_entered().await;
+        handler
+            .wait_until_entered("stuck_server_and_maintenance_probe")
+            .await;
         let shutdown = tokio::time::timeout(
             Duration::from_secs(1),
             running
@@ -3102,7 +3152,9 @@ mod tests {
         axum::extract::State(gate): axum::extract::State<Arc<AuxiliarySaturationGate>>,
     ) -> axum::http::StatusCode {
         gate.entered.notify_one();
-        gate.release.notified().await;
+        tokio::time::timeout(Duration::from_secs(10), gate.release.notified())
+            .await
+            .expect("timed out waiting for saturation test gate release");
         axum::http::StatusCode::OK
     }
 
@@ -3148,7 +3200,9 @@ mod tests {
 
         // Deterministic: wait for the saturating handler to actually be
         // entered (not merely scheduled) before asserting shed behavior.
-        gate.entered.notified().await;
+        tokio::time::timeout(Duration::from_secs(10), gate.entered.notified())
+            .await
+            .expect("timed out waiting for saturating handler entry");
 
         let shed_health = router
             .clone()
@@ -3333,7 +3387,9 @@ mod tests {
             .expect("shared loopback client");
         let request =
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
-        handler.wait_until_entered().await;
+        handler
+            .wait_until_entered("shutdown_deadline_request")
+            .await;
 
         // Pause only now: auto-advance during the real socket handshake above
         // would run the client's own timeout out before the request lands.

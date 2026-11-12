@@ -157,17 +157,14 @@ pub use atm_temp_sweeper::{
 pub use boundary::{
     AckTransition, AsyncMessageReceivedHookEmitter, BuiltInNudgeSinkTarget,
     BuiltInNudgeTemplateKind, ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest,
-    ConfigLoadResponse, DoctorFinding, HerdrNudgeTarget, InternalNudgeEnvelope,
-    LoadMailMessageStateRequest, LoadMailMessageStateResponse, LocalSteerTarget, MailMessageState,
-    MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
-    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore,
-    PostSendHookEvent, RenderedBody, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness,
-    RosterMemberKind, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
-    RuntimeStatusSnapshot, SourceSpan, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow, TemplateComposer, TemplateInspection, TemplateReference,
-    TemplateReferenceKind, TemplateRoot, TemplateSource, UpsertMailMessageStateRequest,
-    UpsertMailMessageStateResponse,
+    ConfigLoadResponse, DoctorFinding, HerdrNudgeTarget, InternalNudgeEnvelope, LocalSteerTarget,
+    MailMessageState, MailStoreDoctor, MailStoreDoctorReport, MailStoreMailboxMetadataCounts,
+    MailStoreMailboxMetadataRow, Message, MessageFingerprint, MessageKey,
+    MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEvent,
+    RenderedBody, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
+    RosterStoreDoctor, RosterStoreDoctorReport, RuntimeStatusSnapshot, SourceSpan, StatusSource,
+    TaskState, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TemplateComposer,
+    TemplateInspection, TemplateReference, TemplateReferenceKind, TemplateRoot, TemplateSource,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
