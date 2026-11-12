@@ -17,7 +17,6 @@ use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
 use atm_core::types::HostName;
-use tokio::net::TcpStream;
 use tokio::time::Instant;
 
 /// Upper bound on addresses dialled for one peer. A resolver answer larger
@@ -92,14 +91,14 @@ fn is_scope_less_link_local(address: SocketAddrV6) -> bool {
 /// consume the budget that a later, reachable address needs. The returned
 /// cause names every attempt so the operator can see which address failed
 /// and why.
-pub(crate) async fn dial_candidates<Connect, Dial>(
+pub(crate) async fn dial_candidates<Connect, Dial, Stream>(
     candidates: ConnectCandidates,
     deadline: RequestDeadline,
     connect: Connect,
-) -> Result<TcpStream, String>
+) -> Result<Stream, String>
 where
     Connect: Fn(SocketAddr) -> Dial,
-    Dial: Future<Output = std::io::Result<TcpStream>>,
+    Dial: Future<Output = std::io::Result<Stream>>,
 {
     let ConnectCandidates {
         usable,
@@ -255,19 +254,19 @@ impl PeerAddressCache {
     /// Connects to `peer`, reusing a fresh cached address set when one exists
     /// and otherwise resolving the name through `resolve`. A dial failure on
     /// cached addresses falls through to one fresh resolution and dial.
-    pub(crate) async fn connect<Resolve, Resolving, Connect, Dial>(
+    pub(crate) async fn connect<Resolve, Resolving, Connect, Dial, Stream>(
         &self,
         peer: &HostName,
         port: NonZeroU16,
         deadline: RequestDeadline,
         resolve: Resolve,
         connect: Connect,
-    ) -> Result<TcpStream, String>
+    ) -> Result<Stream, String>
     where
         Resolve: Fn(HostName, NonZeroU16) -> Resolving,
         Resolving: Future<Output = std::io::Result<Vec<SocketAddr>>>,
         Connect: Fn(SocketAddr) -> Dial + Copy,
-        Dial: Future<Output = std::io::Result<TcpStream>>,
+        Dial: Future<Output = std::io::Result<Stream>>,
     {
         if let Some(cached) = self.fresh(peer, port) {
             // Cached addresses may be stale, so they get the smaller of half
@@ -326,19 +325,25 @@ impl reqwest::dns::Resolve for OrderedPeerResolver {
         let name = name.as_str().to_owned();
         Box::pin(async move {
             let resolved = tokio::net::lookup_host((name.as_str(), 0)).await?;
-            let candidates = order_connect_candidates(resolved);
-            if candidates.skipped_link_local > 0 || candidates.truncated > 0 {
-                tracing::debug!(
-                    %name,
-                    skipped_link_local = candidates.skipped_link_local,
-                    truncated = candidates.truncated,
-                    "resolved peer addresses filtered before dial"
-                );
-            }
-            let addresses: reqwest::dns::Addrs = Box::new(candidates.usable.into_iter());
-            Ok(addresses)
+            Ok(ordered_resolver_addresses(&name, resolved))
         })
     }
+}
+
+fn ordered_resolver_addresses(
+    name: &str,
+    resolved: impl IntoIterator<Item = SocketAddr>,
+) -> reqwest::dns::Addrs {
+    let candidates = order_connect_candidates(resolved);
+    if candidates.skipped_link_local > 0 || candidates.truncated > 0 {
+        tracing::debug!(
+            %name,
+            skipped_link_local = candidates.skipped_link_local,
+            truncated = candidates.truncated,
+            "resolved peer addresses filtered before dial"
+        );
+    }
+    Box::new(candidates.usable.into_iter())
 }
 
 #[cfg(test)]
@@ -351,31 +356,11 @@ mod tests {
 
     use atm_core::api::RequestDeadline;
     use atm_core::types::HostName;
-    use tokio::net::{TcpListener, TcpStream};
 
     use super::{
-        ConnectCandidates, MAX_DIAL_CANDIDATES, OrderedPeerResolver, PeerAddressCache,
-        STALE_ADDRESS_DIAL_CAP, dial_candidates, order_connect_candidates,
+        ConnectCandidates, MAX_DIAL_CANDIDATES, PeerAddressCache, STALE_ADDRESS_DIAL_CAP,
+        dial_candidates, order_connect_candidates, ordered_resolver_addresses,
     };
-
-    async fn start_listener() -> u16 {
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind loopback");
-        let port = listener.local_addr().expect("local addr").port();
-        tokio::spawn(async move {
-            loop {
-                let Ok((stream, _)) = listener.accept().await else {
-                    return;
-                };
-                tokio::spawn(async move {
-                    let _keep_open = stream;
-                    std::future::pending::<()>().await;
-                });
-            }
-        });
-        port
-    }
 
     fn deadline(duration: Duration) -> RequestDeadline {
         RequestDeadline::after(duration)
@@ -405,15 +390,14 @@ mod tests {
         NonZeroU16::new(value).expect("non-zero port")
     }
 
-    /// Dials loopback for real and never answers any other address, which is
-    /// how an unroutable link-local or black-holed address behaves.
+    // Return the selected address as an in-memory stand-in for a connection.
     fn loopback_only_connector(
         address: SocketAddr,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<TcpStream>> + Send>>
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>>
     {
         Box::pin(async move {
             if address.ip().is_loopback() {
-                TcpStream::connect(address).await
+                Ok(address)
             } else {
                 std::future::pending().await
             }
@@ -423,18 +407,13 @@ mod tests {
     fn controlled_connector(
         address: SocketAddr,
         success: SocketAddr,
-        stream: &Arc<Mutex<Option<TcpStream>>>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<TcpStream>> + Send>>
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>>
     {
-        let stream = if address == success {
-            stream.lock().expect("test connector").take()
-        } else {
-            None
-        };
         Box::pin(async move {
-            match stream {
-                Some(stream) => Ok(stream),
-                None => std::future::pending().await,
+            if address == success {
+                Ok(address)
+            } else {
+                std::future::pending().await
             }
         })
     }
@@ -490,7 +469,7 @@ mod tests {
 
     #[tokio::test]
     async fn mixed_family_host_connects_without_stalling_on_link_local_ipv6() {
-        let port = start_listener().await;
+        let port = 43_101;
         let stream = dial_candidates(
             order_connect_candidates([v6("fe80::4af:1", port, 0), v4("127.0.0.1", port)]),
             deadline(Duration::from_secs(10)),
@@ -498,19 +477,14 @@ mod tests {
         )
         .await
         .expect("the routable IPv4 address must be reached");
-        assert!(stream.peer_addr().is_ok());
+        assert_eq!(stream, v4("127.0.0.1", port));
     }
 
     #[tokio::test]
     async fn unresponsive_first_address_is_bounded_so_the_next_address_still_connects() {
-        let port = start_listener().await;
+        let port = 43_101;
         let first = v4("192.0.2.1", port);
         let second = v4("127.0.0.1", port);
-        let stream = Arc::new(Mutex::new(Some(
-            TcpStream::connect(second)
-                .await
-                .expect("prepare loopback stream"),
-        )));
         tokio::time::pause();
         let (attempt_tx, mut attempt_rx) = tokio::sync::mpsc::unbounded_channel();
         let task = tokio::spawn(async move {
@@ -523,7 +497,7 @@ mod tests {
                 deadline(Duration::from_secs(600)),
                 move |address| {
                     attempt_tx.send(address).expect("report attempted address");
-                    controlled_connector(address, second, &stream)
+                    controlled_connector(address, second)
                 },
             )
             .await
@@ -550,7 +524,7 @@ mod tests {
             .await
             .expect("dial task joins")
             .expect("second candidate connects");
-        assert_eq!(stream.peer_addr().expect("connected peer"), second);
+        assert_eq!(stream, second);
     }
 
     #[tokio::test]
@@ -576,7 +550,7 @@ mod tests {
             },
             deadline(Duration::from_millis(400)),
             |address| -> std::pin::Pin<
-                Box<dyn std::future::Future<Output = std::io::Result<TcpStream>> + Send>,
+                Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>,
             > {
                 Box::pin(async move {
                     if address.ip().is_loopback() {
@@ -609,7 +583,7 @@ mod tests {
 
     #[tokio::test]
     async fn cached_addresses_are_reused_within_the_ttl() {
-        let listener_port = start_listener().await;
+        let listener_port = 43_101;
         let cache = PeerAddressCache::new(Duration::from_secs(300));
         let calls = Arc::new(AtomicUsize::new(0));
         let resolver = counting_resolver(vec![v4("127.0.0.1", listener_port)], calls.clone());
@@ -634,7 +608,7 @@ mod tests {
 
     #[tokio::test]
     async fn bare_and_dot_local_names_share_one_cache_entry() {
-        let listener_port = start_listener().await;
+        let listener_port = 43_101;
         let cache = PeerAddressCache::new(Duration::from_secs(300));
         let calls = Arc::new(AtomicUsize::new(0));
         let resolver = counting_resolver(vec![v4("127.0.0.1", listener_port)], calls.clone());
@@ -660,13 +634,8 @@ mod tests {
 
     #[tokio::test]
     async fn changed_peer_address_is_re_resolved_and_reached_without_an_error() {
-        let listener_port = start_listener().await;
+        let listener_port = 43_101;
         let fresh = v4("127.0.0.1", listener_port);
-        let prepared = Arc::new(Mutex::new(Some(
-            TcpStream::connect(fresh)
-                .await
-                .expect("prepare loopback stream"),
-        )));
         tokio::time::pause();
         let cache = PeerAddressCache::new(Duration::from_secs(300));
         let calls = Arc::new(AtomicUsize::new(0));
@@ -685,11 +654,11 @@ mod tests {
                 port(listener_port),
                 deadline(Duration::from_secs(300)),
                 &resolver,
-                |address| controlled_connector(address, fresh, &prepared),
+                |address| controlled_connector(address, fresh),
             )
             .await
             .expect("the moved peer is reached inside the same request");
-        assert_eq!(stream.peer_addr().expect("connected peer"), fresh);
+        assert_eq!(stream, fresh);
         assert_eq!(
             calls.load(Ordering::SeqCst),
             1,
@@ -706,7 +675,7 @@ mod tests {
 
     #[tokio::test]
     async fn expired_cache_entries_are_resolved_again() {
-        let listener_port = start_listener().await;
+        let listener_port = 43_101;
         let ttl = Duration::from_secs(300);
         let cache = PeerAddressCache::new(ttl);
         let calls = Arc::new(AtomicUsize::new(0));
@@ -734,18 +703,13 @@ mod tests {
 
     #[tokio::test]
     async fn stale_cached_address_gives_up_within_the_dial_cap() {
-        let listener_port = start_listener().await;
+        let listener_port = 43_101;
         let cache = PeerAddressCache::new(Duration::from_secs(300));
         let calls = Arc::new(AtomicUsize::new(0));
         let resolver = counting_resolver(vec![v4("127.0.0.1", listener_port)], calls.clone());
         let peer = host("rand-m5");
         let stale = v4("192.0.2.1", listener_port);
         let fresh = v4("127.0.0.1", listener_port);
-        let stream = Arc::new(Mutex::new(Some(
-            TcpStream::connect(fresh)
-                .await
-                .expect("prepare loopback stream"),
-        )));
         tokio::time::pause();
         cache.store(
             &peer,
@@ -755,7 +719,6 @@ mod tests {
         let (attempt_tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
         let task = tokio::spawn(async move {
             let attempt_tx = &attempt_tx;
-            let stream = &stream;
             cache
                 .connect(
                     &peer,
@@ -764,7 +727,7 @@ mod tests {
                     &resolver,
                     move |address| {
                         attempt_tx.send(address).expect("report attempted address");
-                        controlled_connector(address, fresh, stream)
+                        controlled_connector(address, fresh)
                     },
                 )
                 .await
@@ -791,7 +754,7 @@ mod tests {
             .await
             .expect("dial task joins")
             .expect("moved peer connects");
-        assert_eq!(stream.peer_addr().expect("connected peer"), fresh);
+        assert_eq!(stream, fresh);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
@@ -814,24 +777,17 @@ mod tests {
         assert!(cache.fresh(&host("rand-m5"), port(43_101)).is_none());
     }
 
-    #[tokio::test]
-    async fn reqwest_resolver_returns_ordered_routable_addresses() {
-        use reqwest::dns::Resolve;
-        let name: reqwest::dns::Name = "localhost".parse().expect("valid name");
-        let addresses: Vec<SocketAddr> = OrderedPeerResolver
-            .resolve(name)
-            .await
-            .expect("localhost resolves")
-            .collect();
-        assert!(!addresses.is_empty());
-        assert!(addresses.len() <= MAX_DIAL_CANDIDATES);
-        assert!(
-            addresses[0].is_ipv4() || addresses.iter().all(SocketAddr::is_ipv6),
-            "IPv4 leads whenever it is present: {addresses:?}"
-        );
-        assert!(addresses.iter().all(|address| match address {
-            SocketAddr::V6(v6) => !(v6.ip().is_unicast_link_local() && v6.scope_id() == 0),
-            SocketAddr::V4(_) => true,
-        }));
+    #[test]
+    fn reqwest_resolver_returns_ordered_routable_addresses() {
+        let addresses: Vec<SocketAddr> = ordered_resolver_addresses(
+            "peer.example",
+            [
+                v6("fe80::1", 0, 0),
+                v6("2001:db8::1", 0, 0),
+                v4("192.0.2.1", 0),
+            ],
+        )
+        .collect();
+        assert_eq!(addresses, vec![v4("192.0.2.1", 0), v6("2001:db8::1", 0, 0)]);
     }
 }
