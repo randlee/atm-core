@@ -285,9 +285,9 @@ SCB_CONFIG_SEND_PATTERNS = (
 )
 SCB_CONFIG_BOUNDARY_FILES = (
     Path("crates/atm-core/src/boundary_support.rs"),
-    # Keep guarding this retired duplicate path if it is ever reintroduced.
-    Path("crates/atm-core/src/direct_boundaries.rs"),
 )
+# Guard the retired duplicate if it is reintroduced, without requiring it to exist.
+SCB_CONFIG_RETIRED_HELPER_FILE = Path("crates/atm-core/src/direct_boundaries.rs")
 SCB_CONFIG_CANONICAL_HELPER_FILE = Path("crates/atm-core/src/boundary_support.rs")
 # team_admin's sibling split files (restore.rs, filesystem.rs, projection.rs) were
 # reviewed as of the member_mutation.rs split (PR #471) and found not to call
@@ -323,14 +323,12 @@ SCB_SINGLETON_TARGET_FILES = (
     Path("crates/atm-core/src/runtime_install_hooks.rs"),
     Path("crates/atm-daemon-bootstrap/src/lib.rs"),
     Path("crates/atm-runtime-test-support/src/lib.rs"),
-    Path("crates/atm-daemon/src/composition.rs"),
-    Path("crates/atm-daemon/src/tests.rs"),
+    Path("crates/atm-runtime/src/composition.rs"),
     Path("crates/atm-storage-rusqlite/src/lib.rs"),
 )
 SCB_SINGLETON_ALLOWED_HOOK_CALLERS = {
     Path("crates/atm-daemon-bootstrap/src/lib.rs"),
     Path("crates/atm-runtime-test-support/src/lib.rs"),
-    Path("crates/atm-daemon/src/composition.rs"),
 }
 SCB_OBSERVABILITY_ALLOWED_SRC_FILES = {
     Path("crates/atm-daemon-bootstrap/src/daemon_observability.rs"),
@@ -2022,7 +2020,9 @@ def collect_scb_config_rule_violations(
         rel_source = rel_path.as_posix()
         lines = source_path.read_text(encoding="utf-8").splitlines()
         is_send_path = "crates/atm-core/src/send/" in rel_source or rel_path == SCB_CONFIG_FIXTURE_PATH
-        is_boundary_file = rel_path in SCB_CONFIG_BOUNDARY_FILES or rel_path == SCB_CONFIG_FIXTURE_PATH
+        is_boundary_file = rel_path in SCB_CONFIG_BOUNDARY_FILES or rel_path in (
+            SCB_CONFIG_RETIRED_HELPER_FILE, SCB_CONFIG_FIXTURE_PATH
+        )
 
         for line_number, line in enumerate(lines, start=1):
             if is_comment_line(line):
@@ -2316,6 +2316,27 @@ def collect_scb_observability_otel_violations(
     return violations
 
 
+def collect_missing_configured_targets(repo_root: Path) -> list[BoundaryViolation]:
+    """Reject stale explicit targets instead of silently skipping their rules."""
+    groups = {
+        "SCB-CONFIG": SCB_CONFIG_BOUNDARY_FILES,
+        "SCB-RETAINED": SCB_RETAINED_TARGET_FILES,
+        "SCB-WORKSPACE": SCB_WORKSPACE_TARGET_FILES,
+        "SCB-SINGLETON": SCB_SINGLETON_TARGET_FILES,
+        "SCB-SINGLETON hook caller": SCB_SINGLETON_ALLOWED_HOOK_CALLERS,
+        "SCB-OBSERVABILITY allowed source": SCB_OBSERVABILITY_ALLOWED_SRC_FILES,
+    }
+    return [
+        BoundaryViolation(
+            f"SCB-TARGET-MISSING {path.as_posix()}",
+            f"configured {group} target is not a file",
+        )
+        for group, paths in groups.items()
+        for path in sorted(paths)
+        if not (repo_root / path).is_file()
+    ]
+
+
 def collect_boundary_violations(
     repo_root: Path,
     *,
@@ -2325,6 +2346,7 @@ def collect_boundary_violations(
     if records is None or parse_violations is None:
         records, parse_violations = parse_boundary_records(repo_root)
     violations: list[BoundaryViolation] = []
+    violations.extend(collect_missing_configured_targets(repo_root))
     violations.extend(parse_violations)
     violations.extend(collect_reference_violations(repo_root, records))
     violations.extend(collect_test_bypass_violations(repo_root, records))

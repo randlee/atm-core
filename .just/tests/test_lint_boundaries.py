@@ -24,6 +24,9 @@ from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import run
+from lint_boundaries import SCB_CONFIG_BOUNDARY_FILES, SCB_RETAINED_TARGET_FILES
+from lint_boundaries import SCB_WORKSPACE_TARGET_FILES, SCB_SINGLETON_TARGET_FILES
+from lint_boundaries import SCB_SINGLETON_ALLOWED_HOOK_CALLERS, SCB_OBSERVABILITY_ALLOWED_SRC_FILES
 
 
 
@@ -221,6 +224,12 @@ class LintBoundariesTests(unittest.TestCase):
         self.write_scb_workspace_support(repo_root)
         self.write_scb_singleton_support(repo_root)
         self.write_scb_observability_support(repo_root)
+        for path in (*SCB_CONFIG_BOUNDARY_FILES, *SCB_RETAINED_TARGET_FILES,
+                     *SCB_WORKSPACE_TARGET_FILES, *SCB_SINGLETON_TARGET_FILES,
+                     *SCB_SINGLETON_ALLOWED_HOOK_CALLERS, *SCB_OBSERVABILITY_ALLOWED_SRC_FILES):
+            target = repo_root / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.touch(exist_ok=True)
 
     def write_manifests(
         self,
@@ -637,6 +646,35 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             )
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertTrue(any(item.startswith("SCB-SINGLETON-001 ") for item in rendered), rendered)
+
+    def test_missing_configured_targets_fail_with_named_error(self) -> None:
+        from lint_boundaries import collect_missing_configured_targets
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            targets = set((*SCB_CONFIG_BOUNDARY_FILES, *SCB_RETAINED_TARGET_FILES,
+                           *SCB_WORKSPACE_TARGET_FILES, *SCB_SINGLETON_TARGET_FILES,
+                           *SCB_SINGLETON_ALLOWED_HOOK_CALLERS, *SCB_OBSERVABILITY_ALLOWED_SRC_FILES))
+            self.assertEqual(collect_missing_configured_targets(repo_root), [])
+            for path in targets:
+                with self.subTest(path=path):
+                    target = repo_root / path
+                    target.unlink()
+                    rendered = [v.render() for v in collect_boundary_violations(repo_root, records=[], parse_violations=[])]
+                    self.assertTrue(any(item.startswith(f"SCB-TARGET-MISSING {path.as_posix()}") for item in rendered), rendered)
+                    target.touch()
+
+    def test_runtime_composition_is_checked_for_hidden_hooks(self) -> None:
+        from lint_boundaries import collect_scb_singleton_rule_violations
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            target = repo_root / "crates/atm-runtime/src/composition.rs"
+            target.write_text("runtime_install_hooks::install_retained_runtime_factory_for_test_support();\n", encoding="utf-8")
+            rendered = [v.render() for v in collect_scb_singleton_rule_violations(repo_root, [target])]
             self.assertTrue(any(item.startswith("SCB-SINGLETON-001 ") for item in rendered), rendered)
 
 
