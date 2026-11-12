@@ -69,6 +69,9 @@ impl WorkerCompletion {
         let completion = async {
             loop {
                 let notified = self.completed.notified();
+                tokio::pin!(notified);
+                // Register before checking: `notify_waiters` does not keep a permit.
+                notified.as_mut().enable();
                 if self.completed_count.load(Ordering::SeqCst) >= target {
                     return;
                 }
@@ -339,6 +342,9 @@ mod tests {
             tokio::time::timeout(Duration::from_secs(10), async {
                 loop {
                     let notified = self.entered.notified();
+                    tokio::pin!(notified);
+                    // Register before checking: `notify_waiters` does not keep a permit.
+                    notified.as_mut().enable();
                     if self.entered_count.load(Ordering::SeqCst) >= target {
                         return;
                     }

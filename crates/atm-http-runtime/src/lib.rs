@@ -1097,7 +1097,14 @@ mod tests {
         async fn wait_until_entered(&self, step: &str) {
             tokio::time::timeout(Self::ENTERED_WAIT, async {
                 while !self.entered.load(Ordering::SeqCst) {
-                    self.entered_notify.notified().await;
+                    // Register before checking: `notify_waiters` does not keep a permit.
+                    let notified = self.entered_notify.notified();
+                    tokio::pin!(notified);
+                    notified.as_mut().enable();
+                    if self.entered.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    notified.await;
                 }
             })
             .await
@@ -1251,7 +1258,14 @@ mod tests {
         async fn wait_until_entered(&self, step: &str) {
             tokio::time::timeout(Duration::from_secs(10), async {
                 while !self.entered.load(Ordering::SeqCst) {
-                    self.entered_notify.notified().await;
+                    // Register before checking: `notify_waiters` does not keep a permit.
+                    let notified = self.entered_notify.notified();
+                    tokio::pin!(notified);
+                    notified.as_mut().enable();
+                    if self.entered.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    notified.await;
                 }
             })
             .await
