@@ -221,7 +221,7 @@ Status:
   - `crates/atm-graft`
   - `crates/atm-runtime`
   - `crates/atm-rusqlite`
-  - `crates/sc-lint-*` support crates
+  - Historical: `crates/sc-lint-*` support crates, removed in Phase BG
 
 ## 2. Deliverables
 
@@ -1905,6 +1905,10 @@ pending records, not closure evidence.
 ## 62. Phase BD — OpenTelemetry Export And Observability [PLANNED IN BEADS — IN PROGRESS]
 
 Phase BD is planned in the beads graph (`bd` root `atm-phase-bd`, sprints bd-1 through bd-7) and in [`docs/plans/phase-bd.jsonl`](./plans/phase-bd.jsonl); there is no markdown sprint set.
+
+## 63. Phase BG — Published sc-lint Adoption [PHASE-END REVIEW IN PROGRESS]
+
+Phase BG migrated atm-core linting to the published sc-lint 0.8.8 adoption kit and consumer runner, removed the vendored sc-lint support crates, and retained the repository-owned test manifest. The phase plan and evidence are in [docs/plans/phase-bg](./plans/phase-bg/phase-bg-plan.md).
 
 ## Daemon-Switch Scope Reduction
 

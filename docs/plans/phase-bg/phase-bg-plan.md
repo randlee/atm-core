@@ -2,7 +2,7 @@
 
 Historical sprint detail rendered from the beads plan (`bd show`). The beads are authoritative; the current landed state is summarized below. Sprint sections after the as-built record preserve the original proposals and acceptance checklists; their present-tense wording and unchecked boxes are not a statement of current repository state.
 
-> **Current landed state.** atm-core uses the published sc-lint 0.8.4 adoption kit with `minimum_version = "0.8.4"`. bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit and removed the vendored `sc-lint-boundary` and `sc-lint-directives` crates; bg-7 adopted the published sc-lint consumer runner for parallel, keep-going lint execution, while the test manifest remains repository-owned. The kit owns Windows-target cross compilation tools and rustup targets through its `tools` contract. There is no repository `.just/run_lint.py` or `.just/check_version_sync.py`; sc-lint 0.8.4 manifest rows invoke the published `sc_lint.check_version_sync` module for the retained version-alignment check. Each Python lint and test row has Linux, macOS and Windows variants that invoke the `.bootstrap-venv` interpreter directly, and the test runner selects the host variant. macOS-host Windows-target Clippy is configured.
+> **Current landed state.** atm-core uses the published sc-lint 0.8.8 adoption kit with `minimum_version = "0.8.8"`. bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit and removed the vendored `sc-lint-boundary` and `sc-lint-directives` crates; bg-7 adopted the published sc-lint consumer runner for parallel, keep-going lint execution, while the test manifest remains repository-owned. The kit owns Windows-target cross compilation tools and rustup targets through its `tools` contract. There is no repository `.just/run_lint.py` or `.just/check_version_sync.py`; sc-lint 0.8.8 manifest rows invoke the published `sc_lint.check_version_sync` module for the retained version-alignment check. Each Python lint and test row has Linux, macOS and Windows variants that invoke the `.bootstrap-venv` interpreter directly, and the test runner selects the host variant. macOS-host Windows-target Clippy is configured.
 
 > **BG4-2 evidence status.** The planned SCB-RUNTIME-001/002 vendored-versus-published finding-set diff was not recorded. [PR #1790](https://github.com/randlee/atm-core/pull/1790) records only that the published runtime analyzer could not start with sc-lint 0.7.0 because of the `--config` forwarding gap tracked by [sc-lint#373](https://github.com/randlee/sc-lint/issues/373); it contains no comparison results. [PR #1815](https://github.com/randlee/atm-core/pull/1815) reports a local `just lint` attempt terminated with exit 143, which is not a passing lint result or a BG4-2 comparison. The later 0.8.4 phase landing and CI establish the delivered analyzer configuration and validation, but do not retroactively supply the missing finding-set diff.
 
@@ -10,10 +10,10 @@ The historical sprint snapshots below retain their original proposals and versio
 
 ---
 
-## atm-phase-bg: phase-bg: migrate atm-core lint to published sc-lint 0.8.4
+## atm-phase-bg: phase-bg: migrate atm-core lint to published sc-lint 0.8.8
 
 ## Goal
-atm-core uses the published sc-lint 0.8.4 analyzers, wheel, adoption kit and consumer lint runner, with a repository-owned test manifest. Duplicate checks were removed as the published replacements became available. BG4's required SCB-RUNTIME-001/002 comparison attempt was blocked because the analyzer could not run at the time and no finding-set diff was recorded; see the as-built evidence above. Intent: `docs/plans/phase-bg/intent.md`; anchors ANC-001..021: `docs/plans/phase-bg/anchors.json` (landed with plan PR #1762). Replaces the stalled phase-be (atm-phase-be), which waited on 0.6.x.
+atm-core uses the published sc-lint 0.8.8 analyzers, wheel, adoption kit and consumer lint runner, with a repository-owned test manifest. Duplicate checks were removed as the published replacements became available. BG4's required SCB-RUNTIME-001/002 comparison attempt was blocked because the analyzer could not run at the time and no finding-set diff was recorded; see the as-built evidence above. Intent: `docs/plans/phase-bg/intent.md`; anchors ANC-001..021: `docs/plans/phase-bg/anchors.json` (landed with plan PR #1762). Replaces the stalled phase-be (atm-phase-be), which waited on 0.6.x.
 
 ## Sprints (one stack, one package per step, ANC-019)
 | Layer | Sprint | Package | Depends on |
@@ -65,7 +65,7 @@ Install the sc-lint 0.7.0 adoption kit verbatim so atm-core has the shared `just
 1. BG1-1 Kit apply: `python3 <kit-0.7.0>/install.py --input <input> .` writes `.sc-lint/install.json`, `sc-lint.toml`, `.sc-lint/{justfile,bootstrap,bootstrap.ps1,installed.json}`, `plugins/sc-lint/**`, the adopter agent and skill, and the managed Justfile import block. Kit files are committed unedited; `python3 plugins/sc-lint/install.py --dry-run .` exits 0 with no output.
 2. BG1-2 Steps: `.sc-lint/install.json` `profiles` has one step per current `run_lint.py all` target, same name, argv through the Justfile Python bridge; `test` keeps today's `just test` (the kit leaves an existing `test` recipe alone, sc-lint#194).
 3. BG1-3 Justfile: remove the recipes that collide with the kit justfile (`lint target=`, `default` if it collides); add a Justfile Python bridge to run scripts through the pinned bootstrap interpreter; every other recipe unchanged. Bare `just` still prints help.
-4. BG1-4 xwin: step `clippy-windows` runs the published `sc-lint clippy xwin` (and `clippy` runs `sc-lint clippy native`); the only wrapper is the PYO3_PYTHON environment the pyo3 crates (atm-query-python, atm-graft-python) need, marked `delete when randlee/sc-lint#198 ships`. On Windows `clippy-windows` exits 0 saying native clippy covers it. `cargo-xwin` pinned in `tools/bootstrap.toml`; `tools/bootstrap.py` adds the msvc target on non-Windows hosts; bootstrap tests and doc updated.
+4. BG1-4 xwin: step `clippy-windows` runs the published `sc-lint clippy xwin` (and `clippy` runs `sc-lint clippy native`); the only wrapper is the PYO3_PYTHON environment the pyo3 crates (atm-query-python, atm-graft-python) need (`delete when randlee/sc-lint#198 ships`). On Windows `clippy-windows` exits 0 saying native clippy covers it. `cargo-xwin` pinned in `tools/bootstrap.toml`; `tools/bootstrap.py` adds the msvc target on non-Windows hosts; bootstrap tests and doc updated.
 5. BG1-5 CI: `.github/workflows/ci.yml` lint and test jobs run `just setup` after bootstrap and cache the sc-lint binary and the xwin SDK; the just-lint job, which calls `just lint` today, calls the Justfile Python bridge for `.just/run_lint.py all` until bg-6; there is still one lint workflow (no kit `sc-lint.yml`, `ci.enabled = false`).
 
 ## Does Not Close
@@ -218,7 +218,7 @@ Every step the `sc_lint` wheel duplicates runs the published module (ANC-010): f
 
 ### BG5-2 gap disposition
 
-The repository uses sc-lint 0.8.4. The following upstream releases and retained
+The repository uses sc-lint 0.8.8. The following upstream releases and retained
 check account for the BG5-2 gaps:
 
 | Gap | Disposition |
@@ -272,7 +272,7 @@ sc-lint owns the step list and runs it: parallel, keep-going (sc-lint#195); `jus
 
 ## Deliverables
 1. BG6-1 Steps call their tool directly from `.sc-lint/install.json`; `run_lint.py`'s `all`/`fast` modes and log plumbing are deleted; CI and `scripts/validate_release.py` (which runs `python3 .just/run_lint.py all`) switch to `just lint ci all`. The earlier bridge-retention decision was superseded by the per-OS row cleanup: Python rows invoke `.bootstrap-venv` directly for each platform, and the bridge recipes are removed.
-2. BG6-2 Platform scope (REQ-P-PLATFORM-001/002): `just lint ci` = host-only, `just lint ci all` = every platform (#199). `clippy-windows` keeps its PYO3_PYTHON wrapper until #198 and its per-step target until #197, each marked `delete when`.
+2. BG6-2 Platform scope (REQ-P-PLATFORM-001/002): `just lint ci` = host-only, `just lint ci all` = every platform (#199). `clippy-windows` keeps its PYO3_PYTHON wrapper (`delete when randlee/sc-lint#198 ships`) and its per-step target (`delete when randlee/sc-lint#197 ships`).
 3. BG6-3 Test manifest: `just test` and its named selectors come from `test` in `.sc-lint/install.json` (the consumer manifest of #196), covering the current test steps (REQ-P-TEST-001). Rand's `f26467028` makes signing opt-in: `just test` does not sign; `just test-signing` explicitly invokes `sign_daemon_dev.py`, as does `just build` after building; the helper signs existing managed binaries on macOS and skips signing on other platforms; plain `just test` excludes coverage; `just coverage` writes the host's tracked report on macOS and Windows and fails clearly on Linux (REQ-P-COVERAGE-001).
 4. BG6-4 Speed (ANC-004): on one host with warm caches (cargo target dir, venvs), time the same check set at the phase base commit (`just lint`, i.e. `run_lint.py all`) and at the bg-6 head (`just lint` with `clippy-windows` excluded, the one step the base does not run): 1 discarded run, then 3 timed runs each; the head median is lower; commands and numbers in the PR body.
 5. BG6-5 Docs: `docs/lint-suite-prd.md` and `just help` describe the new commands.
