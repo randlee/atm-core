@@ -4,7 +4,7 @@ Historical sprint detail rendered from the beads plan (`bd show`). The beads are
 
 > **Current landed state.** atm-core uses the published sc-lint 0.8.8 adoption kit with `minimum_version = "0.8.8"`. bg-1 through bg-5 landed before the published lint runner supported parallel, keep-going profiles. bg-6 adopted the kit and removed the vendored `sc-lint-boundary` and `sc-lint-directives` crates; bg-7 adopted the published sc-lint consumer runner for parallel, keep-going lint execution, while the test manifest remains repository-owned. The kit owns Windows-target cross compilation tools and rustup targets through its `tools` contract. There is no repository `.just/run_lint.py` or `.just/check_version_sync.py`; sc-lint 0.8.8 manifest rows invoke the published `sc_lint.check_version_sync` module for the retained version-alignment check. Each Python lint and test row has Linux, macOS and Windows variants that invoke the `.bootstrap-venv` interpreter directly, and the test runner selects the host variant. macOS-host Windows-target Clippy is configured.
 
-> **BG4-2 evidence status.** The planned SCB-RUNTIME-001/002 vendored-versus-published finding-set diff was not recorded. [PR #1790](https://github.com/randlee/atm-core/pull/1790) records only that the published runtime analyzer could not start with sc-lint 0.7.0 because of the `--config` forwarding gap tracked by [sc-lint#373](https://github.com/randlee/sc-lint/issues/373); it contains no comparison results. [PR #1815](https://github.com/randlee/atm-core/pull/1815) reports a local `just lint` attempt terminated with exit 143, which is not a passing lint result or a BG4-2 comparison. The later 0.8.4 phase landing and CI establish the delivered analyzer configuration and validation, but do not retroactively supply the missing finding-set diff.
+> **BG4-2 evidence status.** The planned SCB-RUNTIME-001/002 vendored-versus-published finding-set diff was not recorded before deletion; a later comparison is recorded under BG4-2 below. [PR #1790](https://github.com/randlee/atm-core/pull/1790) records only that the published runtime analyzer could not start with sc-lint 0.7.0 because of the `--config` forwarding gap tracked by [sc-lint#373](https://github.com/randlee/sc-lint/issues/373); it contains no comparison results. [PR #1815](https://github.com/randlee/atm-core/pull/1815) reports a local `just lint` attempt terminated with exit 143, which is not a passing lint result or a BG4-2 comparison. The later 0.8.4 phase landing and CI establish the delivered analyzer configuration and validation, but do not retroactively supply the missing finding-set diff.
 
 The historical sprint snapshots below retain their original proposals and versions; see the linked bead history for subsequent changes.
 
@@ -52,7 +52,7 @@ The original package-by-package ordering proposal covered bg-1→bg-6. bg-7 was 
 ### Acceptance criteria
 
 ## Phase acceptance (original checklist)
-See the as-built record above and bead/PR evidence for delivered outcomes. In particular, the BG4-2 finding-set comparison is an unrecorded acceptance item; the `just lint` interruption cited by PR #1815 does not satisfy it.
+See the as-built record above and bead/PR evidence for delivered outcomes. In particular, the BG4-2 comparison below is retrospective; the `just lint` interruption cited by PR #1815 did not satisfy the original comparison requirement.
 
 ---
 
@@ -176,9 +176,81 @@ The `runtime-waits` step runs the published `sc-lint lint sc-runtime` configured
 ## Deliverables
 1. BG4-1 Retarget: `runtime-waits` = `sc-lint lint sc-runtime` as its own step (it is not in the built-in ci profile, sc-lint#344).
 2. BG4-2 Compare and delete: SCB-RUNTIME-001/002 vendored vs published finding-set diff in the PR body; `.just/lint_runtime_waits.py` and its tests deleted.
+
 3. BG4-3 Vendored removal: `crates/sc-lint-boundary` and `crates/sc-lint-directives` removed from the workspace, `Cargo.toml` and `Cargo.lock`; `.just/tests/test_prerelease_archive_workflow.py` expects the registry `sc-lint-directives` entries the lockfile holds (0.4.0 and 0.5.0 at the cut commit), none path-sourced.
 4. BG4-4 Docs: REQ-P-LINT-POSTMORTEM-001 (`docs/requirements.md`) and `docs/architecture.md` describe the published sc-lint crates instead of the embedded `crates/sc-lint-*` surface; `docs/architecture/boundary/general-guidelines.md` stops citing `crates/sc-lint-boundary/config/defaults.toml`.
 5. BG4-5 Findings: new runtime findings fixed in code or carried by a finding bead.
+
+**BG4-2 retrospective comparison (2026-11-12).** Both analyzers examined the
+same clean source revision `79a14136ae480b61e30d936fb114db04a5b5226c` (the
+parent of the documentation-only fix). The historical wrapper was recovered
+from `5ea3bf86878d2c2767d4702bf9de2866d9bc4d56`, the parent of its deletion
+commit `0bcd6439a`. It runs the then-vendored `sc-lint-boundary` and filters
+its JSON to SCB-RUNTIME-001/002. The published analyzer was sc-lint 0.8.8.
+
+| Finding set | Exit | SCB-RUNTIME-001/002 findings |
+| --- | --- | --- |
+| Historical runtime-waits wrapper | 0 | `[]` |
+| Published sc-runtime 0.8.8 | 0 | `[]` |
+| Historical minus published | — | `[]` |
+| Published minus historical | — | `[]` |
+
+The counters use different units; the difference is not two crates missed by
+the published analyzer. The historical graph contains 24 supported target
+nodes in 19 workspace packages. Five are additional targets in packages
+already represented: `agent-team-mail` adds `atm_post_send_hook_fixture` and
+`gen_cli_docs`; `atm-daemon-bootstrap` adds `atm-daemon-benchmark`; `atm-graft`
+adds `smoke_same_host`; and `atm-herdr` adds `fake-herdr`. The published
+counter counts all 22 workspace packages, including `atm-architecture`, which
+has only test targets. The historical graph omits `atm-architecture` and the
+`cdylib`/`rlib`-only `atm-graft-python` and `atm-query-python` targets; the
+published scanner recognizes the latter two as libraries.
+
+Both runtime source scanners traverse each supported package's `src/` and
+`tests/` directories, but not `examples/`. Thus the historical graph includes
+`agent-team-mail`'s `gen_cli_docs` and `atm-graft`'s `smoke_same_host` example
+targets while neither runtime checker actually examines those example files.
+A controlled fixture with a bare `Condvar::wait` only in `examples/wait.rs`
+returned no finding from either checker; moving the same code into `src/lib.rs`
+produced SCB-RUNTIME-001 from both. This is a scanner coverage gap, filed as
+[sc-lint#935](https://github.com/randlee/sc-lint/issues/935); the fixture is a
+probe, not a live finding in either example. The empty real-workspace diff is
+not proof of equivalent coverage. This retrospective comparison does not
+claim the comparison occurred before deletion. The fix changes only this
+documentation, leaving scanned source and lint configuration unchanged from
+the stated revision.
+
+The historical wrapper expects `cargo run -p sc-lint-boundary` in the target
+workspace, where that crate has since been removed. The following commands
+build the unmodified historical analyzer separately and use a narrowly scoped
+`cargo` shim only for that wrapper invocation; all other cargo commands pass
+through to the installed cargo. Both tools then read the current checkout:
+
+```sh
+mkdir -p /tmp/atm-bg4-old /tmp/atm-bg4-bin
+git archive 5ea3bf86878d2c2767d4702bf9de2866d9bc4d56 | tar -x -C /tmp/atm-bg4-old
+cargo build --manifest-path /tmp/atm-bg4-old/Cargo.toml -p sc-lint-boundary
+export ATM_BG4_CARGO="$(command -v cargo)"
+cat > /tmp/atm-bg4-bin/cargo <<'SH'
+#!/bin/sh
+if [ "$1" = run ] && [ "$2" = -q ] && [ "$3" = -p ] && [ "$4" = sc-lint-boundary ] && [ "$5" = -- ]; then
+    shift 5
+    exec /tmp/atm-bg4-old/target/debug/sc-lint-boundary "$@"
+fi
+exec "$ATM_BG4_CARGO" "$@"
+SH
+chmod +x /tmp/atm-bg4-bin/cargo
+PATH="/tmp/atm-bg4-bin:$PATH" python3 /tmp/atm-bg4-old/.just/lint_runtime_waits.py --root "$PWD"
+ATM_BG4_SC_LINT="$HOME/.local/share/sc-lint/bin/sc-lint"
+"$ATM_BG4_SC_LINT" --version
+"$ATM_BG4_SC_LINT" lint sc-runtime --root "$PWD" --rule-filter SCB-RUNTIME-001,SCB-RUNTIME-002 --json
+```
+
+The historical wrapper's report records its analyzer command and raw JSON;
+the analyzer exited 0 with `findings: []`, and the wrapper exited 0. The
+published JSON reported `status: pass` and `findings: []`, and exited 0. No
+finding differences required classification or an upstream issue.
+
 
 ### Design
 
