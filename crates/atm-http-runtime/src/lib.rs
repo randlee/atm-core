@@ -1162,10 +1162,15 @@ mod tests {
             Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
         > {
             Box::pin(async move {
+                // The test releases immediately after observing entry; subscribe first.
+                let released = self.release.notified();
+                tokio::pin!(released);
+                released.as_mut().enable();
+
                 self.calls.fetch_add(1, Ordering::SeqCst);
                 self.entered.store(true, Ordering::SeqCst);
                 self.entered_notify.notify_waiters();
-                tokio::time::timeout(Duration::from_secs(10), self.release.notified())
+                tokio::time::timeout(Duration::from_secs(10), released)
                     .await
                     .expect("timed out waiting for loopback handler release");
                 Ok(ApiResponse::new(ResponseEnvelope::Error(
@@ -1287,9 +1292,14 @@ mod tests {
             Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
         > {
             Box::pin(async move {
+                // The test releases immediately after observing entry; subscribe first.
+                let released = self.release.notified();
+                tokio::pin!(released);
+                released.as_mut().enable();
+
                 self.entered.store(true, Ordering::SeqCst);
                 self.entered_notify.notify_waiters();
-                tokio::time::timeout(Duration::from_secs(10), self.release.notified())
+                tokio::time::timeout(Duration::from_secs(10), released)
                     .await
                     .expect("timed out waiting for UDS handler release");
                 Ok(ApiResponse::new(ResponseEnvelope::Error(
