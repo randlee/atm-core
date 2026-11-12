@@ -9,6 +9,7 @@ trait = "AsyncMessageStore"
 [implementation]
 type = "SqliteMessageStore"
 module = "atm_storage_rusqlite::message_store"
+# The crate root constructs the message store and shares it with sibling storage modules.
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
