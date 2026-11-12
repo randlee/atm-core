@@ -1,3 +1,11 @@
+"""Check visibility of the six SQLite store boundary records.
+
+SCB-BOUNDARY-005 supersedes the repo-local public type and constructor checks
+removed in f9716f84f by checking each record's declared visibility. Rules 001
+and 002 apply to boundary.internal_only items; these six stores are not marked
+internal_only, so those rules do not apply to them.
+"""
+
 from __future__ import annotations
 
 import json
