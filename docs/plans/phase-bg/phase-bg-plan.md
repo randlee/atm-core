@@ -182,8 +182,8 @@ The `runtime-waits` step runs the published `sc-lint lint sc-runtime` configured
 5. BG4-5 Findings: new runtime findings fixed in code or carried by a finding bead.
 
 **BG4-2 retrospective comparison (2026-11-12).** Both analyzers examined the
-same clean source revision `79a14136ae480b61e30d936fb114db04a5b5226c` (the
-parent of the documentation-only fix). The historical wrapper was recovered
+same clean source revision `349292235ea234f6055d3c5a3826660ee4cb3a3c` (the
+merge commit preceding this evidence update). The historical wrapper was recovered
 from `5ea3bf86878d2c2767d4702bf9de2866d9bc4d56`, the parent of its deletion
 commit `0bcd6439a`. It runs the then-vendored `sc-lint-boundary` and filters
 its JSON to SCB-RUNTIME-001/002. The published analyzer was sc-lint 0.8.8.
@@ -218,7 +218,9 @@ probe, not a live finding in either example. The empty real-workspace diff is
 not proof of equivalent coverage. This retrospective comparison does not
 claim the comparison occurred before deletion. The fix changes only this
 documentation, leaving scanned source and lint configuration unchanged from
-the stated revision.
+the stated revision. At the fix head, `git diff --stat
+349292235ea234f6055d3c5a3826660ee4cb3a3c HEAD -- '*.rs' 'Cargo.*'`
+prints no output.
 
 The historical wrapper expects `cargo run -p sc-lint-boundary` in the target
 workspace, where that crate has since been removed. The following commands
