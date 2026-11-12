@@ -19,7 +19,7 @@ io_owns = ["durable_roster_state", "canonical_roster_records"]
 io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-runtime", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependents = ["atm", "atm-core", "atm-daemon-bootstrap", "atm-daemon-client", "atm-http-runtime", "atm-runtime", "atm-runtime-test-support", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
 allowed_dependencies = ["atm-error"]
 forbidden_edges = ["atm-storage -> atm-core"]
 
@@ -33,9 +33,10 @@ response_types = ["RosterSnapshot", "Vec<TeamName>"]
 error_types = ["AtmError"]
 
 [testing]
-allowed_test_double_paths = []
+# These modules contain inert/counting roster-store doubles for unit tests.
+allowed_test_double_paths = ["atm_core::ack::admission_tests", "atm_core::doctor::tests", "atm_core::send_to::tests", "atm_core::service_runtime::tests", "atm_core::team_admin::member_mutation::tests", "atm_core::team_admin::restore::tests", "atm_core::team_admin::tests", "atm_http_runtime::herdr_queue_wake::tests", "atm_storage_rusqlite::roster_runtime::tests", "crate::contract"]
 forbidden_test_bypasses = []
 
 [status]
 state = "concrete_landed"
-notes = ["AC.1 created the shared audited roster-storage trait in crates/atm-storage", "atm-core legacy RosterStore remains compile-bridge surface only until AC.4 consumer cutover closes"]
+notes = ["AC.1 created the shared audited roster-storage trait in crates/atm-storage", "Phase AC moved the canonical RosterStore contract into atm-storage; consumers use this shared trait directly"]
