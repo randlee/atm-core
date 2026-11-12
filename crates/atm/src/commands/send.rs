@@ -2667,7 +2667,11 @@ mod tests {
                 roster_members.push(Self::roster_entry(&team, recipient));
             }
             roster_store
-                .replace_roster(&team, &roster_members)
+                .save_roster(&atm_storage::RosterSnapshot {
+                    team_name: team.clone(),
+                    members: roster_members.clone(),
+                    refreshed_at: None,
+                })
                 .expect("seed roster");
 
             Self {
@@ -2730,18 +2734,20 @@ mod tests {
         fn inbox_contains(&self, agent: &str, text_fragment: &str) -> bool {
             let assembly = atm_runtime_test_support::open_isolated_sqlite_boundary(&self.home_dir)
                 .expect("sqlite db");
-            let mail_store = assembly.mail_store_arc();
+            let mail_store = assembly.message_store_arc();
             let team: TeamName = TEST_TEAM.parse().expect("team");
             let agent_name: atm_core::types::AgentName = agent.parse().expect("agent");
-            let rows = mail_store
-                .query_mailbox_metadata(&team, &agent_name, None)
-                .expect("mailbox rows");
-            rows.into_iter().any(|row| {
-                mail_store
-                    .load_message(&team, &agent_name, &row.message_key)
-                    .expect("message record")
-                    .is_some_and(|message| message.envelope.text.contains(text_fragment))
-            })
+            mail_store
+                .list_messages(&atm_storage::MessageQuery {
+                    team,
+                    agent: agent_name,
+                    sender: None,
+                    task_id: None,
+                    limit: None,
+                })
+                .expect("mailbox rows")
+                .into_iter()
+                .any(|message| message.envelope.text.contains(text_fragment))
         }
     }
 

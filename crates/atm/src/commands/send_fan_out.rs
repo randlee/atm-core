@@ -247,10 +247,7 @@ fn resolve_fan_out_recipients(
 ) -> Result<Vec<FanOutRecipient>> {
     let mut recipients = Vec::with_capacity(picker_output.recipients.len());
     for member_id in &picker_output.recipients {
-        // RBQA-F001: resolves through the canonical, non-deprecated
-        // `atm_storage::RosterStore` -- the same accessor `send.rs`'s
-        // peer-authority target resolution uses -- not the deprecated
-        // `atm_core::boundary::RosterStore`.
+        // Resolve through the same canonical roster store used by peer routing.
         let address = with_default_peer_address_stores(|roster, _peer| {
             atm_core::send_to::resolve_picker_recipient(member_id, roster)
                 .map_err(atm_core::error::AtmError::from)
