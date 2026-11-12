@@ -12,7 +12,7 @@ Intent: `docs/plans/phase-bg/intent.md`
 | ANC-004 | locked | Lint faster | 2026-10-09 |
 | ANC-005 | locked | Windows lint via xwin | 2026-10-09 |
 | ANC-006 | retired | Cross-platform lint | 2026-10-09 |
-| ANC-007 | locked | just lint ci: host; ci all: every platform | 2026-10-09 |
+| ANC-007 | locked | just lint ci: Linux or all | 2026-10-09 |
 | ANC-008 | locked | just test from a manifest | 2026-10-09 |
 | ANC-009 | locked | Analyzers configured independently | 2026-10-09 |
 | ANC-010 | locked | Published sc-lint crates | 2026-10-09 |
@@ -126,19 +126,19 @@ Fixtures:
 
 ## ANC-007
 
-Anchor: The CI lint workflow must run the current host checks with just lint ci and all Linux, macOS, and Windows checks with just lint ci all.
+Anchor: `just lint ci` must offer both a Linux-only run and an all-platforms run.
 
 > running just linux or all platforms should both be options for `just lint ci`
 
-Said by Rand, planning session (atm-core fenix), 2026-10-09. Status: locked. Version 4.
+Said by Rand, planning session (atm-core fenix), 2026-10-09. Status: locked. Version 2.
 
-Summary: just lint ci: host; ci all: every platform
+Summary: just lint ci: Linux or all
 
 Scope: any bead that defines just lint ci or the CI lint workflow
 
 Fixtures:
-- pass: just lint ci selects the current host CI checks, and just lint ci all selects all Linux, macOS, and Windows checks.
-- fail: just lint ci always runs Linux, macOS, and Windows; there is no host-only selection.
+- pass: `just lint ci` takes a scope: linux runs only Linux, all runs Linux, macOS and Windows.
+- fail: `just lint ci` always runs all three platforms; there is no Linux-only option.
 
 ## ANC-008
 

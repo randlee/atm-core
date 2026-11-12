@@ -311,27 +311,25 @@
       "id": "ANC-007",
       "source_type": "ANC",
       "source_ref": null,
-      "statement": "The compatibility.check: ok command must run the current host's checks, and compatibility.check: ok must run checks for Linux, macOS, and Windows.",
+      "statement": "`just lint ci` must offer both a Linux-only run and an all-platforms run.",
       "quote": "running just linux or all platforms should both be options for `just lint ci`",
       "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-10-09",
       "context": "planning session (atm-core fenix)",
-      "summary": "just lint ci: host; ci all: every platform",
+      "summary": "just lint ci: Linux or all",
       "scope": "any bead that defines just lint ci or the CI lint workflow",
       "deterministic_check": "",
       "fixtures": {
         "pass": [
-          "just lint ci selects the current host CI checks, and just lint ci all selects all Linux, macOS, and Windows checks.",
-          "just lint ci selects the current host's CI checks, and just lint ci all selects all Linux, macOS, and Windows checks."
+          "`just lint ci` takes a scope: linux runs only Linux, all runs Linux, macOS and Windows."
         ],
         "fail": [
-          "just lint ci always runs Linux, macOS, and Windows; there is no host-only selection.",
-          "just lint ci always runs Linux, macOS, and Windows; there is no host-only selection."
+          "`just lint ci` always runs all three platforms; there is no Linux-only option."
         ]
       },
       "question_overrides": {},
-      "version": 5,
+      "version": 2,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -351,32 +349,6 @@
           "fields": [
             "fixtures"
           ]
-        },
-        {
-          "at": "2026-11-12T06:25:47+00:00",
-          "event": "updated",
-          "fields": [
-            "statement",
-            "summary",
-            "fixtures"
-          ],
-          "previous_statement": "`just lint ci` must offer both a Linux-only run and an all-platforms run."
-        },
-        {
-          "at": "2026-11-12T06:26:21+00:00",
-          "event": "updated",
-          "fields": [
-            "fixtures"
-          ]
-        },
-        {
-          "at": "2026-11-12T06:34:14+00:00",
-          "event": "updated",
-          "fields": [
-            "statement",
-            "fixtures"
-          ],
-          "previous_statement": "The CI lint workflow must run the current host checks with just lint ci and all Linux, macOS, and Windows checks with just lint ci all."
         }
       ]
     },

@@ -248,10 +248,9 @@ Lint and tooling boundary rules:
   tool (`sc-lint lint sc-boundary`, `sc-portability`, `sc-runtime`) and
   configured by the repository's declarative sc-lint installation
 - `just lint` is the sc-lint kit runner over the `sc-lint.toml` step list
-  (parallel, keep-going); `just lint ci` runs the current host's CI checks and
-  `just lint ci all` runs checks for Linux, macOS, and Windows, including the
-  Linux-tagged Windows-target Clippy step; CI and release validation use the
-  all-platform scope
+  (parallel, keep-going); `just lint ci` runs the host's CI checks and
+  `just lint ci all` adds the Linux-tagged Windows-target Clippy step, which
+  CI and release validation run
 - ATM-specific repository policy checks stay local to `atm-core` when they
   depend on ATM role names, ATM-only document schemas, or ATM team-process
   records

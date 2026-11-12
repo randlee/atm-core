@@ -339,7 +339,7 @@ patterns. It runs as a workspace test; it is not a replacement sc-lint step.
 ## atm-bg-6: bg-6: Runner cutover, platform scope, test manifest, speed
 
 ## Goal
-sc-lint owns the step list and runs it: parallel, keep-going (sc-lint#195); `just lint ci` runs host-only and `just lint ci all` runs every platform (ANC-007, #199); `just test` is driven by the repo-owned manifest (ANC-008, #196); `just lint` is faster than at the phase base commit (ANC-004). `run_lint.py` shrinks to the atm-only steps' commands (ANC-017); the file stays while the sc-publish action `.github/actions/setup-sc-lint/action.yml` (ADR-050, not edited here) asserts it exists, and that dependency is filed on sc-publish.
+sc-lint owns the step list and runs it: parallel, keep-going (sc-lint#195); `just lint ci` runs host/Linux-only and `just lint ci all` runs every platform (ANC-007, #199); `just test` is driven by the repo-owned manifest (ANC-008, #196); `just lint` is faster than at the phase base commit (ANC-004). `run_lint.py` shrinks to the atm-only steps' commands (ANC-017); the file stays while the sc-publish action `.github/actions/setup-sc-lint/action.yml` (ADR-050, not edited here) asserts it exists, and that dependency is filed on sc-publish.
 
 ## Dispatch gate
 - `atm-phase-bg-gate-sclint-runner`: a published sc-lint release with #195, #196 and #199.
