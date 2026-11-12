@@ -81,6 +81,8 @@ enum BlockingStallCounter {
 pub struct BoundedBlockingBridge {
     permits: Arc<tokio::sync::Semaphore>,
     runtime_health: RuntimeHealth,
+    #[cfg(test)]
+    clock: Option<Arc<dyn Fn() -> std::time::Instant + Send + Sync>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,7 +116,17 @@ impl BoundedBlockingBridge {
         Self {
             permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
             runtime_health,
+            #[cfg(test)]
+            clock: None,
         }
+    }
+
+    fn now(&self) -> std::time::Instant {
+        #[cfg(test)]
+        if let Some(clock) = &self.clock {
+            return clock();
+        }
+        std::time::Instant::now()
     }
 
     #[cfg(test)]
@@ -164,14 +176,15 @@ impl BoundedBlockingBridge {
         if deadline.expired() {
             return Err(BlockingBridgeError::DeadlineBeforeStart);
         }
-        let started_at = std::time::Instant::now();
+        let started_at = self.now();
         match policy {
             BlockingCompletionPolicy::AwaitCompletion => {
                 let outcome = tokio::task::spawn_blocking(job)
                     .await
                     .map_err(BlockingBridgeError::Join)?;
-                if started_at.elapsed() > remaining {
-                    self.record_stall(stall_counter, started_at.elapsed(), remaining);
+                let elapsed = self.now().saturating_duration_since(started_at);
+                if elapsed > remaining {
+                    self.record_stall(stall_counter, elapsed, remaining);
                 }
                 drop(permit);
                 outcome.map_err(BlockingBridgeError::Operation)
@@ -185,7 +198,11 @@ impl BoundedBlockingBridge {
                     Ok(Ok(result)) => result.map_err(BlockingBridgeError::Operation),
                     Ok(Err(source)) => Err(BlockingBridgeError::Join(source)),
                     Err(_) => {
-                        self.record_stall(stall_counter, started_at.elapsed(), remaining);
+                        self.record_stall(
+                            stall_counter,
+                            self.now().saturating_duration_since(started_at),
+                            remaining,
+                        );
                         Err(BlockingBridgeError::DeadlineAfterStart)
                     }
                 }
@@ -333,6 +350,14 @@ impl ControlPathSyncBridge {
         Self {
             bridge: BoundedBlockingBridge::new(capacity, runtime_health),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_test_clock(
+        &mut self,
+        clock: Arc<dyn Fn() -> std::time::Instant + Send + Sync>,
+    ) {
+        self.bridge.clock = Some(clock);
     }
 
     pub(crate) fn blocking_bridge(&self) -> &BoundedBlockingBridge {

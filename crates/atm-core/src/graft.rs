@@ -1067,8 +1067,8 @@ mod tests {
         team: &TeamName,
         agent: &AgentName,
         owner_chat_id: Option<ChatId>,
-    ) -> Result<GraftReceiverListener, AtmError> {
-        GraftReceiverListener::bind(graft_root, team, agent, owner_chat_id)
+    ) -> Result<Arc<GraftReceiverListener>, AtmError> {
+        GraftReceiverListener::bind(graft_root, team, agent, owner_chat_id).map(Arc::new)
     }
 
     #[test]
@@ -1088,12 +1088,11 @@ mod tests {
         };
         let endpoint = listener.local_addr().expect("local addr");
         let capability = listener.capability().clone();
-        // Accept on a dedicated thread. The delivery call has its own I/O
-        // deadline, so a failed client cannot leave the test spinning forever.
         listener
             .listener
             .set_nonblocking(false)
             .expect("blocking listener");
+        let (completed_tx, completed_rx) = std::sync::mpsc::sync_channel(1);
         let receiver = std::thread::spawn(move || {
             let mut stream = listener
                 .poll_accept()
@@ -1105,17 +1104,24 @@ mod tests {
             listener
                 .write_response(&mut stream, &GraftPostSendResponse::Delivered)
                 .expect("write response");
-            received
+            let _ = completed_tx.send(received);
         });
-        let response = deliver_graft_post_send(
+        let outcome = deliver_graft_post_send(
             endpoint,
             &capability,
             &request,
             Duration::from_secs(1),
             Duration::from_secs(3),
-        )
-        .expect("deliver");
-        let received = receiver.join().expect("join receiver");
+        );
+        if outcome.is_err() {
+            let _ = TcpStream::connect_timeout(&endpoint, Duration::from_secs(3));
+        }
+        let received = wait_receiver_completion(&completed_rx, Duration::from_secs(10))
+            .unwrap_or_else(|error| panic!("{error}"));
+        receiver
+            .join()
+            .expect("receiver thread after completion signal");
+        let response = outcome.expect("deliver");
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.event.description, "loopback graft transport");
         assert_eq!(received.kind, NudgeKind::Steer);
@@ -1511,14 +1517,14 @@ mod tests {
     /// across a daemon restart" matrix cell).
     fn deliver_through_listener(
         runtime: &GraftLeaseTestRuntime,
-        listener: &GraftReceiverListener,
+        listener: &Arc<GraftReceiverListener>,
     ) -> Result<PostSendEmissionPath, AtmError> {
         deliver_through_listener_capturing_request(runtime, listener).0
     }
 
     fn deliver_through_listener_capturing_request(
         runtime: &GraftLeaseTestRuntime,
-        listener: &GraftReceiverListener,
+        listener: &Arc<GraftReceiverListener>,
     ) -> (Result<PostSendEmissionPath, AtmError>, GraftPostSendRequest) {
         use std::sync::atomic::{AtomicBool, Ordering};
         struct RestoreNonblocking<'a>(&'a GraftReceiverListener);
@@ -1538,61 +1544,90 @@ mod tests {
             .expect("blocking listener");
         let _restore = RestoreNonblocking(listener);
         let endpoint = listener.local_addr().expect("local addr");
-        let client_finished = AtomicBool::new(false);
-        std::thread::scope(|scope| {
-            let client_finished = &client_finished;
-            let receiver = scope.spawn(move || {
-                let mut stream = listener
-                    .poll_accept()
-                    .expect("accept")
-                    .expect("loopback peer");
-                if client_finished.load(Ordering::Acquire) {
-                    return None;
-                }
-                let GraftReceiverRequest::PostSend(request) = listener
-                    .read_receiver_request_with_limit(&mut stream, None)
+        let client_finished = Arc::new(AtomicBool::new(false));
+        let (completed_tx, completed_rx) = std::sync::mpsc::sync_channel(1);
+        let receiver_listener = Arc::clone(listener);
+        let receiver_client_finished = Arc::clone(&client_finished);
+        let receiver = std::thread::spawn(move || {
+            let mut stream = receiver_listener
+                .poll_accept()
+                .expect("accept")
+                .expect("loopback peer");
+            let request = if receiver_client_finished.load(Ordering::Acquire) {
+                None
+            } else {
+                let GraftReceiverRequest::PostSend(request) = receiver_listener
+                    .read_receiver_request(&mut stream, Duration::from_secs(3))
                     .expect("read request")
                 else {
                     panic!("expected post-send request");
                 };
-                listener
+                receiver_listener
                     .write_response(&mut stream, &GraftPostSendResponse::Delivered)
                     .expect("write response");
                 Some(request)
-            });
-            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                deliver_published_receiver_hook_with_transport(
-                    runtime,
-                    &dispatch_for(test_event()),
-                    // This deadline is unused with blocking test transport limits;
-                    // the CI job timeout bounds a genuinely stuck exchange.
-                    RequestDeadline::after(Duration::from_secs(3600)),
-                    |endpoint, capability, request, deadline| {
-                        super::deliver_graft_post_send_with_limits(
-                            endpoint,
-                            capability,
-                            request,
-                            deadline,
-                            super::HookTransportLimits {
-                                connect: None,
-                                io: None,
-                            },
-                        )
-                    },
-                )
-            }));
-            if !matches!(outcome, Ok(Ok(_))) {
+            };
+            let _ = completed_tx.send(request);
+        });
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            deliver_published_receiver_hook_with_transport(
+                runtime,
+                &dispatch_for(test_event()),
+                RequestDeadline::after(Duration::from_secs(10)),
+                |endpoint, capability, request, deadline| {
+                    super::deliver_graft_post_send_with_limits(
+                        endpoint,
+                        capability,
+                        request,
+                        deadline,
+                        super::HookTransportLimits {
+                            connect: Some(Duration::from_secs(3)),
+                            io: Some(Duration::from_secs(3)),
+                        },
+                    )
+                },
+            )
+        }));
+        if !matches!(outcome, Ok(Ok(_))) {
+            client_finished.store(true, Ordering::Release);
+            // Release accept when delivery failed before establishing a connection.
+            let _ = TcpStream::connect_timeout(&endpoint, Duration::from_secs(3));
+        }
+        let request = match wait_receiver_completion(&completed_rx, Duration::from_secs(10)) {
+            Ok(request) => request,
+            Err(error) => {
                 client_finished.store(true, Ordering::Release);
-                // Wake a receiver still blocked in accept if delivery failed before connecting.
-                let _ = TcpStream::connect(endpoint);
+                let _ = TcpStream::connect_timeout(&endpoint, Duration::from_secs(3));
+                panic!("{error}");
             }
-            let request = receiver.join();
-            let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
-            let request = request
-                .expect("receiver thread")
-                .expect("delivery completed before the receiver accepted a request");
-            (outcome, request)
+        };
+        receiver
+            .join()
+            .expect("receiver thread after completion signal");
+        let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+        let request = request.expect("delivery completed before receiver accepted a request");
+        (outcome, request)
+    }
+
+    fn wait_receiver_completion<T>(
+        receiver: &std::sync::mpsc::Receiver<T>,
+        timeout: Duration,
+    ) -> Result<T, &'static str> {
+        receiver.recv_timeout(timeout).map_err(|error| match error {
+            std::sync::mpsc::RecvTimeoutError::Timeout => "receiver completion timed out",
+            std::sync::mpsc::RecvTimeoutError::Disconnected => {
+                "receiver exited before completion signal"
+            }
         })
+    }
+
+    #[test]
+    fn stuck_receiver_reports_completion_timeout() {
+        let (_held_sender, receiver) = std::sync::mpsc::sync_channel::<()>(1);
+        assert_eq!(
+            wait_receiver_completion(&receiver, Duration::ZERO),
+            Err("receiver completion timed out")
+        );
     }
 
     #[test]

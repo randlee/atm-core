@@ -92,6 +92,22 @@ class ValidateReleaseContractTests(unittest.TestCase):
             "send-to-test-seams",
         )
 
+    def test_default_findings_output_is_untracked_and_parent_is_created(self) -> None:
+        default_path = "artifacts/findings/release-findings.json"
+        args = VALIDATE_RELEASE.build_parser().parse_args(["support-files"])
+        self.assertEqual(args.findings, default_path)
+        self.assertIn("/artifacts/findings/", (REPO_ROOT / ".gitignore").read_text(encoding="utf-8"))
+
+        with (
+            mock.patch.object(VALIDATE_RELEASE, "repo_root", return_value=self.root),
+            mock.patch.object(VALIDATE_RELEASE, "current_ref", return_value="test-branch"),
+            mock.patch.object(VALIDATE_RELEASE, "validate_support_files"),
+        ):
+            self.assertEqual(VALIDATE_RELEASE.main(["support-files"]), 0)
+
+        self.assertTrue((self.root / default_path).is_file())
+        self.assertFalse((self.root / "release-findings.json").exists())
+
     @mock.patch.dict(os.environ, {}, clear=False)
     def test_send_to_test_seams_pass_when_the_release_environment_is_clean(self) -> None:
         for var in VALIDATE_RELEASE.SEND_TO_TEST_ONLY_ENV_VARS:

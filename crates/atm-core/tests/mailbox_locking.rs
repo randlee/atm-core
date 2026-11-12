@@ -1346,31 +1346,29 @@ impl Fixture {
         self.mailbox_state_contents_for_team(PRIMARY_TEAM, agent)
     }
 
-    #[allow(
-        deprecated,
-        reason = "mailbox locking tests still inspect the retained sqlite runtime through legacy core boundary shims"
-    )]
     fn inbox_contents_for_team(&self, team: &str, agent: &str) -> Vec<InboxMessage> {
         let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-        let mail_store = assembly.mail_store_arc();
+        let mail_store = assembly.message_store_arc();
         let team = team.parse::<TeamName>().expect("team");
         let agent_name = agent.parse::<AgentName>().expect("agent");
-        let mut metadata_rows = mail_store
-            .query_mailbox_metadata(&team, &agent_name, None)
+        let mut messages = mail_store
+            .list_messages(&atm_storage::MessageQuery {
+                team,
+                agent: agent_name,
+                sender: None,
+                task_id: None,
+                limit: None,
+            })
             .expect("mailbox rows");
-        metadata_rows.sort_by(|left, right| {
-            left.message_at
-                .cmp(&right.message_at)
+        messages.sort_by(|left, right| {
+            left.envelope
+                .timestamp
+                .cmp(&right.envelope.timestamp)
                 .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
         });
-        metadata_rows
+        messages
             .into_iter()
-            .filter_map(|row| {
-                mail_store
-                    .load_message(&team, &agent_name, &row.message_key)
-                    .expect("message record")
-            })
-            .map(|record| record.envelope)
+            .map(|message| message.envelope)
             .collect()
     }
 
@@ -1444,13 +1442,9 @@ impl Fixture {
         self.tempdir.path().join("runtime").join("mail.sqlite3")
     }
 
-    #[allow(
-        deprecated,
-        reason = "mailbox locking tests still seed the retained sqlite runtime through legacy core boundary shims"
-    )]
     fn seed_sqlite_mailbox_for_team(&self, team: &str, agent: &str, messages: &[InboxMessage]) {
         let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
-        let mail_store = assembly.mail_store_arc();
+        let mail_store = assembly.message_store_arc();
         let team = team.parse::<TeamName>().expect("team");
         let agent_name = agent.parse::<AgentName>().expect("agent");
 
@@ -1462,32 +1456,13 @@ impl Fixture {
                     .expect("message key")
             };
             mail_store
-                .upsert_message(atm_core::boundary::Message {
+                .save_message(&atm_core::boundary::Message {
                     team: team.clone(),
                     agent: agent_name.clone(),
                     message_key: message_key.clone(),
                     envelope: message.clone(),
                 })
                 .expect("seed sqlite message");
-            mail_store
-                .upsert_message_state(atm_core::boundary::UpsertMailMessageStateRequest {
-                    team: team.clone(),
-                    agent: agent_name.clone(),
-                    actor: agent_name.clone(),
-                    state: atm_core::boundary::MailMessageState {
-                        team: team.clone(),
-                        agent: agent_name.clone(),
-                        actor: agent_name.clone(),
-                        message_key,
-                        read: message.read,
-                        pending_ack_at: message.pending_ack_at,
-                        acknowledged_at: message.acknowledged_at,
-                        expires_at: message.expires_at,
-                        deleted_at: None,
-                        updated_at: Some(message.timestamp),
-                    },
-                })
-                .expect("seed sqlite message state");
         }
     }
 }
@@ -1519,10 +1494,6 @@ fn create_team_with_config(
     seed_sqlite_roster(sqlite_db_path, team, &roster_members);
 }
 
-#[allow(
-    deprecated,
-    reason = "mailbox locking tests still seed the retained sqlite runtime through legacy core boundary shims"
-)]
 fn seed_sqlite_roster(
     sqlite_db_path: &std::path::Path,
     team: &str,
@@ -1554,7 +1525,11 @@ fn seed_sqlite_roster(
         })
         .collect::<Vec<_>>();
     roster_store
-        .replace_roster(&team, &members)
+        .save_roster(&atm_storage::RosterSnapshot {
+            team_name: team.clone(),
+            members: members.clone(),
+            refreshed_at: None,
+        })
         .expect("seed sqlite roster");
 }
 
