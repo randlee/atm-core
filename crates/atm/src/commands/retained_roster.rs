@@ -1,16 +1,11 @@
-#![allow(
-    deprecated,
-    reason = "the retained CLI roster helper still forwards the legacy atm-core roster boundary during the Phase AC transition"
-)]
-
 use anyhow::Result;
-use atm_core::boundary::RosterStore;
 use atm_core::error::AtmError;
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
 use atm_daemon_bootstrap::with_default_roster_store;
 #[cfg(test)]
 use atm_runtime_test_support::install_sqlite_retained_runtime_factory;
+use atm_storage::RosterStore;
 
 pub(crate) fn with_retained_roster_store<T>(
     f: impl FnOnce(&(dyn RosterStore + Send + Sync)) -> Result<T, AtmError>,

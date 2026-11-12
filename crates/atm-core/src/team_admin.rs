@@ -1,22 +1,17 @@
-#![allow(
-    deprecated,
-    reason = "team_admin still uses the legacy atm-core roster boundary until the retained admin flows finish migrating to canonical shared storage seams"
-)]
-
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::boundary::{
-    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness, RosterStore,
+    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness,
     TeamNudgeTemplateOverrideMode,
 };
 use crate::delivery_channel::LocalMessageReceivedBackend;
 use crate::error::AtmError;
 use crate::schema::HomeDirPath;
 use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
-use atm_storage::RETIRED_TEMPLATE_KINDS;
+use atm_storage::{RETIRED_TEMPLATE_KINDS, RosterSnapshot, RosterStore};
 
 #[path = "team_admin/filesystem.rs"]
 mod filesystem;
@@ -282,6 +277,18 @@ pub struct ClearNudgeTemplateOverrideOutcome {
     pub cleared: bool,
 }
 
+fn replace_roster(
+    store: &dyn RosterStore,
+    team: &TeamName,
+    members: &[RosterEntry],
+) -> Result<(), AtmError> {
+    store.save_roster(&RosterSnapshot {
+        team_name: team.clone(),
+        members: members.to_vec(),
+        refreshed_at: None,
+    })
+}
+
 /// List teams currently discoverable from canonical ATM roster state.
 ///
 /// # Errors
@@ -318,7 +325,7 @@ fn list_teams_from_roster_store(
         .map(|team| {
             roster_store.load_roster(&team).map(|members| TeamSummary {
                 name: team,
-                member_count: members.len(),
+                member_count: members.members.len(),
             })
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -504,16 +511,15 @@ mod tests {
         update_member_with_roster_store,
     };
     use crate::boundary::{
-        self, BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness,
-        RosterMemberKind, RosterStore, RosterStoreHealthSnapshot, TeamNudgeTemplateOverrideMode,
-        TeamNudgeTemplateOverrideRow,
+        BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness,
+        RosterMemberKind, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig, WORKSPACE_ROOT_METADATA_KEY};
     use crate::test_support::{
         EnvGuard, ROLE_TEAM_LEAD, TEST_ARCH_CTM, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM,
     };
-    use crate::types::{AgentName, TeamName};
+    use crate::types::TeamName;
 
     const MAX_MEMBER_METADATA_FIELD_LEN: usize =
         super::member_mutation::MAX_MEMBER_METADATA_FIELD_LEN;
@@ -530,6 +536,10 @@ mod tests {
     }
 
     impl RecordingRosterStore {
+        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, crate::error::AtmError> {
+            Ok(atm_storage::RosterStore::load_roster(self, team)?.members)
+        }
+
         fn seed_team(&self, team: &str, members: Vec<RosterEntry>) {
             self.teams
                 .lock()
@@ -538,15 +548,9 @@ mod tests {
         }
     }
 
-    impl boundary::sealed::Sealed for RecordingRosterStore {}
     impl atm_storage::contract::sealed::Sealed for RecordingRosterStore {}
     impl atm_storage::contract::sealed::Sealed for RecordingNudgeTemplateOverrideStore {}
 
-    // RBQA-F001: `resolve_picker_recipient` now resolves through the
-    // canonical, non-deprecated `atm_storage::RosterStore`, not the
-    // deprecated `crate::boundary::RosterStore` this fixture also
-    // implements above (still exercised directly by this module's other
-    // roster-mutation tests).
     impl atm_storage::RosterStore for RecordingRosterStore {
         fn load_roster(
             &self,
@@ -584,77 +588,6 @@ mod tests {
                 .keys()
                 .cloned()
                 .collect())
-        }
-    }
-
-    impl RosterStore for RecordingRosterStore {
-        fn replace_roster(
-            &self,
-            team: &TeamName,
-            members: &[RosterEntry],
-        ) -> Result<(), crate::error::AtmError> {
-            self.teams
-                .lock()
-                .expect("roster store lock")
-                .insert(team.clone(), members.to_vec());
-            Ok(())
-        }
-
-        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, crate::error::AtmError> {
-            Ok(self
-                .teams
-                .lock()
-                .expect("roster store lock")
-                .get(team)
-                .cloned()
-                .unwrap_or_default())
-        }
-
-        fn query_membership(
-            &self,
-            team: &TeamName,
-            member: &AgentName,
-        ) -> Result<Option<RosterEntry>, crate::error::AtmError> {
-            Ok(self
-                .teams
-                .lock()
-                .expect("roster store lock")
-                .get(team)
-                .and_then(|members| {
-                    members
-                        .iter()
-                        .find(|existing| existing.agent_name == *member)
-                        .cloned()
-                }))
-        }
-
-        fn list_teams(&self) -> Result<Vec<TeamName>, crate::error::AtmError> {
-            Ok(self
-                .teams
-                .lock()
-                .expect("roster store lock")
-                .keys()
-                .cloned()
-                .collect())
-        }
-
-        fn health_snapshot(
-            &self,
-            team: &TeamName,
-        ) -> Result<RosterStoreHealthSnapshot, crate::error::AtmError> {
-            let member_count = self
-                .teams
-                .lock()
-                .expect("roster store lock")
-                .get(team)
-                .map(|members| members.len() as u64)
-                .unwrap_or_default();
-            Ok(RosterStoreHealthSnapshot {
-                team: team.clone(),
-                member_count,
-                stale: false,
-                refreshed_at: None,
-            })
         }
     }
 

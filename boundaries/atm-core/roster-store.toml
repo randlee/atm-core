@@ -5,7 +5,7 @@ name = "RosterStore"
 
 [public]
 trait = "RosterStore"
-notes = "legacy compile-bridge roster-store trait retained in atm_core::boundary after AC.1; authoritative shared contract now lives in crates/atm-storage as RosterStore"
+notes = "retired compile bridge; the canonical contract is atm-storage RosterStore"
 
 [implementation]
 visibility = "trait_only"
@@ -16,7 +16,7 @@ roots = []
 
 [ownership]
 io_owns = ["durable_roster_state", "member_routing_metadata"]
-io_forbidden = ["socket_io", "process_spawn"]
+io_forbidden = []
 
 [dependencies]
 # `atm-daemon-bootstrap` and `atm` remain legitimate compile-bridge roster
@@ -40,5 +40,5 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [status]
-state = "active"
-notes = ["AC.1 introduced crates/atm-storage::RosterStore as the authoritative shared roster contract", "legacy compile bridge remains active while retained production callers still route through atm-runtime::legacy_storage_adapters", "concrete store implementation lives in crates/atm-storage-rusqlite/src/roster_store.rs as SqliteRosterStore during the convergence window", "canonical roster truth remains explicit member rows rather than a TeamConfig snapshot document"]
+state = "retired"
+notes = ["Retired: callers use the canonical atm-storage contract."]

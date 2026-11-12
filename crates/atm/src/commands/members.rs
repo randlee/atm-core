@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "the retained CLI members command still executes through the legacy atm-core roster boundary during the Phase AC transition"
-)]
-
 use anyhow::Result;
 use atm_core::doctor::DoctorQuery;
 use atm_core::home;
@@ -413,7 +408,11 @@ mod tests {
             ];
             assembly
                 .roster_store_arc()
-                .replace_roster(&team, &members)
+                .save_roster(&atm_storage::RosterSnapshot {
+                    team_name: team.clone(),
+                    members: members.clone(),
+                    refreshed_at: None,
+                })
                 .expect("seed roster");
             Self {
                 _tempdir: tempdir,
