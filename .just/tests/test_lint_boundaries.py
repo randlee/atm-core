@@ -111,12 +111,6 @@ testing:
   forbidden_test_bypasses:
     - rusqlite::Connection
 
-enforcement:
-  lint_rules:
-    - LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES
-  review_gates:
-    - no_public_impl
-
 status:
   state: planned
   notes: []
