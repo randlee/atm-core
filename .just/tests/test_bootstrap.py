@@ -614,7 +614,7 @@ class BootstrapTests(IsolatedHomeTests):
                 },
             )
         self.assertIn("clippy-windows-macos", install["lint_profiles"]["ci"])
-        # sc-lint 0.8.6 wheel sc_lint/setup_tools.py:151-160 returns only common tools on Windows (line 155).
+        # sc-lint 0.8.8 wheel sc_lint/setup_tools.py:151-160 returns only common tools on Windows (line 155).
         self.assertEqual(
             install["tools"],
             {"non_windows": {"cargo": {"cargo-xwin": "0.18.4"}, "rustup_targets": ["x86_64-pc-windows-msvc"]}},

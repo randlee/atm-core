@@ -614,7 +614,7 @@
       "python-tests-windows"
     ]
   },
-  "minimum_version": "0.8.6",
+  "minimum_version": "0.8.8",
   "profiles": {
     "adr-index-linux": {
       "command": [
