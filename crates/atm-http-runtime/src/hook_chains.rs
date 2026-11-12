@@ -278,7 +278,9 @@ mod tests {
         let entered = Arc::new(Notify::new());
         let held = held_hook(&hold, &entered);
         let caller = start_held_assign(&held);
-        entered.notified().await;
+        tokio::time::timeout(Duration::from_secs(10), entered.notified())
+            .await
+            .expect("timed out waiting for held assign to enter the hook chain");
 
         // One poll while the chain is held: drain must not finish yet.
         let mut drain = pin!(
@@ -303,7 +305,9 @@ mod tests {
         let entered = Arc::new(Notify::new());
         let held = held_hook(&hold, &entered);
         let caller = start_held_assign(&held);
-        entered.notified().await;
+        tokio::time::timeout(Duration::from_secs(10), entered.notified())
+            .await
+            .expect("timed out waiting for held assign to enter before the drain deadline");
 
         let aborted = held
             .chains

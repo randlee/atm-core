@@ -335,14 +335,18 @@ mod tests {
             );
         }
 
-        async fn wait_for_entered(&self, target: usize) {
-            loop {
-                let notified = self.entered.notified();
-                if self.entered_count.load(Ordering::SeqCst) >= target {
-                    return;
+        async fn wait_for_entered(&self, target: usize, step: &str) {
+            tokio::time::timeout(Duration::from_secs(10), async {
+                loop {
+                    let notified = self.entered.notified();
+                    if self.entered_count.load(Ordering::SeqCst) >= target {
+                        return;
+                    }
+                    notified.await;
                 }
-                notified.await;
-            }
+            })
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for diagnostics query {step} to enter"));
         }
 
         fn entered_count(&self) -> usize {
@@ -534,7 +538,7 @@ mod tests {
         // Deterministic: wait until the fixture query has genuinely started
         // (on its own `spawn_blocking` thread) before advancing the paused
         // clock, instead of racing a real sleep against the deadline.
-        gate.wait_for_entered(1).await;
+        gate.wait_for_entered(1, "before the deadline").await;
         tokio::time::advance(deadline + Duration::from_millis(1)).await;
 
         let (status, _) = request
@@ -568,7 +572,8 @@ mod tests {
         );
 
         let first = tokio::spawn(get(router.clone(), "/v1/diagnostics"));
-        gate.wait_for_entered(1).await;
+        gate.wait_for_entered(1, "first worker before the deadline")
+            .await;
         tokio::time::advance(deadline + Duration::from_millis(1)).await;
         assert_eq!(
             first.await.expect("first request completes").0,
@@ -576,7 +581,8 @@ mod tests {
         );
 
         let second = tokio::spawn(get(router.clone(), "/v1/diagnostics"));
-        gate.wait_for_entered(2).await;
+        gate.wait_for_entered(2, "second worker before the deadline")
+            .await;
         tokio::time::advance(deadline + Duration::from_millis(1)).await;
         assert_eq!(
             second.await.expect("second request completes").0,

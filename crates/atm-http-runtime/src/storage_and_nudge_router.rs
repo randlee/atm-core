@@ -6544,7 +6544,9 @@ pub(crate) mod tests {
             let release = Arc::clone(&self.release);
             let completions = Arc::clone(&self.completions);
             Box::pin(async move {
-                release.notified().await;
+                tokio::time::timeout(Duration::from_secs(10), release.notified())
+                    .await
+                    .expect("timed out waiting for received-message hook release");
                 completions.fetch_add(1, Ordering::SeqCst);
                 Err(AtmError::daemon_unavailable(
                     "intentional slow peer receiver hook failure",
