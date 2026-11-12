@@ -182,7 +182,7 @@ The `runtime-waits` step runs the published `sc-lint lint sc-runtime` configured
 5. BG4-5 Findings: new runtime findings fixed in code or carried by a finding bead.
 
 **BG4-2 retrospective comparison (2026-11-12).** Both analyzers examined the
-same clean source revision `349292235ea234f6055d3c5a3826660ee4cb3a3c` (the
+same clean source revision `deb2cec4272b7b17916d7e7c83f1a49e171e7787` (the
 merge commit preceding this evidence update). The historical wrapper was recovered
 from `5ea3bf86878d2c2767d4702bf9de2866d9bc4d56`, the parent of its deletion
 commit `0bcd6439a`. It runs the then-vendored `sc-lint-boundary` and filters
@@ -219,7 +219,7 @@ not proof of equivalent coverage. This retrospective comparison does not
 claim the comparison occurred before deletion. The fix changes only this
 documentation, leaving scanned source and lint configuration unchanged from
 the stated revision. At the fix head, `git diff --stat
-349292235ea234f6055d3c5a3826660ee4cb3a3c HEAD -- '*.rs' 'Cargo.*'`
+deb2cec4272b7b17916d7e7c83f1a49e171e7787 HEAD -- '*.rs' 'Cargo.*'`
 prints no output.
 
 The historical wrapper expects `cargo run -p sc-lint-boundary` in the target
