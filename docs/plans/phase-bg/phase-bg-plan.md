@@ -2,7 +2,7 @@
 
 Rendered from the beads plan (`bd show`); the beads are authoritative.
 
-**State (2026-11-12).** bg-1 through bg-7 and the phase-end fixes are landed on `integrate/phase-bg`. atm-core lints with the published sc-lint 0.8.8 adoption kit and consumer runner (`minimum_version = "0.8.8"`), parallel and keep-going. The vendored `sc-lint-boundary` and `sc-lint-directives` crates are deleted. The test manifest is repository-owned. Version alignment runs the published `sc_lint.check_version_sync`. Each Python lint and test row has Linux, macOS and Windows variants on the `.bootstrap-venv` interpreter. The merge to `develop` is blocked on Rand's ruling on the requirement, architecture and ADR wording changes ([#2445](https://github.com/randlee/atm-core/issues/2445)).
+**State (2026-11-12).** bg-1 through bg-7 and the phase-end fixes are landed on `integrate/phase-bg`. atm-core lints with the published sc-lint 0.8.8 adoption kit and consumer runner (`minimum_version = "0.8.8"`), parallel and keep-going. The vendored `sc-lint-boundary` and `sc-lint-directives` crates are deleted. The test manifest is repository-owned. Version alignment runs the published `sc_lint.check_version_sync`. Each Python lint and test row has Linux, macOS and Windows variants: repository scripts run on the `.bootstrap-venv` interpreter, published `sc_lint` modules on `.sc-lint/venv`. CI runs `just lint ci all`; `.just/run_lint.py` is deleted. The merge to `develop` is blocked on Rand's ruling on the requirement, architecture and ADR wording changes ([#2445](https://github.com/randlee/atm-core/issues/2445)).
 
 Open items:
 - BG4-2: the SCB-RUNTIME-001/002 finding-set diff was not recorded before the vendored analyzer was deleted; a later run at `deb2cec42` found no SCB-RUNTIME-001/002 findings from either analyzer.
@@ -38,13 +38,13 @@ atm-core uses the published sc-lint 0.8.8 analyzers, wheel, adoption kit and con
 The original package-by-package ordering proposal covered bg-1→bg-6. bg-7 was added in the later re-plan to adopt the published sc-lint consumer lint runner and deliver manifest-driven tests and speed work after kit adoption; the test manifest remains repository-owned. See the closed bg-7 bead.
 
 ## Decisions
-- Kit-managed files are never hand-edited (ANC-002). atm-core specifics live in `.sc-lint/install.json` (its `profiles`, `test` and `analyzers`) and in recipes outside the managed Justfile block. `sc-lint.toml` is rendered from `.sc-lint/install.json` by `python3 plugins/sc-lint/install.py .` and committed as rendered, never hand-edited. Analyzer keys are the v0.7.0 schema only: boundary and runtime take enabled, reason, exclude_rules, fail_rules, exclude_paths; portability also takes config_home_env, unix_path_prefixes, targets.
+- Kit-managed files are never hand-edited (ANC-002). atm-core specifics live in `.sc-lint/install.json` (its `profiles`, `test` and `analyzers`) and in recipes outside the managed Justfile block. `sc-lint.toml` is rendered from `.sc-lint/install.json` by `python3 plugins/sc-lint/install.py .` and committed as rendered, never hand-edited. Analyzer keys follow the schema of the pinned sc-lint release (0.8.8).
 - atm-core-only checks (the 20 steps with no sc-lint equivalent: hermes-*, site-*, daemon-*, env-var-boundary, nudge-taxonomy, arch-gates, ...) stay atm-core steps (ANC-021); none is proposed to sc-lint.
 - sc-publish files (ADR-050) are never edited; kit 0.7.0 leaves them alone because `ci.enabled = false` excludes `.github/` and the installer refuses clashes (sc-lint#193 stays open).
 
-- Until bg-6, the CI just-lint job keeps running `.just/run_lint.py all` (parallel, reports every failure); the kit steps are selectable through `just lint <step>`. bg-6 switches it. The pre-push hook (`.githooks/pre-push`: fmt, clippy, ttl-triage, validate-findings, site) calls those commands directly, not `run_lint.py`, and is not changed in this phase.
+- CI's just-lint job runs `just lint ci all`. The pre-push hook (`.githooks/pre-push`: fmt, clippy, ttl-triage, validate-findings, site) calls those commands directly and is not changed in this phase.
 - Every sprint that deletes a legacy script also removes its `run_lint.py` target, Justfile recipe and `just help` line, and leaves no importer of the deleted module.
-- `just lint` installs and runs sc-lint through the kit (`just setup` → `.sc-lint/bootstrap`, which owns the binary and `.sc-lint/venv`). The sc-publish action `.github/actions/setup-sc-lint` is used only by sc-publish workflows and is not touched.
+- `just lint` installs and runs sc-lint through the kit (`just setup` → `.sc-lint/bootstrap`, which owns the binary and `.sc-lint/venv`).
 - Cross-OS proof: CI lints macOS and Windows only on PRs to main (ci.yml, Rand 2026-09-26). Layer PRs are proven on Linux CI; Windows and macOS CI are proven on the phase release PR (phase AC).
 
 ## Gate
@@ -77,7 +77,7 @@ Install the sc-lint 0.7.0 adoption kit verbatim so atm-core has the shared `just
 ## Kit model (sc-lint v0.7.0, packages/sc-lint-adoption)
 - `install.py` persists its validated input at `.sc-lint/install.json`; `--input` bootstraps it. `profiles` and `test` argv are rendered verbatim into `sc-lint.toml` `[[tool.sc-lint.lint]]` / `[[tool.sc-lint.test]]`.
 - `.sc-lint/justfile`: `setup`, `lint *profile`, `upgrade` via `.sc-lint/bootstrap` (`.ps1` on Windows). `test.just` is added only when the consumer has no `test` recipe; atm-core has one.
-- Consumer argv runs with no shell. Python lint and test rows use explicit per-OS `.bootstrap-venv` interpreter paths, and `just test` selects the row matching the current host.
+- Consumer argv runs with no shell. Python lint and test rows use explicit per-OS interpreter paths (`.bootstrap-venv` for repository scripts, `.sc-lint/venv` for published `sc_lint` modules), and `just test` selects the row matching the current host.
 - Kit steps run serially and stop at the first failure until sc-lint#195 ships (bg-6); CI keeps `run_lint.py all` meanwhile.
 
 ## Upstream
@@ -211,7 +211,7 @@ The `runtime-waits` step runs the published `sc-lint lint sc-runtime` configured
 Every step the `sc_lint` wheel duplicates runs the published module (ANC-010): fmt, function-length, lines, manifests fully; spell, deny, shear, version and identities where the wheel covers them. Each legacy script is deleted after comparison (ANC-011, ANC-012); length findings are fixed by refactors (ANC-014).
 
 ## Deliverables
-1. BG5-0 Invocation: `function-length`, `lines` and `identities` use `sc-lint lint function-length|line-counts|identity-literals`; `fmt` runs `cargo fmt --all --check` (the command the published fmt step runs); the other wheel modules run through the Justfile Python bridge with the `.bootstrap-venv` interpreter for the host OS. No second sc-lint pin in `tools/bootstrap.toml`.
+1. BG5-0 Invocation: `function-length`, `lines` and `identities` use `sc-lint lint function-length|line-counts|identity-literals`; `fmt` runs `cargo fmt --all --check` (the command the published fmt step runs); the other wheel modules run as `python -m sc_lint.<module>` on the `.sc-lint/venv` interpreter for each OS. No second sc-lint pin in `tools/bootstrap.toml`.
 2. BG5-1 Full duplicates: `fmt`, `function-length`, `lines`, `manifests` run as BG5-0 states; legacy scripts, their tests and the dead `modules` target deleted after comparison; `just fmt write|check` stays and calls `cargo fmt --all` directly (the pre-push hook and `just help` use it). For function-length, the comparison is: at the cut commit, the legacy tool's grandfathered list equals the rows `--write-baseline` writes; one finding bead tracks the baseline and closes when the file is empty.
 3. BG5-2 Partial duplicates: `spell`, `deny`, `shear`, `version`, `identities` run the published tool; the gaps (sc-lint#349 Windows console output for spell and any other wheel runner that fails the same way on Windows, #346 shear allowlist, #347 identity `concat!`, #137 Python pin lockstep, and the deny DNS retry under a new sc-lint issue) stay as the smallest atm-side check each, marked `delete when randlee/sc-lint#<n> ships`.
 4. BG5-3 Findings: each new function-length or line-count finding is fixed by a refactor that improves the code (no shaving to just under the limit); suppressions carry a reason and a finding bead.
@@ -263,7 +263,7 @@ replay-store token.
 ## atm-bg-6: bg-6: Runner cutover, platform scope, test manifest, speed
 
 ## Goal
-sc-lint owns the step list and runs it: parallel, keep-going (sc-lint#195); `just lint ci` runs host/Linux-only and `just lint ci all` runs every platform (ANC-007, #199); `just test` is driven by the repo-owned manifest (ANC-008, #196); `just lint` is faster than at the phase base commit (ANC-004). `run_lint.py` shrinks to the atm-only steps' commands (ANC-017); the file stays while the sc-publish action `.github/actions/setup-sc-lint/action.yml` (ADR-050, not edited here) asserts it exists, and that dependency is filed on sc-publish.
+sc-lint owns the step list and runs it: parallel, keep-going (sc-lint#195); `just lint ci` runs host/Linux-only and `just lint ci all` runs every platform (ANC-007, #199); `just test` is driven by the repo-owned manifest (ANC-008, #196); `just lint` is faster than at the phase base commit (ANC-004). `.just/run_lint.py` is deleted; the atm-only steps are rows in `.sc-lint/install.json` (ANC-017).
 
 ## Dispatch gate
 - `atm-phase-bg-gate-sclint-runner`: a published sc-lint release with #195, #196 and #199.
