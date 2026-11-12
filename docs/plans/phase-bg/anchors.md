@@ -185,8 +185,8 @@ Summary: Published sc-lint crates
 Scope: any bead that touches vendored sc-lint crates or the sc-lint version atm-core uses
 
 Fixtures:
-- pass: Install sc-lint 0.7.0 from its published release and delete the vendored sc-lint crates from the workspace.
-- fail: Keep building the vendored sc-lint crates from the workspace and pin them at 0.7.0.
+- pass: Install sc-lint 0.8.8 from its published release and delete the vendored sc-lint crates from the workspace.
+- fail: Keep building the vendored sc-lint crates from the workspace and pin them at 0.8.8.
 
 ## ANC-011
 
