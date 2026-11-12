@@ -1,7 +1,7 @@
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName};
-use atm_storage::contract::{Message, MessageKey};
+use atm_storage::contract::MessageKey;
 use serde::{Deserialize, Serialize};
 
 use super::sealed;
@@ -89,70 +89,6 @@ pub type DoctorFinding = crate::doctor::DoctorFinding;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct MailStoreDoctorReport {
     pub findings: Vec<DoctorFinding>,
-}
-
-/// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.
-#[deprecated(note = "use canonical atm-storage types instead")]
-pub trait MailStore: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when the mailbox transaction cannot be started,
-    /// executed, or committed safely.
-    fn upsert_message(&self, record: Message) -> Result<(), AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when the requested message cannot be loaded.
-    fn load_message(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        message_key: &MessageKey,
-    ) -> Result<Option<Message>, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when mailbox metadata rows cannot be queried.
-    fn query_mailbox_metadata(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        limit: Option<usize>,
-    ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when mailbox metadata counts cannot be queried.
-    fn query_mailbox_metadata_counts(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<MailStoreMailboxMetadataCounts, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when message-state persistence fails.
-    fn upsert_message_state(
-        &self,
-        request: UpsertMailMessageStateRequest,
-    ) -> Result<UpsertMailMessageStateResponse, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when message state cannot be loaded.
-    fn load_message_state(
-        &self,
-        request: LoadMailMessageStateRequest,
-    ) -> Result<LoadMailMessageStateResponse, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a mailbox health snapshot cannot be read.
-    fn health_snapshot(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<MailStoreHealthSnapshot, AtmError>;
 }
 
 /// BOUNDARY-MailStoreDoctor — see docs/atm-core/boundaries.md.

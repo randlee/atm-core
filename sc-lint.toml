@@ -94,16 +94,20 @@ env_paths = { "PYO3_PYTHON" = ".bootstrap-venv/Scripts/python.exe" }
 name = "clippy-windows"
 command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
 platform = "windows"
+# delete when randlee/sc-lint#197 ships
 target = "x86_64-pc-windows-msvc"
 host = "linux"
+# delete when randlee/sc-lint#198 ships
 env_paths = { "PYO3_PYTHON" = ".bootstrap-venv/bin/python" }
 
 [[tool.sc-lint.lint]]
 name = "clippy-windows-macos"
 command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
 platform = "windows"
+# delete when randlee/sc-lint#197 ships
 target = "x86_64-pc-windows-msvc"
 host = "macos"
+# delete when randlee/sc-lint#198 ships
 env_paths = { "PYO3_PYTHON" = ".bootstrap-venv/bin/python" }
 
 [[tool.sc-lint.lint]]
