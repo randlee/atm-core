@@ -3426,6 +3426,10 @@ pub(crate) mod tests {
         let fixture = fixture(true, None, None);
         let assembly =
             open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let mut ports = assembly.doctor_ports;
+        let (gated, entered, release) =
+            atm_runtime_test_support::GatedConfigDoctor::new(ports.config_doctor);
+        ports.config_doctor = Arc::new(gated);
         let projection = Arc::new(
             StorageDoctorProjection::start(
                 DoctorProjectionConfig {
@@ -3434,47 +3438,64 @@ pub(crate) mod tests {
                     ..DoctorProjectionConfig::default()
                 },
                 assembly.service_runtime,
-                assembly.doctor_ports,
+                ports,
                 Arc::new(NullObservability),
             )
             .expect("start bounded doctor projection"),
         );
-        let barrier = Arc::new(tokio::sync::Barrier::new(65));
-        let mut calls = Vec::new();
-        for _ in 0..64 {
-            let projection = Arc::clone(&projection);
-            let barrier = Arc::clone(&barrier);
-            calls.push(tokio::spawn(async move {
-                barrier.wait().await;
-                projection
-                    .project(
-                        atm_core::doctor::DoctorQuery::default(),
-                        DoctorProjectionContext::default(),
-                        RequestDeadline::after(Duration::from_secs(1)),
-                    )
-                    .await
-            }));
-        }
-        barrier.wait().await;
+        let held_projection = Arc::clone(&projection);
+        let held = tokio::spawn(async move {
+            held_projection
+                .project(
+                    atm_core::doctor::DoctorQuery::default(),
+                    DoctorProjectionContext::default(),
+                    RequestDeadline::after(Duration::from_secs(3600)),
+                )
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(30), entered)
+            .await
+            .expect("worker reaches doctor port")
+            .expect("doctor port remains alive");
 
-        let mut completed = 0;
-        let mut saturated = 0;
-        for call in calls {
-            match call.await.expect("doctor caller joins") {
-                Ok(_) => completed += 1,
-                Err(error)
-                    if error.code() == atm_storage::AtmErrorCode::DaemonConnectionSaturated =>
-                {
-                    saturated += 1;
-                }
-                Err(error) => panic!("unexpected doctor overload result: {error}"),
-            }
-        }
-        assert!(completed > 0, "admitted doctor calls retain healthy parity");
+        // Poll once to prove the second request has been admitted into the
+        // sole queue slot while the worker remains held at the port.
+        let mut queued = Box::pin(projection.project(
+            atm_core::doctor::DoctorQuery::default(),
+            DoctorProjectionContext::default(),
+            RequestDeadline::after(Duration::from_secs(3600)),
+        ));
+        let queued_poll = std::future::poll_fn(|cx| {
+            std::task::Poll::Ready(std::future::Future::poll(queued.as_mut(), cx))
+        })
+        .await;
         assert!(
-            saturated > 0,
-            "beyond the bounded control lane, doctor rejects explicitly instead of serializing"
+            queued_poll.is_pending(),
+            "second request waits in the queue"
         );
+        let error = projection
+            .project(
+                atm_core::doctor::DoctorQuery::default(),
+                DoctorProjectionContext::default(),
+                RequestDeadline::after(Duration::from_secs(3600)),
+            )
+            .await
+            .expect_err("full queue rejects the third request");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::DaemonConnectionSaturated
+        );
+
+        release.send(()).expect("release doctor worker");
+        tokio::time::timeout(Duration::from_secs(30), held)
+            .await
+            .expect("held request finishes")
+            .expect("held request joins")
+            .expect("held request completes");
+        tokio::time::timeout(Duration::from_secs(30), queued)
+            .await
+            .expect("queued request finishes")
+            .expect("queued request completes");
     }
 
     #[test]
@@ -3830,13 +3851,7 @@ pub(crate) mod tests {
             )
             .await
             .expect("read response is independent of writer completion");
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while ingress.submissions().is_empty() {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("read handoff reaches recording ingress");
+        ingress.wait_for_submissions(1).await;
         assert!(
             ingress
                 .submissions()
@@ -3856,17 +3871,14 @@ pub(crate) mod tests {
             )
             .await
             .expect("writer rejection never feeds the read response");
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while !ingress
+        ingress.wait_for_submissions(2).await;
+        assert!(
+            ingress
                 .submissions()
                 .iter()
-                .any(|submission| submission.outcome == RecordedWriterOutcome::Rejected)
-            {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("supervisor records the rejecting handoff path");
+                .any(|submission| { submission.outcome == RecordedWriterOutcome::Rejected }),
+            "supervisor records the rejecting handoff path"
+        );
     }
 
     #[tokio::test]
