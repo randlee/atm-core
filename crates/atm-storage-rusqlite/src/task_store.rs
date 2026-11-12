@@ -8,7 +8,6 @@ use atm_storage::{
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::SqliteTaskStore;
 use crate::shared_db::SharedDb;
 use crate::shared_db::{SharedDbTarget, SqliteConnection, sqlite_error};
 use crate::task_sql;
@@ -122,6 +121,11 @@ fn drop_legacy_prompt_handoffs(
             })?;
     }
     Ok(())
+}
+
+#[derive(Debug)]
+pub(crate) struct SqliteTaskStore {
+    pub(crate) db: Arc<SharedDb>,
 }
 
 impl SqliteTaskStore {

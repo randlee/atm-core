@@ -42,10 +42,6 @@ allowed_test_double_paths = [
 ]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-GRAFT-RECEIVER-ENDPOINT-STORE-REFERENCES"]
-review_gates = ["local_ingress_only", "loopback_endpoint_only", "no_backend_to_core_edge_for_graft_receiver_endpoint_store"]
-
 [status]
 state = "concrete_landed"
 notes = ["AQ1.5 owns the sealed contract, SQLite implementation, schema migration, and replacement-router registration routes; receiver-side announce and production bootstrap wiring belong to AQ1.6 and AQ1.7"]

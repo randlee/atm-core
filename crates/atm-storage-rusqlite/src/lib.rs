@@ -290,11 +290,11 @@ pub fn install_task_update_failure_for_test(path: impl AsRef<Path>) -> Result<()
 pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 
 mod message_store;
-use message_store::{
-    SqliteMessageStore, SqliteNudgeTemplateOverrideStore, SqlitePeerConfigStore,
-    SqlitePendingNudgeStore, SqliteTaskStore,
-};
+use message_store::{SqliteMessageStore, SqlitePeerConfigStore};
+use nudge_template_override_store::SqliteNudgeTemplateOverrideStore;
+use pending_nudge_store::SqlitePendingNudgeStore;
 use roster_store::SqliteRosterStore;
+use task_store::SqliteTaskStore;
 
 #[derive(Clone)]
 pub struct SqliteStorageBackend {

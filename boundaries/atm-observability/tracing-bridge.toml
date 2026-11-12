@@ -43,10 +43,6 @@ error_types = ["BridgeError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = ["SCB-OBSERVABILITY-001"]
-review_gates = ["allowlist_redaction", "single_global_install", "non_blocking_queue_admission"]
-
 [status]
 state = "active"
 notes = ["Only atm-daemon-bootstrap installs the process-global tracing bridge; atm-observability is the sole sanctioned library owner of sc-observability backend types.", "The canonical logger fans out redacted events once to its selected file/OTel sinks. SDK diagnostics stay local and project only observable failure evidence. Native SDK and Tokio dependencies belong to the exporter (ADR-064); no official tracing appender is installed."]

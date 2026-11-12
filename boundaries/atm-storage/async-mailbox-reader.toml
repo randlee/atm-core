@@ -36,10 +36,6 @@ error_types = ["ReadLaneError"]
 allowed_test_double_paths = ["crate::testing::InMemoryMailboxReader"]
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-MESSAGESTORE-REFERENCES"]
-review_gates = ["no_backend_specific_async_contract", "no_writer_lane_read_submission"]
-
 [status]
 state = "concrete_landed"
 notes = ["The SQLite adapter owns bounded read-only workers; runtime callers await this capability directly."]

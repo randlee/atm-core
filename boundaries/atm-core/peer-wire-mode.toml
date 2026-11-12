@@ -39,10 +39,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["environment_mode_selection", "adapter_availability_inference"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-PEER-WIRE-MODE"]
-review_gates = ["mode_selected_once_at_daemon_launch", "no_tls_types_in_policy", "no_environment_or_durable_mode_source"]
-
 [status]
 state = "concrete_landed"
 notes = ["AO2.1 owns the typed policy contract; AO2.3 owns daemon argument parsing and runtime mode wiring."]

@@ -11,7 +11,7 @@ notes = "Private SQLite implementation of the typed local-only analyst query cap
 type = "SqliteAnalystQueryStore"
 module = "atm_storage_rusqlite::analyst_query"
 visibility = "private"
-constructor = "private"
+constructor = "none"
 
 [composition]
 roots = ["atm_storage_rusqlite::open_analyst_query_store"]
@@ -37,10 +37,6 @@ error_types = ["AtmError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["direct_http_sqlite_reader", "write_capability"]
-
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-ANALYST-QUERY-SQLITE"]
-review_gates = ["private_sqlite_impl", "only_local_python_consumer", "readonly_authorizer"]
 
 [status]
 state = "active"

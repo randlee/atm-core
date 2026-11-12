@@ -9,6 +9,7 @@ trait = "TaskStore"
 [implementation]
 type = "SqliteTaskStore"
 module = "atm_storage_rusqlite::task_store"
+# The crate root constructs the task store; task_store implements its behavior.
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
@@ -44,10 +45,6 @@ notes = [
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
-
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TASK-STORE-SQLITE"]
-review_gates = ["private_sqlite_impl", "no_cli_sqlite_lookup", "no_ack_task_coupling", "no_task_state_write_outside_task_ops"]
 
 [status]
 state = "concrete_landed"

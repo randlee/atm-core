@@ -10,7 +10,7 @@ facade = "TlsInteropConfig"
 type = "CurlMtlsReceiverFixture"
 module = "atm_peer_tls_interop"
 visibility = "public"
-constructor = "pub(crate)"
+constructor = "none"
 
 [composition]
 roots = []
@@ -42,10 +42,6 @@ error_types = ["AtmError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["native_tls_sender", "production_listener"]
-
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-PEER-TLS-INTEROP-EDGES"]
-review_gates = ["no_active_dependent", "no_native_sender", "no_production_listener"]
 
 [status]
 state = "planned"

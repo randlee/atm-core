@@ -36,11 +36,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-# No production implementer exists; the sole DummyStore implementation is cfg(test)-scoped.
-lint_rules = ["LINT-BOUNDARY-STORAGENOTIFIER-REFERENCES"]
-review_gates = ["post_commit_notifications_only"]
-
 [status]
 state = "concrete_landed"
 notes = ["AC.1 created the shared notification trait in crates/atm-storage", "task notifications are intentionally out of scope for the initial contract"]

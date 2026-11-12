@@ -27,7 +27,7 @@ dependencies = [
  "libc",
  "noyalib",
  "opentelemetry-proto",
- "sc-lint-attributes 0.8.6",
+ "sc-lint-attributes 0.8.8",
  "sc-observability",
  "sc-observability-types",
  "serde",
@@ -58,7 +58,7 @@ dependencies = [
  "interprocess",
  "libc",
  "parking_lot",
- "sc-lint-attributes 0.8.6",
+ "sc-lint-attributes 0.8.8",
  "semver",
  "serde",
  "serde_json",
@@ -214,7 +214,7 @@ dependencies = [
  "chrono",
  "cron",
  "getrandom 0.3.4",
- "sc-lint-attributes 0.8.6",
+ "sc-lint-attributes 0.8.8",
  "serde_json",
  "syn 2.0.119",
  "tokio",
@@ -253,7 +253,7 @@ dependencies = [
  "opentelemetry_sdk",
  "peer-tls",
  "rustix",
- "sc-lint-attributes 0.8.6",
+ "sc-lint-attributes 0.8.8",
  "serde",
  "serde_json",
  "serial_test",
@@ -276,7 +276,7 @@ dependencies = [
  "atm-http-runtime",
  "atm-storage",
  "interprocess",
- "sc-lint-attributes 0.8.6",
+ "sc-lint-attributes 0.8.8",
  "serde_json",
  "tempfile",
  "tokio",
@@ -323,7 +323,7 @@ name = "atm-herdr"
 version = "1.6.5"
 dependencies = [
  "agent-team-mail-core",
- "sc-lint-attributes 0.8.6",
+ "sc-lint-attributes 0.8.8",
  "serde_json",
  "tokio",
 ]
@@ -346,7 +346,7 @@ dependencies = [
  "hyper-util",
  "noyalib",
  "reqwest",
- "sc-lint-attributes 0.8.6",
+ "sc-lint-attributes 0.8.8",
  "serde",
  "serde_json",
  "tempfile",
@@ -412,7 +412,7 @@ dependencies = [
  "async-trait",
  "atm-runtime-test-support",
  "atm-storage",
- "sc-lint-attributes 0.8.6",
+ "sc-lint-attributes 0.8.8",
  "serde_json",
  "tokio",
  "tracing",
@@ -460,7 +460,7 @@ dependencies = [
  "chrono",
  "ring",
  "rusqlite",
- "sc-lint-attributes 0.8.6",
+ "sc-lint-attributes 0.8.8",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -2445,13 +2445,13 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-attributes"
-version = "0.8.6"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8817e3f1356af52bf52ab993faa61b53d8f03f0d53d51ec895f4a7f0a06287c2"
+checksum = "f0e1ffc7c0391bfeee4959eca22bee1ff9603ae306367edfb46aa063c4054964"
 dependencies = [
  "proc-macro2",
  "quote",
- "sc-lint-directives 0.8.6",
+ "sc-lint-directives 0.8.8",
  "syn 3.0.9",
 ]
 
@@ -2466,9 +2466,9 @@ dependencies = [
 
 [[package]]
 name = "sc-lint-directives"
-version = "0.8.6"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ae56cfd5029a92528f0f3b1c5d635d660604ae6b20158d170d3c3672c923dba"
+checksum = "9a3874396b58da2e4b1c3df45b3c289ae5aab7c10ccd853b73fedda511b6bbf9"
 dependencies = [
  "proc-macro2",
  "syn 3.0.9",

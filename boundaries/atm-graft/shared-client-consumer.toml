@@ -58,17 +58,6 @@ forbidden_test_bypasses = [
   "rusqlite::Connection",
 ]
 
-[enforcement]
-lint_rules = [
-  "LINT-BOUNDARY-GRAFT-SHARED-CLIENT-EDGES",
-  "LINT-BOUNDARY-GRAFT-SHARED-CLIENT-REFERENCES",
-]
-review_gates = [
-  "no_graft_to_daemon_edge",
-  "no_graft_to_sqlite_edge",
-  "shared_transport_only",
-]
-
 [status]
 state = "active"
 notes = [

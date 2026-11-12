@@ -35,10 +35,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-SERVER-TRANSPORT-REFERENCES"]
-review_gates = ["no_server_business_logic"]
-
 [status]
 state = "retired"
 notes = ["Historical custom-frame server boundary retired by AI.6 in favor of ADR-033 HTTP/OpenAPI routing.", "Server transport behavior now belongs to runtime adapters that call ApiRouter, not this atm-core trait boundary."]

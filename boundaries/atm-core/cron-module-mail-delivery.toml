@@ -37,9 +37,5 @@ error_types = ["AtmError"]
 allowed_test_double_paths = ["atm_runtime_test_support::RecordingCronModuleMailDelivery"]
 forbidden_test_bypasses = ["std::process::Command"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-CRON-MODULE-MAIL-DELIVERY-REFERENCES"]
-review_gates = ["sealed_trait", "stable_id", "atomic_generation_fence", "deterministic_test_doubles"]
-
 [status]
 state = "concrete_landed"

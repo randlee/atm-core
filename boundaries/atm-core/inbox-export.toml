@@ -37,10 +37,6 @@ notes = ["ATM-authored compatibility projection may replace oversized JSONL bodi
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["mailbox::store::with_locked_source_files"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-INBOX-EXPORT-REFERENCES"]
-review_gates = ["no_direct_mailbox_helper_calls", "repair_rebuild_only_reexport"]
-
 [status]
 state = "retired"
 notes = ["retired by AI.1 with the deleted daemon peer/compatibility adapter line", "no accepted runtime path constructs or calls this contract"]

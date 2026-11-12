@@ -39,10 +39,6 @@ error_types = ["TaskTelemetryError"]
 allowed_test_double_paths = ["atm_core::task_telemetry::tests", "atm_runtime::task_telemetry::tests", "atm_runtime_test_support::task_telemetry"]
 forbidden_test_bypasses = ["payload_bearing_record"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES"]
-review_gates = ["first_party_only", "no_payload_or_vars", "best_effort_only"]
-
 [status]
 state = "concrete_landed"
 notes = ["atm-core owns only the sealed trait and records (no built-in no-op sink); atm-runtime composes and calls the sink, while atm-observability owns the exporting implementation."]

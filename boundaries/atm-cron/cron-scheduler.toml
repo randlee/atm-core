@@ -39,10 +39,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["tokio::process::Command", "rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-CRON-SCHEDULER"]
-review_gates = ["no_runtime_or_bootstrap_edge", "parse_before_write", "stop_check_before_every_run", "missed_tick_replay", "concurrent_runs_of_one_schedule"]
-
 [status]
 state = "active"
 notes = ["Phase bk sprint bk-5: the daemon composes one scheduler and supervises its worker lifecycle."]

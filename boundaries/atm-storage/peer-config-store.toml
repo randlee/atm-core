@@ -36,10 +36,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-PEER-CONFIG-STORE-REFERENCES"]
-review_gates = ["no_transport_or_delivery_logic_in_configuration_store"]
-
 [status]
 state = "concrete_landed"
 notes = ["AI.8 establishes configuration only; AO2.2 authorizes peer-tls as the sole concrete mTLS byte-stream consumer. Storage retains no socket or handshake ownership."]

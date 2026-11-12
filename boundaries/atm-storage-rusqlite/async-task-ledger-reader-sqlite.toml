@@ -10,7 +10,7 @@ trait = "AsyncTaskLedgerReader"
 type = "TaskLedgerReader"
 module = "atm_storage_rusqlite::task_ledger_reader"
 visibility = "private"
-constructor = "private"
+constructor = "none"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]
@@ -36,10 +36,6 @@ error_types = ["ReadLaneError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
-
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TASK-LEDGER-READER-SQLITE-EDGES"]
-review_gates = ["no_public_impl", "no_public_constructor", "no_public_reexport"]
 
 [status]
 state = "concrete_landed"

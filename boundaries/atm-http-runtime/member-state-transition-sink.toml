@@ -38,10 +38,6 @@ notes = ["The callback is invoked only after the canonical roster mutation lock 
 allowed_test_double_paths = ["atm_http_runtime::runtime_health::tests"]
 forbidden_test_bypasses = ["inline_storage_claim"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-HTTP-RUNTIME-DEPENDENCIES"]
-review_gates = ["sealed_trait", "post_roster_lock_callback", "best_effort_only", "recovery_backstop"]
-
 [status]
 state = "concrete_landed"
 notes = ["AQ3 owns the daemon-composition implementation; Herdr and bare-CLI queue claimants remain outside this sink."]

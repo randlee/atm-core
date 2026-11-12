@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -110,12 +111,6 @@ testing:
   forbidden_test_bypasses:
     - rusqlite::Connection
 
-enforcement:
-  lint_rules:
-    - LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES
-  review_gates:
-    - no_public_impl
-
 status:
   state: planned
   notes: []
@@ -162,9 +157,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]
-review_gates = ["no_public_impl"]
 
 [status]
 state = "planned"
@@ -173,15 +165,7 @@ notes = []
 
 
 class LintBoundariesTests(unittest.TestCase):
-    def test_declared_peer_dial_lint_rule_resolves_to_registered_runner(self) -> None:
-        records, parse_violations = parse_boundary_records(REPO_ROOT)
-        self.assertEqual(parse_violations, [])
-        runtime = next(
-            record
-            for record in records
-            if record.source_path == Path("boundaries/atm-http-runtime/http-runtime.toml")
-        )
-        self.assertIn("peer-dial-seam", runtime.lint_rules)
+    def test_peer_dial_lint_runner_is_registered(self) -> None:
         profiles = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["profiles"]
         for platform, python in (
             ("linux", ".bootstrap-venv/bin/python"),
@@ -997,7 +981,7 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
                 )
 
     def test_telemetry_sink_rule_flags_a_production_sink_outside_owner_and_exporter(self) -> None:
-        """A record naming a telemetry-sink rule confines production impls of its
+        """The telemetry-sink boundary confines production impls of its
         trait to the owner and exporting crates; test-scoped impls pass."""
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -1016,7 +1000,7 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
                 .replace('allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]', "allowed_test_double_paths = []")
             )
             rule = "LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES"
-            record = record.replace('lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]', f'lint_rules = ["{rule}"]')
+            record = re.sub(r'boundary_id = "[^"]+"', 'boundary_id = "BOUNDARY-TaskTelemetrySink"', record, count=1)
             self.write_toml_record(repo_root, "atm-core", text=record)
             (repo_root / "crates/atm-core/src/lib.rs").write_text(
                 "impl TaskTelemetrySink for NoopTaskTelemetrySink {}\n", encoding="utf-8"

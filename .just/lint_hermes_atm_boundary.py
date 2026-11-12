@@ -17,7 +17,6 @@ LINT_NAME = "hermes-atm-boundary"
 BOUNDARY_PATH = Path("policy/hermes-atm/runtime-composition.toml")
 PACKAGE_PATH = Path("crates/hermes-atm/pyproject.toml")
 SOURCE_ROOT = Path("crates/hermes-atm/src/hermes_atm")
-EXPECTED_RULE = "LINT-BOUNDARY-HERMES-ATM-IMPORTS"
 FORBIDDEN_SOURCE_MARKERS = {
     "database_io": ("import sqlite3", "from sqlite3"),
     "direct_socket_io": ("import socket", "from socket"),
@@ -49,9 +48,6 @@ def collect_violations(repo_root: Path) -> list[Violation]:
     boundary = load_toml(repo_root / BOUNDARY_PATH)
     package = load_toml(repo_root / PACKAGE_PATH)
     violations: list[Violation] = []
-    enforcement = boundary.get("enforcement", {})
-    if EXPECTED_RULE not in enforcement.get("lint_rules", []):
-        violations.append(Violation(str(BOUNDARY_PATH), f"must declare {EXPECTED_RULE}"))
     forbidden_tags = set(boundary.get("ownership", {}).get("io_forbidden", []))
     expected_tags = set(FORBIDDEN_SOURCE_MARKERS)
     if forbidden_tags != expected_tags:

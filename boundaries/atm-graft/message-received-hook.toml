@@ -11,7 +11,7 @@ notes = "Receiver-owned Graft implementation injected through the published same
 type = "GraftReceiveHook"
 module = "atm_graft::nudge_sink"
 visibility = "pub(crate)"
-constructor = "pub(crate)"
+constructor = "none"
 
 [composition]
 roots = ["atm_graft::runtime::handle_graft_receiver_connection"]
@@ -39,10 +39,6 @@ notes = ["An injected hook error is returned to the receive path, which reports 
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["daemon_owned_graft_implementation"]
-
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-GRAFT-MESSAGE-RECEIVED-HOOK"]
-review_gates = ["receiver_owned", "no_daemon_dependency"]
 
 [status]
 state = "active"

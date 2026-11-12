@@ -37,10 +37,6 @@ notes = ["atm-core retains built_in_nudge_template_kind_from_post_send_event bec
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-NUDGE-TEMPLATE-OVERRIDE-STORE-REFERENCES"]
-review_gates = ["no_cli_sqlite_lookup", "no_emitter_side_lookup", "no_backend_to_core_edge_for_override_store"]
-
 [status]
 state = "concrete_landed"
 notes = ["canonical ownership moved from atm-core to atm-storage during the phase-AD postmerge rusqlite coupling fix", "atm-core still re-exports the trait and moved row/kind types until downstream compile-bridge consumers retire the older import path"]

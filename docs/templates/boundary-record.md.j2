@@ -27,8 +27,6 @@ required_variables:
   - error_types
   - allowed_test_double_paths
   - forbidden_test_bypasses
-  - lint_rules
-  - review_gates
   - state
   - status_notes
   - purpose
@@ -88,12 +86,6 @@ testing:
 {{ allowed_test_double_paths }}
   forbidden_test_bypasses:
 {{ forbidden_test_bypasses }}
-
-enforcement:
-  lint_rules:
-{{ lint_rules }}
-  review_gates:
-{{ review_gates }}
 
 status:
   state: {{ state }}

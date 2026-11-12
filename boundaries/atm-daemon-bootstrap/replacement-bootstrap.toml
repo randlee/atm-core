@@ -39,10 +39,6 @@ notes = ["The concrete storage factory is legal only at this composition boundar
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["legacy_daemon_server", "legacy_dispatcher", "raw_http_listener"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-REPLACEMENT-DAEMON-COMPOSITION"]
-review_gates = ["owner_before_bind", "one_runtime_root", "framework_adapters_only", "no_legacy_fallback"]
-
 [status]
 state = "active"
 notes = ["AL.8 active composition boundary. The old atm-daemon source tree remains reference-only until Phase AM removes it."]

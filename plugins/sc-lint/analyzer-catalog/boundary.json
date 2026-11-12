@@ -6,6 +6,7 @@
       "SCB-BOUNDARY-002",
       "SCB-BOUNDARY-003",
       "SCB-BOUNDARY-004",
+      "SCB-BOUNDARY-005",
       "SCB-CALLER-001"
     ],
     "cycles": [
@@ -50,6 +51,7 @@
     "SCB-BOUNDARY-002",
     "SCB-BOUNDARY-003",
     "SCB-BOUNDARY-004",
+    "SCB-BOUNDARY-005",
     "SCB-CALLER-001",
     "SCB-DEPENDENCY-001",
     "SCB-DEPENDENCY-002",

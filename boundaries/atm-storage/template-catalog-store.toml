@@ -37,9 +37,5 @@ notes = ["AN.9/AN.10 extend the existing decomposed admission payload with the v
 allowed_test_double_paths = ["crate::template_catalog::InMemoryTemplateCatalogStore"]
 forbidden_test_bypasses = ["sqlite_connection", "renderer_handle"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TEMPLATE-CATALOG-STORE"]
-review_gates = ["sealed_capability", "leaf_dtos_only", "no_renderer_or_sql"]
-
 [status]
 state = "concrete_landed"

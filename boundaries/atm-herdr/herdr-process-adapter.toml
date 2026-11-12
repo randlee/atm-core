@@ -67,14 +67,6 @@ notes = [
 allowed_test_double_paths = ["atm_herdr::testing::FakeHerdrProcessAdapter", "atm_daemon_bootstrap::received_hook_selector::BenchmarkNoopHerdrProcessAdapter"]
 forbidden_test_bypasses = ["std::process::Command", "tokio::process::Command"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-HERDR-PROCESS-ADAPTER"]
-review_gates = [
-  "tokio-native-process-only",
-  "no-shell-or-terminal-fallback",
-  "per-member-session-child-environment",
-]
-
 [status]
 state = "active"
 notes = [

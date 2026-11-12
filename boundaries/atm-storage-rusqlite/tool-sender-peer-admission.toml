@@ -11,7 +11,7 @@ notes = "Private SQLite adapter verifies origin-host Ed25519 attestations agains
 type = "SqliteToolSenderPeerAdmissionStore"
 module = "atm_storage_rusqlite::tool_sender_peer_admission"
 visibility = "private"
-constructor = "pub(crate)"
+constructor = "none"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageFactory::with_tool_sender_peer_admission_config"]
@@ -38,10 +38,6 @@ error_types = ["AtmError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
-
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TOOL-SENDER-REGISTRY-REFERENCES"]
-review_gates = ["authenticated_origin_host", "exact_message_binding", "durable_nonce_replay", "commit_before_capability"]
 
 [status]
 state = "active"
