@@ -5,7 +5,7 @@ use super::{
     DoctorFinding, DoctorSeverity, EscalationRecipientAddress, EscalationRecipientSource,
     EscalationRecipientsDoctorReport, TeamEscalationRecipientsDoctorReport,
 };
-use crate::boundary::{DurableRosterStore, TaskState, TaskStore};
+use crate::boundary::{RosterStore, TaskState, TaskStore};
 use crate::error_codes::AtmErrorCode;
 use crate::service_runtime::LocalServiceRuntime;
 use crate::types::TeamName;
@@ -34,7 +34,7 @@ pub(super) fn task_and_roster_findings(
 }
 
 fn doctor_teams(
-    roster_store: &(dyn DurableRosterStore + Send + Sync),
+    roster_store: &(dyn RosterStore + Send + Sync),
     resolved_team: Option<&TeamName>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Vec<TeamName> {
@@ -76,7 +76,7 @@ fn validated_recipients(
 }
 
 fn team_report(
-    roster_store: &(dyn DurableRosterStore + Send + Sync),
+    roster_store: &(dyn RosterStore + Send + Sync),
     task_store: Option<&Arc<dyn TaskStore + Send + Sync>>,
     team: TeamName,
     findings: &mut Vec<DoctorFinding>,

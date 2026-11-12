@@ -7,7 +7,7 @@ use crate::schema::AtmMessageId;
 use crate::types::{AgentName, ChatId, HostName, PaneId, TaskId, TeamName};
 /// Durable roster store used by replacement-runtime maintenance projections.
 #[doc(inline)]
-pub use atm_storage::contract::RosterStore as DurableRosterStore;
+pub use atm_storage::contract::RosterStore;
 pub use atm_storage::contract::{
     AckTransition, AsyncMailboxReader, MailboxScope, Message, MessageKey, MessageQuery,
     ReadLaneError,
