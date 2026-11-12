@@ -19,9 +19,7 @@ io_owns = ["durable_roster_state", "member_routing_metadata"]
 io_forbidden = []
 
 [dependencies]
-# `atm-daemon-bootstrap` and `atm` remain legitimate compile-bridge roster
-# consumers until the retained bootstrap/CLI cutover closes in phase-AD.
-allowed_dependents = ["atm-daemon", "atm-runtime", "atm-daemon-bootstrap", "atm"]
+allowed_dependents = []
 allowed_dependencies = ["atm-error", "atm-storage"]
 allowed_dev_dependencies = ["atm-runtime-test-support"]
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]

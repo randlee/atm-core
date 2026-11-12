@@ -154,7 +154,8 @@ Notes:
 
 ## MailStore
 
-The former `atm-core::boundary::MailStore` compile bridge is retired. The
+Historical status:
+- The former `atm-core::boundary::MailStore` compile bridge is retired. The
 canonical durable mailbox contract is `atm_storage::MessageStore`; its
 [boundary record](../../boundaries/atm-storage/message-store.toml) owns the
 storage contract. Compatibility inbox files remain ingress/export surfaces.
@@ -170,7 +171,8 @@ Purpose:
 
 ## RosterStore
 
-The former `atm-core::boundary::RosterStore` compile bridge is retired.
+Historical status:
+- The former `atm-core::boundary::RosterStore` compile bridge is retired.
 Callers use the canonical `atm_storage::RosterStore` and its
 [boundary record](../../boundaries/atm-storage/roster-store.toml). Runtime
 status remains separate from durable roster ownership.
