@@ -5,7 +5,7 @@ name = "MailStore"
 
 [public]
 trait = "MailStore"
-notes = "legacy compile-bridge mail-store trait retained in atm_core::boundary after AC.1; authoritative shared contract now lives in crates/atm-storage as MessageStore"
+notes = "retired compile bridge; the canonical contract is atm-storage MessageStore"
 
 [implementation]
 visibility = "trait_only"
@@ -16,10 +16,10 @@ roots = []
 
 [ownership]
 io_owns = ["message_lifecycle_state", "mailbox_projection_state"]
-io_forbidden = ["socket_io", "process_spawn"]
+io_forbidden = []
 
 [dependencies]
-allowed_dependents = ["atm-runtime"]
+allowed_dependents = []
 allowed_dependencies = ["atm-error", "atm-storage"]
 allowed_dev_dependencies = ["atm-runtime-test-support"]
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
@@ -38,5 +38,5 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
 [status]
-state = "active"
-notes = ["AC.1 introduced crates/atm-storage::MessageStore as the authoritative shared message contract", "legacy compile bridge remains active while retained production callers still route through atm-runtime::legacy_storage_adapters", "concrete store implementation lives in crates/atm-storage-rusqlite/src/lib.rs as SqliteMessageStore during the convergence window"]
+state = "retired"
+notes = ["Retired: callers use the canonical atm-storage contract."]

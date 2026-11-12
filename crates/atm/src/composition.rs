@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "the retained CLI composition still seeds and bridges legacy atm-core boundary stores during the Phase AC transition"
-)]
-
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -791,7 +786,11 @@ pub(crate) mod tests {
                 })
                 .collect::<Vec<_>>();
             roster_store
-                .replace_roster(&team, &members)
+                .save_roster(&atm_storage::RosterSnapshot {
+                    team_name: team.clone(),
+                    members: members.clone(),
+                    refreshed_at: None,
+                })
                 .expect("seed sqlite roster");
         }
 
@@ -817,21 +816,20 @@ pub(crate) mod tests {
         pub(crate) fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
             if self.home_dir.join("runtime").join("mail.sqlite3").exists() {
                 let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
-                let mail_store = assembly.mail_store_arc();
+                let mail_store = assembly.message_store_arc();
                 let team = TEST_TEAM.parse::<TeamName>().expect("team");
                 let agent_name = agent.parse::<AgentName>().expect("agent");
-                let metadata_rows = mail_store
-                    .query_mailbox_metadata(&team, &agent_name, None)
-                    .expect("mailbox rows");
-                return metadata_rows
-                    .into_iter()
-                    .map(|row| {
-                        mail_store
-                            .load_message(&team, &agent_name, &row.message_key)
-                            .expect("message record")
-                            .expect("stored message")
-                            .envelope
+                return mail_store
+                    .list_messages(&atm_storage::MessageQuery {
+                        team,
+                        agent: agent_name,
+                        sender: None,
+                        task_id: None,
+                        limit: None,
                     })
+                    .expect("mailbox rows")
+                    .into_iter()
+                    .map(|message| message.envelope)
                     .collect();
             }
 
@@ -865,7 +863,7 @@ pub(crate) mod tests {
 
         fn seed_sqlite_mailbox(&self, agent: &str, messages: &[InboxMessage]) {
             let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
-            let mail_store = assembly.mail_store_arc();
+            let mail_store = assembly.message_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let agent_name = agent.parse::<AgentName>().expect("agent");
 
@@ -876,32 +874,13 @@ pub(crate) mod tests {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
                 mail_store
-                    .upsert_message(boundary::Message {
+                    .save_message(&boundary::Message {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         message_key: message_key.clone(),
                         envelope: message.clone(),
                     })
                     .expect("seed sqlite message");
-                mail_store
-                    .upsert_message_state(boundary::UpsertMailMessageStateRequest {
-                        team: team.clone(),
-                        agent: agent_name.clone(),
-                        actor: agent_name.clone(),
-                        state: boundary::MailMessageState {
-                            team: team.clone(),
-                            agent: agent_name.clone(),
-                            actor: agent_name.clone(),
-                            message_key,
-                            read: message.read,
-                            pending_ack_at: message.pending_ack_at,
-                            acknowledged_at: message.acknowledged_at,
-                            expires_at: message.expires_at,
-                            deleted_at: None,
-                            updated_at: Some(message.timestamp),
-                        },
-                    })
-                    .expect("seed sqlite message state");
             }
         }
 
