@@ -12,10 +12,10 @@ metadata:
   <phase>{{ phase | string }}</phase>
   <profile>{{ profile | string }}</profile>
   <instructions><![CDATA[
-    Review repository {{ repo }}, PR {{ pr_number }}, branch {{ branch }}, commit {{ commit }}.
+    Review repository {{ repo | string | cdata_escape }}, PR {{ pr_number | string | cdata_escape }}, branch {{ branch | string | cdata_escape }}, commit {{ commit | string | cdata_escape }}.
     Read the task's acceptance criteria and
     verify each against the exact layer contents. Run the validation required by the task and inspect the
-    stack using the installed sc-gh-stack-view skill. Always pass `--repo {{ repo }}` to GitHub PR commands;
+    stack using the installed sc-gh-stack-view skill. Always pass `--repo {{ repo | string | cdata_escape }}` to GitHub PR commands;
     the primary checkout may be a different repository. An unknown local catalog is not evidence of a defect:
     verify the supplied PR base and head against the phase stack bead and report the catalog limitation.
     Report concrete evidence for every criterion.
@@ -27,8 +27,8 @@ metadata:
 
 ```bash
 set -euo pipefail
-TASK_ID='{{ task_id }}'
-PHASE='{{ phase }}'
+TASK_ID='{{ task_id | string | cdata_escape }}'
+PHASE='{{ phase | string | cdata_escape }}'
 FINDINGS_FILE="${TMPDIR:-/tmp}/$TASK_ID-findings.json"
 ROW=$(bd show "$TASK_ID" --json | jq -e '.[0]')
 SPRINT=$(printf '%s' "$ROW" | jq -er '.metadata.sprint_bead')
@@ -46,7 +46,7 @@ done
 ```
     Close with an inline report ending in a single fenced JSON verdict: PASS has `verdict` and `sha`;
     FINDINGS additionally has `findings`, an array of objects containing each poured `id` and its `blocking` boolean.
-    Use `atm task close {{ task_id }} completed --stdin`. If close fails, read the error, fix its named cause,
+    Use `atm task close {{ task_id | string | cdata_escape }} completed --stdin`. If close fails, read the error, fix its named cause,
     and rerun the close; do not end your turn while your ATM task is open.
   ]]></instructions>
 </qa-task>

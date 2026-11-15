@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11,<3.12"
-# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.7.0,<2"]
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.8.0,<2"]
 # ///
 # pyright: strict
 # DO NOT EDIT WITHOUT EXPLICIT USER APPROVAL.
@@ -274,7 +274,7 @@ MODELS_BY_STAGE: dict[str, type[Bead]] = {
     "stage:sprint": SprintBead, "stage:dev": DevBead, "stage:dev-sanity": SanityBead,
     "stage:qa": QaBead, "stage:fix": FixBead, "stage:finding": FindingBead,
     "stage:stack": StackBead, "stage:plan": Bead, "stage:plan-review": Bead, "stage:review": Bead,
-    "stage:subtask": Bead,
+    "stage:subtask": Bead, "stage:plan-hardening": Bead, "stage:plan-finding": Bead,
 }
 MODELS: dict[str, type[Bead]] = {
     "sprint-bead": SprintBead, "dev-bead": DevBead, "sanity-bead": SanityBead,

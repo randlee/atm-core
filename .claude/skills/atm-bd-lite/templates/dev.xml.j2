@@ -14,14 +14,14 @@ metadata:
     <create><![CDATA[{{ provider.create | replace("'{base}'", "<top>") | replace("'{head}'", "<branch>") | replace("'{title}'", "<one-line title>") | replace("'{body_file}'", "<scratch>/" ~ task_id ~ "-pr-body.md") | replace("{body_file}", "<scratch>/" ~ task_id ~ "-pr-body.md") | cdata_escape }}]]></create>
   </provider-commands>
   <instructions><![CDATA[
-Read your own bead with `bd show {{ task_id }} --json` for the work and metadata. Start with `atm task start {{ task_id }}`.
+Read your own bead with `bd show {{ task_id | string | cdata_escape }} --json` for the work and metadata. Start with `atm task start {{ task_id | string | cdata_escape }}`.
 Never write your own task bead: only the task hooks do that. Run no cache commands; hooks refresh what they read. The only `bd` writes below are to the stack bead.
 Run this setup block from the primary checkout; it locks the stack and creates an isolated worktree:
 
 ```bash
 set -euo pipefail
-TASK_ID='{{ task_id }}'
-PHASE='{{ phase }}'
+TASK_ID='{{ task_id | string | cdata_escape }}'
+PHASE='{{ phase | string | cdata_escape }}'
 ROW=$(bd show "$TASK_ID" --json | jq -e '.[0]')
 BRANCH=$(printf '%s' "$ROW" | jq -er '.metadata.branch')
 STACK=$(printf '%s' "$ROW" | jq -er '.metadata.stack_bead')
@@ -41,8 +41,8 @@ Do the bead's work in the worktree and commit it. Then run this stack block from
 
 ```bash
 set -euo pipefail
-TASK_ID='{{ task_id }}'
-PHASE='{{ phase }}'
+TASK_ID='{{ task_id | string | cdata_escape }}'
+PHASE='{{ phase | string | cdata_escape }}'
 ROW=$(bd show "$TASK_ID" --json | jq -e '.[0]')
 BRANCH=$(printf '%s' "$ROW" | jq -er '.metadata.branch')
 STACK=$(printf '%s' "$ROW" | jq -er '.metadata.stack_bead')
@@ -57,7 +57,7 @@ git -C "$WORKTREE" rebase "origin/$TOP"
 git -C "$WORKTREE" push --force-with-lease origin "$BRANCH"
 ```
 
-Write `Lite development layer` to `<scratch>/{{ task_id }}-pr-body.md`, create the pull request against `$TOP` with the provider command above, then record its number in `PR` before continuing:
+Write `Lite development layer` to `<scratch>/{{ task_id | string | cdata_escape }}-pr-body.md`, create the pull request against `$TOP` with the provider command above, then record its number in `PR` before continuing:
 
 ```bash
 PR='<created pull request number>'
@@ -66,6 +66,6 @@ UPDATED=$(printf '%s' "$META" | jq --arg branch "$BRANCH" --arg head "$HEAD" --a
 bd update "$STACK" --if-assignee "$ATM_IDENTITY" --metadata "$UPDATED"
 ```
 
-Close only with `atm task close {{ task_id }} completed --stdin` and an inline report. If close fails, read the error, fix its named cause, and rerun the close; do not end your turn while your ATM task is open. Do not write the task bead.
+Close only with `atm task close {{ task_id | string | cdata_escape }} completed --stdin` and an inline report. If close fails, read the error, fix its named cause, and rerun the close; do not end your turn while your ATM task is open. Do not write the task bead.
   ]]></instructions>
 </dev-task>

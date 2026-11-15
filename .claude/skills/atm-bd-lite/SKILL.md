@@ -1,6 +1,6 @@
 ---
 name: atm-bd-lite
-version: 0.19.15
+version: 0.19.19
 description: Lightweight ATM Beads profile with task hooks and QA, without a sanity stage.
 ---
 
