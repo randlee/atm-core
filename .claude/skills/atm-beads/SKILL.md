@@ -1,6 +1,6 @@
 ---
 name: atm-beads
-version: 0.19.19
+version: 0.20.0
 description: Plans written as beads. Use when writing, validating or importing a phase plan into beads, or when pairing an ATM task with its bead (claim, start, close).
 requires:
   cli:

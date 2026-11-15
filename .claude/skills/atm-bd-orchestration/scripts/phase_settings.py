@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.11,<3.12"
+# requires-python = ">=3.11"
 # dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.8.0,<2"]
 # ///
 """Repository and phase settings used by atm-bd tools for their own calls."""
