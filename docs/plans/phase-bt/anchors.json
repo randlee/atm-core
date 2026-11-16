@@ -2862,14 +2862,14 @@
       "deterministic_check": "every issue in the release list (#979 #986 #928 #922 #907 #906 #904 #932 #935 #937 #938) appears in at least one atm-bt-* sprint bead title",
       "fixtures": {
         "pass": [
-          "The phase-bt sprint bead titles name every release-list issue: #938 in bt-1, #937 in bt-2 and bt-8, #979 and #986 in bt-3, #928 in bt-4, #922 #907 #906 in bt-5, #904 #932 in bt-6, #935 in bt-7."
+          "The release list is #938 #937 #979 #986 #928 #922 #907 #906 #904 #932 #935. `bd list --label phase-bt --type task` shows a sprint naming each one: bt-1 #938; bt-2 and bt-8 #937; bt-3 #979 #986; bt-4 #928; bt-5 #922 #907 #906; bt-6 #904 #932; bt-7 #935."
         ],
         "fail": [
-          "#935 from the release list appears in no sprint."
+          "The release list includes #935, and no phase-bt sprint names #935."
         ]
       },
       "question_overrides": {},
-      "version": 5,
+      "version": 7,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2934,6 +2934,20 @@
           "event": "updated",
           "fields": [
             "deterministic_check",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:56:08+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:56:22+00:00",
+          "event": "updated",
+          "fields": [
             "fixtures"
           ]
         }

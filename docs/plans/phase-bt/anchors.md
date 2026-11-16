@@ -645,7 +645,7 @@ Anchor: Each issue in the release list must have a sprint in the phase-bt plan t
 
 > Create sprints for all these items as outlined above.  Keep them short and focused.
 
-Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 5.
+Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 7.
 
 Summary: Only named issues
 
@@ -660,8 +660,8 @@ Excluded from (not judged; the cell passes as `excluded`):
 Beads: anchor `atm-sozk`, plan questions `atm-sozk.1`, dev questions `atm-sozk.2`
 
 Fixtures:
-- pass: The phase-bt sprint bead titles name every release-list issue: #938 in bt-1, #937 in bt-2 and bt-8, #979 and #986 in bt-3, #928 in bt-4, #922 #907 #906 in bt-5, #904 #932 in bt-6, #935 in bt-7.
-- fail: #935 from the release list appears in no sprint.
+- pass: The release list is #938 #937 #979 #986 #928 #922 #907 #906 #904 #932 #935. `bd list --label phase-bt --type task` shows a sprint naming each one: bt-1 #938; bt-2 and bt-8 #937; bt-3 #979 #986; bt-4 #928; bt-5 #922 #907 #906; bt-6 #904 #932; bt-7 #935.
+- fail: The release list includes #935, and no phase-bt sprint names #935.
 
 ## ANC-025
 
