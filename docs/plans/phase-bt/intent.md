@@ -19,7 +19,14 @@ Large plans get split into independent agent tasks with no shared context, and m
 
 - Hooks or scripts that enforce close order.
 - Explanatory prose; edits to existing text are surgical.
-- #909 and every other phase-bs follow-on.
+- Every open issue not named by a sprint below.
+
+## Added 2026-11-15 (Rand)
+
+- bt-3..bt-7: one short sprint per bug: #979 + #986 (sanity close chain), #928 (fully landed stack), #922 + #907 + #906 (typed pour and close inputs), #904 + #932 (scripts/tests in CI), #935 (console canonical top).
+- bt-8: no sprint is larger than one Jev call. A plan fits by splitting into subtask beads, or by moving code samples and reference documentation into reference beads that Jev never receives. `stage:subtask` and `stage:reference` both get their own checked models. Diff slicing in `jev_client` is removed (closes #982 and #497).
+- Open gap, not ruled: sanity for subtask beads.
+- Sprints stay short and focused: the repository already has far more code than it should.
 
 ## Anchors
 
