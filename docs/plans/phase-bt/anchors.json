@@ -2054,14 +2054,14 @@
       "deterministic_check": "validate-plan test: an oversized sprint bead fails with the typed oversize code",
       "fixtures": {
         "pass": [
-          "validate-plan refuses a sprint whose deliverable text exceeds MAX_REQUEST_BYTES."
+          "Every phase-bt sprint and subtask bead's deliverable text fits within MAX_REQUEST_BYTES: `validate-plan --phase bt` passes, and test_validate_plan_oversized_sprint shows an oversized sprint is refused."
         ],
         "fail": [
           "A sprint's deliverable text may exceed the Jev request limit; sanity splits it."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2139,6 +2139,20 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
           "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:55:17+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2187,14 +2201,14 @@
       "deterministic_check": "grep the refusal fix text and planning.md for both remedies",
       "fixtures": {
         "pass": [
-          "The oversize refusal says: split the sprint into subtask beads or move its code samples into reference beads."
+          "The oversize refusal tells the planner to split the sprint into subtask beads or move its code samples into reference beads; test_oversize_refusal_names_both_remedies asserts both remedies."
         ],
         "fail": [
-          "The oversize refusal says: trim the deliverable text until it fits."
+          "The oversize refusal tells the planner to trim the deliverable text until it fits."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2272,6 +2286,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
           "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2320,14 +2341,14 @@
       "deterministic_check": "test: a deliverable with a linked reference bead produces a Jev request that omits the reference text",
       "fixtures": {
         "pass": [
-          "jev_client builds the Jev request from the deliverable text and diff only; linked reference beads are left out."
+          "jev_client builds the Jev request from the deliverable text and diff only; test_reference_bead_not_in_jev_request asserts the request omits every linked reference bead's text."
         ],
         "fail": [
           "jev_client appends each linked reference bead's text to the Jev request evidence."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2405,6 +2426,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
           "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2453,14 +2481,14 @@
       "deterministic_check": "grep jev_client.py: no split_request or part evaluation; test: oversized request returns the typed refusal",
       "fixtures": {
         "pass": [
-          "split_request is deleted; an oversized request returns a typed refusal naming the subtask split."
+          "Work too large for one Jev request is split into subtask beads in the plan; split_request is deleted from jev_client, and test_oversized_request_refused shows an oversized request returns the typed refusal."
         ],
         "fail": [
           "An oversized request is cut by file and hunk into parts that are judged separately."
         ]
       },
       "question_overrides": {},
-      "version": 3,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2546,6 +2574,13 @@
             "statement"
           ],
           "previous_statement": "Work too large for one 96,000-byte Jev request must be split into subtask beads."
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2585,7 +2620,7 @@
       "source_ref": null,
       "statement": "The bead schema (bead_schema.py) must define a dedicated checked model for the stage:subtask bead stage.",
       "quote": "subtask and reference should both show up.",
-      "kind": "structural",
+      "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-11-15",
       "context": "planning session 2026-11-15 (phase-bt release scope)",
@@ -2594,14 +2629,14 @@
       "deterministic_check": "MODELS_BY_STAGE maps both labels to dedicated models; schema test rejects a malformed subtask and reference bead",
       "fixtures": {
         "pass": [
-          "MODELS_BY_STAGE maps stage:subtask to SubtaskBead, which checks its parent and difficulty."
+          "MODELS_BY_STAGE maps stage:subtask to SubtaskBead, which checks its parent and difficulty; test_subtask_bead_model rejects a subtask bead without a parent."
         ],
         "fail": [
           "stage:subtask stays mapped to the plain Bead model."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 3,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2679,6 +2714,14 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
           "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "kind",
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2727,14 +2770,14 @@
       "deterministic_check": "diff review: every added file and function traces to a named issue's deliverable",
       "fixtures": {
         "pass": [
-          "The sprint changes the two functions named by its issue and adds their tests."
+          "`git diff --stat main...HEAD` lists only sanity-split and tests/test_sanity_split.py: the two functions issue #986 names and their tests, with no new script, check or process step."
         ],
         "fail": [
           "The sprint also adds a helper script and a new lint check for related cases."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2777,6 +2820,20 @@
           "item": "atm-bt-2",
           "reason": "atm-bt-2 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling",
           "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:55:17+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2796,23 +2853,23 @@
       "source_ref": null,
       "statement": "Each issue in the release list must have a sprint in the phase-bt plan that names it.",
       "quote": "Create sprints for all these items as outlined above.  Keep them short and focused.",
-      "kind": "prohibition",
+      "kind": "structural",
       "stated_by": "Rand",
       "stated_at": "2026-11-15",
       "context": "planning session 2026-11-15 (phase-bt release scope)",
       "summary": "Only named issues",
       "scope": "every bt-3..bt-8 sprint diff and CHANGELOG entry",
-      "deterministic_check": "CHANGELOG bullets and commits reference only the sprint's named issues",
+      "deterministic_check": "every issue in the release list (#979 #986 #928 #922 #907 #906 #904 #932 #935 #937 #938) appears in exactly one atm-bt-* sprint bead title",
       "fixtures": {
         "pass": [
-          "bt-5 names #922, #907 and #906 and fixes exactly those."
+          "`bd list --label phase-bt --type task` titles name each release-list issue exactly once: #979 and #986 in bt-3, #928 in bt-4, #922 #907 #906 in bt-5, #904 #932 in bt-6, #935 in bt-7, #937 in bt-2 and bt-8, #938 in bt-1."
         ],
         "fail": [
           "#935 from the release list appears in no sprint."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2855,6 +2912,22 @@
           "item": "atm-bt-2",
           "reason": "atm-bt-2 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling",
           "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "kind",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:55:18+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
@@ -2874,7 +2947,7 @@
       "source_ref": null,
       "statement": "The bead schema (bead_schema.py) must define a dedicated checked model for the stage:reference bead stage.",
       "quote": "subtask and reference should both show up.",
-      "kind": "structural",
+      "kind": "directive",
       "stated_by": "Rand",
       "stated_at": "2026-11-15",
       "context": "planning session 2026-11-15 (phase-bt release scope)",
@@ -2883,14 +2956,14 @@
       "deterministic_check": "MODELS_BY_STAGE maps stage:reference to a dedicated model; schema test rejects a malformed reference bead",
       "fixtures": {
         "pass": [
-          "MODELS_BY_STAGE maps stage:reference to ReferenceBead, which checks the bead it is linked from."
+          "MODELS_BY_STAGE maps stage:reference to ReferenceBead, which checks the bead it is linked from; test_reference_bead_model rejects an unlinked reference bead."
         ],
         "fail": [
-          "Reference material is kept in a stage:plan notes bead; no stage:reference exists."
+          "bead_schema.py has no stage:reference model; reference material is stored as a plain stage:plan bead."
         ]
       },
       "question_overrides": {},
-      "version": 2,
+      "version": 4,
       "status": "locked",
       "promoted_to": null,
       "beads": {
@@ -2968,6 +3041,21 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
           "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "kind",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:55:18+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
         }
       ],
       "exclude": [
