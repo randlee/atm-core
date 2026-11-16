@@ -23,6 +23,14 @@ Intent: `docs/plans/phase-bt/intent.md`
 | ANC-015 | locked | One QA bead per sprint | 2026-11-07 |
 | ANC-016 | locked | No plan-anchoring mention | 2026-11-07 |
 | ANC-017 | locked | Necessary words only | 2026-11-07 |
+| ANC-018 | locked | Sprint fits one Jev call | 2026-11-15 |
+| ANC-019 | locked | Subtask or reference split | 2026-11-15 |
+| ANC-020 | locked | Jev skips reference beads | 2026-11-15 |
+| ANC-021 | locked | No diff slicing | 2026-11-15 |
+| ANC-022 | locked | Subtask stage typed | 2026-11-15 |
+| ANC-023 | locked | Short focused sprints | 2026-11-15 |
+| ANC-024 | locked | Only named issues | 2026-11-15 |
+| ANC-025 | locked | Reference stage typed | 2026-11-15 |
 
 ## ANC-001
 
@@ -35,6 +43,13 @@ Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-
 Summary: Split too-large plans
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-te91`, plan questions `atm-te91.1`, dev questions `atm-te91.2`
 
@@ -56,6 +71,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-d42v`, plan questions `atm-d42v.1`, dev questions `atm-d42v.2`
 
@@ -75,6 +95,13 @@ Summary: Child beads per subagent
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+
 Beads: anchor `atm-u194`, plan questions `atm-u194.1`, dev questions `atm-u194.2`
 
 Fixtures:
@@ -93,6 +120,13 @@ Summary: Recommend child beads
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+
 Beads: anchor `atm-w53l`, plan questions `atm-w53l.1`, dev questions `atm-w53l.2`
 
 Fixtures:
@@ -110,6 +144,13 @@ Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-
 Summary: Model class per child
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-w0y3`, plan questions `atm-w0y3.1`, dev questions `atm-w0y3.2`
 
@@ -131,6 +172,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-umb4`, plan questions `atm-umb4.1`, dev questions `atm-umb4.2`
 
@@ -152,6 +198,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-66vl`, plan questions `atm-66vl.1`, dev questions `atm-66vl.2`
 
@@ -173,6 +224,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-kha6`, plan questions `atm-kha6.1`, dev questions `atm-kha6.2`
 
@@ -194,6 +250,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-plmh`, plan questions `atm-plmh.1`, dev questions `atm-plmh.2`
 
@@ -215,6 +276,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-ff88`, plan questions `atm-ff88.1`, dev questions `atm-ff88.2`
 
@@ -236,6 +302,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-m1dj`, plan questions `atm-m1dj.1`, dev questions `atm-m1dj.2`
 
@@ -257,6 +328,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-q2b3`, plan questions `atm-q2b3.1`, dev questions `atm-q2b3.2`
 
@@ -278,6 +354,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938) and plans no sanity beads; sprint sanity beads are atm-bt-2 scope
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-tyf5`, plan questions `atm-tyf5.1`, dev questions `atm-tyf5.2`
 
@@ -296,6 +377,13 @@ Said by Rand, planning session 2026-11-07, issue atm-bd#937 subtask beads, 2026-
 Summary: Commit per dev bead
 
 Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templates and hooks for subtask beads (#937)
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-ggaq`, plan questions `atm-ggaq.1`, dev questions `atm-ggaq.2`
 
@@ -317,6 +405,11 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-p2kg`, plan questions `atm-p2kg.1`, dev questions `atm-p2kg.2`
 
@@ -338,6 +431,13 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Deterministic check to pair with the development gate: grep -ri plan-anchoring plugins/atm-bd-orchestration returns nothing
 
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+
 Beads: anchor `atm-nmob`, plan questions `atm-nmob.1`, dev questions `atm-nmob.2`
 
 Fixtures:
@@ -358,9 +458,236 @@ Scope: atm-bd-orchestration planning guidance, bead schema, dev/sanity/QA templa
 
 Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-1`: atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2
+- `atm-bt-3`: atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-4`: atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 
 Beads: anchor `atm-eynt`, plan questions `atm-eynt.1`, dev questions `atm-eynt.2`
 
 Fixtures:
 - pass: Every sentence this sprint adds to a prompt or task template for child beads carries only necessary words.
 - fail: The dev template adds a paragraph explaining why child beads exist.
+
+## ANC-018
+
+Anchor: Every sprint and subtask bead's deliverable text must fit within jev_client's 96,000-byte Jev request limit (MAX_REQUEST_BYTES).
+
+> I don't want sprints larger than Jev context.
+
+Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 2.
+
+Summary: Sprint fits one Jev call
+
+Scope: edits validate-plan, bead_schema.py, or the plan size rule in planning.md
+
+Deterministic check to pair with the development gate: validate-plan test: an oversized sprint bead fails with the typed oversize code
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-2`: atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-3`: atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-4`: atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-5`: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-6`: atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-7`: atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+
+Beads: anchor `atm-u5h6`, plan questions `atm-u5h6.1`, dev questions `atm-u5h6.2`
+
+Fixtures:
+- pass: validate-plan refuses a sprint whose deliverable text exceeds MAX_REQUEST_BYTES.
+- fail: A sprint's deliverable text may exceed the Jev request limit; sanity splits it.
+
+## ANC-019
+
+Anchor: A sprint larger than the Jev context must be reduced by splitting it into subtask beads or by moving its code samples or reference documentation into reference beads.
+
+> I don't want sprints larger than Jev context.  Sub-tasks OR reference beads with code samples (or reference documentation) which would be skipped by Jev.
+
+Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 2.
+
+Summary: Subtask or reference split
+
+Scope: edits the oversize refusal text in validate-plan or jev_client, or the size rule in planning.md
+
+Deterministic check to pair with the development gate: grep the refusal fix text and planning.md for both remedies
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-2`: atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-3`: atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-4`: atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-5`: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-6`: atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-7`: atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+
+Beads: anchor `atm-opat`, plan questions `atm-opat.1`, dev questions `atm-opat.2`
+
+Fixtures:
+- pass: The oversize refusal says: split the sprint into subtask beads or move its code samples into reference beads.
+- fail: The oversize refusal says: trim the deliverable text until it fits.
+
+## ANC-020
+
+Anchor: The content of a reference bead (a bead holding code samples or reference documentation for a sprint) must never be included in a request sent to the Jev sanity judge.
+
+> I don't want sprints larger than Jev context.  Sub-tasks OR reference beads with code samples (or reference documentation) which would be skipped by Jev.
+
+Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 2.
+
+Summary: Jev skips reference beads
+
+Scope: edits jev_client.py request building or the reference bead model
+
+Deterministic check to pair with the development gate: test: a deliverable with a linked reference bead produces a Jev request that omits the reference text
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-2`: atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-3`: atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-4`: atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-5`: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-6`: atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-7`: atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+
+Beads: anchor `atm-zazu`, plan questions `atm-zazu.1`, dev questions `atm-zazu.2`
+
+Fixtures:
+- pass: jev_client builds the Jev request from the deliverable text and diff only; linked reference beads are left out.
+- fail: jev_client appends each linked reference bead's text to the Jev request evidence.
+
+## ANC-021
+
+Anchor: Work too large for one 96,000-byte Jev request must be split into subtask beads when the plan is written; jev_client must never cut it into diff slices.
+
+> This won't work. We need to split into sub-tasks
+
+Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 3.
+
+Summary: No diff slicing
+
+Scope: edits jev_client.py oversize handling or part evaluation
+
+Deterministic check to pair with the development gate: grep jev_client.py: no split_request or part evaluation; test: oversized request returns the typed refusal
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-2`: atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-3`: atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-4`: atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-5`: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-6`: atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-7`: atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+
+Beads: anchor `atm-v6qf`, plan questions `atm-v6qf.1`, dev questions `atm-v6qf.2`
+
+Fixtures:
+- pass: split_request is deleted; an oversized request returns a typed refusal naming the subtask split.
+- fail: An oversized request is cut by file and hunk into parts that are judged separately.
+
+## ANC-022
+
+Anchor: The bead schema (bead_schema.py) must define a dedicated checked model for the stage:subtask bead stage.
+
+> subtask and reference should both show up.
+
+Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 2.
+
+Summary: Subtask stage typed
+
+Scope: edits bead_schema.py stage models
+
+Deterministic check to pair with the development gate: MODELS_BY_STAGE maps both labels to dedicated models; schema test rejects a malformed subtask and reference bead
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-2`: atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-3`: atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-4`: atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-5`: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-6`: atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-7`: atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+
+Beads: anchor `atm-eb8i`, plan questions `atm-eb8i.1`, dev questions `atm-eb8i.2`
+
+Fixtures:
+- pass: MODELS_BY_STAGE maps stage:subtask to SubtaskBead, which checks its parent and difficulty.
+- fail: stage:subtask stays mapped to the plain Bead model.
+
+## ANC-023
+
+Anchor: Each sprint's diff must add only the code its named issues require, with no new scripts, checks or process steps.
+
+> Keep them short and focused.  This repo already has 10x more code than it should.
+
+Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 2.
+
+Summary: Short focused sprints
+
+Scope: every bt-3..bt-8 sprint diff
+
+Deterministic check to pair with the development gate: diff review: every added file and function traces to a named issue's deliverable
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling
+- `atm-bt-2`: atm-bt-2 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling
+
+Beads: anchor `atm-uav5`, plan questions `atm-uav5.1`, dev questions `atm-uav5.2`
+
+Fixtures:
+- pass: The sprint changes the two functions named by its issue and adds their tests.
+- fail: The sprint also adds a helper script and a new lint check for related cases.
+
+## ANC-024
+
+Anchor: Each issue in the release list must have a sprint in the phase-bt plan that names it.
+
+> Create sprints for all these items as outlined above.  Keep them short and focused.
+
+Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 2.
+
+Summary: Only named issues
+
+Scope: every bt-3..bt-8 sprint diff and CHANGELOG entry
+
+Deterministic check to pair with the development gate: CHANGELOG bullets and commits reference only the sprint's named issues
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling
+- `atm-bt-2`: atm-bt-2 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling
+
+Beads: anchor `atm-sozk`, plan questions `atm-sozk.1`, dev questions `atm-sozk.2`
+
+Fixtures:
+- pass: bt-5 names #922, #907 and #906 and fixes exactly those.
+- fail: #935 from the release list appears in no sprint.
+
+## ANC-025
+
+Anchor: The bead schema (bead_schema.py) must define a dedicated checked model for the stage:reference bead stage.
+
+> subtask and reference should both show up.
+
+Said by Rand, planning session 2026-11-15 (phase-bt release scope), 2026-11-15. Status: locked. Version 2.
+
+Summary: Reference stage typed
+
+Scope: edits bead_schema.py stage models
+
+Deterministic check to pair with the development gate: MODELS_BY_STAGE maps stage:reference to a dedicated model; schema test rejects a malformed reference bead
+
+Excluded from (not judged; the cell passes as `excluded`):
+- `atm-bt-1`: atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-2`: atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-3`: atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-4`: atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-5`: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-6`: atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+- `atm-bt-7`: atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8
+
+Beads: anchor `atm-8sxr`, plan questions `atm-8sxr.1`, dev questions `atm-8sxr.2`
+
+Fixtures:
+- pass: MODELS_BY_STAGE maps stage:reference to ReferenceBead, which checks the bead it is linked from.
+- fail: Reference material is kept in a stage:plan notes bead; no stage:reference exists.
