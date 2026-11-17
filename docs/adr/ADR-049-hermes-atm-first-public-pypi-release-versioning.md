@@ -13,7 +13,8 @@ version via `version.workspace = true`; the published sc-lint `sc_lint.check_ver
 step is the canonical package-version alignment gate, established in PR #897
 after consolidating two earlier duplicate/conflicting checks. The separate
 `.just/check_python_dependency_pins.py` check covers sibling dependency pins
-while sc-lint#783 remains open. The workspace is currently at `1.4.2`.
+until sc-lint#982 ships (sc-lint#783's `python.dependency_specifier`
+does not fail an unpinned sibling and has no manifest glob discovery). The workspace is currently at `1.4.2`.
 
 quality-mgr's QA-RELEASE-READINESS-PYPI-1 investigation flagged this as an
 unresolved gap: publishing a package's *first* public release as `1.4.2`
@@ -89,4 +90,4 @@ version mapping, and no change to `version.workspace = true` or the published
 - The published `sc_lint.check_version_sync` check continues to pass; this
   ADR introduces no new version-comparison logic to test. Sibling dependency
   pin enforcement remains in `.just/check_python_dependency_pins.py` pending
-  sc-lint#783.
+  sc-lint#982.
