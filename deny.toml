@@ -4,6 +4,10 @@ no-default-features = false
 
 [advisories]
 yanked = "deny"
+# chrono 0.4.45 is a direct dependency of six workspace crates and also
+# comes through cron 0.17. Replacement with jiff is tracked in
+# randlee/sc-runtime#151; remove this entry when chrono is gone from Cargo.lock.
+ignore = ["RUSTSEC-2026-0543"]
 
 [bans]
 multiple-versions = "allow"
