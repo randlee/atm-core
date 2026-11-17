@@ -110,16 +110,19 @@ default scratch root, it does not error.
 
 `resolve_atm_temp` reads `ATM_TEMP` as `env.var("ATM_TEMP")` — a **method
 call** on the `EnvSource` trait object, not the free-function path form
-(`env::var(...)` / `std::env::var(...)`) that `.just/check_env_var_boundary.py`'s
-`ENV_CALL_RE` matches (anchored on a literal `::`). No allowlist entry or
-`boundary_reader_functions` registration is required or appropriate: the
-`boundary_reader_functions` list's actual effect is the opposite of an
-exemption — every call to a *listed* function from another file in a
-restricted crate root is flagged. `ATM_TEMP` is still added to
-`forbidden_env_vars` in `.just/lint-config.toml` as defensive coverage: it
-costs nothing today (there is no offending call site to allowlist) and
-catches a future direct `env::var("ATM_TEMP")` call added outside the
-`EnvSource` seam.
+(`env::var(...)` / `std::env::var(...)`) that sc-lint's `SCB-ENV-001` matches
+(its detection is syntactic and does not follow method calls). No exemption
+or `boundary_reader_functions` registration is required or appropriate.
+`ATM_TEMP` is still listed in `forbidden_env_vars` (the boundary analyzer's
+`env_var_boundary` policy in `sc-lint.toml`) as defensive coverage: it costs
+nothing today (there is no offending call site) and catches a future direct
+`env::var("ATM_TEMP")` call added outside the `EnvSource` seam.
+
+Enforcement is split until sc-lint#981 ships: `SCB-ENV-001` reports direct,
+forwarding-helper and same-file-wrapper reads of a forbidden variable outside
+the configured reader functions; `.just/check_env_var_boundary.py` keeps only
+the rule sc-lint lacks, that a call to a reader function (or a same-file
+wrapper of one) from another file in a restricted crate root is a violation.
 
 ### (b) Sweep policy: TTL-only, 30 days, no ack coupling
 
