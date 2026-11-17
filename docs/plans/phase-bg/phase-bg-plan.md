@@ -7,7 +7,7 @@ Rendered from the beads plan (`bd show`); the beads are authoritative.
 Open items:
 - BG4-2: the SCB-RUNTIME-001/002 finding-set diff was not recorded before the vendored analyzer was deleted; a later run at `deb2cec42` found no SCB-RUNTIME-001/002 findings from either analyzer.
 - BG6-4: speed evidence is open (bead `atm-phase-bg-readiness-f5`).
-- bg-8 (bead `atm-bg-8`) moves to sc-lint 0.8.9: `SCB-ENV-001` replaces the direct-read part of `.just/check_env_var_boundary.py` (the cross-file reader-call rule stays until [sc-lint#981](https://github.com/randlee/sc-lint/issues/981)), and `sc_lint.check_version_sync` (`python.dependency_specifier`, [sc-lint#783](https://github.com/randlee/sc-lint/issues/783)) replaces `.just/check_python_dependency_pins.py`.
+- bg-8 (bead `atm-bg-8`) moves to sc-lint 0.8.9: `SCB-ENV-001` replaces the direct-read part of `.just/check_env_var_boundary.py`; the cross-file reader-call rule stays until [sc-lint#981](https://github.com/randlee/sc-lint/issues/981). `.just/check_python_dependency_pins.py` stays until [sc-lint#982](https://github.com/randlee/sc-lint/issues/982) (unpinned sibling, manifest discovery).
 
 ---
 
