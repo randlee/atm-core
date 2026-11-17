@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="phase-root-bead" content="atm-phase-bg">
+  <meta name="wyvern:width" content="1536">
+  <meta name="wyvern:height" content="864">
+  <title>Sprint review · Phase BG</title>
+  <script id="wyvern-initial-size">
+    (() => {
+      function sizeWindow(event) {
+        const bounds = (event && event.detail) || window.__wyvernViewportBounds || {};
+        const screen = window.screen || {};
+        const width = Math.round(0.8 * (bounds.available_width || screen.availWidth || 1920));
+        const height = Math.round(0.8 * (bounds.available_height || screen.availHeight || 1080));
+        document.querySelector('meta[name="wyvern:width"]').content = String(width);
+        document.querySelector('meta[name="wyvern:height"]').content = String(height);
+        if (window.ipc && typeof window.ipc.postMessage === 'function') {
+          window.ipc.postMessage('resize:' + width + 'x' + height);
+        }
+      }
+      window.addEventListener('wyvern:viewport-bounds', sizeWindow);
+      sizeWindow();
+    })();
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #172b43; background: white; font: 14px system-ui, sans-serif; }
+    header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px; background: #f8fafc; border-bottom: 1px solid #dbe3ed; }
+    h1 { margin: 0 auto 0 0; font-size: 17px; }
+    button { font: inherit; color: inherit; background: white; border: 1px solid #a8b7c9;
+      border-radius: 5px; padding: 5px 12px; cursor: pointer; }
+    button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+    output { min-width: 45px; text-align: center; }
+    main { overflow: auto; height: calc(100vh - 59px); padding: 12px; }
+    #diagram { width: 100%; }
+    #diagram > svg { display: block; width: 100%; height: auto; }
+    @media print { header { position: static; } button, output { display: none; }
+      main { height: auto; overflow: visible; } #diagram { width: 100% !important; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Sprint review · Phase BG</h1>
+    <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+    <output id="zoom-level" aria-live="polite">100%</output>
+    <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+    <button id="fit" type="button">Fit</button>
+  </header>
+  <main aria-label="Sprint dependency diagram">
+    <div id="diagram"><svg xmlns="http://www.w3.org/2000/svg" width="2562.0pt" height="602.0pt" viewBox="0.0 0.0 2562.0 602.0">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(28.8 484.8)">
+<title>execution</title>
+<polygon fill="white" stroke="none" points="-28.8,28.8 -28.8,-484.8 2533.43,-484.8 2533.43,28.8 -28.8,28.8" />
+<text xml:space="preserve" text-anchor="middle" x="1252.31" y="-434" font-family="Arial" font-size="20.00">Phase BG — execution order</text>
+<text xml:space="preserve" text-anchor="middle" x="1252.31" y="-410" font-family="Arial" font-size="20.00">Sprint completes → its gate passes → downstream sprint starts</text>
+<g id="clust1" class="cluster">
+<title>cluster_atm-bg-1.group-dev</title>
+</g>
+<g id="clust2" class="cluster">
+<title>cluster_atm-bg-2.group-dev</title>
+</g>
+<g id="clust3" class="cluster">
+<title>cluster_atm-bg-3.group-dev</title>
+</g>
+<g id="clust4" class="cluster">
+<title>cluster_atm-bg-4.group-dev</title>
+</g>
+<g id="clust5" class="cluster">
+<title>cluster_atm-bg-5.group-dev</title>
+</g>
+<g id="clust6" class="cluster">
+<title>cluster_atm-bg-6.group-dev</title>
+</g>
+<g id="clust7" class="cluster">
+<title>cluster_atm-bg-7.group-dev</title>
+</g>
+<g id="clust8" class="cluster">
+<title>cluster_atm-bg-8.group-dev</title>
+</g>
+<g id="clust9" class="cluster">
+<title>cluster_atm-bg-9.group-dev</title>
+</g>
+
+<g id="node1" class="node">
+<title>atm-bg-1.group-dev — Done at 8d68bb5e9 (PR 1779 + 1780); sanity round 2 D1 D3 D4 D5 done, D2 overruled by lead ruling atm-bg-1.group-dev.3; Sanity round 2 at 8d68bb5e9 (atm-sanity msg 01M4Q1F57NMMTA5EGAZC3Q0H9M): D1 D3 D4 D5 done; only D2 failed on the clippy argv form, overruled by lead ruling and AC amended (atm-bg-1.group-dev.3). No third round.</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M135.45,-222C135.45,-222 28,-222 28,-222 22,-222 16,-216 16,-210 16,-210 16,-198 16,-198 16,-192 22,-186 28,-186 28,-186 135.45,-186 135.45,-186 141.45,-186 147.45,-192 147.45,-198 147.45,-198 147.45,-210 147.45,-210 147.45,-216 141.45,-222 135.45,-222" />
+<text xml:space="preserve" text-anchor="middle" x="81.72" y="-200.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-1.group-dev</text>
+</g>
+
+<g id="node2" class="node">
+<title>atm-bg-1.group-sanity — Sanity round 2 at 8d68bb5e9 (atm-sanity msg 01M4Q1F57NMMTA5EGAZC3Q0H9M): D1 D3 D4 D5 done; only D2 failed on the clippy argv form, overruled by lead ruling and AC amended (atm-bg-1.group-dev.3). No third round.; completed sanity iterations: 2</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M388.24,-210.84C388.24,-210.84 354.3,-234.39 354.3,-234.39 349.37,-237.81 338.44,-241.23 332.44,-241.23 332.44,-241.23 249.11,-241.23 249.11,-241.23 243.11,-241.23 232.18,-237.81 227.25,-234.39 227.25,-234.39 193.31,-210.84 193.31,-210.84 188.38,-207.42 188.38,-200.58 193.31,-197.16 193.31,-197.16 227.25,-173.61 227.25,-173.61 232.18,-170.19 243.11,-166.77 249.11,-166.77 249.11,-166.77 332.44,-166.77 332.44,-166.77 338.44,-166.77 349.37,-170.19 354.3,-173.61 354.3,-173.61 388.24,-197.16 388.24,-197.16 393.17,-200.58 393.17,-207.42 388.24,-210.84" />
+<text xml:space="preserve" text-anchor="middle" x="290.78" y="-207.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-1.group-dev</text>
+<text xml:space="preserve" text-anchor="middle" x="290.78" y="-192.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge1" class="edge">
+<title>atm-bg-1.group-dev-&gt;atm-bg-1.group-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M147.67,-204C156.12,-204 164.97,-204 173.94,-204" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="173.71,-206.63 181.21,-204 173.71,-201.38 173.71,-206.63" />
+</g>
+
+<g id="node3" class="node">
+<title>atm-bg-2.group-dev — LEAD RULING: D1, D2 done; D3 shim deletion overruled as bg-6 fence handoff; lint-only #373. Layer PR #1797 @ d6f0d8cff.; LEAD RULING: D1, D2 done; D3 shim deletion overruled as bg-6 fence handoff; lint-only #373. Layer PR #1797 @ d6f0d8cff.</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M553.55,-355C553.55,-355 446.1,-355 446.1,-355 440.1,-355 434.1,-349 434.1,-343 434.1,-343 434.1,-331 434.1,-331 434.1,-325 440.1,-319 446.1,-319 446.1,-319 553.55,-319 553.55,-319 559.55,-319 565.55,-325 565.55,-331 565.55,-331 565.55,-343 565.55,-343 565.55,-349 559.55,-355 553.55,-355" />
+<text xml:space="preserve" text-anchor="middle" x="499.83" y="-333.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-2.group-dev</text>
+</g>
+
+<g id="edge2" class="edge">
+<title>atm-bg-1.group-sanity-&gt;atm-bg-2.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M342.49,-241.61C367.24,-259.42 397.74,-280.55 426.1,-298 435.16,-303.57 445.08,-309.19 454.6,-314.36" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="453.09,-316.53 460.94,-317.76 455.57,-311.9 453.09,-316.53" />
+</g>
+
+<g id="node5" class="node">
+<title>atm-bg-3.group-dev — LEAD RULING ROUND_CAP: D1, D4 done; D2, D3 overruled as bg-6 fence handoffs; lint-only failure inherited #373. Layer PR #1801.; LEAD RULING ROUND_CAP: D1, D4 done; D2, D3 overruled as bg-6 fence handoffs; lint-only failure inherited #373. Layer PR #1801.</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M553.55,-257C553.55,-257 446.1,-257 446.1,-257 440.1,-257 434.1,-251 434.1,-245 434.1,-245 434.1,-233 434.1,-233 434.1,-227 440.1,-221 446.1,-221 446.1,-221 553.55,-221 553.55,-221 559.55,-221 565.55,-227 565.55,-233 565.55,-233 565.55,-245 565.55,-245 565.55,-251 559.55,-257 553.55,-257" />
+<text xml:space="preserve" text-anchor="middle" x="499.83" y="-235.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-3.group-dev</text>
+</g>
+
+<g id="edge4" class="edge">
+<title>atm-bg-1.group-sanity-&gt;atm-bg-3.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M377.79,-218.54C393.39,-221.18 409.54,-223.91 424.76,-226.48" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="424.06,-229.02 431.89,-227.69 424.94,-223.85 424.06,-229.02" />
+</g>
+
+<g id="node7" class="node">
+<title>atm-bg-4.group-dev — Lead close after overrule: delivered #373 filing + vendored runtime-waits check marked delete when randlee/sc-lint#373 ships (PR #1790). Remaining BG4 deliverables blocked by #373 and are bg-6 ACs (sanity children .1-.4 overruled).; Sanity FAIL overruled by lead: all four undone deliverables are blocked by randlee/sc-lint#373 and are bg-6 ACs; see atm-bg-4.group-dev.1-.4 close reasons.</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M553.55,-178C553.55,-178 446.1,-178 446.1,-178 440.1,-178 434.1,-172 434.1,-166 434.1,-166 434.1,-154 434.1,-154 434.1,-148 440.1,-142 446.1,-142 446.1,-142 553.55,-142 553.55,-142 559.55,-142 565.55,-148 565.55,-154 565.55,-154 565.55,-166 565.55,-166 565.55,-172 559.55,-178 553.55,-178" />
+<text xml:space="preserve" text-anchor="middle" x="499.83" y="-156.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-4.group-dev</text>
+</g>
+
+<g id="edge6" class="edge">
+<title>atm-bg-1.group-sanity-&gt;atm-bg-4.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M373.61,-186.61C390.65,-182.99 408.5,-179.19 425.22,-175.64" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="425.36,-178.3 432.15,-174.17 424.27,-173.16 425.36,-178.3" />
+</g>
+
+<g id="node9" class="node">
+<title>atm-bg-5.group-dev — SANITY.ROUND_CAP lead ruling: in-fence bg-5 deliverables done at 737a61820 (PR #1786 + #1792, just lint exit 0); remaining Justfile/run_lint.py wiring handed to atm-bg-6.; Round-2 FAIL overruled at SANITY.ROUND_CAP: all three undone items are fence-blocked wiring handed to atm-bg-6; D3/D4 done; just lint exit 0.</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M553.55,-80C553.55,-80 446.1,-80 446.1,-80 440.1,-80 434.1,-74 434.1,-68 434.1,-68 434.1,-56 434.1,-56 434.1,-50 440.1,-44 446.1,-44 446.1,-44 553.55,-44 553.55,-44 559.55,-44 565.55,-50 565.55,-56 565.55,-56 565.55,-68 565.55,-68 565.55,-74 559.55,-80 553.55,-80" />
+<text xml:space="preserve" text-anchor="middle" x="499.83" y="-58.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-5.group-dev</text>
+</g>
+
+<g id="edge8" class="edge">
+<title>atm-bg-1.group-sanity-&gt;atm-bg-5.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M337.8,-166.39C363.19,-146.33 395.66,-121.78 426.1,-102 435.26,-96.05 445.37,-90.12 455.06,-84.71" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="456.24,-87.06 461.55,-81.15 453.72,-82.46 456.24,-87.06" />
+</g>
+
+<g id="node4" class="node">
+<title>atm-bg-2.group-sanity — LEAD RULING: D1, D2 done; D3 shim deletion overruled as bg-6 fence handoff; lint-only #373. Layer PR #1797 @ d6f0d8cff.; completed sanity iterations: 1</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M806.35,-353.84C806.35,-353.84 772.4,-377.39 772.4,-377.39 767.47,-380.81 756.54,-384.23 750.54,-384.23 750.54,-384.23 667.22,-384.23 667.22,-384.23 661.22,-384.23 650.29,-380.81 645.36,-377.39 645.36,-377.39 611.41,-353.84 611.41,-353.84 606.48,-350.42 606.48,-343.58 611.41,-340.16 611.41,-340.16 645.36,-316.61 645.36,-316.61 650.29,-313.19 661.22,-309.77 667.22,-309.77 667.22,-309.77 750.54,-309.77 750.54,-309.77 756.54,-309.77 767.47,-313.19 772.4,-316.61 772.4,-316.61 806.35,-340.16 806.35,-340.16 811.28,-343.58 811.28,-350.42 806.35,-353.84" />
+<text xml:space="preserve" text-anchor="middle" x="708.88" y="-350.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-2.group-dev</text>
+<text xml:space="preserve" text-anchor="middle" x="708.88" y="-335.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge3" class="edge">
+<title>atm-bg-2.group-dev-&gt;atm-bg-2.group-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M565.77,-340.14C576.35,-340.65 587.55,-341.19 598.84,-341.73" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="598.54,-344.35 606.16,-342.09 598.8,-339.1 598.54,-344.35" />
+</g>
+
+<g id="node11" class="node">
+<title>atm-bg-6.group-dev — dev complete at ad9cbfd293c5a16ba800d318a93748f28a479e0e; sanity PASS recorded</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M971.66,-218C971.66,-218 864.21,-218 864.21,-218 858.21,-218 852.21,-212 852.21,-206 852.21,-206 852.21,-194 852.21,-194 852.21,-188 858.21,-182 864.21,-182 864.21,-182 971.66,-182 971.66,-182 977.66,-182 983.66,-188 983.66,-194 983.66,-194 983.66,-206 983.66,-206 983.66,-212 977.66,-218 971.66,-218" />
+<text xml:space="preserve" text-anchor="middle" x="917.93" y="-196.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-6.group-dev</text>
+</g>
+
+<g id="edge10" class="edge">
+<title>atm-bg-2.group-sanity-&gt;atm-bg-6.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M780.9,-321.91C795.81,-315.2 811.01,-307.2 824.21,-298 853.25,-277.74 880.33,-247.24 897.63,-225.65" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="899.68,-227.3 902.26,-219.78 895.55,-224.05 899.68,-227.3" />
+</g>
+
+<g id="node6" class="node">
+<title>atm-bg-3.group-sanity — LEAD RULING ROUND_CAP: D1, D4 done; D2, D3 overruled as bg-6 fence handoffs; lint-only failure inherited #373. Layer PR #1801.; completed sanity iterations: 2</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M806.35,-255.84C806.35,-255.84 772.4,-279.39 772.4,-279.39 767.47,-282.81 756.54,-286.23 750.54,-286.23 750.54,-286.23 667.22,-286.23 667.22,-286.23 661.22,-286.23 650.29,-282.81 645.36,-279.39 645.36,-279.39 611.41,-255.84 611.41,-255.84 606.48,-252.42 606.48,-245.58 611.41,-242.16 611.41,-242.16 645.36,-218.61 645.36,-218.61 650.29,-215.19 661.22,-211.77 667.22,-211.77 667.22,-211.77 750.54,-211.77 750.54,-211.77 756.54,-211.77 767.47,-215.19 772.4,-218.61 772.4,-218.61 806.35,-242.16 806.35,-242.16 811.28,-245.58 811.28,-252.42 806.35,-255.84" />
+<text xml:space="preserve" text-anchor="middle" x="708.88" y="-252.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-3.group-dev</text>
+<text xml:space="preserve" text-anchor="middle" x="708.88" y="-237.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge5" class="edge">
+<title>atm-bg-3.group-dev-&gt;atm-bg-3.group-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M565.77,-242.14C576.35,-242.65 587.55,-243.19 598.84,-243.73" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="598.54,-246.35 606.16,-244.09 598.8,-241.1 598.54,-246.35" />
+</g>
+
+<g id="edge11" class="edge">
+<title>atm-bg-3.group-sanity-&gt;atm-bg-6.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M789.64,-230.13C807.2,-225.97 825.72,-221.59 843.03,-217.49" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="843.58,-220.06 850.27,-215.78 842.37,-214.95 843.58,-220.06" />
+</g>
+
+<g id="node8" class="node">
+<title>atm-bg-4.group-sanity — Sanity FAIL overruled by lead: all four undone deliverables are blocked by randlee/sc-lint#373 and are bg-6 ACs; see atm-bg-4.group-dev.1-.4 close reasons.; completed sanity iterations: 1</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M806.35,-157.84C806.35,-157.84 772.4,-181.39 772.4,-181.39 767.47,-184.81 756.54,-188.23 750.54,-188.23 750.54,-188.23 667.22,-188.23 667.22,-188.23 661.22,-188.23 650.29,-184.81 645.36,-181.39 645.36,-181.39 611.41,-157.84 611.41,-157.84 606.48,-154.42 606.48,-147.58 611.41,-144.16 611.41,-144.16 645.36,-120.61 645.36,-120.61 650.29,-117.19 661.22,-113.77 667.22,-113.77 667.22,-113.77 750.54,-113.77 750.54,-113.77 756.54,-113.77 767.47,-117.19 772.4,-120.61 772.4,-120.61 806.35,-144.16 806.35,-144.16 811.28,-147.58 811.28,-154.42 806.35,-157.84" />
+<text xml:space="preserve" text-anchor="middle" x="708.88" y="-154.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-4.group-dev</text>
+<text xml:space="preserve" text-anchor="middle" x="708.88" y="-139.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge7" class="edge">
+<title>atm-bg-4.group-dev-&gt;atm-bg-4.group-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M565.77,-157.18C576.06,-156.73 586.94,-156.26 597.91,-155.78" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="598.02,-158.4 605.4,-155.45 597.79,-153.16 598.02,-158.4" />
+</g>
+
+<g id="edge12" class="edge">
+<title>atm-bg-4.group-sanity-&gt;atm-bg-6.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M789.64,-169.87C807.2,-174.03 825.72,-178.41 843.03,-182.51" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="842.37,-185.05 850.27,-184.22 843.58,-179.94 842.37,-185.05" />
+</g>
+
+<g id="node10" class="node">
+<title>atm-bg-5.group-sanity — Round-2 FAIL overruled at SANITY.ROUND_CAP: all three undone items are fence-blocked wiring handed to atm-bg-6; D3/D4 done; just lint exit 0.; completed sanity iterations: 2</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M806.35,-59.84C806.35,-59.84 772.4,-83.39 772.4,-83.39 767.47,-86.81 756.54,-90.23 750.54,-90.23 750.54,-90.23 667.22,-90.23 667.22,-90.23 661.22,-90.23 650.29,-86.81 645.36,-83.39 645.36,-83.39 611.41,-59.84 611.41,-59.84 606.48,-56.42 606.48,-49.58 611.41,-46.16 611.41,-46.16 645.36,-22.61 645.36,-22.61 650.29,-19.19 661.22,-15.77 667.22,-15.77 667.22,-15.77 750.54,-15.77 750.54,-15.77 756.54,-15.77 767.47,-19.19 772.4,-22.61 772.4,-22.61 806.35,-46.16 806.35,-46.16 811.28,-49.58 811.28,-56.42 806.35,-59.84" />
+<text xml:space="preserve" text-anchor="middle" x="708.88" y="-56.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-5.group-dev</text>
+<text xml:space="preserve" text-anchor="middle" x="708.88" y="-41.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge9" class="edge">
+<title>atm-bg-5.group-dev-&gt;atm-bg-5.group-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M565.77,-59.18C576.06,-58.73 586.94,-58.26 597.91,-57.78" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="598.02,-60.4 605.4,-57.45 597.79,-55.16 598.02,-60.4" />
+</g>
+
+<g id="edge13" class="edge">
+<title>atm-bg-5.group-sanity-&gt;atm-bg-6.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M780.9,-78.09C795.81,-84.8 811.01,-92.8 824.21,-102 853.25,-122.26 880.33,-152.76 897.63,-174.35" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="895.55,-175.95 902.26,-180.22 899.68,-172.7 895.55,-175.95" />
+</g>
+
+<g id="node12" class="node">
+<title>atm-bg-6.group-sanity — PASS at ad9cbfd293c5a16ba800d318a93748f28a479e0e; completed sanity iterations: 2</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M1224.45,-206.84C1224.45,-206.84 1190.51,-230.39 1190.51,-230.39 1185.58,-233.81 1174.65,-237.23 1168.65,-237.23 1168.65,-237.23 1085.32,-237.23 1085.32,-237.23 1079.32,-237.23 1068.39,-233.81 1063.46,-230.39 1063.46,-230.39 1029.52,-206.84 1029.52,-206.84 1024.59,-203.42 1024.59,-196.58 1029.52,-193.16 1029.52,-193.16 1063.46,-169.61 1063.46,-169.61 1068.39,-166.19 1079.32,-162.77 1085.32,-162.77 1085.32,-162.77 1168.65,-162.77 1168.65,-162.77 1174.65,-162.77 1185.58,-166.19 1190.51,-169.61 1190.51,-169.61 1224.45,-193.16 1224.45,-193.16 1229.38,-196.58 1229.38,-203.42 1224.45,-206.84" />
+<text xml:space="preserve" text-anchor="middle" x="1126.98" y="-203.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-6.group-dev</text>
+<text xml:space="preserve" text-anchor="middle" x="1126.98" y="-188.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge14" class="edge">
+<title>atm-bg-6.group-dev-&gt;atm-bg-6.group-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M983.88,-200C992.33,-200 1001.18,-200 1010.15,-200" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="1009.92,-202.63 1017.42,-200 1009.92,-197.38 1009.92,-202.63" />
+</g>
+
+<g id="node13" class="node">
+<title>atm-bg-7.group-dev — dev complete at 639eb7f5b3bdc80e2b1dd79c3a15f10bba872497; sanity PASS recorded</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M1389.76,-218C1389.76,-218 1282.31,-218 1282.31,-218 1276.31,-218 1270.31,-212 1270.31,-206 1270.31,-206 1270.31,-194 1270.31,-194 1270.31,-188 1276.31,-182 1282.31,-182 1282.31,-182 1389.76,-182 1389.76,-182 1395.76,-182 1401.76,-188 1401.76,-194 1401.76,-194 1401.76,-206 1401.76,-206 1401.76,-212 1395.76,-218 1389.76,-218" />
+<text xml:space="preserve" text-anchor="middle" x="1336.04" y="-196.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-7.group-dev</text>
+</g>
+
+<g id="edge15" class="edge">
+<title>atm-bg-6.group-sanity-&gt;atm-bg-7.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M1235.15,-200C1243.85,-200 1252.51,-200 1260.89,-200" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="1260.62,-202.63 1268.12,-200 1260.62,-197.38 1260.62,-202.63" />
+</g>
+
+<g id="node14" class="node">
+<title>atm-bg-7.group-sanity — PASS at 639eb7f5b3bdc80e2b1dd79c3a15f10bba872497; completed sanity iterations: 2</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M1642.56,-206.84C1642.56,-206.84 1608.61,-230.39 1608.61,-230.39 1603.68,-233.81 1592.75,-237.23 1586.75,-237.23 1586.75,-237.23 1503.43,-237.23 1503.43,-237.23 1497.43,-237.23 1486.5,-233.81 1481.57,-230.39 1481.57,-230.39 1447.62,-206.84 1447.62,-206.84 1442.69,-203.42 1442.69,-196.58 1447.62,-193.16 1447.62,-193.16 1481.57,-169.61 1481.57,-169.61 1486.5,-166.19 1497.43,-162.77 1503.43,-162.77 1503.43,-162.77 1586.75,-162.77 1586.75,-162.77 1592.75,-162.77 1603.68,-166.19 1608.61,-169.61 1608.61,-169.61 1642.56,-193.16 1642.56,-193.16 1647.49,-196.58 1647.49,-203.42 1642.56,-206.84" />
+<text xml:space="preserve" text-anchor="middle" x="1545.09" y="-203.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-7.group-dev</text>
+<text xml:space="preserve" text-anchor="middle" x="1545.09" y="-188.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge16" class="edge">
+<title>atm-bg-7.group-dev-&gt;atm-bg-7.group-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M1401.98,-200C1410.43,-200 1419.28,-200 1428.26,-200" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="1428.02,-202.63 1435.52,-200 1428.02,-197.38 1428.02,-202.63" />
+</g>
+
+<g id="node15" class="node">
+<title>atm-bg-8.group-dev — Blocked by unfinished prerequisites</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M1807.87,-218C1807.87,-218 1700.42,-218 1700.42,-218 1694.42,-218 1688.42,-212 1688.42,-206 1688.42,-206 1688.42,-194 1688.42,-194 1688.42,-188 1694.42,-182 1700.42,-182 1700.42,-182 1807.87,-182 1807.87,-182 1813.87,-182 1819.87,-188 1819.87,-194 1819.87,-194 1819.87,-206 1819.87,-206 1819.87,-212 1813.87,-218 1807.87,-218" />
+<text xml:space="preserve" text-anchor="middle" x="1754.14" y="-196.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-8.group-dev</text>
+</g>
+
+<g id="edge17" class="edge">
+<title>atm-bg-7.group-sanity-&gt;atm-bg-8.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M1653.25,-200C1661.95,-200 1670.61,-200 1678.99,-200" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="1678.73,-202.63 1686.23,-200 1678.73,-197.38 1678.73,-202.63" />
+</g>
+
+<g id="node16" class="node">
+<title>atm-bg-8.group-sanity — Blocked by unfinished prerequisites; completed sanity iterations: 0</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M2060.66,-206.84C2060.66,-206.84 2026.72,-230.39 2026.72,-230.39 2021.79,-233.81 2010.86,-237.23 2004.86,-237.23 2004.86,-237.23 1921.53,-237.23 1921.53,-237.23 1915.53,-237.23 1904.6,-233.81 1899.67,-230.39 1899.67,-230.39 1865.73,-206.84 1865.73,-206.84 1860.8,-203.42 1860.8,-196.58 1865.73,-193.16 1865.73,-193.16 1899.67,-169.61 1899.67,-169.61 1904.6,-166.19 1915.53,-162.77 1921.53,-162.77 1921.53,-162.77 2004.86,-162.77 2004.86,-162.77 2010.86,-162.77 2021.79,-166.19 2026.72,-169.61 2026.72,-169.61 2060.66,-193.16 2060.66,-193.16 2065.59,-196.58 2065.59,-203.42 2060.66,-206.84" />
+<text xml:space="preserve" text-anchor="middle" x="1963.19" y="-203.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-8.group-dev</text>
+<text xml:space="preserve" text-anchor="middle" x="1963.19" y="-188.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge18" class="edge">
+<title>atm-bg-8.group-dev-&gt;atm-bg-8.group-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M1820.09,-200C1828.54,-200 1837.39,-200 1846.36,-200" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="1846.13,-202.63 1853.63,-200 1846.13,-197.38 1846.13,-202.63" />
+</g>
+
+<g id="node17" class="node">
+<title>atm-bg-9.group-dev — Blocked by unfinished prerequisites</title>
+<path fill="#edf3fb" stroke="#9caec2" d="M2225.97,-218C2225.97,-218 2118.52,-218 2118.52,-218 2112.52,-218 2106.52,-212 2106.52,-206 2106.52,-206 2106.52,-194 2106.52,-194 2106.52,-188 2112.52,-182 2118.52,-182 2118.52,-182 2225.97,-182 2225.97,-182 2231.97,-182 2237.97,-188 2237.97,-194 2237.97,-194 2237.97,-206 2237.97,-206 2237.97,-212 2231.97,-218 2225.97,-218" />
+<text xml:space="preserve" text-anchor="middle" x="2172.25" y="-196.1" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-9.group-dev</text>
+</g>
+
+<g id="edge19" class="edge">
+<title>atm-bg-8.group-sanity-&gt;atm-bg-9.group-dev</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M2071.36,-200C2080.05,-200 2088.72,-200 2097.1,-200" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="2096.83,-202.63 2104.33,-200 2096.83,-197.38 2096.83,-202.63" />
+</g>
+
+<g id="node18" class="node">
+<title>atm-bg-9.group-sanity — Blocked by unfinished prerequisites; completed sanity iterations: 0</title>
+<path fill="#e6f1e9" stroke="#a0b8a8" d="M2478.77,-206.84C2478.77,-206.84 2444.82,-230.39 2444.82,-230.39 2439.89,-233.81 2428.96,-237.23 2422.96,-237.23 2422.96,-237.23 2339.63,-237.23 2339.63,-237.23 2333.63,-237.23 2322.7,-233.81 2317.77,-230.39 2317.77,-230.39 2283.83,-206.84 2283.83,-206.84 2278.9,-203.42 2278.9,-196.58 2283.83,-193.16 2283.83,-193.16 2317.77,-169.61 2317.77,-169.61 2322.7,-166.19 2333.63,-162.77 2339.63,-162.77 2339.63,-162.77 2422.96,-162.77 2422.96,-162.77 2428.96,-162.77 2439.89,-166.19 2444.82,-169.61 2444.82,-169.61 2478.77,-193.16 2478.77,-193.16 2483.7,-196.58 2483.7,-203.42 2478.77,-206.84" />
+<text xml:space="preserve" text-anchor="middle" x="2381.3" y="-203.9" font-family="Arial" font-size="13.00" fill="#172b43">atm-bg-9.group-dev</text>
+<text xml:space="preserve" text-anchor="middle" x="2381.3" y="-188.3" font-family="Arial" font-size="13.00" fill="#172b43">sanity gate</text>
+</g>
+
+<g id="edge20" class="edge">
+<title>atm-bg-9.group-dev-&gt;atm-bg-9.group-sanity</title>
+<path fill="none" stroke="#647a94" stroke-width="1.15" d="M2238.19,-200C2246.64,-200 2255.49,-200 2264.47,-200" />
+<polygon fill="#647a94" stroke="#647a94" stroke-width="1.15" points="2264.23,-202.63 2271.73,-200 2264.23,-197.38 2264.23,-202.63" />
+</g>
+<g class="state-badges"><g class="state-badge" transform="translate(71.72 -231)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="state-badge" transform="translate(271.78 -250.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">2</text></g><g class="state-badge" transform="translate(489.83 -364)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="qa-badge" transform="translate(476.33 -328)"><rect width="47" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="23.5" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0:0:0</text><title>QA FAIL: 0:0:0 open blocking:important:minor; atm-bg-2.group-qa</title></g><g class="state-badge" transform="translate(489.83 -266)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="qa-badge" transform="translate(476.33 -230)"><rect width="47" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="23.5" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0:0:0</text><title>QA FAIL: 0:0:0 open blocking:important:minor; atm-bg-3.group-qa</title></g><g class="state-badge" transform="translate(489.83 -187)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="qa-badge" transform="translate(476.33 -151)"><rect width="47" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="23.5" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0:0:0</text><title>QA FAIL: 0:0:0 open blocking:important:minor; atm-bg-4.group-qa</title></g><g class="state-badge" transform="translate(489.83 -89)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="qa-badge" transform="translate(476.33 -53)"><rect width="47" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="23.5" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0:0:0</text><title>QA FAIL: 0:0:0 open blocking:important:minor; atm-bg-5.group-qa</title></g><g class="state-badge" transform="translate(689.88 -393.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">1</text></g><g class="state-badge" transform="translate(907.93 -227)"><rect width="20" height="18" rx="6" fill="white" stroke="#15803d" stroke-width="1.2" /><path d="M 5 9 L 8 12 L 14 5" fill="none" stroke="#15803d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /></g><g class="state-badge" transform="translate(689.88 -295.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">2</text></g><g class="state-badge" transform="translate(689.88 -197.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">1</text></g><g class="state-badge" transform="translate(689.88 -99.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">2</text></g><g class="state-badge" transform="translate(1107.98 -246.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#15803d" stroke-width="1.2" /><path d="M 5 9 L 8 12 L 14 5" fill="none" stroke="#15803d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#15803d">2</text></g><g class="state-badge" transform="translate(1326.04 -227)"><rect width="20" height="18" rx="6" fill="white" stroke="#15803d" stroke-width="1.2" /><path d="M 5 9 L 8 12 L 14 5" fill="none" stroke="#15803d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /></g><g class="state-badge" transform="translate(1526.09 -246.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#15803d" stroke-width="1.2" /><path d="M 5 9 L 8 12 L 14 5" fill="none" stroke="#15803d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#15803d">2</text></g><g class="state-badge" transform="translate(1744.14 -227)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="qa-badge" transform="translate(1744.14 -191)"><rect width="20" height="18" rx="6" fill="white" stroke="#64748b" stroke-width="1.2" /><path d="M4 10V14H16V10 M10 3V10 M7 7L10 10L13 7" fill="none" stroke="#64748b" stroke-width="1.5" /><title>QA IN PROGRESS; atm-bg-8.group-qa</title></g><g class="state-badge" transform="translate(1944.19 -246.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0</text></g><g class="state-badge" transform="translate(2162.25 -227)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><g class="qa-badge" transform="translate(2162.25 -191)"><rect width="20" height="18" rx="6" fill="white" stroke="#64748b" stroke-width="1.2" /><path d="M4 10V14H16V10 M10 3V10 M7 7L10 10L13 7" fill="none" stroke="#64748b" stroke-width="1.5" /><title>QA IN PROGRESS; atm-bg-9.group-qa</title></g><g class="state-badge" transform="translate(2362.3 -246.23)"><rect width="38" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text><text x="27" y="13" text-anchor="middle" font-family="Arial" font-size="12" font-weight="bold" fill="#b91c1c">0</text></g></g></g>
+<g class="state-legend" font-family="Arial" font-size="14" fill="#334155"><rect x="0" y="514.0" width="2562.0" height="88" fill="white" /><g class="state-badge" transform="translate(30 523)"><rect width="20" height="18" rx="6" fill="white" stroke="#15803d" stroke-width="1.2" /><path d="M 5 9 L 8 12 L 14 5" fill="none" stroke="#15803d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /></g><text x="56" y="537.0">Complete / sanity PASS</text><g class="state-badge" transform="translate(232 523)"><rect width="20" height="18" rx="6" fill="white" stroke="#64748b" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#64748b">○</text></g><text x="258" y="537.0">Pending</text><g class="state-badge" transform="translate(329 523)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><text x="355" y="537.0">Blocked</text><g class="state-badge" transform="translate(426 523)"><rect width="20" height="18" rx="6" fill="white" stroke="#2563eb" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#2563eb">↻</text></g><text x="452" y="537.0">Active</text><g class="state-badge" transform="translate(516 523)"><rect width="20" height="18" rx="6" fill="white" stroke="#b91c1c" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b91c1c">!</text></g><text x="542" y="537.0">Findings</text><g class="state-badge" transform="translate(620 523)"><rect width="20" height="18" rx="6" fill="white" stroke="#b45309" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#b45309">?</text></g><text x="646" y="537.0">Unconfirmed</text><g class="state-badge" transform="translate(745 523)"><rect width="20" height="18" rx="6" fill="white" stroke="#7e22ce" stroke-width="1.2" /><text x="10" y="13" text-anchor="middle" font-family="Arial" font-size="15" font-weight="bold" fill="#7e22ce">↷</text></g><text x="771" y="537.0">User override</text><text x="30" y="566.0" font-size="12">Top = dev/sanity; gate number = completed sanity iterations; ? = unavailable. Dev check requires sanity PASS. Snapshot: 2026-11-17T16:47:36.008933+00:00</text><text x="30" y="588.0" font-size="12">Bottom = QA: assigned / active / pass, or open blocking:important:minor findings after FAIL. Blank = undispatched.</text></g></svg></div>
+  </main>
+  <script>
+    const diagram = document.getElementById('diagram');
+    let zoom = 1;
+    function setZoom(value) {
+      zoom = Math.max(0.5, Math.min(4, value));
+      diagram.style.width = (zoom * 100) + '%';
+      document.getElementById('zoom-level').textContent = Math.round(zoom * 100) + '%';
+    }
+    document.getElementById('zoom-out').addEventListener('click', () => setZoom(zoom / 1.25));
+    document.getElementById('zoom-in').addEventListener('click', () => setZoom(zoom * 1.25));
+    document.getElementById('fit').addEventListener('click', () => setZoom(1));
+  </script>
+</body>
+</html>
