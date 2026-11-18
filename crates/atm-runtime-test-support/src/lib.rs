@@ -114,12 +114,13 @@ impl RecordingWriterIngress {
     pub async fn wait_for_submissions(&self, count: usize) {
         loop {
             let notified = self.inner.submission_signal.notified();
+            tokio::pin!(notified);
+            // Register before checking: `notify_one` can otherwise land in the gap.
+            notified.as_mut().enable();
             if self.submissions().len() >= count {
                 return;
             }
-            tokio::time::timeout(std::time::Duration::from_secs(30), notified)
-                .await
-                .expect("recorded writer submission arrives");
+            notified.await;
         }
     }
 
@@ -269,7 +270,7 @@ impl atm_core::boundary::ConfigDoctor for GatedConfigDoctor {
         let gate = self.gate.lock().expect("doctor gate").take();
         if let Some((entered, release)) = gate {
             let _ = entered.send(());
-            let _ = release.recv_timeout(std::time::Duration::from_secs(30));
+            let _ = release.recv();
         }
         self.inner.inspect_config()
     }

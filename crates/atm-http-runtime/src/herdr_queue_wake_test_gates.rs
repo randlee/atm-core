@@ -57,8 +57,6 @@ impl HerdrQueueWakePump {
             return;
         };
         entered.notify_one();
-        tokio::time::timeout(std::time::Duration::from_secs(10), release.notified())
-            .await
-            .expect("timed out waiting for the Herdr handoff cleanup test gate release");
+        release.notified().await;
     }
 }

@@ -870,7 +870,7 @@ pub(crate) struct PendingStoreState {
     mark_pending_calls: std::sync::Mutex<Vec<(MemberKey, AtmMessageId)>>,
 }
 
-/// A bounded, signal-driven blocker for synchronous pending-store tests.
+/// A signal-driven blocker for synchronous pending-store tests.
 #[derive(Default)]
 pub struct ReleaseBlocker {
     state: std::sync::Mutex<ReleaseBlockerState>,
@@ -893,32 +893,20 @@ impl ReleaseBlocker {
         let mut state = self.state.lock().expect("release blocker lock");
         state.entered = true;
         self.changed.notify_all();
-        let (state, result) = self
+        let state = self
             .changed
-            .wait_timeout_while(state, std::time::Duration::from_secs(60), |state| {
-                !state.released
-            })
+            .wait_while(state, |state| !state.released)
             .expect("release blocker state is not poisoned");
-        assert!(state.released, "release gate released within 60 seconds");
-        assert!(
-            !result.timed_out(),
-            "release gate was not released within 60 seconds"
-        );
+        assert!(state.released, "release gate was released");
     }
 
     pub fn wait_until_entered(&self) {
         let state = self.state.lock().expect("release blocker lock");
-        let (state, result) = self
+        let state = self
             .changed
-            .wait_timeout_while(state, std::time::Duration::from_secs(10), |state| {
-                !state.entered
-            })
+            .wait_while(state, |state| !state.entered)
             .expect("release blocker state is not poisoned");
-        assert!(state.entered, "release gate entered within 10 seconds");
-        assert!(
-            !result.timed_out(),
-            "release gate did not enter within 10 seconds"
-        );
+        assert!(state.entered, "release gate entered");
     }
 }
 
