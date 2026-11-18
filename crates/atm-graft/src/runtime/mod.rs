@@ -520,9 +520,21 @@ pub(crate) fn set_session_state(
 pub(crate) fn join_receive_loop_with_deadline(
     join_handle: JoinHandle<Result<(), AtmError>>,
 ) -> Result<(), AtmError> {
+    join_receive_loop_with_wait(join_handle, |receiver, deadline| {
+        receiver.recv_timeout(deadline)
+    })
+}
+
+fn join_receive_loop_with_wait(
+    join_handle: JoinHandle<Result<(), AtmError>>,
+    wait: impl FnOnce(
+        Receiver<Result<(), AtmError>>,
+        Duration,
+    ) -> Result<Result<(), AtmError>, RecvTimeoutError>,
+) -> Result<(), AtmError> {
     let (result_rx, join_helper, join_helper_thread_id) =
         spawn_receive_loop_join_helper(join_handle)?;
-    match result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE) {
+    match wait(result_rx, RECEIVE_LOOP_JOIN_DEADLINE) {
         Ok(result) => finish_join_receive_loop(join_helper, result),
         Err(RecvTimeoutError::Timeout) => {
             Err(join_receive_loop_timeout_error(join_helper_thread_id))
@@ -2368,6 +2380,88 @@ mod tests {
         stop_receiver(stop_tx, join);
     }
 
+    enum JoinClockEvent {
+        Advance(Duration, mpsc::SyncSender<()>),
+        Completed(Result<Result<(), AtmError>, mpsc::RecvError>),
+    }
+
+    struct ControlledJoin {
+        clock: mpsc::Sender<JoinClockEvent>,
+        armed: mpsc::Receiver<Duration>,
+        observed: mpsc::Receiver<(Duration, Duration)>,
+        join: std::thread::JoinHandle<Result<(), AtmError>>,
+    }
+
+    fn controlled_join(worker: std::thread::JoinHandle<Result<(), AtmError>>) -> ControlledJoin {
+        let (event_tx, event_rx) = mpsc::channel();
+        let relay_tx = event_tx.clone();
+        let (armed_tx, armed_rx) = mpsc::sync_channel(1);
+        let (observed_tx, observed_rx) = mpsc::sync_channel(1);
+        let join = std::thread::spawn(move || {
+            super::join_receive_loop_with_wait(worker, move |result, deadline| {
+                std::thread::spawn(move || {
+                    let _ = relay_tx.send(JoinClockEvent::Completed(result.recv()));
+                });
+                armed_tx.send(deadline).expect("outer deadline armed");
+                let mut elapsed = Duration::ZERO;
+                loop {
+                    match event_rx.recv().expect("controlled join clock") {
+                        JoinClockEvent::Advance(delta, ack) => {
+                            elapsed += delta;
+                            ack.send(()).expect("clock advance acknowledged");
+                            if elapsed >= deadline {
+                                return Err(mpsc::RecvTimeoutError::Timeout);
+                            }
+                        }
+                        JoinClockEvent::Completed(result) => {
+                            observed_tx
+                                .send((elapsed, deadline))
+                                .expect("record join time");
+                            return result.map_err(|_| mpsc::RecvTimeoutError::Disconnected);
+                        }
+                    }
+                }
+            })
+        });
+        ControlledJoin {
+            clock: event_tx,
+            armed: armed_rx,
+            observed: observed_rx,
+            join,
+        }
+    }
+
+    fn advance_join_clock(clock: &mpsc::Sender<JoinClockEvent>, delta: Duration) {
+        let (ack_tx, ack_rx) = mpsc::sync_channel(1);
+        clock
+            .send(JoinClockEvent::Advance(delta, ack_tx))
+            .expect("advance outer clock");
+        ack_rx.recv().expect("outer clock advanced");
+    }
+
+    #[test]
+    fn controlled_outer_join_deadline_reports_stalled_worker() {
+        let (release_tx, release_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            release_rx.recv().expect("release worker");
+            Ok(())
+        });
+        let ControlledJoin {
+            clock,
+            armed,
+            observed: _,
+            join,
+        } = controlled_join(worker);
+        let deadline = armed.recv().expect("outer deadline");
+        advance_join_clock(&clock, deadline);
+        let error = join
+            .join()
+            .expect("join waiter panicked")
+            .expect_err("outer deadline must expire");
+        assert!(error.message().contains("join deadline"));
+        release_tx.send(()).expect("release worker after timeout");
+    }
+
     // rust-service-hardening RSH-001: a stalled (not merely slow) daemon must
     // not compound the loop's blocking refresh call with `Drop`'s blocking
     // unregister call past the outer receive-loop join deadline.
@@ -2443,7 +2537,15 @@ mod tests {
         let (action, refresh_deadline) =
             deadline_waiting_rx.recv().expect("refresh deadline armed");
         assert_eq!(action, "lease_refresh");
+        let ControlledJoin {
+            clock,
+            armed,
+            observed,
+            join: outer_join,
+        } = controlled_join(join);
+        let outer_deadline = armed.recv().expect("outer deadline");
         stop_tx.send(()).expect("stop");
+        advance_join_clock(&clock, refresh_deadline);
         expire_tx.send(()).expect("expire refresh deadline");
         unregister_started_rx
             .recv()
@@ -2452,10 +2554,18 @@ mod tests {
             .recv()
             .expect("unregister deadline armed");
         assert_eq!(action, "lease_unregister");
-        assert!(refresh_deadline + unregister_deadline < super::RECEIVE_LOOP_JOIN_DEADLINE);
+        advance_join_clock(&clock, unregister_deadline);
         expire_tx.send(()).expect("expire unregister deadline");
-        join.join()
-            .expect("receiver worker panicked")
+        let (elapsed, observed_deadline) = observed.recv().expect("outer join completed");
+        assert_eq!(elapsed, refresh_deadline + unregister_deadline);
+        assert_eq!(observed_deadline, outer_deadline);
+        assert!(
+            elapsed < outer_deadline,
+            "stop must complete before the outer deadline"
+        );
+        outer_join
+            .join()
+            .expect("outer join worker panicked")
             .expect("join receiver despite stalled lease calls");
         assert_eq!(
             stalled_calls.load(Ordering::SeqCst),
