@@ -137,12 +137,43 @@ impl DoctorProjection for StorageDoctorProjection {
         context: DoctorProjectionContext,
         deadline: RequestDeadline,
     ) -> Result<DoctorReport, AtmError> {
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable_with_recovery(
-                "doctor request deadline expired before control-lane admission",
-                "increase the request deadline or retry when the daemon is ready.",
-            )
-        })?;
+        self.project_with_deadline(query, context, Some(deadline))
+            .await
+    }
+}
+
+impl StorageDoctorProjection {
+    /// Projects in-process doctor requests without a wall-clock deadline.
+    ///
+    /// This is a test seam for control-lane tests whose assertions concern
+    /// queue admission and worker completion rather than deadline behavior.
+    /// It skips endpoint-specific Herdr enrichment so it cannot introduce a
+    /// wall-clock deadline into the test path. Use it only when assertions
+    /// concern the in-process control lane rather than Herdr observations.
+    #[doc(hidden)]
+    pub async fn project_without_deadline_for_tests(
+        &self,
+        query: DoctorQuery,
+        context: DoctorProjectionContext,
+    ) -> Result<DoctorReport, AtmError> {
+        self.project_with_deadline(query, context, None).await
+    }
+
+    async fn project_with_deadline(
+        &self,
+        query: DoctorQuery,
+        context: DoctorProjectionContext,
+        deadline: Option<RequestDeadline>,
+    ) -> Result<DoctorReport, AtmError> {
+        let remaining = match deadline {
+            Some(deadline) => Some(deadline.remaining().ok_or_else(|| {
+                AtmError::daemon_unavailable_with_recovery(
+                    "doctor request deadline expired before control-lane admission",
+                    "increase the request deadline or retry when the daemon is ready.",
+                )
+            })?),
+            None => None,
+        };
         let (response, response_receiver) = tokio::sync::oneshot::channel();
         self.sender
             .try_send(DoctorJob { query, response })
@@ -160,20 +191,23 @@ impl DoctorProjection for StorageDoctorProjection {
                     )
                 }
             })?;
-        let mut report = tokio::time::timeout(remaining, response_receiver)
-            .await
-            .map_err(|_| {
-                AtmError::daemon_unavailable_with_recovery(
-                    "doctor request deadline expired",
-                    "increase the request deadline or retry when the daemon is ready.",
-                )
-            })?
-            .map_err(|_| {
-                AtmError::daemon_unavailable_with_recovery(
-                    "doctor control lane stopped",
-                    "restart the HTTP runtime and retry the doctor request.",
-                )
-            })??;
+        let response = match remaining {
+            Some(remaining) => tokio::time::timeout(remaining, response_receiver)
+                .await
+                .map_err(|_| {
+                    AtmError::daemon_unavailable_with_recovery(
+                        "doctor request deadline expired",
+                        "increase the request deadline or retry when the daemon is ready.",
+                    )
+                })?,
+            None => response_receiver.await,
+        };
+        let mut report = response.map_err(|_| {
+            AtmError::daemon_unavailable_with_recovery(
+                "doctor control lane stopped",
+                "restart the HTTP runtime and retry the doctor request.",
+            )
+        })??;
         let rosters = report
             .member_roster
             .clone()
@@ -185,7 +219,7 @@ impl DoctorProjection for StorageDoctorProjection {
             // inspect. This is a known, unconfigured state rather than a
             // guessed endpoint result.
             report.herdr.configured = Some(false);
-        } else {
+        } else if let Some(deadline) = deadline {
             let per_team_budget = deadline
                 .remaining()
                 .map(|remaining| remaining / rosters.len() as u32);
@@ -206,9 +240,6 @@ impl DoctorProjection for StorageDoctorProjection {
         report.reader_lanes = self.reader_lanes;
         Ok(report)
     }
-}
-
-impl StorageDoctorProjection {
     async fn append_herdr_report(
         &self,
         report: &mut DoctorReport,
