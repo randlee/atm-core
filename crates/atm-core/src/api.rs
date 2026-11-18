@@ -888,6 +888,24 @@ mod tests {
     }
 
     #[test]
+    fn unbounded_request_deadline_never_expires() {
+        let deadline = super::RequestDeadline::unbounded();
+        assert!(deadline.is_unbounded());
+        assert!(!deadline.expired());
+        assert_eq!(deadline.remaining(), None);
+        assert_eq!(deadline.remaining_ms(), u64::MAX);
+        assert_eq!(
+            deadline.remaining_ms_at(std::time::Instant::now()),
+            u64::MAX
+        );
+        assert!(
+            deadline
+                .minus(std::time::Duration::from_secs(10))
+                .is_unbounded()
+        );
+    }
+
+    #[test]
     fn search_is_encoded_as_one_bodyless_get_query_parameter() {
         let request = RequestEnvelope::Search(Box::new(SearchRequest {
             query: crate::search::SearchInput::default(),
@@ -1238,7 +1256,7 @@ impl UntrustedSmokeProvenance {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RequestDeadline(Instant);
+pub struct RequestDeadline(Option<Instant>);
 
 impl RequestDeadline {
     pub fn after(duration: Duration) -> Self {
@@ -1246,15 +1264,26 @@ impl RequestDeadline {
     }
 
     pub fn after_at(now: Instant, duration: Duration) -> Self {
-        Self(now + duration)
+        Self(Some(now + duration))
+    }
+
+    /// An explicit no-deadline budget for in-process work that is not governed
+    /// by a caller request deadline, including deterministic test paths.
+    pub const fn unbounded() -> Self {
+        Self(None)
+    }
+
+    #[must_use]
+    pub const fn is_unbounded(self) -> bool {
+        self.0.is_none()
     }
 
     pub fn expired(self) -> bool {
-        self.remaining().is_none()
+        !self.is_unbounded() && self.remaining().is_none()
     }
 
     pub fn remaining(self) -> Option<Duration> {
-        self.0
+        self.0?
             .checked_duration_since(Instant::now())
             .filter(|remaining| !remaining.is_zero())
     }
@@ -1265,13 +1294,16 @@ impl RequestDeadline {
 
     pub fn remaining_ms_at(self, now: Instant) -> u64 {
         self.0
-            .checked_duration_since(now)
+            .and_then(|deadline| deadline.checked_duration_since(now))
             .map(|remaining| remaining.as_millis().min(u128::from(u64::MAX)) as u64)
-            .unwrap_or(0)
+            .unwrap_or_else(|| if self.is_unbounded() { u64::MAX } else { 0 })
     }
 
     pub fn minus(self, duration: Duration) -> Self {
-        Self(self.0.checked_sub(duration).unwrap_or_else(Instant::now))
+        Self(
+            self.0
+                .map(|deadline| deadline.checked_sub(duration).unwrap_or_else(Instant::now)),
+        )
     }
 }
 

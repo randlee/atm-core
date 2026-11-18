@@ -313,7 +313,7 @@ async fn bare_cli_pull_preserves_item_until_member_reads() {
                 },
             )),
             atm_core::AuthenticatedIngress::Local,
-            atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            atm_core::api::RequestDeadline::unbounded(),
         )
         .await
         .expect("authorized queue-get");

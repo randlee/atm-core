@@ -171,7 +171,7 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
         .write(
             daemon.request("sender", "recipient", "BD6-F1-PEER", None),
             AuthenticatedIngress::Peer,
-            RequestDeadline::after(Duration::from_secs(10)),
+            RequestDeadline::unbounded(),
         )
         .await
         .expect("a peer write is acknowledged before its detached hook");

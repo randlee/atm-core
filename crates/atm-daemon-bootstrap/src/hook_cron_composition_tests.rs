@@ -40,7 +40,7 @@ use crate::{
 const TEST_OTHER_PHASE: &str = "test-phase";
 
 fn deadline() -> RequestDeadline {
-    RequestDeadline::after(Duration::from_secs(60))
+    RequestDeadline::unbounded()
 }
 fn stop_deadline() -> tokio::time::Instant {
     tokio::time::Instant::now() + Duration::from_secs(60)

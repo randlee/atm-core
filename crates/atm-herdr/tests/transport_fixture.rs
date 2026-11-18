@@ -81,12 +81,7 @@ async fn get(
     invoker: &atm_herdr::HerdrProcessInvoker,
     session: Option<&HerdrSession>,
 ) -> Result<atm_herdr::HerdrGetOutcome, HerdrError> {
-    get_with_deadline(
-        invoker,
-        session,
-        RequestDeadline::after(Duration::from_secs(30)),
-    )
-    .await
+    get_with_deadline(invoker, session, RequestDeadline::unbounded()).await
 }
 
 async fn get_with_deadline(
@@ -285,7 +280,7 @@ async fn socket_doctor_ping_response_reports_ok() {
     let config = HerdrClientConfig::try_new(HerdrTransportKind::Socket, None, Some(path.clone()))
         .expect("socket config");
     let observation = HerdrDoctorProbe::new(config)
-        .observe(None, &[], RequestDeadline::after(Duration::from_secs(30)))
+        .observe(None, &[], RequestDeadline::unbounded())
         .await;
     let request = server_task
         .await
@@ -317,7 +312,7 @@ async fn socket_doctor_rejected_ping_reports_unexpected_response() {
     let config = HerdrClientConfig::try_new(HerdrTransportKind::Socket, None, Some(path))
         .expect("socket config");
     let observation = HerdrDoctorProbe::new(config)
-        .observe(None, &[], RequestDeadline::after(Duration::from_secs(30)))
+        .observe(None, &[], RequestDeadline::unbounded())
         .await;
     server_task
         .await
@@ -362,12 +357,7 @@ async fn socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read() {
         let server_task = tokio::spawn(server.serve_oversized(response, write_completed_tx));
         let invoker = atm_herdr::testing::production_invoker_with_test_socket(oversized.clone());
         let client_task = tokio::spawn(async move {
-            get_with_deadline(
-                &invoker,
-                None,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .await
+            get_with_deadline(&invoker, None, RequestDeadline::unbounded()).await
         });
         write_completed_rx
             .await
@@ -386,12 +376,7 @@ async fn socket_fixture_matrix_covers_no_newline_oversized_and_stalled_read() {
     let server = fake_herdr_socket::FakeHerdrSocket::bind(&stalled).expect("bind");
     let task = tokio::spawn(server.serve_and_stall());
     let invoker = atm_herdr::testing::production_invoker_with_test_socket(stalled.clone());
-    let result = get_with_deadline(
-        &invoker,
-        None,
-        RequestDeadline::after(Duration::from_secs(1)),
-    )
-    .await;
+    let result = get_with_deadline(&invoker, None, RequestDeadline::after(Duration::ZERO)).await;
     task.abort();
     assert!(matches!(result, Err(HerdrError::Timeout)));
 }
@@ -409,7 +394,7 @@ async fn socket_fixture_matrix_covers_stalled_write_and_cancellation() {
         &invoker,
         &agent,
         &prompt,
-        RequestDeadline::after(Duration::from_millis(100)),
+        RequestDeadline::after(Duration::ZERO),
     )
     .await;
     task.abort();

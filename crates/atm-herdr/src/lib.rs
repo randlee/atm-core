@@ -1154,12 +1154,7 @@ mod tests {
         };
         assert_eq!(
             invoker
-                .prompt(
-                    &agent,
-                    None,
-                    " \n",
-                    RequestDeadline::after(Duration::from_secs(1)),
-                )
+                .prompt(&agent, None, " \n", RequestDeadline::unbounded(),)
                 .await,
             Err(HerdrError::EmptyAgentPrompt)
         );
@@ -1213,9 +1208,7 @@ mod tests {
         };
 
         assert!(matches!(
-            invoker
-                .list(None, RequestDeadline::after(Duration::from_secs(1)))
-                .await,
+            invoker.list(None, RequestDeadline::unbounded()).await,
             Err(HerdrError::Unavailable { .. })
         ));
         assert!(matches!(breaker.state(), HerdrBreakerState::Open { .. }));

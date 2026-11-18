@@ -166,13 +166,23 @@ impl BoundedBlockingBridge {
         T: Send + 'static,
         F: FnOnce() -> Result<T, AtmError> + Send + 'static,
     {
-        let remaining = deadline
-            .remaining()
-            .ok_or(BlockingBridgeError::DeadlineBeforeStart)?;
-        let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
-            .await
-            .map_err(|_| BlockingBridgeError::DeadlineBeforeStart)?
-            .map_err(|_| BlockingBridgeError::Closed)?;
+        let remaining = match deadline.remaining() {
+            Some(remaining) => Some(remaining),
+            None if deadline.is_unbounded() => None,
+            None => return Err(BlockingBridgeError::DeadlineBeforeStart),
+        };
+        let permit = match remaining {
+            Some(remaining) => {
+                tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
+                    .await
+                    .map_err(|_| BlockingBridgeError::DeadlineBeforeStart)?
+                    .map_err(|_| BlockingBridgeError::Closed)?
+            }
+            None => Arc::clone(&self.permits)
+                .acquire_owned()
+                .await
+                .map_err(|_| BlockingBridgeError::Closed)?,
+        };
         if deadline.expired() {
             return Err(BlockingBridgeError::DeadlineBeforeStart);
         }
@@ -183,8 +193,8 @@ impl BoundedBlockingBridge {
                     .await
                     .map_err(BlockingBridgeError::Join)?;
                 let elapsed = self.now().saturating_duration_since(started_at);
-                if elapsed > remaining {
-                    self.record_stall(stall_counter, elapsed, remaining);
+                if remaining.is_some_and(|remaining| elapsed > remaining) {
+                    self.record_stall(stall_counter, elapsed, remaining.unwrap());
                 }
                 drop(permit);
                 outcome.map_err(BlockingBridgeError::Operation)
@@ -194,17 +204,23 @@ impl BoundedBlockingBridge {
                     let _permit = permit;
                     job()
                 });
-                match tokio::time::timeout(remaining, outcome).await {
-                    Ok(Ok(result)) => result.map_err(BlockingBridgeError::Operation),
-                    Ok(Err(source)) => Err(BlockingBridgeError::Join(source)),
-                    Err(_) => {
-                        self.record_stall(
-                            stall_counter,
-                            self.now().saturating_duration_since(started_at),
-                            remaining,
-                        );
-                        Err(BlockingBridgeError::DeadlineAfterStart)
-                    }
+                let result = match remaining {
+                    Some(remaining) => match tokio::time::timeout(remaining, outcome).await {
+                        Ok(result) => result,
+                        Err(_) => {
+                            self.record_stall(
+                                stall_counter,
+                                self.now().saturating_duration_since(started_at),
+                                remaining,
+                            );
+                            return Err(BlockingBridgeError::DeadlineAfterStart);
+                        }
+                    },
+                    None => outcome.await,
+                };
+                match result {
+                    Ok(result) => result.map_err(BlockingBridgeError::Operation),
+                    Err(source) => Err(BlockingBridgeError::Join(source)),
                 }
             }
         }
@@ -338,6 +354,9 @@ fn source_preflight_error(description: &str, error: BlockingBridgeError) -> AtmE
 /// receiver hook begins.  A hook remains advisory after durable persistence;
 /// it must never consume the daemon's final response budget.
 pub(super) fn receiver_hook_deadline(deadline: RequestDeadline) -> Option<RequestDeadline> {
+    if deadline.is_unbounded() {
+        return Some(deadline);
+    }
     deadline
         .remaining()
         .and_then(|remaining| remaining.checked_sub(RESPONSE_HANDOFF_GRACE))

@@ -169,6 +169,18 @@ pub trait AsyncGraftReceiverEndpointStore: GraftReceiverEndpointStore {
         );
         Err(GraftEndpointStoreError::storage(&error))
     }
+
+    /// Looks up a receiver lease without a caller deadline.
+    async fn lookup_without_deadline_async(
+        &self,
+        _team: &TeamName,
+        _agent: &AgentName,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        let error = AtmError::daemon_unavailable(
+            "graft receiver endpoint store does not implement async lease lookup",
+        );
+        Err(GraftEndpointStoreError::storage(&error))
+    }
 }
 
 /// A non-empty, opaque certificate fingerprint. It cannot be confused with a

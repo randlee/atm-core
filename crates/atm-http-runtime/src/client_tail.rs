@@ -307,16 +307,28 @@ async fn decode_reqwest_response(
 #[derive(Debug, Clone)]
 pub(crate) struct HttpRuntimeClient<Connector> {
     connector: Arc<Connector>,
-    pub(super) request_timeout: Duration,
+    request_timeout: Option<Duration>,
 }
 
 impl<Connector> HttpRuntimeClient<Connector> {
     #[must_use]
     pub(crate) fn new(connector: Arc<Connector>, request_timeout: Duration) -> Self {
+        Self::new_with_timeout(connector, Some(request_timeout))
+    }
+
+    pub(crate) fn new_with_timeout(
+        connector: Arc<Connector>,
+        request_timeout: Option<Duration>,
+    ) -> Self {
         Self {
             connector,
             request_timeout,
         }
+    }
+
+    pub(super) fn request_deadline(&self) -> RequestDeadline {
+        self.request_timeout
+            .map_or_else(RequestDeadline::unbounded, RequestDeadline::after)
     }
 
     #[tracing::instrument(
@@ -358,13 +370,7 @@ impl<Connector> HttpRuntimeClient<Connector> {
         let request_id = request_id.unwrap_or_else(next_request_id);
         let request_id_value = request_id.to_string();
         let encoded = encode_http_request(&request, &[(REQUEST_ID_HEADER, &request_id_value)])?;
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::new(
-                AtmErrorCode::WaitTimeout,
-                "HTTP client request budget elapsed before connector dispatch",
-            )
-        })?;
-        let response = tokio::time::timeout(remaining, async {
+        let exchange = async {
             match self.connector.exchange(encoded.clone(), deadline).await {
                 Ok(response) => Ok(response),
                 Err(failure) if failure.is_safe_to_reconnect() => {
@@ -376,10 +382,22 @@ impl<Connector> HttpRuntimeClient<Connector> {
                 }
                 Err(failure) => Err(failure),
             }
-        })
-        .await
-        .map_err(|_| self.connector.deadline_elapsed().into_atm_error())?
-        .map_err(HttpRuntimeClientFailure::into_atm_error)?;
+        };
+        let response = match deadline.remaining() {
+            Some(remaining) => tokio::time::timeout(remaining, exchange)
+                .await
+                .map_err(|_| self.connector.deadline_elapsed().into_atm_error())?
+                .map_err(HttpRuntimeClientFailure::into_atm_error)?,
+            None if deadline.is_unbounded() => exchange
+                .await
+                .map_err(HttpRuntimeClientFailure::into_atm_error)?,
+            None => {
+                return Err(AtmError::new(
+                    AtmErrorCode::WaitTimeout,
+                    "HTTP client request budget elapsed before connector dispatch",
+                ));
+            }
+        };
         let headers = response
             .headers()
             .iter()
@@ -412,7 +430,7 @@ where
     Connector: HttpRuntimeConnector + 'static,
 {
     async fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
-        self.execute_with_deadline(request, RequestDeadline::after(self.request_timeout))
+        self.execute_with_deadline(request, self.request_deadline())
             .await
     }
 }

@@ -57,14 +57,14 @@ impl MailboxReader {
         }
         if tool_class {
             self.pool
-                .submit_tool(deadline.remaining(), move |connection, target| {
+                .submit_tool_optional(deadline.remaining(), move |connection, target| {
                     list_messages(connection, target, &scope, &query)
                         .map_err(read_lane_storage_error)
                 })
                 .await
         } else {
             self.pool
-                .submit(deadline.remaining(), move |connection, target| {
+                .submit_optional(deadline.remaining(), move |connection, target| {
                     list_messages(connection, target, &scope, &query)
                         .map_err(read_lane_storage_error)
                 })
@@ -99,9 +99,13 @@ impl MailboxReader {
                 .map_err(read_lane_storage_error)
         };
         if tool_class {
-            self.pool.submit_tool(deadline.remaining(), submit).await
+            self.pool
+                .submit_tool_optional(deadline.remaining(), submit)
+                .await
         } else {
-            self.pool.submit(deadline.remaining(), submit).await
+            self.pool
+                .submit_optional(deadline.remaining(), submit)
+                .await
         }
     }
 
@@ -112,7 +116,7 @@ impl MailboxReader {
         deadline: ReadDeadline,
     ) -> Result<Option<Message>, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 load_message(connection, target, &scope, &key)
             })
             .await
@@ -124,7 +128,7 @@ impl MailboxReader {
         deadline: ReadDeadline,
     ) -> Result<bool, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 mailbox_member_exists(connection, target, &scope).map_err(read_lane_storage_error)
             })
             .await
@@ -136,7 +140,7 @@ impl MailboxReader {
         deadline: ReadDeadline,
     ) -> Result<Option<IsoTimestamp>, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 load_seen_watermark(connection, target, &scope).map_err(read_lane_storage_error)
             })
             .await
@@ -161,7 +165,7 @@ impl MailboxReader {
             return Err(ReadLaneError::UnauthorizedScope);
         }
         self.pool
-            .submit_tool(deadline.remaining(), move |connection, target| {
+            .submit_tool_optional(deadline.remaining(), move |connection, target| {
                 count_messages(connection, target, &filters, group_by)
                     .map_err(read_lane_storage_error)
             })

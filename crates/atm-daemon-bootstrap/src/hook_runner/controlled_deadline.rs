@@ -26,9 +26,8 @@ impl ControlledHookDeadline {
     #[allow(dead_code)] // Used by feature-gated runner expiry tests.
     pub(crate) async fn wait_for_process_registration(&self) {
         let mut registrations = self.process_registrations.subscribe();
-        let observed = *registrations.borrow_and_update();
         registrations
-            .wait_for(|value| *value > observed)
+            .wait_for(|value| *value > 0)
             .await
             .expect("controlled hook deadline sender alive");
     }
@@ -43,8 +42,13 @@ impl ControlledHookDeadline {
     }
 
     pub(super) async fn wait_for_process_advance(&self) {
+        let mut generation = self.generation.subscribe();
+        let current = *generation.borrow_and_update();
         self.process_registrations
             .send_modify(|value| *value = value.wrapping_add(1));
-        self.wait_for_advance().await;
+        generation
+            .wait_for(|value| *value != current)
+            .await
+            .expect("controlled hook deadline sender alive");
     }
 }

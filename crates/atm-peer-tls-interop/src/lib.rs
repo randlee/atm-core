@@ -223,7 +223,10 @@ fn complete_server_handshake(
     deadline: RequestDeadline,
 ) -> Result<(), HandshakeFailure> {
     while stream.conn.is_handshaking() {
-        let remaining = deadline.remaining().ok_or(HandshakeFailure::Deadline)?;
+        let remaining = deadline.remaining();
+        if remaining.is_none() && !deadline.is_unbounded() {
+            return Err(HandshakeFailure::Deadline);
+        }
         apply_deadline(stream.get_ref(), remaining).map_err(|_| HandshakeFailure::Deadline)?;
         if let Err(_error) = stream.conn.complete_io(&mut stream.sock) {
             if deadline.expired() {
@@ -235,14 +238,14 @@ fn complete_server_handshake(
     Ok(())
 }
 
-fn apply_deadline(stream: &TcpStream, deadline: Duration) -> Result<(), AtmError> {
-    stream.set_read_timeout(Some(deadline)).map_err(|source| {
+fn apply_deadline(stream: &TcpStream, deadline: Option<Duration>) -> Result<(), AtmError> {
+    stream.set_read_timeout(deadline).map_err(|source| {
         AtmError::daemon_unavailable_with_cause(
             "failed to set curl mTLS fixture read deadline",
             source,
         )
     })?;
-    stream.set_write_timeout(Some(deadline)).map_err(|source| {
+    stream.set_write_timeout(deadline).map_err(|source| {
         AtmError::daemon_unavailable_with_cause(
             "failed to set curl mTLS fixture write deadline",
             source,
@@ -250,11 +253,14 @@ fn apply_deadline(stream: &TcpStream, deadline: Duration) -> Result<(), AtmError
     })
 }
 
-fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
-    deadline
-        .remaining()
-        .filter(|remaining| !remaining.is_zero())
-        .ok_or_else(|| AtmError::daemon_unavailable("curl mTLS fixture deadline expired"))
+fn remaining_budget(deadline: RequestDeadline) -> Result<Option<Duration>, AtmError> {
+    match deadline.remaining() {
+        Some(remaining) => Ok(Some(remaining)),
+        None if deadline.is_unbounded() => Ok(None),
+        None => Err(AtmError::daemon_unavailable(
+            "curl mTLS fixture deadline expired",
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -371,9 +377,7 @@ mod tests {
         let (fixture, addr) =
             CurlMtlsReceiverFixture::bind_ephemeral(config).expect("bind fixture");
         let server_certificate = server.tls.certificates()[0].clone();
-        let handle = thread::spawn(move || {
-            fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
-        });
+        let handle = thread::spawn(move || fixture.serve_one(RequestDeadline::unbounded()));
         let stream = connect_with_retry(addr);
         let config = client_config(&client.tls, &server_certificate);
         let connection = ClientConnection::new(
@@ -421,9 +425,7 @@ mod tests {
         let (fixture, addr) =
             CurlMtlsReceiverFixture::bind_ephemeral(config).expect("bind fixture");
         let server_certificate = server.tls.certificates()[0].clone();
-        let handle = thread::spawn(move || {
-            fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
-        });
+        let handle = thread::spawn(move || fixture.serve_one(RequestDeadline::unbounded()));
         let stream = connect_with_retry(addr);
         let config = client_config(&client.tls, &server_certificate);
         let connection = ClientConnection::new(
@@ -472,9 +474,7 @@ mod tests {
         .expect("interop config");
         let (fixture, addr) =
             CurlMtlsReceiverFixture::bind_ephemeral(config).expect("bind fixture");
-        let handle = thread::spawn(move || {
-            fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
-        });
+        let handle = thread::spawn(move || fixture.serve_one(RequestDeadline::unbounded()));
         let url = format!("https://localhost:{}/fixture", addr.port());
         let output = curl_command()
             .args([

@@ -12,7 +12,7 @@ use super::{
 };
 
 #[cfg(feature = "test-support")]
-use crate::process_deadline::spawn_until;
+use crate::process_deadline::spawn_until_with_hook_context;
 
 struct CapturedEnv<'a>(&'a [(std::ffi::OsString, std::ffi::OsString)]);
 
@@ -89,7 +89,7 @@ impl DaemonHookRunner {
                 })?
                 .map_err(|_| missing("hook semaphore closed")),
             #[cfg(feature = "test-support")]
-            HookDeadlineSource::Controlled(deadline) => tokio::select! {
+            HookDeadlineSource::Controlled { deadline, .. } => tokio::select! {
                 permit = permit => permit.map_err(|_| missing("hook semaphore closed")),
                 _ = deadline.wait_for_advance() => Err(AtmError::hook_timeout(&target.phase, "hook concurrency limit reached")),
             },
@@ -101,20 +101,28 @@ impl DaemonHookRunner {
         spec: SpawnSpec,
         stdin: &[u8],
         remaining: Duration,
+        _target: &HookTarget,
+        _hook: &str,
     ) -> Result<SpawnedOutput, SpawnFailure> {
         match &self.deadline_source {
             HookDeadlineSource::System => spawn_with_deadline(spec, stdin, remaining).await,
             #[cfg(feature = "test-support")]
-            HookDeadlineSource::Controlled(deadline) => {
-                spawn_until(spec, stdin, deadline.wait_for_process_advance())
-                    .await
-                    .map_err(|failure| match failure {
-                        SpawnFailure::TimedOut { .. } => SpawnFailure::TimedOut {
-                            after_ms: remaining.as_millis().min(u128::from(u64::MAX)) as u64,
-                        },
-                        other => other,
-                    })
-            }
+            HookDeadlineSource::Controlled { deadline, .. } => spawn_until_with_hook_context(
+                spec,
+                stdin,
+                deadline.wait_for_process_advance(),
+                _target.team.as_str(),
+                _target.phase.as_str(),
+                _hook,
+                remaining.as_millis().min(u128::from(u64::MAX)) as u64,
+            )
+            .await
+            .map_err(|failure| match failure {
+                SpawnFailure::TimedOut { .. } => SpawnFailure::TimedOut {
+                    after_ms: remaining.as_millis().min(u128::from(u64::MAX)) as u64,
+                },
+                other => other,
+            }),
         }
     }
 }

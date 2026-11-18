@@ -228,19 +228,16 @@ impl SharedDb {
             .map_err(AtmError::from)?
     }
 
-    /// Awaits one pure read on the shared reader pool with the caller's
-    /// deadline. Tokio request paths use this instead of wrapping the
-    /// synchronous compatibility surface in `spawn_blocking`.
-    pub(crate) async fn read_with_deadline_async<T>(
+    pub(crate) async fn read_with_optional_deadline_async<T>(
         &self,
-        deadline: std::time::Duration,
+        deadline: Option<std::time::Duration>,
         operation: impl FnOnce(&Connection) -> Result<T, AtmError> + Send + 'static,
     ) -> Result<T, AtmError>
     where
         T: Send + 'static,
     {
         self.read_pool
-            .submit(deadline, move |connection, _target| {
+            .submit_optional(deadline, move |connection, _target| {
                 operation(connection).map_err(read_lane_storage_error)
             })
             .await
@@ -366,7 +363,7 @@ impl SharedDb {
     pub(crate) async fn submit_search_async(
         &self,
         query: atm_storage::MessageSearchQuery,
-        deadline: std::time::Duration,
+        deadline: Option<std::time::Duration>,
     ) -> Result<atm_storage::MessageSearchPage, AtmError> {
         self.search_reader.submit_async(query, deadline).await
     }

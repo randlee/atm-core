@@ -4,7 +4,6 @@
 //! than beside the trait: a task-hook `HookRunner` cannot satisfy this test.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
 use atm_core::boundary::{CronHookRunner, HookName, HookTarget, PhaseId};
@@ -56,7 +55,7 @@ async fn cron_engine_consumer_keeps_tick_and_stop_contracts_separate() {
         ));
 
     let target = target();
-    let deadline = RequestDeadline::after(Duration::from_secs(1));
+    let deadline = RequestDeadline::unbounded();
     let tick = request(&target, HookName::cron_tick());
     let stop = request(&target, HookName::cron_stop());
 

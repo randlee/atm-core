@@ -75,7 +75,7 @@ mod tests {
             caller_team: "test-team".parse().expect("team"),
             host: None,
             ingress: AuthenticatedIngress::Local,
-            deadline: RequestDeadline::after(std::time::Duration::from_secs(5)),
+            deadline: RequestDeadline::unbounded(),
             request_id: atm_core::protocol::next_request_id(),
         }
     }

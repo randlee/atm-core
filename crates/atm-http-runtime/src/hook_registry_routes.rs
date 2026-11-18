@@ -5,6 +5,7 @@
 //! the same synchronous bridge call as the store write (design D-8). Cron
 //! routes pass the scheduler's own results and errors through unchanged.
 
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -48,10 +49,30 @@ fn check_timeout(timeout_ms: u32, max: u32, name: &str) -> Result<(), AtmError> 
     Ok(())
 }
 
-fn cron_scheduler_budget(deadline: RequestDeadline, operation: &str) -> Result<Duration, AtmError> {
-    deadline.remaining().ok_or_else(|| {
-        AtmError::daemon_unavailable(format!("request deadline expired before {operation}"))
-    })
+fn cron_scheduler_budget(
+    deadline: RequestDeadline,
+    operation: &str,
+) -> Result<Option<Duration>, AtmError> {
+    match deadline.remaining() {
+        Some(remaining) => Ok(Some(remaining)),
+        None if deadline.is_unbounded() => Ok(None),
+        None => Err(AtmError::daemon_unavailable(format!(
+            "request deadline expired before {operation}"
+        ))),
+    }
+}
+
+async fn run_cron_scheduler_operation<T>(
+    deadline: RequestDeadline,
+    operation: &str,
+    future: impl Future<Output = Result<T, AtmError>>,
+) -> Result<T, AtmError> {
+    match cron_scheduler_budget(deadline, operation)? {
+        Some(remaining) => tokio::time::timeout(remaining, future).await.map_err(|_| {
+            AtmError::daemon_unavailable(format!("request deadline expired during {operation}"))
+        })?,
+        None => future.await,
+    }
 }
 
 /// Refreshes the snapshot after a committed write. A failure keeps the row and
@@ -189,14 +210,9 @@ impl StorageAndNudgeRouter {
         let spec = request.into_spec()?;
         self.check_roster_member(&spec.team, &spec.created_by)?;
         let scheduler = self.cron_scheduler()?;
-        let schedule = tokio::time::timeout(
-            cron_scheduler_budget(deadline, "cron schedule start")?,
-            scheduler.start(spec),
-        )
-        .await
-        .map_err(|_| {
-            AtmError::daemon_unavailable("request deadline expired during cron schedule start")
-        })??;
+        let schedule =
+            run_cron_scheduler_operation(deadline, "cron schedule start", scheduler.start(spec))
+                .await?;
         Ok(ApiResponse::new(ResponseEnvelope::CronStarted(schedule)))
     }
 
@@ -210,14 +226,12 @@ impl StorageAndNudgeRouter {
         let name = request.name.as_deref().map(CronName::parse).transpose()?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let rows = tokio::time::timeout(
-            cron_scheduler_budget(deadline, "cron schedule end")?,
+        let rows = run_cron_scheduler_operation(
+            deadline,
+            "cron schedule end",
             scheduler.end(&request.caller_team, &request.phase, name.as_ref()),
         )
-        .await
-        .map_err(|_| {
-            AtmError::daemon_unavailable("request deadline expired during cron schedule end")
-        })??;
+        .await?;
         Ok(ApiResponse::new(ResponseEnvelope::CronEnded(rows)))
     }
 
@@ -230,14 +244,12 @@ impl StorageAndNudgeRouter {
         require_local(ingress)?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let rows = tokio::time::timeout(
-            cron_scheduler_budget(deadline, "cron schedule list")?,
+        let rows = run_cron_scheduler_operation(
+            deadline,
+            "cron schedule list",
             scheduler.list(Some(&request.caller_team), request.phase.as_ref()),
         )
-        .await
-        .map_err(|_| {
-            AtmError::daemon_unavailable("request deadline expired during cron schedule list")
-        })??;
+        .await?;
         Ok(ApiResponse::new(ResponseEnvelope::CronList(rows)))
     }
 

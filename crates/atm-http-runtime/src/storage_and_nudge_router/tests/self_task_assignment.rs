@@ -14,7 +14,7 @@ async fn write(
         .dispatch(
             ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
             AuthenticatedIngress::Local,
-            RequestDeadline::after(Duration::from_secs(10)),
+            RequestDeadline::unbounded(),
         )
         .await
         .map(atm_core::ApiResponse::into_inner)
@@ -70,7 +70,7 @@ async fn self_addressed_task_assignment_is_tracked_without_delivery() {
                 .expect("list query"),
             ))),
             AuthenticatedIngress::Local,
-            RequestDeadline::after(Duration::from_secs(10)),
+            RequestDeadline::unbounded(),
         )
         .await
         .expect("list the caller's own inbox")
