@@ -33,13 +33,13 @@ x86_64-pc-windows-msvc = "0950f5a9f3422f74dea181d11f8b4d4447d1e9d1a9fdadcb72ff5b
 x86_64-unknown-linux-gnu = "4a2621d4b8cb2a1c2433aab2746597b3a10138c33106a303600ebbe76a0e5930"
 
 [sc-compose]
-version = "1.8.0"
+version = "1.9.0"
 
 [sc-compose.checksums]
-aarch64-apple-darwin = "c7b03453d357f36997b27467b02cfe6124713ca1ee9344175c31f8e0dc5f5408"
-x86_64-apple-darwin = "5f70b67b35e2c3f8e2784a7aea631fbf1ca0cf91f8378e4f1b44f96242a9d057"
-x86_64-pc-windows-msvc = "987c33e1a8d66d364c3a3b85e8e54b10f47d60321ac464cd87a15b9245a91335"
-x86_64-unknown-linux-gnu = "a12a16259c1cab58c4c611320653e442fe3440c2a15cce0ba617ad77d145809a"
+aarch64-apple-darwin = "10b2d5f43ce6f2df847c31ba9763f4e66fdeae8262e0375784d79460564ddfef"
+x86_64-apple-darwin = "df494af114a94d5d5d38b4f1a2018dd2f08b14b1d1b21dd9a2bff6d320d1e8f8"
+x86_64-pc-windows-msvc = "20349bd3a0618f14601586261fe1b09c05d82642dfb3104bfcca5e51534a8bdd"
+x86_64-unknown-linux-gnu = "0f98747d9c1cba60a60f6e37d3eca2ccd2aa2f733348883b57705fe6a8d1b108"
 
 [wyvern]
 version = "0.8.0"
