@@ -1,9 +1,9 @@
 {
-  "version": "0.20.0",
-  "commit": "d65311de77b81525fdb865aa67a52991f8ae125c",
+  "version": "0.20.1",
+  "commit": "c4294d70d4c91a4e18e20d42e864c3ae47f62c29",
   "source": {
     "ref": "bundled",
-    "manifest_aggregate": "09bd2b5989cb53f303fd3b67147e410ab5a8f9c342c9d5a549d4224f591debd4"
+    "manifest_aggregate": "f94487c7803541cdc4b8a04adcb01393d443b0bfa8bcdc77df0854d8eee4191a"
   },
   "files": [
     {
@@ -52,7 +52,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-lite/SKILL.md",
-      "sc_sha": "7abbb1697315c06b1925912f47bc2204b42a4b1d12f8de8e7deb5b695832dd2d"
+      "sc_sha": "bd5a87a65f892c1182f265089beedb91e434ae707e14151bbc983db32e538a94"
     },
     {
       "path": ".claude/skills/atm-bd-lite/hooks/task-assign.md",
@@ -124,7 +124,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/SKILL.md",
-      "sc_sha": "d7ff6835fafaaa2e2618478a8c120df5ef6972567805858bfdc6599384cb0dc5"
+      "sc_sha": "0f5a9d414642a2c280c0e59b824b211ddc804d922138ddd30a117a0a6310a392"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/blocking-findings-guidelines.md",
@@ -436,7 +436,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity-stack-link",
-      "sc_sha": "76656bc075e705dbcfe32e75c8d203aad802b7082552fc7a8fcb98d624582ac9"
+      "sc_sha": "361b746b3b72d7ed4158d4110fe6c0c63b606f1084f7c6e8ce1fb4352ba215c0"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/sanity_task_close_hook.py",
@@ -656,7 +656,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_sanity_stack.py",
-      "sc_sha": "db07a16891beef4b1f088f0298b5d2cdd4b7861642c4130a5cc35ff2c3b4a729"
+      "sc_sha": "2ed0a9b2543afcdb00363a9cd86f5b70a8c37575fcc3ed7036b10559d939c8d7"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/scripts/tests/test_sanity_task_close_hook.py",
@@ -844,7 +844,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/SKILL.md",
-      "sc_sha": "004adb457b8b7af2ce9d813be16a5fd768fa4acf8cc9614703a5b0365cca3138"
+      "sc_sha": "b3f7e9ae86e5202907ee113fa0aa885bebf8e5570d948d296a56919562a8b455"
     },
     {
       "path": ".claude/skills/atm-beads/examples/dev-sanity-bead-vars-d-4.json",
@@ -1048,7 +1048,7 @@
     },
     {
       "path": ".claude/skills/plan-hardening/SKILL.md",
-      "sc_sha": "fcfae00ba7d5290f30a8e0d8126e0e34f22177daa1808c22e6d1264f2be37cc4"
+      "sc_sha": "ca2aec9bb350e2bf99d7e64966fc598355e0914628f51bc7595d837b88939bd0"
     },
     {
       "path": ".claude/skills/plan-hardening/examples/plan-hardening-finding-bead-vars.example.json",

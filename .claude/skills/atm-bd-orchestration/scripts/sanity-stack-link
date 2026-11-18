@@ -64,6 +64,7 @@ class Linker:
         self.heartbeat_at = 0
         self.mode = None
         self.lean_reason = None
+        self.landed = []
 
     def command(self, argv, *, check=True, allow_transport_failure=False):
         if self.held and argv[:2] != ['bd', 'heartbeat'] and self.clock() - self.heartbeat_at >= HEARTBEAT_INTERVAL:
@@ -148,6 +149,42 @@ class Linker:
             raise StackError('filtered hosted stack list has invalid fields')
         return found
 
+    def landed_bottom(self, stack, pulls, trunk):
+        """Hosted-stack PRs below the first open one that have landed in the trunk.
+
+        After a partial land GitHub keeps the merged bottom PR in the hosted stack (#983). Such a PR is skipped only
+        when it merged into the trunk and its head is in origin/<trunk>; a closed-unmerged PR stays an error."""
+        open_numbers = {pull['number'] for pull in pulls}
+        landed = []
+        for number in stack['prs']:
+            if number in open_numbers:
+                break
+            result = self.command(['gh', 'api', f'repos/{{owner}}/{{repo}}/pulls/{number}', '--jq',
+                                   '{merged, base: .base.ref, sha: .head.sha}'])
+            found = rows(result.stdout) if result.stdout.strip() else []
+            if (len(found) != 1 or not isinstance(found[0], dict) or type(found[0].get('merged')) is not bool or
+                    not isinstance(found[0].get('sha'), str) or not found[0]['sha']):
+                raise StackError(f'hosted stack PR #{number} has invalid fields')
+            if not found[0]['merged']:
+                raise StackError(f'hosted stack PR #{number} is closed without merging')
+            if found[0].get('base') != trunk:
+                raise StackError(f'hosted stack PR #{number} merged into {found[0].get("base")}, not the trunk')
+            contained = self.command(['git', 'merge-base', '--is-ancestor', found[0]['sha'], 'origin/' + trunk], check=False)
+            if contained.returncode:
+                raise StackError(f'hosted stack PR #{number} merged but its head is not in origin/{trunk}')
+            landed.append(number)
+        # A stack with no open PR left is a fully landed stack (#928), not a partial land.
+        return landed if len(landed) < len(stack['prs']) else []
+
+    @staticmethod
+    def drop_landed(metadata, landed):
+        """Remove landed layers from the bottom of the ledger; the new bottom's base becomes the trunk."""
+        layers = metadata['layers']
+        while layers and layers[0]['pr'] in landed:
+            removed = layers.pop(0)
+            if layers and layers[0].get('base') == removed['branch']:
+                layers[0]['base'] = metadata['trunk']
+
     def invalid_layer(self, metadata, layer, invariant, *, remove=False):
         repaired = copy.deepcopy(metadata)
         index = next(i for i, item in enumerate(metadata['layers']) if item is layer)
@@ -163,7 +200,7 @@ class Linker:
         raise LayerError(f"PR {fields.get('pr')} branch {fields.get('branch')} head {fields.get('head')}: {invariant}; --set-metadata stores a string",
                          command)
 
-    def reconcile(self, metadata, pulls, stacks):
+    def reconcile(self, metadata, pulls, stacks, landed=()):
         layers = metadata['layers']
         known = {entry['pr'] for entry in layers}
         matching = [stack for stack in stacks if stack['number'] == metadata['stack_number'] or
@@ -182,7 +219,8 @@ class Linker:
             raise StackError('hosted stack has conflicting ancestry')
         by_number = {pull['number']: pull for pull in pulls}
         previous = metadata['trunk']
-        for index, number in enumerate(stack['prs']):
+        hosted = [number for number in stack['prs'] if number not in landed]
+        for index, number in enumerate(hosted):
             pull = by_number.get(number)
             if not pull or pull['draft'] or pull['base'] != previous:
                 raise StackError('hosted stack pull chain is missing or ambiguous')
@@ -232,7 +270,7 @@ class Linker:
                     raise StackError('hosted-only stack layer is not uniquely attributable')
                 layers.append({'branch': pull['head'], 'pr': number, 'head': pull['sha'], 'base': previous, 'linked': True})
             previous = pull['head']
-        for layer in layers[len(stack['prs']):]:
+        for layer in layers[len(hosted):]:
             if layer['linked']:
                 self.invalid_layer(metadata, layer, 'linked: true but absent from the hosted stack')
         metadata['stack_number'] = stack['number']
@@ -319,7 +357,9 @@ class Linker:
                         (stack['base'] == metadata['trunk'] and known.intersection(stack['prs']))]
             if len(matching) > 1:
                 raise StackError('ambiguous hosted stacks overlap the ledger')
-            hosted_prs = matching[0]['prs'] if matching else []
+            landed = self.landed = self.landed_bottom(matching[0], pulls, metadata['trunk']) if matching else []
+            self.drop_landed(metadata, landed)
+            hosted_prs = [number for number in matching[0]['prs'] if number not in landed] if matching else []
             for layer in layers:
                 if layer['linked'] and layer['pr'] not in hosted_prs:
                     self.invalid_layer(metadata, layer, 'linked: true but absent from the hosted stack')
@@ -331,11 +371,11 @@ class Linker:
                         hosted_prs[:len(anchors)] != anchors):
                     raise StackError(f'stack top mismatch: ledger {selected.ledger_top}; hosted {selected.hosted_top}')
                 try:
-                    self.reconcile(metadata, pulls, stacks)
+                    self.reconcile(metadata, pulls, stacks, landed)
                 except StackError as error:
                     raise StackError(f'stack top mismatch: ledger {selected.ledger_top}; hosted {selected.hosted_top}; {error}') from error
             else:
-                self.reconcile(metadata, pulls, stacks)
+                self.reconcile(metadata, pulls, stacks, landed)
         candidate = next((pull for pull in pulls if pull['number'] == self.values['pr_number']), None)
         if not candidate or candidate['head'] != self.values['branch'] or candidate['sha'] != self.values['commit'] or candidate['draft']:
             raise StackError('checked pull request is missing, draft, or differs from the pinned branch and commit')
@@ -458,12 +498,13 @@ class Linker:
         if not lean and layers and (stack_number is not None or len(pending) > 1):
             if stack_number is None or children:
                 link_layers = [entry for entry in layers if entry['linked'] or entry in pending]
-                self.command(['gh', 'stack', 'link', '--base', metadata['trunk']] + [str(entry['pr']) for entry in link_layers] + ([] if new in layers else [str(new['pr'])]))
+                self.command(['gh', 'stack', 'link', '--base', metadata['trunk']] + [str(number) for number in self.landed] +
+                             [str(entry['pr']) for entry in link_layers] + ([] if new in layers else [str(new['pr'])]))
             else:
                 for entry in pending:
                     self.command(['gh', 'stack', 'link', str(stack_number), str(entry['pr'])])
             hosted = self.stacks()
-            expected = [entry['pr'] for entry in layers if entry['linked'] or entry in pending]
+            expected = self.landed + [entry['pr'] for entry in layers if entry['linked'] or entry in pending]
             if new not in layers:
                 expected.append(new['pr'])
             matches = [stack for stack in hosted if stack['base'] == metadata['trunk'] and stack['prs'] == expected
