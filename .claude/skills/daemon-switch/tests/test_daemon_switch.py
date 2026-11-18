@@ -2109,3 +2109,46 @@ class HerdrRestartTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class CrossPlatformProvisionRegressionTests(unittest.TestCase):
+    def test_default_doctor_projection_on_each_platform(self) -> None:
+        for system, address in (("Windows", r"\\\\.\\pipe\\%APPDATA%/herdr/herdr.sock"), ("Darwin", "/tmp/herdr.sock"), ("Linux", "/run/user/1000/herdr.sock")):
+            endpoint = {"session": None, "provenance": "herdr_default", "transport": "socket", "endpoint": address, "state": {"kind": "ok"}, "capabilities": {}}
+            payload = {"herdr": {"configured": True, "endpoints": [endpoint, dict(endpoint, session="default", provenance="session")]}}
+            with self.subTest(system=system), mock.patch.object(DAEMON_SWITCH.platform, "system", return_value=system), mock.patch.object(DAEMON_SWITCH, "doctor", return_value=payload):
+                self.assertEqual([e.name for e in DAEMON_SWITCH.herdr_entry_endpoints(Path("atm"), install=True)], ["default"])
+                self.assertEqual([e.name for e in DAEMON_SWITCH.herdr_restart_endpoints(Path("atm"))], ["default"])
+                self.assertEqual(DAEMON_SWITCH.herdr_restart_pending_endpoints(Path("atm")), [])
+                endpoint["provenance"] = "socket_path"
+                with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "externally owned"):
+                    DAEMON_SWITCH.select_herdr_restart_endpoint(Path("atm"), "default")
+
+    def test_windows_provision_xml_and_non_windows_refusal(self) -> None:
+        import service_control
+        from xml.etree import ElementTree
+        args = argparse.Namespace(yes=True, service="atm-daemon")
+        daemon = Path("selector & daemon.exe")
+        links = lambda _args: (Path("atm.exe"), daemon)
+        captured = []
+        def run(command, **_kwargs):
+            captured.append(ElementTree.parse(command[command.index("/XML") + 1]).getroot())
+            return subprocess.CompletedProcess(command, 0, "ok", "")
+        with mock.patch.object(service_control.platform, "system", return_value="Windows"), mock.patch.dict(os.environ, {"USERDOMAIN": "DOMAIN", "USERNAME": "user"}), mock.patch.object(service_control, "require_executable"), mock.patch.object(service_control, "require_windows_task_selector") as check, mock.patch.object(service_control, "run", side_effect=run):
+            service_control.provision_windows_task(args, links)
+            check.assert_called_once_with(args, links)
+        root = captured[0]
+        def value(path):
+            return root.findtext("/".join("{*}" + part for part in path.split("/")))
+        self.assertIsNotNone(root.find("{*}Triggers/{*}LogonTrigger"))
+        self.assertEqual(value("Principals/Principal/UserId"), r"DOMAIN\user")
+        self.assertEqual(value("Principals/Principal/LogonType"), "InteractiveToken")
+        self.assertEqual(value("Principals/Principal/RunLevel"), "LeastPrivilege")
+        self.assertEqual(value("Settings/ExecutionTimeLimit"), "PT0S")
+        self.assertEqual(value("Settings/RestartOnFailure/Interval"), "PT1M")
+        self.assertEqual(value("Settings/RestartOnFailure/Count"), "3")
+        self.assertEqual(len(root.findall("{*}Actions/*")), 1)
+        self.assertEqual(value("Actions/Exec/Command"), str(daemon))
+        for system in ("Darwin", "Linux"):
+            with self.subTest(system=system), mock.patch.object(service_control.platform, "system", return_value=system):
+                with self.assertRaisesRegex(service_control.SwitchError, "only available on Windows"):
+                    service_control.provision_windows_task(args, links)

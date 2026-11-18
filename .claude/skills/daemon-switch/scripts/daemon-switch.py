@@ -985,6 +985,21 @@ def herdr_entry_root() -> Path:
     return state_path().with_name("herdr-entry")
 
 
+def herdr_endpoint_name(raw: dict[str, object]) -> object:
+    """Resolve session identity without treating a socket address as a name."""
+    session = raw.get("session")
+    if session is not None:
+        return session
+    if raw.get("provenance") in ("herdr_default", "socket_path"):
+        return HERDR_DEFAULT_SESSION
+    endpoint = raw.get("endpoint")
+    if raw.get("transport") == "socket":
+        return None
+    if isinstance(endpoint, str) and re.fullmatch(r"[A-Za-z0-9_.-]+", endpoint):
+        return endpoint
+    return HERDR_DEFAULT_SESSION if endpoint is None else None
+
+
 def herdr_entry_endpoints(cli: Path, *, install: bool) -> list[HerdrEndpoint]:
     """Use only AY3's native doctor JSON; never reconstruct roster selection."""
     payload = doctor(cli)
@@ -1024,13 +1039,18 @@ def herdr_entry_endpoints(cli: Path, *, install: bool) -> list[HerdrEndpoint]:
     for value in values:
         if not isinstance(value, dict):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint was malformed", "Fix native doctor and rerun", 4)
-        name = value.get("session") or value.get("endpoint") or HERDR_DEFAULT_SESSION
+        name = herdr_endpoint_name(value)
         if not isinstance(name, str) or not name or not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint identifier was invalid", "Fix native doctor and rerun", 4)
         socket_path = value.get("socket_path")
         if socket_path is not None and not isinstance(socket_path, str):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor socket provenance was malformed", "Fix native doctor and rerun", 4)
-        endpoints.append(HerdrEndpoint(name, socket_path))
+        if value.get("provenance") == "socket_path":
+            socket_path = value.get("endpoint") if isinstance(value.get("endpoint"), str) else "socket-path"
+        endpoint = HerdrEndpoint(name, socket_path)
+        if name == HERDR_DEFAULT_SESSION and socket_path is None and any(existing.name == name and existing.socket_path is None for existing in endpoints):
+            continue
+        endpoints.append(endpoint)
     return endpoints
 
 
@@ -1113,7 +1133,7 @@ def herdr_restart_endpoints(cli: Path, *, doctor_payload: object | None = None) 
     for raw in raw_endpoints:
         if not isinstance(raw, dict):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor endpoint was malformed", "Fix native doctor and rerun", 4)
-        name = raw.get("session") or raw.get("endpoint") or HERDR_DEFAULT_SESSION
+        name = herdr_endpoint_name(raw)
         state = raw.get("state")
         capabilities = raw.get("capabilities")
         provenance = raw.get("provenance")
@@ -1127,7 +1147,14 @@ def herdr_restart_endpoints(cli: Path, *, doctor_payload: object | None = None) 
         if client is not None and not isinstance(client, str) or server is not None and not isinstance(server, str):
             raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor version data was malformed", "Fix native doctor and rerun", 4)
         socket_path = raw.get("endpoint") if provenance == "socket_path" else None
-        endpoints.append(HerdrRestartEndpoint(HerdrEndpoint(name, socket_path if isinstance(socket_path, str) else "socket-path" if provenance == "socket_path" else None), provenance, str(state["kind"]), client, server, live_handoff))
+        endpoint = HerdrRestartEndpoint(HerdrEndpoint(name, socket_path if isinstance(socket_path, str) else "socket-path" if provenance == "socket_path" else None), provenance, str(state["kind"]), client, server, live_handoff)
+        if name == HERDR_DEFAULT_SESSION and provenance in ("herdr_default", "session"):
+            duplicate = next((item for item in endpoints if item.name == name and item.provenance in ("herdr_default", "session")), None)
+            if duplicate is not None:
+                if (duplicate.state_kind, duplicate.client_version, duplicate.running_server, duplicate.live_handoff) != (endpoint.state_kind, endpoint.client_version, endpoint.running_server, endpoint.live_handoff):
+                    raise HerdrEntryError("HERDR_DOCTOR_UNREADABLE", "native doctor duplicate default endpoints disagree", "Fix native doctor and rerun", 4)
+                continue
+        endpoints.append(endpoint)
     return endpoints
 
 
