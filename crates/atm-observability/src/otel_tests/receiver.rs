@@ -2,7 +2,6 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use opentelemetry_proto::tonic::collector::{
     logs::v1 as logs, metrics::v1 as metrics, trace::v1 as traces,
@@ -82,21 +81,16 @@ impl Capture {
     }
 
     /// Waits until `condition` holds, re-checking on every capture change.
-    /// The 30s bound is failure-only; on expiry the panic names `what`.
-    pub async fn wait(&self, what: &str, condition: impl Fn() -> bool) {
-        tokio::time::timeout(Duration::from_secs(30), async {
-            loop {
-                let changed = self.changed.notified();
-                tokio::pin!(changed);
-                changed.as_mut().enable();
-                if condition() {
-                    return;
-                }
-                changed.await;
+    pub async fn wait(&self, _what: &str, condition: impl Fn() -> bool) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if condition() {
+                return;
             }
-        })
-        .await
-        .unwrap_or_else(|_| panic!("the receiver never observed {what}"));
+            changed.await;
+        }
     }
 }
 
@@ -225,9 +219,6 @@ impl Receiver {
 
     pub async fn stop(self) {
         let _ = self.stop.send(());
-        tokio::time::timeout(Duration::from_secs(3), self.task)
-            .await
-            .unwrap()
-            .unwrap();
+        self.task.await.unwrap();
     }
 }

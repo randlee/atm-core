@@ -14,18 +14,35 @@ use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry::trace::{Span, Tracer, TracerProvider};
 use opentelemetry_proto::tonic::metrics::v1::metric::Data;
 
-use super::otel_setup::{TelemetrySetup, setup_with_limits, setup_with_timeouts};
+use super::otel_setup::{
+    TelemetrySetup, setup_with_limits, setup_with_timeouts, setup_without_deadlines,
+};
 use receiver::{Receiver, Signal};
-
-// The CI job has a shorter overall deadline; this guard cannot determine a
-// successful export or shutdown before the job itself terminates.
-const SUCCESS_EXPORT_HANG_GUARD: Duration = Duration::from_secs(24 * 60 * 60);
 
 fn setup_success(
     config: &TelemetryExportConfig,
     batch: usize,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
-    setup_with_limits(config, batch, SUCCESS_EXPORT_HANG_GUARD)
+    setup_without_deadlines(config, batch)
+}
+
+#[tokio::test(start_paused = true)]
+async fn unbounded_test_wait_does_not_expire_when_time_advances() {
+    use opentelemetry_sdk::runtime::Runtime;
+    assert!(
+        std::time::Instant::now()
+            .checked_add(Duration::MAX)
+            .is_none()
+    );
+    let runtime = super::otel_setup::NoDeadlineRuntime;
+    let delay = runtime.delay(Duration::MAX);
+    tokio::pin!(delay);
+    tokio::time::advance(Duration::from_secs(48 * 60 * 60)).await;
+    tokio::select! {
+        biased;
+        _ = &mut delay => panic!("unbounded wait expired"),
+        _ = std::future::ready(()) => {}
+    }
 }
 
 fn config(endpoint: &str) -> TelemetryExportConfig {

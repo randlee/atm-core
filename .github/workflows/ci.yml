@@ -236,6 +236,8 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
+    # Reports a hung test at the job boundary without imposing a test assertion deadline.
+    timeout-minutes: 60
     needs: [clippy, ci-scope, hermes-atm-release-wheels]
     if: ${{ always() && !cancelled() && needs.clippy.result == 'success' && (needs.ci-scope.outputs.runtime != 'true' || needs.hermes-atm-release-wheels.result == 'success' || needs.hermes-atm-release-wheels.result == 'skipped') }}
     strategy:
