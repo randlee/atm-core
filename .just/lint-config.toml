@@ -21,21 +21,7 @@ forbidden_literals = [
 allowed_paths = ["crates/atm-core/tests/mailbox_locking.rs"]
 
 [env_var_boundary]
-# ATM_TEMP is read only through the `EnvSource` trait-method seam
-# (`resolve_atm_temp`, crates/atm-core/src/atm_temp.rs), which is lint-clean
-# by construction: `env.var("ATM_TEMP")` is a method call, not the
-# free-function `env::var`/`std::env::var` path this lint's `ENV_CALL_RE`
-# matches. Listing it here is defensive coverage only (ADR-055 "M14"): there
-# is no existing offending call site to allowlist, and this catches a future
-# direct `env::var("ATM_TEMP")` added outside the `EnvSource` seam.
-forbidden_env_vars = [
-  "ATM_TEAM",
-  "ATM_IDENTITY",
-  "ATM_CHAT_ID",
-  "ATM_SESSION_ID",
-  "ATM_PID",
-  "ATM_TEMP",
-]
+# Cross-file reader-call rule only; delete with .just/check_env_var_boundary.py when randlee/sc-lint#981 ships.
 restricted_crate_roots = ["crates/atm-core/src", "crates/atm-daemon/src"]
 # Seed boundary readers. The lint expands this set transitively to include
 # same-file wrappers (for example `*_or_warn`) that call these functions.

@@ -19,7 +19,7 @@ use crate::types::HostName;
 ///
 /// The entire justification for this trait is that [`EnvSource::var`] is a
 /// **method call**, never the free-function `env::var`/`std::env::var` path
-/// form the `env-var-boundary` lint's `ENV_CALL_RE` matches (anchored on a
+/// form the `SCB-ENV-001` lint matches (anchored on a
 /// literal `::`). `resolve_atm_temp` is therefore lint-clean by
 /// construction and needs no allowlist entry (ADR-055's "M14" note).
 pub trait EnvSource {

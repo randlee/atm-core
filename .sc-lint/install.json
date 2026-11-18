@@ -27,7 +27,8 @@
         "SCB-MANIFEST-005",
         "SCB-MANIFEST-006",
         "SCB-BOUNDARY-004",
-        "SCB-BOUNDARY-005"
+        "SCB-BOUNDARY-005",
+        "SCB-ENV-001"
       ],
       "global_dependency_ownership": [
         {
@@ -473,7 +474,30 @@
           "owner_manifest_path": "crates/atm-http-runtime/Cargo.toml"
         }
       ],
-      "reason": "Boundary inventory, crate cycles, forbidden crate edges, and composition-root policy for the atm-core workspace. SCB-CYCLE-001 alone is excluded for crates/atm-core/src/observability.rs: LogFieldValue and LogFieldMap intentionally represent recursive JSON values and maps; every other boundary rule still checks this file."
+      "reason": "Boundary inventory, crate cycles, forbidden crate edges, and composition-root policy for the atm-core workspace. SCB-CYCLE-001 alone is excluded for crates/atm-core/src/observability.rs: LogFieldValue and LogFieldMap intentionally represent recursive JSON values and maps; every other boundary rule still checks this file.",
+      "env_var_boundary": [
+        {
+          "forbidden_env_vars": [
+            "ATM_TEAM",
+            "ATM_IDENTITY",
+            "ATM_CHAT_ID",
+            "ATM_SESSION_ID",
+            "ATM_PID",
+            "ATM_TEMP"
+          ],
+          "restricted_crate_roots": [
+            "crates/atm-core",
+            "crates/atm-daemon"
+          ],
+          "boundary_reader_functions": [
+            "agent_team_mail_core::caller_context::read_cli_identity_from_env",
+            "agent_team_mail_core::caller_context::read_cli_team_from_env",
+            "agent_team_mail_core::caller_context::read_cli_chat_id_from_env",
+            "agent_team_mail_core::caller_context::read_cli_session_id_from_env",
+            "agent_team_mail_core::caller_context::read_cli_pid_from_env"
+          ]
+        }
+      ]
     },
     "portability": {
       "config_home_env": "ATM_CONFIG_HOME",
@@ -614,7 +638,7 @@
       "python-tests-windows"
     ]
   },
-  "minimum_version": "0.8.8",
+  "minimum_version": "0.8.9",
   "profiles": {
     "adr-index-linux": {
       "command": [
