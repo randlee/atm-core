@@ -1,6 +1,6 @@
 # Phase bg: migrate to published sc-lint
 
-Rendered from the beads plan (`bd show`); the beads are authoritative.
+Rendered from the beads plan (`bd show`); the beads are authoritative. The unchecked bg-1..bg-6 acceptance boxes below are historical planning criteria, not live completion status; use the current phase state and bead states to track completion.
 
 **State (2026-11-12).** bg-1 through bg-7 and the phase-end fixes are landed on `integrate/phase-bg`. atm-core lints with the published sc-lint 0.8.8 adoption kit and consumer runner (`minimum_version = "0.8.8"`), parallel and keep-going. The vendored `sc-lint-boundary` and `sc-lint-directives` crates are deleted. The test manifest is repository-owned. Version alignment runs the published `sc_lint.check_version_sync`. Each Python lint and test row has Linux, macOS and Windows variants: repository scripts run on the `.bootstrap-venv` interpreter, published `sc_lint` modules on `.sc-lint/venv`. CI runs `just lint ci all`; `.just/run_lint.py` is deleted. The merge to `develop` is blocked on Rand's ruling on the requirement, architecture and ADR wording changes ([#2445](https://github.com/randlee/atm-core/issues/2445)).
 
@@ -67,7 +67,7 @@ Install the sc-lint 0.7.0 adoption kit verbatim so atm-core has the shared `just
 2. BG1-2 Steps: `.sc-lint/install.json` `profiles` has one step per current `run_lint.py all` target, same name, argv through the Justfile Python bridge; `test` keeps today's `just test` (the kit leaves an existing `test` recipe alone, sc-lint#194).
 3. BG1-3 Justfile: remove the recipes that collide with the kit justfile (`lint target=`, `default` if it collides); add a Justfile Python bridge to run scripts through the pinned bootstrap interpreter; every other recipe unchanged. Bare `just` still prints help.
 4. BG1-4 xwin: step `clippy-windows` runs the published `sc-lint clippy xwin` (and `clippy` runs `sc-lint clippy native`); the only wrapper is the PYO3_PYTHON environment the pyo3 crates (atm-query-python, atm-graft-python) need (`delete when randlee/sc-lint#198 ships`). On Windows `clippy-windows` exits 0 saying native clippy covers it. `cargo-xwin` pinned in `tools/bootstrap.toml`; `tools/bootstrap.py` adds the msvc target on non-Windows hosts; bootstrap tests and doc updated.
-5. BG1-5 CI: `.github/workflows/ci.yml` lint and test jobs run `just setup` after bootstrap and cache the sc-lint binary and the xwin SDK; the just-lint job, which calls `just lint` today, calls the Justfile Python bridge for `.just/run_lint.py all` until bg-6; there is still one lint workflow (no kit `sc-lint.yml`, `ci.enabled = false`).
+5. BG1-5 CI (original bg-1 plan, superseded by bg-6): `.github/workflows/ci.yml` lint and test jobs run `just setup` after bootstrap and cache the sc-lint binary and the xwin SDK; the original just-lint proposal routed `.just/run_lint.py all` through the Justfile Python bridge until bg-6. BG6-1 instead removed `.just/run_lint.py` and switched CI to `just lint ci all`; there is still one lint workflow (no kit `sc-lint.yml`, `ci.enabled = false`).
 
 ## Does Not Close
 - Retargeting steps to published analyzers and deleting legacy tools (bg-2..bg-5); runner cutover and speed (bg-6).
@@ -78,7 +78,7 @@ Install the sc-lint 0.7.0 adoption kit verbatim so atm-core has the shared `just
 - `install.py` persists its validated input at `.sc-lint/install.json`; `--input` bootstraps it. `profiles` and `test` argv are rendered verbatim into `sc-lint.toml` `[[tool.sc-lint.lint]]` / `[[tool.sc-lint.test]]`.
 - `.sc-lint/justfile`: `setup`, `lint *profile`, `upgrade` via `.sc-lint/bootstrap` (`.ps1` on Windows). `test.just` is added only when the consumer has no `test` recipe; atm-core has one.
 - Consumer argv runs with no shell. Python lint and test rows use explicit per-OS interpreter paths (`.bootstrap-venv` for repository scripts, `.sc-lint/venv` for published `sc_lint` modules), and `just test` selects the row matching the current host.
-- Kit steps run serially and stop at the first failure until sc-lint#195 ships (bg-6); CI keeps `run_lint.py all` meanwhile.
+- At the bg-1 planning point, kit steps were expected to run serially and stop at the first failure until sc-lint#195 shipped in bg-6, while CI kept `run_lint.py all`. BG6-1 superseded this: the published runner now runs the steps in parallel and continues after failures, and CI invokes `just lint ci all`.
 
 ## Upstream
 - Gaps found here, including consumer boilerplate a kit template could remove (sc-lint#348 covers the installer renderer), are filed on randlee/sc-lint as general-purpose capabilities and sent to team-lead@sc-lint (ANC-018, ANC-020).
