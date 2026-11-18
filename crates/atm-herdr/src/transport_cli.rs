@@ -437,7 +437,7 @@ mod tests {
             &[],
             &[],
             None,
-            atm_core::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            atm_core::RequestDeadline::unbounded(),
         )
         .await;
         assert!(matches!(

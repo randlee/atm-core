@@ -1,6 +1,7 @@
 use super::*;
 
 impl ReaderPool {
+    #[cfg(test)]
     pub(crate) async fn submit<T, F>(
         &self,
         deadline: Duration,
@@ -25,6 +26,7 @@ impl ReaderPool {
         self.submit_with_class(deadline, None, operation).await
     }
 
+    #[cfg(test)]
     pub(crate) async fn submit_tool<T, F>(
         &self,
         deadline: Duration,

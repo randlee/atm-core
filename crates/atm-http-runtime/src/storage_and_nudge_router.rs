@@ -12,6 +12,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::api::{ApiRequest, ApiResponse, AuthenticatedIngress, RequestDeadline};
@@ -47,6 +48,17 @@ use crate::router_support::{
     hook_warning, receiver_hook_deadline, retry_deferred_marker, validate_graft_receiver_member,
     write_response,
 };
+
+fn peer_request_timeout(
+    deadline: RequestDeadline,
+    expired_message: &'static str,
+) -> Result<Option<Duration>, AtmError> {
+    match deadline.remaining() {
+        Some(remaining) => Ok(Some(remaining)),
+        None if deadline.is_unbounded() => Ok(None),
+        None => Err(AtmError::daemon_unavailable(expired_message)),
+    }
+}
 
 pub(crate) mod hook_wiring;
 mod non_write_dispatch;
@@ -270,26 +282,29 @@ impl StorageAndNudgeRouter {
             ));
         };
         let port = self.resolved_peer_port(host, deadline).await?;
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "request deadline expired before cross-host acknowledgement delivery",
-            )
-        })?;
+        let request_timeout = peer_request_timeout(
+            deadline,
+            "request deadline expired before cross-host acknowledgement delivery",
+        )?;
         let client = match self.peer_connection_pool.as_ref() {
             Some(pool) => crate::client::pooled_peer_stream_write_client(
                 host.clone(),
                 port,
-                remaining,
+                request_timeout,
                 pool.clone(),
             )?,
             None => match self.shared_direct_peer_client.as_ref() {
-                Some(client) => crate::client::direct_peer_tcp_client_with_shared_client(
+                Some(client) => crate::client::direct_peer_tcp_client_with_shared_client_timeout(
                     host.clone(),
                     port,
-                    remaining,
+                    request_timeout,
                     client.clone(),
                 )?,
-                None => crate::client::direct_peer_tcp_client(host.clone(), port, remaining)?,
+                None => crate::client::direct_peer_tcp_client_with_timeout(
+                    host.clone(),
+                    port,
+                    request_timeout,
+                )?,
             },
         };
         let security = if self.peer_connection_pool.is_some() {
@@ -767,16 +782,23 @@ impl StorageAndNudgeRouter {
     ) -> Result<ApiResponse, AtmError> {
         require_local_graft_ingress(ingress)?;
         validate_graft_receiver_member(&self.service_runtime, &team, &agent)?;
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "request deadline expired before graft receiver lease lookup",
-            )
-        })?;
         let store = self.service_runtime.graft_receiver_endpoint_store()?;
-        let lease = store
-            .lookup_with_deadline_async(&team, &agent, remaining)
-            .await
-            .map_err(graft_store_error)?;
+        let lease = match deadline.remaining() {
+            Some(remaining) => {
+                store
+                    .lookup_with_deadline_async(&team, &agent, remaining)
+                    .await
+            }
+            None if deadline.is_unbounded() => {
+                store.lookup_without_deadline_async(&team, &agent).await
+            }
+            None => {
+                return Err(AtmError::daemon_unavailable(
+                    "request deadline expired before graft receiver lease lookup",
+                ));
+            }
+        }
+        .map_err(graft_store_error)?;
         Ok(ApiResponse::new(ResponseEnvelope::GraftReceiverLookup(
             lease,
         )))
@@ -1063,7 +1085,13 @@ pub(crate) fn require_local_graft_ingress(ingress: AuthenticatedIngress) -> Resu
 #[cfg(test)]
 pub(crate) mod tests {
     mod bd3_task_telemetry;
+    mod mailbox_fanout;
     mod self_task_assignment;
+
+    #[tokio::test]
+    async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied() {
+        mailbox_fanout::run_mailbox_and_doctor_fanout().await;
+    }
 
     use std::fs;
     use std::future::Future;
@@ -1124,6 +1152,7 @@ pub(crate) mod tests {
         LoopbackTcpConfig, PeerConnectionPool, PeerPoolConfig, PeerStreamAdapter, PeerStreamFuture,
         direct_peer_tcp_client, shared_direct_peer_client,
     };
+
     use crate::{
         AuthenticatedConnector, BareCliFifo, BareCliQueueFullDrops, CanonicalWriteHandler,
         NonZeroDuration, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, append_bare_cli_message,
@@ -1139,6 +1168,7 @@ pub(crate) mod tests {
         saw_durable_record: AtomicBool,
         failure: Option<AtmError>,
         cancelled_on_drop: Option<Arc<AtomicBool>>,
+        started_on_poll: Mutex<Option<Arc<tokio::sync::Notify>>>,
     }
 
     struct CounterFixture(DiagnosticCounters);
@@ -1279,7 +1309,15 @@ pub(crate) mod tests {
                 .push(dispatch.clone());
             let failure = self.failure.clone();
             if let Some(cancelled) = self.cancelled_on_drop.clone() {
+                let started_on_poll = self
+                    .started_on_poll
+                    .lock()
+                    .expect("read hook start signal")
+                    .clone();
                 return Box::pin(async move {
+                    if let Some(started) = started_on_poll {
+                        started.notify_one();
+                    }
                     let _cleanup = CancellationMarker(cancelled);
                     std::future::pending::<Result<PostSendEmissionPath, AtmError>>().await
                 });
@@ -1622,7 +1660,7 @@ pub(crate) mod tests {
             .write_with_request_id(
                 task_write_request(&fixture, "T-HOST"),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(5)),
+                RequestDeadline::unbounded(),
                 atm_core::protocol::next_request_id(),
             )
             .await
@@ -1683,7 +1721,7 @@ pub(crate) mod tests {
                     target: MoveTarget::Head,
                 })),
                 AuthenticatedIngress::Peer,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect_err("peer ingress must reject task move");
@@ -1787,6 +1825,7 @@ pub(crate) mod tests {
             saw_durable_record: AtomicBool::new(false),
             failure: hook_failure,
             cancelled_on_drop,
+            started_on_poll: Mutex::new(None),
         });
         let (home_dir, current_dir) = fixture_dirs(&temporary_root);
         let health = RuntimeHealth::with_owner(99);
@@ -2332,26 +2371,8 @@ pub(crate) mod tests {
         recorded_assigner_reassign_still_succeeds_through_daemon_body
     );
 
-    /// Hang detector for two-runtime router tests that dispatch a canonical
-    /// write or ACK over a real reqwest client to a real, in-process peer
-    /// HTTP runtime. This is not a timing assertion on how fast delivery
-    /// should be: it exists only to fail a genuinely hung exchange instead of
-    /// blocking `cargo test` forever. A fresh client build (TLS/connector
-    /// init), TCP connect, remote accept, remote `commit_write` (including a
-    /// SQLite fsync), and the synchronous received-hook path all happen
-    /// inside this budget on a shared executor, so it must stay generous on
-    /// loaded CI runners. See `DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT` for
-    /// the server-side counterpart, which must stay strictly larger than
-    /// this value per the request-budget contract.
-    const TWO_RUNTIME_TEST_REQUEST_BUDGET: Duration = Duration::from_secs(30);
-
-    /// Hang detector for tests that host a real accept loop and a real
-    /// client dispatch on the same executor (see `TWO_RUNTIME_TEST_REQUEST_BUDGET`
-    /// for the client-side counterpart). This is not a timing assertion: it
-    /// only needs to be comfortably larger than the client-side budget so a
-    /// slow-but-correct exchange cannot be starved by the server closing the
-    /// connection first. Per the request-budget contract, the server budget
-    /// must stay strictly greater than the client budget.
+    /// Test server request budget for a real accept loop and direct peer
+    /// dispatch. Short deadline behavior is covered by controlled unit tests.
     const DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(35);
 
     fn direct_peer_runtime_config(
@@ -2380,7 +2401,7 @@ pub(crate) mod tests {
         .with_direct_peer_tcp(direct_peer)
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn blocking_core_bridge_rejects_saturation_without_starting_a_second_job() {
         let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
@@ -2392,7 +2413,7 @@ pub(crate) mod tests {
         let first_admission = admission.clone();
         let first = tokio::spawn(async move {
             first_admission
-                .run(RequestDeadline::after(Duration::from_secs(1)), move || {
+                .run(RequestDeadline::unbounded(), move || {
                     first_started_tx.send(()).expect("signal started job");
                     release_first_rx.wait_for(1);
                     Ok("first durable result")
@@ -2403,15 +2424,21 @@ pub(crate) mod tests {
 
         let second_started = Arc::new(AtomicBool::new(false));
         let second_job_started = Arc::clone(&second_started);
-        let saturated = admission
-            .run(
-                RequestDeadline::after(Duration::from_millis(20)),
-                move || {
-                    second_job_started.store(true, Ordering::SeqCst);
-                    Ok(())
-                },
-            )
-            .await;
+        let second_admission = admission.clone();
+        let saturated = tokio::spawn(async move {
+            second_admission
+                .run(
+                    RequestDeadline::after(Duration::from_millis(20)),
+                    move || {
+                        second_job_started.store(true, Ordering::SeqCst);
+                        Ok(())
+                    },
+                )
+                .await
+        });
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(20)).await;
+        let saturated = saturated.await.expect("saturated task joins");
         assert!(
             saturated.is_err(),
             "saturated admission rejects before start"
@@ -2504,7 +2531,7 @@ pub(crate) mod tests {
         );
 
         admission
-            .run(RequestDeadline::after(Duration::from_secs(1)), || Ok(()))
+            .run(RequestDeadline::unbounded(), || Ok(()))
             .await
             .expect("a fast job completes within its budget");
 
@@ -2602,7 +2629,7 @@ pub(crate) mod tests {
 
         crate::prompt_handoff_record::record_prompt_handoff(
             &bridge,
-            RequestDeadline::after(Duration::from_secs(1)),
+            RequestDeadline::unbounded(),
             Err(AtmError::daemon_unavailable(
                 "injected task-store acquisition failure",
             )),
@@ -2637,6 +2664,7 @@ pub(crate) mod tests {
             saw_durable_record: AtomicBool::new(false),
             failure: None,
             cancelled_on_drop: None,
+            started_on_poll: Mutex::new(None),
         });
         let graft = Arc::new(RecordingReceivedHook {
             message_store: Arc::clone(&fixture.message_store),
@@ -2645,6 +2673,7 @@ pub(crate) mod tests {
             saw_durable_record: AtomicBool::new(false),
             failure: None,
             cancelled_on_drop: None,
+            started_on_poll: Mutex::new(None),
         });
         let selector = HarnessReceivedHookSelector {
             tmux: Arc::clone(&tmux),
@@ -2686,12 +2715,24 @@ pub(crate) mod tests {
         ));
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn started_write_retains_its_actual_result_after_the_advisory_deadline() {
-        let admission = ControlPathSyncBridge::new(
+        let health = RuntimeHealth::default();
+        let mut admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
-            RuntimeHealth::default(),
+            health.clone(),
         );
+        let advanced = Arc::new(AtomicBool::new(false));
+        let clock_advanced = Arc::clone(&advanced);
+        let origin = std::time::Instant::now();
+        admission.set_test_clock(Arc::new(move || {
+            origin
+                + if clock_advanced.load(Ordering::SeqCst) {
+                    Duration::from_millis(30)
+                } else {
+                    Duration::ZERO
+                }
+        }));
         let started_tx = Arc::new(TestSignal::default());
         let started_rx = Arc::clone(&started_tx);
         let release_tx = Arc::new(TestSignal::default());
@@ -2711,13 +2752,14 @@ pub(crate) mod tests {
         tokio::task::spawn_blocking(move || started_rx.wait_for(1))
             .await
             .expect("job start waiter joins");
-        tokio::time::advance(Duration::from_millis(30)).await;
+        advanced.store(true, Ordering::SeqCst);
         release_tx.signal();
         assert_eq!(
             task.await.expect("task joins").expect("actual result"),
             "actual durable result",
             "a started transaction is not reclassified as a deadline failure"
         );
+        assert_eq!(health.snapshot().blocking_core_bridge_stalls_total, 1);
     }
 
     #[tokio::test]
@@ -2727,7 +2769,7 @@ pub(crate) mod tests {
             RuntimeHealth::default(),
         );
         let error = admission
-            .run(RequestDeadline::after(Duration::from_secs(1)), || {
+            .run(RequestDeadline::unbounded(), || {
                 Err::<(), _>(AtmError::validation("intentional storage failure"))
             })
             .await
@@ -2756,7 +2798,7 @@ pub(crate) mod tests {
                     first.clone(),
                 )),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("authorized heartbeat");
@@ -2777,7 +2819,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(atm_core::protocol::RequestEnvelope::Heartbeat(second)),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("second authorized heartbeat");
@@ -2817,7 +2859,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Heartbeat(request)),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("authorized heartbeat");
@@ -2855,7 +2897,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Heartbeat(idle_request)),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("second authorized heartbeat");
@@ -2890,7 +2932,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::QueueGetNext(request)),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect_err("a non-roster member must be rejected");
@@ -2933,7 +2975,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::QueueGetNext(request)),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("authorized queue-get");
@@ -3079,7 +3121,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::QueueGetNext(request)),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("authorized queue-get");
@@ -3128,7 +3170,7 @@ pub(crate) mod tests {
                     atm_core::doctor::DoctorQuery::default(),
                 )),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("doctor response");
@@ -3189,7 +3231,7 @@ pub(crate) mod tests {
                     },
                 )),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(5)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("doctor response");
@@ -3262,10 +3304,12 @@ pub(crate) mod tests {
         fixture.runtime_health.record_write_source_preflight_stall();
         let assembly =
             open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
+        let mut doctor_ports = assembly.doctor_ports;
+        doctor_ports.herdr_endpoint = Arc::new(atm_core::doctor::ClosedHerdrEndpointDoctor);
         let doctor_projection = StorageDoctorProjection::start(
             DoctorProjectionConfig::default(),
             assembly.service_runtime,
-            assembly.doctor_ports,
+            doctor_ports,
             Arc::new(NullObservability),
         )
         .expect("start doctor projection");
@@ -3297,7 +3341,7 @@ pub(crate) mod tests {
                     atm_core::doctor::DoctorQuery::default(),
                 )),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("doctor response");
@@ -3547,7 +3591,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("seed task through canonical write path");
@@ -3585,7 +3629,7 @@ pub(crate) mod tests {
                     query,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("list task ledger through task store")
@@ -3612,7 +3656,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("seed mailbox through canonical write path");
@@ -3648,7 +3692,7 @@ pub(crate) mod tests {
                     list,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("list through async mailbox runtime")
@@ -3677,7 +3721,7 @@ pub(crate) mod tests {
                     peek,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("peek through async mailbox runtime")
@@ -3707,7 +3751,7 @@ pub(crate) mod tests {
                     read,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("read through async mailbox runtime")
@@ -3728,7 +3772,7 @@ pub(crate) mod tests {
                     fixture.current_dir.clone(),
                 )))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("seed mailbox");
@@ -3820,7 +3864,7 @@ pub(crate) mod tests {
                 .dispatch(
                     request,
                     AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::from_secs(1)),
+                    RequestDeadline::unbounded(),
                 )
                 .await
                 .expect("non-read-display endpoint succeeds");
@@ -3836,7 +3880,7 @@ pub(crate) mod tests {
                     read.clone(),
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("read response is independent of writer completion");
@@ -3856,7 +3900,7 @@ pub(crate) mod tests {
                     read,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("writer rejection never feeds the read response");
@@ -3868,138 +3912,6 @@ pub(crate) mod tests {
                 .any(|submission| { submission.outcome == RecordedWriterOutcome::Rejected }),
             "supervisor records the rejecting handoff path"
         );
-    }
-
-    #[tokio::test]
-    async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied() {
-        let fixture = fixture(true, None, None);
-        let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
-        fixture
-            .router
-            .dispatch(
-                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
-                AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .await
-            .expect("seed mailbox");
-
-        let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
-        let async_mailbox_runtime = assembly
-            .async_mailbox_runtime
-            .with_state_handoff(HandoffConfig::default())
-            .expect("start mailbox handoff");
-        let doctor_projection = StorageDoctorProjection::start(
-            DoctorProjectionConfig::default(),
-            assembly.service_runtime,
-            assembly.doctor_ports,
-            Arc::new(NullObservability),
-        )
-        .expect("start doctor projection");
-        let router = fixture
-            .router
-            .clone()
-            .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
-            .with_doctor_projection(Arc::new(doctor_projection));
-        let bridge = router.control_path_sync_bridge.clone();
-        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let release_tx = Arc::new(TestSignal::default());
-        let release_rx = Arc::clone(&release_tx);
-        let bridge_task = tokio::spawn(async move {
-            bridge
-                .run(RequestDeadline::after(Duration::from_secs(30)), move || {
-                    started_tx.send(()).expect("signal occupied bridge");
-                    release_rx.wait_for(1);
-                    Ok(())
-                })
-                .await
-        });
-        started_rx.await.expect("bridge started");
-
-        let root = fixture.home_dir.clone();
-        let list = atm_core::list::ListQuery::new(
-            root.clone(),
-            root.clone(),
-            "recipient".parse().expect("recipient"),
-            None,
-            "test-team".parse().expect("team"),
-            atm_core::types::ReadSelection::All,
-            false,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("list query");
-        let peek = atm_core::read::PeekQuery::new(
-            root.clone(),
-            root.clone(),
-            "recipient".parse().expect("recipient"),
-            None,
-            "test-team".parse().expect("team"),
-            atm_core::types::ReadSelection::All,
-            false,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("peek query");
-        let read = atm_core::read::ReadQuery::new(
-            root.clone(),
-            root,
-            "recipient".parse().expect("recipient"),
-            None,
-            "test-team".parse().expect("team"),
-            atm_core::types::ReadSelection::All,
-            false,
-            true,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("read query");
-        let mut calls = Vec::new();
-        for index in 0..12 {
-            let router = router.clone();
-            let request = match index % 4 {
-                0 => ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
-                    list.clone(),
-                ))),
-                1 => ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::Peek(
-                    peek.clone(),
-                ))),
-                2 => ApiRequest::Messages(Box::new(
-                    atm_core::api::MessageCollectionRequest::Receive(read.clone()),
-                )),
-                _ => ApiRequest::Doctor(atm_core::doctor::DoctorQuery::default()),
-            };
-            calls.push(tokio::spawn(async move {
-                router
-                    .dispatch(
-                        request,
-                        AuthenticatedIngress::Local,
-                        RequestDeadline::after(Duration::from_secs(1)),
-                    )
-                    .await
-            }));
-        }
-        for call in calls {
-            call.await
-                .expect("fanout task joins")
-                .expect("fanout request completes while bridge is occupied");
-        }
-        release_tx.signal();
-        bridge_task
-            .await
-            .expect("bridge task joins")
-            .expect("bridge task completes");
     }
 
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {
@@ -4303,7 +4215,7 @@ pub(crate) mod tests {
                     .dispatch(
                         ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
                         AuthenticatedIngress::Local,
-                        RequestDeadline::after(Duration::from_secs(2)),
+                        RequestDeadline::unbounded(),
                     )
                     .await
             });
@@ -4349,7 +4261,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("register response");
@@ -4367,7 +4279,7 @@ pub(crate) mod tests {
                     agent: registration.agent.clone(),
                 }),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("lookup response")
@@ -4385,7 +4297,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
                 AuthenticatedIngress::Peer,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await;
         assert!(
@@ -4402,7 +4314,7 @@ pub(crate) mod tests {
                     agent: "unknown".parse().expect("agent"),
                 }),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await;
         assert!(unknown.is_err(), "unknown roster members must be rejected");
@@ -4414,7 +4326,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRegister(non_loopback)),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await;
         assert!(
@@ -4554,7 +4466,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
                 AuthenticatedIngress::Peer,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await;
         assert!(
@@ -4570,7 +4482,7 @@ pub(crate) mod tests {
                     unregistration.clone(),
                 )),
                 AuthenticatedIngress::Peer,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await;
         assert!(
@@ -4586,7 +4498,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRegister(unknown_registration)),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await;
         assert!(
@@ -4606,7 +4518,7 @@ pub(crate) mod tests {
                     unknown_unregistration,
                 )),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await;
         assert!(
@@ -4640,7 +4552,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration)),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("register response");
@@ -4656,7 +4568,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRefresh(refresh)),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("owner-matched refresh must succeed")
@@ -4676,7 +4588,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRefresh(foreign_refresh)),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect_err("a foreign generation must be rejected, not silently accepted");
@@ -4695,7 +4607,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRefresh(non_local_refresh)),
                 AuthenticatedIngress::Peer,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await;
         assert!(
@@ -4726,7 +4638,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::GraftReceiverRegister(registration.clone())),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("register response");
@@ -4741,7 +4653,7 @@ pub(crate) mod tests {
                     agent: registered_agent,
                 }),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("lookup response")
@@ -4763,7 +4675,7 @@ pub(crate) mod tests {
                     agent: unleased_agent,
                 }),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("lookup response for a member with no lease")
@@ -4783,7 +4695,7 @@ pub(crate) mod tests {
                     agent: "recipient".parse().expect("agent"),
                 }),
                 AuthenticatedIngress::Peer,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await;
         assert!(non_local.is_err(), "peer ingress must not look up leases");
@@ -4921,7 +4833,7 @@ pub(crate) mod tests {
 
         crate::prompt_handoff_record::record_prompt_handoff(
             &bridge,
-            RequestDeadline::after(Duration::from_secs(1)),
+            RequestDeadline::unbounded(),
             Ok(store),
             &dispatch,
             PromptTrigger::Steer,
@@ -4990,7 +4902,7 @@ pub(crate) mod tests {
         let occupying_bridge = bridge.clone();
         let occupying = tokio::spawn(async move {
             occupying_bridge
-                .run(RequestDeadline::after(Duration::from_secs(2)), move || {
+                .run(RequestDeadline::unbounded(), move || {
                     started_tx.signal();
                     release_rx.wait_for(1);
                     Ok(())
@@ -5442,7 +5354,7 @@ pub(crate) mod tests {
                 .dispatch(
                     ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
                     ingress,
-                    RequestDeadline::after(Duration::from_secs(1)),
+                    RequestDeadline::unbounded(),
                 )
                 .await
                 .expect("template routing request");
@@ -5531,7 +5443,7 @@ pub(crate) mod tests {
                     &fixture, body,
                 )))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("include fallback send");
@@ -5695,7 +5607,7 @@ pub(crate) mod tests {
             .write(
                 write_request(fixture.home_dir.clone(), fixture.current_dir.clone()),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("seed local mailbox through the canonical storage path");
@@ -6001,7 +5913,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("local daemon owns host-qualified delivery");
@@ -6086,7 +5998,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect_err("missing trusted peer must not dial a default port");
@@ -6138,7 +6050,7 @@ pub(crate) mod tests {
                 .dispatch(
                     ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                     AuthenticatedIngress::Local,
-                    RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+                    RequestDeadline::unbounded(),
                 )
                 .await
                 .expect("selected router forwards the local write");
@@ -6280,7 +6192,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("local acknowledgement is delivered to the stored peer host");
@@ -6422,7 +6334,7 @@ pub(crate) mod tests {
             .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect_err("post-commit peer acknowledgement forwarding failure reaches the caller");
@@ -6576,7 +6488,7 @@ pub(crate) mod tests {
                 AuthenticatedIngress::Peer,
                 // Bounded so a regression that puts the hook back on the
                 // response path fails here instead of hanging the suite.
-                RequestDeadline::after(Duration::from_secs(5)),
+                RequestDeadline::unbounded(),
                 atm_core::protocol::next_request_id(),
             )
             .await
@@ -6935,10 +6847,16 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn received_hook_timeout_is_advisory_and_cancels_the_pending_future() {
         let cancelled = Arc::new(AtomicBool::new(false));
         let fixture = fixture(true, None, Some(Arc::clone(&cancelled)));
+        let started = Arc::new(tokio::sync::Notify::new());
+        *fixture
+            .received_hook
+            .started_on_poll
+            .lock()
+            .expect("install hook start signal") = Some(Arc::clone(&started));
         let dispatch = BuiltInPostSendDispatch {
             event: hook_event(),
             target: PostSendBuiltInTarget::Graft(GraftNudgeTarget {
@@ -6949,13 +6867,18 @@ pub(crate) mod tests {
             kind: NudgeKind::Steer,
         };
 
-        let warnings = fixture
-            .router
-            .emit_received_hook(
-                Ok(vec![dispatch]),
-                RequestDeadline::after(Duration::from_millis(300)),
-            )
-            .await;
+        let router = fixture.router.clone();
+        let hook_task = tokio::spawn(async move {
+            router
+                .emit_received_hook(
+                    Ok(vec![dispatch]),
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+        });
+        started.notified().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+        let warnings = hook_task.await.expect("hook request joins");
 
         assert_eq!(warnings.len(), 1, "one timed-out hook yields one warning");
         assert_eq!(
@@ -7069,7 +6992,7 @@ pub(crate) mod tests {
             .acquire(
                 &"127.0.0.1".parse().expect("peer authority"),
                 NonZeroU16::new(port).expect("non-zero test port"),
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("pooled peer connection");
@@ -7081,7 +7004,7 @@ pub(crate) mod tests {
                     headers: Vec::new(),
                     body: Vec::new(),
                 },
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("peer request succeeds");

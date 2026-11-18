@@ -2455,7 +2455,7 @@ mod tests {
                 .dispatch(
                     request,
                     atm_core::api::AuthenticatedIngress::Peer,
-                    RequestDeadline::after(Duration::from_secs(5)),
+                    RequestDeadline::unbounded(),
                 )
                 .await
                 .expect_err("peer ingress is refused");

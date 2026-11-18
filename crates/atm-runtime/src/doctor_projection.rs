@@ -503,7 +503,7 @@ mod tests {
                     ..DoctorQuery::default()
                 },
                 DoctorProjectionContext::default(),
-                RequestDeadline::after(std::time::Duration::from_secs(5)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("all-team projection");

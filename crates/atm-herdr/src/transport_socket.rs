@@ -679,7 +679,7 @@ mod tests {
             .call(
                 HerdrOp::Get { agent: &agent },
                 None,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("socket response");
@@ -702,17 +702,14 @@ mod tests {
     #[tokio::test]
     async fn permit_wait_uses_the_call_deadline_and_releases_cleanly() {
         let permits = Arc::new(Semaphore::new(1));
-        let held = acquire_permit(
-            Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
-        )
-        .await
-        .expect("first permit");
+        let held = acquire_permit(Arc::clone(&permits), RequestDeadline::unbounded())
+            .await
+            .expect("first permit");
         let result =
             acquire_permit(Arc::clone(&permits), RequestDeadline::after(Duration::ZERO)).await;
         assert!(matches!(result, Err(HerdrError::Timeout)));
         drop(held);
-        let _ = acquire_permit(permits, RequestDeadline::after(Duration::from_secs(1)))
+        let _ = acquire_permit(permits, RequestDeadline::unbounded())
             .await
             .expect("released permit");
     }
@@ -723,12 +720,9 @@ mod tests {
         let mut held = Vec::new();
         for _ in 0..SOCKET_PERMITS {
             held.push(
-                acquire_permit(
-                    Arc::clone(&permits),
-                    RequestDeadline::after(Duration::from_secs(1)),
-                )
-                .await
-                .expect("permit"),
+                acquire_permit(Arc::clone(&permits), RequestDeadline::unbounded())
+                    .await
+                    .expect("permit"),
             );
         }
 
@@ -749,21 +743,18 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn cancelling_a_permit_wait_releases_all_state() {
         let permits = Arc::new(Semaphore::new(1));
-        let held = acquire_permit(
-            Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
-        )
-        .await
-        .expect("held permit");
+        let held = acquire_permit(Arc::clone(&permits), RequestDeadline::unbounded())
+            .await
+            .expect("held permit");
         let waiter = tokio::spawn(acquire_permit(
             Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
+            RequestDeadline::unbounded(),
         ));
         tokio::task::yield_now().await;
         waiter.abort();
         let _ = waiter.await;
         drop(held);
-        let _ = acquire_permit(permits, RequestDeadline::after(Duration::from_secs(1)))
+        let _ = acquire_permit(permits, RequestDeadline::unbounded())
             .await
             .expect("permit after cancellation");
     }
@@ -773,7 +764,7 @@ mod tests {
         let result = read_response_line(
             &mut std::io::Cursor::new(b"{}".to_vec()),
             HERDR_MAX_SOCKET_LINE_BYTES,
-            RequestDeadline::after(Duration::from_secs(1)),
+            RequestDeadline::unbounded(),
         )
         .await;
         assert!(matches!(
@@ -788,7 +779,7 @@ mod tests {
         let result = read_response_line(
             &mut std::io::Cursor::new(b"abcd\n".to_vec()),
             3,
-            RequestDeadline::after(Duration::from_secs(1)),
+            RequestDeadline::unbounded(),
         )
         .await;
         assert!(matches!(
@@ -835,21 +826,18 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn cancelling_io_wait_does_not_retain_the_socket_permit() {
         let permits = Arc::new(Semaphore::new(1));
-        let held = acquire_permit(
-            Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
-        )
-        .await
-        .expect("held permit");
+        let held = acquire_permit(Arc::clone(&permits), RequestDeadline::unbounded())
+            .await
+            .expect("held permit");
         let waiter = tokio::spawn(acquire_permit(
             Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
+            RequestDeadline::unbounded(),
         ));
         tokio::task::yield_now().await;
         waiter.abort();
         let _ = waiter.await;
         drop(held);
-        let _ = acquire_permit(permits, RequestDeadline::after(Duration::from_secs(1)))
+        let _ = acquire_permit(permits, RequestDeadline::unbounded())
             .await
             .expect("permit after I/O cancellation");
     }
@@ -857,7 +845,7 @@ mod tests {
     #[tokio::test]
     async fn cancelling_connect_write_and_read_futures_is_clean() {
         let connect = tokio::spawn(connect_with_deadline(
-            RequestDeadline::after(Duration::from_secs(1)),
+            RequestDeadline::unbounded(),
             std::future::pending::<io::Result<()>>(),
         ));
         tokio::task::yield_now().await;
@@ -865,7 +853,7 @@ mod tests {
         assert!(connect.await.is_err());
 
         let write = tokio::spawn(deadline_io(
-            RequestDeadline::after(Duration::from_secs(1)),
+            RequestDeadline::unbounded(),
             std::future::pending::<io::Result<()>>(),
         ));
         tokio::task::yield_now().await;
@@ -873,7 +861,7 @@ mod tests {
         assert!(write.await.is_err());
 
         let read = tokio::spawn(deadline_io(
-            RequestDeadline::after(Duration::from_secs(1)),
+            RequestDeadline::unbounded(),
             std::future::pending::<io::Result<usize>>(),
         ));
         tokio::task::yield_now().await;

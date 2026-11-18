@@ -269,7 +269,15 @@ pub fn direct_peer_tcp_client(
     port: NonZeroU16,
     request_timeout: Duration,
 ) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
-    direct_peer_tcp_client_with_shared_client(
+    direct_peer_tcp_client_with_timeout(host, port, Some(request_timeout))
+}
+
+pub(crate) fn direct_peer_tcp_client_with_timeout(
+    host: HostName,
+    port: NonZeroU16,
+    request_timeout: Option<Duration>,
+) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
+    direct_peer_tcp_client_with_shared_client_timeout(
         host,
         port,
         request_timeout,
@@ -291,14 +299,13 @@ pub fn shared_direct_peer_client() -> Result<reqwest::Client, AtmError> {
         })
 }
 
-/// Builds one typed peer-write facade using the daemon-owned plaintext client.
-pub(crate) fn direct_peer_tcp_client_with_shared_client(
+pub(crate) fn direct_peer_tcp_client_with_shared_client_timeout(
     host: HostName,
     port: NonZeroU16,
-    request_timeout: Duration,
+    request_timeout: Option<Duration>,
     client: reqwest::Client,
 ) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
-    Ok(Arc::new(direct_peer_write_client(
+    Ok(Arc::new(direct_peer_write_client_with_timeout(
         host,
         port,
         request_timeout,
@@ -312,32 +319,38 @@ pub(crate) fn direct_peer_tcp_client_with_shared_client(
 pub(crate) fn pooled_peer_stream_write_client(
     host: HostName,
     port: NonZeroU16,
-    request_timeout: Duration,
+    request_timeout: Option<Duration>,
     pool: PeerConnectionPool,
 ) -> Result<Arc<dyn DaemonApiClient + Send + Sync>, AtmError> {
-    if request_timeout.is_zero() {
+    if request_timeout.is_some_and(|timeout| timeout.is_zero()) {
         return Err(AtmError::config(
             "direct peer HTTP client request timeout must be greater than zero",
         ));
     }
     let connector = PooledPeerStreamConnector::new(host, port, pool);
-    let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
+    let client = Arc::new(HttpRuntimeClient::new_with_timeout(
+        Arc::new(connector),
+        request_timeout,
+    ));
     Ok(Arc::new(PeerStreamWriteClient { client }))
 }
 
-pub(crate) fn direct_peer_write_client(
+fn direct_peer_write_client_with_timeout(
     host: HostName,
     port: NonZeroU16,
-    request_timeout: Duration,
+    request_timeout: Option<Duration>,
     client: reqwest::Client,
 ) -> Result<DirectPeerWriteClient, AtmError> {
-    if request_timeout.is_zero() {
+    if request_timeout.is_some_and(|timeout| timeout.is_zero()) {
         return Err(AtmError::config(
             "direct peer HTTP client request timeout must be greater than zero",
         ));
     }
     let connector = DirectPeerTcpConnector::new(client, host, port);
-    let client = Arc::new(HttpRuntimeClient::new(Arc::new(connector), request_timeout));
+    let client = Arc::new(HttpRuntimeClient::new_with_timeout(
+        Arc::new(connector),
+        request_timeout,
+    ));
     Ok(DirectPeerWriteClient { client })
 }
 
@@ -561,7 +574,7 @@ where
             .execute_envelope_with_deadline(
                 RequestEnvelope::Write(Box::new(write)),
                 RequestEnvelope::Write(Box::new(peer_response_shape)),
-                RequestDeadline::after(self.client.request_timeout),
+                self.client.request_deadline(),
                 None,
             )
             .await
@@ -611,7 +624,7 @@ impl DirectPeerWriteClient {
             .execute_envelope_with_deadline(
                 RequestEnvelope::Write(Box::new(write)),
                 RequestEnvelope::Write(Box::new(peer_response_shape)),
-                RequestDeadline::after(self.client.request_timeout),
+                self.client.request_deadline(),
                 request_id,
             )
             .await
@@ -703,13 +716,17 @@ pub(crate) async fn execute_opaque_peer_request_with_sender(
     deadline: RequestDeadline,
 ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
     let request = build_opaque_peer_request(request)?;
-    let remaining = deadline
-        .remaining()
-        .ok_or(HttpRuntimeClientFailure::Cancelled)?;
-    let response = tokio::time::timeout(remaining, sender.send_request(request))
-        .await
-        .map_err(|_| HttpRuntimeClientFailure::Timeout)?
-        .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
+    let response = match deadline.remaining() {
+        Some(remaining) => tokio::time::timeout(remaining, sender.send_request(request))
+            .await
+            .map_err(|_| HttpRuntimeClientFailure::Timeout)?
+            .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?,
+        None if deadline.is_unbounded() => sender
+            .send_request(request)
+            .await
+            .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?,
+        None => return Err(HttpRuntimeClientFailure::Cancelled),
+    };
     collect_opaque_peer_response(response).await
 }
 
@@ -1232,10 +1249,7 @@ mod tests {
         };
         for _ in 0..3 {
             let response = connector
-                .exchange(
-                    request.clone(),
-                    RequestDeadline::after(Duration::from_secs(1)),
-                )
+                .exchange(request.clone(), RequestDeadline::unbounded())
                 .await
                 .expect("shared plaintext connection writes successfully");
             assert_eq!(response.status(), StatusCode::CREATED);
@@ -1439,15 +1453,10 @@ mod tests {
             body: Vec::new(),
         };
 
-        let failure = execute_reqwest_request(
-            &client,
-            url,
-            request,
-            RequestDeadline::after(Duration::from_secs(1)),
-            None,
-        )
-        .await
-        .expect_err("nothing listens on the reserved port");
+        let failure =
+            execute_reqwest_request(&client, url, request, RequestDeadline::unbounded(), None)
+                .await
+                .expect_err("nothing listens on the reserved port");
 
         assert!(
             matches!(failure, HttpRuntimeClientFailure::Connect(_)),
@@ -1487,15 +1496,10 @@ mod tests {
             body: Vec::new(),
         };
 
-        let failure = execute_reqwest_request(
-            &client,
-            url,
-            request,
-            RequestDeadline::after(Duration::from_secs(1)),
-            None,
-        )
-        .await
-        .expect_err("the peer closes the connection without responding");
+        let failure =
+            execute_reqwest_request(&client, url, request, RequestDeadline::unbounded(), None)
+                .await
+                .expect_err("the peer closes the connection without responding");
 
         assert!(
             !matches!(failure, HttpRuntimeClientFailure::Connect(_)),
@@ -1567,7 +1571,7 @@ mod tests {
             .execute_envelope_with_deadline(
                 request.clone(),
                 request,
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
                 Some(atm_core::protocol::RequestId::new(73).expect("non-zero request ID")),
             )
             .await

@@ -259,11 +259,8 @@ mod tests {
             kind: NudgeKind::Steer,
         };
 
-        sink.emit_received_message(
-            &dispatch,
-            atm_core::RequestDeadline::after(std::time::Duration::from_secs(1)),
-        )
-        .expect("delivery");
+        sink.emit_received_message(&dispatch, atm_core::RequestDeadline::unbounded())
+            .expect("delivery");
 
         let nudges = injector.nudges.lock().expect("nudges");
         assert_eq!(nudges.len(), 1);

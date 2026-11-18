@@ -135,6 +135,13 @@ where
     let mut failures = Vec::with_capacity(total);
     for (index, address) in usable.into_iter().enumerate() {
         let Some(remaining) = deadline.remaining() else {
+            if deadline.is_unbounded() {
+                match connect(address).await {
+                    Ok(stream) => return Ok(stream),
+                    Err(error) => failures.push(format!("{address}: {error}")),
+                }
+                continue;
+            }
             failures.push(format!(
                 "{address}: request budget elapsed before the attempt"
             ));
@@ -289,15 +296,20 @@ impl PeerAddressCache {
             }
         }
 
-        let remaining = deadline
-            .remaining()
-            .ok_or_else(|| "request budget elapsed before the peer name was resolved".to_owned())?;
-        let resolved = tokio::time::timeout(remaining, resolve(peer.clone(), port))
-            .await
-            .map_err(|_| {
-                format!("DNS resolution of `{peer}` did not finish within the request budget")
-            })?
-            .map_err(|error| format!("DNS resolution of `{peer}` failed: {error}"))?;
+        let resolved = match deadline.remaining() {
+            Some(remaining) => tokio::time::timeout(remaining, resolve(peer.clone(), port))
+                .await
+                .map_err(|_| {
+                    format!("DNS resolution of `{peer}` did not finish within the request budget")
+                })?
+                .map_err(|error| format!("DNS resolution of `{peer}` failed: {error}"))?,
+            None if deadline.is_unbounded() => resolve(peer.clone(), port)
+                .await
+                .map_err(|error| format!("DNS resolution of `{peer}` failed: {error}"))?,
+            None => {
+                return Err("request budget elapsed before the peer name was resolved".to_owned());
+            }
+        };
         let candidates = order_connect_candidates(resolved);
         self.store(peer, port, candidates.clone());
         match dial_candidates(candidates, deadline, connect).await {
@@ -362,8 +374,8 @@ mod tests {
         dial_candidates, order_connect_candidates, ordered_resolver_addresses,
     };
 
-    fn deadline(duration: Duration) -> RequestDeadline {
-        RequestDeadline::after(duration)
+    fn unbounded() -> RequestDeadline {
+        RequestDeadline::unbounded()
     }
 
     fn v6(address: &str, port: u16, scope_id: u32) -> SocketAddr {
@@ -472,7 +484,7 @@ mod tests {
         let port = 43_101;
         let stream = dial_candidates(
             order_connect_candidates([v6("fe80::4af:1", port, 0), v4("127.0.0.1", port)]),
-            deadline(Duration::from_secs(10)),
+            unbounded(),
             loopback_only_connector,
         )
         .await
@@ -494,7 +506,7 @@ mod tests {
                     skipped_link_local: 0,
                     truncated: 0,
                 },
-                deadline(Duration::from_secs(600)),
+                RequestDeadline::after(Duration::from_secs(600)),
                 move |address| {
                     attempt_tx.send(address).expect("report attempted address");
                     controlled_connector(address, second)
@@ -521,7 +533,7 @@ mod tests {
     async fn link_local_only_answer_fails_fast_with_an_actionable_cause() {
         let cause = dial_candidates(
             order_connect_candidates([v6("fe80::4af:1", 43_101, 0)]),
-            deadline(Duration::from_secs(10)),
+            unbounded(),
             loopback_only_connector,
         )
         .await
@@ -538,7 +550,7 @@ mod tests {
                 skipped_link_local: 1,
                 truncated: 2,
             },
-            deadline(Duration::from_millis(400)),
+            RequestDeadline::after(Duration::from_millis(400)),
             |address| -> std::pin::Pin<
                 Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>,
             > {
@@ -582,7 +594,7 @@ mod tests {
                 .connect(
                     &host("rand-m5.local"),
                     port(listener_port),
-                    deadline(Duration::from_secs(5)),
+                    unbounded(),
                     &resolver,
                     loopback_only_connector,
                 )
@@ -607,7 +619,7 @@ mod tests {
                 .connect(
                     &host(name),
                     port(listener_port),
-                    deadline(Duration::from_secs(5)),
+                    unbounded(),
                     &resolver,
                     loopback_only_connector,
                 )
@@ -642,7 +654,7 @@ mod tests {
             .connect(
                 &peer,
                 port(listener_port),
-                deadline(Duration::from_secs(300)),
+                RequestDeadline::after(Duration::from_secs(300)),
                 &resolver,
                 |address| controlled_connector(address, fresh),
             )
@@ -676,7 +688,7 @@ mod tests {
                 .connect(
                     &peer,
                     port(listener_port),
-                    deadline(Duration::from_secs(5)),
+                    unbounded(),
                     &resolver,
                     loopback_only_connector,
                 )
@@ -713,7 +725,7 @@ mod tests {
                 .connect(
                     &peer,
                     port(listener_port),
-                    deadline(Duration::from_secs(300)),
+                    RequestDeadline::after(Duration::from_secs(300)),
                     &resolver,
                     move |address| {
                         attempt_tx.send(address).expect("report attempted address");
@@ -747,7 +759,7 @@ mod tests {
             .connect(
                 &host("rand-m5.local"),
                 port(43_101),
-                deadline(Duration::from_millis(200)),
+                RequestDeadline::after(Duration::from_millis(200)),
                 &resolver,
                 loopback_only_connector,
             )
