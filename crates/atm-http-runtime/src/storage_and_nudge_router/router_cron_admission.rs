@@ -2,6 +2,9 @@
 
 use super::*;
 
+const CRON_MODULE_MAIL_BUDGET: atm_core::api::RequestBudget =
+    atm_core::api::RequestBudget::finite(std::time::Duration::from_secs(30));
+
 impl StorageAndNudgeRouter {
     pub(crate) async fn dispatch_with_cron_permit(
         &self,
@@ -107,7 +110,7 @@ impl StorageAndNudgeRouter {
             None,
             false,
         )?;
-        let deadline = RequestDeadline::after(std::time::Duration::from_secs(30));
+        let deadline = CRON_MODULE_MAIL_BUDGET.start();
         let prepared = self
             .prepare_and_commit_write(
                 request,
@@ -152,10 +155,10 @@ impl StorageAndNudgeRouter {
         let generation = permit.generation();
         let team = team.clone();
         let phase = phase.clone();
-        let remaining = match deadline.remaining() {
-            Some(remaining) => Some(remaining),
-            None if deadline.is_unbounded() => None,
-            None => {
+        let remaining = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining),
+            atm_core::api::DeadlineBudget::Unbounded => None,
+            atm_core::api::DeadlineBudget::Expired => {
                 return Err(AtmError::daemon_unavailable(
                     "cron action deadline expired before permit admission",
                 ));

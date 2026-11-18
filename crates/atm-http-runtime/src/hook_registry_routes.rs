@@ -53,10 +53,10 @@ fn cron_scheduler_budget(
     deadline: RequestDeadline,
     operation: &str,
 ) -> Result<Option<Duration>, AtmError> {
-    match deadline.remaining() {
-        Some(remaining) => Ok(Some(remaining)),
-        None if deadline.is_unbounded() => Ok(None),
-        None => Err(AtmError::daemon_unavailable(format!(
+    match deadline.budget() {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => Ok(Some(remaining)),
+        atm_core::api::DeadlineBudget::Unbounded => Ok(None),
+        atm_core::api::DeadlineBudget::Expired => Err(AtmError::daemon_unavailable(format!(
             "request deadline expired before {operation}"
         ))),
     }

@@ -29,7 +29,12 @@ pub(super) fn build_direct_peer_server(
 pub(super) fn validate_config(config: &HttpRuntimeConfig) -> Result<(), AtmError> {
     debug_assert!(config.limits.max_body_bytes > 0);
     debug_assert!(config.limits.max_connections > 0);
-    debug_assert!(!config.timeouts.request.is_zero());
+    debug_assert!(
+        config
+            .timeouts
+            .header_read
+            .is_none_or(|timeout| !timeout.is_zero())
+    );
     config.peer_pool.validate()?;
     debug_assert!(!config.timeouts.shutdown.is_zero());
     validate_loopback_config(&config.loopback_tcp)?;

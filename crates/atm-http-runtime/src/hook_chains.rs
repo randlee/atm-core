@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
 use atm_core::error::AtmError;
@@ -104,8 +103,14 @@ impl ChainTracker {
         self.begin_shutdown();
         let mut live = self.shared.live.subscribe();
         let idle = live.wait_for(|count| *count == 0);
-        let remaining = deadline.remaining().unwrap_or(Duration::ZERO);
-        if matches!(tokio::time::timeout(remaining, idle).await, Ok(Ok(_))) {
+        let drained = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Unbounded => idle.await.is_ok(),
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                matches!(tokio::time::timeout(remaining, idle).await, Ok(Ok(_)))
+            }
+            atm_core::api::DeadlineBudget::Expired => false,
+        };
+        if drained {
             return 0;
         }
         let aborted = *self.shared.live.borrow();
@@ -278,15 +283,10 @@ mod tests {
         let entered = Arc::new(Notify::new());
         let held = held_hook(&hold, &entered);
         let caller = start_held_assign(&held);
-        tokio::time::timeout(Duration::from_secs(10), entered.notified())
-            .await
-            .expect("timed out waiting for held assign to enter the hook chain");
+        entered.notified().await;
 
         // One poll while the chain is held: drain must not finish yet.
-        let mut drain = pin!(
-            held.chains
-                .drain(RequestDeadline::after(Duration::from_secs(10)))
-        );
+        let mut drain = pin!(held.chains.drain(RequestDeadline::unbounded()));
         let mut cx = Context::from_waker(Waker::noop());
         assert!(drain.as_mut().poll(&mut cx).is_pending());
 
@@ -305,9 +305,7 @@ mod tests {
         let entered = Arc::new(Notify::new());
         let held = held_hook(&hold, &entered);
         let caller = start_held_assign(&held);
-        tokio::time::timeout(Duration::from_secs(10), entered.notified())
-            .await
-            .expect("timed out waiting for held assign to enter before the drain deadline");
+        entered.notified().await;
 
         let aborted = held
             .chains

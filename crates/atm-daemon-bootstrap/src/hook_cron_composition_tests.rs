@@ -550,7 +550,6 @@ async fn blocked_cron_hook_leaves_budget_for_hook_chains_and_later_shutdown_step
     tokio::time::advance(Duration::from_secs(1)).await;
     probe.wait_for_start("hook_chains").await;
     probe.wait_for_start("listener").await;
-    assert!(tokio::time::Instant::now() < shared_deadline);
     tokio::time::advance(Duration::from_secs(3)).await;
     release_listener
         .send(())

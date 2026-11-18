@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
-use atm_core::api::RequestDeadline;
+use atm_core::api::{RequestBudget, RequestDeadline};
 use atm_core::boundary::{
     MemberKey, MessageReceivedHookSelector, NudgeKind, PendingNudgeStore, RosterStore,
 };
@@ -43,9 +43,10 @@ pub const HERDR_MAX_PROMPTS_PER_TICK: usize = 16;
 /// Consecutive no-input releases before one retry-budget attempt is spent.
 pub const HERDR_MAX_CONSECUTIVE_RELEASES: u32 = 10;
 const HERDR_REQUEST_BUDGET: Duration = Duration::from_secs(5);
+const HERDR_REQUEST_TIMEOUT: RequestBudget = RequestBudget::finite(HERDR_REQUEST_BUDGET);
 
 pub(crate) fn herdr_request_deadline() -> RequestDeadline {
-    RequestDeadline::after(HERDR_REQUEST_BUDGET)
+    HERDR_REQUEST_TIMEOUT.start()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -187,17 +188,17 @@ impl HerdrQueueWakePump {
                 return;
             }
             for mut handle in handles {
-                let Some(remaining) = deadline.remaining() else {
-                    handle.abort();
-                    tracing::warn!(
-                        subsystem = "herdr_queue_wake",
-                        action = "queue_claim_release_shutdown",
-                        outcome = "deadline_exceeded",
-                        "Herdr queue release drain exceeded its shutdown deadline"
-                    );
-                    continue;
+                let timed_out = match deadline.budget() {
+                    atm_core::api::DeadlineBudget::Unbounded => {
+                        let _ = (&mut handle).await;
+                        false
+                    }
+                    atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                        tokio::time::timeout(remaining, &mut handle).await.is_err()
+                    }
+                    atm_core::api::DeadlineBudget::Expired => true,
                 };
-                if tokio::time::timeout(remaining, &mut handle).await.is_err() {
+                if timed_out {
                     handle.abort();
                     tracing::warn!(
                         subsystem = "herdr_queue_wake",

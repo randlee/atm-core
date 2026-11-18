@@ -175,9 +175,13 @@ impl StorageDoctorProjection {
         if rosters.is_empty() {
             report.herdr.configured = Some(false);
         } else if let Some(deadline) = deadline {
-            let per_team_budget = deadline
-                .remaining()
-                .map(|remaining| remaining / rosters.len() as u32);
+            let per_team_budget = match deadline.budget() {
+                atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                    Some(remaining / rosters.len() as u32)
+                }
+                atm_core::api::DeadlineBudget::Unbounded => None,
+                atm_core::api::DeadlineBudget::Expired => Some(std::time::Duration::ZERO),
+            };
             let scope = report.resolved_team_scope.clone();
             for roster in rosters {
                 if deadline.expired() {
@@ -202,10 +206,10 @@ impl StorageDoctorProjection {
         deadline: Option<RequestDeadline>,
     ) -> Result<DoctorReport, AtmError> {
         let remaining = match deadline {
-            Some(deadline) => match deadline.remaining() {
-                Some(remaining) => Some(remaining),
-                None if deadline.is_unbounded() => None,
-                None => {
+            Some(deadline) => match deadline.budget() {
+                atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining),
+                atm_core::api::DeadlineBudget::Unbounded => None,
+                atm_core::api::DeadlineBudget::Expired => {
                     return Err(AtmError::daemon_unavailable_with_recovery(
                         "doctor request deadline expired before control-lane admission",
                         "increase the request deadline or retry when the daemon is ready.",
@@ -259,10 +263,12 @@ impl StorageDoctorProjection {
     ) {
         let configured = herdr_is_configured(roster);
         report.herdr.configured = Some(report.herdr.configured.unwrap_or(false) || configured);
-        let timeout_budget = match caller_deadline.remaining() {
-            Some(remaining) => Some(budget.map_or(remaining, |budget| budget.min(remaining))),
-            None if caller_deadline.is_unbounded() => None,
-            None => {
+        let timeout_budget = match caller_deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                Some(budget.map_or(remaining, |budget| budget.min(remaining)))
+            }
+            atm_core::api::DeadlineBudget::Unbounded => budget,
+            atm_core::api::DeadlineBudget::Expired => {
                 append_deadline_finding(
                     report,
                     "doctor request deadline expired before Herdr projection",

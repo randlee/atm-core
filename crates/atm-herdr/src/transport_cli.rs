@@ -111,10 +111,10 @@ async fn run_command(
     session: Option<&HerdrSession>,
     deadline: RequestDeadline,
 ) -> Result<CommandOutput, HerdrError> {
-    let remaining = match deadline.remaining() {
-        Some(remaining) => Some(remaining),
-        None if deadline.is_unbounded() => None,
-        None => return Err(HerdrError::TimedOut),
+    let remaining = match deadline.budget() {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining),
+        atm_core::api::DeadlineBudget::Unbounded => None,
+        atm_core::api::DeadlineBudget::Expired => return Err(HerdrError::TimedOut),
     };
     let binary = command_binary(configured_binary);
     let mut command = tokio::process::Command::new(binary);

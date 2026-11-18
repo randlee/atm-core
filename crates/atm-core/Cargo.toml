@@ -17,7 +17,8 @@ categories = ["command-line-utilities", "development-tools"]
 name = "atm_core"
 
 [features]
-test-utils = ["atm-storage/test-utils"]
+runtime-clock = ["dep:tokio"]
+test-utils = ["atm-storage/test-utils", "runtime-clock"]
 
 [dependencies]
 atm-error.workspace = true
@@ -36,6 +37,7 @@ semver.workspace = true
 fs4 = "0.13"
 async-trait.workspace = true
 sc-lint-attributes = { workspace = true }
+tokio = { version = "1.48", default-features = false, features = ["time"], optional = true }
 
 [dev-dependencies]
 atm-runtime-test-support.workspace = true
@@ -43,6 +45,7 @@ atm-storage = { workspace = true, features = ["test-utils"] }
 serial_test = "3"
 tempfile = "3"
 tracing-subscriber.workspace = true
+tokio.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Threading", "Win32_UI_Shell"] }

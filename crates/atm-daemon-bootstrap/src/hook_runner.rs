@@ -219,17 +219,7 @@ impl DaemonHookRunner {
         doctor: bool,
     ) -> Result<SpawnedOutput, AtmError> {
         let started_at = tokio::time::Instant::now();
-        #[cfg(feature = "test-support")]
-        let remaining = deadline
-            .remaining()
-            .or_else(|| match &self.deadline_source {
-                HookDeadlineSource::Controlled {
-                    request_remaining, ..
-                } if deadline.is_unbounded() => *request_remaining,
-                _ => None,
-            });
-        #[cfg(not(feature = "test-support"))]
-        let remaining = deadline.remaining();
+        let remaining = self.request_remaining(deadline);
         let budget = effective_hook_budget(
             target.timeout_ms,
             remaining,
@@ -285,6 +275,23 @@ impl DaemonHookRunner {
             outcome = "ok", "hook execution completed"
         );
         Ok(output)
+    }
+
+    fn request_remaining(&self, deadline: RequestDeadline) -> Option<Duration> {
+        match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining),
+            atm_core::api::DeadlineBudget::Unbounded => {
+                #[cfg(feature = "test-support")]
+                if let HookDeadlineSource::Controlled {
+                    request_remaining, ..
+                } = &self.deadline_source
+                {
+                    return *request_remaining;
+                }
+                None
+            }
+            atm_core::api::DeadlineBudget::Expired => None,
+        }
     }
 }
 

@@ -955,7 +955,7 @@ fn handle_graft_receiver_connection(
             })
             .emit_received_message(
                 &dispatch,
-                atm_core::RequestDeadline::after(GRAFT_RECEIVER_IO_DEADLINE),
+                atm_core::api::RequestBudget::finite(GRAFT_RECEIVER_IO_DEADLINE).start(),
             ) {
                 Ok(_) => GraftPostSendResponse::Delivered,
                 Err(error) => GraftPostSendResponse::Error(error),

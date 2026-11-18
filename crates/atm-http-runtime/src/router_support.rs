@@ -81,8 +81,6 @@ enum BlockingStallCounter {
 pub struct BoundedBlockingBridge {
     permits: Arc<tokio::sync::Semaphore>,
     runtime_health: RuntimeHealth,
-    #[cfg(test)]
-    clock: Option<Arc<dyn Fn() -> std::time::Instant + Send + Sync>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,17 +114,11 @@ impl BoundedBlockingBridge {
         Self {
             permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
             runtime_health,
-            #[cfg(test)]
-            clock: None,
         }
     }
 
     fn now(&self) -> std::time::Instant {
-        #[cfg(test)]
-        if let Some(clock) = &self.clock {
-            return clock();
-        }
-        std::time::Instant::now()
+        tokio::time::Instant::now().into_std()
     }
 
     #[cfg(test)]
@@ -166,10 +158,12 @@ impl BoundedBlockingBridge {
         T: Send + 'static,
         F: FnOnce() -> Result<T, AtmError> + Send + 'static,
     {
-        let remaining = match deadline.remaining() {
-            Some(remaining) => Some(remaining),
-            None if deadline.is_unbounded() => None,
-            None => return Err(BlockingBridgeError::DeadlineBeforeStart),
+        let remaining = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining),
+            atm_core::api::DeadlineBudget::Unbounded => None,
+            atm_core::api::DeadlineBudget::Expired => {
+                return Err(BlockingBridgeError::DeadlineBeforeStart);
+            }
         };
         let permit = match remaining {
             Some(remaining) => {
@@ -354,14 +348,13 @@ fn source_preflight_error(description: &str, error: BlockingBridgeError) -> AtmE
 /// receiver hook begins.  A hook remains advisory after durable persistence;
 /// it must never consume the daemon's final response budget.
 pub(super) fn receiver_hook_deadline(deadline: RequestDeadline) -> Option<RequestDeadline> {
-    if deadline.is_unbounded() {
-        return Some(deadline);
+    match deadline.budget().reserve(RESPONSE_HANDOFF_GRACE)? {
+        atm_core::api::DeadlineBudget::Unbounded => Some(deadline),
+        atm_core::api::DeadlineBudget::Remaining(remaining) => {
+            Some(atm_core::api::RequestBudget::finite(remaining).start())
+        }
+        atm_core::api::DeadlineBudget::Expired => None,
     }
-    deadline
-        .remaining()
-        .and_then(|remaining| remaining.checked_sub(RESPONSE_HANDOFF_GRACE))
-        .filter(|remaining| !remaining.is_zero())
-        .map(RequestDeadline::after)
 }
 
 impl ControlPathSyncBridge {
@@ -369,14 +362,6 @@ impl ControlPathSyncBridge {
         Self {
             bridge: BoundedBlockingBridge::new(capacity, runtime_health),
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn set_test_clock(
-        &mut self,
-        clock: Arc<dyn Fn() -> std::time::Instant + Send + Sync>,
-    ) {
-        self.bridge.clock = Some(clock);
     }
 
     pub(crate) fn blocking_bridge(&self) -> &BoundedBlockingBridge {

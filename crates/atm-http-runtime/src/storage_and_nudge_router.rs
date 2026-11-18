@@ -53,10 +53,12 @@ fn peer_request_timeout(
     deadline: RequestDeadline,
     expired_message: &'static str,
 ) -> Result<Option<Duration>, AtmError> {
-    match deadline.remaining() {
-        Some(remaining) => Ok(Some(remaining)),
-        None if deadline.is_unbounded() => Ok(None),
-        None => Err(AtmError::daemon_unavailable(expired_message)),
+    match deadline.budget() {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => Ok(Some(remaining)),
+        atm_core::api::DeadlineBudget::Unbounded => Ok(None),
+        atm_core::api::DeadlineBudget::Expired => {
+            Err(AtmError::daemon_unavailable(expired_message))
+        }
     }
 }
 
@@ -396,19 +398,19 @@ impl StorageAndNudgeRouter {
             let Some(emitter) = self.received_hook_selector.select_emitter(&dispatch) else {
                 continue;
             };
-            let delivery = match deadline.remaining() {
-                Some(remaining) => tokio::time::timeout(
+            let delivery = match deadline.budget() {
+                atm_core::api::DeadlineBudget::Remaining(remaining) => tokio::time::timeout(
                     remaining,
                     emitter.emit_received_message(dispatch.clone(), deadline),
                 )
                 .await
                 .map(Some),
-                None if deadline.is_unbounded() => Ok(Some(
+                atm_core::api::DeadlineBudget::Unbounded => Ok(Some(
                     emitter
                         .emit_received_message(dispatch.clone(), deadline)
                         .await,
                 )),
-                None => {
+                atm_core::api::DeadlineBudget::Expired => {
                     warnings.push(hook_warning(AtmError::daemon_unavailable(
                         "received-message hook was skipped because the request deadline was exhausted after persistence",
                     )));
@@ -783,16 +785,16 @@ impl StorageAndNudgeRouter {
         require_local_graft_ingress(ingress)?;
         validate_graft_receiver_member(&self.service_runtime, &team, &agent)?;
         let store = self.service_runtime.graft_receiver_endpoint_store()?;
-        let lease = match deadline.remaining() {
-            Some(remaining) => {
+        let lease = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
                 store
                     .lookup_with_deadline_async(&team, &agent, remaining)
                     .await
             }
-            None if deadline.is_unbounded() => {
+            atm_core::api::DeadlineBudget::Unbounded => {
                 store.lookup_without_deadline_async(&team, &agent).await
             }
-            None => {
+            atm_core::api::DeadlineBudget::Expired => {
                 return Err(AtmError::daemon_unavailable(
                     "request deadline expired before graft receiver lease lookup",
                 ));
@@ -2482,24 +2484,13 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn blocking_core_bridge_records_a_stall_when_a_job_outlives_its_budget() {
         let health = RuntimeHealth::default();
-        let mut admission = ControlPathSyncBridge::new(
+        let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
             health.clone(),
         );
-        let advanced = Arc::new(AtomicBool::new(false));
-        let clock_state = Arc::clone(&advanced);
-        let origin = std::time::Instant::now();
-        admission.set_test_clock(Arc::new(move || {
-            origin
-                + if clock_state.load(Ordering::SeqCst) {
-                    Duration::from_secs(60)
-                } else {
-                    Duration::ZERO
-                }
-        }));
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let release_tx = Arc::new(TestSignal::default());
         let release_rx = Arc::clone(&release_tx);
@@ -2513,7 +2504,7 @@ pub(crate) mod tests {
                 .await
         });
         started_rx.await.expect("job starts");
-        advanced.store(true, Ordering::SeqCst);
+        tokio::time::advance(Duration::from_secs(60)).await;
         release_tx.signal();
         assert_eq!(
             task.await.expect("job joins").expect("job succeeds"),
@@ -2715,24 +2706,13 @@ pub(crate) mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn started_write_retains_its_actual_result_after_the_advisory_deadline() {
         let health = RuntimeHealth::default();
-        let mut admission = ControlPathSyncBridge::new(
+        let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
             health.clone(),
         );
-        let advanced = Arc::new(AtomicBool::new(false));
-        let clock_advanced = Arc::clone(&advanced);
-        let origin = std::time::Instant::now();
-        admission.set_test_clock(Arc::new(move || {
-            origin
-                + if clock_advanced.load(Ordering::SeqCst) {
-                    Duration::from_millis(30)
-                } else {
-                    Duration::ZERO
-                }
-        }));
         let started_tx = Arc::new(TestSignal::default());
         let started_rx = Arc::clone(&started_tx);
         let release_tx = Arc::new(TestSignal::default());
@@ -2752,7 +2732,7 @@ pub(crate) mod tests {
         tokio::task::spawn_blocking(move || started_rx.wait_for(1))
             .await
             .expect("job start waiter joins");
-        advanced.store(true, Ordering::SeqCst);
+        tokio::time::advance(Duration::from_millis(30)).await;
         release_tx.signal();
         assert_eq!(
             task.await.expect("task joins").expect("actual result"),
@@ -6981,7 +6961,7 @@ pub(crate) mod tests {
             let _ = crate::http1_server::serve_connection(
                 hyper_util::rt::TokioIo::new(stream),
                 router,
-                Duration::from_secs(30),
+                Some(Duration::from_secs(30)),
                 shutdown_rx,
             )
             .await;

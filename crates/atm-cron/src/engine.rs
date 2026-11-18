@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::{collections::BTreeMap, sync::Mutex};
 
 use atm_core::{
-    api::RequestDeadline,
+    api::{RequestBudget, RequestDeadline},
     boundary::{
         CronCommitResult, CronDeliveryIntent, CronDeliveryKey, CronDiagnosticDetail, CronFailure,
         CronFailureKind, CronHookRunner, CronLifecycleNudger, CronModuleMailDelivery,
@@ -485,10 +485,11 @@ fn request(
 }
 
 fn deadline(cron: &AtmCron, schedule: &CronSchedule) -> RequestDeadline {
-    RequestDeadline::after_at(
-        cron.deps.clock.monotonic_now(),
-        std::time::Duration::from_millis(u64::from(schedule.timeout_ms) + 500),
-    )
+    cron.deps
+        .clock
+        .request_deadline(RequestBudget::finite(std::time::Duration::from_millis(
+            u64::from(schedule.timeout_ms) + 500,
+        )))
 }
 
 fn elapsed(cron: &AtmCron, started: chrono::DateTime<chrono::Utc>) -> i64 {
@@ -571,9 +572,10 @@ mod tests {
             store: Arc::new(InMemoryCronScheduleStore::new()),
             runner: Arc::new(atm_runtime_test_support::DummyHookRunner::default()),
             dispatcher: dispatcher.clone(),
-            clock: Arc::new(crate::ManualClock::new(
-                "2026-10-19T00:00:00Z".parse().expect("timestamp"),
-            )),
+            clock: Arc::new(
+                crate::ManualClock::new("2026-10-19T00:00:00Z".parse().expect("timestamp"))
+                    .with_unbounded_deadlines(),
+            ),
             host: None,
             jitter: Arc::new(crate::SeqJitter::default()),
         })

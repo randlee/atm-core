@@ -105,22 +105,8 @@ where
         skipped_link_local,
         truncated,
     } = candidates;
-    let notes = || {
-        let mut notes = Vec::new();
-        if skipped_link_local > 0 {
-            notes.push(format!(
-                "{skipped_link_local} scope-less link-local IPv6 address(es) skipped as unroutable"
-            ));
-        }
-        if truncated > 0 {
-            notes.push(format!(
-                "{truncated} further resolved address(es) not tried (limit {MAX_DIAL_CANDIDATES})"
-            ));
-        }
-        notes
-    };
     if usable.is_empty() {
-        let notes = notes();
+        let notes = candidate_notes(skipped_link_local, truncated);
         return Err(if notes.is_empty() {
             "the host resolved to no addresses".to_owned()
         } else {
@@ -134,41 +120,60 @@ where
     let total = usable.len();
     let mut failures = Vec::with_capacity(total);
     for (index, address) in usable.into_iter().enumerate() {
-        let Some(remaining) = deadline.remaining() else {
-            if deadline.is_unbounded() {
+        match deadline.budget() {
+            atm_core::api::DeadlineBudget::Unbounded => {
                 match connect(address).await {
                     Ok(stream) => return Ok(stream),
                     Err(error) => failures.push(format!("{address}: {error}")),
                 }
                 continue;
             }
-            failures.push(format!(
-                "{address}: request budget elapsed before the attempt"
-            ));
-            break;
-        };
-        let untried = u32::try_from(total - index).unwrap_or(u32::MAX);
-        let budget = remaining / untried;
-        match tokio::time::timeout(budget, connect(address)).await {
-            Ok(Ok(stream)) => {
-                if !failures.is_empty() {
-                    tracing::info!(
-                        %address,
-                        earlier_attempts = failures.join("; "),
-                        "direct peer connected after earlier candidate addresses failed"
-                    );
-                }
-                return Ok(stream);
+            atm_core::api::DeadlineBudget::Expired => {
+                failures.push(format!(
+                    "{address}: request budget elapsed before the attempt"
+                ));
+                break;
             }
-            Ok(Err(error)) => failures.push(format!("{address}: {error}")),
-            Err(_) => failures.push(format!(
-                "{address}: no response within its {}ms share of the request budget",
-                budget.as_millis()
-            )),
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                let untried = u32::try_from(total - index).unwrap_or(u32::MAX);
+                let budget = remaining / untried;
+                match tokio::time::timeout(budget, connect(address)).await {
+                    Ok(Ok(stream)) => {
+                        if !failures.is_empty() {
+                            tracing::info!(
+                                %address,
+                                earlier_attempts = failures.join("; "),
+                                "direct peer connected after earlier candidate addresses failed"
+                            );
+                        }
+                        return Ok(stream);
+                    }
+                    Ok(Err(error)) => failures.push(format!("{address}: {error}")),
+                    Err(_) => failures.push(format!(
+                        "{address}: no response within its {}ms share of the request budget",
+                        budget.as_millis()
+                    )),
+                }
+            }
         }
     }
-    failures.extend(notes());
+    failures.extend(candidate_notes(skipped_link_local, truncated));
     Err(failures.join("; "))
+}
+
+fn candidate_notes(skipped_link_local: usize, truncated: usize) -> Vec<String> {
+    let mut notes = Vec::new();
+    if skipped_link_local > 0 {
+        notes.push(format!(
+            "{skipped_link_local} scope-less link-local IPv6 address(es) skipped as unroutable"
+        ));
+    }
+    if truncated > 0 {
+        notes.push(format!(
+            "{truncated} further resolved address(es) not tried (limit {MAX_DIAL_CANDIDATES})"
+        ));
+    }
+    notes
 }
 
 /// Forward resolution of the registered peer hostname through the operating
@@ -280,9 +285,15 @@ impl PeerAddressCache {
             // the remaining budget and `STALE_ADDRESS_DIAL_CAP`; the rest is
             // reserved for the fresh lookup and dial that follow when they no
             // longer answer.
-            let cached_deadline = deadline.remaining().map_or(deadline, |remaining| {
-                RequestDeadline::after((remaining / 2).min(STALE_ADDRESS_DIAL_CAP))
-            });
+            let cached_budget = deadline.budget().capped(STALE_ADDRESS_DIAL_CAP);
+            let cached_deadline = match cached_budget {
+                atm_core::api::DeadlineBudget::Unbounded => deadline,
+                atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                    let cached_timeout = (remaining / 2).min(STALE_ADDRESS_DIAL_CAP);
+                    atm_core::api::RequestBudget::finite(cached_timeout).start()
+                }
+                atm_core::api::DeadlineBudget::Expired => deadline,
+            };
             match dial_candidates(cached, cached_deadline, connect).await {
                 Ok(stream) => return Ok(stream),
                 Err(cause) => {
@@ -296,17 +307,21 @@ impl PeerAddressCache {
             }
         }
 
-        let resolved = match deadline.remaining() {
-            Some(remaining) => tokio::time::timeout(remaining, resolve(peer.clone(), port))
+        let resolved = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                tokio::time::timeout(remaining, resolve(peer.clone(), port))
+                    .await
+                    .map_err(|_| {
+                        format!(
+                            "DNS resolution of `{peer}` did not finish within the request budget"
+                        )
+                    })?
+                    .map_err(|error| format!("DNS resolution of `{peer}` failed: {error}"))?
+            }
+            atm_core::api::DeadlineBudget::Unbounded => resolve(peer.clone(), port)
                 .await
-                .map_err(|_| {
-                    format!("DNS resolution of `{peer}` did not finish within the request budget")
-                })?
                 .map_err(|error| format!("DNS resolution of `{peer}` failed: {error}"))?,
-            None if deadline.is_unbounded() => resolve(peer.clone(), port)
-                .await
-                .map_err(|error| format!("DNS resolution of `{peer}` failed: {error}"))?,
-            None => {
+            atm_core::api::DeadlineBudget::Expired => {
                 return Err("request budget elapsed before the peer name was resolved".to_owned());
             }
         };

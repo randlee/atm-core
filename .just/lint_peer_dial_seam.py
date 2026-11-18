@@ -50,7 +50,7 @@ LOCKED_LINES: dict[str, tuple[str, ...]] = {
         "pub(crate) const DIAL_REPORT_GRACE: Duration = Duration::from_millis(250);",
         "pub(crate) const STALE_ADDRESS_DIAL_CAP: Duration = Duration::from_millis(500);",
         # Rule 5: cached dial bounded by min(half remaining, cap).
-        "RequestDeadline::after((remaining / 2).min(STALE_ADDRESS_DIAL_CAP))",
+        "let cached_timeout = (remaining / 2).min(STALE_ADDRESS_DIAL_CAP);",
         "let name = peer.as_str().to_ascii_lowercase();",
         '.strip_suffix(".local")',
         "address.ip().is_unicast_link_local() && address.scope_id() == 0",
@@ -59,7 +59,7 @@ LOCKED_LINES: dict[str, tuple[str, ...]] = {
     "crates/atm-http-runtime/src/peer_connection_pool.rs": (
         "address_cache_ttl: Duration::from_secs(5 * 60),",
         # Rule 7: the dial loop ends DIAL_REPORT_GRACE inside the budget.
-        ".checked_sub(DIAL_REPORT_GRACE)",
+        "budget.reserve(DIAL_REPORT_GRACE)",
         "self.shared.addresses.connect(",
     ),
     "crates/atm-http-runtime/src/client.rs": (
