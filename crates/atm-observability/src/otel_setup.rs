@@ -104,7 +104,7 @@ impl Runtime for NoDeadlineRuntime {
             if duration == Duration::MAX {
                 Box::pin(std::future::pending())
             } else {
-                Box::pin(tokio::time::sleep(duration))
+                Box::pin(Tokio.delay(duration))
             };
         delay
     }
