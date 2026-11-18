@@ -382,15 +382,21 @@ async fn connect_named_pipe(
             message: "Unix Herdr endpoint selected on a Windows build".to_owned(),
         });
     };
-    retry_pipe_busy(
-        || deadline.remaining(),
-        retry_delay,
-        || tokio::net::windows::named_pipe::ClientOptions::new().open(name),
-    )
-    .await
+    connect_named_pipe_with_remaining(name, || deadline.remaining(), retry_delay).await
 }
 
 #[cfg(windows)]
+async fn connect_named_pipe_with_remaining(
+    name: &str,
+    remaining: impl Fn() -> Option<Duration>,
+    retry_delay: Duration,
+) -> Result<tokio::net::windows::named_pipe::NamedPipeClient, HerdrError> {
+    retry_pipe_busy(remaining, retry_delay, || {
+        tokio::net::windows::named_pipe::ClientOptions::new().open(name)
+    })
+    .await
+}
+
 #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Named-pipe busy retries pause within the remaining connection deadline.")]
 async fn retry_pipe_busy<T>(
     remaining: impl Fn() -> Option<Duration>,
@@ -854,32 +860,44 @@ mod tests {
         assert!(read.await.is_err());
     }
 
-    #[cfg(windows)]
-    #[tokio::test(start_paused = true)]
-    async fn named_pipe_busy_retry_is_covered_with_a_bounded_deadline() {
-        let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let observed = Arc::clone(&attempts);
-        retry_pipe_busy(
-            || Some(Duration::from_secs(1)),
+    #[tokio::test]
+    async fn pipe_retry_succeeds_without_reading_a_deadline_when_open_succeeds() {
+        let opened = std::sync::atomic::AtomicBool::new(false);
+        let result = retry_pipe_busy(
+            || panic!("successful open must not consult a deadline"),
             PIPE_BUSY_RETRY_DELAY,
-            move || {
-                if observed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
-                    Err(io::Error::from_raw_os_error(231))
-                } else {
-                    Ok(())
-                }
+            || {
+                opened.store(true, std::sync::atomic::Ordering::Relaxed);
+                Ok("connected")
             },
         )
-        .await
-        .expect("retry");
-        assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 2);
-        let expired = retry_pipe_busy(
-            || None,
+        .await;
+        assert_eq!(result.expect("connection"), "connected");
+        assert!(opened.load(std::sync::atomic::Ordering::Relaxed));
+    }
+
+    #[tokio::test]
+    async fn pipe_retry_reports_deadline_expiry_without_sleeping() {
+        let attempts = std::sync::atomic::AtomicUsize::new(0);
+        let remaining_calls = std::sync::atomic::AtomicUsize::new(0);
+        let result = retry_pipe_busy(
+            || {
+                remaining_calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                None
+            },
             PIPE_BUSY_RETRY_DELAY,
-            || Err::<(), _>(io::Error::from_raw_os_error(231)),
+            || {
+                attempts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                Err::<(), _>(io::Error::from_raw_os_error(231))
+            },
         )
         .await;
-        assert!(matches!(expired, Err(HerdrError::Timeout)));
+        assert!(matches!(result, Err(HerdrError::Timeout)));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(
+            remaining_calls.load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
     }
 
     #[cfg(windows)]
@@ -894,9 +912,12 @@ mod tests {
             .expect("create test named-pipe server");
         let endpoint = HerdrEndpoint::NamedPipe(pipe_name);
 
-        let mut client = connect_named_pipe(
-            &endpoint,
-            RequestDeadline::after(Duration::from_secs(5)),
+        let HerdrEndpoint::NamedPipe(pipe_name) = &endpoint else {
+            unreachable!("Windows endpoint is a named pipe");
+        };
+        let mut client = connect_named_pipe_with_remaining(
+            pipe_name,
+            || Some(Duration::MAX),
             PIPE_BUSY_RETRY_DELAY,
         )
         .await
@@ -930,9 +951,15 @@ mod tests {
     #[tokio::test]
     async fn missing_named_pipe_returns_a_typed_error_before_deadline() {
         let endpoint = HerdrEndpoint::NamedPipe(unique_test_pipe_name());
-        let deadline = RequestDeadline::after(Duration::from_secs(5));
-
-        let result = connect_named_pipe(&endpoint, deadline, PIPE_BUSY_RETRY_DELAY).await;
+        let HerdrEndpoint::NamedPipe(pipe_name) = &endpoint else {
+            unreachable!("Windows endpoint is a named pipe");
+        };
+        let result = connect_named_pipe_with_remaining(
+            pipe_name,
+            || Some(Duration::MAX),
+            PIPE_BUSY_RETRY_DELAY,
+        )
+        .await;
 
         assert!(matches!(result, Err(HerdrError::ServerUnavailable { .. })));
     }
