@@ -2146,6 +2146,8 @@ class CrossPlatformProvisionRegressionTests(unittest.TestCase):
         self.assertEqual(value("Settings/ExecutionTimeLimit"), "PT0S")
         self.assertEqual(value("Settings/RestartOnFailure/Interval"), "PT1M")
         self.assertEqual(value("Settings/RestartOnFailure/Count"), "3")
+        self.assertEqual(value("Settings/DisallowStartIfOnBatteries"), "false")
+        self.assertEqual(value("Settings/StopIfGoingOnBatteries"), "false")
         self.assertEqual(len(root.findall("{*}Actions/*")), 1)
         self.assertEqual(value("Actions/Exec/Command"), str(daemon))
         for system in ("Darwin", "Linux"):

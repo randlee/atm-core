@@ -281,6 +281,8 @@ def provision_windows_task(args: argparse.Namespace, selected_links: Callable[[a
     restart = child(settings, "RestartOnFailure")
     child(restart, "Interval", "PT1M")
     child(restart, "Count", "3")
+    child(settings, "DisallowStartIfOnBatteries", "false")
+    child(settings, "StopIfGoingOnBatteries", "false")
     actions = child(root, "Actions")
     actions.set("Context", "Author")
     child(child(actions, "Exec"), "Command", str(daemon))
