@@ -1,8 +1,9 @@
 #![forbid(unsafe_code)]
 //! `sc-composer` implementation of ATM's template-composition port.
 //!
-//! The adapter uses the exact crates.io `sc-composer` and `sc-sha` 1.7.0
-//! releases for inspection, rendering, and root-confinement operations. ATM
+//! The adapter depends on the crates.io `sc-composer` and `sc-sha` crates
+//! with a 1.9.0 floor (`Cargo.lock` resolves the exact build) for
+//! inspection, rendering, and root-confinement operations. ATM
 //! translates their public results into its small storage DTOs; it does not
 //! maintain a second parser, hash implementation, or fixture-backed
 //! production path.
@@ -28,7 +29,7 @@ use serde_json::{Map, Value};
 
 /// Production render, confinement, and inspection adapter.
 ///
-/// Every production operation delegates to the exact-pinned upstream crates:
+/// Every production operation delegates to the upstream `sc-composer` and `sc-sha` crates:
 /// `sc-sha` owns strict UTF-8/LF-normalized identity while `sc-composer` owns
 /// frontmatter parsing, directive classification, rendering, and confinement.
 #[derive(Clone, Default)]

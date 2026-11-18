@@ -2115,9 +2115,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.5.15"
+version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35a133f956daabe89a61a685c2649f13d82d5aa4bd5d12d1277e1072a21c0694"
+checksum = "af66907df18639dcf4db56ca65490cabc4b27a97dbadd96f2926cca73298f016"
 dependencies = [
  "cfg_aliases",
  "libc",
@@ -2414,9 +2414,9 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sc-composer"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c2ee3dc4fce6603b165713e5ec6c2e06874b241b439e043fdc2d21a16d7885c"
+checksum = "5d8b4c77c83d2c2b1a8433dd658dd7a9f3cf16ccd13aa7dc9d065a22e0e6e18c"
 dependencies = [
  "minijinja",
  "quick-xml",
@@ -2527,9 +2527,9 @@ dependencies = [
 
 [[package]]
 name = "sc-sha"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20f318a395f53ddb1d4a56071531559b2d5c0c5e334bcaef488208e2a1415a93"
+checksum = "e9d7d22227ceffbf44f20dbd0f076ef4810a907f8b407e0b8ac6ae795b5b7a33"
 dependencies = [
  "sha2 0.11.1",
 ]
