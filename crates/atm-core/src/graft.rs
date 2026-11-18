@@ -1545,7 +1545,6 @@ mod tests {
         let _restore = RestoreNonblocking(listener);
         let endpoint = listener.local_addr().expect("local addr");
         let client_finished = Arc::new(AtomicBool::new(false));
-        let (completed_tx, completed_rx) = std::sync::mpsc::sync_channel(1);
         let receiver_listener = Arc::clone(listener);
         let receiver_client_finished = Arc::clone(&client_finished);
         let receiver = std::thread::spawn(move || {
@@ -1553,11 +1552,11 @@ mod tests {
                 .poll_accept()
                 .expect("accept")
                 .expect("loopback peer");
-            let request = if receiver_client_finished.load(Ordering::Acquire) {
+            if receiver_client_finished.load(Ordering::Acquire) {
                 None
             } else {
                 let GraftReceiverRequest::PostSend(request) = receiver_listener
-                    .read_receiver_request(&mut stream, Duration::from_secs(3))
+                    .read_receiver_request_with_limit(&mut stream, None)
                     .expect("read request")
                 else {
                     panic!("expected post-send request");
@@ -1566,14 +1565,15 @@ mod tests {
                     .write_response(&mut stream, &GraftPostSendResponse::Delivered)
                     .expect("write response");
                 Some(request)
-            };
-            let _ = completed_tx.send(request);
+            }
         });
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             deliver_published_receiver_hook_with_transport(
                 runtime,
                 &dispatch_for(test_event()),
-                RequestDeadline::after(Duration::from_secs(10)),
+                // The test transport has no time limits; an expired deadline
+                // makes an accidental return to budget-based success fail.
+                RequestDeadline::after_at(std::time::Instant::now(), Duration::ZERO),
                 |endpoint, capability, request, deadline| {
                     super::deliver_graft_post_send_with_limits(
                         endpoint,
@@ -1581,8 +1581,8 @@ mod tests {
                         request,
                         deadline,
                         super::HookTransportLimits {
-                            connect: Some(Duration::from_secs(3)),
-                            io: Some(Duration::from_secs(3)),
+                            connect: None,
+                            io: None,
                         },
                     )
                 },
@@ -1591,19 +1591,11 @@ mod tests {
         if !matches!(outcome, Ok(Ok(_))) {
             client_finished.store(true, Ordering::Release);
             // Release accept when delivery failed before establishing a connection.
-            let _ = TcpStream::connect_timeout(&endpoint, Duration::from_secs(3));
+            let _ = TcpStream::connect(endpoint);
         }
-        let request = match wait_receiver_completion(&completed_rx, Duration::from_secs(10)) {
-            Ok(request) => request,
-            Err(error) => {
-                client_finished.store(true, Ordering::Release);
-                let _ = TcpStream::connect_timeout(&endpoint, Duration::from_secs(3));
-                panic!("{error}");
-            }
-        };
-        receiver
+        let request = receiver
             .join()
-            .expect("receiver thread after completion signal");
+            .expect("receiver thread after delivery handshake");
         let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
         let request = request.expect("delivery completed before receiver accepted a request");
         (outcome, request)
