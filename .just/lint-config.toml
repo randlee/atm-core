@@ -105,6 +105,13 @@ package_version_field = "PackageVersion"
 manifest_version_field = "ManifestVersion"
 installer_url_field = "InstallerUrl"
 
+[version_sync.python]
+python_manifests = [
+  "crates/atm-graft-python/pyproject.toml",
+  "crates/atm-query-python/pyproject.toml",
+  "crates/hermes-atm/pyproject.toml",
+]
+
 [version_sync.release_wiring]
 enabled = true
 file = ".github/workflows/release.yml"
