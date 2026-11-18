@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Enforce cross-file reader calls and exact caller-context reads.
+"""Enforce forbidden direct reads, cross-file reader calls, and exact reader sites.
 
 Delete the cross-file rule when randlee/sc-lint#981 ships; delete the
-exact-site read check when randlee/sc-lint#983 ships.
+exact-site read check when randlee/sc-lint#983 ships, and general direct
+reads when randlee/sc-lint#984 ships.
 """
 
 from __future__ import annotations
@@ -271,19 +272,18 @@ def collect_file_violations(
         if in_test_scope or not is_code_line(line):
             continue
 
-        # sc-lint exempts whole readers. Check this one module at exact call
-        # sites until its exemption can distinguish approved and new reads.
-        if rel_path == Path("crates/atm-core/src/caller_context.rs"):
-            for match in ENV_CALL_RE.finditer(line):
-                if match.group("literal") in forbidden_env_vars:
-                    violations.append(EnvVarViolation(rel_path.as_posix(), line_number, line.strip(),
-                                                      enclosing_function_name(lines, line_number),
-                                                      "direct_literal_env_read"))
-            for match in CALL_LITERAL_RE.finditer(line):
-                if match.group("literal") in forbidden_env_vars and match.group(1) in forwarding_functions:
-                    violations.append(EnvVarViolation(rel_path.as_posix(), line_number, line.strip(),
-                                                      enclosing_function_name(lines, line_number),
-                                                      "env_var_via_forwarding_function"))
+        # Until sc-lint covers initializers, scan all restricted files. Exact
+        # allowlist entries continue to exempt only the five approved sites.
+        for match in ENV_CALL_RE.finditer(line):
+            if match.group("literal") in forbidden_env_vars:
+                violations.append(EnvVarViolation(rel_path.as_posix(), line_number, line.strip(),
+                                                  enclosing_function_name(lines, line_number),
+                                                  "direct_literal_env_read"))
+        for match in CALL_LITERAL_RE.finditer(line):
+            if match.group("literal") in forbidden_env_vars and match.group(1) in forwarding_functions:
+                violations.append(EnvVarViolation(rel_path.as_posix(), line_number, line.strip(),
+                                                  enclosing_function_name(lines, line_number),
+                                                  "env_var_via_forwarding_function"))
 
         stripped = line.strip()
         if FN_DEF_RE.match(stripped):
