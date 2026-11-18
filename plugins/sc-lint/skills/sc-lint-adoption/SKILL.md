@@ -1,7 +1,7 @@
 ---
 name: sc-lint-adoption
 description: Seed the sc-lint contract in a Rust repository. Use when a repository needs unified `just setup`, `just lint`, and `just test` commands, or when reviewing adoption inputs.
-version: 0.8.8
+version: 0.8.9
 ---
 
 # sc-lint adoption

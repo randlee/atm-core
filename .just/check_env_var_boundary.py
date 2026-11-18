@@ -1,27 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce the ATM_TEAM/ATM_IDENTITY client-boundary rule.
-
-ATM_TEAM and ATM_IDENTITY are CLI-identity environment variables that must
-only be read at client entry points (the `atm` CLI and the `atm-graft`
-client). Library crates (`atm-core`, `atm-daemon`) must receive already
-resolved values as parameters instead of reading these variables themselves.
-
-This lint flags:
-  * direct `env::var("ATM_TEAM"/"ATM_IDENTITY")` /
-    `env::var_os("ATM_TEAM"/"ATM_IDENTITY")` calls,
-  * calls that route one of the forbidden literals through a same-file helper
-    function whose body forwards its string parameter straight into
-    `env::var`/`env::var_os` (e.g. `read_env_raw("ATM_IDENTITY")` where
-    `read_env_raw(key: &str)` calls `env::var_os(key)`), and
-  * calls to the explicitly configured `boundary_reader_functions` and any
-    same-file wrapper functions that call them transitively (the known
-    CLI-only resolver functions that read these variables internally), from
-    any other production source file in the restricted crate roots.
-
-Findings for pre-existing call sites may be allowlisted in
-`.just/allowlists/env_var_boundary_allowlist.toml` while the follow-up
-refactor to push these reads out to the client boundary is scheduled.
-"""
+"""Enforce cross-file caller-context reader calls. Delete when randlee/sc-lint#981 ships."""
 
 from __future__ import annotations
 
@@ -46,13 +24,6 @@ from sc_lint.lint_common import workspace_crate_section_lines
 LINT_NAME = "env-var-boundary"
 ALLOWLIST_PATH = Path(".just/allowlists/env_var_boundary_allowlist.toml")
 
-ENV_CALL_RE = re.compile(
-    r"\b(?:std::)?env::var(?:_os)?\s*\(\s*(?:\"(?P<literal>[^\"]*)\"|(?P<ident>[A-Za-z_][A-Za-z0-9_]*))\s*\)"
-)
-FN_SINGLE_STR_PARAM_RE = re.compile(
-    r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*&str\s*\)"
-)
-CALL_LITERAL_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\"(?P<literal>[^\"]*)\"")
 FN_DEF_RE = re.compile(r"^(?:pub(?:\([^)]*\))?\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 
@@ -83,14 +54,6 @@ def env_boundary_config(repo_root: Path) -> dict:
     if not isinstance(config, dict):
         raise SystemExit("[env_var_boundary] must be a TOML table")
     return config
-
-
-def load_forbidden_env_vars(repo_root: Path) -> tuple[str, ...]:
-    config = env_boundary_config(repo_root)
-    values = config.get("forbidden_env_vars")
-    if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
-        raise SystemExit("[env_var_boundary].forbidden_env_vars must be an array of strings")
-    return tuple(values)
 
 
 def load_restricted_crate_roots(repo_root: Path) -> tuple[Path, ...]:
@@ -193,23 +156,6 @@ def function_body_bounds(lines: list[str], signature_line_index: int) -> tuple[i
     return signature_line_index, end_index
 
 
-def collect_same_file_forwarding_functions(lines: list[str]) -> set[str]:
-    """Find functions whose body forwards their single &str parameter into env::var(_os)."""
-    forwarding: set[str] = set()
-    for index, line in enumerate(lines):
-        match = FN_SINGLE_STR_PARAM_RE.search(line)
-        if match is None:
-            continue
-        function_name, param_name = match.group(1), match.group(2)
-        start, end = function_body_bounds(lines, index)
-        for body_line in lines[start : end + 1]:
-            for call_match in ENV_CALL_RE.finditer(body_line):
-                if call_match.group("ident") == param_name:
-                    forwarding.add(function_name)
-                    break
-    return forwarding
-
-
 def find_boundary_reader_definition_files(
     file_lines: dict[Path, list[str]],
     boundary_reader_functions: tuple[str, ...],
@@ -217,9 +163,8 @@ def find_boundary_reader_definition_files(
     """Map each configured boundary-reader function name to the file that defines it.
 
     Calls to a boundary-reader function from within its own defining file are
-    internal implementation details of that resolver (already covered, and
-    allowlisted where needed, via the forwarding-function detection), not a
-    new client of the env read, so they are excluded from Rule C.
+    internal implementation details of that resolver, not a new client of
+    the env read, so they are excluded from this rule.
     """
     definition_files: dict[str, Path] = {}
     for rel_path, lines in file_lines.items():
@@ -287,47 +232,14 @@ def collect_file_violations(
     rel_path: Path,
     lines: list[str],
     scope: list[bool],
-    forbidden_env_vars: tuple[str, ...],
     boundary_reader_functions: tuple[str, ...],
     boundary_reader_definition_files: dict[str, Path],
 ) -> list[EnvVarViolation]:
     violations: list[EnvVarViolation] = []
-    forwarding_functions = collect_same_file_forwarding_functions(lines)
 
     for line_number, (line, in_test_scope) in enumerate(zip(lines, scope, strict=True), start=1):
         if in_test_scope or not is_code_line(line):
             continue
-
-        for call_match in ENV_CALL_RE.finditer(line):
-            literal = call_match.group("literal")
-            if literal is not None and literal in forbidden_env_vars:
-                violations.append(
-                    EnvVarViolation(
-                        path=rel_path.as_posix(),
-                        line_number=line_number,
-                        line=line.strip(),
-                        symbol=enclosing_function_name(lines, line_number),
-                        kind="direct_literal_env_read",
-                    )
-                )
-
-        for call_match in CALL_LITERAL_RE.finditer(line):
-            func_name = call_match.group(1)
-            literal = call_match.group("literal")
-            if literal not in forbidden_env_vars:
-                continue
-            if FN_DEF_RE.match(line.strip()):
-                continue
-            if func_name in forwarding_functions:
-                violations.append(
-                    EnvVarViolation(
-                        path=rel_path.as_posix(),
-                        line_number=line_number,
-                        line=line.strip(),
-                        symbol=enclosing_function_name(lines, line_number),
-                        kind="env_var_via_forwarding_function",
-                    )
-                )
 
         stripped = line.strip()
         if FN_DEF_RE.match(stripped):
@@ -352,7 +264,6 @@ def collect_file_violations(
 def collect_env_var_boundary_violations(
     repo_root: Path,
     *,
-    forbidden_env_vars: tuple[str, ...],
     restricted_crate_roots: tuple[Path, ...],
     boundary_reader_functions: tuple[str, ...],
     allowlist: list[AllowlistEntry],
@@ -375,7 +286,6 @@ def collect_env_var_boundary_violations(
             rel_path=rel_path,
             lines=lines,
             scope=scope,
-            forbidden_env_vars=forbidden_env_vars,
             boundary_reader_functions=boundary_reader_functions,
             boundary_reader_definition_files=boundary_reader_definition_files,
         )
@@ -406,14 +316,12 @@ def main(argv: list[str]) -> int:
     started_at = datetime.now(timezone.utc)
     start_time = monotonic_now()
 
-    forbidden_env_vars = load_forbidden_env_vars(repo_root)
     restricted_crate_roots = load_restricted_crate_roots(repo_root)
     boundary_reader_functions = load_boundary_reader_functions(repo_root)
     allowlist = load_allowlist(repo_root)
 
     violations = collect_env_var_boundary_violations(
         repo_root,
-        forbidden_env_vars=forbidden_env_vars,
         restricted_crate_roots=restricted_crate_roots,
         boundary_reader_functions=boundary_reader_functions,
         allowlist=allowlist,

@@ -8,7 +8,7 @@ maturin==1.14.1
 packaging==26.3
 pydantic==2.13.4
 pydantic-core==2.46.4
-sc-lint==0.8.8
+sc-lint==0.8.9
 typing-extensions==4.16.0
 tzdata==2026.3
 typing-inspection==0.4.4

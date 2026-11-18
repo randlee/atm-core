@@ -7,7 +7,8 @@
       "SCB-BOUNDARY-003",
       "SCB-BOUNDARY-004",
       "SCB-BOUNDARY-005",
-      "SCB-CALLER-001"
+      "SCB-CALLER-001",
+      "SCB-ENV-001"
     ],
     "cycles": [
       "SCB-CYCLE-001",
@@ -35,13 +36,17 @@
       "SCB-MANIFEST-003",
       "SCB-MANIFEST-004",
       "SCB-MANIFEST-005",
-      "SCB-MANIFEST-006"
+      "SCB-MANIFEST-006",
+      "SCB-MANIFEST-007",
+      "SCB-MANIFEST-008"
     ]
   },
   "own_keys": [
     "manifest_dependency_allowlists",
     "global_dependency_ownership",
-    "manifest_section_rules"
+    "manifest_section_rules",
+    "env_var_boundary",
+    "dependency_requirements"
   ],
   "rules": [
     "SCB-CYCLE-001",
@@ -63,6 +68,9 @@
     "SCB-MANIFEST-003",
     "SCB-MANIFEST-004",
     "SCB-MANIFEST-005",
-    "SCB-MANIFEST-006"
+    "SCB-MANIFEST-006",
+    "SCB-ENV-001",
+    "SCB-MANIFEST-007",
+    "SCB-MANIFEST-008"
   ]
 }
