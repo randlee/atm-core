@@ -89,6 +89,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:36+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -111,6 +118,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)"
         }
       ]
     },
@@ -207,6 +218,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:36+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -233,6 +251,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)"
         }
       ]
     },
@@ -322,6 +344,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:36+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -344,6 +373,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)"
         }
       ]
     },
@@ -440,6 +473,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:36+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -462,6 +502,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)"
         }
       ]
     },
@@ -669,6 +713,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -695,6 +746,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -913,6 +968,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -939,6 +1001,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -1035,6 +1101,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:59:46+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1061,6 +1134,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -1157,6 +1234,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1183,6 +1267,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -1286,6 +1374,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1312,6 +1407,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -1408,6 +1507,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1434,6 +1540,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -1530,6 +1640,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:59:46+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1556,6 +1673,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3"
         }
       ]
     },
@@ -1645,6 +1766,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:59:46+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1667,6 +1795,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3"
         }
       ]
     },
@@ -1770,6 +1902,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the QA bead or QA run; that is atm-bt-2.sub-3",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -1796,6 +1935,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the QA bead or QA run; that is atm-bt-2.sub-3"
         }
       ]
     },
@@ -2010,6 +2153,13 @@
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
           "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 writes no subtask prompts or task text; its planning.md edit is two sentences",
+          "replaced": false
         }
       ],
       "exclude": [
@@ -2036,6 +2186,10 @@
         {
           "item": "atm-bt-7",
           "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 writes no subtask prompts or task text; its planning.md edit is two sentences"
         }
       ]
     },

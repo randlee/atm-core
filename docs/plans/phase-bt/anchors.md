@@ -50,6 +50,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)
 
 Beads: anchor `atm-te91`, plan questions `atm-te91.1`, dev questions `atm-te91.2`
 
@@ -76,6 +77,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)
 
 Beads: anchor `atm-d42v`, plan questions `atm-d42v.1`, dev questions `atm-d42v.2`
 
@@ -101,6 +103,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)
 
 Beads: anchor `atm-u194`, plan questions `atm-u194.1`, dev questions `atm-u194.2`
 
@@ -126,6 +129,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)
 
 Beads: anchor `atm-w53l`, plan questions `atm-w53l.1`, dev questions `atm-w53l.2`
 
@@ -177,6 +181,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2
 
 Beads: anchor `atm-umb4`, plan questions `atm-umb4.1`, dev questions `atm-umb4.2`
 
@@ -229,6 +234,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2
 
 Beads: anchor `atm-kha6`, plan questions `atm-kha6.1`, dev questions `atm-kha6.2`
 
@@ -255,6 +261,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2
 
 Beads: anchor `atm-plmh`, plan questions `atm-plmh.1`, dev questions `atm-plmh.2`
 
@@ -281,6 +288,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2
 
 Beads: anchor `atm-ff88`, plan questions `atm-ff88.1`, dev questions `atm-ff88.2`
 
@@ -307,6 +315,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2
 
 Beads: anchor `atm-m1dj`, plan questions `atm-m1dj.1`, dev questions `atm-m1dj.2`
 
@@ -333,6 +342,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2
 
 Beads: anchor `atm-q2b3`, plan questions `atm-q2b3.1`, dev questions `atm-q2b3.2`
 
@@ -359,6 +369,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3
 
 Beads: anchor `atm-tyf5`, plan questions `atm-tyf5.1`, dev questions `atm-tyf5.2`
 
@@ -384,6 +395,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3
 
 Beads: anchor `atm-ggaq`, plan questions `atm-ggaq.1`, dev questions `atm-ggaq.2`
 
@@ -410,6 +422,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 does not touch the QA bead or QA run; that is atm-bt-2.sub-3
 
 Beads: anchor `atm-p2kg`, plan questions `atm-p2kg.1`, dev questions `atm-p2kg.2`
 
@@ -463,6 +476,7 @@ Excluded from (not judged; the cell passes as `excluded`):
 - `atm-bt-5`: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-6`: atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
 - `atm-bt-7`: atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow
+- `atm-bt-8`: bt-8 writes no subtask prompts or task text; its planning.md edit is two sentences
 
 Beads: anchor `atm-eynt`, plan questions `atm-eynt.1`, dev questions `atm-eynt.2`
 
