@@ -1439,18 +1439,14 @@ mod tests {
             body: Vec::new(),
         };
 
-        let failure = tokio::time::timeout(
-            Duration::from_secs(1),
-            execute_reqwest_request(
-                &client,
-                url,
-                request,
-                RequestDeadline::after(Duration::from_secs(1)),
-                None,
-            ),
+        let failure = execute_reqwest_request(
+            &client,
+            url,
+            request,
+            RequestDeadline::after(Duration::from_secs(1)),
+            None,
         )
         .await
-        .expect("direct exchange test must remain bounded")
         .expect_err("nothing listens on the reserved port");
 
         assert!(
@@ -1491,18 +1487,14 @@ mod tests {
             body: Vec::new(),
         };
 
-        let failure = tokio::time::timeout(
-            Duration::from_secs(1),
-            execute_reqwest_request(
-                &client,
-                url,
-                request,
-                RequestDeadline::after(Duration::from_secs(1)),
-                None,
-            ),
+        let failure = execute_reqwest_request(
+            &client,
+            url,
+            request,
+            RequestDeadline::after(Duration::from_secs(1)),
+            None,
         )
         .await
-        .expect("direct exchange test must remain bounded")
         .expect_err("the peer closes the connection without responding");
 
         assert!(

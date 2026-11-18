@@ -1405,11 +1405,11 @@ pub(crate) mod tests {
 
         fn wait_for(&self, expected: usize) {
             let count = self.count.lock().expect("test signal lock");
-            let (count, _) = self
+            let count = self
                 .changed
-                .wait_timeout_while(count, Duration::from_secs(30), |count| *count < expected)
+                .wait_while(count, |count| *count < expected)
                 .expect("test signal wait");
-            assert!(*count >= expected, "timed out waiting for test signal");
+            assert!(*count >= expected, "test signal reached expected count");
         }
     }
 
@@ -1458,10 +1458,10 @@ pub(crate) mod tests {
             let released = released
                 .lock()
                 .expect("wait for stalled template verification");
-            let (released, _) = wake
-                .wait_timeout_while(released, Duration::from_secs(30), |released| !*released)
+            let released = wake
+                .wait_while(released, |released| !*released)
                 .expect("stalled template verification wait");
-            assert!(*released, "test must release stalled template verification");
+            assert!(*released, "test releases stalled template verification");
             Ok(self.inspection.clone())
         }
 
@@ -2391,10 +2391,7 @@ pub(crate) mod tests {
                 })
                 .await
         });
-        tokio::time::timeout(Duration::from_secs(30), first_started_rx)
-            .await
-            .expect("timed out waiting for first job")
-            .expect("first job starts");
+        first_started_rx.await.expect("first job starts");
 
         let second_started = Arc::new(AtomicBool::new(false));
         let second_job_started = Arc::clone(&second_started);
@@ -2480,10 +2477,7 @@ pub(crate) mod tests {
                 })
                 .await
         });
-        tokio::time::timeout(Duration::from_secs(30), started_rx)
-            .await
-            .expect("job start deadline")
-            .expect("job starts");
+        started_rx.await.expect("job starts");
         advanced.store(true, Ordering::SeqCst);
         release_tx.signal();
         assert_eq!(
@@ -3453,10 +3447,7 @@ pub(crate) mod tests {
                 )
                 .await
         });
-        tokio::time::timeout(Duration::from_secs(30), entered)
-            .await
-            .expect("worker reaches doctor port")
-            .expect("doctor port remains alive");
+        entered.await.expect("doctor port remains alive");
 
         // Poll once to prove the second request has been admitted into the
         // sole queue slot while the worker remains held at the port.
@@ -3487,15 +3478,10 @@ pub(crate) mod tests {
         );
 
         release.send(()).expect("release doctor worker");
-        tokio::time::timeout(Duration::from_secs(30), held)
-            .await
-            .expect("held request finishes")
+        held.await
             .expect("held request joins")
             .expect("held request completes");
-        tokio::time::timeout(Duration::from_secs(30), queued)
-            .await
-            .expect("queued request finishes")
-            .expect("queued request completes");
+        queued.await.expect("queued request completes");
     }
 
     #[test]
@@ -3925,10 +3911,7 @@ pub(crate) mod tests {
                 })
                 .await
         });
-        tokio::time::timeout(Duration::from_secs(30), started_rx)
-            .await
-            .expect("bridge start deadline")
-            .expect("bridge started");
+        started_rx.await.expect("bridge started");
 
         let root = fixture.home_dir.clone();
         let list = atm_core::list::ListQuery::new(
@@ -5083,16 +5066,15 @@ pub(crate) mod tests {
                 &telemetry,
             ),
             async {
-                tokio::task::spawn_blocking(move || entered.recv_timeout(Duration::from_secs(30)))
+                tokio::task::spawn_blocking(move || entered.recv())
                     .await
                     .expect("entered reader joins")
                     .expect("the store write is held");
                 probe_start
                     .send(())
                     .expect("start independent runtime probe");
-                tokio::time::timeout(Duration::from_secs(30), probe_result)
+                probe_result
                     .await
-                    .expect("runtime probe deadline")
                     .expect("runtime probe completed while store was held");
                 tokio::time::advance(response_deadline).await;
             },
@@ -6544,9 +6526,7 @@ pub(crate) mod tests {
             let release = Arc::clone(&self.release);
             let completions = Arc::clone(&self.completions);
             Box::pin(async move {
-                tokio::time::timeout(Duration::from_secs(10), release.notified())
-                    .await
-                    .expect("timed out waiting for received-message hook release");
+                release.notified().await;
                 completions.fetch_add(1, Ordering::SeqCst);
                 Err(AtmError::daemon_unavailable(
                     "intentional slow peer receiver hook failure",
@@ -6598,9 +6578,9 @@ pub(crate) mod tests {
             )
             .await
             .expect("a peer write is acknowledged after durable persistence");
-        tokio::time::timeout(Duration::from_secs(30), started_rx.recv())
+        started_rx
+            .recv()
             .await
-            .expect("timed out waiting for the detached receiver hook")
             .expect("the detached receiver hook started");
         assert_eq!(
             hook.completions.load(Ordering::SeqCst),

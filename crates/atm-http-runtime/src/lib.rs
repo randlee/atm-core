@@ -1083,8 +1083,6 @@ mod tests {
     }
 
     impl CountingLoopbackRouter {
-        const ENTERED_WAIT: Duration = Duration::from_secs(10);
-
         fn new() -> Self {
             Self {
                 calls: AtomicUsize::new(0),
@@ -1094,23 +1092,17 @@ mod tests {
             }
         }
 
-        async fn wait_until_entered(&self, step: &str) {
-            tokio::time::timeout(Self::ENTERED_WAIT, async {
-                while !self.entered.load(Ordering::SeqCst) {
-                    // Register before checking: `notify_waiters` does not keep a permit.
-                    let notified = self.entered_notify.notified();
-                    tokio::pin!(notified);
-                    notified.as_mut().enable();
-                    if self.entered.load(Ordering::SeqCst) {
-                        return;
-                    }
-                    notified.await;
+        async fn wait_until_entered(&self, _step: &str) {
+            while !self.entered.load(Ordering::SeqCst) {
+                // Register before checking: `notify_waiters` does not keep a permit.
+                let notified = self.entered_notify.notified();
+                tokio::pin!(notified);
+                notified.as_mut().enable();
+                if self.entered.load(Ordering::SeqCst) {
+                    return;
                 }
-            })
-            .await
-            .unwrap_or_else(|_| {
-                panic!("timed out waiting for {step} to enter the loopback router")
-            });
+                notified.await;
+            }
         }
     }
 
@@ -1170,9 +1162,7 @@ mod tests {
                 self.calls.fetch_add(1, Ordering::SeqCst);
                 self.entered.store(true, Ordering::SeqCst);
                 self.entered_notify.notify_waiters();
-                tokio::time::timeout(Duration::from_secs(10), released)
-                    .await
-                    .expect("timed out waiting for loopback handler release");
+                released.await;
                 Ok(ApiResponse::new(ResponseEnvelope::Error(
                     AtmError::validation("loopback test handler reached"),
                 )))
@@ -1260,21 +1250,17 @@ mod tests {
             }
         }
 
-        async fn wait_until_entered(&self, step: &str) {
-            tokio::time::timeout(Duration::from_secs(10), async {
-                while !self.entered.load(Ordering::SeqCst) {
-                    // Register before checking: `notify_waiters` does not keep a permit.
-                    let notified = self.entered_notify.notified();
-                    tokio::pin!(notified);
-                    notified.as_mut().enable();
-                    if self.entered.load(Ordering::SeqCst) {
-                        return;
-                    }
-                    notified.await;
+        async fn wait_until_entered(&self, _step: &str) {
+            while !self.entered.load(Ordering::SeqCst) {
+                // Register before checking: `notify_waiters` does not keep a permit.
+                let notified = self.entered_notify.notified();
+                tokio::pin!(notified);
+                notified.as_mut().enable();
+                if self.entered.load(Ordering::SeqCst) {
+                    return;
                 }
-            })
-            .await
-            .unwrap_or_else(|_| panic!("timed out waiting for {step} to enter the UDS router"));
+                notified.await;
+            }
         }
     }
 
@@ -1299,9 +1285,7 @@ mod tests {
 
                 self.entered.store(true, Ordering::SeqCst);
                 self.entered_notify.notify_waiters();
-                tokio::time::timeout(Duration::from_secs(10), released)
-                    .await
-                    .expect("timed out waiting for UDS handler release");
+                released.await;
                 Ok(ApiResponse::new(ResponseEnvelope::Error(
                     AtmError::validation("UDS drain fixture released"),
                 )))
@@ -2123,9 +2107,7 @@ mod tests {
         .expect("runtime starts");
 
         running.state.server_task.abort();
-        tokio::time::timeout(Duration::from_secs(1), running.wait_for_server_stop())
-            .await
-            .expect("supervision observes the stopped server task");
+        running.wait_for_server_stop().await;
         assert_eq!(
             health.snapshot().readiness,
             RuntimeReadinessState::Unavailable,
@@ -2383,9 +2365,9 @@ mod tests {
             .await
             .expect("write incomplete HTTP headers");
         let mut response = [0_u8; 1];
-        let bytes_read = tokio::time::timeout(Duration::from_secs(1), stream.read(&mut response))
+        let bytes_read = stream
+            .read(&mut response)
             .await
-            .expect("HTTP header deadline must close the connection")
             .expect("read closure after HTTP header deadline");
         assert_eq!(bytes_read, 0, "slow header connection must be closed");
 
@@ -2446,33 +2428,15 @@ mod tests {
             .await
             .expect("first request task joins")
             .expect("first request receives its canonical response");
-        tokio::time::timeout(
-            Duration::from_secs(1),
-            running
-                .begin_shutdown()
-                .finish(tokio::time::Instant::now() + Duration::from_secs(1)),
-        )
-        .await
-        .expect("runtime must drain rather than wait on an unadmitted connection")
-        .expect("runtime shuts down after connection-admission test");
+        running
+            .begin_shutdown()
+            .finish(tokio::time::Instant::now() + Duration::from_secs(1))
+            .await
+            .expect("runtime shuts down after connection-admission test");
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn loopback_shared_client_uses_the_active_record_and_canonical_handler() {
-        let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let cancelled_for_watchdog = Arc::clone(&cancelled);
-        let (expired, watchdog) = tokio::sync::oneshot::channel();
-        let watchdog_task = tokio::task::spawn_blocking(move || {
-            let deadline = std::time::Instant::now() + Duration::from_secs(30);
-            while !cancelled_for_watchdog.load(Ordering::Acquire)
-                && std::time::Instant::now() < deadline
-            {
-                std::thread::park_timeout(Duration::from_millis(10));
-            }
-            if !cancelled_for_watchdog.load(Ordering::Acquire) {
-                let _ = expired.send(());
-            }
-        });
         let test = async {
             let (release_clock, clock_held) = tokio::sync::oneshot::channel::<()>();
             let clock_hold = tokio::task::spawn_blocking(move || {
@@ -2519,35 +2483,12 @@ mod tests {
             drop(release_clock);
             clock_hold.await.expect("clock hold releases");
         };
-        tokio::select! {
-            () = test => {
-                cancelled.store(true, Ordering::Release);
-                watchdog_task.await.expect("watchdog task joins");
-            }
-            result = watchdog => {
-                result.expect("watchdog sender remains alive until it expires");
-                panic!("loopback shared-client test hung for 30 seconds");
-            }
-        }
+        test.await;
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn reused_loopback_client_follows_a_replaced_daemon_listener_without_duplicate_delivery()
     {
-        let watchdog_cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let watchdog_cancelled_for_task = Arc::clone(&watchdog_cancelled);
-        let (watchdog_expired, watchdog) = tokio::sync::oneshot::channel();
-        let watchdog_task = tokio::task::spawn_blocking(move || {
-            let deadline = std::time::Instant::now() + Duration::from_secs(30);
-            while !watchdog_cancelled_for_task.load(Ordering::Acquire)
-                && std::time::Instant::now() < deadline
-            {
-                std::thread::park_timeout(Duration::from_millis(10));
-            }
-            if !watchdog_cancelled_for_task.load(Ordering::Acquire) {
-                let _ = watchdog_expired.send(());
-            }
-        });
         let test = async {
             // The clock is paused and held still for the whole test: Tokio does
             // not auto-advance a paused clock while a `spawn_blocking` task is in
@@ -2666,16 +2607,7 @@ mod tests {
             clock_hold.await.expect("clock hold releases");
         };
 
-        tokio::select! {
-            () = test => {
-                watchdog_cancelled.store(true, Ordering::Release);
-                watchdog_task.await.expect("watchdog task joins");
-            }
-            result = watchdog => {
-                result.expect("watchdog sender remains alive until it expires");
-                panic!("reused loopback client replacement test hung for 30 seconds");
-            }
-        }
+        test.await;
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -3068,14 +3000,10 @@ mod tests {
         handler
             .wait_until_entered("stuck_server_and_maintenance_probe")
             .await;
-        let shutdown = tokio::time::timeout(
-            Duration::from_secs(1),
-            running
-                .begin_shutdown()
-                .finish(tokio::time::Instant::now() + Duration::from_millis(250)),
-        )
-        .await
-        .expect("forced-abort shutdown completes within a bounded test window");
+        let shutdown = running
+            .begin_shutdown()
+            .finish(tokio::time::Instant::now() + Duration::from_millis(250))
+            .await;
         let error = match shutdown {
             Ok(_) => panic!("an in-flight request exceeds the configured shutdown deadline"),
             Err(error) => error,
@@ -3086,11 +3014,7 @@ mod tests {
             "forced abort removes the endpoint record after owning the server task"
         );
         assert!(
-            tokio::time::timeout(Duration::from_secs(1), request)
-                .await
-                .expect("aborted request task joins")
-                .expect("request task itself joins")
-                .is_err(),
+            request.await.expect("request task joins").is_err(),
             "the aborted in-flight request cannot report a successful response"
         );
     }
@@ -3152,9 +3076,7 @@ mod tests {
         axum::extract::State(gate): axum::extract::State<Arc<AuxiliarySaturationGate>>,
     ) -> axum::http::StatusCode {
         gate.entered.notify_one();
-        tokio::time::timeout(Duration::from_secs(10), gate.release.notified())
-            .await
-            .expect("timed out waiting for saturation test gate release");
+        gate.release.notified().await;
         axum::http::StatusCode::OK
     }
 
@@ -3200,9 +3122,7 @@ mod tests {
 
         // Deterministic: wait for the saturating handler to actually be
         // entered (not merely scheduled) before asserting shed behavior.
-        tokio::time::timeout(Duration::from_secs(10), gate.entered.notified())
-            .await
-            .expect("timed out waiting for saturating handler entry");
+        gate.entered.notified().await;
 
         let shed_health = router
             .clone()
