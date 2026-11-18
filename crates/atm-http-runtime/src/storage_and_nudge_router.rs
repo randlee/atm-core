@@ -1090,8 +1090,7 @@ pub(crate) mod tests {
     use atm_core::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
     use atm_core::{AuthenticatedIngress, RequestDeadline, api::ApiRequest, error::AtmError};
     use atm_runtime::{
-        DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig,
-        StorageDoctorProjection,
+        DoctorProjectionConfig, DoctorProjectionContext, HandoffConfig, StorageDoctorProjection,
     };
     use atm_runtime_test_support::{RecordedWriterOutcome, mailbox_runtime_with_recording_ingress};
     use atm_runtime_test_support::{
@@ -3365,10 +3364,9 @@ pub(crate) mod tests {
         )
         .expect("start doctor projection");
         let report = projection
-            .project(
+            .project_without_deadline_for_tests(
                 atm_core::doctor::DoctorQuery::default(),
                 DoctorProjectionContext::default(),
-                RequestDeadline::after(Duration::from_secs(1)),
             )
             .await
             .expect("doctor report");
@@ -3396,10 +3394,9 @@ pub(crate) mod tests {
             let projection = Arc::clone(&projection);
             tasks.push(tokio::spawn(async move {
                 projection
-                    .project(
+                    .project_without_deadline_for_tests(
                         atm_core::doctor::DoctorQuery::default(),
                         DoctorProjectionContext::default(),
-                        RequestDeadline::after(Duration::from_secs(1)),
                     )
                     .await
             }));
@@ -3440,10 +3437,9 @@ pub(crate) mod tests {
         let held_projection = Arc::clone(&projection);
         let held = tokio::spawn(async move {
             held_projection
-                .project(
+                .project_without_deadline_for_tests(
                     atm_core::doctor::DoctorQuery::default(),
                     DoctorProjectionContext::default(),
-                    RequestDeadline::after(Duration::from_secs(3600)),
                 )
                 .await
         });
@@ -3451,10 +3447,9 @@ pub(crate) mod tests {
 
         // Poll once to prove the second request has been admitted into the
         // sole queue slot while the worker remains held at the port.
-        let mut queued = Box::pin(projection.project(
+        let mut queued = Box::pin(projection.project_without_deadline_for_tests(
             atm_core::doctor::DoctorQuery::default(),
             DoctorProjectionContext::default(),
-            RequestDeadline::after(Duration::from_secs(3600)),
         ));
         let queued_poll = std::future::poll_fn(|cx| {
             std::task::Poll::Ready(std::future::Future::poll(queued.as_mut(), cx))
@@ -3465,10 +3460,9 @@ pub(crate) mod tests {
             "second request waits in the queue"
         );
         let error = projection
-            .project(
+            .project_without_deadline_for_tests(
                 atm_core::doctor::DoctorQuery::default(),
                 DoctorProjectionContext::default(),
-                RequestDeadline::after(Duration::from_secs(3600)),
             )
             .await
             .expect_err("full queue rejects the third request");
