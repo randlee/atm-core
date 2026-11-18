@@ -306,7 +306,7 @@ class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
                 self.assertIn(f'<scope-source kind="pr" pr="2457" head="{head}">', stdout)
                 self.assertIn("(#2450)", self.element(stdout, "scope-source"))
                 # The captured scope text travels in the assignment itself, verbatim.
-                self.assertEqual(self.element(stdout, "pr-scope").strip(">\n"), self.PR_SCOPE)
+                self.assertEqual(self.element(stdout, "pr-scope"), "><![CDATA[" + self.PR_SCOPE + "]]>")
                 self.assertNotIn("<authoritative-sprint-doc>", stdout)
                 self.assertNotIn("<stack-discipline>", stdout)
                 self.assertNotIn("gh stack", stdout)

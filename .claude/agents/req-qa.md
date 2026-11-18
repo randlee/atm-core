@@ -64,8 +64,10 @@ with free-form input.
 ```
 
 Rules:
-- `phase_or_sprint_docs` is an array and must contain one or more repo-relative
-  paths.
+- `phase_or_sprint_docs` is an array of repo-relative paths. It must contain
+  one or more when `authoritative_sprint_doc` is set; for a standalone PR
+  review (`pr_scope` set) it may be empty, because the captured `pr_scope.text`
+  is the task-level scope and the baseline sources above still apply.
 - `phase_sprint_documents` is a supported alias; if both are provided, merge
   and de-duplicate.
 - `authoritative_sprint_doc` is the primary task-level sprint source when

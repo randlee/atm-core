@@ -116,9 +116,11 @@ Before starting a sprint:
    them at assignment time (plus any `linked_issues` for reference). The
    captured text is the scope of record, because the PR body on GitHub can
    be edited after dispatch; reviewers judge the text in the assignment, not
-   a re-fetched body. The template carries it into `<pr-scope>`, hands it to
-   `req-qa` and `arch-qa` as their `pr_scope`, drops the sprint-doc and
-   `gh stack` steps, and `quality-mgr` closes the task `refused` when the
+   a re-fetched body. The template carries it into `<pr-scope>` (a CDATA
+   section, so any text round-trips exactly), hands it to `req-qa` and
+   `arch-qa` as their `pr_scope` and to every other reviewer as `notes` with
+   the PR number and head, drops the sprint-doc and `gh stack` steps, and
+   `quality-mgr` closes the task `refused` when the
    text states no substantive scope or acceptance criteria rather than
    inventing them.
 6. `quality-mgr` launches the full reviewer set on QA-1 (the sprint's first
