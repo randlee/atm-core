@@ -1,6 +1,6 @@
 ---
 name: qa-task
-version: 2.2.0
+version: 2.3.0
 description: quality-mgr QA assignment template for codex-orchestration sprint, plan, phase-end and standalone-PR reviews.
 format: xml
 required_variables:
@@ -48,7 +48,7 @@ metadata:
 {%- if fix_round and not triage_records | trim %}{{ "FIX_VERIFICATION_WITHOUT_TRIAGE_RECORDS" | int }}{% endif -%}
 {%- if fix_round and not filing_reviewers | trim %}{{ "FIX_VERIFICATION_WITHOUT_FILING_REVIEWERS" | int }}{% endif -%}
 {%- if not fix_round and filing_reviewers | trim %}{{ "FULL_REVIEW_WITH_FILING_REVIEWERS" | int }}{% endif -%}
-{#- Scope source. A sprint, plan or phase-end review names its sprint_doc and sits on a phase stack. A standalone PR review (no sprint doc) is scoped by pr_scope: the PR body and acceptance criteria as the lead captured them into this assignment, judged at head pr_head_sha. The PR body on GitHub is live, editable metadata, so the assignment carries the text itself and reviewers judge that text, never a re-fetched body. The text is carried in a CDATA section so XML metacharacters and a literal `</pr-scope>` round-trip exactly; a literal `]]>` inside it is split as `]]]]><![CDATA[>` and reads back as `]]>`. Every reviewer gets the same text and head: req-qa and arch-qa as `pr_scope`, every other reviewer as `notes` under scope_note_prefix. A standalone PR has no stack and no frozen layer. #}
+{#- Scope source. A sprint, plan or phase-end review names its sprint_doc and sits on a phase stack. A standalone PR review (no sprint doc) is scoped by pr_scope: the PR body and acceptance criteria as the lead captured them into this assignment, judged at head pr_head_sha. The PR body on GitHub is live, editable metadata, so the assignment carries the text itself and reviewers judge that text, never a re-fetched body. The text is carried byte for byte (trimming is only for the empty check, never applied to the output: leading indentation is Markdown) in a CDATA section so XML metacharacters and a literal `</pr-scope>` round-trip exactly; a literal `]]>` inside it is split as `]]]]><![CDATA[>` and reads back as `]]>`. Every reviewer gets the same text and head: req-qa and arch-qa as `pr_scope`, every other reviewer as `notes` under scope_note_prefix. A standalone PR has no stack and no frozen layer. #}
 {%- set sprint_scoped = sprint_doc | trim -%}
 {%- if sprint_scoped and pr_scope | trim %}{{ "SPRINT_DOC_AND_PR_SCOPE_BOTH_GIVEN" | int }}{% endif -%}
 {%- if not sprint_scoped and not pr_number | trim %}{{ "PR_SCOPE_WITHOUT_PR_NUMBER" | int }}{% endif -%}
@@ -66,7 +66,7 @@ metadata:
   <authoritative-sprint-doc>{{ sprint_doc | trim }}</authoritative-sprint-doc>
 {% else %}
   <scope-source kind="pr" pr="{{ pr_number }}" head="{{ pr_head_sha | trim }}">The pr-scope text below, captured by {{ lead }} from PR #{{ pr_number }}{% if linked_issues | trim %} and its linked issues ({{ linked_issues | trim }}){% endif %}, judged at head `{{ pr_head_sha | trim }}`. It is the scope of record for this review; the live PR body and issue text are not.</scope-source>
-  <pr-scope><![CDATA[{{ pr_scope | trim | replace("]]>", "]]]]><![CDATA[>") }}]]></pr-scope>
+  <pr-scope><![CDATA[{{ pr_scope | replace("]]>", "]]]]><![CDATA[>") }}]]></pr-scope>
 {% endif %}
   <pr-number>{{ pr_number }}</pr-number>
   <branch>{{ branch }}</branch>

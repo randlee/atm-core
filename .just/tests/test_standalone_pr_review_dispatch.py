@@ -4,7 +4,9 @@ The codex QA assignment for a standalone PR (a small fix off ``develop`` with
 no sprint doc) carries the reviewed scope text in the assignment itself
 (``pr_scope``, as the lead captured it, judged at ``pr_head_sha``) because the
 PR body on GitHub is live, editable metadata. The text sits in a CDATA section
-so XML metacharacters and a literal ``</pr-scope>`` round-trip exactly.
+so XML metacharacters and a literal ``</pr-scope>`` round-trip exactly, and it
+is emitted byte for byte: trimming is only the empty check, so a Markdown code
+block's indentation and blank lines survive.
 quality-mgr then renders the structured reviewer assignments from the same
 inputs: ``req-qa`` and ``arch-qa`` take ``pr_scope`` in place of
 ``sprint_doc``; the Rust reviewers, ``ruthless-boundary-qa`` and
@@ -54,11 +56,17 @@ PR_SCOPE = (
     "- `python -m pytest .claude/skills/daemon-switch/tests` passes (Windows host)\n"
     "Console-close termination is not addressed."
 )
-# Every delimiter and metacharacter that could truncate or break the carrier.
+# Every delimiter and metacharacter that could truncate or break the carrier,
+# plus the whitespace a trim would eat: leading and trailing blank lines, a
+# four-space Markdown code block, and trailing spaces (a Markdown line break).
 HOSTILE_SCOPE = (
-    "Reject </pr-scope> early & keep <tag attr=\"x\"> literal; the body shows &amp; and &lt;.\n"
+    "\n\n"
+    "    atm doctor --json | jq .sockets  \n"
+    "    # expected: one entry\n"
+    "Reject </pr-scope> early & keep <tag attr=\"x\"> literal; the body shows &amp; and &lt;.  \n"
     "A criterion with ]]> inside, then ]]>]]> twice, and a trailing <![CDATA[ opener.\n"
-    "Acceptance: `grep -c '</pr-scope>' out.xml` prints 0 and \"quotes\" 'survive'."
+    "Acceptance: `grep -c '</pr-scope>' out.xml` prints 0 and \"quotes\" 'survive'.\n"
+    "\n"
 )
 HEAD = "0de74ac4c8bd470d3ce6924da2f668b11fa5fc90"
 # What the lead passes to qa-template.xml.j2 for the live case.
@@ -147,6 +155,11 @@ class StandalonePrReviewDispatchTests(unittest.TestCase):
         self.assertIn("No reviewer runs without the captured scope and the pinned head", workflow)
 
     def test_hostile_scope_text_round_trips_through_the_xml_and_every_reviewer(self) -> None:
+        # The probe must keep what a trim would eat, or the round trip proves nothing.
+        self.assertNotEqual(HOSTILE_SCOPE, HOSTILE_SCOPE.strip())
+        self.assertTrue(HOSTILE_SCOPE.startswith("\n\n    "))
+        self.assertIn("  \n", HOSTILE_SCOPE)
+        self.assertTrue(HOSTILE_SCOPE.endswith(".\n\n"))
         xml = render_xml({**LEAD_INPUTS, "pr_scope": HOSTILE_SCOPE})
         self.assertEqual(pr_scope_text(xml), HOSTILE_SCOPE)
         inputs = reviewer_inputs(xml)

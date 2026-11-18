@@ -1,6 +1,6 @@
 ---
 name: arch-qa-assignment
-version: 1.1.0
+version: 1.2.0
 description: Render a fenced-JSON assignment for arch-qa.
 format: json
 required_variables:
@@ -23,7 +23,7 @@ defaults:
   triage_records: []
   notes: ""
 ---
-{#- At most one task-level scope source: a sprint review names its sprint_doc; a standalone PR review carries the reviewed scope text (pr_scope, as the lead captured it into the QA assignment) with the PR number and the head SHA it is judged at. Both, or a PR scope without its head, fails the render. #}
+{#- At most one task-level scope source: a sprint review names its sprint_doc; a standalone PR review carries the reviewed scope text (pr_scope, as the lead captured it into the QA assignment) with the PR number and the head SHA it is judged at; the text is emitted byte for byte, trimming is only the empty check. Both, or a PR scope without its head, fails the render. #}
 {%- set sprint_scoped = sprint_doc | trim -%}
 {%- set pr_scoped = pr_scope | trim -%}
 {%- if sprint_scoped and pr_scoped %}SPRINT_DOC_AND_PR_SCOPE_BOTH_GIVEN{% endif -%}
@@ -42,7 +42,7 @@ defaults:
   "pr_scope": {% if pr_scoped %}{
     "pr_number": {{ pr_number | trim }},
     "head_sha": {{ pr_head_sha | trim }},
-    "text": {{ pr_scope | trim }}
+    "text": {{ pr_scope }}
   }{% else %}null{% endif %},
   "review_targets": [{% for target in review_targets %}{{ target }}{% if not loop.last %}, {% endif %}{% endfor %}],
   "reference_docs": [{% for doc in reference_docs %}{{ doc }}{% if not loop.last %}, {% endif %}{% endfor %}],
