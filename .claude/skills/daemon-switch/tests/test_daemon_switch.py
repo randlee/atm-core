@@ -2106,6 +2106,37 @@ class HerdrRestartTests(unittest.TestCase):
             ],
         )
 
+    def test_default_aliases_dedupe_only_when_the_complete_doctor_observation_matches(self) -> None:
+        default = {
+            "session": None,
+            "provenance": "herdr_default",
+            "transport": "socket",
+            "endpoint": r"\\.\pipe\%APPDATA%/herdr/herdr.sock",
+            "state": {"kind": "ok", "version": "0.9.5", "protocol": 22},
+            "capabilities": {"live_handoff": False},
+        }
+        alias = {**default, "session": "default", "provenance": "session"}
+        payload = self.doctor_payload(default, alias)
+
+        self.assertEqual(len(DAEMON_SWITCH.herdr_restart_endpoints(self.cli, doctor_payload=payload)), 1)
+        with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=payload):
+            self.assertEqual([entry.name for entry in DAEMON_SWITCH.herdr_entry_endpoints(self.cli, install=True)], ["default"])
+
+        conflicting_updates = [
+            {"state": {**default["state"], "version": "0.9.6"}},
+            {"state": {**default["state"], "protocol": 23}},
+            {"state": {**default["state"], "kind": "error"}},
+            {"capabilities": {"live_handoff": True}},
+        ]
+        for update in conflicting_updates:
+            with self.subTest(update=update):
+                conflicting_alias = {**alias, **update}
+                with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "duplicate default endpoints disagree"):
+                    DAEMON_SWITCH.herdr_restart_endpoints(self.cli, doctor_payload=self.doctor_payload(default, conflicting_alias))
+                with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=self.doctor_payload(default, conflicting_alias)):
+                    with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "duplicate default endpoints disagree"):
+                        DAEMON_SWITCH.herdr_entry_endpoints(self.cli, install=True)
+
 
 if __name__ == "__main__":
     unittest.main()
