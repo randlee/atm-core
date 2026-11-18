@@ -28,7 +28,7 @@ required-features = ["benchmark-harness"]
 [dependencies]
 sc-lint-attributes = { workspace = true }
 async-trait.workspace = true
-atm-core.workspace = true
+atm-core = { workspace = true, features = ["runtime-clock"] }
 atm-cron.workspace = true
 atm-observability.workspace = true
 atm-herdr.workspace = true

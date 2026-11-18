@@ -7,7 +7,7 @@
 use std::time::Instant;
 
 use async_trait::async_trait;
-use atm_core::api::{AuthenticatedIngress, RequestDeadline};
+use atm_core::api::{AuthenticatedIngress, RequestBudget, RequestDeadline};
 use atm_core::boundary::{
     DispatchSpec, DispatchedAction, HookActionDispatcher, SERVER_REQUEST_BUDGET, sealed,
 };
@@ -62,7 +62,7 @@ impl UnhookedRouter {
                 .map_or_else(Instant::now, |probe| (probe.now)());
             #[cfg(not(test))]
             let now = Instant::now();
-            return RequestDeadline::after_at(now, SERVER_REQUEST_BUDGET);
+            return RequestBudget::finite(SERVER_REQUEST_BUDGET).start_at(now);
         };
         deadline
     }

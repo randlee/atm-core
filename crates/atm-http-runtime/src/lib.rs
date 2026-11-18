@@ -41,6 +41,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use atm_core::api::RequestBudget;
+
 use atm_core::error::AtmError;
 use atm_core::local_http::LocalCapability;
 use atm_core::observability_counters::DiagnosticCountersSource;
@@ -407,7 +409,8 @@ impl NonZeroDuration {
 /// Absolute limits used by the future framework adapter.
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeTimeouts {
-    request: Duration,
+    request: RequestBudget,
+    header_read: Option<Duration>,
     shutdown: Duration,
 }
 
@@ -415,7 +418,18 @@ impl RuntimeTimeouts {
     #[must_use]
     pub const fn new(request: NonZeroDuration, shutdown: NonZeroDuration) -> Self {
         Self {
-            request: request.get(),
+            request: RequestBudget::finite(request.get()),
+            header_read: Some(request.get()),
+            shutdown: shutdown.get(),
+        }
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub fn with_unbounded_requests(shutdown: NonZeroDuration) -> Self {
+        Self {
+            request: RequestBudget::unbounded(),
+            header_read: None,
             shutdown: shutdown.get(),
         }
     }
@@ -563,7 +577,7 @@ impl HttpRuntime<Configured> {
             #[cfg(unix)]
             unix_listener,
             max_connections: self.config.limits.max_connections,
-            header_read_timeout: self.config.timeouts.request,
+            header_read_timeout: self.config.timeouts.header_read,
             shutdown_tx: shutdown_tx.clone(),
             shutdown_rx,
             server_stopped_tx,
@@ -637,7 +651,7 @@ impl HttpRuntime<Configured> {
             health_route::health_router(self.diagnostic_counters.clone()).merge(
                 diagnostics_route::diagnostics_router(
                     self.diagnostic_timeline.clone(),
-                    self.config.timeouts.request,
+                    self.config.timeouts.header_read,
                     self.config.limits.max_connections,
                 ),
             ),
@@ -663,7 +677,7 @@ struct ServerTaskInputs {
     #[cfg(unix)]
     unix_listener: Option<(UnixListener, UnixSocketPathGuard)>,
     max_connections: usize,
-    header_read_timeout: Duration,
+    header_read_timeout: Option<Duration>,
     shutdown_tx: watch::Sender<()>,
     shutdown_rx: watch::Receiver<()>,
     server_stopped_tx: watch::Sender<bool>,
@@ -761,7 +775,7 @@ struct ServerGroupInputs {
     #[cfg(unix)]
     unix_socket: Option<(UnixListener, UnixSocketPathGuard, axum::Router)>,
     max_connections: usize,
-    header_read_timeout: Duration,
+    header_read_timeout: Option<Duration>,
     shutdown_rx: watch::Receiver<()>,
     shutdown_tx: watch::Sender<()>,
 }
@@ -842,7 +856,7 @@ fn spawn_direct_peer_server(
     servers: &mut tokio::task::JoinSet<std::io::Result<()>>,
     direct_peer: DirectPeerServer,
     max_connections: usize,
-    header_read_timeout: Duration,
+    header_read_timeout: Option<Duration>,
     shutdown_rx: watch::Receiver<()>,
 ) {
     match direct_peer {
@@ -1402,18 +1416,16 @@ mod tests {
         )
     }
 
-    fn timeouts(request: Duration, shutdown: Duration) -> RuntimeTimeouts {
-        RuntimeTimeouts::new(
-            NonZeroDuration::new(request).expect("test timeout is non-zero"),
+    fn timeouts(_request: Duration, shutdown: Duration) -> RuntimeTimeouts {
+        RuntimeTimeouts::with_unbounded_requests(
             NonZeroDuration::new(shutdown).expect("test timeout is non-zero"),
         )
     }
 
     fn bounded_test_http_client() -> reqwest::Client {
         reqwest::Client::builder()
-            .timeout(Duration::from_secs(1))
             .build()
-            .expect("bounded test HTTP client")
+            .expect("test HTTP client")
     }
 
     #[test]
@@ -1902,7 +1914,6 @@ mod tests {
         let raw_uds_client = reqwest::Client::builder()
             .unix_socket(socket_path.clone())
             .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(1))
             .build()
             .expect("raw UDS comparison client");
         let actual = raw_uds_client
@@ -3101,7 +3112,7 @@ mod tests {
             health_route::health_router(None)
                 .merge(diagnostics_route::diagnostics_router(
                     None,
-                    Duration::from_secs(1),
+                    Some(Duration::from_secs(1)),
                     1,
                 ))
                 .merge(saturating_route),

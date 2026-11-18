@@ -5,6 +5,7 @@ use crate::error::AtmError;
 
 pub(crate) const DEFAULT_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-003), reason = "This API is a synchronous mailbox read poller and its signature cannot yield to Tokio; the optional runtime-clock feature only supplies deadline clock samples.")]
 pub fn wait_for_eligible_message<T, FLoad, FEligible>(
     timeout_secs: u64,
     mut load_messages: FLoad,

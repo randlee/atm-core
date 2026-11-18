@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use atm_core::api::{RequestBudget, RequestDeadline};
 use chrono::{DateTime, Utc};
 
 #[async_trait]
@@ -9,15 +10,15 @@ pub trait Clock: Send + Sync {
     fn monotonic_now(&self) -> std::time::Instant {
         std::time::Instant::now()
     }
+    fn request_deadline(&self, budget: RequestBudget) -> RequestDeadline {
+        budget.start_at(self.monotonic_now())
+    }
     async fn sleep_until(&self, target: DateTime<Utc>);
 }
 
 pub struct SystemClock;
 
 pub(crate) const MAX_SLEEP_SLICE: Duration = Duration::from_secs(30);
-
-#[cfg(feature = "test-utils")]
-const TEST_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) fn system_sleep_step(now: DateTime<Utc>, target: DateTime<Utc>) -> Duration {
     (target - now)
@@ -49,6 +50,7 @@ pub struct ManualClock {
     now: tokio::sync::watch::Sender<DateTime<Utc>>,
     parks: tokio::sync::watch::Sender<u64>,
     monotonic: std::sync::Mutex<std::time::Instant>,
+    unbounded_deadlines: bool,
 }
 
 #[cfg(feature = "test-utils")]
@@ -58,7 +60,13 @@ impl ManualClock {
             now: tokio::sync::watch::channel(start).0,
             parks: tokio::sync::watch::channel(0).0,
             monotonic: std::sync::Mutex::new(std::time::Instant::now()),
+            unbounded_deadlines: false,
         }
+    }
+
+    pub fn with_unbounded_deadlines(mut self) -> Self {
+        self.unbounded_deadlines = true;
+        self
     }
 
     pub fn advance(&self, duration: chrono::Duration) {
@@ -84,16 +92,10 @@ impl ManualClock {
 
     pub async fn wait_parks_above(&self, count: u64) {
         let mut parks = self.parks.subscribe();
-        let settled =
-            tokio::time::timeout(TEST_WAIT_TIMEOUT, parks.wait_for(|value| *value > count))
-                .await
-                .map(|result| result.expect("manual clock sender alive"));
-        if settled.is_err() {
-            panic!(
-                "manual clock park wait timed out: expected count above {count}, observed {}",
-                self.parks()
-            );
-        }
+        parks
+            .wait_for(|value| *value > count)
+            .await
+            .expect("manual clock sender alive");
     }
 
     pub async fn advance_settled(&self, duration: chrono::Duration) {
@@ -115,6 +117,14 @@ impl Clock for ManualClock {
             .monotonic
             .lock()
             .expect("manual monotonic clock poisoned")
+    }
+
+    fn request_deadline(&self, budget: RequestBudget) -> RequestDeadline {
+        if self.unbounded_deadlines {
+            RequestDeadline::unbounded()
+        } else {
+            budget.start_at(self.monotonic_now())
+        }
     }
 
     async fn sleep_until(&self, target: DateTime<Utc>) {

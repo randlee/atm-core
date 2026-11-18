@@ -37,7 +37,7 @@ struct DiagnosticsState {
     /// hop to the SQLite connection pool. A read that cannot complete inside
     /// this budget is reported as unavailable rather than left to run
     /// unbounded against a large retained table.
-    query_deadline: Duration,
+    query_deadline: Option<Duration>,
     /// Bounds blocking diagnostic workers by their real lifetime. Unlike the
     /// HTTP admission permit, this remains held after a timed-out request
     /// returns until its non-cancellable spawn_blocking query finishes.
@@ -85,7 +85,7 @@ impl WorkerCompletion {
 /// Adds the authenticated local diagnostics query route.
 pub(crate) fn diagnostics_router(
     store: Option<Arc<dyn DiagnosticTimelineStore>>,
-    query_deadline: Duration,
+    query_deadline: Option<Duration>,
     max_in_flight_queries: usize,
 ) -> Router {
     Router::new()
@@ -102,7 +102,7 @@ pub(crate) fn diagnostics_router(
 #[cfg(test)]
 fn diagnostics_router_with_worker_completion(
     store: Option<Arc<dyn DiagnosticTimelineStore>>,
-    query_deadline: Duration,
+    query_deadline: Option<Duration>,
     max_in_flight_queries: usize,
     worker_completion: Arc<WorkerCompletion>,
 ) -> Router {
@@ -202,7 +202,7 @@ async fn query_diagnostics(
 /// backend: acquire a worker permit, run the query on the blocking pool, and
 /// enforce the caller's overall deadline across that whole hop.
 async fn run_bounded_diagnostics_query(
-    query_deadline: Duration,
+    query_deadline: Option<Duration>,
     query_workers: Arc<tokio::sync::Semaphore>,
     store: Arc<dyn DiagnosticTimelineStore>,
     storage_query: atm_runtime::DiagnosticQuery,
@@ -225,14 +225,18 @@ async fn run_bounded_diagnostics_query(
         }
         result
     });
-    tokio::time::timeout(query_deadline, query_future)
-        .await
-        .map_err(|_| {
-            diagnostics_error(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "diagnostic timeline query exceeded its bounded deadline",
-            )
-        })?
+    let query_result = match query_deadline {
+        Some(deadline) => tokio::time::timeout(deadline, query_future)
+            .await
+            .map_err(|_| {
+                diagnostics_error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "diagnostic timeline query exceeded its bounded deadline",
+                )
+            })?,
+        None => query_future.await,
+    };
+    query_result
         .map_err(|_| {
             diagnostics_error(
                 StatusCode::SERVICE_UNAVAILABLE,
@@ -428,7 +432,7 @@ mod tests {
     async fn rejects_a_limit_above_the_shared_max_cap() {
         let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
             std::sync::Arc::new(FixtureStore::default());
-        let router = diagnostics_router(Some(store), Duration::from_secs(5), 8);
+        let router = diagnostics_router(Some(store), Some(Duration::from_secs(5)), 8);
         let (status, _) = get(
             router,
             &format!("/v1/diagnostics?limit={}", DIAGNOSTIC_QUERY_MAX_LIMIT + 1),
@@ -441,7 +445,7 @@ mod tests {
     async fn accepts_a_limit_exactly_at_the_shared_max_cap() {
         let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
             std::sync::Arc::new(FixtureStore::default());
-        let router = diagnostics_router(Some(store), Duration::from_secs(5), 8);
+        let router = diagnostics_router(Some(store), Some(Duration::from_secs(5)), 8);
         let (status, _) = get(
             router,
             &format!("/v1/diagnostics?limit={DIAGNOSTIC_QUERY_MAX_LIMIT}"),
@@ -455,7 +459,7 @@ mod tests {
         let rows: Vec<_> = (0..7).map(|id| fixture_event(id, 100 - id)).collect();
         let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
             std::sync::Arc::new(FixtureStore { rows, gate: None });
-        let router = diagnostics_router(Some(store), Duration::from_secs(5), 8);
+        let router = diagnostics_router(Some(store), Some(Duration::from_secs(5)), 8);
 
         let (status, body) = get(router.clone(), "/v1/diagnostics?limit=3").await;
         assert_eq!(status, StatusCode::OK);
@@ -509,7 +513,7 @@ mod tests {
     async fn rejects_a_malformed_cursor() {
         let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
             std::sync::Arc::new(FixtureStore::default());
-        let router = diagnostics_router(Some(store), Duration::from_secs(5), 8);
+        let router = diagnostics_router(Some(store), Some(Duration::from_secs(5)), 8);
         let (status, _) = get(router, "/v1/diagnostics?cursor=not-a-cursor").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
     }
@@ -525,7 +529,7 @@ mod tests {
         let worker_completion = Arc::new(WorkerCompletion::default());
         let router = diagnostics_router_with_worker_completion(
             Some(store),
-            deadline,
+            Some(deadline),
             8,
             Arc::clone(&worker_completion),
         );
@@ -563,7 +567,7 @@ mod tests {
         let worker_completion = Arc::new(WorkerCompletion::default());
         let router = diagnostics_router_with_worker_completion(
             Some(store),
-            deadline,
+            Some(deadline),
             2,
             Arc::clone(&worker_completion),
         );
@@ -612,7 +616,7 @@ mod tests {
         let rows: Vec<_> = (0..5).map(|id| fixture_event(id, 1)).collect();
         let store: std::sync::Arc<dyn DiagnosticTimelineStore> =
             std::sync::Arc::new(FixtureStore { rows, gate: None });
-        let router = diagnostics_router(Some(store), Duration::from_secs(5), 8);
+        let router = diagnostics_router(Some(store), Some(Duration::from_secs(5)), 8);
 
         let (status, body) = get(router.clone(), "/v1/diagnostics?limit=2").await;
         assert_eq!(status, StatusCode::OK);

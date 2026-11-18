@@ -387,8 +387,12 @@ fn state_for_server(version: HerdrVersion, protocol: u32) -> HerdrDoctorState {
 }
 
 fn remaining_member_deadline(deadline: RequestDeadline) -> RequestDeadline {
-    let remaining = deadline.remaining().unwrap_or(Duration::ZERO);
-    RequestDeadline::after(remaining.min(Duration::from_secs(2)))
+    let remaining = match deadline.budget().capped(Duration::from_secs(2)) {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => remaining,
+        atm_core::api::DeadlineBudget::Unbounded => unreachable!("capped budget is finite"),
+        atm_core::api::DeadlineBudget::Expired => Duration::ZERO,
+    };
+    RequestDeadline::after(remaining)
 }
 
 fn presence_for_error(error: HerdrError) -> HerdrPresenceOutcome {

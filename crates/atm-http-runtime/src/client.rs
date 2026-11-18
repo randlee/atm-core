@@ -716,16 +716,18 @@ pub(crate) async fn execute_opaque_peer_request_with_sender(
     deadline: RequestDeadline,
 ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
     let request = build_opaque_peer_request(request)?;
-    let response = match deadline.remaining() {
-        Some(remaining) => tokio::time::timeout(remaining, sender.send_request(request))
-            .await
-            .map_err(|_| HttpRuntimeClientFailure::Timeout)?
-            .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?,
-        None if deadline.is_unbounded() => sender
+    let response = match deadline.budget() {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => {
+            tokio::time::timeout(remaining, sender.send_request(request))
+                .await
+                .map_err(|_| HttpRuntimeClientFailure::Timeout)?
+                .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?
+        }
+        atm_core::api::DeadlineBudget::Unbounded => sender
             .send_request(request)
             .await
             .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?,
-        None => return Err(HttpRuntimeClientFailure::Cancelled),
+        atm_core::api::DeadlineBudget::Expired => return Err(HttpRuntimeClientFailure::Cancelled),
     };
     collect_opaque_peer_response(response).await
 }
@@ -1118,7 +1120,7 @@ mod tests {
             deadline: RequestDeadline,
         ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
             self.requests.lock().expect("requests").push(request);
-            if let Some(remaining) = deadline.remaining() {
+            if let atm_core::api::DeadlineBudget::Remaining(remaining) = deadline.budget() {
                 self.remaining.lock().expect("remaining").push(remaining);
             }
             self.responses
@@ -1223,7 +1225,7 @@ mod tests {
                     let _ = crate::http1_server::serve_connection(
                         hyper_util::rt::TokioIo::new(stream),
                         router,
-                        Duration::from_secs(30),
+                        Some(Duration::from_secs(30)),
                         shutdown_rx,
                     )
                     .await;
@@ -1441,9 +1443,8 @@ mod tests {
     #[tokio::test]
     async fn a_refused_connection_is_classified_as_a_safe_to_reconnect_failure() {
         let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_millis(500))
             .build()
-            .expect("build a bounded test client");
+            .expect("build test client");
         let url =
             reqwest::Url::parse("http://127.0.0.1:0/v1/atm/messages").expect("valid loopback url");
         let request = HttpRequest {
@@ -1484,9 +1485,8 @@ mod tests {
             drop(stream);
         });
         let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_millis(500))
             .build()
-            .expect("build a bounded test client");
+            .expect("build test client");
         let url = reqwest::Url::parse(&format!("http://127.0.0.1:{port}/v1/atm/messages"))
             .expect("valid loopback url");
         let request = HttpRequest {

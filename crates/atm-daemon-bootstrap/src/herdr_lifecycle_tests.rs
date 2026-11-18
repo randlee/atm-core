@@ -4,9 +4,6 @@
 //! the isolated SQLite runtime. They use AY2's fake only at the Herdr trait
 //! boundary, never a legacy daemon or a live ATM database.
 
-use std::sync::Arc;
-use std::time::Duration;
-
 use crate::active_received_hook_selector_with_health;
 use atm_core::LocalServiceRuntime;
 use atm_core::boundary::RosterEntry;
@@ -20,6 +17,7 @@ use atm_herdr::{
 use atm_http_runtime::{HerdrQueueWakePump, RuntimeHealth};
 use atm_runtime_test_support::open_isolated_sqlite_boundary;
 use atm_storage::{RosterHarness, RosterMemberKind, RosterSnapshot};
+use std::sync::Arc;
 
 struct Fixture {
     _root: tempfile::TempDir,
@@ -166,22 +164,14 @@ async fn ay4_l4_connection_reset_keeps_unknown_prompt_pending_without_duplicate_
     );
 }
 
-const FAILURE_ONLY_BOUND: Duration = Duration::from_secs(30);
-
 #[tokio::test]
 async fn ay4_l5_shutdown_stops_new_queue_wake_admissions() {
     let fixture = fixture();
     let (list_gate, parked) = fixture.fake.block_next_list();
     let (shutdown, receiver) = tokio::sync::watch::channel(());
     let task = Arc::new(fixture.pump.clone()).start(receiver);
-    // Both waits are gated on events; 30s is a failure-only hang bound.
-    tokio::time::timeout(FAILURE_ONLY_BOUND, parked.notified())
-        .await
-        .expect("queue wake never parked in its list request");
+    parked.notified().await;
     shutdown.send(()).expect("shutdown signal");
     list_gate.notify_one();
-    tokio::time::timeout(FAILURE_ONLY_BOUND, task)
-        .await
-        .expect("queue wake never joined after its released list request and shutdown")
-        .expect("queue wake task join");
+    task.await.expect("queue wake task join");
 }

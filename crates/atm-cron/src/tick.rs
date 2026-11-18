@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use atm_core::{
-    api::RequestDeadline,
+    api::{RequestBudget, RequestDeadline},
     boundary::{
         CronGeneration, CronRunPermit, CronRunPermitIssuer, CronSchedule, CronScheduleId,
         DispatchSpec, HOOK_ACTION_RESERVE_MS, HookName, HookTarget, StopCondition, sealed,
@@ -174,10 +174,9 @@ fn deadline_budget(timeout_ms: u32) -> Duration {
 }
 
 fn deadline(cron: &AtmCron, schedule: &CronSchedule) -> RequestDeadline {
-    RequestDeadline::after_at(
-        cron.deps.clock.monotonic_now(),
-        deadline_budget(schedule.timeout_ms),
-    )
+    cron.deps
+        .clock
+        .request_deadline(RequestBudget::finite(deadline_budget(schedule.timeout_ms)))
 }
 
 fn request(
@@ -343,7 +342,7 @@ mod tests {
             store: store.clone(),
             runner: Arc::new(DummyHookRunner::default()),
             dispatcher: Arc::new(RecordingHookActionDispatcher::default()),
-            clock: Arc::new(crate::ManualClock::new(now)),
+            clock: Arc::new(crate::ManualClock::new(now).with_unbounded_deadlines()),
             host: None,
             jitter: Arc::new(crate::SeqJitter::default()),
         });

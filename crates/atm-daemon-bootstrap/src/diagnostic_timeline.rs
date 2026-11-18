@@ -919,9 +919,9 @@ mod tests {
     /// write) does not hold shutdown: the bounded stop returns once its
     /// deadline passes while the worker is still provably running, and the
     /// worker exits on the stop signal after it is released.
-    /// Negative: no elapsed time is compared; the 30s timeout is a
-    /// failure-only hang bound for an unbounded join.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    /// The paused Tokio clock controls the deadline; the worker is held by
+    /// explicit channels while the shutdown future reaches that deadline.
+    #[tokio::test(start_paused = true)]
     async fn a_held_flush_worker_does_not_hold_shutdown_past_its_deadline() {
         let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
         let (entered_tx, entered_rx) = std::sync::mpsc::channel::<()>();
@@ -940,12 +940,13 @@ mod tests {
             .expect("the worker entered its flush");
 
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(300);
-        tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            super::stop_worker(super::FlushWorker { stop_tx, join }, deadline),
-        )
-        .await
-        .expect("the bounded stop never returned: the join is unbounded");
+        let stopping = tokio::spawn(super::stop_worker(
+            super::FlushWorker { stop_tx, join },
+            deadline,
+        ));
+        tokio::task::yield_now().await;
+        tokio::time::advance(std::time::Duration::from_millis(300)).await;
+        stopping.await.expect("bounded stop task joins");
         assert!(tokio::time::Instant::now() >= deadline);
         assert_eq!(
             exited_rx.try_recv(),
@@ -954,12 +955,10 @@ mod tests {
         );
 
         release_tx.send(()).expect("release the held flush");
-        tokio::task::spawn_blocking(move || {
-            exited_rx.recv_timeout(std::time::Duration::from_secs(30))
-        })
-        .await
-        .expect("exit reader")
-        .expect("the released worker never exited on its stop signal");
+        tokio::task::spawn_blocking(move || exited_rx.recv())
+            .await
+            .expect("exit reader")
+            .expect("the released worker exited on its stop signal");
     }
 
     #[test]
@@ -972,14 +971,9 @@ mod tests {
         std::thread::spawn(move || {
             let _ = joined_tx.send(worker.join());
         });
-        match joined_rx.recv_timeout(std::time::Duration::from_secs(1)) {
-            Ok(result) => result.expect("flush worker exits after stop signal"),
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                panic!("flush worker did not exit within the bounded stop deadline")
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                panic!("flush worker join watchdog disconnected")
-            }
-        }
+        joined_rx
+            .recv()
+            .expect("flush worker join signal sent")
+            .expect("flush worker exits after stop signal");
     }
 }

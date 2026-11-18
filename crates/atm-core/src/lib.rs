@@ -6,8 +6,8 @@ pub mod api;
 /// `ATM_TEMP` scratch-root resolution and shared-host safety validation
 /// (ADR-055).
 pub mod atm_temp;
-/// `$ATM_TEMP` TTL sweep config validation and one pure, `tokio`-free sweep
-/// pass (ADR-055 decision (b)).
+/// `$ATM_TEMP` TTL sweep config validation and one pure sweep pass
+/// (ADR-055 decision (b)); deadline clock access optionally uses Tokio.
 pub mod atm_temp_sweeper;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;

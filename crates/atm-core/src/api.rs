@@ -892,7 +892,7 @@ mod tests {
         let deadline = super::RequestDeadline::unbounded();
         assert!(deadline.is_unbounded());
         assert!(!deadline.expired());
-        assert_eq!(deadline.remaining(), None);
+        assert_eq!(deadline.budget(), super::DeadlineBudget::Unbounded);
         assert_eq!(deadline.remaining_ms(), u64::MAX);
         assert_eq!(
             deadline.remaining_ms_at(std::time::Instant::now()),
@@ -903,6 +903,96 @@ mod tests {
                 .minus(std::time::Duration::from_secs(10))
                 .is_unbounded()
         );
+    }
+
+    #[test]
+    fn deadline_budget_table_uses_fixed_now() {
+        use std::time::{Duration, Instant};
+
+        use super::{DeadlineBudget, RequestDeadline};
+
+        let now = Instant::now();
+        let cases = [
+            (RequestDeadline::unbounded(), DeadlineBudget::Unbounded),
+            (
+                RequestDeadline::after_at(now, Duration::from_secs(2)),
+                DeadlineBudget::Remaining(Duration::from_secs(2)),
+            ),
+            (
+                RequestDeadline::after_at(now, Duration::ZERO),
+                DeadlineBudget::Expired,
+            ),
+            (
+                RequestDeadline::after_at(now - Duration::from_secs(1), Duration::ZERO),
+                DeadlineBudget::Expired,
+            ),
+        ];
+        for (deadline, expected) in cases {
+            assert_eq!(deadline.budget_at(now), expected);
+        }
+    }
+
+    #[test]
+    fn deadline_budget_caps_and_reserves_exhaustively() {
+        use std::time::Duration;
+
+        use super::DeadlineBudget::{Expired, Remaining, Unbounded};
+
+        assert_eq!(
+            Unbounded.capped(Duration::from_secs(2)),
+            Remaining(Duration::from_secs(2))
+        );
+        assert_eq!(Unbounded.capped(Duration::ZERO), Expired);
+        assert_eq!(
+            Remaining(Duration::from_secs(5)).capped(Duration::from_secs(2)),
+            Remaining(Duration::from_secs(2))
+        );
+        assert_eq!(Expired.capped(Duration::from_secs(2)), Expired);
+        assert_eq!(Unbounded.reserve(Duration::from_secs(1)), Some(Unbounded));
+        assert_eq!(
+            Remaining(Duration::from_secs(5)).reserve(Duration::from_secs(2)),
+            Some(Remaining(Duration::from_secs(3)))
+        );
+        assert_eq!(
+            Remaining(Duration::from_secs(2)).reserve(Duration::from_secs(2)),
+            None
+        );
+        assert_eq!(Remaining(Duration::ZERO).reserve(Duration::ZERO), None);
+        assert_eq!(Expired.reserve(Duration::ZERO), None);
+        assert_eq!(
+            super::DeadlineBudget::Remaining(Duration::ZERO).capped(Duration::from_secs(1)),
+            Expired
+        );
+    }
+
+    #[cfg(feature = "runtime-clock")]
+    #[tokio::test(start_paused = true)]
+    async fn request_budget_observes_paused_runtime_time() {
+        use std::time::Duration;
+
+        use super::{DeadlineBudget, RequestBudget};
+
+        let deadline = RequestBudget::finite(Duration::from_secs(1)).start();
+        assert_eq!(
+            deadline.budget(),
+            DeadlineBudget::Remaining(Duration::from_secs(1))
+        );
+        tokio::time::advance(Duration::from_millis(999)).await;
+        assert_eq!(
+            deadline.budget(),
+            DeadlineBudget::Remaining(Duration::from_millis(1))
+        );
+        tokio::time::advance(Duration::from_millis(1)).await;
+        assert_eq!(deadline.budget(), DeadlineBudget::Expired);
+    }
+
+    #[cfg(feature = "runtime-clock")]
+    #[test]
+    fn runtime_clock_is_between_tokio_clock_samples() {
+        let before = super::deadline_clock::now();
+        let sample = tokio::time::Instant::now().into_std();
+        let after = super::deadline_clock::now();
+        assert!(before <= sample && sample <= after);
     }
 
     #[test]
@@ -1260,7 +1350,7 @@ pub struct RequestDeadline(Option<Instant>);
 
 impl RequestDeadline {
     pub fn after(duration: Duration) -> Self {
-        Self::after_at(Instant::now(), duration)
+        Self::after_at(deadline_clock::now(), duration)
     }
 
     pub fn after_at(now: Instant, duration: Duration) -> Self {
@@ -1269,6 +1359,7 @@ impl RequestDeadline {
 
     /// An explicit no-deadline budget for in-process work that is not governed
     /// by a caller request deadline, including deterministic test paths.
+    #[cfg(any(test, feature = "test-utils"))]
     pub const fn unbounded() -> Self {
         Self(None)
     }
@@ -1279,31 +1370,141 @@ impl RequestDeadline {
     }
 
     pub fn expired(self) -> bool {
-        !self.is_unbounded() && self.remaining().is_none()
+        matches!(self.budget(), DeadlineBudget::Expired)
     }
 
-    pub fn remaining(self) -> Option<Duration> {
-        self.0?
-            .checked_duration_since(Instant::now())
-            .filter(|remaining| !remaining.is_zero())
+    pub fn budget(self) -> DeadlineBudget {
+        self.budget_at(deadline_clock::now())
+    }
+
+    pub fn budget_at(self, now: Instant) -> DeadlineBudget {
+        match self.0 {
+            None => DeadlineBudget::Unbounded,
+            Some(deadline) => match deadline.checked_duration_since(now) {
+                Some(remaining) if !remaining.is_zero() => DeadlineBudget::Remaining(remaining),
+                Some(_) | None => DeadlineBudget::Expired,
+            },
+        }
     }
 
     pub fn remaining_ms(self) -> u64 {
-        self.remaining_ms_at(Instant::now())
+        self.remaining_ms_at(deadline_clock::now())
     }
 
     pub fn remaining_ms_at(self, now: Instant) -> u64 {
-        self.0
-            .and_then(|deadline| deadline.checked_duration_since(now))
-            .map(|remaining| remaining.as_millis().min(u128::from(u64::MAX)) as u64)
-            .unwrap_or_else(|| if self.is_unbounded() { u64::MAX } else { 0 })
+        match self.budget_at(now) {
+            DeadlineBudget::Unbounded => u64::MAX,
+            DeadlineBudget::Remaining(remaining) => {
+                remaining.as_millis().min(u128::from(u64::MAX)) as u64
+            }
+            DeadlineBudget::Expired => 0,
+        }
     }
 
     pub fn minus(self, duration: Duration) -> Self {
-        Self(
-            self.0
-                .map(|deadline| deadline.checked_sub(duration).unwrap_or_else(Instant::now)),
-        )
+        Self(self.0.map(|deadline| {
+            deadline
+                .checked_sub(duration)
+                .unwrap_or_else(deadline_clock::now)
+        }))
+    }
+}
+
+/// A request's remaining time, preserving the difference between no limit and expiry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeadlineBudget {
+    /// The request has no deadline.
+    Unbounded,
+    /// The request has this much time left.
+    Remaining(Duration),
+    /// The request deadline has elapsed.
+    Expired,
+}
+
+impl DeadlineBudget {
+    /// Applies an upper bound to a remaining or unbounded budget.
+    #[must_use]
+    pub fn capped(self, cap: Duration) -> Self {
+        if cap.is_zero() {
+            return Self::Expired;
+        }
+        match self {
+            Self::Unbounded => Self::Remaining(cap),
+            Self::Remaining(remaining) if remaining.is_zero() => Self::Expired,
+            Self::Remaining(remaining) => Self::Remaining(remaining.min(cap)),
+            Self::Expired => Self::Expired,
+        }
+    }
+
+    /// Reserves time from a finite budget; `None` means an existing finite budget cannot cover it.
+    #[must_use]
+    pub fn reserve(self, grace: Duration) -> Option<Self> {
+        match self {
+            Self::Unbounded => Some(Self::Unbounded),
+            Self::Remaining(remaining) => remaining
+                .checked_sub(grace)
+                .filter(|remaining| !remaining.is_zero())
+                .map(Self::Remaining),
+            Self::Expired => None,
+        }
+    }
+}
+
+/// A reusable request timeout that starts when a request enters a runtime boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RequestBudget(Option<Duration>);
+
+impl RequestBudget {
+    /// Creates a finite request timeout.
+    #[must_use]
+    pub const fn finite(duration: Duration) -> Self {
+        Self(Some(duration))
+    }
+
+    /// Creates a no-deadline budget for deterministic tests.
+    #[cfg(any(test, feature = "test-utils"))]
+    #[must_use]
+    pub const fn unbounded() -> Self {
+        Self(None)
+    }
+
+    /// Starts the budget at the current runtime clock.
+    #[must_use]
+    pub fn start(self) -> RequestDeadline {
+        self.start_at(deadline_clock::now())
+    }
+
+    /// Starts the budget at a caller-supplied monotonic clock sample.
+    #[must_use]
+    pub fn start_at(self, now: Instant) -> RequestDeadline {
+        match self.0 {
+            Some(duration) => RequestDeadline::after_at(now, duration),
+            None => {
+                #[cfg(any(test, feature = "test-utils"))]
+                {
+                    RequestDeadline::unbounded()
+                }
+                #[cfg(not(any(test, feature = "test-utils")))]
+                {
+                    unreachable!("unbounded request budgets are test-only")
+                }
+            }
+        }
+    }
+}
+
+mod deadline_clock {
+    use std::time::Instant;
+
+    pub(super) fn now() -> Instant {
+        #[cfg(feature = "runtime-clock")]
+        {
+            tokio::time::Instant::now().into_std()
+        }
+        #[cfg(not(feature = "runtime-clock"))]
+        {
+            Instant::now()
+        }
     }
 }
 

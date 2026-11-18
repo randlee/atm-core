@@ -14,9 +14,12 @@ test-utils = []
 
 [dependencies]
 sc-lint-attributes = { workspace = true }
-atm-core.workspace = true
+atm-core = { workspace = true, features = ["runtime-clock"] }
 serde_json.workspace = true
 tokio.workspace = true
+
+[dev-dependencies]
+atm-core = { workspace = true, features = ["test-utils"] }
 
 [[bin]]
 name = "fake-herdr"

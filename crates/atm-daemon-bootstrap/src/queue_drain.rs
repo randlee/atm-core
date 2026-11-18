@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::LocalServiceRuntime;
-use atm_core::api::RequestDeadline;
+use atm_core::api::RequestBudget;
 use atm_core::boundary::{MemberKey, MessageReceivedHookSelector, NudgeClaim, NudgeKind};
 use atm_core::delivery_channel::{
     DeliveryChannel, classify_delivery_channel, graft_lease_state, local_message_received_backend,
@@ -27,6 +27,7 @@ use tokio::task::JoinHandle;
 
 const RECOVERY_SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 const QUEUE_DRAIN_DEADLINE: Duration = Duration::from_secs(3);
+const QUEUE_DRAIN_BUDGET: RequestBudget = RequestBudget::finite(QUEUE_DRAIN_DEADLINE);
 
 /// The one classifier guard shared by transition drains and recovery sweeps.
 ///
@@ -274,7 +275,7 @@ pub(crate) async fn run_recovery_sweep_once(
 ) -> Result<(), AtmError> {
     let runtime_for_list = runtime.clone();
     let members = blocking_bridge
-        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+        .run(QUEUE_DRAIN_BUDGET.start(), move || {
             runtime_for_list
                 .pending_nudge_store()?
                 .list_pending_members()
@@ -331,7 +332,7 @@ async fn drain_one(
     );
     let emit_result = match selector.select_emitter(&dispatch) {
         Some(emitter) => emitter
-            .emit_received_message(dispatch, RequestDeadline::after(QUEUE_DRAIN_DEADLINE))
+            .emit_received_message(dispatch, QUEUE_DRAIN_BUDGET.start())
             .await
             .map(|_| ()),
         None => Err(AtmError::new(
@@ -383,7 +384,7 @@ async fn claim_next_dispatch(
     let runtime_for_channel = runtime.clone();
     let member_for_channel = member.clone();
     let channel_allowed = blocking_bridge
-        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+        .run(QUEUE_DRAIN_BUDGET.start(), move || {
             queue_drain_channel_allowed(&runtime_for_channel, &member_for_channel)
         })
         .await?;
@@ -394,7 +395,7 @@ async fn claim_next_dispatch(
     let runtime_for_claim = runtime.clone();
     let member_for_claim = member.clone();
     let claim = blocking_bridge
-        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+        .run(QUEUE_DRAIN_BUDGET.start(), move || {
             let store = runtime_for_claim.pending_nudge_store()?;
             store.claim_next_pending(&member_for_claim)
         })
@@ -408,7 +409,7 @@ async fn claim_next_dispatch(
     let runtime_for_load = runtime.clone();
     let member_for_load = member.clone();
     let message = blocking_bridge
-        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+        .run(QUEUE_DRAIN_BUDGET.start(), move || {
             load_received_hook_dispatch_message(&runtime_for_load, &member_for_load, message_id)
         })
         .await;
@@ -444,7 +445,7 @@ async fn requeue_claim(
     let member_for_requeue = member.clone();
     let claim_for_requeue = claim_guard.claim().clone();
     blocking_bridge
-        .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+        .run(QUEUE_DRAIN_BUDGET.start(), move || {
             runtime_for_requeue
                 .pending_nudge_store()?
                 .requeue_pending(&member_for_requeue, &claim_for_requeue)
@@ -464,7 +465,7 @@ fn clear_delivered_marker<'a>(
     let health_for_clear = runtime_health.clone();
     async move {
         if let Err(error) = blocking_bridge
-            .run(RequestDeadline::after(QUEUE_DRAIN_DEADLINE), move || {
+            .run(QUEUE_DRAIN_BUDGET.start(), move || {
                 atm_core::nudge_dispatch::rearm_queue_marker_after_handoff(
                     &runtime_for_clear,
                     &member_for_clear,
@@ -857,10 +858,7 @@ mod tests {
             tracker,
         });
 
-        tokio::time::timeout(Duration::from_secs(1), receiver)
-            .await
-            .expect("Drop must abort the tracked handle despite lock poison")
-            .expect("aborted task must drop its sentinel");
+        receiver.await.expect("aborted task must drop its sentinel");
     }
 
     #[tokio::test]

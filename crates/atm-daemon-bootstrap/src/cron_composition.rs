@@ -1,7 +1,7 @@
 use std::{future::Future, sync::Arc, time::Duration};
 
 use atm_core::types::HostName;
-use atm_core::{api::RequestDeadline, error::AtmError};
+use atm_core::{api::RequestBudget, error::AtmError};
 use atm_cron::{AtmCron, AtmCronDeps, Clock, JitterSource};
 use atm_http_runtime::{
     CronLifecycleNudgerAdapter, CronModuleMailDeliveryAdapter, StorageAndNudgeRouter,
@@ -125,11 +125,10 @@ pub(crate) async fn run_shutdown_steps(
     shutdown_probe::step("hook_chains", deadline, async {
         let chains = handler.hook_chains();
         chains.begin_shutdown();
+        let now = Instant::now();
+        let remaining = deadline.saturating_duration_since(now);
         chains
-            .drain(RequestDeadline::after_at(
-                deadline.into_std(),
-                std::time::Duration::ZERO,
-            ))
+            .drain(RequestBudget::finite(remaining).start_at(now.into_std()))
             .await;
     })
     .await;

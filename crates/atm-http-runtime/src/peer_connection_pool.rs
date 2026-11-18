@@ -179,8 +179,8 @@ impl PeerConnectionPool {
             let ready = if idle.sender.is_closed() {
                 false
             } else {
-                match deadline.remaining() {
-                    Some(remaining) => {
+                match deadline.budget() {
+                    atm_core::api::DeadlineBudget::Remaining(remaining) => {
                         match tokio::time::timeout(remaining, idle.sender.ready()).await {
                             Ok(Ok(())) => true,
                             Ok(Err(_)) => false,
@@ -193,8 +193,8 @@ impl PeerConnectionPool {
                             }
                         }
                     }
-                    None if deadline.is_unbounded() => idle.sender.ready().await.is_ok(),
-                    None => {
+                    atm_core::api::DeadlineBudget::Unbounded => idle.sender.ready().await.is_ok(),
+                    atm_core::api::DeadlineBudget::Expired => {
                         self.shared.release_reservation(peer);
                         return Err(peer_connect_deadline_failure(
                             &authority,
@@ -293,12 +293,14 @@ impl PeerConnectionPool {
             .dial_transport(peer, port, deadline, authority, &connect_timeout)
             .await?;
         let adapted = self.shared.adapter.connect(stream, peer);
-        let stream = match deadline.remaining() {
-            Some(remaining) => tokio::time::timeout(remaining, adapted)
-                .await
-                .map_err(|_| connect_timeout())?,
-            None if deadline.is_unbounded() => adapted.await,
-            None => return Err(connect_timeout()),
+        let stream = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                tokio::time::timeout(remaining, adapted)
+                    .await
+                    .map_err(|_| connect_timeout())?
+            }
+            atm_core::api::DeadlineBudget::Unbounded => adapted.await,
+            atm_core::api::DeadlineBudget::Expired => return Err(connect_timeout()),
         }
         .map_err(|error| {
             let cause = error.to_string();
@@ -314,12 +316,14 @@ impl PeerConnectionPool {
             }
         })?;
         let handshake = http1::handshake(TokioIo::new(stream));
-        let (sender, connection) = match deadline.remaining() {
-            Some(remaining) => tokio::time::timeout(remaining, handshake)
-                .await
-                .map_err(|_| connect_timeout())?,
-            None if deadline.is_unbounded() => handshake.await,
-            None => return Err(connect_timeout()),
+        let (sender, connection) = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                tokio::time::timeout(remaining, handshake)
+                    .await
+                    .map_err(|_| connect_timeout())?
+            }
+            atm_core::api::DeadlineBudget::Unbounded => handshake.await,
+            atm_core::api::DeadlineBudget::Expired => return Err(connect_timeout()),
         }
         .map_err(|source| {
             let cause = source.to_string();
@@ -352,20 +356,24 @@ impl PeerConnectionPool {
         authority: &str,
         connect_timeout: &(dyn Fn() -> HttpRuntimeClientFailure + Sync),
     ) -> Result<TcpStream, HttpRuntimeClientFailure> {
-        let remaining = deadline.remaining();
+        let budget = deadline.budget();
         // The caller's own request timeout fires exactly at `deadline`, so the
         // dial loop is bounded slightly *inside* the budget: it finishes, and
         // reports its per-address diagnosis, before any bare timeout can win
         // the race. The outer guard here is only a backstop at the budget.
-        let dial_deadline = match remaining {
-            Some(remaining) => RequestDeadline::after(
-                remaining
-                    .checked_sub(DIAL_REPORT_GRACE)
-                    .filter(|reserved| !reserved.is_zero())
-                    .unwrap_or(remaining),
-            ),
-            None if deadline.is_unbounded() => deadline,
-            None => return Err(connect_timeout()),
+        let dial_deadline = match budget.reserve(DIAL_REPORT_GRACE) {
+            Some(atm_core::api::DeadlineBudget::Remaining(remaining)) => {
+                atm_core::api::RequestBudget::finite(remaining).start()
+            }
+            Some(atm_core::api::DeadlineBudget::Unbounded) => deadline,
+            Some(atm_core::api::DeadlineBudget::Expired) => return Err(connect_timeout()),
+            None => match budget {
+                atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                    atm_core::api::RequestBudget::finite(remaining).start()
+                }
+                atm_core::api::DeadlineBudget::Unbounded => deadline,
+                atm_core::api::DeadlineBudget::Expired => return Err(connect_timeout()),
+            },
         };
         let dial = self.shared.addresses.connect(
             peer,
@@ -374,17 +382,19 @@ impl PeerConnectionPool {
             resolve_peer_addresses,
             TcpStream::connect,
         );
-        let connected = match remaining {
-            Some(remaining) => tokio::time::timeout(remaining, dial).await.map_err(|_| {
-                tracing::warn!(
-                    %peer,
-                    %authority,
-                    "direct peer TCP connect exhausted the request budget"
-                );
-                connect_timeout()
-            })?,
-            None if deadline.is_unbounded() => dial.await,
-            None => return Err(connect_timeout()),
+        let connected = match budget {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                tokio::time::timeout(remaining, dial).await.map_err(|_| {
+                    tracing::warn!(
+                        %peer,
+                        %authority,
+                        "direct peer TCP connect exhausted the request budget"
+                    );
+                    connect_timeout()
+                })?
+            }
+            atm_core::api::DeadlineBudget::Unbounded => dial.await,
+            atm_core::api::DeadlineBudget::Expired => return Err(connect_timeout()),
         }
         .map_err(|cause| {
             tracing::warn!(%peer, %authority, %cause, "direct peer TCP connect failed");
@@ -676,7 +686,7 @@ mod tests {
                     let _ = serve_connection(
                         hyper_util::rt::TokioIo::new(stream),
                         router,
-                        std::time::Duration::from_secs(30),
+                        Some(std::time::Duration::from_secs(30)),
                         shutdown_rx,
                     )
                     .await;
@@ -705,7 +715,7 @@ mod tests {
                     let _ = serve_connection(
                         hyper_util::rt::TokioIo::new(stream),
                         router,
-                        std::time::Duration::from_secs(30),
+                        Some(std::time::Duration::from_secs(30)),
                         shutdown_rx,
                     )
                     .await;
@@ -760,7 +770,7 @@ mod tests {
                             let _ = serve_connection(
                                 hyper_util::rt::TokioIo::new(stream),
                                 router,
-                                std::time::Duration::from_secs(30),
+                                Some(std::time::Duration::from_secs(30)),
                                 connection_shutdown_rx,
                             )
                             .await;

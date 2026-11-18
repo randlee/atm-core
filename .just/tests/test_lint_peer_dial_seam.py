@@ -136,8 +136,8 @@ class LintPeerDialSeamTests(unittest.TestCase):
             self.write_repo(repo_root)
             seam = repo_root / SEAM
             text = seam.read_text(encoding="utf-8").replace(
-                "RequestDeadline::after((remaining / 2).min(STALE_ADDRESS_DIAL_CAP))",
-                "RequestDeadline::after(remaining / 2)",
+                "let cached_timeout = (remaining / 2).min(STALE_ADDRESS_DIAL_CAP);",
+                "let cached_timeout = remaining / 2;",
             )
             seam.write_text(text, encoding="utf-8")
             findings = collect_lock_findings(repo_root)

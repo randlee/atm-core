@@ -1,5 +1,12 @@
 use super::*;
 
+fn deadline_remaining_ms(deadline: RequestDeadline) -> Option<u128> {
+    match deadline.budget() {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining.as_millis()),
+        atm_core::api::DeadlineBudget::Unbounded | atm_core::api::DeadlineBudget::Expired => None,
+    }
+}
+
 #[async_trait]
 pub(crate) trait HttpRuntimeConnector: Send + Sync {
     /// Context preserved if an OS DNS/connect operation outlives the ATM
@@ -334,7 +341,7 @@ impl<Connector> HttpRuntimeClient<Connector> {
     #[tracing::instrument(
         name = "atm_http_runtime.client.execute",
         skip(self, request),
-        fields(deadline_remaining_ms = ?deadline.remaining().map(|duration| duration.as_millis()))
+        fields(deadline_remaining_ms = ?deadline_remaining_ms(deadline))
     )]
     async fn execute_with_deadline(
         &self,
@@ -383,15 +390,17 @@ impl<Connector> HttpRuntimeClient<Connector> {
                 Err(failure) => Err(failure),
             }
         };
-        let response = match deadline.remaining() {
-            Some(remaining) => tokio::time::timeout(remaining, exchange)
+        let response = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                tokio::time::timeout(remaining, exchange)
+                    .await
+                    .map_err(|_| self.connector.deadline_elapsed().into_atm_error())?
+                    .map_err(HttpRuntimeClientFailure::into_atm_error)?
+            }
+            atm_core::api::DeadlineBudget::Unbounded => exchange
                 .await
-                .map_err(|_| self.connector.deadline_elapsed().into_atm_error())?
                 .map_err(HttpRuntimeClientFailure::into_atm_error)?,
-            None if deadline.is_unbounded() => exchange
-                .await
-                .map_err(HttpRuntimeClientFailure::into_atm_error)?,
-            None => {
+            atm_core::api::DeadlineBudget::Expired => {
                 return Err(AtmError::new(
                     AtmErrorCode::WaitTimeout,
                     "HTTP client request budget elapsed before connector dispatch",

@@ -403,7 +403,7 @@ mod tests {
             .await;
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn shutdown_joins_the_worker_without_a_bare_abort() {
         let dir = tempfile::tempdir().expect("tempdir");
         let sweeper = start_test_sweeper(
@@ -415,15 +415,12 @@ mod tests {
         );
         // Shutdown must complete well within its own bounded grace period
         // even though the next tick is far in the future.
-        tokio::time::timeout(
-            SWEEPER_SHUTDOWN_GRACE,
-            sweeper.shutdown(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE),
-        )
-        .await
-        .expect("shutdown completes within its own grace period");
+        sweeper
+            .shutdown(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE)
+            .await;
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn shutdown_signals_and_joins_when_take_once_locks_are_poisoned() {
         let (shutdown, shutdown_rx) = oneshot::channel();
         let (joined, joined_rx) = oneshot::channel();
@@ -456,10 +453,7 @@ mod tests {
             .shutdown(tokio::time::Instant::now() + SWEEPER_SHUTDOWN_GRACE)
             .await;
 
-        tokio::time::timeout(Duration::from_secs(1), joined_rx)
-            .await
-            .expect("shutdown must join the poisoned-lock worker")
-            .expect("worker completion must be observed");
+        joined_rx.await.expect("worker completion must be observed");
     }
 
     #[tokio::test]
@@ -508,13 +502,11 @@ mod tests {
         };
         drop(sweeper);
 
-        tokio::time::timeout(Duration::from_secs(1), shutdown_rx)
+        shutdown_rx
             .await
-            .expect("Drop must retain and signal the poisoned shutdown sender")
             .expect("shutdown sender must send before Drop returns");
-        tokio::time::timeout(Duration::from_secs(1), aborted_rx)
+        aborted_rx
             .await
-            .expect("Drop must abort the poisoned-lock worker")
             .expect("aborted worker must drop its sentinel");
     }
 
@@ -588,9 +580,8 @@ mod tests {
             )
         });
 
-        let report = tokio::time::timeout(SWEEPER_SHUTDOWN_GRACE, pass)
+        let report = pass
             .await
-            .expect("cancelled pass must join within the shutdown grace period")
             .expect("blocking task must not panic")
             .expect("sweep_once_with_age_source must not error");
 
