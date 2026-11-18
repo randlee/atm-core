@@ -95,6 +95,31 @@ name = "{lib_name}"
 
 
 
+    def test_static_initializer_and_function_read_are_detected_with_approved_sites_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            source_root = JUST_DIR.parent
+            (repo_root / "crates/atm-core/src/caller_context.rs").write_text(
+                (source_root / "crates/atm-core/src/caller_context.rs").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            allow_dir = repo_root / ".just/allowlists"
+            allow_dir.mkdir()
+            (allow_dir / "env_var_boundary_allowlist.toml").write_text(
+                (source_root / ".just/allowlists/env_var_boundary_allowlist.toml").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (repo_root / "crates/atm-core/src/config.rs").write_text(
+                'static TEAM: std::sync::LazyLock<Option<String>> = std::sync::LazyLock::new(|| std::env::var("ATM_TEAM").ok());\n'
+                'fn positive_control() { let _ = std::env::var("ATM_IDENTITY"); }\n', encoding="utf-8"
+            )
+            violations = self.collect(repo_root)
+            self.assertEqual([(v.path, v.line_number, v.kind) for v in violations], [
+                ("crates/atm-core/src/config.rs", 1, "direct_literal_env_read"),
+                ("crates/atm-core/src/config.rs", 2, "direct_literal_env_read"),
+            ])
+
     def test_exempt_reader_rejects_extra_read_and_allows_exact_approved_site(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
