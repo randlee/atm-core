@@ -14,6 +14,7 @@ use std::sync::Arc;
 use atm_core::HerdrSession;
 use atm_core::LocalServiceRuntime;
 use atm_core::RequestDeadline;
+use atm_core::api::RequestBudget;
 use atm_core::boundary::{
     self, AsyncMessageReceivedHookEmitter, BuiltInPostSendDispatch, CronLifecycleNudge,
     CronLifecycleNudgeEmitter, CronLifecycleNudgeTarget, MessageReceivedHookSelector, NudgeKind,
@@ -27,6 +28,9 @@ use atm_http_runtime::{
     BareCliFifo, BareCliQueueFullDrops, BoundedBlockingBridge, HERDR_MAX_PROMPTS_PER_TICK,
     RuntimeHealth, append_bare_cli_message,
 };
+
+const RECEIVED_HOOK_BUDGET: RequestBudget =
+    RequestBudget::finite(std::time::Duration::from_secs(30));
 
 /// The two sealed ports backed by one receiver-selector instance.
 ///
@@ -408,23 +412,19 @@ impl CronLifecycleNudgeEmitter for ReplacementReceivedHookSelector {
             nudge.key.transition_seq
         );
         match target {
-            CronLifecycleNudgeTarget::Tmux(target) => TokioTmuxReceivedHook::emit_nudge(
-                target,
-                RequestDeadline::after(std::time::Duration::from_secs(30)),
-            )
-            .await
-            .map(|()| atm_storage::DeliveryReceipt::Accepted { receipt_id })
-            .or_else(|_| {
-                Ok(unknown_lifecycle_receipt(
-                    "tmux lifecycle handoff result is unknown",
-                ))
-            }),
+            CronLifecycleNudgeTarget::Tmux(target) => {
+                TokioTmuxReceivedHook::emit_nudge(target, RECEIVED_HOOK_BUDGET.start())
+                    .await
+                    .map(|()| atm_storage::DeliveryReceipt::Accepted { receipt_id })
+                    .or_else(|_| {
+                        Ok(unknown_lifecycle_receipt(
+                            "tmux lifecycle handoff result is unknown",
+                        ))
+                    })
+            }
             CronLifecycleNudgeTarget::Herdr(target) => self
                 .herdr
-                .emit_nudge(
-                    target,
-                    RequestDeadline::after(std::time::Duration::from_secs(30)),
-                )
+                .emit_nudge(target, RECEIVED_HOOK_BUDGET.start())
                 .await
                 .map(|()| atm_storage::DeliveryReceipt::Accepted { receipt_id })
                 .or_else(|_| {
@@ -439,19 +439,16 @@ impl CronLifecycleNudgeEmitter for ReplacementReceivedHookSelector {
                 match self
                     .graft
                     .blocking_bridge
-                    .run(
-                        RequestDeadline::after(std::time::Duration::from_secs(30)),
-                        move || {
-                            Ok::<_, AtmError>(
-                                atm_core::graft::deliver_published_cron_lifecycle_from_local_runtime(
-                                    &runtime,
-                                    key,
-                                    &target,
-                                    RequestDeadline::after(std::time::Duration::from_secs(30)),
-                                ),
-                            )
-                        },
-                    )
+                    .run(RECEIVED_HOOK_BUDGET.start(), move || {
+                        Ok::<_, AtmError>(
+                            atm_core::graft::deliver_published_cron_lifecycle_from_local_runtime(
+                                &runtime,
+                                key,
+                                &target,
+                                RECEIVED_HOOK_BUDGET.start(),
+                            ),
+                        )
+                    })
                     .await
                 {
                     Ok(receipt) => Ok(receipt),
@@ -557,10 +554,15 @@ impl TokioTmuxReceivedHook {
             deadline,
         )
         .await?;
-        let delay = deadline
-            .remaining()
-            .ok_or_else(|| hook_deadline_error("before tmux's second Enter"))?
-            .min(TMUX_DOUBLE_ENTER_DELAY);
+        let delay = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                remaining.min(TMUX_DOUBLE_ENTER_DELAY)
+            }
+            atm_core::api::DeadlineBudget::Unbounded => TMUX_DOUBLE_ENTER_DELAY,
+            atm_core::api::DeadlineBudget::Expired => {
+                return Err(hook_deadline_error("before tmux's second Enter"));
+            }
+        };
         tokio::time::sleep(delay).await;
         run_tmux(
             [
@@ -628,9 +630,10 @@ async fn run_tmux<const N: usize>(
     arguments: [&str; N],
     deadline: RequestDeadline,
 ) -> Result<(), AtmError> {
-    let remaining = deadline
-        .remaining()
-        .ok_or_else(|| hook_deadline_error("before tmux command start"))?;
+    let budget = deadline.budget();
+    if matches!(budget, atm_core::api::DeadlineBudget::Expired) {
+        return Err(hook_deadline_error("before tmux command start"));
+    }
     let mut child = tokio::process::Command::new("tmux")
         .args(arguments)
         .kill_on_drop(true)
@@ -642,20 +645,35 @@ async fn run_tmux<const N: usize>(
             )
             .with_cause(source)
         })?;
-    let status = match tokio::time::timeout(remaining, child.wait()).await {
-        Ok(Ok(status)) => status,
-        Ok(Err(source)) => {
-            return Err(AtmError::new(
-                AtmErrorCode::PostSendTmuxSendFailed,
-                "tmux received-message hook command failed",
-            )
-            .with_cause(source));
+    let status = match budget {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => {
+            match tokio::time::timeout(remaining, child.wait()).await {
+                Ok(Ok(status)) => status,
+                Ok(Err(source)) => {
+                    return Err(AtmError::new(
+                        AtmErrorCode::PostSendTmuxSendFailed,
+                        "tmux received-message hook command failed",
+                    )
+                    .with_cause(source));
+                }
+                Err(_) => {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    return Err(hook_deadline_error("while executing tmux"));
+                }
+            }
         }
-        Err(_) => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            return Err(hook_deadline_error("while executing tmux"));
-        }
+        atm_core::api::DeadlineBudget::Unbounded => match child.wait().await {
+            Ok(status) => status,
+            Err(source) => {
+                return Err(AtmError::new(
+                    AtmErrorCode::PostSendTmuxSendFailed,
+                    "tmux received-message hook command failed",
+                )
+                .with_cause(source));
+            }
+        },
+        atm_core::api::DeadlineBudget::Expired => unreachable!("expired before command start"),
     };
     status.success().then_some(()).ok_or_else(|| {
         AtmError::new(

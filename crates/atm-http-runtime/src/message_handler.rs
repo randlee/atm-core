@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use atm_core::api::{
     ApiRequest, ApiResponse, AuthenticatedIngress, CLEAR_OUTCOME_HEADER, HttpRequest,
-    HttpRouteKind, MessageCollectionRequest, RequestDeadline, UntrustedSmokeProvenance,
-    http_route_kind, http_route_surface,
+    HttpRouteKind, MessageCollectionRequest, RequestBudget, RequestDeadline,
+    UntrustedSmokeProvenance, http_route_kind, http_route_surface,
 };
 use atm_core::clear::ClearQuery;
 use atm_core::doctor::DoctorQuery;
@@ -307,7 +307,7 @@ fn validate_peer_write_version(peer_version: Option<HttpApiVersion>) -> Result<(
 struct MessageRouteState {
     handler: Arc<dyn CanonicalWriteHandler>,
     connector: AuthenticatedConnector,
-    request_timeout: std::time::Duration,
+    request_timeout: RequestBudget,
     max_body_bytes: usize,
 }
 
@@ -439,7 +439,7 @@ async fn post_messages_with_request_id(
         ingress,
         AuthenticatedIngress::Peer | AuthenticatedIngress::UntrustedSmoke(_)
     );
-    let deadline = RequestDeadline::after(state.request_timeout);
+    let deadline = state.request_timeout.start();
 
     let response = state
         .handler
@@ -515,7 +515,7 @@ async fn dispatch_request_with_request_id(
         Ok(ingress) => ingress,
         Err(error) => return error_response(error),
     };
-    let deadline = RequestDeadline::after(state.request_timeout);
+    let deadline = state.request_timeout.start();
     state
         .handler
         .dispatch_with_request_id(request, ingress, deadline, request_id)
@@ -1185,7 +1185,9 @@ mod tests {
     }
 
     fn timeouts() -> RuntimeTimeouts {
-        timeouts_with_request(Duration::from_secs(1))
+        RuntimeTimeouts::with_unbounded_requests(
+            NonZeroDuration::new(Duration::from_secs(1)).expect("non-zero shutdown timeout"),
+        )
     }
 
     fn timeouts_with_request(request: Duration) -> RuntimeTimeouts {

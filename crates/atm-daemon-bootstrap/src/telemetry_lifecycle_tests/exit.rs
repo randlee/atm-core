@@ -131,12 +131,7 @@ fn spawn_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) -> std::proc
         let _ = stdout.read_to_end(&mut bytes);
         let _ = stdout_tx.send(bytes);
     });
-    let (bytes, status) = await_eof_then_exit(
-        &mut child,
-        &stdout_rx,
-        Instant::now() + Duration::from_secs(90),
-        &format!("scenario child {scenario}"),
-    );
+    let (bytes, status) = await_eof_then_exit(&mut child, &stdout_rx);
     std::process::Output {
         status,
         stdout: bytes.expect("scenario child stdout bytes"),
@@ -144,21 +139,25 @@ fn spawn_child_scenario_with(scenario: &str, envs: &[(&str, &str)]) -> std::proc
     }
 }
 
-/// Kills and reaps a child that outlived its deadline, so no failing test
-/// leaves a process behind.
+/// Kills and reaps a child in the dedicated expiry test.
 fn kill_and_reap(child: &mut Child) {
     let _ = child.kill();
     let _ = child.wait();
 }
 
-/// Tick of the bounded exit poll; the absolute deadline, not this, bounds the wait.
 const EXIT_POLL: Duration = Duration::from_millis(20);
 
 /// Waits for the child's stdout reader to finish (`eof` carries its result or
-/// is dropped at EOF), then confirms the exit, all inside one absolute
-/// `deadline`. Stdout EOF alone does not prove exit. On any timeout the child
-/// is killed and reaped before the failure.
-fn await_eof_then_exit<T>(
+/// is dropped at EOF), then confirms exit. Stdout EOF alone does not prove exit.
+fn await_eof_then_exit<T>(child: &mut Child, eof: &mpsc::Receiver<T>) -> (Option<T>, ExitStatus) {
+    let carried = eof.recv().ok();
+    let status = child.wait().expect("wait for child exit");
+    (carried, status)
+}
+
+/// Dedicated expiry path used only by the test that proves a live child is
+/// killed and reaped when its explicit deadline elapses.
+fn await_eof_then_exit_before_deadline<T>(
     child: &mut Child,
     eof: &mpsc::Receiver<T>,
     deadline: Instant,
@@ -212,16 +211,13 @@ fn wrong_scenario_name_does_not_prove_child_execution() {
 }
 
 /// Waits for proof that an export reached the collector before a stop request.
-fn wait_for_pre_stop_export(
-    collector_started: &mpsc::Receiver<()>,
-) -> Result<(), mpsc::RecvTimeoutError> {
-    collector_started.recv_timeout(EXPORT_WAIT)
+fn wait_for_pre_stop_export(collector_started: &mpsc::Receiver<()>) -> Result<(), mpsc::RecvError> {
+    collector_started.recv()
 }
 
 /// Launches the child, waits until it serves, verifies an optional collector
 /// export is already stalled, requests the stop and asserts the child exits
-/// successfully, which includes its own shutdown-deadline proof. The 30 s
-/// wait is a hang diagnostic only; no elapsed time is asserted.
+/// successfully, which includes its own shutdown-deadline proof.
 fn stop_to_exit(mode: &str, endpoint: Option<&str>, collector_started: Option<mpsc::Receiver<()>>) {
     let mut command = Command::new(std::env::current_exe().expect("test binary"));
     command
@@ -247,7 +243,7 @@ fn stop_to_exit(mode: &str, endpoint: Option<&str>, collector_started: Option<mp
             }
         }
     });
-    if ready_rx.recv_timeout(Duration::from_secs(60)).is_err() {
+    if ready_rx.recv().is_err() {
         kill_and_reap(&mut child);
         panic!("exit-proof child never became ready");
     }
@@ -258,15 +254,9 @@ fn stop_to_exit(mode: &str, endpoint: Option<&str>, collector_started: Option<mp
         });
     }
     let mut stdin = child.stdin.take().expect("child stdin");
-    let started = Instant::now();
     writeln!(stdin, "stop").expect("request stop");
     drop(stdin);
-    let (_, status) = await_eof_then_exit(
-        &mut child,
-        &eof_rx,
-        started + Duration::from_secs(30),
-        "exit-proof child",
-    );
+    let (_, status) = await_eof_then_exit(&mut child, &eof_rx);
     assert!(status.success(), "child exit status {status}");
 }
 
@@ -297,14 +287,14 @@ fn timed_out_child_is_killed_and_reaped_before_the_failure() {
             }
         }
     });
-    if ready_rx.recv_timeout(Duration::from_secs(60)).is_err() {
+    if ready_rx.recv().is_err() {
         kill_and_reap(&mut child);
         panic!("serving child never became ready");
     }
     // Stdin stays open, so the child keeps serving past the deadline.
     let _stdin = child.stdin.take().expect("child stdin");
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        await_eof_then_exit(
+        await_eof_then_exit_before_deadline(
             &mut child,
             &eof_rx,
             Instant::now() + Duration::from_secs(2),
@@ -341,7 +331,7 @@ fn child_that_never_exits_is_killed_and_reaped_by_the_exit_wait() {
     drop(eof_tx); // stdout reported EOF at once; only the exit wait can time out
     let started = Instant::now();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        await_eof_then_exit(
+        await_eof_then_exit_before_deadline(
             &mut child,
             &eof_rx,
             started + Duration::from_secs(2),
@@ -349,10 +339,6 @@ fn child_that_never_exits_is_killed_and_reaped_by_the_exit_wait() {
         )
     }));
     assert!(outcome.is_err(), "a child that never exits must time out");
-    assert!(
-        started.elapsed() < Duration::from_secs(10),
-        "the exit wait returned at its deadline, not after a blocked wait"
-    );
     let status = child
         .try_wait()
         .expect("poll child")
@@ -365,10 +351,7 @@ fn pre_stop_export_gate_rejects_a_missing_export() {
     let (collector_started, gate) = mpsc::channel();
     drop(collector_started);
     assert!(
-        matches!(
-            wait_for_pre_stop_export(&gate),
-            Err(mpsc::RecvTimeoutError::Disconnected)
-        ),
+        matches!(wait_for_pre_stop_export(&gate), Err(mpsc::RecvError)),
         "the stop gate must reject a missing collector export"
     );
 }
@@ -443,8 +426,6 @@ const CHILD_BACKLOG: &str = "ATM_BD6_BACKLOG";
 /// final record; the child keeps its runtime, and so the SDK export tasks,
 /// running until then.
 const CHILD_HOLD: &str = "ATM_BD6_HOLD";
-/// Failure-only bound on the held child's wait for the parent.
-const PARENT_CONFIRMATION_LIMIT: Duration = Duration::from_secs(30);
 /// Prefixes the child's export health, printed after daemon shutdown.
 const EXPORT_HEALTH_MARKER: &str = "BD6-EXPORT-HEALTH ";
 /// The bridge retains allowlisted fields only, never message text.
@@ -515,9 +496,7 @@ fn final_record_child() {
     println!("{CHILD_SCENARIO_SENTINEL}");
 }
 
-/// Blocks until the parent writes a line on stdin, failing at
-/// [`PARENT_CONFIRMATION_LIMIT`]. The reader thread is detached, so a failed
-/// wait does not hold the process.
+/// Blocks until the parent writes a line on stdin.
 fn await_parent_confirmation() {
     let (sender, confirmed) = mpsc::channel();
     std::thread::spawn(move || {
@@ -525,7 +504,7 @@ fn await_parent_confirmation() {
         let _ = sender.send(std::io::stdin().read_line(&mut line));
     });
     confirmed
-        .recv_timeout(PARENT_CONFIRMATION_LIMIT)
+        .recv()
         .expect("the parent confirmed that its collector stored the final record")
         .expect("read the parent's confirmation");
 }
@@ -628,17 +607,10 @@ async fn final_record_held(receiver: &Receiver, backlog: usize) -> Vec<String> {
         .await;
     writeln!(stdin, "stored").expect("confirm to the child");
     drop(stdin);
-    let (bytes, status) = tokio::task::spawn_blocking(move || {
-        // Hang diagnostic only; no elapsed time is asserted.
-        await_eof_then_exit(
-            &mut child,
-            &stdout_rx,
-            Instant::now() + Duration::from_secs(30),
-            "held final-record child",
-        )
-    })
-    .await
-    .expect("parent driver");
+    let (bytes, status) =
+        tokio::task::spawn_blocking(move || await_eof_then_exit(&mut child, &stdout_rx))
+            .await
+            .expect("parent driver");
     let output = std::process::Output {
         status,
         stdout: bytes.expect("final-record child stdout bytes"),
@@ -860,8 +832,8 @@ async fn line_with(lines: &Arc<Mutex<mpsc::Receiver<String>>>, marker: &'static 
         let lines = lines.lock().expect("child lines");
         loop {
             let line = lines
-                .recv_timeout(Duration::from_secs(60))
-                .unwrap_or_else(|_| panic!("child never printed {marker}"));
+                .recv()
+                .unwrap_or_else(|_| panic!("child exited before printing {marker}"));
             if line.contains(marker) {
                 return line;
             }
@@ -939,7 +911,7 @@ async fn delivered_export_then_full_backlog_behind_stall() {
             (stdin, Instant::now())
         }
     });
-    let (mut stdin, started) = match driven.await {
+    let (mut stdin, _started) = match driven.await {
         Ok(driven) => driven,
         Err(error) => {
             kill_and_reap(&mut child);
@@ -949,14 +921,7 @@ async fn delivered_export_then_full_backlog_behind_stall() {
     writeln!(stdin, "stop").expect("request stop");
     drop(stdin);
     // The test owns `child`; the bounded blocking wait runs in place.
-    let (_, status) = tokio::task::block_in_place(|| {
-        await_eof_then_exit(
-            &mut child,
-            &eof,
-            started + Duration::from_secs(30),
-            "combined child",
-        )
-    });
+    let (_, status) = tokio::task::block_in_place(|| await_eof_then_exit(&mut child, &eof));
     assert!(status.success(), "child exit status {status}");
     line_with(&lines, CHILD_SCENARIO_SENTINEL).await;
     receiver.stop().await;

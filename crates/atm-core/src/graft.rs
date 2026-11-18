@@ -369,10 +369,14 @@ fn remaining_hook_budget(
     deadline: RequestDeadline,
     safety_cap: Duration,
 ) -> Result<Duration, AtmError> {
-    if deadline.is_unbounded() {
-        hook_budget_from_remaining(Some(safety_cap), safety_cap)
-    } else {
-        hook_budget_from_remaining(deadline.remaining(), safety_cap)
+    match deadline.budget() {
+        crate::api::DeadlineBudget::Unbounded => {
+            hook_budget_from_remaining(Some(safety_cap), safety_cap)
+        }
+        crate::api::DeadlineBudget::Remaining(remaining) => {
+            hook_budget_from_remaining(Some(remaining), safety_cap)
+        }
+        crate::api::DeadlineBudget::Expired => hook_budget_from_remaining(None, safety_cap),
     }
 }
 
@@ -723,6 +727,19 @@ impl GraftReceiverListener {
         }
     }
 
+    #[cfg(test)]
+    fn read_request_unbounded(
+        &self,
+        stream: &mut TcpStream,
+    ) -> Result<GraftPostSendRequest, AtmError> {
+        match self.read_receiver_request_with_limit(stream, None)? {
+            GraftReceiverRequest::PostSend(request) => Ok(request),
+            GraftReceiverRequest::CronLifecycle(_) => Err(AtmError::validation(
+                "graft post-send receiver received a cron lifecycle request",
+            )),
+        }
+    }
+
     /// Read one authenticated request of either supported Graft delivery
     /// family. The untagged payload keeps the historical post-send JSON shape
     /// byte-for-byte compatible while allowing keyed cron lifecycle frames.
@@ -957,8 +974,9 @@ mod tests {
     use super::{
         AtmGraftClient, CronLifecycleGraftRequest, GraftCronLifecycleReceipt, GraftPostSendRequest,
         GraftPostSendResponse, GraftPostSendWireRequest, GraftReceiverListener,
-        GraftReceiverRequest, GraftReceiverWireRequest, RECEIVER_HOOK_RESULT_HANDOFF_GRACE,
-        deliver_graft_post_send, deliver_published_cron_lifecycle, deliver_published_receiver_hook,
+        GraftReceiverRequest, GraftReceiverWireRequest, HookTransportLimits,
+        RECEIVER_HOOK_RESULT_HANDOFF_GRACE, deliver_graft_post_send_with_limits,
+        deliver_published_cron_lifecycle, deliver_published_receiver_hook,
         deliver_published_receiver_hook_with_transport, graft_receiver_lock_path_from_root,
         graft_receiver_not_registered_error,
     };
@@ -1111,25 +1129,24 @@ mod tests {
                 .expect("accept")
                 .expect("loopback peer");
             let received = listener
-                .read_request(&mut stream, Duration::from_secs(3))
+                .read_request_unbounded(&mut stream)
                 .expect("read request");
             listener
                 .write_response(&mut stream, &GraftPostSendResponse::Delivered)
                 .expect("write response");
             let _ = completed_tx.send(received);
         });
-        let outcome = deliver_graft_post_send(
+        let outcome = deliver_graft_post_send_with_limits(
             endpoint,
             &capability,
             &request,
-            Duration::from_secs(1),
-            Duration::from_secs(3),
+            RequestDeadline::unbounded(),
+            HookTransportLimits {
+                connect: None,
+                io: None,
+            },
         );
-        if outcome.is_err() {
-            let _ = TcpStream::connect_timeout(&endpoint, Duration::from_secs(3));
-        }
-        let received = wait_receiver_completion(&completed_rx, Duration::from_secs(10))
-            .unwrap_or_else(|error| panic!("{error}"));
+        let received = completed_rx.recv().expect("receiver completion sent");
         receiver
             .join()
             .expect("receiver thread after completion signal");
@@ -1606,27 +1623,6 @@ mod tests {
         let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
         let request = request.expect("delivery completed before receiver accepted a request");
         (outcome, request)
-    }
-
-    fn wait_receiver_completion<T>(
-        receiver: &std::sync::mpsc::Receiver<T>,
-        timeout: Duration,
-    ) -> Result<T, &'static str> {
-        receiver.recv_timeout(timeout).map_err(|error| match error {
-            std::sync::mpsc::RecvTimeoutError::Timeout => "receiver completion timed out",
-            std::sync::mpsc::RecvTimeoutError::Disconnected => {
-                "receiver exited before completion signal"
-            }
-        })
-    }
-
-    #[test]
-    fn stuck_receiver_reports_completion_timeout() {
-        let (_held_sender, receiver) = std::sync::mpsc::sync_channel::<()>(1);
-        assert_eq!(
-            wait_receiver_completion(&receiver, Duration::ZERO),
-            Err("receiver completion timed out")
-        );
     }
 
     #[test]

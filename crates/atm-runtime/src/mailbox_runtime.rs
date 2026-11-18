@@ -849,10 +849,10 @@ impl StorageAsyncMailboxRuntime {
             if !selection.selected.is_empty() || tokio::time::Instant::now() >= wait_deadline {
                 return Ok((selection, match_count));
             }
-            let request_remaining = match deadline.remaining() {
-                Some(remaining) => Some(remaining),
-                None if deadline.is_unbounded() => None,
-                None => {
+            let request_remaining = match deadline.budget() {
+                atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining),
+                atm_core::api::DeadlineBudget::Unbounded => None,
+                atm_core::api::DeadlineBudget::Expired => {
                     return Err(AtmError::daemon_unavailable(
                         "mailbox request deadline expired while awaiting mail",
                     ));
@@ -999,10 +999,10 @@ fn selection_candidate(message: Message) -> MailboxSelectionCandidate {
 }
 
 pub fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
-    match deadline.remaining() {
-        Some(remaining) => ReadDeadline::new(remaining),
-        None if deadline.is_unbounded() => Ok(ReadDeadline::unbounded()),
-        None => Err(AtmError::daemon_unavailable(
+    match deadline.budget() {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => ReadDeadline::new(remaining),
+        atm_core::api::DeadlineBudget::Unbounded => Ok(ReadDeadline::unbounded()),
+        atm_core::api::DeadlineBudget::Expired => Err(AtmError::daemon_unavailable(
             "mailbox request deadline expired",
         )),
     }

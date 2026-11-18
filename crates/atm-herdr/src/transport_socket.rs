@@ -209,10 +209,10 @@ async fn acquire_permit(
     in_flight: Arc<Semaphore>,
     deadline: RequestDeadline,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, HerdrError> {
-    let remaining = match deadline.remaining() {
-        Some(remaining) => Some(remaining),
-        None if deadline.is_unbounded() => None,
-        None => return Err(HerdrError::Timeout),
+    let remaining = match deadline.budget() {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining),
+        atm_core::api::DeadlineBudget::Unbounded => None,
+        atm_core::api::DeadlineBudget::Expired => return Err(HerdrError::Timeout),
     };
     let permit = match remaining {
         Some(remaining) => tokio::time::timeout(remaining, in_flight.acquire_owned())
@@ -321,10 +321,10 @@ async fn deadline_io<T>(
     deadline: RequestDeadline,
     future: impl Future<Output = io::Result<T>>,
 ) -> Result<T, HerdrError> {
-    let remaining = match deadline.remaining() {
-        Some(remaining) => Some(remaining),
-        None if deadline.is_unbounded() => None,
-        None => return Err(HerdrError::Timeout),
+    let remaining = match deadline.budget() {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining),
+        atm_core::api::DeadlineBudget::Unbounded => None,
+        atm_core::api::DeadlineBudget::Expired => return Err(HerdrError::Timeout),
     };
     let result = match remaining {
         Some(remaining) => tokio::time::timeout(remaining, future)
@@ -396,23 +396,16 @@ async fn connect_named_pipe(
             message: "Unix Herdr endpoint selected on a Windows build".to_owned(),
         });
     };
-    connect_named_pipe_with_remaining(
-        name,
-        || deadline.remaining(),
-        || deadline.is_unbounded(),
-        retry_delay,
-    )
-    .await
+    connect_named_pipe_with_remaining(name, || deadline.budget(), retry_delay).await
 }
 
 #[cfg(windows)]
 async fn connect_named_pipe_with_remaining(
     name: &str,
-    remaining: impl Fn() -> Option<Duration>,
-    unbounded: impl Fn() -> bool,
+    budget: impl Fn() -> atm_core::api::DeadlineBudget,
     retry_delay: Duration,
 ) -> Result<tokio::net::windows::named_pipe::NamedPipeClient, HerdrError> {
-    retry_pipe_busy(remaining, unbounded, retry_delay, || {
+    retry_pipe_busy(budget, retry_delay, || {
         tokio::net::windows::named_pipe::ClientOptions::new().open(name)
     })
     .await
@@ -420,8 +413,7 @@ async fn connect_named_pipe_with_remaining(
 
 #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Named-pipe busy retries pause within the remaining connection deadline.")]
 async fn retry_pipe_busy<T>(
-    remaining: impl Fn() -> Option<Duration>,
-    unbounded: impl Fn() -> bool,
+    budget: impl Fn() -> atm_core::api::DeadlineBudget,
     retry_delay: Duration,
     mut open: impl FnMut() -> io::Result<T>,
 ) -> Result<T, HerdrError> {
@@ -429,10 +421,12 @@ async fn retry_pipe_busy<T>(
     loop {
         match open() {
             Ok(client) => return Ok(client),
-            Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => match remaining() {
-                Some(remaining) => tokio::time::sleep(retry_delay.min(remaining)).await,
-                None if unbounded() => tokio::time::sleep(retry_delay).await,
-                None => return Err(HerdrError::Timeout),
+            Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => match budget() {
+                atm_core::api::DeadlineBudget::Remaining(remaining) => {
+                    tokio::time::sleep(retry_delay.min(remaining)).await
+                }
+                atm_core::api::DeadlineBudget::Unbounded => tokio::time::sleep(retry_delay).await,
+                atm_core::api::DeadlineBudget::Expired => return Err(HerdrError::Timeout),
             },
             Err(error) => return Err(socket_io_error(error)),
         }
@@ -874,7 +868,6 @@ mod tests {
         let opened = std::sync::atomic::AtomicBool::new(false);
         let result = retry_pipe_busy(
             || panic!("successful open must not consult a deadline"),
-            || false,
             PIPE_BUSY_RETRY_DELAY,
             || {
                 opened.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -893,9 +886,8 @@ mod tests {
         let result = retry_pipe_busy(
             || {
                 remaining_calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                None
+                atm_core::api::DeadlineBudget::Expired
             },
-            || false,
             PIPE_BUSY_RETRY_DELAY,
             || {
                 attempts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -926,10 +918,13 @@ mod tests {
         let HerdrEndpoint::NamedPipe(pipe_name) = &endpoint else {
             unreachable!("Windows endpoint is a named pipe");
         };
-        let mut client =
-            connect_named_pipe_with_remaining(pipe_name, || None, || true, PIPE_BUSY_RETRY_DELAY)
-                .await
-                .expect("connect to test named-pipe server");
+        let mut client = connect_named_pipe_with_remaining(
+            pipe_name,
+            || atm_core::api::DeadlineBudget::Unbounded,
+            PIPE_BUSY_RETRY_DELAY,
+        )
+        .await
+        .expect("connect to test named-pipe server");
         server.connect().await.expect("accept named-pipe client");
 
         client
@@ -962,9 +957,12 @@ mod tests {
         let HerdrEndpoint::NamedPipe(pipe_name) = &endpoint else {
             unreachable!("Windows endpoint is a named pipe");
         };
-        let result =
-            connect_named_pipe_with_remaining(pipe_name, || None, || true, PIPE_BUSY_RETRY_DELAY)
-                .await;
+        let result = connect_named_pipe_with_remaining(
+            pipe_name,
+            || atm_core::api::DeadlineBudget::Unbounded,
+            PIPE_BUSY_RETRY_DELAY,
+        )
+        .await;
 
         assert!(matches!(result, Err(HerdrError::ServerUnavailable { .. })));
     }

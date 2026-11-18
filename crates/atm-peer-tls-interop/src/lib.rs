@@ -223,10 +223,11 @@ fn complete_server_handshake(
     deadline: RequestDeadline,
 ) -> Result<(), HandshakeFailure> {
     while stream.conn.is_handshaking() {
-        let remaining = deadline.remaining();
-        if remaining.is_none() && !deadline.is_unbounded() {
-            return Err(HandshakeFailure::Deadline);
-        }
+        let remaining = match deadline.budget() {
+            atm_core::api::DeadlineBudget::Remaining(remaining) => Some(remaining),
+            atm_core::api::DeadlineBudget::Unbounded => None,
+            atm_core::api::DeadlineBudget::Expired => return Err(HandshakeFailure::Deadline),
+        };
         apply_deadline(stream.get_ref(), remaining).map_err(|_| HandshakeFailure::Deadline)?;
         if let Err(_error) = stream.conn.complete_io(&mut stream.sock) {
             if deadline.expired() {
@@ -254,10 +255,10 @@ fn apply_deadline(stream: &TcpStream, deadline: Option<Duration>) -> Result<(), 
 }
 
 fn remaining_budget(deadline: RequestDeadline) -> Result<Option<Duration>, AtmError> {
-    match deadline.remaining() {
-        Some(remaining) => Ok(Some(remaining)),
-        None if deadline.is_unbounded() => Ok(None),
-        None => Err(AtmError::daemon_unavailable(
+    match deadline.budget() {
+        atm_core::api::DeadlineBudget::Remaining(remaining) => Ok(Some(remaining)),
+        atm_core::api::DeadlineBudget::Unbounded => Ok(None),
+        atm_core::api::DeadlineBudget::Expired => Err(AtmError::daemon_unavailable(
             "curl mTLS fixture deadline expired",
         )),
     }

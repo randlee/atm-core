@@ -197,9 +197,12 @@ impl StorageAndNudgeRouter {
             .drain(deadline.saturating_duration_since(tokio::time::Instant::now()))
             .await;
         self.hook_chains()
-            .drain(RequestDeadline::after(
-                deadline.saturating_duration_since(tokio::time::Instant::now()),
-            ))
+            .drain(
+                atm_core::api::RequestBudget::finite(
+                    deadline.saturating_duration_since(tokio::time::Instant::now()),
+                )
+                .start(),
+            )
             .await;
     }
 }

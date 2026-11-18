@@ -162,7 +162,7 @@ pub(crate) async fn serve_loopback_http1<L>(
     listener: L,
     router: Router,
     max_connections: usize,
-    header_read_timeout: Duration,
+    header_read_timeout: Option<Duration>,
     shutdown_rx: watch::Receiver<()>,
 ) -> io::Result<()>
 where
@@ -243,7 +243,7 @@ pub(crate) async fn serve_authenticated_peer_http1(
                 if let Err(error) = serve_connection(
                     TokioIo::new(accepted.stream),
                     service,
-                    timeouts.request,
+                    timeouts.header_read,
                     connection_shutdown,
                 )
                 .await
@@ -264,7 +264,7 @@ pub(crate) async fn serve_unix_http1(
     listener: UnixListener,
     router: Router,
     max_connections: usize,
-    header_read_timeout: Duration,
+    header_read_timeout: Option<Duration>,
     shutdown_rx: watch::Receiver<()>,
 ) -> io::Result<()> {
     accept_loop(
@@ -295,7 +295,7 @@ pub(crate) async fn serve_unix_http1(
 pub(crate) async fn serve_connection<I, S>(
     io: TokioIo<I>,
     service: S,
-    header_read_timeout: Duration,
+    header_read_timeout: Option<Duration>,
     mut shutdown_rx: watch::Receiver<()>,
 ) -> io::Result<()>
 where
@@ -313,14 +313,15 @@ where
         service.map_request(|request: axum::http::Request<Incoming>| request.map(Body::new));
     let service = TowerToHyperService::new(service);
     let mut builder = http1::Builder::new();
-    builder
-        .timer(TokioTimer::new())
-        .header_read_timeout(header_read_timeout)
-        // Keep a bounded admitted connection available for its HTTP/1.1
-        // request sequence. The connection semaphore still caps concurrent
-        // peers, the header timer bounds idle/header waits, and callers send
-        // `Connection: close` when their finite batch is complete.
-        .keep_alive(true);
+    builder.timer(TokioTimer::new());
+    if let Some(timeout) = header_read_timeout {
+        builder.header_read_timeout(timeout);
+    }
+    // Keep a bounded admitted connection available for its HTTP/1.1
+    // request sequence. The connection semaphore still caps concurrent
+    // peers, the header timer bounds idle/header waits, and callers send
+    // `Connection: close` when their finite batch is complete.
+    builder.keep_alive(true);
     let connection = builder.serve_connection(io, service);
     tokio::pin!(connection);
 
@@ -407,7 +408,7 @@ mod tests {
         let server = tokio::spawn(serve_connection(
             TokioIo::new(server),
             router,
-            Duration::from_secs(1),
+            Some(Duration::from_secs(1)),
             shutdown_rx,
         ));
 
@@ -453,7 +454,7 @@ mod tests {
             acceptor,
             router,
             8,
-            Duration::from_secs(5),
+            Some(Duration::from_secs(5)),
             shutdown_rx,
         ));
 

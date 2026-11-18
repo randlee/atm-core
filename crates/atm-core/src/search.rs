@@ -309,10 +309,10 @@ pub async fn execute_search(
         return Err(AtmError::search_local_only());
     }
     let query = request.compile_query()?;
-    let search_deadline = match deadline.remaining() {
-        Some(remaining) => SearchDeadline::new(remaining)?,
-        None if deadline.is_unbounded() => SearchDeadline::unbounded(),
-        None => {
+    let search_deadline = match deadline.budget() {
+        crate::api::DeadlineBudget::Remaining(remaining) => SearchDeadline::new(remaining)?,
+        crate::api::DeadlineBudget::Unbounded => SearchDeadline::unbounded(),
+        crate::api::DeadlineBudget::Expired => {
             return Err(AtmError::daemon_unavailable(
                 "request deadline expired before local search execution",
             ));

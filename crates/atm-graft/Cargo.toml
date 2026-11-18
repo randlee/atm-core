@@ -13,7 +13,7 @@ homepage.workspace = true
 test-support = ["atm-core/test-utils"]
 
 [dependencies]
-atm-core.workspace = true
+atm-core = { workspace = true, features = ["runtime-clock"] }
 atm-daemon-client.workspace = true
 async-trait.workspace = true
 atm-http-runtime.workspace = true

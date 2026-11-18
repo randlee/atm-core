@@ -15,7 +15,7 @@ test-utils = ["atm-core/test-utils"]
 [dependencies]
 sc-lint-attributes = { workspace = true }
 async-trait.workspace = true
-atm-core.workspace = true
+atm-core = { workspace = true, features = ["runtime-clock"] }
 chrono = { version = "0.4", features = ["serde"] }
 cron.workspace = true
 getrandom.workspace = true

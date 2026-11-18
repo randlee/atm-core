@@ -166,7 +166,7 @@ impl ControlledCronComposition {
             self.handler.as_ref(),
             ApiRequest::new(request),
             AuthenticatedIngress::Local,
-            RequestDeadline::after(Duration::from_secs(60)),
+            RequestDeadline::unbounded(),
         )
         .await
         .map(atm_core::api::ApiResponse::into_inner)
