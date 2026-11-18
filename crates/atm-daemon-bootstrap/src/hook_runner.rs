@@ -176,6 +176,7 @@ impl DaemonHookRunner {
     }
 
     #[cfg(feature = "test-support")]
+    #[cfg(test)]
     fn with_controlled_request_budget(
         env: &dyn EnvSource,
         deadline: Arc<ControlledHookDeadline>,
