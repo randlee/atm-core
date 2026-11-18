@@ -5,8 +5,10 @@ no sprint doc) carries the reviewed scope text in the assignment itself
 (``pr_scope``, as the lead captured it, judged at ``pr_head_sha``) because the
 PR body on GitHub is live, editable metadata. The text sits in a CDATA section
 so XML metacharacters and a literal ``</pr-scope>`` round-trip exactly, and it
-is emitted byte for byte: trimming is only the empty check, so a Markdown code
-block's indentation and blank lines survive.
+is emitted byte for byte apart from one normalization, CRLF and lone CR to LF
+(XML readers normalize line ends anyway, so every reviewer must see the same
+bytes): trimming is only the empty check, so a Markdown code block's
+indentation and blank lines survive.
 quality-mgr then renders the structured reviewer assignments from the same
 inputs: ``req-qa`` and ``arch-qa`` take ``pr_scope`` in place of
 ``sprint_doc``; the Rust reviewers, ``ruthless-boundary-qa`` and
@@ -58,16 +60,19 @@ PR_SCOPE = (
 )
 # Every delimiter and metacharacter that could truncate or break the carrier,
 # plus the whitespace a trim would eat: leading and trailing blank lines, a
-# four-space Markdown code block, and trailing spaces (a Markdown line break).
+# four-space Markdown code block, and trailing spaces (a Markdown line break),
+# plus CRLF and lone-CR line endings as a Windows capture would carry them.
 HOSTILE_SCOPE = (
-    "\n\n"
-    "    atm doctor --json | jq .sockets  \n"
-    "    # expected: one entry\n"
+    "\r\n\n"
+    "    atm doctor --json | jq .sockets  \r\n"
+    "    # expected: one entry\r"
     "Reject </pr-scope> early & keep <tag attr=\"x\"> literal; the body shows &amp; and &lt;.  \n"
-    "A criterion with ]]> inside, then ]]>]]> twice, and a trailing <![CDATA[ opener.\n"
+    "A criterion with ]]> inside, then ]]>]]> twice, and a trailing <![CDATA[ opener.\r\n"
     "Acceptance: `grep -c '</pr-scope>' out.xml` prints 0 and \"quotes\" 'survive'.\n"
-    "\n"
+    "\r\n"
 )
+# The template's one normalization: CRLF and lone CR become LF, nothing else changes.
+EXPECTED_SCOPE = HOSTILE_SCOPE.replace("\r\n", "\n").replace("\r", "\n")
 HEAD = "0de74ac4c8bd470d3ce6924da2f668b11fa5fc90"
 # What the lead passes to qa-template.xml.j2 for the live case.
 LEAD_INPUTS = {
@@ -155,21 +160,34 @@ class StandalonePrReviewDispatchTests(unittest.TestCase):
         self.assertIn("No reviewer runs without the captured scope and the pinned head", workflow)
 
     def test_hostile_scope_text_round_trips_through_the_xml_and_every_reviewer(self) -> None:
-        # The probe must keep what a trim would eat, or the round trip proves nothing.
+        # The probe must keep what a trim would eat and carry both foreign line
+        # endings, or the round trip proves nothing.
         self.assertNotEqual(HOSTILE_SCOPE, HOSTILE_SCOPE.strip())
-        self.assertTrue(HOSTILE_SCOPE.startswith("\n\n    "))
+        self.assertTrue(HOSTILE_SCOPE.startswith("\r\n\n    "))
+        self.assertIn("  \r\n", HOSTILE_SCOPE)
         self.assertIn("  \n", HOSTILE_SCOPE)
-        self.assertTrue(HOSTILE_SCOPE.endswith(".\n\n"))
+        self.assertRegex(HOSTILE_SCOPE, r"\r[^\n]")
+        self.assertTrue(HOSTILE_SCOPE.endswith(".\n\r\n"))
+        self.assertNotIn("\r", EXPECTED_SCOPE)
+        self.assertEqual(EXPECTED_SCOPE.count("\n"), HOSTILE_SCOPE.count("\n") + 1)
+        self.assertTrue(EXPECTED_SCOPE.startswith("\n\n    ") and EXPECTED_SCOPE.endswith(".\n\n"))
         xml = render_xml({**LEAD_INPUTS, "pr_scope": HOSTILE_SCOPE})
-        self.assertEqual(pr_scope_text(xml), HOSTILE_SCOPE)
+        self.assertEqual(pr_scope_text(xml), EXPECTED_SCOPE)
+        self.assertNotIn("\r", PR_SCOPE_ELEMENT.search(xml).group(0))
+        # quality-mgr reads the text from the assignment; the reviewer templates
+        # also normalize on their own, so a raw capture given to them agrees.
         inputs = reviewer_inputs(xml)
+        self.assertEqual(inputs["pr_scope"], EXPECTED_SCOPE)
         for template in (REQ_QA, ARCH_QA):
-            with self.subTest(template=template):
-                self.assertEqual(render_json(template, inputs)["pr_scope"]["text"], HOSTILE_SCOPE)
+            for label, text in (("from assignment", EXPECTED_SCOPE), ("raw capture", HOSTILE_SCOPE)):
+                with self.subTest(template=template, given=label):
+                    data = render_json(template, {**inputs, "pr_scope": text})
+                    self.assertEqual(data["pr_scope"]["text"], EXPECTED_SCOPE)
         for template, extra in NOTES_REVIEWERS:
             with self.subTest(template=template):
                 notes = render_json(template, {**notes_only(inputs), **extra})["notes"]
-                self.assertTrue(notes.endswith(scope_note("2457", HEAD, HOSTILE_SCOPE)), notes)
+                self.assertTrue(notes.endswith(scope_note("2457", HEAD, EXPECTED_SCOPE)), notes)
+                self.assertNotIn("\r", notes)
 
     def test_req_qa_and_arch_qa_render_from_the_assignment_with_the_pr_scope(self) -> None:
         inputs = reviewer_inputs(render_xml(LEAD_INPUTS))

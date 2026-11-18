@@ -1,6 +1,6 @@
 ---
 name: req-qa-assignment
-version: 1.3.0
+version: 1.4.0
 description: Render a fenced-JSON assignment for req-qa.
 format: json
 required_variables:
@@ -22,8 +22,12 @@ defaults:
   triage_records: []
   notes: ""
 ---
-{#- Exactly one scope source: a sprint review names its sprint_doc; a standalone PR review carries the reviewed scope text (pr_scope, as the lead captured it into the QA assignment) with the PR number and the head SHA it is judged at; the text is emitted byte for byte, trimming is only the empty check. Neither, both, or a PR scope without its head fails the render instead of reviewing open-ended. #}
+{#- Exactly one scope source: a sprint review names its sprint_doc; a standalone PR review carries the reviewed scope text (pr_scope, as the lead captured it into the QA assignment) with the PR number and the head SHA it is judged at; the text's line endings are normalized to LF once (CRLF and lone CR become LF, matching the QA assignment's XML); every other byte is emitted unchanged, trimming is only the empty check. Neither, both, or a PR scope without its head fails the render instead of reviewing open-ended. #}
 {%- set sprint_scoped = sprint_doc | trim -%}
+{%- set pr_scope = pr_scope | replace("
+", "
+") | replace("", "
+") -%}
 {%- set pr_scoped = pr_scope | trim -%}
 {%- if not sprint_scoped and not pr_scoped %}SCOPE_SOURCE_REQUIRED{% endif -%}
 {%- if sprint_scoped and pr_scoped %}SPRINT_DOC_AND_PR_SCOPE_BOTH_GIVEN{% endif -%}

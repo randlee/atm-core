@@ -175,7 +175,9 @@ no project-plan entry and no phase stack:
 - the assignment's `<pr-scope>` text, as the lead captured it, is the
   authoritative scope, judged at that head SHA. It sits in a CDATA section so
   XML metacharacters round-trip exactly; a `]]]]><![CDATA[>` split inside it
-  reads as a literal `]]>`. The PR body and issue text on GitHub are live,
+  reads as a literal `]]>`. Its line endings are LF (the template normalizes
+  CRLF and lone CR once); every other byte is the lead's capture, and that
+  same text goes to every reviewer. The PR body and issue text on GitHub are live,
   editable metadata: never substitute a re-fetched body for the captured
   text. Extract the deliverables and acceptance criteria from the captured
   text and list what you extracted, with the head SHA, in the verdict
