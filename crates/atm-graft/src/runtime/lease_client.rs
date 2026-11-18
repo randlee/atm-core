@@ -141,6 +141,22 @@ fn owner_generation(listener: &GraftReceiverListener) -> OwnerGeneration {
     listener.owner_generation().clone()
 }
 
+#[cfg(test)]
+pub(super) type TestLeaseWait = Box<
+    dyn Fn(
+            &'static str,
+            Duration,
+            mpsc::Receiver<Result<(), AtmError>>,
+        ) -> Result<Result<(), AtmError>, RecvTimeoutError>
+        + Send,
+>;
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static TEST_LEASE_WAIT: std::cell::RefCell<Option<TestLeaseWait>> =
+        std::cell::RefCell::new(None);
+}
+
 /// Runs a possibly-blocking daemon client call on a helper thread and gives up
 /// waiting on it after `deadline` instead of blocking the caller indefinitely.
 ///
@@ -170,7 +186,14 @@ where
             "failed to spawn graft {action} helper"
         )));
     }
-    match result_rx.recv_timeout(deadline) {
+    #[cfg(test)]
+    let result = TEST_LEASE_WAIT.with(|wait| match wait.borrow().as_ref() {
+        Some(wait) => wait(action, deadline, result_rx),
+        None => result_rx.recv_timeout(deadline),
+    });
+    #[cfg(not(test))]
+    let result = result_rx.recv_timeout(deadline);
+    match result {
         Ok(result) => result,
         Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
             AtmErrorCode::WaitTimeout,

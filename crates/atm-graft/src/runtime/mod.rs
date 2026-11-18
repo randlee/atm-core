@@ -996,9 +996,9 @@ mod tests {
         GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLeaseClient,
         GraftReceiverLoopContext, HelperThreadBudget, MAX_HOST_NUDGE_HELPERS,
         RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, ReceiverRecoveryCircuit,
-        RegisteredGraftReceiver, ResultWait, handle_graft_receiver_connection,
-        join_receive_loop_with_deadline, load_graft_config, read_snapshot,
-        recover_after_poll_accept_error, recover_graft_receiver_with, wait_for_stop_or_delay,
+        RegisteredGraftReceiver, ResultWait, handle_graft_receiver_connection, load_graft_config,
+        read_snapshot, recover_after_poll_accept_error, recover_graft_receiver_with,
+        wait_for_stop_or_delay,
     };
     use crate::{GraftSessionState, SessionSnapshot};
 
@@ -1249,12 +1249,7 @@ mod tests {
         }
 
         fn wait(&self, expected: &'static str) {
-            assert_eq!(
-                self.events
-                    .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-                    .expect("lease tick completed"),
-                expected
-            );
+            assert_eq!(self.events.recv().expect("lease tick completed"), expected);
         }
 
         fn advance(&self, expected: &'static str) {
@@ -1267,6 +1262,15 @@ mod tests {
         graft_root: PathBuf,
         injector: Arc<dyn HostNudgeInjector>,
         client: GraftClient,
+    ) -> (SpawnedReceiver, ManualLeaseTicks) {
+        spawn_receiver_with_manual_ticks_and_wait(graft_root, injector, client, None)
+    }
+
+    fn spawn_receiver_with_manual_ticks_and_wait(
+        graft_root: PathBuf,
+        injector: Arc<dyn HostNudgeInjector>,
+        client: GraftClient,
+        lease_wait: Option<super::lease_client::TestLeaseWait>,
     ) -> (SpawnedReceiver, ManualLeaseTicks) {
         let (stop_tx, stop_rx) = mpsc::channel();
         let (events_tx, events) = mpsc::channel();
@@ -1295,6 +1299,14 @@ mod tests {
         let (clock_ready_tx, clock_ready_rx) = mpsc::sync_channel(1);
         let clock_initialized = AtomicBool::new(false);
         let join = std::thread::spawn(move || {
+            let lease_wait = lease_wait.unwrap_or_else(|| {
+                Box::new(|_, _, result| {
+                    result
+                        .recv()
+                        .map_err(|_| mpsc::RecvTimeoutError::Disconnected)
+                })
+            });
+            super::lease_client::TEST_LEASE_WAIT.with(|wait| *wait.borrow_mut() = Some(lease_wait));
             super::run_graft_receiver_loop_with_clock(ctx, ResultWait::UntilComplete, || {
                 let current = *worker_now.lock().expect("clock");
                 if !clock_initialized.swap(true, Ordering::SeqCst) {
@@ -1303,15 +1315,9 @@ mod tests {
                 current
             })
         });
-        ready_latch
-            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
-            .expect("receiver ready");
-        let target = target_rx
-            .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-            .expect("receiver target");
-        clock_ready_rx
-            .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-            .expect("clock initialized");
+        ready_latch.ready_rx.recv().expect("receiver ready");
+        let target = target_rx.recv().expect("receiver target");
+        clock_ready_rx.recv().expect("clock initialized");
         (
             (stop_tx, join, snapshot, target),
             ManualLeaseTicks { now, events },
@@ -1325,7 +1331,9 @@ mod tests {
         // The non-blocking accept loop observes the stop signal within one poll
         // interval, so no wake-by-connect is required to unblock shutdown.
         stop_tx.send(()).expect("stop");
-        join_receive_loop_with_deadline(join).expect("join receiver");
+        join.join()
+            .expect("receiver worker panicked")
+            .expect("join receiver");
     }
 
     #[test]
@@ -1630,14 +1638,9 @@ mod tests {
         let capability = listener.listener.capability().clone();
         // A completed connect queues this loopback peer before the single
         // nonblocking accept, without polling or relying on another thread.
-        let mut client = TcpStream::connect_timeout(&endpoint, DELIVER_CONNECT_DEADLINE)
-            .expect("connect to rebound listener");
-        client
-            .set_read_timeout(Some(DELIVER_IO_DEADLINE))
-            .expect("set response deadline");
-        client
-            .set_write_timeout(Some(DELIVER_IO_DEADLINE))
-            .expect("set request deadline");
+        // Complete the request before accepting, and handle it before reading
+        // the response, so success depends on these handshakes, not a timer.
+        let mut client = TcpStream::connect(endpoint).expect("connect to rebound listener");
         let wire = GraftPostSendWireRequest {
             capability_base64url: capability.to_base64url(),
             request: GraftPostSendRequest {
@@ -1705,9 +1708,12 @@ mod tests {
                 listener.is_none(),
                 "stop must end recovery without a listener"
             );
-            Ok(())
+            Ok::<(), AtmError>(())
         });
-        join_receive_loop_with_deadline(recovery).expect("join recovery");
+        recovery
+            .join()
+            .expect("recovery worker panicked")
+            .expect("join recovery");
         assert_eq!(attempts.load(Ordering::SeqCst), 1);
         assert_eq!(
             read_snapshot(&snapshot).expect("read retry snapshot").state,
@@ -2306,16 +2312,12 @@ mod tests {
                 let result = deliver_request(endpoint, &capability, request_event());
                 delivered_tx.send(result).expect("deliver result");
             });
-            started_rx
-                .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-                .expect("delivery entered injector");
+            started_rx.recv().expect("delivery entered injector");
             // The accept loop is handling a connection when the tick becomes due.
             ticks.advance_clock();
             release_tx.send(()).expect("release delivery");
             assert_eq!(
-                delivered_rx
-                    .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-                    .expect("delivery completed"),
+                delivered_rx.recv().expect("delivery completed"),
                 GraftPostSendResponse::Delivered
             );
             ticks.wait("ok");
@@ -2371,8 +2373,6 @@ mod tests {
     // unregister call past the outer receive-loop join deadline.
     #[test]
     fn rsh001_stalled_daemon_calls_never_delay_stop_past_the_join_deadline() {
-        const STALLED_CALL_SIGNAL_DEADLINE: Duration = Duration::from_secs(15);
-
         let paths = test_paths();
         let (refresh_started_tx, refresh_started_rx) = mpsc::sync_channel(1);
         let (refresh_release_tx, refresh_release_rx) = mpsc::channel();
@@ -2414,21 +2414,49 @@ mod tests {
             },
         )));
 
-        let ((stop_tx, join, _snapshot, _target), ticks) = spawn_receiver_with_manual_ticks(
-            paths.workspace_root.clone(),
-            Arc::new(RecordingInjector::default()),
-            client,
-        );
+        let (deadline_waiting_tx, deadline_waiting_rx) = mpsc::channel();
+        let (expire_tx, expire_rx) = mpsc::channel();
+        let lease_wait: super::lease_client::TestLeaseWait =
+            Box::new(move |action, deadline, result| {
+                if action == "lease_announce" {
+                    return result
+                        .recv()
+                        .map_err(|_| mpsc::RecvTimeoutError::Disconnected);
+                }
+                deadline_waiting_tx
+                    .send((action, deadline))
+                    .expect("signal deadline wait");
+                expire_rx.recv().expect("advance controlled deadline");
+                Err(mpsc::RecvTimeoutError::Timeout)
+            });
+        let ((stop_tx, join, _snapshot, _target), ticks) =
+            spawn_receiver_with_manual_ticks_and_wait(
+                paths.workspace_root.clone(),
+                Arc::new(RecordingInjector::default()),
+                client,
+                Some(lease_wait),
+            );
         ticks.advance_clock();
         refresh_started_rx
-            .recv_timeout(STALLED_CALL_SIGNAL_DEADLINE)
-            .expect("timed out waiting for periodic refresh to enter the stalled refresh call");
-
+            .recv()
+            .expect("refresh entered stalled call");
+        let (action, refresh_deadline) =
+            deadline_waiting_rx.recv().expect("refresh deadline armed");
+        assert_eq!(action, "lease_refresh");
         stop_tx.send(()).expect("stop");
-        join_receive_loop_with_deadline(join).expect("join receiver despite stalled lease calls");
+        expire_tx.send(()).expect("expire refresh deadline");
         unregister_started_rx
-            .recv_timeout(STALLED_CALL_SIGNAL_DEADLINE)
-            .expect("timed out waiting for shutdown to enter the stalled unregister call");
+            .recv()
+            .expect("unregister entered stalled call");
+        let (action, unregister_deadline) = deadline_waiting_rx
+            .recv()
+            .expect("unregister deadline armed");
+        assert_eq!(action, "lease_unregister");
+        assert!(refresh_deadline + unregister_deadline < super::RECEIVE_LOOP_JOIN_DEADLINE);
+        expire_tx.send(()).expect("expire unregister deadline");
+        join.join()
+            .expect("receiver worker panicked")
+            .expect("join receiver despite stalled lease calls");
         assert_eq!(
             stalled_calls.load(Ordering::SeqCst),
             2,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Delete when randlee/sc-lint#783 ships workspace Python pin validation."""
+"""Delete when randlee/sc-lint#982 ships workspace Python pin validation."""
 from __future__ import annotations
 
 import re
