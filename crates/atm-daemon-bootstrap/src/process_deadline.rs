@@ -202,6 +202,7 @@ pub(crate) async fn spawn_until(
     spawn_until_inner(spec, stdin, cancel, None).await
 }
 
+#[cfg(feature = "test-support")]
 pub(crate) async fn spawn_until_with_hook_context(
     spec: SpawnSpec,
     stdin: &[u8],

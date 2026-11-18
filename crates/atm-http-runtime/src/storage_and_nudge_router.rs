@@ -381,19 +381,27 @@ impl StorageAndNudgeRouter {
             let Some(emitter) = self.received_hook_selector.select_emitter(&dispatch) else {
                 continue;
             };
-            let Some(remaining) = deadline.remaining() else {
-                warnings.push(hook_warning(AtmError::daemon_unavailable(
-                    "received-message hook was skipped because the request deadline was exhausted after persistence",
-                )));
-                break;
+            let delivery = match deadline.remaining() {
+                Some(remaining) => tokio::time::timeout(
+                    remaining,
+                    emitter.emit_received_message(dispatch.clone(), deadline),
+                )
+                .await
+                .map(Some),
+                None if deadline.is_unbounded() => Ok(Some(
+                    emitter
+                        .emit_received_message(dispatch.clone(), deadline)
+                        .await,
+                )),
+                None => {
+                    warnings.push(hook_warning(AtmError::daemon_unavailable(
+                        "received-message hook was skipped because the request deadline was exhausted after persistence",
+                    )));
+                    break;
+                }
             };
-            match tokio::time::timeout(
-                remaining,
-                emitter.emit_received_message(dispatch.clone(), deadline),
-            )
-            .await
-            {
-                Ok(Ok(_)) => {
+            match delivery {
+                Ok(Some(Ok(_))) => {
                     crate::prompt_handoff_record::record_prompt_handoff(
                         self.control_path_sync_bridge.blocking_bridge(),
                         deadline,
@@ -405,7 +413,8 @@ impl StorageAndNudgeRouter {
                     )
                     .await;
                 }
-                Ok(Err(error)) => warnings.push(hook_warning(error)),
+                Ok(Some(Err(error))) => warnings.push(hook_warning(error)),
+                Ok(None) => unreachable!("delivery result always contains the emitter result"),
                 Err(_) => warnings.push(hook_warning(AtmError::daemon_unavailable(
                     "received-message hook timed out after durable message persistence",
                 ))),

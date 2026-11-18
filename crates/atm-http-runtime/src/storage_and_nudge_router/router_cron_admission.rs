@@ -152,29 +152,42 @@ impl StorageAndNudgeRouter {
         let generation = permit.generation();
         let team = team.clone();
         let phase = phase.clone();
-        let remaining = deadline.remaining().ok_or_else(|| {
-            AtmError::daemon_unavailable("cron action deadline expired before permit admission")
-        })?;
-        tokio::time::timeout(remaining, tokio::task::spawn_blocking(move || {
-                let schedules = store.active_all()?;
-                let admitted = schedules.iter().any(|schedule| {
-                    schedule.active
-                        && schedule.id == schedule_id
-                        && schedule.generation == generation
-                        && schedule.team == team
-                        && schedule.phase == phase
-                });
-                if admitted {
-                    Ok(())
-                } else {
-                    Err(AtmError::validation_with_recovery(
-                        "cron action permit is stale or its schedule is no longer active",
-                        "allow the current cron run to stop and let the scheduler start a fresh generation",
-                    ))
-                }
-            }))
-            .await
-            .map_err(|_| AtmError::daemon_unavailable("cron action permit admission timed out"))?
+        let remaining = match deadline.remaining() {
+            Some(remaining) => Some(remaining),
+            None if deadline.is_unbounded() => None,
+            None => {
+                return Err(AtmError::daemon_unavailable(
+                    "cron action deadline expired before permit admission",
+                ));
+            }
+        };
+        let operation = tokio::task::spawn_blocking(move || {
+            let schedules = store.active_all()?;
+            let admitted = schedules.iter().any(|schedule| {
+                schedule.active
+                    && schedule.id == schedule_id
+                    && schedule.generation == generation
+                    && schedule.team == team
+                    && schedule.phase == phase
+            });
+            if admitted {
+                Ok(())
+            } else {
+                Err(AtmError::validation_with_recovery(
+                    "cron action permit is stale or its schedule is no longer active",
+                    "allow the current cron run to stop and let the scheduler start a fresh generation",
+                ))
+            }
+        });
+        let joined = match remaining {
+            Some(remaining) => tokio::time::timeout(remaining, operation)
+                .await
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("cron action permit admission timed out")
+                })?,
+            None => operation.await,
+        };
+        joined
             .map_err(|_| AtmError::daemon_unavailable("cron action permit admission task failed"))?
     }
 }

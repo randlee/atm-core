@@ -101,8 +101,8 @@ impl DaemonHookRunner {
         spec: SpawnSpec,
         stdin: &[u8],
         remaining: Duration,
-        target: &HookTarget,
-        hook: &str,
+        _target: &HookTarget,
+        _hook: &str,
     ) -> Result<SpawnedOutput, SpawnFailure> {
         match &self.deadline_source {
             HookDeadlineSource::System => spawn_with_deadline(spec, stdin, remaining).await,
@@ -111,9 +111,9 @@ impl DaemonHookRunner {
                 spec,
                 stdin,
                 deadline.wait_for_process_advance(),
-                target.team.as_str(),
-                target.phase.as_str(),
-                hook,
+                _target.team.as_str(),
+                _target.phase.as_str(),
+                _hook,
                 remaining.as_millis().min(u128::from(u64::MAX)) as u64,
             )
             .await

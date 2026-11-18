@@ -465,6 +465,7 @@ mod tests {
     use std::cell::Cell;
     use std::collections::BTreeMap;
     use std::fs;
+    #[cfg(feature = "test-support")]
     use std::sync::Mutex;
 
     use atm_core::atm_temp::ProcessEnvSource;
@@ -473,18 +474,26 @@ mod tests {
     use atm_core::hook::{HOOK_SCHEMA_VERSION, HookCaller};
     use serde_json::{Value, json};
     use tempfile::TempDir;
+    #[cfg(feature = "test-support")]
     use tracing::field::{Field, Visit};
+    #[cfg(feature = "test-support")]
     use tracing::span::{Attributes, Id};
+    #[cfg(feature = "test-support")]
     use tracing::{Event, Subscriber};
+    #[cfg(feature = "test-support")]
     use tracing_subscriber::Layer;
+    #[cfg(feature = "test-support")]
     use tracing_subscriber::layer::{Context, SubscriberExt};
+    #[cfg(feature = "test-support")]
     use tracing_subscriber::registry::LookupSpan;
 
     use super::*;
 
+    #[cfg(feature = "test-support")]
     #[derive(Clone, Default)]
     struct CapturedFields(BTreeMap<String, String>);
 
+    #[cfg(feature = "test-support")]
     impl Visit for CapturedFields {
         fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
             self.0.insert(field.name().into(), format!("{value:?}"));
@@ -499,9 +508,11 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "test-support")]
     #[derive(Clone, Default)]
     struct KillEventCapture(Arc<Mutex<Vec<CapturedFields>>>);
 
+    #[cfg(feature = "test-support")]
     impl<S> Layer<S> for KillEventCapture
     where
         S: Subscriber + for<'lookup> LookupSpan<'lookup>,
@@ -691,11 +702,7 @@ mod tests {
         let request = fixture.request("task.close");
         let run = tokio::spawn(async move {
             runner
-                .run(
-                    &target,
-                    &request,
-                    RequestDeadline::after(Duration::from_secs(10)),
-                )
+                .run(&target, &request, RequestDeadline::unbounded())
                 .await
         });
         deadline.wait_for_process_registration().await;
@@ -1090,7 +1097,7 @@ mod tests {
             .run(
                 &fixture.target,
                 &fixture.request("task.close"),
-                RequestDeadline::after(Duration::from_secs(10)),
+                RequestDeadline::unbounded(),
             )
             .await
             .unwrap_err();
@@ -1290,7 +1297,7 @@ mod tests {
         for target in [HookTarget::from(&registration), HookTarget::from(&schedule)] {
             let reply = fixture
                 .runner()
-                .doctor(&target, RequestDeadline::after(Duration::from_secs(60)))
+                .doctor(&target, RequestDeadline::unbounded())
                 .await
                 .unwrap();
             assert!(reply.success);
@@ -1305,10 +1312,7 @@ mod tests {
         assert_eq!(
             fixture
                 .runner()
-                .doctor(
-                    &fixture.target,
-                    RequestDeadline::after(Duration::from_secs(60))
-                )
+                .doctor(&fixture.target, RequestDeadline::unbounded())
                 .await
                 .unwrap_err()
                 .code(),
@@ -1323,11 +1327,7 @@ mod tests {
         assert_eq!(
             fixture
                 .runner()
-                .run(
-                    &fixture.target,
-                    &request,
-                    RequestDeadline::after(Duration::from_secs(60))
-                )
+                .run(&fixture.target, &request, RequestDeadline::unbounded())
                 .await
                 .unwrap()
                 .reply,
@@ -1337,11 +1337,7 @@ mod tests {
         assert_eq!(
             fixture
                 .runner()
-                .run(
-                    &fixture.target,
-                    &request,
-                    RequestDeadline::after(Duration::from_secs(60))
-                )
+                .run(&fixture.target, &request, RequestDeadline::unbounded())
                 .await
                 .unwrap()
                 .reply,
@@ -1353,7 +1349,7 @@ mod tests {
                 .run(
                     &fixture.target,
                     &fixture.request("cron.tick"),
-                    RequestDeadline::after(Duration::from_secs(60))
+                    RequestDeadline::unbounded()
                 )
                 .await
                 .unwrap()
@@ -1375,7 +1371,7 @@ mod tests {
                 .stop(
                     &fixture.target,
                     &fixture.request("cron.stop"),
-                    RequestDeadline::after(Duration::from_secs(60)),
+                    RequestDeadline::unbounded(),
                 )
                 .await
                 .unwrap();
@@ -1396,7 +1392,7 @@ mod tests {
                 .stop(
                     &fixture.target,
                     &fixture.request("cron.stop"),
-                    RequestDeadline::after(Duration::from_secs(60))
+                    RequestDeadline::unbounded()
                 )
                 .await
                 .unwrap_err()
