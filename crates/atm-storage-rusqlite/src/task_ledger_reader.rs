@@ -54,7 +54,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         deadline: ReadDeadline,
     ) -> Result<Option<TaskRow>, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 task_sql::select_task_row(connection, &team, &task_id)
                     .map_err(|error| sqlite_error(target, "failed to load task row", error))
                     .map_err(read_lane_storage_error)
@@ -68,7 +68,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         deadline: ReadDeadline,
     ) -> Result<Vec<TaskRow>, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 task_sql::select_open_tasks_for_team(connection, &team)
                     .map_err(|error| sqlite_error(target, "failed to list open team tasks", error))
                     .map_err(read_lane_storage_error)
@@ -83,7 +83,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         deadline: ReadDeadline,
     ) -> Result<RefusalRun, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 task_sql::trailing_refusal_run(connection, &team, &assignee)
                     .map_err(|error| sqlite_error(target, "failed to read refusal run", error))
                     .map_err(read_lane_storage_error)
@@ -98,7 +98,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         deadline: ReadDeadline,
     ) -> Result<Vec<TaskRow>, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 list_tasks(connection, target, &team, member.as_ref())
                     .map_err(read_lane_storage_error)
             })
@@ -113,7 +113,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         deadline: ReadDeadline,
     ) -> Result<Vec<TaskRow>, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 list_task_history(connection, target, &team, member.as_ref(), limit)
                     .map_err(read_lane_storage_error)
             })
@@ -128,7 +128,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         deadline: ReadDeadline,
     ) -> Result<Vec<TaskEventRow>, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 list_task_events(connection, target, &team, &task_id, member.as_ref())
                     .map_err(read_lane_storage_error)
             })
@@ -145,7 +145,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
             return Ok(Vec::new());
         }
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 list_task_events_for_tasks(connection, target, &team, &task_ids)
                     .map_err(read_lane_storage_error)
             })
@@ -159,7 +159,7 @@ impl AsyncTaskLedgerReader for TaskLedgerReader {
         deadline: ReadDeadline,
     ) -> Result<Vec<PromptHandoff>, ReadLaneError> {
         self.pool
-            .submit(deadline.remaining(), move |connection, target| {
+            .submit_optional(deadline.remaining(), move |connection, target| {
                 list_prompt_handoffs(connection, target, &team, &task_id)
                     .map_err(read_lane_storage_error)
             })

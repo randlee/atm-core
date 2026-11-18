@@ -849,13 +849,21 @@ impl StorageAsyncMailboxRuntime {
             if !selection.selected.is_empty() || tokio::time::Instant::now() >= wait_deadline {
                 return Ok((selection, match_count));
             }
-            let request_remaining = deadline.remaining().ok_or_else(|| {
-                AtmError::daemon_unavailable("mailbox request deadline expired while awaiting mail")
-            })?;
+            let request_remaining = match deadline.remaining() {
+                Some(remaining) => Some(remaining),
+                None if deadline.is_unbounded() => None,
+                None => {
+                    return Err(AtmError::daemon_unavailable(
+                        "mailbox request deadline expired while awaiting mail",
+                    ));
+                }
+            };
             let until_wait_deadline =
                 wait_deadline.saturating_duration_since(tokio::time::Instant::now());
-            let pause = Duration::from_millis(25)
-                .min(request_remaining)
+            let pause = request_remaining
+                .map_or(Duration::from_millis(25), |remaining| {
+                    Duration::from_millis(25).min(remaining)
+                })
                 .min(until_wait_deadline);
             if pause.is_zero() {
                 return Ok((selection, match_count));
@@ -991,10 +999,13 @@ fn selection_candidate(message: Message) -> MailboxSelectionCandidate {
 }
 
 pub fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
-    deadline
-        .remaining()
-        .ok_or_else(|| AtmError::daemon_unavailable("mailbox request deadline expired"))
-        .and_then(ReadDeadline::new)
+    match deadline.remaining() {
+        Some(remaining) => ReadDeadline::new(remaining),
+        None if deadline.is_unbounded() => Ok(ReadDeadline::unbounded()),
+        None => Err(AtmError::daemon_unavailable(
+            "mailbox request deadline expired",
+        )),
+    }
 }
 
 #[cfg(test)]

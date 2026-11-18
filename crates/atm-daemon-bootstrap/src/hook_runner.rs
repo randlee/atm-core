@@ -229,35 +229,22 @@ impl DaemonHookRunner {
             });
         #[cfg(not(feature = "test-support"))]
         let remaining = deadline.remaining();
-        let budget = match remaining {
-            Some(remaining) if doctor => doctor_budget(target.timeout_ms, remaining),
-            Some(remaining) => runner_budget(target.timeout_ms, remaining),
-            None if deadline.is_unbounded() && doctor => {
-                Some(Duration::from_millis(u64::from(target.timeout_ms)))
-            }
-            None if deadline.is_unbounded() => configured_runner_budget(target.timeout_ms),
-            None => None,
-        }
+        let budget = effective_hook_budget(
+            target.timeout_ms,
+            remaining,
+            deadline.is_unbounded(),
+            doctor,
+        )
         .ok_or_else(|| {
-            let error = AtmError::hook_timeout(
+            log_hook_budget_exhausted(target, hook, doctor, started_at.elapsed());
+            AtmError::hook_timeout(
                 &target.phase,
                 if doctor {
                     "doctor budget exhausted"
                 } else {
                     "request budget exhausted before the hook ran"
                 },
-            );
-            tracing::warn!(
-                subsystem = "atm_hook",
-                team = %target.team,
-                phase = %target.phase,
-                hook,
-                budget_ms = target.timeout_ms,
-                elapsed_ms = started_at.elapsed().as_millis() as u64,
-                outcome = "budget_exhausted",
-                "hook execution did not receive a budget"
-            );
-            error
+            )
         })?;
         let started = tokio::time::Instant::now();
         let _permit = self.acquire_permit(target, hook, budget, started).await?;
@@ -298,6 +285,35 @@ impl DaemonHookRunner {
         );
         Ok(output)
     }
+}
+
+fn effective_hook_budget(
+    timeout_ms: u32,
+    remaining: Option<Duration>,
+    unbounded: bool,
+    doctor: bool,
+) -> Option<Duration> {
+    match remaining {
+        Some(remaining) if doctor => doctor_budget(timeout_ms, remaining),
+        Some(remaining) => runner_budget(timeout_ms, remaining),
+        None if unbounded && doctor => Some(Duration::from_millis(u64::from(timeout_ms))),
+        None if unbounded => configured_runner_budget(timeout_ms),
+        None => None,
+    }
+}
+
+fn log_hook_budget_exhausted(target: &HookTarget, hook: &str, doctor: bool, elapsed: Duration) {
+    tracing::warn!(
+        subsystem = "atm_hook",
+        team = %target.team,
+        phase = %target.phase,
+        hook,
+        budget_ms = target.timeout_ms,
+        elapsed_ms = elapsed.as_millis() as u64,
+        outcome = "budget_exhausted",
+        doctor,
+        "hook execution did not receive a budget"
+    );
 }
 
 fn hook_spawn_span(target: &HookTarget, hook: &str, budget: Duration) -> tracing::Span {
