@@ -776,15 +776,14 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
     }
 
-    async fn assert_driver_completions(pool: &PeerConnectionPool, minimum: usize, context: &str) {
+    async fn assert_driver_completions(pool: &PeerConnectionPool, minimum: usize) {
         loop {
-            let notified = pool.shared.driver_signal.notified();
+            let mut notified = Box::pin(pool.shared.driver_signal.notified());
+            notified.as_mut().enable();
             if pool.completed_driver_count() >= minimum {
                 return;
             }
-            tokio::time::timeout(Duration::from_secs(30), notified)
-                .await
-                .unwrap_or_else(|_| panic!("connection driver did not complete after {context}"));
+            notified.await;
         }
     }
 
@@ -812,7 +811,7 @@ mod tests {
         let completed_before_shutdown = pool.completed_driver_count();
         pool.shutdown(std::time::Duration::from_secs(1)).await;
         assert_eq!(pool.pooled_count(), 0);
-        assert_driver_completions(&pool, completed_before_shutdown + 1, "pool teardown").await;
+        assert_driver_completions(&pool, completed_before_shutdown + 1).await;
     }
 
     #[tokio::test]
@@ -846,7 +845,7 @@ mod tests {
         assert_eq!(pool.pooled_count(), 2);
         let completed_before_shutdown = pool.completed_driver_count();
         pool.shutdown(std::time::Duration::from_secs(1)).await;
-        assert_driver_completions(&pool, completed_before_shutdown + 2, "two-peer teardown").await;
+        assert_driver_completions(&pool, completed_before_shutdown + 2).await;
     }
 
     #[tokio::test]
@@ -884,11 +883,11 @@ mod tests {
         let completed_before_drop = pool.completed_driver_count();
         drop(overflow);
         assert_eq!(pool.pooled_count(), 1);
-        assert_driver_completions(&pool, completed_before_drop + 1, "overflow drop").await;
+        assert_driver_completions(&pool, completed_before_drop + 1).await;
         drop(retained);
         assert_eq!(pool.pooled_count(), 1);
         pool.shutdown(std::time::Duration::from_secs(1)).await;
-        assert_driver_completions(&pool, completed_before_drop + 2, "retained teardown").await;
+        assert_driver_completions(&pool, completed_before_drop + 2).await;
     }
 
     #[tokio::test]
@@ -944,12 +943,7 @@ mod tests {
             1,
             "a failed overflow borrow never consumes the retained reservation"
         );
-        assert_driver_completions(
-            &pool,
-            completed_before_drop + 1,
-            "failed overflow exchange drop",
-        )
-        .await;
+        assert_driver_completions(&pool, completed_before_drop + 1).await;
         drop(retained);
         pool.shutdown(std::time::Duration::from_secs(1)).await;
     }
@@ -990,7 +984,7 @@ mod tests {
             1,
             "an unused overflow borrow never enters the retained pool"
         );
-        assert_driver_completions(&pool, completed_before_drop + 1, "unused overflow drop").await;
+        assert_driver_completions(&pool, completed_before_drop + 1).await;
         drop(retained);
         pool.shutdown(std::time::Duration::from_secs(1)).await;
     }
@@ -1021,7 +1015,7 @@ mod tests {
         tokio::time::advance(std::time::Duration::from_millis(15)).await;
         pool.evict_idle_now();
         assert_eq!(pool.pooled_count(), 0);
-        assert_driver_completions(&pool, completed_before_eviction + 1, "idle eviction").await;
+        assert_driver_completions(&pool, completed_before_eviction + 1).await;
         let mut redial = pool
             .acquire(
                 &peer,
@@ -1035,7 +1029,7 @@ mod tests {
         let completed_before_shutdown = pool.completed_driver_count();
         drop(redial);
         pool.shutdown(std::time::Duration::from_secs(1)).await;
-        assert_driver_completions(&pool, completed_before_shutdown + 1, "redial teardown").await;
+        assert_driver_completions(&pool, completed_before_shutdown + 1).await;
     }
 
     #[tokio::test]
@@ -1061,12 +1055,7 @@ mod tests {
         let completed_before_drop = pool.completed_driver_count();
         drop(connection);
         assert_eq!(pool.pooled_count(), 0);
-        assert_driver_completions(
-            &pool,
-            completed_before_drop + 1,
-            "unused pooled borrow drop",
-        )
-        .await;
+        assert_driver_completions(&pool, completed_before_drop + 1).await;
     }
 
     #[tokio::test]
@@ -1086,7 +1075,7 @@ mod tests {
             .expect("first connection opens");
         complete_one_request(&mut first).await;
         drop(first);
-        assert_driver_completions(&pool, 1, "server-requested close").await;
+        assert_driver_completions(&pool, 1).await;
 
         let mut redialed = pool
             .acquire(
@@ -1173,7 +1162,7 @@ mod tests {
             super::HttpRuntimeClientFailure::PeerConnect { .. }
         ));
         drop(connection);
-        assert_driver_completions(&pool, 1, "failed exchange drop").await;
+        assert_driver_completions(&pool, 1).await;
         assert_eq!(adapter.connects.load(Ordering::SeqCst), 1);
         assert_eq!(accepted.load(Ordering::SeqCst), 1);
         assert_eq!(pool.pooled_count(), 0);
@@ -1196,7 +1185,7 @@ mod tests {
             .expect("initial pooled connection opens");
         complete_one_request(&mut first).await;
         drop(first);
-        assert_driver_completions(&pool, 1, "stale seed connection").await;
+        assert_driver_completions(&pool, 1).await;
         shutdown_listener
             .send(())
             .expect("listener shutdown requested");

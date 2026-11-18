@@ -502,24 +502,14 @@ mod tests {
             )
             .await
         });
-        assert_eq!(
-            tokio::time::timeout(Duration::from_secs(1_000), attempt_rx.recv())
-                .await
-                .expect("first attempt is reported"),
-            Some(first)
-        );
+        assert_eq!(attempt_rx.recv().await, Some(first));
         tokio::time::advance(Duration::from_secs(200)).await;
         assert!(matches!(
             attempt_rx.try_recv(),
             Err(tokio::sync::mpsc::error::TryRecvError::Empty)
         ));
         tokio::time::advance(Duration::from_secs(150)).await;
-        assert_eq!(
-            tokio::time::timeout(Duration::from_secs(1_000), attempt_rx.recv())
-                .await
-                .expect("second attempt is reported"),
-            Some(second)
-        );
+        assert_eq!(attempt_rx.recv().await, Some(second));
         let stream = task
             .await
             .expect("dial task joins")
@@ -732,24 +722,14 @@ mod tests {
                 )
                 .await
         });
-        assert_eq!(
-            tokio::time::timeout(Duration::from_secs(1_000), attempts.recv())
-                .await
-                .expect("stale attempt is reported"),
-            Some(stale)
-        );
+        assert_eq!(attempts.recv().await, Some(stale));
         tokio::time::advance(STALE_ADDRESS_DIAL_CAP / 2).await;
         assert!(matches!(
             attempts.try_recv(),
             Err(tokio::sync::mpsc::error::TryRecvError::Empty)
         ));
         tokio::time::advance(STALE_ADDRESS_DIAL_CAP).await;
-        assert_eq!(
-            tokio::time::timeout(Duration::from_secs(1_000), attempts.recv())
-                .await
-                .expect("fresh attempt is reported"),
-            Some(fresh)
-        );
+        assert_eq!(attempts.recv().await, Some(fresh));
         let stream = task
             .await
             .expect("dial task joins")

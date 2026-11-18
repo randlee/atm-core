@@ -224,16 +224,19 @@ platform = "windows"
 name = "identities"
 command = ["sc-lint", "lint", "identity-literals"]
 
+# Detects missing kit files only; content drift awaits randlee/sc-lint#985.
 [[tool.sc-lint.lint]]
 name = "kit-drift-linux"
 command = [".bootstrap-venv/bin/python", "plugins/sc-lint/install.py", ".", "--dry-run"]
 platform = "linux"
 
+# Detects missing kit files only; content drift awaits randlee/sc-lint#985.
 [[tool.sc-lint.lint]]
 name = "kit-drift-macos"
 command = [".bootstrap-venv/bin/python", "plugins/sc-lint/install.py", ".", "--dry-run"]
 platform = "macos"
 
+# Detects missing kit files only; content drift awaits randlee/sc-lint#985.
 [[tool.sc-lint.lint]]
 name = "kit-drift-windows"
 command = [".bootstrap-venv\\Scripts\\python.exe", "plugins/sc-lint/install.py", ".", "--dry-run"]

@@ -136,13 +136,9 @@ async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
     });
 
     let started_gate = Arc::clone(&gate);
-    tokio::time::timeout(
-        Duration::from_secs(10),
-        tokio::task::spawn_blocking(move || started_gate.wait_until_entered()),
-    )
-    .await
-    .expect("timed out waiting for blocking work start signal")
-    .expect("blocking work start signal waiter joins");
+    tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
+        .await
+        .expect("blocking work start signal waiter joins");
     tokio::time::advance(HERDR_REQUEST_BUDGET).await;
     let error = operation
         .await
@@ -153,11 +149,6 @@ async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
     assert_eq!(error.code(), AtmErrorCode::BlockingBridgeDeadlineAfterStart);
     assert!(error.detail().contains("timed out"));
 }
-
-/// Failure-only bound on permit-based gate waits and joins: far above normal
-/// progress, it exists so a lost gate fails with a message naming it instead of
-/// hanging until the CI job timeout.
-const GATE_WAIT_LIMIT: Duration = Duration::from_secs(60);
 
 #[test]
 fn herdr_list_failure_reaches_the_tracing_bridge_with_its_error_code() {
@@ -1181,14 +1172,9 @@ async fn cancel_inflight_prompt() -> (
     let task = pump.clone().start(shutdown_rx);
     // The gate stores a permit (`notify_one`), so this wait cannot miss it and
     // needs no wall-clock bound racing the pump's progress.
-    tokio::time::timeout(GATE_WAIT_LIMIT, prompt_started.notified())
-        .await
-        .expect("prompt-started gate never fired");
+    prompt_started.notified().await;
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(GATE_WAIT_LIMIT, task)
-        .await
-        .expect("pump never joined after shutdown notification")
-        .expect("poll task join");
+    task.await.expect("poll task join");
     drop(prompt_gate);
     drop(sender_clone);
     (root, runtime, fake, key)
@@ -2178,9 +2164,7 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
     let prompt_started = pump.install_prompt_started_test_gate();
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
-    tokio::time::timeout(GATE_WAIT_LIMIT, prompt_started.notified())
-        .await
-        .expect("prompt-started gate never fired");
+    prompt_started.notified().await;
     assert!(
         runtime
             .roster_ephemeral_state(key.team(), key.agent())
@@ -2191,10 +2175,7 @@ async fn ac13_herdr_wake_pending_ephemeral_state_tracks_the_in_flight_claim() {
 
     drop(prompt_gate);
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(GATE_WAIT_LIMIT, task)
-        .await
-        .expect("pump never joined after shutdown notification")
-        .expect("poll task join");
+    task.await.expect("poll task join");
 
     assert!(
         !runtime
@@ -2590,15 +2571,10 @@ async fn ac11_claim_drop_guard_release_is_joined_before_pump_shutdown() {
     let task = pump.clone().start(shutdown_rx);
     // The gate stores a permit (`notify_one`), so this wait cannot miss it and
     // needs no wall-clock bound racing the pump's progress.
-    tokio::time::timeout(GATE_WAIT_LIMIT, prompt_started.notified())
-        .await
-        .expect("prompt-started gate never fired");
+    prompt_started.notified().await;
 
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(GATE_WAIT_LIMIT, task)
-        .await
-        .expect("pump never joined after shutdown")
-        .expect("poll task joins after shutdown");
+    task.await.expect("poll task joins after shutdown");
 
     assert!(
         pump.release_handles
@@ -2650,13 +2626,9 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
     );
     drop(release);
     let started_gate = Arc::clone(&release_gate);
-    tokio::time::timeout(
-        Duration::from_secs(10),
-        tokio::task::spawn_blocking(move || started_gate.wait_until_entered()),
-    )
-    .await
-    .expect("timed out waiting for pending-store release gate entry")
-    .expect("release-start signal waiter joins");
+    tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
+        .await
+        .expect("release-start signal waiter joins");
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
@@ -2712,15 +2684,10 @@ async fn ac11_successful_prompt_cancellation_cannot_rerelease_claim() {
     let task = pump.clone().start(shutdown_rx);
     // Marker cleanup has completed once the gate is entered; the gate stores a
     // permit, so waiting on it cannot race the pump's progress.
-    tokio::time::timeout(GATE_WAIT_LIMIT, clear_started.notified())
-        .await
-        .expect("handoff-cleanup gate never entered");
+    clear_started.notified().await;
 
     shutdown_tx.send(()).expect("shutdown notification");
-    tokio::time::timeout(GATE_WAIT_LIMIT, task)
-        .await
-        .expect("pump never joined after shutdown")
-        .expect("poll task join");
+    task.await.expect("poll task join");
     assert!(
         runtime
             .pending_nudge_store()
