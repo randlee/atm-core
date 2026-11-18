@@ -112,10 +112,15 @@ Before starting a sprint:
    document as the authoritative QA scope source. A standalone PR review (a
    small fix off `develop` with no sprint doc, CLAUDE.md "Small fixes")
    leaves `sprint_doc` empty and passes `pr_head_sha` (the reviewed PR head)
-   and any `linked_issues`; its scope is the PR body plus those issues at
-   that head, the template drops the sprint-doc and `gh stack` steps, and
-   `quality-mgr` closes the task `refused` when the PR states no substantive
-   scope or acceptance criteria rather than inventing them.
+   and `pr_scope`: the PR body and acceptance criteria as the lead captured
+   them at assignment time (plus any `linked_issues` for reference). The
+   captured text is the scope of record, because the PR body on GitHub can
+   be edited after dispatch; reviewers judge the text in the assignment, not
+   a re-fetched body. The template carries it into `<pr-scope>`, hands it to
+   `req-qa` and `arch-qa` as their `pr_scope`, drops the sprint-doc and
+   `gh stack` steps, and `quality-mgr` closes the task `refused` when the
+   text states no substantive scope or acceptance criteria rather than
+   inventing them.
 6. `quality-mgr` launches the full reviewer set on QA-1 (the sprint's first
    QA pass):
    - `req-qa`
@@ -204,7 +209,7 @@ of §0.
 - `quality-mgr` must extract every deliverable, acceptance criterion, deletion
   target, required validation item, and expected artifact from the scope
   source before launching `req-qa`: `sprint_doc`, or for a standalone PR
-  review the PR body plus linked issues at `pr_head_sha`, listed in the
+  review the captured `pr_scope` text judged at `pr_head_sha`, listed in the
   verdict
 - `req-qa` must independently treat that scope source as authoritative
 - `req-qa` must count deliverable completion and report a completion percentage

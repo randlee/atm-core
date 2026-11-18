@@ -1,6 +1,6 @@
 ---
 name: qa-task
-version: 2.0.0
+version: 2.1.0
 description: quality-mgr QA assignment template for codex-orchestration sprint, plan, phase-end and standalone-PR reviews.
 format: xml
 required_variables:
@@ -22,6 +22,7 @@ defaults:
   review_kind: ""
   sprint_doc: ""
   pr_head_sha: ""
+  pr_scope: ""
   linked_issues: ""
   triage_records: ""
   filing_reviewers: ""
@@ -41,14 +42,18 @@ metadata:
 {#- review_kind names the review's purpose and the branch name decides nothing. `full`: sprint QA-1/2, plan QA-1, phase-end, or the first QA of a standalone PR (a small fix off develop included). `fix_verification`: verify previously filed findings, so it names the original findings (triage_records) and the reviewers that filed them (filing_reviewers), or it would review open-ended. Compatibility default when review_kind is empty: `fix_verification` when filing_reviewers is given or a plan round is past the first (Rand, 2026-10-03: plan QA-2 and later verifies fixes), otherwise `full`. The int filter on a word fails the render. #}
 {%- set review_kind = review_kind | trim if review_kind | trim else ("fix_verification" if (filing_reviewers | trim or (review_mode == "plan" and round_index | int > 1)) else "full") -%}
 {%- if review_kind not in ["full", "fix_verification"] %}{{ "UNKNOWN_REVIEW_KIND" | int }}{% endif -%}
+{#- quality-policy.md: plan review QA-2 and later is fix verification only; an explicit full review there is a contradiction, not an override. #}
+{%- if review_kind == "full" and review_mode == "plan" and round_index | int > 1 %}{{ "PLAN_ROUND_ABOVE_ONE_IS_FIX_VERIFICATION" | int }}{% endif -%}
 {%- set fix_round = review_kind == "fix_verification" -%}
 {%- if fix_round and not triage_records | trim %}{{ "FIX_VERIFICATION_WITHOUT_TRIAGE_RECORDS" | int }}{% endif -%}
 {%- if fix_round and not filing_reviewers | trim %}{{ "FIX_VERIFICATION_WITHOUT_FILING_REVIEWERS" | int }}{% endif -%}
 {%- if not fix_round and filing_reviewers | trim %}{{ "FULL_REVIEW_WITH_FILING_REVIEWERS" | int }}{% endif -%}
-{#- Scope source. A sprint, plan or phase-end review names its sprint_doc and sits on a phase stack. A standalone PR review (no sprint doc) is scoped by the PR body plus linked issues, pinned to pr_head_sha; it has no stack and no frozen layer. #}
+{#- Scope source. A sprint, plan or phase-end review names its sprint_doc and sits on a phase stack. A standalone PR review (no sprint doc) is scoped by pr_scope: the PR body and acceptance criteria as the lead captured them into this assignment, judged at head pr_head_sha. The PR body on GitHub is live, editable metadata, so the assignment carries the text itself and reviewers judge that text, never a re-fetched body. A standalone PR has no stack and no frozen layer. #}
 {%- set sprint_scoped = sprint_doc | trim -%}
+{%- if sprint_scoped and pr_scope | trim %}{{ "SPRINT_DOC_AND_PR_SCOPE_BOTH_GIVEN" | int }}{% endif -%}
 {%- if not sprint_scoped and not pr_number | trim %}{{ "PR_SCOPE_WITHOUT_PR_NUMBER" | int }}{% endif -%}
 {%- if not sprint_scoped and not pr_head_sha | trim %}{{ "PR_SCOPE_WITHOUT_PR_HEAD_SHA" | int }}{% endif -%}
+{%- if not sprint_scoped and not pr_scope | trim %}{{ "PR_SCOPE_WITHOUT_SCOPE_TEXT" | int }}{% endif -%}
 {%- set qa_round = (round_index | int if round_index | int > 1 else 2) if fix_round else 1 %}
 <repo-qa-task id="{{ task_id }}" sprint="{{ sprint }}" round="{{ round_index }}">
   <description>{{ description }}</description>
@@ -59,7 +64,10 @@ metadata:
   <scope-source kind="sprint-doc">{{ sprint_doc | trim }}</scope-source>
   <authoritative-sprint-doc>{{ sprint_doc | trim }}</authoritative-sprint-doc>
 {% else %}
-  <scope-source kind="pr" head="{{ pr_head_sha | trim }}">PR #{{ pr_number }} body plus its linked issues{% if linked_issues | trim %} ({{ linked_issues | trim }}){% endif %}, at head `{{ pr_head_sha | trim }}`</scope-source>
+  <scope-source kind="pr" pr="{{ pr_number }}" head="{{ pr_head_sha | trim }}">The pr-scope text below, captured by {{ lead }} from PR #{{ pr_number }}{% if linked_issues | trim %} and its linked issues ({{ linked_issues | trim }}){% endif %}, judged at head `{{ pr_head_sha | trim }}`. It is the scope of record for this review; the live PR body and issue text are not.</scope-source>
+  <pr-scope>
+{{ pr_scope | trim }}
+</pr-scope>
 {% endif %}
   <pr-number>{{ pr_number }}</pr-number>
   <branch>{{ branch }}</branch>
@@ -94,9 +102,9 @@ metadata:
   <workflow>
     <step id="a">Start the task immediately with `atm task start {{ task_id }} "<one line: what you will do first>"`, then begin the QA review in the same work session.</step>
     <step id="a1">Your queue runs in parallel: QA tasks never wait for each other. Right after the task start run `atm task list --json` and treat every open task assigned to quality-mgr as live now — its assignment body is the `description` field — and run each one concurrently with its own background reviewers. Close each task with its own `atm task close <task-id> completed …` the moment that verdict is ready, in any order; a queued position is ordering, not a wait, and a task can be closed without ever being started.</step>
-    <step id="b">Reject the task immediately if the assignment is not an XML payload rendered from this template. {% if sprint_scoped %}Read `{{ sprint_doc | trim }}` first and treat it as the authoritative source for QA scope.{% else %}Read the PR first: `gh pr view {{ pr_number }} --json title,body,headRefOid,baseRefName` and every linked issue{% if linked_issues | trim %} ({{ linked_issues | trim }}){% endif %}. The PR body plus those issues, at head `{{ pr_head_sha | trim }}`, is the authoritative source for QA scope. If they state no substantive scope and acceptance criteria (what the change must do and how that is checked), close this task with `atm task close {{ task_id }} refused "<what is missing>"` so {{ lead }} can re-issue the assignment with them; never invent scope or acceptance criteria.{% endif %} Render structured JSON assignments for `req-qa` and `arch-qa` using the templates in `.claude/skills/codex-orchestration/`. Do not send free-form reviewer prompts.</step>
-    <step id="c">Extract every deliverable, acceptance criterion, deletion requirement, required validation item, and expected artifact directly from {% if sprint_scoped %}`{{ sprint_doc | trim }}`{% else %}the PR body and its linked issues, and list what you extracted, with head `{{ pr_head_sha | trim }}`, in the verdict so the judged scope is on record{% endif %}.</step>
-    <step id="d">{% if sprint_scoped %}Treat the sprint doc and planning artifacts as explicit acceptance-gate items: verify `{{ sprint_doc | trim }}` exists, the sprint doc frontmatter sets `status: complete`, `branch:`, and `worktree:`, and `docs/project-plan.md` includes the sprint entry before QA can PASS.{% else %}There is no sprint doc and no project-plan entry to gate on. The acceptance gate is the scope record from step c: every extracted acceptance criterion is judged at head `{{ pr_head_sha | trim }}` and reported with its result before QA can PASS.{% endif %}</step>
+    <step id="b">Reject the task immediately if the assignment is not an XML payload rendered from this template. {% if sprint_scoped %}Read `{{ sprint_doc | trim }}` first and treat it as the authoritative source for QA scope. Render structured JSON assignments for `req-qa` and `arch-qa` using the templates in `.claude/skills/codex-orchestration/`, passing `sprint_doc`.{% else %}Read the `pr-scope` text above first: it is the authoritative source for QA scope, as captured by {{ lead }}; do not replace it with a re-fetched PR body or issue text, which can be edited after this assignment. Use `gh pr view {{ pr_number }} --json headRefOid,baseRefName` only to confirm the PR exists and to compare its head with `{{ pr_head_sha | trim }}`. If the pr-scope text states no substantive scope and acceptance criteria (what the change must do and how that is checked), close this task with `atm task close {{ task_id }} refused "<what is missing>"` so {{ lead }} can re-issue the assignment with them; never invent scope or acceptance criteria. Render structured JSON assignments for `req-qa` and `arch-qa` using the templates in `.claude/skills/codex-orchestration/`, passing the pr-scope text verbatim as `pr_scope` with `pr_number` and `pr_head_sha`, and no `sprint_doc`.{% endif %} Do not send free-form reviewer prompts.</step>
+    <step id="c">Extract every deliverable, acceptance criterion, deletion requirement, required validation item, and expected artifact directly from {% if sprint_scoped %}`{{ sprint_doc | trim }}`{% else %}the pr-scope text, and list what you extracted, with head `{{ pr_head_sha | trim }}`, in the verdict so the judged scope is on record{% endif %}.</step>
+    <step id="d">{% if sprint_scoped %}Treat the sprint doc and planning artifacts as explicit acceptance-gate items: verify `{{ sprint_doc | trim }}` exists, the sprint doc frontmatter sets `status: complete`, `branch:`, and `worktree:`, and `docs/project-plan.md` includes the sprint entry before QA can PASS.{% else %}There is no sprint doc and no project-plan entry to gate on. The acceptance gate is the scope record from step c: every acceptance criterion extracted from the pr-scope text is judged at head `{{ pr_head_sha | trim }}` and reported with its result before QA can PASS.{% endif %}</step>
     <step id="e">{% if fix_round %}This is fix verification, not a sprint review, whatever its round number: dispatch exactly the filing reviewer(s) `{{ filing_reviewers | trim }}`, each locked to its own finding ids from the triage records and their original acceptance criteria, and no other reviewer. Render each filer's assignment from its template; render `ruthless-boundary-qa`, `rust-best-practices-agent`, `rust-service-hardening-agent` or `plan-scope-reviewer`, when one of them is a filing reviewer, with `qa_round` (`round_index` for `plan-scope-reviewer`) = {{ qa_round }} and its own ids as `carry_forward_findings_json`. The verdict is each assigned finding's fixed/open/regressed status, nothing else.{% else %}Read `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md` and render any required Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/`. For `phase_end`, the rendered `rust-qa-agent` assignment must retain its required `artifact_commands: "just validate"` execution proof; collect its `executed_checks.artifacts` result before reporting PASS. This is a full review (sprint rounds 1–2, plan QA-1, phase-end, or the first QA of a standalone PR): launch the reviewer set for this review mode from `.claude/project/quality-policy.md` and render every reviewer assignment with `qa_round` = 1. `ruthless-boundary-qa` and `rust-best-practices-agent` remain part of docs-only plan review and phase-ending review regardless of sprint round.{% endif %}</step>
     <step id="f">If triage records are provided, read them before spawning reviewers. Treat them as the canonical prior scope for follow-up QA, not as a substitute for verification.</step>
     <step id="g">Spawn every selected reviewer in background mode. Do not run cargo, clippy, or broad QA analysis yourself in the foreground.</step>

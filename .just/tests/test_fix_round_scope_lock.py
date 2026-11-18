@@ -11,10 +11,13 @@ is a full review. A fix verification takes ``filing_reviewers`` and
 ``triage_records`` and refuses to render without both; a full review refuses
 filing reviewers. When ``review_kind`` is omitted the compatibility default is
 ``fix_verification`` only when ``filing_reviewers`` is given or a plan round
-is past the first, otherwise ``full``. A full review's scope source is its
+is past the first, otherwise ``full``; an explicit ``full`` on a plan round
+past the first refuses to render. A full review's scope source is its
 ``sprint_doc`` (sprint-doc and ``gh stack`` gates) or, for a standalone PR
-with no sprint doc, the PR body plus linked issues pinned to ``pr_head_sha``
-(no sprint-doc or stack steps). The subjective reviewers' and
+with no sprint doc, the ``pr_scope`` text the lead captured from the PR body
+and linked issues, carried in the assignment and judged at ``pr_head_sha``
+(no sprint-doc or stack steps; the live PR body is never the scope of
+record). The subjective reviewers' and
 ``plan-scope-reviewer``'s assignment templates refuse to render above round 1
 without their own ids. Each
 case renders the template through the real ``sc-compose`` binary.
@@ -142,8 +145,12 @@ class PlanScopeReviewerScopeLockTests(unittest.TestCase):
 class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
     # The XML task templates use {% autoescape %}, which `--strict` rejects as an
     # undeclared token on develop already, so these render without it.
+    PR_SCOPE = ('Native doctor can report the default Herdr socket twice.\n\n'
+                'Acceptance: `atm doctor` lists the default socket once; '
+                '`python -m pytest .claude/skills/daemon-switch/tests` passes.')
     STANDALONE_PR = {"sprint": "fix/daemon-switch-cross-platform", "branch": "fix/daemon-switch-cross-platform",
-                     "sprint_doc": "", "pr_number": "2457", "pr_head_sha": "0de74ac4c8bd470d3ce6924da2f668b11fa5fc90"}
+                     "sprint_doc": "", "pr_number": "2457", "pr_head_sha": "0de74ac4c8bd470d3ce6924da2f668b11fa5fc90",
+                     "pr_scope": PR_SCOPE}
     FILED = {"triage_records": ".triage/phase-x/findings/RBQA-004.ttl", "filing_reviewers": "ruthless-boundary-qa"}
 
     def qa(self, **values: object) -> subprocess.CompletedProcess[str]:
@@ -296,8 +303,10 @@ class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
                 stdout = self.rendered(**values)
                 self.assert_full_review(stdout)
                 head = self.STANDALONE_PR["pr_head_sha"]
-                self.assertIn(f'<scope-source kind="pr" head="{head}">', stdout)
+                self.assertIn(f'<scope-source kind="pr" pr="2457" head="{head}">', stdout)
                 self.assertIn("(#2450)", self.element(stdout, "scope-source"))
+                # The captured scope text travels in the assignment itself, verbatim.
+                self.assertEqual(self.element(stdout, "pr-scope").strip(">\n"), self.PR_SCOPE)
                 self.assertNotIn("<authoritative-sprint-doc>", stdout)
                 self.assertNotIn("<stack-discipline>", stdout)
                 self.assertNotIn("gh stack", stdout)
@@ -305,8 +314,11 @@ class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
                 self.assertNotIn("docs/project-plan.md` includes", stdout)
                 self.assertIn(f"Review exactly head `{head}`", self.element(stdout, "review-pin"))
                 step_b = self.step(stdout, "b")
-                self.assertIn("gh pr view 2457 --json title,body,headRefOid,baseRefName", step_b)
-                self.assertIn("(#2450)", step_b)
+                self.assertIn("Read the `pr-scope` text above first", step_b)
+                self.assertIn("do not replace it with a re-fetched PR body", step_b)
+                self.assertNotIn("--json title,body", step_b)
+                self.assertIn("gh pr view 2457 --json headRefOid,baseRefName", step_b)
+                self.assertIn("passing the pr-scope text verbatim as `pr_scope`", step_b)
                 self.assertIn("never invent scope or acceptance criteria", step_b)
                 self.assertIn('atm task close t refused "<what is missing>"', step_b)
                 self.assertIn(f"with head `{head}`, in the verdict", self.step(stdout, "c"))
@@ -323,8 +335,11 @@ class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
         self.assertNotIn("gh stack", stdout)
         self.assertIn("<review-pin>", stdout)
 
-    def test_standalone_pr_review_without_a_pinned_head_or_pr_refuses_to_render(self) -> None:
-        for missing in ({"pr_head_sha": ""}, {"pr_head_sha": " \n"}, {"pr_number": ""}):
+    def test_standalone_pr_review_without_a_pinned_head_pr_or_scope_text_refuses_to_render(self) -> None:
+        # The scope text is carried in the assignment, so a PR review without it
+        # (or with a sprint doc alongside it) has no single scope of record.
+        for missing in ({"pr_head_sha": ""}, {"pr_head_sha": " \n"}, {"pr_number": ""},
+                        {"pr_scope": ""}, {"pr_scope": " \n"}, {"sprint_doc": "d.md"}):
             with self.subTest(**missing):
                 completed = self.qa(**{**self.STANDALONE_PR, **missing}, round_index=1, review_kind="full")
                 self.assertNotEqual(completed.returncode, 0, completed.stdout)
@@ -356,6 +371,15 @@ class CodexQaAssignmentFixVerificationTests(unittest.TestCase):
                 self.assertIn("dispatch exactly the filing reviewer(s) `plan-scope-reviewer`", step)
                 for unfiled in ("req-qa", "arch-qa", "ceremony-qa", "ceremony-finding-screen"):
                     self.assertNotIn(unfiled, step)
+
+    def test_explicit_full_review_on_a_later_plan_round_refuses_to_render(self) -> None:
+        # quality-policy.md: plan QA-2 and later is fix verification only; an explicit
+        # `full` there is a contradiction the template refuses, not an override.
+        for round_index in (2, 3):
+            with self.subTest(round_index=round_index):
+                completed = self.qa(round_index=round_index, review_mode="plan", branch="plan/phase-x",
+                                    review_kind="full")
+                self.assertNotEqual(completed.returncode, 0, completed.stdout)
 
     def test_plan_round_two_without_filers_refuses_to_render(self) -> None:
         for review_kind in (None, "fix_verification"):
