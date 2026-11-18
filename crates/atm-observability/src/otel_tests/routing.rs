@@ -23,7 +23,7 @@ pub(super) fn policy() -> RetainedLogPolicy {
         rotation_max_files: 5,
         retention_max_age: Duration::from_secs(7 * 86400),
         maintenance_cadence: Duration::from_secs(60),
-        writer_shutdown_timeout: Duration::from_secs(1),
+        writer_shutdown_timeout: SUCCESS_EXPORT_HANG_GUARD,
         maintenance_max_work_per_pass: Some(8),
     }
 }
@@ -140,7 +140,7 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         }
         drop(subscriber);
         drop(dispatch);
-        attachment.detach(Duration::from_secs(1)).unwrap();
+        attachment.detach(SUCCESS_EXPORT_HANG_GUARD).unwrap();
         drop(attachment);
         let logger = Arc::try_unwrap(logger)
             .ok()
