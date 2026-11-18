@@ -296,12 +296,12 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_bootstrap_rejects_every_non_pinned_wheel(self) -> None:
         with self.assertRaisesRegex(
             SystemExit,
-            r"found '1\.4\.1'; required exactly 1\.8\.0",
+            r"found '1\.4\.1'; required exactly 1\.9\.0",
         ):
             BOOTSTRAP.require_pinned_version("1.4.1")
         with self.assertRaisesRegex(
             SystemExit,
-            r"found '1\.7\.1'; required exactly 1\.8\.0",
+            r"found '1\.7\.1'; required exactly 1\.9\.0",
         ):
             BOOTSTRAP.require_pinned_version("1.7.1")
 
