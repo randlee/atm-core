@@ -698,7 +698,7 @@ pub(crate) mod tests {
                             .dispatch(
                                 request,
                                 atm_core::AuthenticatedIngress::Local,
-                                atm_core::RequestDeadline::after(std::time::Duration::from_secs(2)),
+                                atm_core::RequestDeadline::unbounded(),
                             )
                             .await
                     })

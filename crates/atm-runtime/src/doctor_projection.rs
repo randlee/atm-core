@@ -165,13 +165,53 @@ impl StorageDoctorProjection {
         context: DoctorProjectionContext,
         deadline: Option<RequestDeadline>,
     ) -> Result<DoctorReport, AtmError> {
+        let mut report = self.receive_report(query, deadline).await?;
+        let rosters = report
+            .member_roster
+            .clone()
+            .into_iter()
+            .chain(report.team_rosters.clone())
+            .collect::<Vec<_>>();
+        if rosters.is_empty() {
+            report.herdr.configured = Some(false);
+        } else if let Some(deadline) = deadline {
+            let per_team_budget = deadline
+                .remaining()
+                .map(|remaining| remaining / rosters.len() as u32);
+            let scope = report.resolved_team_scope.clone();
+            for roster in rosters {
+                if deadline.expired() {
+                    append_deadline_finding(
+                        &mut report,
+                        "doctor request deadline expired before the next Herdr team projection",
+                    );
+                    break;
+                }
+                self.append_herdr_report(&mut report, &roster, &scope, deadline, per_team_budget)
+                    .await;
+            }
+        }
+        append_context_findings(&mut report, context);
+        report.reader_lanes = self.reader_lanes;
+        Ok(report)
+    }
+
+    async fn receive_report(
+        &self,
+        query: DoctorQuery,
+        deadline: Option<RequestDeadline>,
+    ) -> Result<DoctorReport, AtmError> {
         let remaining = match deadline {
-            Some(deadline) => Some(deadline.remaining().ok_or_else(|| {
-                AtmError::daemon_unavailable_with_recovery(
-                    "doctor request deadline expired before control-lane admission",
-                    "increase the request deadline or retry when the daemon is ready.",
-                )
-            })?),
+            Some(deadline) => match deadline.remaining() {
+                Some(remaining) => Some(remaining),
+                None if deadline.is_unbounded() => None,
+                None => {
+                    return Err(AtmError::daemon_unavailable_with_recovery(
+                        "doctor request deadline expired before control-lane admission",
+                        "increase the request deadline or retry when the daemon is ready.",
+                    ));
+                }
+            },
             None => None,
         };
         let (response, response_receiver) = tokio::sync::oneshot::channel();
@@ -202,43 +242,12 @@ impl StorageDoctorProjection {
                 })?,
             None => response_receiver.await,
         };
-        let mut report = response.map_err(|_| {
+        response.map_err(|_| {
             AtmError::daemon_unavailable_with_recovery(
                 "doctor control lane stopped",
                 "restart the HTTP runtime and retry the doctor request.",
             )
-        })??;
-        let rosters = report
-            .member_roster
-            .clone()
-            .into_iter()
-            .chain(report.team_rosters.clone())
-            .collect::<Vec<_>>();
-        if rosters.is_empty() {
-            // Without a resolved team there is no Herdr-backed member to
-            // inspect. This is a known, unconfigured state rather than a
-            // guessed endpoint result.
-            report.herdr.configured = Some(false);
-        } else if let Some(deadline) = deadline {
-            let per_team_budget = deadline
-                .remaining()
-                .map(|remaining| remaining / rosters.len() as u32);
-            let scope = report.resolved_team_scope.clone();
-            for roster in rosters {
-                if deadline.expired() {
-                    append_deadline_finding(
-                        &mut report,
-                        "doctor request deadline expired before the next Herdr team projection",
-                    );
-                    break;
-                }
-                self.append_herdr_report(&mut report, &roster, &scope, deadline, per_team_budget)
-                    .await;
-            }
-        }
-        append_context_findings(&mut report, context);
-        report.reader_lanes = self.reader_lanes;
-        Ok(report)
+        })?
     }
     async fn append_herdr_report(
         &self,
@@ -250,38 +259,44 @@ impl StorageDoctorProjection {
     ) {
         let configured = herdr_is_configured(roster);
         report.herdr.configured = Some(report.herdr.configured.unwrap_or(false) || configured);
-        let Some(remaining) = caller_deadline.remaining() else {
-            append_deadline_finding(
-                report,
-                "doctor request deadline expired before Herdr projection",
-            );
-            return;
+        let timeout_budget = match caller_deadline.remaining() {
+            Some(remaining) => Some(budget.map_or(remaining, |budget| budget.min(remaining))),
+            None if caller_deadline.is_unbounded() => None,
+            None => {
+                append_deadline_finding(
+                    report,
+                    "doctor request deadline expired before Herdr projection",
+                );
+                return;
+            }
         };
-        let timeout_budget = budget.map_or(remaining, |budget| budget.min(remaining));
-        match tokio::time::timeout(
-            timeout_budget,
-            self.endpoint_doctor.observe(roster, caller_deadline),
-        )
-        .await
-        {
-            Ok(observations) => {
-                let findings = if scope.is_all_teams() {
-                    presence_findings_for_team(&observations, &roster.team)
-                } else {
-                    atm_core::doctor::presence_findings(&observations)
-                };
-                report
-                    .herdr
-                    .endpoints
-                    .extend(observations.into_iter().map(Into::into));
-                append_doctor_findings(report, findings);
-            }
-            Err(_) => {
-                let finding = herdr_deadline_finding();
-                report.herdr.error = Some(finding.clone());
-                append_doctor_findings(report, vec![finding]);
-            }
-        }
+        let observations = match timeout_budget {
+            Some(timeout_budget) => match tokio::time::timeout(
+                timeout_budget,
+                self.endpoint_doctor.observe(roster, caller_deadline),
+            )
+            .await
+            {
+                Ok(observations) => observations,
+                Err(_) => {
+                    let finding = herdr_deadline_finding();
+                    report.herdr.error = Some(finding.clone());
+                    append_doctor_findings(report, vec![finding]);
+                    return;
+                }
+            },
+            None => self.endpoint_doctor.observe(roster, caller_deadline).await,
+        };
+        let findings = if scope.is_all_teams() {
+            presence_findings_for_team(&observations, &roster.team)
+        } else {
+            atm_core::doctor::presence_findings(&observations)
+        };
+        report
+            .herdr
+            .endpoints
+            .extend(observations.into_iter().map(Into::into));
+        append_doctor_findings(report, findings);
     }
 }
 
@@ -488,7 +503,7 @@ mod tests {
                     ..DoctorQuery::default()
                 },
                 DoctorProjectionContext::default(),
-                RequestDeadline::after(std::time::Duration::from_secs(5)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("all-team projection");

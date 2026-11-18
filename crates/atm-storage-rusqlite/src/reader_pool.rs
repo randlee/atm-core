@@ -19,6 +19,9 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use crate::shared_db::SharedDbTarget;
 use crate::shared_db_reader_lanes::open_read_connection_for_target;
 
+#[path = "reader_pool/async_submit.rs"]
+mod async_submit;
+
 #[repr(usize)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WorkerStatus {
@@ -377,7 +380,7 @@ struct WorkerReservation {
 struct Request {
     id: RequestId,
     queued_at: Instant,
-    deadline: Instant,
+    deadline: Option<Instant>,
     _tool_class_slot: Option<OwnedSemaphorePermit>,
     run: Box<ReaderJob>,
 }
@@ -465,129 +468,6 @@ impl ReaderPool {
             .record_wal_health(checkpoint_succeeded, frames);
     }
 
-    pub(crate) async fn submit<T, F>(
-        &self,
-        deadline: Duration,
-        operation: F,
-    ) -> Result<T, ReadLaneError>
-    where
-        T: Send + 'static,
-        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
-    {
-        self.submit_with_class(deadline, None, operation).await
-    }
-
-    pub(crate) async fn submit_tool<T, F>(
-        &self,
-        deadline: Duration,
-        operation: F,
-    ) -> Result<T, ReadLaneError>
-    where
-        T: Send + 'static,
-        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
-    {
-        let expires_at = deadline_at(deadline)?;
-        let remaining = expires_at.saturating_duration_since(Instant::now());
-        let permit = tokio::time::timeout(
-            remaining,
-            Arc::clone(&self.inner.tool_class_slots).acquire_owned(),
-        )
-        .await
-        .map_err(|_| deadline_expired("waiting for tool read capacity", deadline))?
-        .map_err(|_| ReadLaneError::Unavailable {
-            message: "tool read capacity closed".to_owned(),
-        })?;
-        self.submit_with_class_at(expires_at, deadline, Some(permit), operation)
-            .await
-    }
-
-    async fn submit_with_class<T, F>(
-        &self,
-        deadline: Duration,
-        tool_class_slot: Option<OwnedSemaphorePermit>,
-        operation: F,
-    ) -> Result<T, ReadLaneError>
-    where
-        T: Send + 'static,
-        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
-    {
-        self.submit_with_class_at(deadline_at(deadline)?, deadline, tool_class_slot, operation)
-            .await
-    }
-
-    async fn submit_with_class_at<T, F>(
-        &self,
-        expires_at: Instant,
-        deadline: Duration,
-        tool_class_slot: Option<OwnedSemaphorePermit>,
-        operation: F,
-    ) -> Result<T, ReadLaneError>
-    where
-        T: Send + 'static,
-        F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
-    {
-        let reservation = self.reserve_worker()?;
-        let request_id = RequestId::next(&self.inner.next_request);
-        let (reply, response) = tokio::sync::oneshot::channel();
-        let request = Request {
-            id: request_id,
-            queued_at: Instant::now(),
-            deadline: expires_at,
-            _tool_class_slot: tool_class_slot,
-            run: Box::new(move |connection, target, disposition| {
-                let result = match disposition {
-                    RequestDisposition::Execute => operation(connection, target),
-                    RequestDisposition::ExpiredInQueue => {
-                        Err(deadline_expired("waiting in queue", deadline))
-                    }
-                    RequestDisposition::Rejected(error) => Err(error),
-                };
-                let _ = reply.send(result);
-            }),
-        };
-        self.inner
-            .metrics
-            .queue_depth
-            .fetch_add(1, Ordering::Relaxed);
-        let remaining = expires_at.saturating_duration_since(Instant::now());
-        match tokio::time::timeout(
-            remaining,
-            reservation.sender.send(WorkerMessage::Request(request)),
-        )
-        .await
-        {
-            Err(_) => {
-                self.inner
-                    .metrics
-                    .queue_depth
-                    .fetch_sub(1, Ordering::Relaxed);
-                self.inner
-                    .metrics
-                    .expired_in_queue
-                    .fetch_add(1, Ordering::Relaxed);
-                return Err(deadline_expired("waiting in queue", deadline));
-            }
-            Ok(Err(_)) => {
-                self.inner
-                    .metrics
-                    .queue_depth
-                    .fetch_sub(1, Ordering::Relaxed);
-                return Err(ReadLaneError::Unavailable {
-                    message: "reader worker stopped".to_owned(),
-                });
-            }
-            Ok(Ok(())) => {}
-        }
-        let remaining = expires_at.saturating_duration_since(Instant::now());
-        match tokio::time::timeout(remaining, response).await {
-            Err(_) => Err(self.expire_waiting_request(reservation, request_id, deadline)),
-            Ok(Err(_)) => Err(ReadLaneError::Unavailable {
-                message: "reader worker closed its reply channel".to_owned(),
-            }),
-            Ok(Ok(result)) => result,
-        }
-    }
-
     pub(crate) fn submit_tool_blocking<T, F>(
         &self,
         deadline: Duration,
@@ -655,7 +535,7 @@ impl ReaderPool {
         let request = Request {
             id: request_id,
             queued_at: Instant::now(),
-            deadline: expires_at,
+            deadline: Some(expires_at),
             _tool_class_slot: tool_class_slot,
             run: Box::new(move |connection, target, disposition| {
                 let result = match disposition {
@@ -1123,7 +1003,7 @@ fn run_worker(
             );
             continue;
         }
-        if now >= request.deadline {
+        if request.deadline.is_some_and(|deadline| now >= deadline) {
             metrics.expired_in_queue.fetch_add(1, Ordering::Relaxed);
             (request.run)(
                 &connection,

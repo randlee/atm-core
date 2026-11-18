@@ -369,7 +369,11 @@ fn remaining_hook_budget(
     deadline: RequestDeadline,
     safety_cap: Duration,
 ) -> Result<Duration, AtmError> {
-    hook_budget_from_remaining(deadline.remaining(), safety_cap)
+    if deadline.is_unbounded() {
+        hook_budget_from_remaining(Some(safety_cap), safety_cap)
+    } else {
+        hook_budget_from_remaining(deadline.remaining(), safety_cap)
+    }
 }
 
 fn hook_budget_from_remaining(
@@ -1028,6 +1032,14 @@ mod tests {
 
     #[test]
     fn graft_hook_budget_reserves_time_for_the_outer_result_handoff() {
+        let unbounded =
+            super::remaining_hook_budget(RequestDeadline::unbounded(), Duration::from_secs(1))
+                .expect("unbounded request uses the transport safety cap");
+        assert_eq!(
+            unbounded,
+            Duration::from_secs(1) - RECEIVER_HOOK_RESULT_HANDOFF_GRACE
+        );
+
         let short = super::hook_budget_from_remaining(
             Some(RECEIVER_HOOK_RESULT_HANDOFF_GRACE),
             Duration::from_secs(1),
@@ -1213,12 +1225,7 @@ mod tests {
             rendered_nudge: "cron stopped".to_owned(),
         };
         assert_eq!(
-            deliver_published_cron_lifecycle(
-                &runtime,
-                key,
-                &target,
-                RequestDeadline::after(Duration::from_secs(3)),
-            ),
+            deliver_published_cron_lifecycle(&runtime, key, &target, RequestDeadline::unbounded(),),
             DeliveryReceipt::RecipientUnavailable
         );
     }
@@ -1677,7 +1684,7 @@ mod tests {
         let error = deliver_published_receiver_hook(
             &runtime,
             &dispatch_for(test_event()),
-            RequestDeadline::after(Duration::from_secs(3)),
+            RequestDeadline::unbounded(),
         )
         .expect_err("an absent lease must be reported as not-registered, never dialed");
 
@@ -1730,7 +1737,7 @@ mod tests {
         let error = deliver_published_receiver_hook_with_transport(
             &runtime,
             &dispatch_for(test_event()),
-            RequestDeadline::after(Duration::from_secs(3)),
+            RequestDeadline::unbounded(),
             |actual_endpoint, _, _, _| {
                 assert_eq!(actual_endpoint, endpoint);
                 Err(connect_error)

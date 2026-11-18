@@ -1121,7 +1121,7 @@ mod tests {
         let path = selector
             .select_emitter(&dispatch)
             .expect("bare-CLI queue-pull emitter")
-            .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+            .emit_received_message(dispatch, RequestDeadline::unbounded())
             .await
             .expect("queue-pull handoff");
         assert_eq!(path, PostSendEmissionPath::QueuePull);
@@ -1177,7 +1177,7 @@ mod tests {
             selector
                 .select_emitter(&dispatch)
                 .expect("bare-CLI steer queue-pull emitter")
-                .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+                .emit_received_message(dispatch, RequestDeadline::unbounded())
                 .await
                 .expect("steer queue-pull handoff");
         }
@@ -1271,7 +1271,7 @@ mod tests {
         selector
             .select_emitter(&dispatch)
             .expect("bare-CLI immediate emitter")
-            .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+            .emit_received_message(dispatch, RequestDeadline::unbounded())
             .await
             .expect("bare-CLI immediate handoff");
 
@@ -1333,7 +1333,7 @@ mod tests {
         let path = selector
             .select_emitter(&dispatch)
             .expect("bare-CLI queue-pull emitter")
-            .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+            .emit_received_message(dispatch, RequestDeadline::unbounded())
             .await
             .expect("a marker-clear failure must not fail an already-successful FIFO handoff");
         assert_eq!(path, PostSendEmissionPath::QueuePull);
@@ -1419,10 +1419,7 @@ mod tests {
         selector
             .select_emitter(&dispatch)
             .expect("graft emitter")
-            .emit_received_message(
-                dispatch,
-                RequestDeadline::after(std::time::Duration::from_secs(3)),
-            )
+            .emit_received_message(dispatch, RequestDeadline::unbounded())
             .await
             .expect("queue handoff");
         server.join().expect("server join");
@@ -1498,17 +1495,13 @@ mod tests {
         let result = selector
             .select_emitter(&dispatch)
             .expect("graft emitter")
-            .emit_received_message(
-                dispatch,
-                RequestDeadline::after(std::time::Duration::from_secs(3)),
-            )
+            .emit_received_message(dispatch, RequestDeadline::unbounded())
             .await;
-        server.join().expect("server join");
-
         assert!(
             result.is_ok(),
-            "marker-clear failure must not fail delivery"
+            "marker-clear failure must not fail delivery: {result:?}"
         );
+        server.join().expect("server join");
         assert_eq!(failing_store.rearm_call_count(), 2);
         assert_eq!(health.snapshot().graft_queue_handoff_failures_total, 0);
         assert_eq!(health.snapshot().graft_queue_marker_clear_failures_total, 2);
@@ -1547,10 +1540,7 @@ mod tests {
         let health = RuntimeHealth::default();
         let emitter = PublishedGraftReceivedHook::failing_for_test(runtime.clone(), health.clone());
         let error = emitter
-            .emit_received_message(
-                dispatch,
-                RequestDeadline::after(std::time::Duration::from_secs(1)),
-            )
+            .emit_received_message(dispatch, RequestDeadline::unbounded())
             .await
             .expect_err("unavailable graft must fail");
         assert_eq!(error.code(), AtmErrorCode::PostSendGraftUnavailable);
@@ -1608,7 +1598,7 @@ mod tests {
         let health = RuntimeHealth::default();
         let emitter = PublishedGraftReceivedHook::failing_for_test(runtime.clone(), health.clone());
         let error = emitter
-            .emit_received_message(dispatch, RequestDeadline::after(Duration::from_secs(1)))
+            .emit_received_message(dispatch, RequestDeadline::unbounded())
             .await
             .expect_err("unavailable graft must be reported to sweep caller");
         assert_eq!(error.code(), AtmErrorCode::PostSendGraftUnavailable);
@@ -1638,10 +1628,7 @@ mod tests {
                 .expect("Herdr local steer must be selected");
             assert_eq!(
                 emitter
-                    .emit_received_message(
-                        herdr_dispatch(kind),
-                        RequestDeadline::after(Duration::from_secs(1))
-                    )
+                    .emit_received_message(herdr_dispatch(kind), RequestDeadline::unbounded())
                     .await
                     .expect("fake Herdr accepts prompt"),
                 atm_core::boundary::PostSendEmissionPath::LocalHerdr

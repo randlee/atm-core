@@ -21,7 +21,7 @@ async fn write(
         .dispatch(
             ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
             AuthenticatedIngress::Local,
-            RequestDeadline::after(Duration::from_secs(10)),
+            RequestDeadline::unbounded(),
         )
         .await
         .map(atm_core::ApiResponse::into_inner)
@@ -245,7 +245,7 @@ async fn router_producers_project_exactly_their_committed_rows() {
                 target: MoveTarget::Head,
             })),
             AuthenticatedIngress::Local,
-            RequestDeadline::after(Duration::from_secs(10)),
+            RequestDeadline::unbounded(),
         )
         .await
         .expect("direct move");
@@ -258,7 +258,7 @@ async fn router_producers_project_exactly_their_committed_rows() {
                 target: MoveTarget::Head,
             })),
             AuthenticatedIngress::Local,
-            RequestDeadline::after(Duration::from_secs(10)),
+            RequestDeadline::unbounded(),
         )
         .await
         .expect_err("moving an unknown task is refused");
@@ -419,10 +419,7 @@ async fn replayed_router_handoff_emits_nothing_for_the_existing_sqlite_key() {
         .expect("assignment emitted a task-linked dispatch");
 
     let warnings = router
-        .emit_received_hook(
-            Ok(vec![dispatch]),
-            RequestDeadline::after(Duration::from_secs(10)),
-        )
+        .emit_received_hook(Ok(vec![dispatch]), RequestDeadline::unbounded())
         .await;
     assert!(
         warnings.is_empty(),

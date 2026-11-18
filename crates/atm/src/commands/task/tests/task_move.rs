@@ -204,7 +204,7 @@ async fn peer_ingress_rejects_task_move_explicitly() {
                 target: MoveTarget::End,
             })),
             atm_core::AuthenticatedIngress::Peer,
-            atm_core::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            atm_core::RequestDeadline::unbounded(),
         )
         .await
         .unwrap_err();

@@ -7,7 +7,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
-use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -21,10 +20,12 @@ use crate::template_workflow::{
 use crate::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName, TemplateSha};
 
 mod mailbox_filters;
+mod search_deadline;
 pub use mailbox_filters::{
     SearchAckState, SearchCount, SearchCountGroupBy, SearchCountKey, SearchMailboxSelection,
     SearchReadState,
 };
+pub use search_deadline::SearchDeadline;
 
 /// One bounded literal term in a typed search expression.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -492,23 +493,6 @@ impl MessageSearchQuery {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SearchDeadline {
-    remaining: Duration,
-}
-impl SearchDeadline {
-    pub fn new(remaining: Duration) -> Result<Self, AtmError> {
-        if remaining.is_zero() {
-            return Err(AtmError::validation("search deadline must be non-zero"));
-        }
-        Ok(Self { remaining })
-    }
-    #[must_use]
-    pub const fn remaining(self) -> Duration {
-        self.remaining
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct SearchResultKey {
     pub team: TeamName,
@@ -703,7 +687,10 @@ impl AsyncMessageSearchStore for InMemoryMessageSearchStore {
         query: MessageSearchQuery,
         deadline: SearchDeadline,
     ) -> Result<MessageSearchPage, AtmError> {
-        if deadline.remaining().is_zero() {
+        if deadline
+            .remaining()
+            .is_some_and(|remaining| remaining.is_zero())
+        {
             return Err(AtmError::validation("search deadline must be non-zero"));
         }
         self.search(&query)

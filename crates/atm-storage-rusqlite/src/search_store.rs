@@ -259,12 +259,17 @@ impl AsyncMessageSearchStore for SqliteMessageSearchStore {
         query: MessageSearchQuery,
         deadline: SearchDeadline,
     ) -> Result<MessageSearchPage, AtmError> {
-        tokio::time::timeout(
-            deadline.remaining(),
-            self.db.submit_search_async(query, deadline.remaining()),
-        )
-        .await
-        .map_err(|_| AtmError::daemon_unavailable("search reader lane exceeded its deadline"))?
+        match deadline.remaining() {
+            Some(remaining) => tokio::time::timeout(
+                remaining,
+                self.db.submit_search_async(query, Some(remaining)),
+            )
+            .await
+            .map_err(|_| {
+                AtmError::daemon_unavailable("search reader lane exceeded its deadline")
+            })?,
+            None => self.db.submit_search_async(query, None).await,
+        }
     }
 }
 

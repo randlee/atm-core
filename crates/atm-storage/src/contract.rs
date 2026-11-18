@@ -380,7 +380,7 @@ impl MailboxScope {
 /// reader capability.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadDeadline {
-    remaining: Duration,
+    remaining: Option<Duration>,
 }
 
 impl ReadDeadline {
@@ -390,12 +390,23 @@ impl ReadDeadline {
                 "mailbox read deadline must be non-zero",
             ));
         }
-        Ok(Self { remaining })
+        Ok(Self {
+            remaining: Some(remaining),
+        })
+    }
+
+    pub const fn unbounded() -> Self {
+        Self { remaining: None }
     }
 
     #[must_use]
-    pub const fn remaining(self) -> Duration {
+    pub const fn remaining(self) -> Option<Duration> {
         self.remaining
+    }
+
+    #[must_use]
+    pub const fn is_unbounded(self) -> bool {
+        self.remaining.is_none()
     }
 }
 

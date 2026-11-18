@@ -111,8 +111,10 @@ async fn run_command(
     session: Option<&HerdrSession>,
     deadline: RequestDeadline,
 ) -> Result<CommandOutput, HerdrError> {
-    let Some(remaining) = deadline.remaining() else {
-        return Err(HerdrError::TimedOut);
+    let remaining = match deadline.remaining() {
+        Some(remaining) => Some(remaining),
+        None if deadline.is_unbounded() => None,
+        None => return Err(HerdrError::TimedOut),
     };
     let binary = command_binary(configured_binary);
     let mut command = tokio::process::Command::new(binary);
@@ -130,21 +132,25 @@ async fn run_command(
     let mut child = command
         .spawn()
         .map_err(|error| spawn_unavailable(error, configured_binary))?;
-    let status =
-        match tokio::time::timeout(effective_process_timeout(remaining), child.wait()).await {
-            Ok(Ok(status)) => status,
-            Ok(Err(error)) => return Err(server_unavailable(error)),
-            Err(_) => {
-                #[cfg(windows)]
-                cleanup_after_timeout(&mut child, WINDOWS_CHILD_CLEANUP_GRACE).await?;
-                #[cfg(not(windows))]
-                {
-                    let _ = child.kill().await;
-                    let _ = child.wait().await;
+    let status = match remaining {
+        Some(remaining) => {
+            match tokio::time::timeout(effective_process_timeout(remaining), child.wait()).await {
+                Ok(Ok(status)) => status,
+                Ok(Err(error)) => return Err(server_unavailable(error)),
+                Err(_) => {
+                    #[cfg(windows)]
+                    cleanup_after_timeout(&mut child, WINDOWS_CHILD_CLEANUP_GRACE).await?;
+                    #[cfg(not(windows))]
+                    {
+                        let _ = child.kill().await;
+                        let _ = child.wait().await;
+                    }
+                    return Err(HerdrError::TimedOut);
                 }
-                return Err(HerdrError::TimedOut);
             }
-        };
+        }
+        None => child.wait().await.map_err(server_unavailable)?,
+    };
     let (stdout, stderr) = capture_command_output(&mut child).await?;
     Ok(CommandOutput {
         stdout,
@@ -431,7 +437,7 @@ mod tests {
             &[],
             &[],
             None,
-            atm_core::RequestDeadline::after(std::time::Duration::from_secs(1)),
+            atm_core::RequestDeadline::unbounded(),
         )
         .await;
         assert!(matches!(

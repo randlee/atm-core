@@ -309,12 +309,16 @@ pub async fn execute_search(
         return Err(AtmError::search_local_only());
     }
     let query = request.compile_query()?;
-    let remaining = deadline.remaining().ok_or_else(|| {
-        AtmError::daemon_unavailable("request deadline expired before local search execution")
-    })?;
-    let page = store
-        .search_async(query, SearchDeadline::new(remaining)?)
-        .await?;
+    let search_deadline = match deadline.remaining() {
+        Some(remaining) => SearchDeadline::new(remaining)?,
+        None if deadline.is_unbounded() => SearchDeadline::unbounded(),
+        None => {
+            return Err(AtmError::daemon_unavailable(
+                "request deadline expired before local search execution",
+            ));
+        }
+    };
+    let page = store.search_async(query, search_deadline).await?;
     response_from_page(page, request.lifecycle)
 }
 
@@ -642,7 +646,6 @@ fn parse_group_by(value: &str) -> Result<SearchGroupBy, AtmError> {
 mod tests {
     use std::future::Future;
     use std::task::{Context, Poll, Waker};
-    use std::time::Duration;
 
     use super::{SearchInput, SearchRequest, execute_search, parse_search_expression};
     use atm_storage::{
@@ -789,7 +792,7 @@ mod tests {
             crate::api::AuthenticatedIngress::Peer,
             request,
             &store,
-            crate::api::RequestDeadline::after(Duration::from_secs(1)),
+            crate::api::RequestDeadline::unbounded(),
         ))
         .expect_err("peer search must reject");
         assert_eq!(error.code(), atm_storage::AtmErrorCode::SearchLocalOnly);
@@ -806,7 +809,7 @@ mod tests {
                 lifecycle: None,
             },
             &store,
-            crate::api::RequestDeadline::after(Duration::from_secs(1)),
+            crate::api::RequestDeadline::unbounded(),
         ))
         .expect("local search");
         assert!(response.hits.is_empty());
@@ -877,7 +880,7 @@ mod tests {
                 }),
             },
             &store,
-            crate::api::RequestDeadline::after(Duration::from_secs(1)),
+            crate::api::RequestDeadline::unbounded(),
         ))
         .expect("local lifecycle search");
         assert!(matches!(

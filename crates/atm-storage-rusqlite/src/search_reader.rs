@@ -40,10 +40,10 @@ impl SearchReader {
     pub(crate) async fn submit_async(
         &self,
         query: MessageSearchQuery,
-        timeout: Duration,
+        timeout: Option<Duration>,
     ) -> Result<MessageSearchPage, AtmError> {
         self.pool
-            .submit_tool(timeout, move |connection, target| {
+            .submit_tool_optional(timeout, move |connection, target| {
                 execute_search(&query, connection, target).map_err(read_lane_storage_error)
             })
             .await

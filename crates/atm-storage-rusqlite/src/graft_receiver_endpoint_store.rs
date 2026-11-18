@@ -86,6 +86,25 @@ macro_rules! lookup_lease {
     };
 }
 
+impl SqliteGraftReceiverEndpointStore {
+    async fn lookup_async(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+        deadline: Option<Duration>,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        let team = team.clone();
+        let agent = agent.clone();
+        let db = Arc::clone(&self.db);
+        self.db
+            .read_with_optional_deadline_async(deadline, move |connection| {
+                lookup_lease!(connection, db.as_ref(), &team, &agent)
+            })
+            .await
+            .map_err(storage_error)
+    }
+}
+
 impl GraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
     fn register(
         &self,
@@ -344,15 +363,15 @@ impl AsyncGraftReceiverEndpointStore for SqliteGraftReceiverEndpointStore {
         agent: &AgentName,
         deadline: Duration,
     ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
-        let team = team.clone();
-        let agent = agent.clone();
-        let db = Arc::clone(&self.db);
-        self.db
-            .read_with_deadline_async(deadline, move |connection| {
-                lookup_lease!(connection, db.as_ref(), &team, &agent)
-            })
-            .await
-            .map_err(storage_error)
+        self.lookup_async(team, agent, Some(deadline)).await
+    }
+
+    async fn lookup_without_deadline_async(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<GraftReceiverLease>, GraftEndpointStoreError> {
+        self.lookup_async(team, agent, None).await
     }
 }
 

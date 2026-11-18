@@ -480,7 +480,7 @@ pub(crate) mod test_support {
     }
 
     pub fn deadline() -> RequestDeadline {
-        RequestDeadline::after(std::time::Duration::from_secs(30))
+        RequestDeadline::unbounded()
     }
 
     /// A control-path bridge with the registry routes' capacity of one.

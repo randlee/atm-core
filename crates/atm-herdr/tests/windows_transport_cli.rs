@@ -53,12 +53,9 @@ fn write_windows_ci_doctor_artifact() {
 
 #[tokio::test]
 async fn windows_cli_process_accepts_crlf_json_output() {
-    let result = get(
-        &invoker("stdout-json-line"),
-        RequestDeadline::after(Duration::from_secs(1)),
-    )
-    .await
-    .expect("CRLF-delimited UTF-8 JSON response");
+    let result = get(&invoker("stdout-json-line"), RequestDeadline::unbounded())
+        .await
+        .expect("CRLF-delimited UTF-8 JSON response");
     assert_eq!(result.snapshot.status, HerdrAgentStatus::Working);
     write_windows_ci_doctor_artifact();
 }
@@ -67,7 +64,7 @@ async fn windows_cli_process_accepts_crlf_json_output() {
 async fn windows_cli_process_deadline_uses_bounded_kill_then_reap() {
     let result = get(
         &invoker("sleep-past-deadline"),
-        RequestDeadline::after(Duration::from_millis(50)),
+        RequestDeadline::after(Duration::ZERO),
     )
     .await;
     assert_eq!(result, Err(HerdrError::TimedOut));

@@ -849,13 +849,21 @@ impl StorageAsyncMailboxRuntime {
             if !selection.selected.is_empty() || tokio::time::Instant::now() >= wait_deadline {
                 return Ok((selection, match_count));
             }
-            let request_remaining = deadline.remaining().ok_or_else(|| {
-                AtmError::daemon_unavailable("mailbox request deadline expired while awaiting mail")
-            })?;
+            let request_remaining = match deadline.remaining() {
+                Some(remaining) => Some(remaining),
+                None if deadline.is_unbounded() => None,
+                None => {
+                    return Err(AtmError::daemon_unavailable(
+                        "mailbox request deadline expired while awaiting mail",
+                    ));
+                }
+            };
             let until_wait_deadline =
                 wait_deadline.saturating_duration_since(tokio::time::Instant::now());
-            let pause = Duration::from_millis(25)
-                .min(request_remaining)
+            let pause = request_remaining
+                .map_or(Duration::from_millis(25), |remaining| {
+                    Duration::from_millis(25).min(remaining)
+                })
                 .min(until_wait_deadline);
             if pause.is_zero() {
                 return Ok((selection, match_count));
@@ -991,10 +999,13 @@ fn selection_candidate(message: Message) -> MailboxSelectionCandidate {
 }
 
 pub fn read_deadline(deadline: RequestDeadline) -> Result<ReadDeadline, AtmError> {
-    deadline
-        .remaining()
-        .ok_or_else(|| AtmError::daemon_unavailable("mailbox request deadline expired"))
-        .and_then(ReadDeadline::new)
+    match deadline.remaining() {
+        Some(remaining) => ReadDeadline::new(remaining),
+        None if deadline.is_unbounded() => Ok(ReadDeadline::unbounded()),
+        None => Err(AtmError::daemon_unavailable(
+            "mailbox request deadline expired",
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -1076,7 +1087,7 @@ mod tests {
     #[tokio::test]
     async fn list_peek_and_read_share_visibility_and_missing_behavior() {
         let runtime = runtime(vec![message("unread", false), message("history", true)]);
-        let deadline = RequestDeadline::after(Duration::from_secs(1));
+        let deadline = RequestDeadline::unbounded();
         let listed = runtime
             .list_mail(scope(), MailboxSelectionRequest::default(), deadline)
             .await
@@ -1089,7 +1100,7 @@ mod tests {
                 scope(),
                 "unread".parse().expect("key"),
                 MailboxSelectionRequest::default(),
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("peek");
@@ -1100,7 +1111,7 @@ mod tests {
                 scope(),
                 "missing".parse().expect("key"),
                 MailboxSelectionRequest::default(),
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("read");
@@ -1328,7 +1339,7 @@ mod tests {
                 scope(),
                 "unread".parse().expect("key"),
                 MailboxSelectionRequest::default(),
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("read selection returns without writer completion");
@@ -1370,7 +1381,7 @@ mod tests {
         let outcome = runtime
             .read_command(
                 prepare_async_read(&read).expect("core prepares read policy"),
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("runtime selects through reader lane");
@@ -1399,7 +1410,7 @@ mod tests {
         let listed = runtime
             .list_command(
                 prepare_async_list(&list).expect("core prepares list policy"),
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("runtime lists through reader lane");
@@ -1445,7 +1456,7 @@ mod tests {
         let outcome = runtime
             .read_command(
                 prepare_async_read(&read).expect("core prepares exact policy"),
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("runtime selects exact message");
@@ -1497,7 +1508,7 @@ mod tests {
         let outcome = runtime
             .read_command(
                 prepare_async_read(&read).expect("core prepares read policy"),
-                RequestDeadline::after(Duration::from_secs(1)),
+                RequestDeadline::unbounded(),
             )
             .await
             .expect("read response");

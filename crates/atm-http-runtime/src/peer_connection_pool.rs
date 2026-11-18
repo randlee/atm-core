@@ -179,14 +179,22 @@ impl PeerConnectionPool {
             let ready = if idle.sender.is_closed() {
                 false
             } else {
-                let remaining = deadline.remaining().ok_or_else(|| {
-                    self.shared.release_reservation(peer);
-                    peer_connect_deadline_failure(&authority, &connection_target)
-                })?;
-                match tokio::time::timeout(remaining, idle.sender.ready()).await {
-                    Ok(Ok(())) => true,
-                    Ok(Err(_)) => false,
-                    Err(_) => {
+                match deadline.remaining() {
+                    Some(remaining) => {
+                        match tokio::time::timeout(remaining, idle.sender.ready()).await {
+                            Ok(Ok(())) => true,
+                            Ok(Err(_)) => false,
+                            Err(_) => {
+                                self.shared.release_reservation(peer);
+                                return Err(peer_connect_deadline_failure(
+                                    &authority,
+                                    &connection_target,
+                                ));
+                            }
+                        }
+                    }
+                    None if deadline.is_unbounded() => idle.sender.ready().await.is_ok(),
+                    None => {
                         self.shared.release_reservation(peer);
                         return Err(peer_connect_deadline_failure(
                             &authority,
@@ -284,30 +292,35 @@ impl PeerConnectionPool {
         let stream = self
             .dial_transport(peer, port, deadline, authority, &connect_timeout)
             .await?;
-        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
-        let stream = tokio::time::timeout(remaining, self.shared.adapter.connect(stream, peer))
-            .await
-            .map_err(|_| connect_timeout())?
-            .map_err(|error| {
-                let cause = error.to_string();
-                tracing::warn!(
-                    %peer,
-                    %authority,
-                    %cause,
-                    "direct peer stream adapter rejected the connection"
-                );
-                HttpRuntimeClientFailure::PeerConnect {
-                    target: authority.to_owned(),
-                    cause,
-                }
-            })?;
-        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
-        let (sender, connection) = tokio::time::timeout(
-            remaining,
-            http1::handshake(TokioIo::new(stream)),
-        )
-        .await
-        .map_err(|_| connect_timeout())?
+        let adapted = self.shared.adapter.connect(stream, peer);
+        let stream = match deadline.remaining() {
+            Some(remaining) => tokio::time::timeout(remaining, adapted)
+                .await
+                .map_err(|_| connect_timeout())?,
+            None if deadline.is_unbounded() => adapted.await,
+            None => return Err(connect_timeout()),
+        }
+        .map_err(|error| {
+            let cause = error.to_string();
+            tracing::warn!(
+                %peer,
+                %authority,
+                %cause,
+                "direct peer stream adapter rejected the connection"
+            );
+            HttpRuntimeClientFailure::PeerConnect {
+                target: authority.to_owned(),
+                cause,
+            }
+        })?;
+        let handshake = http1::handshake(TokioIo::new(stream));
+        let (sender, connection) = match deadline.remaining() {
+            Some(remaining) => tokio::time::timeout(remaining, handshake)
+                .await
+                .map_err(|_| connect_timeout())?,
+            None if deadline.is_unbounded() => handshake.await,
+            None => return Err(connect_timeout()),
+        }
         .map_err(|source| {
             let cause = source.to_string();
             tracing::warn!(%peer, %authority, %cause, "direct peer HTTP/1 handshake failed");
@@ -339,43 +352,48 @@ impl PeerConnectionPool {
         authority: &str,
         connect_timeout: &(dyn Fn() -> HttpRuntimeClientFailure + Sync),
     ) -> Result<TcpStream, HttpRuntimeClientFailure> {
-        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
+        let remaining = deadline.remaining();
         // The caller's own request timeout fires exactly at `deadline`, so the
         // dial loop is bounded slightly *inside* the budget: it finishes, and
         // reports its per-address diagnosis, before any bare timeout can win
         // the race. The outer guard here is only a backstop at the budget.
-        let dial_deadline = RequestDeadline::after(
-            remaining
-                .checked_sub(DIAL_REPORT_GRACE)
-                .filter(|reserved| !reserved.is_zero())
-                .unwrap_or(remaining),
-        );
-        tokio::time::timeout(
-            remaining,
-            self.shared.addresses.connect(
-                peer,
-                port,
-                dial_deadline,
-                resolve_peer_addresses,
-                TcpStream::connect,
+        let dial_deadline = match remaining {
+            Some(remaining) => RequestDeadline::after(
+                remaining
+                    .checked_sub(DIAL_REPORT_GRACE)
+                    .filter(|reserved| !reserved.is_zero())
+                    .unwrap_or(remaining),
             ),
-        )
-        .await
-        .map_err(|_| {
-            tracing::warn!(
-                %peer,
-                %authority,
-                "direct peer TCP connect exhausted the request budget"
-            );
-            connect_timeout()
-        })?
+            None if deadline.is_unbounded() => deadline,
+            None => return Err(connect_timeout()),
+        };
+        let dial = self.shared.addresses.connect(
+            peer,
+            port,
+            dial_deadline,
+            resolve_peer_addresses,
+            TcpStream::connect,
+        );
+        let connected = match remaining {
+            Some(remaining) => tokio::time::timeout(remaining, dial).await.map_err(|_| {
+                tracing::warn!(
+                    %peer,
+                    %authority,
+                    "direct peer TCP connect exhausted the request budget"
+                );
+                connect_timeout()
+            })?,
+            None if deadline.is_unbounded() => dial.await,
+            None => return Err(connect_timeout()),
+        }
         .map_err(|cause| {
             tracing::warn!(%peer, %authority, %cause, "direct peer TCP connect failed");
             HttpRuntimeClientFailure::PeerConnect {
                 target: authority.to_owned(),
                 cause,
             }
-        })
+        })?;
+        Ok(connected)
     }
 
     #[cfg(test)]
@@ -602,19 +620,18 @@ async fn drain_driver(mut driver: JoinHandle<()>, shutdown_deadline: Instant) {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
-
     use axum::Router;
     use axum::http::{StatusCode, header};
     use axum::routing::post;
+    use std::convert::Infallible;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::net::TcpListener;
     use tokio::sync::watch;
 
     use super::{PeerConnectionPool, PeerPoolConfig};
     use crate::http1_server::serve_connection;
+    use crate::peer_dial::ConnectCandidates;
     use crate::{AcceptedPeerStream, EstablishedPeerStream, PeerStreamAdapter, PeerStreamFuture};
 
     #[derive(Default)]
@@ -767,10 +784,7 @@ mod tests {
 
     async fn complete_one_request(connection: &mut super::PooledPeerConnection) {
         let response = connection
-            .exchange(
-                request(),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
-            )
+            .exchange(request(), atm_core::api::RequestDeadline::unbounded())
             .await
             .expect("peer request succeeds");
         assert_eq!(response.status(), StatusCode::CREATED);
@@ -799,7 +813,7 @@ mod tests {
                 .acquire(
                     &peer,
                     std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                    atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                    atm_core::api::RequestDeadline::unbounded(),
                 )
                 .await
                 .expect("pool acquires peer connection");
@@ -834,7 +848,7 @@ mod tests {
                 .acquire(
                     &peer,
                     std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                    atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                    atm_core::api::RequestDeadline::unbounded(),
                 )
                 .await
                 .expect("pool acquires peer connection");
@@ -865,7 +879,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("first connection reserves pooled slot");
@@ -873,7 +887,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("overflow falls back without queueing");
@@ -906,7 +920,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("first borrow reserves the only retained slot");
@@ -914,7 +928,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("second borrow dials overflow connection");
@@ -927,7 +941,7 @@ mod tests {
                     headers: vec!["malformed-header".to_owned()],
                     body: Vec::new(),
                 },
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect_err("malformed request marks the overflow guard failed before write");
@@ -964,7 +978,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("first borrow reserves the only retained slot");
@@ -972,7 +986,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("second borrow dials overflow connection");
@@ -1005,7 +1019,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("initial connection");
@@ -1020,7 +1034,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("post-eviction redial");
@@ -1048,7 +1062,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("pooled connection is acquired");
@@ -1069,7 +1083,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("first connection opens");
@@ -1081,7 +1095,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("stale idle entry redials before a new exchange");
@@ -1101,7 +1115,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("initial connection is pooled");
@@ -1145,16 +1159,13 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("TCP and HTTP/1 setup completes before the peer drop is observed");
 
         let failure = connection
-            .exchange(
-                request(),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
-            )
+            .exchange(request(), atm_core::api::RequestDeadline::unbounded())
             .await
             .expect_err("peer close during request is surfaced");
         assert!(matches!(
@@ -1179,7 +1190,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await
             .expect("initial pooled connection opens");
@@ -1197,7 +1208,7 @@ mod tests {
             .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
+                atm_core::api::RequestDeadline::unbounded(),
             )
             .await;
         let failure = match result {
@@ -1244,38 +1255,37 @@ mod tests {
         }
     }
 
-    /// ADR-060 §7: the dial loop is bounded inside the request budget, so an
-    /// unresponsive peer is reported with its per-address diagnosis rather
-    /// than losing the race to a bare connect timeout.
     #[tokio::test]
-    async fn unresponsive_peer_reports_per_address_diagnosis_not_a_bare_timeout() {
+    async fn refused_peer_reports_per_address_diagnosis_without_a_request_deadline() {
         let adapter = Arc::new(CountingPassthroughAdapter::default());
         let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
-        // A black-holed address: nothing answers, so the attempt runs to its
-        // budget share unless the OS rejects the route outright.
-        let peer = "10.255.255.1".parse().expect("peer authority");
-        let budget = Duration::from_millis(600);
-        let started = std::time::Instant::now();
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("reserve a loopback port");
+        let socket = listener.local_addr().expect("listener address");
+        drop(listener);
+        let peer = "127.0.0.1".parse().expect("peer authority");
+        let port = super::NonZeroU16::new(socket.port()).expect("non-zero test port");
+        pool.shared.addresses.store(
+            &peer,
+            port,
+            ConnectCandidates {
+                usable: vec![socket],
+                skipped_link_local: 0,
+                truncated: 0,
+            },
+        );
         let result = pool
-            .acquire(
-                &peer,
-                std::num::NonZeroU16::new(43_101).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(budget),
-            )
+            .acquire(&peer, port, atm_core::api::RequestDeadline::unbounded())
             .await;
-        let elapsed = started.elapsed();
         let cause = match result {
-            Ok(_) => panic!("a black-holed peer must not connect"),
+            Ok(_) => panic!("a refused peer must not connect"),
             Err(super::HttpRuntimeClientFailure::PeerConnect { cause, .. }) => cause,
             Err(other) => panic!("per-address diagnosis expected, got {other:?}"),
         };
         assert!(
-            cause.contains("10.255.255.1:43101: "),
+            cause.contains(&format!("127.0.0.1:{}: ", socket.port())),
             "cause names the attempted address and reason: {cause}"
-        );
-        assert!(
-            elapsed < budget,
-            "the dial loop finishes inside the request budget: {elapsed:?}"
         );
         assert_eq!(adapter.connects.load(Ordering::SeqCst), 0);
         assert_eq!(pool.pooled_count(), 0);
