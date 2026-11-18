@@ -199,6 +199,27 @@ pub(crate) async fn spawn_until(
     stdin: &[u8],
     cancel: impl Future<Output = ()>,
 ) -> Result<SpawnedOutput, SpawnFailure> {
+    spawn_until_inner(spec, stdin, cancel, None).await
+}
+
+pub(crate) async fn spawn_until_with_hook_context(
+    spec: SpawnSpec,
+    stdin: &[u8],
+    cancel: impl Future<Output = ()>,
+    team: &str,
+    phase: &str,
+    hook: &str,
+    budget_ms: u64,
+) -> Result<SpawnedOutput, SpawnFailure> {
+    spawn_until_inner(spec, stdin, cancel, Some((team, phase, hook, budget_ms))).await
+}
+
+async fn spawn_until_inner(
+    spec: SpawnSpec,
+    stdin: &[u8],
+    cancel: impl Future<Output = ()>,
+    hook_context: Option<(&str, &str, &str, u64)>,
+) -> Result<SpawnedOutput, SpawnFailure> {
     let mut command = Command::new(&spec.program);
     command
         .args(&spec.args)
@@ -222,12 +243,26 @@ pub(crate) async fn spawn_until(
     if result.is_err() {
         let leader_status = child.try_wait();
         if failed_collection_cleanup(&leader_status) == FailedCollectionCleanup::KillGroupAndReap {
-            tracing::warn!(
-                subsystem = "atm_hook",
-                outcome = "killed",
-                elapsed_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
-                "killing hook process group after failed or timed-out collection"
-            );
+            let elapsed_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+            if let Some((team, phase, hook, budget_ms)) = hook_context {
+                tracing::warn!(
+                    subsystem = "atm_hook",
+                    team,
+                    phase,
+                    hook,
+                    budget_ms,
+                    outcome = "killed",
+                    elapsed_ms,
+                    "killing hook process group after failed or timed-out collection"
+                );
+            } else {
+                tracing::warn!(
+                    subsystem = "atm_hook",
+                    outcome = "killed",
+                    elapsed_ms,
+                    "killing hook process group after failed or timed-out collection"
+                );
+            }
             guard.kill();
             let _ = child.kill().await;
             child.wait().await.map_err(|error| failed(&spec, error))?;

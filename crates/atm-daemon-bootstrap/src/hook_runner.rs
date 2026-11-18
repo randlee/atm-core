@@ -44,7 +44,10 @@ mod execution;
 enum HookDeadlineSource {
     System,
     #[cfg(feature = "test-support")]
-    Controlled(Arc<ControlledHookDeadline>),
+    Controlled {
+        deadline: Arc<ControlledHookDeadline>,
+        request_remaining: Option<Duration>,
+    },
 }
 
 /// Maximum concurrently running hook children for one daemon.
@@ -165,7 +168,26 @@ impl DaemonHookRunner {
         Self::with_limit_and_deadline(
             env,
             HOOK_CONCURRENCY_MAX,
-            HookDeadlineSource::Controlled(deadline),
+            HookDeadlineSource::Controlled {
+                deadline,
+                request_remaining: None,
+            },
+        )
+    }
+
+    #[cfg(feature = "test-support")]
+    fn with_controlled_request_budget(
+        env: &dyn EnvSource,
+        deadline: Arc<ControlledHookDeadline>,
+        request_remaining: Duration,
+    ) -> Self {
+        Self::with_limit_and_deadline(
+            env,
+            HOOK_CONCURRENCY_MAX,
+            HookDeadlineSource::Controlled {
+                deadline,
+                request_remaining: Some(request_remaining),
+            },
         )
     }
 
@@ -196,11 +218,25 @@ impl DaemonHookRunner {
         doctor: bool,
     ) -> Result<SpawnedOutput, AtmError> {
         let started_at = tokio::time::Instant::now();
-        let remaining = deadline.remaining().unwrap_or_default();
-        let budget = if doctor {
-            doctor_budget(target.timeout_ms, remaining)
-        } else {
-            runner_budget(target.timeout_ms, remaining)
+        #[cfg(feature = "test-support")]
+        let remaining = deadline
+            .remaining()
+            .or_else(|| match &self.deadline_source {
+                HookDeadlineSource::Controlled {
+                    request_remaining, ..
+                } if deadline.is_unbounded() => *request_remaining,
+                _ => None,
+            });
+        #[cfg(not(feature = "test-support"))]
+        let remaining = deadline.remaining();
+        let budget = match remaining {
+            Some(remaining) if doctor => doctor_budget(target.timeout_ms, remaining),
+            Some(remaining) => runner_budget(target.timeout_ms, remaining),
+            None if deadline.is_unbounded() && doctor => {
+                Some(Duration::from_millis(u64::from(target.timeout_ms)))
+            }
+            None if deadline.is_unbounded() => configured_runner_budget(target.timeout_ms),
+            None => None,
         }
         .ok_or_else(|| {
             let error = AtmError::hook_timeout(
@@ -231,10 +267,10 @@ impl DaemonHookRunner {
                 remaining_spawn_budget(&target.phase, budget, started.elapsed())?
             }
             #[cfg(feature = "test-support")]
-            HookDeadlineSource::Controlled(_) => budget,
+            HookDeadlineSource::Controlled { .. } => budget,
         };
         let output = self
-            .spawn(spec, &stdin, remaining)
+            .spawn(spec, &stdin, remaining, target, hook)
             .instrument(hook_spawn_span(target, hook, budget))
             .await
             .map_err(|failure| {
@@ -401,6 +437,11 @@ pub(crate) fn runner_budget(timeout_ms: u32, remaining: Duration) -> Option<Dura
         timeout_ms,
         remaining.checked_sub(Duration::from_millis(u64::from(HOOK_ACTION_RESERVE_MS)))?,
     )
+}
+
+fn configured_runner_budget(timeout_ms: u32) -> Option<Duration> {
+    let budget = Duration::from_millis(u64::from(timeout_ms));
+    (!budget.is_zero()).then_some(budget)
 }
 
 pub(crate) fn doctor_budget(timeout_ms: u32, remaining: Duration) -> Option<Duration> {
@@ -627,7 +668,7 @@ mod tests {
                 .run(
                     &self.target,
                     &self.request("task.close"),
-                    RequestDeadline::after(Duration::from_secs(60)),
+                    RequestDeadline::unbounded(),
                 )
                 .await
         }
@@ -1061,24 +1102,30 @@ mod tests {
         fixture.no_spawn();
     }
 
+    #[cfg(feature = "test-support")]
     #[tokio::test]
     async fn runner_timeout_returns_hook_timeout() {
         let mut fixture = Fixture::new();
-        // Leave about 1.1 s of runner budget after the 500 ms action reserve.
-        // This is deliberately smaller than the configured timeout so the
-        // real process failure proves execute passed its effective budget
-        // through, with enough startup headroom for the child process.
         fixture.target.timeout_ms = 5_000;
         fixture.script("import threading\nthreading.Event().wait()\n");
-        let error = fixture
-            .runner()
-            .run(
-                &fixture.target,
-                &fixture.request("task.close"),
-                RequestDeadline::after(Duration::from_millis(1_600)),
-            )
-            .await
-            .unwrap_err();
+        let deadline = Arc::new(ControlledHookDeadline::new());
+        let runner = DaemonHookRunner::with_controlled_request_budget(
+            &fixture.env,
+            deadline.clone(),
+            Duration::from_millis(1_600),
+        );
+        let task = tokio::spawn(async move {
+            runner
+                .run(
+                    &fixture.target,
+                    &fixture.request("task.close"),
+                    RequestDeadline::unbounded(),
+                )
+                .await
+        });
+        deadline.wait_for_process_registration().await;
+        deadline.advance();
+        let error = task.await.unwrap().unwrap_err();
         assert_eq!(error.code(), AtmErrorCode::HookTimeout);
         assert!(error.message().starts_with("HOOK.TIMEOUT: phase bk: "));
         assert!(
@@ -1156,17 +1203,31 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "test-support")]
     #[tokio::test]
     async fn module_never_reading_stdin_times_out() {
         let mut fixture = Fixture::new();
-        fixture.target.timeout_ms = 200;
+        fixture.target.timeout_ms = 1_000;
         fixture
             .target
             .custom
             .insert("padding".into(), Value::String("x".repeat(128 * 1024)));
         fixture.script("import threading\nthreading.Event().wait()\n");
+        let deadline = Arc::new(ControlledHookDeadline::new());
+        let runner = DaemonHookRunner::with_controlled_deadline(&fixture.env, deadline.clone());
+        let task = tokio::spawn(async move {
+            runner
+                .run(
+                    &fixture.target,
+                    &fixture.request("task.close"),
+                    RequestDeadline::unbounded(),
+                )
+                .await
+        });
+        deadline.wait_for_process_registration().await;
+        deadline.advance();
         assert_eq!(
-            fixture.run().await.unwrap_err().code(),
+            task.await.unwrap().unwrap_err().code(),
             AtmErrorCode::HookTimeout
         );
     }
@@ -1180,19 +1241,26 @@ mod tests {
         assert!(error.message().contains("stdout exceeds"));
     }
 
+    #[cfg(feature = "test-support")]
     #[tokio::test(flavor = "current_thread")]
-    async fn spawn_until_kill_event_inherits_hook_fields() {
+    async fn controlled_kill_event_inherits_hook_fields() {
         let capture = KillEventCapture::default();
         let subscriber = tracing_subscriber::registry().with(capture.clone());
         let _subscriber = tracing::subscriber::set_default(subscriber);
         let fixture = Fixture::new();
-        fixture.script("import sys,threading\nsys.stdout.write('x' * ((1 << 20) + 1))\nsys.stdout.flush()\nthreading.Event().wait()\n");
-
-        let error = fixture
-            .run()
-            .await
-            .expect_err("oversized output kills the hook");
-        assert_eq!(error.code(), AtmErrorCode::HookMalformed);
+        fixture.script("import threading\nthreading.Event().wait()\n");
+        let deadline = Arc::new(ControlledHookDeadline::new());
+        let runner = DaemonHookRunner::with_controlled_deadline(&fixture.env, deadline.clone());
+        let target = fixture.target.clone();
+        let request = fixture.request("task.close");
+        let run = runner.run(&target, &request, RequestDeadline::unbounded());
+        tokio::pin!(run);
+        tokio::select! {
+            result = &mut run => panic!("hook unexpectedly completed before controlled expiry: {result:?}"),
+            _ = deadline.wait_for_process_registration() => deadline.advance(),
+        }
+        let error = run.await.unwrap_err();
+        assert_eq!(error.code(), AtmErrorCode::HookTimeout);
         let events = capture.0.lock().expect("capture lock");
         assert_eq!(events.len(), 1, "exactly one spawn_until kill event");
         let fields = &events[0].0;

@@ -701,7 +701,7 @@ async fn offline_member_gets_one_message_zero_nudges_per_episode() {
             },
         )),
         atm_core::AuthenticatedIngress::Local,
-        RequestDeadline::after(Duration::from_secs(1)),
+        RequestDeadline::unbounded(),
     )
     .await
     .expect("offline heartbeat ingress");

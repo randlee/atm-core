@@ -209,15 +209,22 @@ async fn acquire_permit(
     in_flight: Arc<Semaphore>,
     deadline: RequestDeadline,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, HerdrError> {
-    let Some(remaining) = deadline.remaining() else {
-        return Err(HerdrError::Timeout);
+    let remaining = match deadline.remaining() {
+        Some(remaining) => Some(remaining),
+        None if deadline.is_unbounded() => None,
+        None => return Err(HerdrError::Timeout),
     };
-    match tokio::time::timeout(remaining, in_flight.acquire_owned()).await {
-        Ok(Ok(permit)) => Ok(permit),
-        Ok(Err(_)) => Err(HerdrError::InternalError {
+    let permit = match remaining {
+        Some(remaining) => tokio::time::timeout(remaining, in_flight.acquire_owned())
+            .await
+            .map_err(|_| HerdrError::Timeout)?,
+        None => in_flight.acquire_owned().await,
+    };
+    match permit {
+        Ok(permit) => Ok(permit),
+        Err(_) => Err(HerdrError::InternalError {
             message: "Herdr socket permit pool was closed".to_owned(),
         }),
-        Err(_) => Err(HerdrError::Timeout),
     }
 }
 
@@ -314,13 +321,20 @@ async fn deadline_io<T>(
     deadline: RequestDeadline,
     future: impl Future<Output = io::Result<T>>,
 ) -> Result<T, HerdrError> {
-    let Some(remaining) = deadline.remaining() else {
-        return Err(HerdrError::Timeout);
+    let remaining = match deadline.remaining() {
+        Some(remaining) => Some(remaining),
+        None if deadline.is_unbounded() => None,
+        None => return Err(HerdrError::Timeout),
     };
-    match tokio::time::timeout(remaining, future).await {
-        Ok(Ok(value)) => Ok(value),
-        Ok(Err(error)) => Err(socket_io_error(error)),
-        Err(_) => Err(HerdrError::Timeout),
+    let result = match remaining {
+        Some(remaining) => tokio::time::timeout(remaining, future)
+            .await
+            .map_err(|_| HerdrError::Timeout)?,
+        None => future.await,
+    };
+    match result {
+        Ok(value) => Ok(value),
+        Err(error) => Err(socket_io_error(error)),
     }
 }
 
@@ -382,16 +396,23 @@ async fn connect_named_pipe(
             message: "Unix Herdr endpoint selected on a Windows build".to_owned(),
         });
     };
-    connect_named_pipe_with_remaining(name, || deadline.remaining(), retry_delay).await
+    connect_named_pipe_with_remaining(
+        name,
+        || deadline.remaining(),
+        || deadline.is_unbounded(),
+        retry_delay,
+    )
+    .await
 }
 
 #[cfg(windows)]
 async fn connect_named_pipe_with_remaining(
     name: &str,
     remaining: impl Fn() -> Option<Duration>,
+    unbounded: impl Fn() -> bool,
     retry_delay: Duration,
 ) -> Result<tokio::net::windows::named_pipe::NamedPipeClient, HerdrError> {
-    retry_pipe_busy(remaining, retry_delay, || {
+    retry_pipe_busy(remaining, unbounded, retry_delay, || {
         tokio::net::windows::named_pipe::ClientOptions::new().open(name)
     })
     .await
@@ -400,6 +421,7 @@ async fn connect_named_pipe_with_remaining(
 #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Named-pipe busy retries pause within the remaining connection deadline.")]
 async fn retry_pipe_busy<T>(
     remaining: impl Fn() -> Option<Duration>,
+    unbounded: impl Fn() -> bool,
     retry_delay: Duration,
     mut open: impl FnMut() -> io::Result<T>,
 ) -> Result<T, HerdrError> {
@@ -407,12 +429,11 @@ async fn retry_pipe_busy<T>(
     loop {
         match open() {
             Ok(client) => return Ok(client),
-            Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => {
-                let Some(remaining) = remaining() else {
-                    return Err(HerdrError::Timeout);
-                };
-                tokio::time::sleep(retry_delay.min(remaining)).await;
-            }
+            Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => match remaining() {
+                Some(remaining) => tokio::time::sleep(retry_delay.min(remaining)).await,
+                None if unbounded() => tokio::time::sleep(retry_delay).await,
+                None => return Err(HerdrError::Timeout),
+            },
             Err(error) => return Err(socket_io_error(error)),
         }
     }
@@ -865,6 +886,7 @@ mod tests {
         let opened = std::sync::atomic::AtomicBool::new(false);
         let result = retry_pipe_busy(
             || panic!("successful open must not consult a deadline"),
+            || false,
             PIPE_BUSY_RETRY_DELAY,
             || {
                 opened.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -885,6 +907,7 @@ mod tests {
                 remaining_calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 None
             },
+            || false,
             PIPE_BUSY_RETRY_DELAY,
             || {
                 attempts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -915,13 +938,10 @@ mod tests {
         let HerdrEndpoint::NamedPipe(pipe_name) = &endpoint else {
             unreachable!("Windows endpoint is a named pipe");
         };
-        let mut client = connect_named_pipe_with_remaining(
-            pipe_name,
-            || Some(Duration::MAX),
-            PIPE_BUSY_RETRY_DELAY,
-        )
-        .await
-        .expect("connect to test named-pipe server");
+        let mut client =
+            connect_named_pipe_with_remaining(pipe_name, || None, || true, PIPE_BUSY_RETRY_DELAY)
+                .await
+                .expect("connect to test named-pipe server");
         server.connect().await.expect("accept named-pipe client");
 
         client
@@ -954,12 +974,9 @@ mod tests {
         let HerdrEndpoint::NamedPipe(pipe_name) = &endpoint else {
             unreachable!("Windows endpoint is a named pipe");
         };
-        let result = connect_named_pipe_with_remaining(
-            pipe_name,
-            || Some(Duration::MAX),
-            PIPE_BUSY_RETRY_DELAY,
-        )
-        .await;
+        let result =
+            connect_named_pipe_with_remaining(pipe_name, || None, || true, PIPE_BUSY_RETRY_DELAY)
+                .await;
 
         assert!(matches!(result, Err(HerdrError::ServerUnavailable { .. })));
     }

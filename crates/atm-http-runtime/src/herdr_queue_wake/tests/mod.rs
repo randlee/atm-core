@@ -1535,7 +1535,7 @@ async fn task_linked_prompt_without_task_id_logs_storage_failure_and_records_not
 
     crate::prompt_handoff_record::record_prompt_handoff(
         &bridge,
-        RequestDeadline::after(Duration::from_secs(1)),
+        RequestDeadline::unbounded(),
         Ok(store.clone()),
         &dispatch,
         PromptTrigger::Steer,
