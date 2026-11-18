@@ -40,6 +40,9 @@ class CheckEnvVarBoundaryTests(unittest.TestCase):
         (repo_root / ".just").mkdir()
         (repo_root / ".just/lint-config.toml").write_text(LINT_CONFIG, encoding="utf-8")
         (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
+        (repo_root / "sc-lint.toml").write_text('''[[tool.sc-lint.analyzers.boundary.env_var_boundary]]
+forbidden_env_vars = ["ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID", "ATM_SESSION_ID", "ATM_PID", "ATM_TEMP"]
+''', encoding="utf-8")
         for crate, lib_name in (
             ("atm-core", "atm_core"),
             ("atm-daemon", "atm_daemon"),
@@ -91,6 +94,53 @@ name = "{lib_name}"
 
 
 
+
+    def test_exempt_reader_rejects_extra_read_and_allows_exact_approved_site(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "crates/atm-core/src/caller_context.rs").write_text('''
+pub fn read_cli_pid_from_env() -> Option<String> {
+    let _ = std::env::var("ATM_TEAM");
+    std::env::var_os("ATM_PID")
+}
+fn positive_control() {
+    let _ = std::env::var("ATM_TEAM");
+}
+''', encoding="utf-8")
+            allow_dir = repo_root / ".just/allowlists"
+            allow_dir.mkdir()
+            (allow_dir / "env_var_boundary_allowlist.toml").write_text('''
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_pid_from_env"
+line = 'std::env::var_os("ATM_PID")'
+why = "approved PID read"
+sunset_sprint = "sc-lint#983"
+''', encoding="utf-8")
+            violations = self.collect(repo_root)
+            self.assertEqual([(v.symbol, v.kind) for v in violations], [
+                ("read_cli_pid_from_env", "direct_literal_env_read"),
+                ("positive_control", "direct_literal_env_read"),
+            ])
+
+    def test_extra_forwarded_read_inside_reader_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            (repo_root / "crates/atm-core/src/caller_context.rs").write_text('''
+fn read_env_raw(key: &str) -> Option<String> {
+    std::env::var(key).ok()
+}
+pub fn read_cli_pid_from_env() {
+    read_env_raw("ATM_TEAM");
+}
+''', encoding="utf-8")
+            violations = self.collect(repo_root)
+            self.assertEqual([(v.symbol, v.kind) for v in violations], [
+                ("read_cli_pid_from_env", "env_var_via_forwarding_function"),
+            ])
 
     def test_flags_calls_to_configured_boundary_reader_functions_from_other_files(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
