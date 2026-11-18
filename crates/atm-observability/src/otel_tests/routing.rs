@@ -23,7 +23,9 @@ pub(super) fn policy() -> RetainedLogPolicy {
         rotation_max_files: 5,
         retention_max_age: Duration::from_secs(7 * 86400),
         maintenance_cadence: Duration::from_secs(60),
-        writer_shutdown_timeout: SUCCESS_EXPORT_HANG_GUARD,
+        // Writer shutdown uses std mpsc recv_timeout, whose overflow path
+        // waits without a deadline. The test checks MAX overflows Instant.
+        writer_shutdown_timeout: Duration::MAX,
         maintenance_max_work_per_pass: Some(8),
     }
 }
@@ -140,7 +142,9 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         }
         drop(subscriber);
         drop(dispatch);
-        attachment.detach(SUCCESS_EXPORT_HANG_GUARD).unwrap();
+        // sc-observability-log uses checked_add and waits without a deadline
+        // when this duration is not representable.
+        attachment.detach(Duration::MAX).unwrap();
         drop(attachment);
         let logger = Arc::try_unwrap(logger)
             .ok()

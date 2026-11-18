@@ -14,7 +14,7 @@ use opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor
 use opentelemetry_sdk::logs::{BatchConfigBuilder as LogBatchConfigBuilder, SdkLoggerProvider};
 use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
 use opentelemetry_sdk::metrics::{SdkMeterProvider, Temporality};
-use opentelemetry_sdk::runtime::Tokio;
+use opentelemetry_sdk::runtime::{Runtime, RuntimeChannel, Tokio};
 use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
 use opentelemetry_sdk::trace::{BatchConfigBuilder, Sampler, SdkTracerProvider};
 use tonic::metadata::{Ascii, MetadataValue};
@@ -87,6 +87,50 @@ pub(crate) fn setup_with_limits(
     setup_with_timeouts(config, batch, timeout, timeout)
 }
 
+// Test success paths keep real SDK and gRPC behavior, but the sentinel
+// disables export timers. Scheduled SDK intervals still use Tokio's clock.
+#[cfg(test)]
+#[derive(Clone)]
+pub(super) struct NoDeadlineRuntime;
+
+#[cfg(test)]
+impl Runtime for NoDeadlineRuntime {
+    fn spawn<F: std::future::Future<Output = ()> + Send + 'static>(&self, future: F) {
+        Tokio.spawn(future);
+    }
+
+    fn delay(&self, duration: Duration) -> impl std::future::Future<Output = ()> + Send + 'static {
+        let delay: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> =
+            if duration == Duration::MAX {
+                Box::pin(std::future::pending())
+            } else {
+                Box::pin(tokio::time::sleep(duration))
+            };
+        delay
+    }
+}
+
+#[cfg(test)]
+impl RuntimeChannel for NoDeadlineRuntime {
+    type Receiver<T: std::fmt::Debug + Send> = <Tokio as RuntimeChannel>::Receiver<T>;
+    type Sender<T: std::fmt::Debug + Send> = <Tokio as RuntimeChannel>::Sender<T>;
+
+    fn batch_message_channel<T: std::fmt::Debug + Send>(
+        &self,
+        capacity: usize,
+    ) -> (Self::Sender<T>, Self::Receiver<T>) {
+        Tokio.batch_message_channel(capacity)
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn setup_without_deadlines(
+    config: &TelemetryExportConfig,
+    batch: usize,
+) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
+    setup_with_runtime(config, batch, None, Duration::MAX, NoDeadlineRuntime)
+}
+
 /// Production gives the tonic transport a bound below the SDK processors' so
 /// exactly one timer decides a stalled export; tests do the same with their
 /// own bounds.
@@ -96,8 +140,21 @@ pub(crate) fn setup_with_timeouts(
     transport_timeout: Duration,
     timeout: Duration,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
+    setup_with_runtime(config, batch, Some(transport_timeout), timeout, Tokio)
+}
+
+fn setup_with_runtime<R: RuntimeChannel>(
+    config: &TelemetryExportConfig,
+    batch: usize,
+    transport_timeout: Option<Duration>,
+    timeout: Duration,
+    runtime: R,
+) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
     tokio::runtime::Handle::try_current()?;
     let (channel, interceptor) = grpc_transport(config, transport_timeout)?;
+    // The exporter uses this value only as a retry budget; the test channel
+    // has no transport timer, and its runtime disables the sentinel timer.
+    let exporter_timeout = transport_timeout.unwrap_or(Duration::MAX);
     // Explicit gzip also prevents the upstream builder consulting ambient
     // compression settings; gRPC remains the only transport.
     macro_rules! exporter {
@@ -105,7 +162,7 @@ pub(crate) fn setup_with_timeouts(
             $builder
                 .with_tonic()
                 .with_channel(channel.clone())
-                .with_timeout(transport_timeout)
+                .with_timeout(exporter_timeout)
                 .with_compression(Compression::Gzip)
                 .with_interceptor(interceptor.clone())
                 .build()?
@@ -120,9 +177,9 @@ pub(crate) fn setup_with_timeouts(
     let resource = Resource::builder_empty()
         .with_service_name(config.service_name().to_owned())
         .build();
-    let tracer = tracer_provider(spans, resource.clone(), batch, timeout);
-    let logger = logger_provider(logs, resource.clone(), batch, timeout);
-    let meter = meter_provider(metrics, resource, timeout)?;
+    let tracer = tracer_provider(spans, resource.clone(), batch, timeout, runtime.clone());
+    let logger = logger_provider(logs, resource.clone(), batch, timeout, runtime.clone());
+    let meter = meter_provider(metrics, resource, timeout, runtime)?;
     let sink = Arc::new(crate::task_exporter::TaskExporter::new(
         tracer.tracer("atm.task"),
         meter.meter("atm.task"),
@@ -140,7 +197,7 @@ pub(crate) fn setup_with_timeouts(
 )]
 fn grpc_transport(
     config: &TelemetryExportConfig,
-    transport_timeout: Duration,
+    transport_timeout: Option<Duration>,
 ) -> Result<
     (
         tonic::transport::Channel,
@@ -164,16 +221,17 @@ fn grpc_transport(
     Ok((channel, interceptor))
 }
 
-fn logger_provider(
+fn logger_provider<R: RuntimeChannel>(
     logs: opentelemetry_otlp::LogExporter,
     resource: Resource,
     batch: usize,
     timeout: Duration,
+    runtime: R,
 ) -> SdkLoggerProvider {
     SdkLoggerProvider::builder()
         .with_resource(resource)
         .with_log_processor(
-            BatchLogProcessor::builder(logs, Tokio)
+            BatchLogProcessor::builder(logs, runtime)
                 .with_batch_config(
                     LogBatchConfigBuilder::default()
                         .with_max_queue_size(EXPORT_QUEUE)
@@ -276,7 +334,7 @@ fn log_provider(
     config: &TelemetryExportConfig,
 ) -> Result<SdkLoggerProvider, Box<dyn std::error::Error + Send + Sync>> {
     tokio::runtime::Handle::try_current()?;
-    let (channel, interceptor) = grpc_transport(config, EXPORT_TRANSPORT_TIMEOUT)?;
+    let (channel, interceptor) = grpc_transport(config, Some(EXPORT_TRANSPORT_TIMEOUT))?;
     let logs = opentelemetry_otlp::LogExporter::builder()
         .with_tonic()
         .with_channel(channel)
@@ -292,6 +350,7 @@ fn log_provider(
         resource,
         EXPORT_BATCH,
         EXPORT_TIMEOUT,
+        Tokio,
     ))
 }
 
@@ -299,11 +358,12 @@ fn log_provider(
 /// timeouts applied; both use the transport bound (see `EXPORT_TRANSPORT_TIMEOUT`).
 fn lazy_channel(
     config: &TelemetryExportConfig,
-    transport_timeout: Duration,
+    transport_timeout: Option<Duration>,
 ) -> Result<tonic::transport::Channel, Box<dyn std::error::Error + Send + Sync>> {
-    let mut endpoint = Endpoint::from_shared(config.endpoint().to_owned())?
-        .timeout(transport_timeout)
-        .connect_timeout(transport_timeout);
+    let mut endpoint = Endpoint::from_shared(config.endpoint().to_owned())?;
+    if let Some(timeout) = transport_timeout {
+        endpoint = endpoint.timeout(timeout).connect_timeout(timeout);
+    }
     if uses_tls(config.endpoint()) {
         endpoint = endpoint.tls_config(ClientTlsConfig::new().with_native_roots())?;
     }
@@ -318,11 +378,12 @@ pub(crate) fn uses_tls(endpoint: &str) -> bool {
         .is_some_and(|scheme| scheme.eq_ignore_ascii_case("https://"))
 }
 
-fn tracer_provider(
+fn tracer_provider<R: RuntimeChannel>(
     spans: opentelemetry_otlp::SpanExporter,
     resource: Resource,
     batch: usize,
     timeout: Duration,
+    runtime: R,
 ) -> SdkTracerProvider {
     SdkTracerProvider::builder()
         .with_id_generator(crate::task_exporter::DurableIds)
@@ -334,7 +395,7 @@ fn tracer_provider(
         .with_max_links_per_span(0)
         .with_max_attributes_per_link(0)
         .with_span_processor(
-            BatchSpanProcessor::builder(spans, Tokio)
+            BatchSpanProcessor::builder(spans, runtime)
                 .with_batch_config(
                     BatchConfigBuilder::default()
                         .with_max_queue_size(EXPORT_QUEUE)
@@ -373,10 +434,11 @@ pub(crate) fn task_stream(
         .map_err(|source| MetricStreamError(source.to_string()))
 }
 
-fn meter_provider(
+fn meter_provider<R: Runtime>(
     metrics: opentelemetry_otlp::MetricExporter,
     resource: Resource,
     timeout: Duration,
+    runtime: R,
 ) -> Result<SdkMeterProvider, MetricStreamError> {
     // Validate once so a builder failure propagates through setup; the view
     // below rebuilds the same stream per instrument and cannot then fail.
@@ -391,7 +453,7 @@ fn meter_provider(
                 .flatten()
         })
         .with_reader(
-            PeriodicReader::builder(metrics, Tokio)
+            PeriodicReader::builder(metrics, runtime)
                 .with_interval(EXPORT_INTERVAL)
                 .with_timeout(timeout)
                 .build(),
