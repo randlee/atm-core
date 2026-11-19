@@ -66,10 +66,10 @@ impl CliIo {
     }
 }
 
-struct CommandOutput {
-    stdout: String,
-    stderr: String,
-    success: bool,
+pub(super) struct CommandOutput {
+    pub(super) stdout: String,
+    pub(super) stderr: String,
+    pub(super) success: bool,
 }
 
 pub(crate) fn command_args(op: HerdrOp<'_>) -> Vec<String> {
@@ -319,7 +319,7 @@ pub(crate) async fn read_capped(reader: impl tokio::io::AsyncRead + Unpin) -> (V
     (output, truncated)
 }
 
-fn decode_envelope(output: &CommandOutput) -> Result<HerdrEnvelope, HerdrError> {
+pub(super) fn decode_envelope(output: &CommandOutput) -> Result<HerdrEnvelope, HerdrError> {
     let value = serde_json::from_str::<Value>(if output.success {
         &output.stdout
     } else {

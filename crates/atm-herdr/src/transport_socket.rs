@@ -12,6 +12,7 @@ use atm_core::{EnvSource, HerdrSession, ProcessEnvSource, RequestDeadline};
 use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Semaphore;
+use tokio::time::Instant;
 
 use crate::HerdrError;
 use crate::transport::{HerdrClientConfig, HerdrEnvelope, HerdrErrorEnvelope, HerdrOp};
@@ -117,6 +118,7 @@ impl SocketIo {
         session: Option<&HerdrSession>,
         deadline: RequestDeadline,
     ) -> Result<HerdrEnvelope, HerdrError> {
+        let deadline = tokio_deadline(deadline)?;
         let permit = acquire_permit(Arc::clone(&self.in_flight), deadline).await?;
         let endpoint = herdr_api_endpoint(&self.cfg, session, &self.env);
 
@@ -124,14 +126,21 @@ impl SocketIo {
         let mut stream = connect_unix(&endpoint, deadline).await?;
         #[cfg(windows)]
         let mut stream =
-            connect_named_pipe(&endpoint, deadline, self.pipe_busy_retry_delay).await?;
+            connect_named_pipe_at(&endpoint, deadline, self.pipe_busy_retry_delay).await?;
 
-        write_request(&mut stream, &request, deadline).await?;
-        let response = read_response_line(&mut stream, self.max_line_bytes, deadline).await?;
+        let response =
+            exchange_over_stream(&mut stream, &request, self.max_line_bytes, deadline).await?;
         drop(stream);
         drop(permit);
-        decode_envelope(&response)
+        Ok(response)
     }
+}
+
+fn tokio_deadline(deadline: RequestDeadline) -> Result<Instant, HerdrError> {
+    let Some(remaining) = deadline.remaining() else {
+        return Err(HerdrError::Timeout);
+    };
+    Ok(Instant::now() + remaining)
 }
 
 /// Pure endpoint selection. Environment is supplied by the composition root
@@ -207,12 +216,9 @@ fn named_pipe_name(path: PathBuf) -> String {
 
 async fn acquire_permit(
     in_flight: Arc<Semaphore>,
-    deadline: RequestDeadline,
+    deadline: Instant,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, HerdrError> {
-    let Some(remaining) = deadline.remaining() else {
-        return Err(HerdrError::Timeout);
-    };
-    match tokio::time::timeout(remaining, in_flight.acquire_owned()).await {
+    match tokio::time::timeout_at(deadline, in_flight.acquire_owned()).await {
         Ok(Ok(permit)) => Ok(permit),
         Ok(Err(_)) => Err(HerdrError::InternalError {
             message: "Herdr socket permit pool was closed".to_owned(),
@@ -269,7 +275,7 @@ fn encode_ping_request() -> Vec<u8> {
 async fn write_request<S>(
     stream: &mut S,
     request: &[u8],
-    deadline: RequestDeadline,
+    deadline: Instant,
 ) -> Result<(), HerdrError>
 where
     S: AsyncWrite + Unpin,
@@ -278,10 +284,27 @@ where
     deadline_io(deadline, stream.flush()).await
 }
 
+/// Exchange one NDJSON request and response on an already connected stream.
+/// The absolute Tokio deadline is injected here so the same transport path is
+/// testable under a paused clock without consulting the std clock.
+async fn exchange_over_stream<S>(
+    stream: &mut S,
+    request: &[u8],
+    max_line_bytes: usize,
+    deadline: Instant,
+) -> Result<HerdrEnvelope, HerdrError>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    write_request(stream, request, deadline).await?;
+    let response = read_response_line(stream, max_line_bytes, deadline).await?;
+    decode_envelope(&response)
+}
+
 async fn read_response_line<S>(
     stream: &mut S,
     max_line_bytes: usize,
-    deadline: RequestDeadline,
+    deadline: Instant,
 ) -> Result<Vec<u8>, HerdrError>
 where
     S: AsyncRead + Unpin,
@@ -311,13 +334,10 @@ where
 }
 
 async fn deadline_io<T>(
-    deadline: RequestDeadline,
+    deadline: Instant,
     future: impl Future<Output = io::Result<T>>,
 ) -> Result<T, HerdrError> {
-    let Some(remaining) = deadline.remaining() else {
-        return Err(HerdrError::Timeout);
-    };
-    match tokio::time::timeout(remaining, future).await {
+    match tokio::time::timeout_at(deadline, future).await {
         Ok(Ok(value)) => Ok(value),
         Ok(Err(error)) => Err(socket_io_error(error)),
         Err(_) => Err(HerdrError::Timeout),
@@ -354,7 +374,7 @@ fn oversized_response(observed_bytes: usize, max_line_bytes: usize) -> HerdrErro
 #[cfg(unix)]
 async fn connect_unix(
     endpoint: &HerdrEndpoint,
-    deadline: RequestDeadline,
+    deadline: Instant,
 ) -> Result<tokio::net::UnixStream, HerdrError> {
     let HerdrEndpoint::UnixSocket(path) = endpoint else {
         return Err(HerdrError::InternalError {
@@ -365,16 +385,16 @@ async fn connect_unix(
 }
 
 async fn connect_with_deadline<T>(
-    deadline: RequestDeadline,
+    deadline: Instant,
     future: impl Future<Output = io::Result<T>>,
 ) -> Result<T, HerdrError> {
     deadline_io(deadline, future).await
 }
 
 #[cfg(windows)]
-async fn connect_named_pipe(
+async fn connect_named_pipe_at(
     endpoint: &HerdrEndpoint,
-    deadline: RequestDeadline,
+    deadline: Instant,
     retry_delay: Duration,
 ) -> Result<tokio::net::windows::named_pipe::NamedPipeClient, HerdrError> {
     let HerdrEndpoint::NamedPipe(name) = endpoint else {
@@ -382,37 +402,48 @@ async fn connect_named_pipe(
             message: "Unix Herdr endpoint selected on a Windows build".to_owned(),
         });
     };
-    retry_pipe_busy(
-        || deadline.remaining(),
-        retry_delay,
-        || tokio::net::windows::named_pipe::ClientOptions::new().open(name),
-    )
+    retry_pipe_busy(deadline, retry_delay, || {
+        tokio::net::windows::named_pipe::ClientOptions::new().open(name)
+    })
     .await
 }
 
+#[cfg(all(windows, test))]
+async fn connect_named_pipe(
+    endpoint: &HerdrEndpoint,
+    deadline: RequestDeadline,
+    retry_delay: Duration,
+) -> Result<tokio::net::windows::named_pipe::NamedPipeClient, HerdrError> {
+    connect_named_pipe_at(endpoint, tokio_deadline(deadline)?, retry_delay).await
+}
+
 #[cfg(windows)]
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Named-pipe busy retries pause within the remaining connection deadline.")]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070: Windows ERROR_PIPE_BUSY retry backoff; cancelled by timeout_at(request_deadline).")]
 async fn retry_pipe_busy<T>(
-    remaining: impl Fn() -> Option<Duration>,
+    deadline: Instant,
     retry_delay: Duration,
     mut open: impl FnMut() -> io::Result<T>,
 ) -> Result<T, HerdrError> {
     const ERROR_PIPE_BUSY: i32 = 231;
-    loop {
-        match open() {
-            Ok(client) => return Ok(client),
-            Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => {
-                let Some(remaining) = remaining() else {
-                    return Err(HerdrError::Timeout);
-                };
-                tokio::time::sleep(retry_delay.min(remaining)).await;
+    match tokio::time::timeout_at(deadline, async {
+        loop {
+            match open() {
+                Ok(client) => return Ok(client),
+                Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => {
+                    tokio::time::sleep(retry_delay).await;
+                }
+                Err(error) => return Err(socket_io_error(error)),
             }
-            Err(error) => return Err(socket_io_error(error)),
         }
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => Err(HerdrError::Timeout),
     }
 }
 
-fn decode_envelope(bytes: &[u8]) -> Result<HerdrEnvelope, HerdrError> {
+pub(super) fn decode_envelope(bytes: &[u8]) -> Result<HerdrEnvelope, HerdrError> {
     let value = serde_json::from_slice::<Value>(bytes).map_err(|error| {
         eprintln!("Herdr socket response JSON decode failed: {error}");
         HerdrError::ProtocolMismatch {
@@ -440,6 +471,10 @@ fn decode_envelope(bytes: &[u8]) -> Result<HerdrEnvelope, HerdrError> {
 mod tests {
     use super::*;
     use atm_core::HerdrAgentName;
+
+    fn test_deadline(after: Duration) -> Instant {
+        Instant::now() + after
+    }
 
     fn env(platform: Platform) -> HerdrHostEnv {
         HerdrHostEnv {
@@ -604,88 +639,146 @@ mod tests {
     }
 
     #[test]
+    fn refused_socket_connection_remains_server_unavailable() {
+        assert!(matches!(
+            socket_io_error(io::Error::from(io::ErrorKind::ConnectionRefused)),
+            HerdrError::ServerUnavailable {
+                retry_after: None,
+                io_error_kind: Some(io::ErrorKind::ConnectionRefused),
+                ..
+            }
+        ));
+    }
+
+    #[test]
     fn socket_variant_is_constructible_only_in_tests_until_ay9() {
         let socket = SocketIo::new(&HerdrClientConfig::default());
         let _io = crate::transport::HerdrIo::Socket(socket);
     }
 
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn unix_socket_call_sends_one_request_and_decodes_one_response() {
-        use std::time::{SystemTime, UNIX_EPOCH};
+    #[tokio::test(start_paused = true)]
+    async fn socket_exchange_over_duplex_sends_one_request_and_decodes_one_response() {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!("atm-herdr-ay8-{nonce}.sock"));
-        let listener = tokio::net::UnixListener::bind(&path).expect("socket listener");
+        let (mut client, mut server) = tokio::io::duplex(1024);
         let server = tokio::spawn(async move {
-            let (stream, _) = listener.accept().await.expect("client");
-            let (read_half, mut write_half) = stream.into_split();
-            let mut reader = tokio::io::BufReader::new(read_half);
             let mut request = Vec::new();
-            tokio::io::AsyncBufReadExt::read_until(&mut reader, b'\n', &mut request)
+            tokio::io::BufReader::new(&mut server)
+                .read_until(b'\n', &mut request)
                 .await
                 .expect("request");
             assert_eq!(request.last(), Some(&b'\n'));
             let value: Value = serde_json::from_slice(&request).expect("request JSON");
             assert_eq!(value["method"], "agent.get");
-            tokio::io::AsyncWriteExt::write_all(
-                &mut write_half,
-                br#"{"result":{"agent":{"name":"alice","agent_status":"idle"}}}
+            server
+                .write_all(
+                    br#"{"result":{"agent":{"name":"alice","agent_status":"idle"}}}
 "#,
-            )
-            .await
-            .expect("response");
+                )
+                .await
+                .expect("response");
         });
-
-        let io = SocketIo {
-            cfg: HerdrClientConfig::with_socket_path(path.clone()),
-            env: env(Platform::Unix),
-            max_line_bytes: HERDR_MAX_SOCKET_LINE_BYTES,
-            in_flight: Arc::new(Semaphore::new(SOCKET_PERMITS)),
-            pipe_busy_retry_delay: PIPE_BUSY_RETRY_DELAY,
-        };
         let agent = HerdrAgentName::new("alice").expect("agent");
-        let envelope = io
-            .call(
-                HerdrOp::Get { agent: &agent },
-                None,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .await
-            .expect("socket response");
-        assert!(envelope.result.is_some());
-        server.await.expect("server task");
-        std::fs::remove_file(path).expect("socket cleanup");
-    }
-
-    #[tokio::test]
-    async fn expired_deadline_is_rejected_before_socket_io() {
-        let result = read_response_line(
-            &mut tokio::io::empty(),
+        let request = encode_request(HerdrOp::Get { agent: &agent }).expect("request");
+        let envelope = exchange_over_stream(
+            &mut client,
+            &request,
             HERDR_MAX_SOCKET_LINE_BYTES,
-            RequestDeadline::after(Duration::ZERO),
-        )
-        .await;
-        assert!(matches!(result, Err(HerdrError::Timeout)));
-    }
-
-    #[tokio::test]
-    async fn permit_wait_uses_the_call_deadline_and_releases_cleanly() {
-        let permits = Arc::new(Semaphore::new(1));
-        let held = acquire_permit(
-            Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
+            test_deadline(Duration::from_secs(1)),
         )
         .await
-        .expect("first permit");
+        .expect("socket response");
+        assert!(envelope.result.is_some());
+        server.await.expect("server task");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn expired_deadline_is_rejected_before_socket_io() {
+        let (mut client, _server) = tokio::io::duplex(16);
         let result =
-            acquire_permit(Arc::clone(&permits), RequestDeadline::after(Duration::ZERO)).await;
+            read_response_line(&mut client, HERDR_MAX_SOCKET_LINE_BYTES, Instant::now()).await;
+        assert!(matches!(result, Err(HerdrError::Timeout)));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn expired_request_deadline_is_rejected_at_the_transport_entry() {
+        assert!(matches!(
+            tokio_deadline(RequestDeadline::after(Duration::ZERO)),
+            Err(HerdrError::Timeout)
+        ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn delayed_transport_entry_keeps_the_injected_absolute_deadline() {
+        let deadline = test_deadline(Duration::from_nanos(4));
+        tokio::time::advance(Duration::from_nanos(3)).await;
+        let (mut client, _server) = tokio::io::duplex(16);
+
+        let result = exchange_over_stream(&mut client, b"request\n", 128, deadline).await;
+
+        assert!(matches!(result, Err(HerdrError::Timeout)));
+        assert!(Instant::now() >= deadline);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn nested_write_and_read_share_the_injected_deadline_at_the_exact_boundary() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let deadline = test_deadline(Duration::from_nanos(4));
+        let (mut client, mut server) = tokio::io::duplex(1);
+        let (read_gate_tx, read_gate_rx) = tokio::sync::oneshot::channel();
+        let (request_seen_tx, request_seen_rx) = tokio::sync::oneshot::channel();
+        let (response_gate_tx, response_gate_rx) = tokio::sync::oneshot::channel();
+        let server_task = tokio::spawn(async move {
+            read_gate_rx.await.expect("read gate");
+            let mut request = [0_u8; 8];
+            server
+                .read_exact(&mut request)
+                .await
+                .expect("full request after read gate");
+            assert_eq!(&request, b"payload\n");
+            request_seen_tx.send(()).expect("request observed");
+            response_gate_rx.await.expect("response gate");
+            let _ = server.write_all(b"{}\n").await;
+        });
+        let (result_tx, mut result_rx) = tokio::sync::oneshot::channel();
+        let exchange = tokio::spawn(async move {
+            let result = exchange_over_stream(&mut client, b"payload\n", 128, deadline).await;
+            let _ = result_tx.send(result);
+        });
+
+        tokio::time::advance(Duration::from_nanos(2)).await;
+        read_gate_tx.send(()).expect("release server read");
+        request_seen_rx.await.expect("server received request");
+        tokio::time::advance(Duration::from_nanos(1)).await;
+        assert!(
+            Instant::now() < deadline,
+            "d-1ns remains before the deadline"
+        );
+        assert!(matches!(
+            result_rx.try_recv(),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+        ));
+        tokio::time::advance(Duration::from_nanos(1)).await;
+        assert_eq!(Instant::now(), deadline);
+
+        let result = result_rx.await.expect("exchange result");
+        assert!(matches!(result, Err(HerdrError::Timeout)));
+        response_gate_tx.send(()).expect("release response fixture");
+        exchange.await.expect("exchange task");
+        server_task.await.expect("server fixture");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn permit_wait_uses_the_call_deadline_and_releases_cleanly() {
+        let permits = Arc::new(Semaphore::new(1));
+        let held = acquire_permit(Arc::clone(&permits), test_deadline(Duration::from_secs(1)))
+            .await
+            .expect("first permit");
+        let result = acquire_permit(Arc::clone(&permits), Instant::now()).await;
         assert!(matches!(result, Err(HerdrError::Timeout)));
         drop(held);
-        let _ = acquire_permit(permits, RequestDeadline::after(Duration::from_secs(1)))
+        let _ = acquire_permit(permits, test_deadline(Duration::from_secs(1)))
             .await
             .expect("released permit");
     }
@@ -696,21 +789,16 @@ mod tests {
         let mut held = Vec::new();
         for _ in 0..SOCKET_PERMITS {
             held.push(
-                acquire_permit(
-                    Arc::clone(&permits),
-                    RequestDeadline::after(Duration::from_secs(1)),
-                )
-                .await
-                .expect("permit"),
+                acquire_permit(Arc::clone(&permits), test_deadline(Duration::from_secs(1)))
+                    .await
+                    .expect("permit"),
             );
         }
 
         let waiter = tokio::spawn(acquire_permit(
             Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
+            test_deadline(Duration::from_secs(1)),
         ));
-        tokio::task::yield_now().await;
-        assert!(!waiter.is_finished());
         tokio::time::advance(Duration::from_secs(1)).await;
         assert!(matches!(
             waiter.await.expect("waiter"),
@@ -722,31 +810,30 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn cancelling_a_permit_wait_releases_all_state() {
         let permits = Arc::new(Semaphore::new(1));
-        let held = acquire_permit(
-            Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
-        )
-        .await
-        .expect("held permit");
-        let waiter = tokio::spawn(acquire_permit(
-            Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
-        ));
-        tokio::task::yield_now().await;
+        let held = acquire_permit(Arc::clone(&permits), test_deadline(Duration::from_secs(1)))
+            .await
+            .expect("held permit");
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let waiter_permits = Arc::clone(&permits);
+        let waiter = tokio::spawn(async move {
+            let _ = started_tx.send(());
+            acquire_permit(waiter_permits, test_deadline(Duration::from_secs(1))).await
+        });
+        started_rx.await.expect("waiter reached permit acquisition");
         waiter.abort();
         let _ = waiter.await;
         drop(held);
-        let _ = acquire_permit(permits, RequestDeadline::after(Duration::from_secs(1)))
+        let _ = acquire_permit(permits, test_deadline(Duration::from_secs(1)))
             .await
             .expect("permit after cancellation");
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn eof_without_newline_preserves_observed_byte_count() {
         let result = read_response_line(
             &mut std::io::Cursor::new(b"{}".to_vec()),
             HERDR_MAX_SOCKET_LINE_BYTES,
-            RequestDeadline::after(Duration::from_secs(1)),
+            test_deadline(Duration::from_secs(1)),
         )
         .await;
         assert!(matches!(
@@ -756,12 +843,12 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn oversized_response_is_rejected_at_the_line_boundary() {
         let result = read_response_line(
             &mut std::io::Cursor::new(b"abcd\n".to_vec()),
             3,
-            RequestDeadline::after(Duration::from_secs(1)),
+            test_deadline(Duration::from_secs(1)),
         )
         .await;
         assert!(matches!(
@@ -773,11 +860,13 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn stalled_connect_honors_the_absolute_deadline() {
-        let task = tokio::spawn(connect_with_deadline(
-            RequestDeadline::after(Duration::from_secs(1)),
-            std::future::pending::<io::Result<()>>(),
-        ));
-        tokio::task::yield_now().await;
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let deadline = test_deadline(Duration::from_secs(1));
+        let task = tokio::spawn(connect_with_deadline(deadline, async move {
+            let _ = started_tx.send(());
+            std::future::pending::<io::Result<()>>().await
+        }));
+        started_rx.await.expect("connect future was polled");
         tokio::time::advance(Duration::from_secs(1)).await;
         assert!(matches!(
             task.await.expect("connect task"),
@@ -789,15 +878,13 @@ mod tests {
     async fn stalled_write_honors_the_absolute_deadline() {
         let (mut client, _server) = tokio::io::duplex(1);
         let request = vec![b'x'; 4096];
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let deadline = test_deadline(Duration::from_secs(1));
         let task = tokio::spawn(async move {
-            write_request(
-                &mut client,
-                &request,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .await
+            let _ = started_tx.send(());
+            write_request(&mut client, &request, deadline).await
         });
-        tokio::task::yield_now().await;
+        started_rx.await.expect("write future was polled");
         tokio::time::advance(Duration::from_secs(1)).await;
         assert!(matches!(
             task.await.expect("write task"),
@@ -808,48 +895,59 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn cancelling_io_wait_does_not_retain_the_socket_permit() {
         let permits = Arc::new(Semaphore::new(1));
-        let held = acquire_permit(
-            Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
-        )
-        .await
-        .expect("held permit");
-        let waiter = tokio::spawn(acquire_permit(
-            Arc::clone(&permits),
-            RequestDeadline::after(Duration::from_secs(1)),
-        ));
-        tokio::task::yield_now().await;
+        let held = acquire_permit(Arc::clone(&permits), test_deadline(Duration::from_secs(1)))
+            .await
+            .expect("held permit");
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let waiter_permits = Arc::clone(&permits);
+        let waiter = tokio::spawn(async move {
+            let _ = started_tx.send(());
+            acquire_permit(waiter_permits, test_deadline(Duration::from_secs(1))).await
+        });
+        started_rx.await.expect("waiter reached permit acquisition");
         waiter.abort();
         let _ = waiter.await;
         drop(held);
-        let _ = acquire_permit(permits, RequestDeadline::after(Duration::from_secs(1)))
+        let _ = acquire_permit(permits, test_deadline(Duration::from_secs(1)))
             .await
             .expect("permit after I/O cancellation");
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn cancelling_connect_write_and_read_futures_is_clean() {
+        let (connect_started_tx, connect_started_rx) = tokio::sync::oneshot::channel();
         let connect = tokio::spawn(connect_with_deadline(
-            RequestDeadline::after(Duration::from_secs(1)),
-            std::future::pending::<io::Result<()>>(),
+            test_deadline(Duration::from_secs(1)),
+            async move {
+                let _ = connect_started_tx.send(());
+                std::future::pending::<io::Result<()>>().await
+            },
         ));
-        tokio::task::yield_now().await;
+        connect_started_rx.await.expect("connect future was polled");
         connect.abort();
         assert!(connect.await.is_err());
 
+        let (write_started_tx, write_started_rx) = tokio::sync::oneshot::channel();
         let write = tokio::spawn(deadline_io(
-            RequestDeadline::after(Duration::from_secs(1)),
-            std::future::pending::<io::Result<()>>(),
+            test_deadline(Duration::from_secs(1)),
+            async move {
+                let _ = write_started_tx.send(());
+                std::future::pending::<io::Result<()>>().await
+            },
         ));
-        tokio::task::yield_now().await;
+        write_started_rx.await.expect("write future was polled");
         write.abort();
         assert!(write.await.is_err());
 
+        let (read_started_tx, read_started_rx) = tokio::sync::oneshot::channel();
         let read = tokio::spawn(deadline_io(
-            RequestDeadline::after(Duration::from_secs(1)),
-            std::future::pending::<io::Result<usize>>(),
+            test_deadline(Duration::from_secs(1)),
+            async move {
+                let _ = read_started_tx.send(());
+                std::future::pending::<io::Result<usize>>().await
+            },
         ));
-        tokio::task::yield_now().await;
+        read_started_rx.await.expect("read future was polled");
         read.abort();
         assert!(read.await.is_err());
     }
@@ -859,27 +957,35 @@ mod tests {
     async fn named_pipe_busy_retry_is_covered_with_a_bounded_deadline() {
         let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let observed = Arc::clone(&attempts);
-        retry_pipe_busy(
-            || Some(Duration::from_secs(1)),
+        let (busy_tx, busy_rx) = tokio::sync::oneshot::channel();
+        let deadline = test_deadline(PIPE_BUSY_RETRY_DELAY + Duration::from_nanos(1));
+        let retry = tokio::spawn(retry_pipe_busy(
+            deadline,
             PIPE_BUSY_RETRY_DELAY,
             move || {
                 if observed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
+                    let _ = busy_tx.send(());
                     Err(io::Error::from_raw_os_error(231))
                 } else {
                     Ok(())
                 }
             },
-        )
-        .await
-        .expect("retry");
+        ));
+        busy_rx
+            .await
+            .expect("first busy result reached retry sleep");
+        tokio::time::advance(PIPE_BUSY_RETRY_DELAY).await;
+        retry.await.expect("retry task").expect("retry");
         assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 2);
-        let expired = retry_pipe_busy(
-            || None,
-            PIPE_BUSY_RETRY_DELAY,
-            || Err::<(), _>(io::Error::from_raw_os_error(231)),
-        )
+        let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = Arc::clone(&attempts);
+        let expired = retry_pipe_busy(Instant::now(), PIPE_BUSY_RETRY_DELAY, move || {
+            observed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            Err::<(), _>(io::Error::from_raw_os_error(231))
+        })
         .await;
         assert!(matches!(expired, Err(HerdrError::Timeout)));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::Relaxed), 0);
     }
 
     #[cfg(windows)]

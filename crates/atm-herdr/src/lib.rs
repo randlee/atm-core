@@ -1265,21 +1265,14 @@ mod tests {
         for (failures, seconds) in [(1, 1), (2, 2), (3, 4), (4, 8), (5, 16), (6, 30), (20, 30)] {
             assert_eq!(breaker_backoff(failures), Duration::from_secs(seconds));
         }
-        let breaker = HerdrSpawnBreaker::default();
+        let clock = Arc::new(TestBreakerClock::new());
+        let breaker = HerdrSpawnBreaker::with_clock(clock.clone());
         for _ in 0..3 {
             record_result::<()>(&breaker, &Err(HerdrError::ServerNotRunning));
         }
         assert_eq!(breaker.consecutive_failures(), 3);
         assert!(!breaker.permits_spawn());
-        {
-            let mut state = breaker.state.lock().expect("breaker lock");
-            state.opened_at = Some(
-                Instant::now()
-                    .checked_sub(Duration::from_secs(31))
-                    .expect("a 31-second test offset must be representable"),
-            );
-            state.half_open_probe = false;
-        }
+        clock.advance(Duration::from_secs(31));
         assert!(breaker.permits_spawn(), "half-open allows one probe");
         assert!(!breaker.permits_spawn(), "half-open rejects a second probe");
         breaker.record_success();
