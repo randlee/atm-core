@@ -19,6 +19,28 @@ use atm_core::api::RequestDeadline;
 use atm_core::types::HostName;
 use tokio::time::Instant;
 
+// Test-only clock and dial selection are scoped to one Tokio task; release
+// builds keep the direct RequestDeadline and network calls below.
+#[cfg(test)]
+tokio::task_local! { pub(crate) static SCRIPTED_PEER_DIAL: (); }
+
+#[cfg(test)]
+pub(crate) fn test_remaining(deadline: RequestDeadline) -> Option<Duration> {
+    SCRIPTED_PEER_DIAL
+        .try_with(|()| {
+            let millis = deadline.remaining_ms_at(Instant::now().into_std());
+            (millis != 0).then(|| Duration::from_millis(millis))
+        })
+        .unwrap_or_else(|_| deadline.remaining())
+}
+
+#[cfg(test)]
+pub(crate) fn test_after(duration: Duration) -> RequestDeadline {
+    SCRIPTED_PEER_DIAL
+        .try_with(|()| RequestDeadline::after_at(Instant::now().into_std(), duration))
+        .unwrap_or_else(|_| RequestDeadline::after(duration))
+}
+
 /// Upper bound on addresses dialled for one peer. A resolver answer larger
 /// than this would otherwise split the request budget into shares too small
 /// for any single address to connect, defeating the per-attempt bound.
@@ -134,7 +156,11 @@ where
     let total = usable.len();
     let mut failures = Vec::with_capacity(total);
     for (index, address) in usable.into_iter().enumerate() {
-        let Some(remaining) = deadline.remaining() else {
+        #[cfg(not(test))]
+        let remaining = deadline.remaining();
+        #[cfg(test)]
+        let remaining = test_remaining(deadline);
+        let Some(remaining) = remaining else {
             failures.push(format!(
                 "{address}: request budget elapsed before the attempt"
             ));
@@ -289,8 +315,11 @@ impl PeerAddressCache {
             }
         }
 
-        let remaining = deadline
-            .remaining()
+        #[cfg(not(test))]
+        let remaining = deadline.remaining();
+        #[cfg(test)]
+        let remaining = test_remaining(deadline);
+        let remaining = remaining
             .ok_or_else(|| "request budget elapsed before the peer name was resolved".to_owned())?;
         let resolved = tokio::time::timeout(remaining, resolve(peer.clone(), port))
             .await
