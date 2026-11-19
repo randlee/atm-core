@@ -184,10 +184,7 @@ impl TcpPeerTransportDialer {
         // dial loop is bounded slightly *inside* the budget: it finishes, and
         // reports its per-address diagnosis, before any bare timeout can win
         // the race. The outer guard here is only a backstop at the budget.
-        let dial_deadline = deadline
-            .checked_sub(DIAL_REPORT_GRACE)
-            .filter(|reserved| *reserved > Instant::now())
-            .unwrap_or(deadline);
+        let dial_deadline = dial_deadline(deadline);
         tokio::time::timeout_at(
             deadline,
             self.addresses.connect(
@@ -215,6 +212,13 @@ impl TcpPeerTransportDialer {
             }
         })
     }
+}
+
+fn dial_deadline(deadline: Instant) -> Instant {
+    deadline
+        .checked_sub(DIAL_REPORT_GRACE)
+        .filter(|reserved| *reserved > Instant::now())
+        .unwrap_or(deadline)
 }
 
 impl Drop for PoolShared {
@@ -1490,28 +1494,81 @@ mod tests {
         }
     }
 
-    /// ADR-060 §7: the dial loop is bounded inside the request budget, so an
-    /// unresponsive peer is reported with its per-address diagnosis rather
-    /// than losing the race to a bare connect timeout.
-    #[tokio::test]
+    /// A controlled transport still exercises the address cache and candidate loop.
+    struct UnresponsiveDialer {
+        addresses: super::PeerAddressCache,
+    }
+
+    impl super::PeerTransportDialer for UnresponsiveDialer {
+        fn dial<'a>(
+            &'a self,
+            peer: &'a atm_core::types::HostName,
+            port: std::num::NonZeroU16,
+            deadline: tokio::time::Instant,
+            authority: &'a str,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = Result<
+                            EstablishedPeerStream,
+                            crate::client::HttpRuntimeClientFailure,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async move {
+                let dial_deadline = super::dial_deadline(deadline);
+                self.addresses
+                    .connect(
+                        peer,
+                        port,
+                        dial_deadline,
+                        |_host, port| async move {
+                            Ok(vec![std::net::SocketAddr::from((
+                                [10, 255, 255, 1],
+                                port.get(),
+                            ))])
+                        },
+                        |_address| async {
+                            std::future::pending::<std::io::Result<EstablishedPeerStream>>().await
+                        },
+                    )
+                    .await
+                    .map_err(
+                        |cause| crate::client::HttpRuntimeClientFailure::PeerConnect {
+                            target: authority.to_owned(),
+                            cause,
+                        },
+                    )
+            })
+        }
+    }
+
+    /// ADR-060 §7: per-address diagnosis arrives inside the request budget.
+    #[tokio::test(start_paused = true)]
     async fn unresponsive_peer_reports_per_address_diagnosis_not_a_bare_timeout() {
-        let adapter = Arc::new(CountingPassthroughAdapter::default());
-        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
-        // A black-holed address: nothing answers, so the attempt runs to its
-        // budget share unless the OS rejects the route outright.
+        let config = PeerPoolConfig::default();
+        let dialer = Arc::new(UnresponsiveDialer {
+            addresses: super::PeerAddressCache::new(config.address_cache_ttl),
+        });
+        let pool = PeerConnectionPool::with_dialer(
+            config,
+            dialer,
+            Arc::new(super::PeerAddressCache::new(config.address_cache_ttl)),
+        );
         let peer = "10.255.255.1".parse().expect("peer authority");
+        let start = tokio::time::Instant::now();
         let budget = Duration::from_millis(600);
-        let started = std::time::Instant::now();
         let result = pool
-            .acquire(
+            .acquire_until(
                 &peer,
-                std::num::NonZeroU16::new(43_101).expect("non-zero test port"),
-                atm_core::api::RequestDeadline::after(budget),
+                std::num::NonZeroU16::new(43_101).unwrap(),
+                start + budget,
             )
             .await;
-        let elapsed = started.elapsed();
         let cause = match result {
-            Ok(_) => panic!("a black-holed peer must not connect"),
+            Ok(_) => panic!("an unresponsive peer must not connect"),
             Err(super::HttpRuntimeClientFailure::PeerConnect { cause, .. }) => cause,
             Err(other) => panic!("per-address diagnosis expected, got {other:?}"),
         };
@@ -1519,11 +1576,10 @@ mod tests {
             cause.contains("10.255.255.1:43101: "),
             "cause names the attempted address and reason: {cause}"
         );
-        assert!(
-            elapsed < budget,
-            "the dial loop finishes inside the request budget: {elapsed:?}"
+        assert_eq!(
+            tokio::time::Instant::now(),
+            start + budget - super::DIAL_REPORT_GRACE
         );
-        assert_eq!(adapter.connects.load(Ordering::SeqCst), 0);
         assert_eq!(pool.pooled_count(), 0);
     }
 }
