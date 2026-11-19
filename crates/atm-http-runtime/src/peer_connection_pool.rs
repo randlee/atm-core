@@ -363,12 +363,11 @@ impl PeerConnectionPool {
         // dial loop is bounded slightly *inside* the budget: it finishes, and
         // reports its per-address diagnosis, before any bare timeout can win
         // the race. The outer guard here is only a backstop at the budget.
-        let dial_deadline = RequestDeadline::after(
-            remaining
+        let dial_deadline = Instant::now()
+            + (remaining
                 .checked_sub(DIAL_REPORT_GRACE)
                 .filter(|reserved| !reserved.is_zero())
-                .unwrap_or(remaining),
-        );
+                .unwrap_or(remaining));
         tokio::time::timeout(
             remaining,
             self.shared.addresses.connect(
