@@ -1,6 +1,5 @@
+use std::future::Future;
 use std::path::Path;
-#[cfg(test)]
-use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -419,43 +418,72 @@ struct TailArgs {
     /// Poll interval in milliseconds between follow polls.
     #[arg(long, default_value_t = DEFAULT_TAIL_POLL_INTERVAL_MS)]
     poll_interval_ms: u64,
-
-    /// Internal test seam to stop tail mode after a fixed number of polls.
-    #[cfg(test)]
-    #[arg(long, hide = true)]
-    max_polls: Option<usize>,
 }
 
 impl TailArgs {
-    #[cfg(not(test))]
-    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Log follow polls the retained store at the configured interval.")]
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let mut session = observability.follow(self.query.build_query(LogMode::Tail)?)?;
+        let interval = follow_interval(Duration::from_millis(self.poll_interval_ms));
+        follow_loop(
+            || session.poll().map_err(anyhow::Error::from),
+            interval,
+            |snapshot| {
+                output::print_log_records(snapshot.records, self.query.json)?;
+                Ok(true)
+            },
+            async {
+                tokio::signal::ctrl_c()
+                    .await
+                    .context("waiting for Ctrl-C")?;
+                Ok(())
+            },
+        )
+        .await
+    }
+}
 
-        loop {
-            let snapshot = session.poll()?;
-            output::print_log_records(snapshot.records, self.query.json)?;
-            tokio::time::sleep(std::time::Duration::from_millis(self.poll_interval_ms)).await;
-        }
+fn follow_interval(period: Duration) -> Option<tokio::time::Interval> {
+    if period.is_zero() {
+        // The previous sleep(Duration::ZERO) completed immediately; keep that
+        // behavior without asking Tokio to construct a zero-period interval.
+        return None;
     }
 
-    #[cfg(test)]
-    async fn run(self, observability: &CliObservability) -> Result<()> {
-        let mut session = observability.follow(self.query.build_query(LogMode::Tail)?)?;
-        let mut polls = 0usize;
+    let mut interval = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    Some(interval)
+}
 
-        loop {
-            let snapshot = session.poll()?;
-            output::print_log_records(snapshot.records, self.query.json)?;
-            polls += 1;
+async fn follow_loop<P, T, O, C>(
+    mut poll: P,
+    mut interval: Option<tokio::time::Interval>,
+    mut output: O,
+    cancellation: C,
+) -> Result<()>
+where
+    P: FnMut() -> Result<T>,
+    O: FnMut(T) -> Result<bool>,
+    C: Future<Output = Result<()>>,
+{
+    tokio::pin!(cancellation);
 
-            if self.max_polls.is_some_and(|limit| polls >= limit) {
+    loop {
+        let snapshot = poll()?;
+        if !output(snapshot)? {
+            return Ok(());
+        }
+
+        tokio::select! {
+            biased;
+            cancellation_result = &mut cancellation => {
+                cancellation_result?;
                 return Ok(());
             }
-
-            if self.max_polls.is_none() {
-                thread::yield_now();
-            }
+            _ = async {
+                if let Some(interval) = interval.as_mut() {
+                    interval.tick().await;
+                }
+            } => {}
         }
     }
 }
@@ -535,7 +563,11 @@ fn parse_relative_duration(raw: &str) -> Result<IsoTimestamp> {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::Mutex;
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use std::time::Duration;
 
     use atm_core::error::AtmError;
     use atm_core::local_http::{LocalCapability, LocalHttpEndpointRecord};
@@ -551,10 +583,110 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::{
-        LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord, parse_log_level_filter,
-        parse_match_expression, parse_relative_duration,
+        LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord, follow_interval,
+        follow_loop, parse_log_level_filter, parse_match_expression, parse_relative_duration,
     };
     use crate::observability::{CliObservability, CliObservabilityOptions};
+
+    #[tokio::test(start_paused = true)]
+    async fn follow_loop_polls_immediately_then_at_interval_spacing() {
+        let (poll_tx, mut poll_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+        let polls = Arc::new(AtomicUsize::new(0));
+        let poll_count = Arc::clone(&polls);
+        let task = tokio::spawn(follow_loop(
+            move || {
+                let count = poll_count.fetch_add(1, Ordering::SeqCst) + 1;
+                poll_tx.send(count).expect("poll observer remains open");
+                Ok(count)
+            },
+            follow_interval(Duration::from_millis(10)),
+            |_| Ok(true),
+            async move {
+                cancel_rx.await.map_err(anyhow::Error::from)?;
+                Ok(())
+            },
+        ));
+
+        assert_eq!(poll_rx.recv().await, Some(1));
+        tokio::time::advance(Duration::from_millis(9)).await;
+        assert!(poll_rx.try_recv().is_err());
+        tokio::time::advance(Duration::from_millis(1)).await;
+        assert_eq!(poll_rx.recv().await, Some(2));
+
+        cancel_tx.send(()).expect("follow loop is still running");
+        task.await
+            .expect("follow loop task")
+            .expect("follow loop result");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn follow_loop_preserves_zero_interval_and_cancels_cleanly() {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let poll_count = Arc::clone(&polls);
+        let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+        let mut cancel_tx = Some(cancel_tx);
+        follow_loop(
+            move || {
+                let count = poll_count.fetch_add(1, Ordering::SeqCst) + 1;
+                if count == 2 {
+                    cancel_tx
+                        .take()
+                        .expect("cancel sender is used once")
+                        .send(())
+                        .expect("follow loop awaits cancellation");
+                }
+                Ok(count)
+            },
+            follow_interval(Duration::ZERO),
+            |_| Ok(true),
+            async move {
+                cancel_rx.await.map_err(anyhow::Error::from)?;
+                Ok(())
+            },
+        )
+        .await
+        .expect("cancellation exits cleanly");
+
+        assert_eq!(polls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn follow_loop_stops_when_output_closes() {
+        let polls = AtomicUsize::new(0);
+        follow_loop(
+            || {
+                polls.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            },
+            follow_interval(Duration::from_secs(1)),
+            |_| Ok(false),
+            std::future::pending(),
+        )
+        .await
+        .expect("closed output ends follow mode");
+
+        assert_eq!(polls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn follow_loop_preserves_output_errors() {
+        let error = follow_loop(
+            || Ok(()),
+            follow_interval(Duration::from_secs(1)),
+            |_| Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "closed stdout").into()),
+            std::future::pending(),
+        )
+        .await
+        .expect_err("broken pipe is propagated");
+
+        assert_eq!(
+            error
+                .downcast_ref::<std::io::Error>()
+                .map(std::io::Error::kind),
+            Some(std::io::ErrorKind::BrokenPipe)
+        );
+    }
 
     fn caller_context_env() -> EnvGuard {
         EnvGuard::set_many([
