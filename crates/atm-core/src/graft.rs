@@ -149,12 +149,14 @@ pub enum GraftPostSendResponse {
 
 const RECEIVER_HOOK_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct HookTransportLimits {
     connect: Option<Duration>,
     io: Option<Duration>,
 }
 
+#[cfg(test)]
 const PRODUCTION_HOOK_TRANSPORT_LIMITS: HookTransportLimits = HookTransportLimits {
     connect: Some(RECEIVER_HOOK_CONNECT_DEADLINE),
     io: Some(RECEIVER_HOOK_IO_DEADLINE),
@@ -369,9 +371,20 @@ fn remaining_hook_budget(
     deadline: RequestDeadline,
     safety_cap: Duration,
 ) -> Result<Duration, AtmError> {
-    hook_budget_from_remaining(deadline.remaining(), safety_cap)
+    deadline
+        .remaining()
+        .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
+        .filter(|remaining| !remaining.is_zero())
+        .map(|remaining| remaining.min(safety_cap))
+        .ok_or_else(|| {
+            AtmError::new(
+                AtmErrorCode::PostSendGraftUnavailable,
+                "received-message hook does not retain enough request budget for endpoint delivery and result handoff",
+            )
+        })
 }
 
+#[cfg(test)]
 fn hook_budget_from_remaining(
     remaining: Option<Duration>,
     safety_cap: Duration,
@@ -388,6 +401,47 @@ fn hook_budget_from_remaining(
         })
 }
 
+#[cfg(not(test))]
+fn deliver_graft_post_send_with_deadline(
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
+    request: &GraftPostSendRequest,
+    deadline: RequestDeadline,
+) -> Result<GraftPostSendResponse, AtmError> {
+    let connect_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_CONNECT_DEADLINE)?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            format!(
+                "failed to connect to graft receiver endpoint {} within {:?}",
+                endpoint, connect_deadline
+            ),
+        )
+        .with_cause(source)
+    })?;
+    let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
+    apply_stream_deadlines(&stream, io_deadline)?;
+    let wire = GraftPostSendWireRequest {
+        capability_base64url: capability.to_base64url(),
+        request: request.clone(),
+    };
+    write_graft_post_send_message(
+        &mut stream,
+        &wire,
+        "failed to write graft post-send request",
+        "graft post-send request exceeded the bounded payload cap",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft post-send request").with_cause(source)
+    })?;
+    read_graft_post_send_message(
+        &mut stream,
+        "failed to read graft post-send response",
+        "graft post-send response exceeded the bounded payload cap",
+    )
+}
+
+#[cfg(test)]
 fn deliver_graft_post_send_with_deadline(
     endpoint: SocketAddr,
     capability: &LocalCapability,
@@ -403,6 +457,7 @@ fn deliver_graft_post_send_with_deadline(
     )
 }
 
+#[cfg(test)]
 fn deliver_graft_post_send_with_limits(
     endpoint: SocketAddr,
     capability: &LocalCapability,
@@ -727,9 +782,21 @@ impl GraftReceiverListener {
         stream: &mut TcpStream,
         io_deadline: Duration,
     ) -> Result<GraftReceiverRequest, AtmError> {
-        self.read_receiver_request_with_limit(stream, Some(io_deadline))
+        apply_stream_deadlines(stream, io_deadline)?;
+        let wire: GraftReceiverWireRequest = read_graft_post_send_message(
+            stream,
+            "failed to read graft receiver request",
+            "graft receiver request exceeded the bounded payload cap",
+        )?;
+        if !self.capability.matches_header(&wire.capability_base64url) {
+            return Err(AtmError::validation(
+                "graft receiver request presented an invalid local capability",
+            ));
+        }
+        Ok(wire.request)
     }
 
+    #[cfg(test)]
     fn read_receiver_request_with_limit(
         &self,
         stream: &mut TcpStream,

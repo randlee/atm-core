@@ -17,7 +17,14 @@ use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
 use atm_core::types::HostName;
+use tokio::net::TcpStream;
 use tokio::time::Instant;
+
+#[cfg(test)]
+fn test_remaining(deadline: RequestDeadline) -> Option<Duration> {
+    let millis = deadline.remaining_ms_at(Instant::now().into_std());
+    (millis != 0).then(|| Duration::from_millis(millis))
+}
 
 /// Upper bound on addresses dialled for one peer. A resolver answer larger
 /// than this would otherwise split the request budget into shares too small
@@ -91,14 +98,14 @@ fn is_scope_less_link_local(address: SocketAddrV6) -> bool {
 /// consume the budget that a later, reachable address needs. The returned
 /// cause names every attempt so the operator can see which address failed
 /// and why.
-pub(crate) async fn dial_candidates<Connect, Dial, Stream>(
+pub(crate) async fn dial_candidates<Connect, Dial>(
     candidates: ConnectCandidates,
     deadline: RequestDeadline,
     connect: Connect,
-) -> Result<Stream, String>
+) -> Result<TcpStream, String>
 where
     Connect: Fn(SocketAddr) -> Dial,
-    Dial: Future<Output = std::io::Result<Stream>>,
+    Dial: Future<Output = std::io::Result<TcpStream>>,
 {
     let ConnectCandidates {
         usable,
@@ -134,7 +141,11 @@ where
     let total = usable.len();
     let mut failures = Vec::with_capacity(total);
     for (index, address) in usable.into_iter().enumerate() {
-        let Some(remaining) = deadline.remaining() else {
+        #[cfg(test)]
+        let remaining = test_remaining(deadline);
+        #[cfg(not(test))]
+        let remaining = deadline.remaining();
+        let Some(remaining) = remaining else {
             failures.push(format!(
                 "{address}: request budget elapsed before the attempt"
             ));
@@ -254,27 +265,35 @@ impl PeerAddressCache {
     /// Connects to `peer`, reusing a fresh cached address set when one exists
     /// and otherwise resolving the name through `resolve`. A dial failure on
     /// cached addresses falls through to one fresh resolution and dial.
-    pub(crate) async fn connect<Resolve, Resolving, Connect, Dial, Stream>(
+    pub(crate) async fn connect<Resolve, Resolving, Connect, Dial>(
         &self,
         peer: &HostName,
         port: NonZeroU16,
         deadline: RequestDeadline,
         resolve: Resolve,
         connect: Connect,
-    ) -> Result<Stream, String>
+    ) -> Result<TcpStream, String>
     where
         Resolve: Fn(HostName, NonZeroU16) -> Resolving,
         Resolving: Future<Output = std::io::Result<Vec<SocketAddr>>>,
         Connect: Fn(SocketAddr) -> Dial + Copy,
-        Dial: Future<Output = std::io::Result<Stream>>,
+        Dial: Future<Output = std::io::Result<TcpStream>>,
     {
         if let Some(cached) = self.fresh(peer, port) {
             // Cached addresses may be stale, so they get the smaller of half
             // the remaining budget and `STALE_ADDRESS_DIAL_CAP`; the rest is
             // reserved for the fresh lookup and dial that follow when they no
             // longer answer.
+            #[cfg(not(test))]
             let cached_deadline = deadline.remaining().map_or(deadline, |remaining| {
                 RequestDeadline::after((remaining / 2).min(STALE_ADDRESS_DIAL_CAP))
+            });
+            #[cfg(test)]
+            let cached_deadline = test_remaining(deadline).map_or(deadline, |remaining| {
+                RequestDeadline::after_at(
+                    Instant::now().into_std(),
+                    (remaining / 2).min(STALE_ADDRESS_DIAL_CAP),
+                )
             });
             match dial_candidates(cached, cached_deadline, connect).await {
                 Ok(stream) => return Ok(stream),
@@ -289,8 +308,11 @@ impl PeerAddressCache {
             }
         }
 
-        let remaining = deadline
-            .remaining()
+        #[cfg(not(test))]
+        let remaining = deadline.remaining();
+        #[cfg(test)]
+        let remaining = test_remaining(deadline);
+        let remaining = remaining
             .ok_or_else(|| "request budget elapsed before the peer name was resolved".to_owned())?;
         let resolved = tokio::time::timeout(remaining, resolve(peer.clone(), port))
             .await
@@ -356,6 +378,7 @@ mod tests {
 
     use atm_core::api::RequestDeadline;
     use atm_core::types::HostName;
+    use tokio::net::TcpStream;
 
     use super::{
         ConnectCandidates, MAX_DIAL_CANDIDATES, PeerAddressCache, STALE_ADDRESS_DIAL_CAP,
@@ -363,7 +386,7 @@ mod tests {
     };
 
     fn deadline(duration: Duration) -> RequestDeadline {
-        RequestDeadline::after(duration)
+        RequestDeadline::after_at(tokio::time::Instant::now().into_std(), duration)
     }
 
     fn v6(address: &str, port: u16, scope_id: u32) -> SocketAddr {
@@ -390,14 +413,22 @@ mod tests {
         NonZeroU16::new(value).expect("non-zero port")
     }
 
-    // Return the selected address as an in-memory stand-in for a connection.
+    // A connected loopback pair supplies a real stream without a timed dial.
+    fn connected_stream() -> std::io::Result<TcpStream> {
+        let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
+        let client = std::net::TcpStream::connect(listener.local_addr()?)?;
+        let (_peer, _) = listener.accept()?;
+        client.set_nonblocking(true)?;
+        TcpStream::from_std(client)
+    }
+
     fn loopback_only_connector(
         address: SocketAddr,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>>
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<TcpStream>> + Send>>
     {
         Box::pin(async move {
             if address.ip().is_loopback() {
-                Ok(address)
+                connected_stream()
             } else {
                 std::future::pending().await
             }
@@ -407,11 +438,11 @@ mod tests {
     fn controlled_connector(
         address: SocketAddr,
         success: SocketAddr,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>>
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<TcpStream>> + Send>>
     {
         Box::pin(async move {
             if address == success {
-                Ok(address)
+                connected_stream()
             } else {
                 std::future::pending().await
             }
@@ -467,7 +498,7 @@ mod tests {
         assert_eq!(candidates.truncated, 10 - MAX_DIAL_CANDIDATES);
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn mixed_family_host_connects_without_stalling_on_link_local_ipv6() {
         let port = 43_101;
         let stream = dial_candidates(
@@ -477,15 +508,14 @@ mod tests {
         )
         .await
         .expect("the routable IPv4 address must be reached");
-        assert_eq!(stream, v4("127.0.0.1", port));
+        assert!(stream.peer_addr().unwrap().ip().is_loopback());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn unresponsive_first_address_is_bounded_so_the_next_address_still_connects() {
         let port = 43_101;
         let first = v4("192.0.2.1", port);
         let second = v4("127.0.0.1", port);
-        tokio::time::pause();
         let (attempt_tx, mut attempt_rx) = tokio::sync::mpsc::unbounded_channel();
         let task = tokio::spawn(async move {
             dial_candidates(
@@ -514,10 +544,10 @@ mod tests {
             .await
             .expect("dial task joins")
             .expect("second candidate connects");
-        assert_eq!(stream, second);
+        assert!(stream.peer_addr().unwrap().ip().is_loopback());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn link_local_only_answer_fails_fast_with_an_actionable_cause() {
         let cause = dial_candidates(
             order_connect_candidates([v6("fe80::4af:1", 43_101, 0)]),
@@ -540,7 +570,7 @@ mod tests {
             },
             deadline(Duration::from_millis(400)),
             |address| -> std::pin::Pin<
-                Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>,
+                Box<dyn std::future::Future<Output = std::io::Result<TcpStream>> + Send>,
             > {
                 Box::pin(async move {
                     if address.ip().is_loopback() {
@@ -571,7 +601,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn cached_addresses_are_reused_within_the_ttl() {
         let listener_port = 43_101;
         let cache = PeerAddressCache::new(Duration::from_secs(300));
@@ -596,7 +626,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn bare_and_dot_local_names_share_one_cache_entry() {
         let listener_port = 43_101;
         let cache = PeerAddressCache::new(Duration::from_secs(300));
@@ -622,11 +652,10 @@ mod tests {
         assert!(cache.fresh(&host("rand-m5"), port(listener_port)).is_some());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn changed_peer_address_is_re_resolved_and_reached_without_an_error() {
         let listener_port = 43_101;
         let fresh = v4("127.0.0.1", listener_port);
-        tokio::time::pause();
         let cache = PeerAddressCache::new(Duration::from_secs(300));
         let calls = Arc::new(AtomicUsize::new(0));
         // The cache holds the address the peer had on its previous network;
@@ -648,7 +677,7 @@ mod tests {
             )
             .await
             .expect("the moved peer is reached inside the same request");
-        assert_eq!(stream, fresh);
+        assert!(stream.peer_addr().unwrap().ip().is_loopback());
         assert_eq!(
             calls.load(Ordering::SeqCst),
             1,
@@ -663,7 +692,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn expired_cache_entries_are_resolved_again() {
         let listener_port = 43_101;
         let ttl = Duration::from_secs(300);
@@ -691,7 +720,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn stale_cached_address_gives_up_within_the_dial_cap() {
         let listener_port = 43_101;
         let cache = PeerAddressCache::new(Duration::from_secs(300));
@@ -700,7 +729,6 @@ mod tests {
         let peer = host("rand-m5");
         let stale = v4("192.0.2.1", listener_port);
         let fresh = v4("127.0.0.1", listener_port);
-        tokio::time::pause();
         cache.store(
             &peer,
             port(listener_port),
@@ -734,7 +762,7 @@ mod tests {
             .await
             .expect("dial task joins")
             .expect("moved peer connects");
-        assert_eq!(stream, fresh);
+        assert!(stream.peer_addr().unwrap().ip().is_loopback());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 

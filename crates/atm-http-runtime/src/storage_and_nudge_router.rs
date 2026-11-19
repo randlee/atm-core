@@ -2447,7 +2447,7 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn blocking_core_bridge_records_a_stall_when_a_job_outlives_its_budget() {
         let health = RuntimeHealth::default();
         let mut admission = ControlPathSyncBridge::new(
@@ -2470,11 +2470,14 @@ pub(crate) mod tests {
         let release_rx = Arc::clone(&release_tx);
         let task = tokio::spawn(async move {
             admission
-                .run(RequestDeadline::after(Duration::from_secs(30)), move || {
-                    started_tx.send(()).expect("signal started job");
-                    release_rx.wait_for(1);
-                    Ok("slow job still finished")
-                })
+                .run(
+                    RequestDeadline::after_at(origin, Duration::from_secs(30)),
+                    move || {
+                        started_tx.send(()).expect("signal started job");
+                        release_rx.wait_for(1);
+                        Ok("slow job still finished")
+                    },
+                )
                 .await
         });
         started_rx.await.expect("job starts");
