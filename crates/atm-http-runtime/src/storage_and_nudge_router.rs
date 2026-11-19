@@ -2409,7 +2409,7 @@ pub(crate) mod tests {
         .with_direct_peer_tcp(direct_peer)
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn blocking_core_bridge_rejects_saturation_without_starting_a_second_job() {
         let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
@@ -2418,29 +2418,33 @@ pub(crate) mod tests {
         let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
         let release_first_tx = Arc::new(TestSignal::default());
         let release_first_rx = Arc::clone(&release_first_tx);
+        let _release = SignalOnDrop(release_first_tx.clone());
         let first_admission = admission.clone();
-        let first = tokio::spawn(async move {
+        let first_deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+        let first = tokio::spawn(crate::request_deadline::scope(first_deadline, async move {
             first_admission
-                .run(RequestDeadline::after(Duration::from_secs(1)), move || {
+                .run(RequestDeadline::after(Duration::ZERO), move || {
                     first_started_tx.send(()).expect("signal started job");
                     release_first_rx.wait_for(1);
                     Ok("first durable result")
                 })
                 .await
-        });
+        }));
         first_started_rx.await.expect("first job starts");
 
         let second_started = Arc::new(AtomicBool::new(false));
         let second_job_started = Arc::clone(&second_started);
-        let saturated = admission
-            .run(
-                RequestDeadline::after(Duration::from_millis(20)),
-                move || {
+        let second_deadline = tokio::time::Instant::now() + Duration::from_millis(20);
+        let (saturated, ()) = tokio::join!(
+            crate::request_deadline::scope(
+                second_deadline,
+                admission.run(RequestDeadline::after(Duration::ZERO), move || {
                     second_job_started.store(true, Ordering::SeqCst);
                     Ok(())
-                },
-            )
-            .await;
+                },)
+            ),
+            tokio::time::advance(Duration::from_millis(20)),
+        );
         assert!(
             saturated.is_err(),
             "saturated admission rejects before start"
@@ -2460,7 +2464,7 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn expired_blocking_core_bridge_never_starts_a_blocking_job() {
         let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
@@ -2484,7 +2488,7 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn blocking_core_bridge_records_a_stall_when_a_job_outlives_its_budget() {
         let health = RuntimeHealth::default();
         let mut admission = ControlPathSyncBridge::new(
@@ -2505,15 +2509,17 @@ pub(crate) mod tests {
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let release_tx = Arc::new(TestSignal::default());
         let release_rx = Arc::clone(&release_tx);
-        let task = tokio::spawn(async move {
+        let _release = SignalOnDrop(release_tx.clone());
+        let deadline_at = tokio::time::Instant::now() + Duration::from_secs(1);
+        let task = tokio::spawn(crate::request_deadline::scope(deadline_at, async move {
             admission
-                .run(RequestDeadline::after(Duration::from_secs(30)), move || {
+                .run(RequestDeadline::after(Duration::ZERO), move || {
                     started_tx.send(()).expect("signal started job");
                     release_rx.wait_for(1);
                     Ok("slow job still finished")
                 })
                 .await
-        });
+        }));
         started_rx.await.expect("job starts");
         advanced.store(true, Ordering::SeqCst);
         release_tx.signal();
@@ -2524,7 +2530,7 @@ pub(crate) mod tests {
         assert_eq!(health.snapshot().blocking_core_bridge_stalls_total, 1);
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn blocking_core_bridge_does_not_record_a_stall_for_jobs_within_budget() {
         let health = RuntimeHealth::default();
         let admission = ControlPathSyncBridge::new(
@@ -2532,10 +2538,12 @@ pub(crate) mod tests {
             health.clone(),
         );
 
-        admission
-            .run(RequestDeadline::after(Duration::from_secs(1)), || Ok(()))
-            .await
-            .expect("a fast job completes within its budget");
+        crate::request_deadline::scope(
+            tokio::time::Instant::now() + Duration::from_secs(1),
+            admission.run(RequestDeadline::after(Duration::ZERO), || Ok(())),
+        )
+        .await
+        .expect("a fast job completes within its budget");
 
         assert_eq!(
             health.snapshot().blocking_core_bridge_stalls_total,
