@@ -15,8 +15,6 @@ use std::time::Duration;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use atm_core::api::HttpRequest;
-#[cfg(test)]
-use atm_core::api::RequestDeadline;
 use atm_core::types::HostName;
 use axum::body::Body;
 use hyper::client::conn::http1;
@@ -111,7 +109,7 @@ struct PoolShared {
 }
 
 /// Produces an authenticated stream without coupling pooling to a transport.
-trait PeerStreamDialer: Send + Sync {
+pub(crate) trait PeerStreamDialer: Send + Sync {
     fn dial<'a>(
         &'a self,
         peer: &'a HostName,
@@ -283,7 +281,7 @@ impl PeerConnectionPool {
         Self::with_dialer(config, dialer, addresses)
     }
 
-    fn with_dialer(
+    pub(crate) fn with_dialer(
         config: PeerPoolConfig,
         dialer: Arc<dyn PeerStreamDialer>,
         addresses: Arc<PeerAddressCache>,
@@ -308,17 +306,6 @@ impl PeerConnectionPool {
         });
         spawn_idle_eviction_task(&shared);
         Self { shared }
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn acquire(
-        &self,
-        peer: &HostName,
-        port: NonZeroU16,
-        deadline: RequestDeadline,
-    ) -> Result<PooledPeerConnection, HttpRuntimeClientFailure> {
-        self.acquire_until(peer, port, crate::request_deadline::capture(deadline))
-            .await
     }
 
     pub(crate) async fn acquire_until(
@@ -534,16 +521,6 @@ impl PeerConnectionPool {
 }
 
 impl PooledPeerConnection {
-    #[cfg(test)]
-    pub(crate) async fn exchange(
-        &mut self,
-        request: HttpRequest,
-        deadline: RequestDeadline,
-    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        self.exchange_until(request, crate::request_deadline::capture(deadline))
-            .await
-    }
-
     pub(crate) async fn exchange_until(
         &mut self,
         request: HttpRequest,

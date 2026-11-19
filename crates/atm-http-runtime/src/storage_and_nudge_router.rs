@@ -7129,9 +7129,12 @@ pub(crate) mod tests {
 
     /// Holds an authenticated stream open after the client closes: its
     /// shutdown never completes, so the pooled driver stalls.
-    struct StallOnCloseAdapter;
+    struct StallOnCloseDialer(
+        std::sync::Mutex<Option<tokio::io::DuplexStream>>,
+        Arc<tokio::sync::Notify>,
+    );
 
-    struct StallOnClose(tokio::net::TcpStream);
+    struct StallOnClose(tokio::io::DuplexStream, Arc<tokio::sync::Notify>);
 
     impl tokio::io::AsyncRead for StallOnClose {
         fn poll_read(
@@ -7163,70 +7166,90 @@ pub(crate) mod tests {
             self: Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
         ) -> std::task::Poll<std::io::Result<()>> {
+            self.1.notify_one();
             std::task::Poll::Pending
         }
     }
 
-    impl PeerStreamAdapter for StallOnCloseAdapter {
-        fn connect<'a>(
+    impl crate::peer_connection_pool::PeerStreamDialer for StallOnCloseDialer {
+        fn dial<'a>(
             &'a self,
-            stream: tokio::net::TcpStream,
             _peer: &'a atm_core::types::HostName,
-        ) -> PeerStreamFuture<'a, EstablishedPeerStream> {
-            Box::pin(async move { Ok(Box::new(StallOnClose(stream)) as EstablishedPeerStream) })
-        }
-
-        fn accept<'a>(
-            &'a self,
-            _stream: tokio::net::TcpStream,
-        ) -> PeerStreamFuture<'a, AcceptedPeerStream> {
-            Box::pin(async { Err(AtmError::config("test accepts no peers")) })
+            _port: NonZeroU16,
+            _deadline: tokio::time::Instant,
+            _authority: &'a str,
+        ) -> Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = Result<
+                            EstablishedPeerStream,
+                            crate::client::HttpRuntimeClientFailure,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        > {
+            let stream = self.0.lock().expect("dialer lock").take();
+            let started = Arc::clone(&self.1);
+            Box::pin(async move {
+                stream
+                    .map(|s| Box::new(StallOnClose(s, started)) as EstablishedPeerStream)
+                    .ok_or_else(|| {
+                        crate::client::HttpRuntimeClientFailure::Connect("unexpected redial".into())
+                    })
+            })
         }
     }
 
     /// The pooled-driver, detached-hook, and hook-chain drains share the
     /// caller's one absolute deadline: a stalled driver leaves later drains
     /// only what remains, never a fresh budget.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn shutdown_peer_connections_spends_one_deadline_across_pool_hooks_and_chains() {
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-            .await
-            .expect("test peer binds");
-        let port = listener.local_addr().expect("test peer address").port();
+        let _clock = freeze_peer_test_clock();
+        let (client, server) = tokio::io::duplex(4096);
+        let close_started = Arc::new(tokio::sync::Notify::new());
         tokio::spawn(async move {
-            let (stream, _) = listener.accept().await.expect("peer accepts");
             let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(());
             let router = axum::Router::new().route(
                 "/v1/atm/messages",
                 axum::routing::post(|| async { StatusCode::CREATED }),
             );
             let _ = crate::http1_server::serve_connection(
-                hyper_util::rt::TokioIo::new(stream),
+                hyper_util::rt::TokioIo::new(server),
                 router,
                 Duration::from_secs(30),
                 shutdown_rx,
             )
             .await;
         });
-        let pool =
-            PeerConnectionPool::new(PeerPoolConfig::default(), Arc::new(StallOnCloseAdapter));
+        let pool = PeerConnectionPool::with_dialer(
+            PeerPoolConfig::default(),
+            Arc::new(StallOnCloseDialer(
+                std::sync::Mutex::new(Some(client)),
+                Arc::clone(&close_started),
+            )),
+            Arc::new(crate::peer_dial::PeerAddressCache::new(
+                Duration::from_secs(60),
+            )),
+        );
         let mut connection = pool
-            .acquire(
+            .acquire_until(
                 &"127.0.0.1".parse().expect("peer authority"),
-                NonZeroU16::new(port).expect("non-zero test port"),
-                RequestDeadline::after(Duration::from_secs(1)),
+                NonZeroU16::new(12345).expect("non-zero test port"),
+                tokio::time::Instant::now() + Duration::from_secs(1),
             )
             .await
             .expect("pooled peer connection");
         let response = connection
-            .exchange(
+            .exchange_until(
                 atm_core::api::HttpRequest {
                     method: "POST".to_owned(),
                     path: "/v1/atm/messages".to_owned(),
                     headers: Vec::new(),
                     body: Vec::new(),
                 },
-                RequestDeadline::after(Duration::from_secs(1)),
+                tokio::time::Instant::now() + Duration::from_secs(1),
             )
             .await
             .expect("peer request succeeds");
@@ -7244,20 +7267,15 @@ pub(crate) mod tests {
             .hook_chains()
             .spawn(std::future::pending::<()>())
             .expect("hook chain starts before shutdown");
-        // Real I/O set the stall up; virtual time measures the drain.
-        tokio::time::pause();
         let started = tokio::time::Instant::now();
-        // Shorter than any step's own budget, so a fresh one shows.
         let deadline = Duration::from_secs(3);
-
-        router.shutdown_peer_connections(started + deadline).await;
-
-        // Timer registrations round up to the 1ms wheel tick.
-        let elapsed = started.elapsed();
-        assert!(
-            elapsed >= deadline && elapsed <= deadline + Duration::from_millis(10),
-            "{elapsed:?}"
-        );
+        let shutdown = tokio::spawn(async move {
+            router.shutdown_peer_connections(started + deadline).await;
+        });
+        close_started.notified().await;
+        tokio::time::advance(deadline).await;
+        shutdown.await.expect("shutdown completes");
+        assert_eq!(tokio::time::Instant::now(), started + deadline);
         assert!(
             hook_chain
                 .await
