@@ -515,6 +515,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn resource_pressure_accept_failures_do_not_end_the_listener() {
+        let started = tokio::time::Instant::now();
         let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
         for _ in 0..3 {
             events_tx
@@ -544,6 +545,10 @@ mod tests {
             .read_to_end(&mut response)
             .await
             .expect("read response");
+        assert_eq!(
+            tokio::time::Instant::now() - started,
+            Duration::from_millis(7)
+        );
         assert!(
             response.starts_with(b"HTTP/1.1 201 Created"),
             "a listener that hit transient accept failures must still answer healthy clients"
