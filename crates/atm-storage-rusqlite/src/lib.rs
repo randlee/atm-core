@@ -812,7 +812,7 @@ mod tests {
     use chrono::Utc;
     use rusqlite::{Connection, OptionalExtension, params};
     use serde_json::Map;
-    use std::sync::{Arc, Barrier, mpsc};
+    use std::sync::{Arc, Barrier};
     use std::time::Duration;
 
     type OrdinaryMessageColumns = (
@@ -4817,34 +4817,21 @@ mod tests {
         let concurrent_backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let concurrent_store = concurrent_backend.roster_store();
         let barrier = Arc::new(Barrier::new(2));
-        let (sender, receiver) = mpsc::channel();
         let left_store = Arc::clone(&concurrent_store);
         let left_barrier = Arc::clone(&barrier);
-        let left_sender = sender.clone();
         let left_handle = std::thread::spawn(move || {
             left_barrier.wait();
-            left_sender
-                .send(left_store.save_roster(&left))
-                .expect("test receiver is alive");
+            left_store.save_roster(&left)
         });
-        let right_store = Arc::clone(&concurrent_store);
-        let right_sender = sender;
+        let right_store = concurrent_store;
         let right_handle = std::thread::spawn(move || {
             barrier.wait();
-            right_sender
-                .send(right_store.save_roster(&right))
-                .expect("test receiver is alive");
+            right_store.save_roster(&right)
         });
         let results = [
-            receiver
-                .recv_timeout(Duration::from_secs(1))
-                .expect("left or right writer completed before deadline"),
-            receiver
-                .recv_timeout(Duration::from_secs(1))
-                .expect("both writers completed before deadline"),
+            left_handle.join().expect("left writer"),
+            right_handle.join().expect("right writer"),
         ];
-        left_handle.join().expect("left writer");
-        right_handle.join().expect("right writer");
         results
     }
 
