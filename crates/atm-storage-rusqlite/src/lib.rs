@@ -3693,6 +3693,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sqlite_message_store_notifies_subscribers_after_writer_commit() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.async_message_store();
+        let mut commits = store.subscribe_mailbox_commits();
+
+        store
+            .save_message_if_absent_async(message("atm:commit-wake", "commit wake"))
+            .await
+            .expect("message commits through writer");
+
+        assert!(commits.changed().await);
+    }
+
+    #[tokio::test]
     async fn read_display_state_is_the_only_async_reader_followup_admitted_to_writer() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.async_message_store();

@@ -17,6 +17,8 @@ use atm_core::read::selection::{
     select_mailbox_candidates, sort_and_limit_mailbox_selection,
 };
 use atm_core::send::MessageWriteOrigin;
+#[path = "mailbox_commit_wake.rs"]
+mod mailbox_commit_wake;
 #[cfg(test)]
 use atm_storage::MessageQuery;
 use atm_storage::{
@@ -24,6 +26,7 @@ use atm_storage::{
     Message, MessageKey, ReadDeadline, SearchCountGroupBy, SearchFilters, SearchMailboxSelection,
     TimeRange,
 };
+use mailbox_commit_wake::{MailboxCommitFanout, MailboxWaitOutcome, wait_for_mail_commit};
 
 /// Bounded, composition-owned handoff settings for post-read state updates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,6 +101,10 @@ struct StateHandoffInner {
     retry_deadline_exhaustions: std::sync::atomic::AtomicU64,
     completed_writes: std::sync::atomic::AtomicU64,
     active_worker: Mutex<Option<tokio::task::AbortHandle>>,
+    #[cfg(test)]
+    backoff_started: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    #[cfg(test)]
+    shutdown_complete: tokio::sync::Notify,
 }
 
 /// Owns the manager handle outside the state shared with the task itself.
@@ -148,6 +155,10 @@ impl StateHandoffSupervisor {
             retry_deadline_exhaustions: std::sync::atomic::AtomicU64::new(0),
             completed_writes: std::sync::atomic::AtomicU64::new(0),
             active_worker: Mutex::new(None),
+            #[cfg(test)]
+            backoff_started: Mutex::new(None),
+            #[cfg(test)]
+            shutdown_complete: tokio::sync::Notify::new(),
         });
         let manager_inner = Arc::clone(&inner);
         let (shutdown, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -302,44 +313,18 @@ impl RestartCause {
     }
 }
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "bounded retry delay between attempts; cancelled by worker or daemon shutdown")]
-async fn wait_backoff(delay: Duration) {
-    tokio::time::sleep(delay).await;
-}
-
 async fn supervise_handoff_worker(
     inner: Arc<StateHandoffInner>,
     mut shutdown: tokio::sync::watch::Receiver<bool>,
 ) {
-    // Dropping the manager must also abort its spawned worker; dropping a
-    // JoinHandle alone would detach it and retain the storage boundary.
-    struct AbortWorker(tokio::task::AbortHandle);
-    impl Drop for AbortWorker {
-        fn drop(&mut self) {
-            self.0.abort();
-        }
-    }
     let mut backoff = Duration::from_millis(50);
     loop {
         let completed_before = inner
             .completed_writes
             .load(std::sync::atomic::Ordering::Acquire);
-        let worker_inner = Arc::clone(&inner);
-        let worker = tokio::spawn(async move { run_handoff_worker(worker_inner).await });
-        let guard = AbortWorker(worker.abort_handle());
-        *inner
-            .active_worker
-            .lock()
-            .expect("state-handoff worker mutex poisoned") = Some(worker.abort_handle());
-        let result = tokio::select! {
-            result = worker => result,
-            _ = shutdown.changed() => return,
+        let Some(result) = join_handoff_worker(&inner, &mut shutdown).await else {
+            return;
         };
-        *inner
-            .active_worker
-            .lock()
-            .expect("state-handoff worker mutex poisoned") = None;
-        drop(guard);
         let cause = match result {
             Ok(Err(error)) => {
                 tracing::error!(
@@ -373,14 +358,62 @@ async fn supervise_handoff_worker(
             attempt = restart,
             "restarting read-state worker"
         );
-        tokio::select! {
-            _ = wait_backoff(backoff) => {},
-            _ = shutdown.changed() => return,
+        if !wait_for_worker_restart(backoff, &mut shutdown).await {
+            return;
         }
         backoff = backoff.saturating_mul(2).min(Duration::from_secs(5));
         inner
             .state
             .store(STATE_READY, std::sync::atomic::Ordering::Release);
+    }
+}
+
+async fn join_handoff_worker(
+    inner: &Arc<StateHandoffInner>,
+    shutdown: &mut tokio::sync::watch::Receiver<bool>,
+) -> Option<Result<Result<(), AtmError>, tokio::task::JoinError>> {
+    struct AbortWorker(tokio::task::AbortHandle);
+    impl Drop for AbortWorker {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
+
+    let worker_inner = Arc::clone(inner);
+    let worker_shutdown = shutdown.clone();
+    let mut worker =
+        tokio::spawn(async move { run_handoff_worker(worker_inner, worker_shutdown).await });
+    let guard = AbortWorker(worker.abort_handle());
+    *inner
+        .active_worker
+        .lock()
+        .expect("state-handoff worker mutex poisoned") = Some(worker.abort_handle());
+    let result = tokio::select! {
+        result = &mut worker => Some(result),
+        _ = shutdown.changed() => {
+            worker.abort();
+            let _ = worker.await;
+            #[cfg(test)]
+            inner.shutdown_complete.notify_one();
+            None
+        },
+    };
+    *inner
+        .active_worker
+        .lock()
+        .expect("state-handoff worker mutex poisoned") = None;
+    drop(guard);
+    result
+}
+
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070 writer-admission retry backoff; cancelled by daemon shutdown")]
+async fn wait_for_worker_restart(
+    backoff: Duration,
+    shutdown: &mut tokio::sync::watch::Receiver<bool>,
+) -> bool {
+    tokio::select! {
+        _ = tokio::time::sleep(backoff) => true,
+        _ = shutdown.changed() => false,
     }
 }
 
@@ -408,69 +441,93 @@ fn remove_handoff_transition(inner: &StateHandoffInner) {
     debug_assert!(removed.is_some(), "worker owns the front transition");
 }
 
-async fn run_handoff_worker(inner: Arc<StateHandoffInner>) -> Result<(), AtmError> {
+async fn run_handoff_worker(
+    inner: Arc<StateHandoffInner>,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
+) -> Result<(), AtmError> {
     loop {
         let transition = next_handoff_transition(&inner).await;
-        let retry_deadline = tokio::time::Instant::now() + inner.config.handoff_retry_deadline;
-        let mut delay = Duration::from_millis(50);
-        let mut last_error = None;
-        loop {
-            if tokio::time::Instant::now() >= retry_deadline {
-                inner
-                    .retry_deadline_exhaustions
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                return Err(last_error.take().unwrap_or_else(|| {
-                    AtmError::daemon_unavailable(
-                        "read-state retry deadline expired before writer admission",
-                    )
-                }));
-            }
-            match inner
-                .writer
-                .apply_read_display_state_with_origin_async(
-                    transition.scope.clone(),
-                    transition.message_ids.clone(),
-                    transition.seen_watermark,
-                    transition.origin,
+        if !apply_handoff_transition(&inner, &transition, &mut shutdown).await? {
+            return Ok(());
+        }
+    }
+}
+
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070 writer-admission retry backoff; cancelled by daemon shutdown")]
+async fn apply_handoff_transition(
+    inner: &Arc<StateHandoffInner>,
+    transition: &ReadDisplayTransition,
+    shutdown: &mut tokio::sync::watch::Receiver<bool>,
+) -> Result<bool, AtmError> {
+    let retry_deadline = tokio::time::Instant::now() + inner.config.handoff_retry_deadline;
+    let mut delay = Duration::from_millis(50);
+    let mut last_error = None;
+    loop {
+        if tokio::time::Instant::now() >= retry_deadline {
+            inner
+                .retry_deadline_exhaustions
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return Err(last_error.take().unwrap_or_else(|| {
+                AtmError::daemon_unavailable(
+                    "read-state retry deadline expired before writer admission",
                 )
-                .await
-            {
-                Ok(()) => {
-                    remove_handoff_transition(&inner);
+            }));
+        }
+        match inner
+            .writer
+            .apply_read_display_state_with_origin_async(
+                transition.scope.clone(),
+                transition.message_ids.clone(),
+                transition.seen_watermark,
+                transition.origin,
+            )
+            .await
+        {
+            Ok(()) => {
+                remove_handoff_transition(inner);
+                inner
+                    .completed_writes
+                    .fetch_add(1, std::sync::atomic::Ordering::Release);
+                return Ok(true);
+            }
+            Err(error) if error.code() == atm_storage::AtmErrorCode::MessageValidationFailed => {
+                tracing::error!(
+                    code = "ATM_MAILBOX_HANDOFF_DISCARDED",
+                    failure_class = error.code().as_str(),
+                    "discarding permanently invalid read-state transition"
+                );
+                remove_handoff_transition(inner);
+                return Ok(true);
+            }
+            Err(error) => {
+                let remaining =
+                    retry_deadline.saturating_duration_since(tokio::time::Instant::now());
+                if remaining.is_zero() {
                     inner
-                        .completed_writes
-                        .fetch_add(1, std::sync::atomic::Ordering::Release);
-                    break;
+                        .retry_deadline_exhaustions
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    return Err(error);
                 }
-                Err(error)
-                    if error.code() == atm_storage::AtmErrorCode::MessageValidationFailed =>
+                tracing::warn!(
+                    code = "ATM_MAILBOX_HANDOFF_RETRY",
+                    failure_class = error.code().as_str(),
+                    "retrying mailbox read-state handoff"
+                );
+                last_error = Some(error);
+                #[cfg(test)]
+                if let Some(signal) = inner
+                    .backoff_started
+                    .lock()
+                    .expect("backoff test signal")
+                    .take()
                 {
-                    tracing::error!(
-                        code = "ATM_MAILBOX_HANDOFF_DISCARDED",
-                        failure_class = error.code().as_str(),
-                        "discarding permanently invalid read-state transition"
-                    );
-                    remove_handoff_transition(&inner);
-                    break;
+                    let _ = signal.send(());
                 }
-                Err(error) => {
-                    let remaining =
-                        retry_deadline.saturating_duration_since(tokio::time::Instant::now());
-                    if remaining.is_zero() {
-                        inner
-                            .retry_deadline_exhaustions
-                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        return Err(error);
-                    }
-                    tracing::warn!(
-                        code = "ATM_MAILBOX_HANDOFF_RETRY",
-                        failure_class = error.code().as_str(),
-                        "retrying mailbox read-state handoff"
-                    );
-                    last_error = Some(error);
-                    wait_backoff(delay.min(remaining)).await;
-                    delay = delay.saturating_mul(2).min(Duration::from_secs(5));
+                tokio::select! {
+                    _ = tokio::time::sleep(delay.min(remaining)) => {},
+                    _ = shutdown.changed() => return Ok(false),
                 }
+                delay = delay.saturating_mul(2).min(Duration::from_secs(5));
             }
         }
     }
@@ -531,6 +588,7 @@ pub trait AsyncMailboxRuntime: Send + Sync {
 pub struct StorageAsyncMailboxRuntime {
     reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
     state_handoff: StateHandoffLifecycle,
+    commit_wake: MailboxCommitFanout,
 }
 
 /// Before startup composition temporarily holds the writer ingress needed to
@@ -548,9 +606,11 @@ impl StorageAsyncMailboxRuntime {
         reader: Arc<dyn AsyncMailboxReader + Send + Sync>,
         writer_lane: Arc<dyn AsyncMessageStore + Send + Sync>,
     ) -> Self {
+        let commit_wake = MailboxCommitFanout::new(writer_lane.subscribe_mailbox_commits());
         Self {
             reader,
             state_handoff: StateHandoffLifecycle::Unstarted(writer_lane),
+            commit_wake,
         }
     }
 
@@ -567,6 +627,7 @@ impl StorageAsyncMailboxRuntime {
         };
         self.state_handoff =
             StateHandoffLifecycle::Active(StateHandoffSupervisor::start(config, writer)?);
+        self.commit_wake.start();
         Ok(self)
     }
 
@@ -577,6 +638,9 @@ impl StorageAsyncMailboxRuntime {
         Self {
             reader,
             state_handoff: StateHandoffLifecycle::Unstarted(Arc::new(TestOnlyWriterLane)),
+            commit_wake: MailboxCommitFanout::new(
+                Arc::new(TestOnlyWriterLane).subscribe_mailbox_commits(),
+            ),
         }
     }
 }
@@ -830,7 +894,6 @@ impl StorageAsyncMailboxRuntime {
         self.select_matching(scope, request, limit, deadline).await
     }
 
-    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Mailbox long-poll checks for new messages at bounded intervals until the request deadline.")]
     async fn select_for_read(
         &self,
         scope: MailboxScope,
@@ -842,6 +905,7 @@ impl StorageAsyncMailboxRuntime {
             return self.select_one_for_read(scope, request, deadline).await;
         };
         let wait_deadline = tokio::time::Instant::now() + wait_timeout;
+        let mut commit_wake = self.commit_wake.subscribe();
         loop {
             let (selection, match_count) = self
                 .select_one_for_read(scope.clone(), request.clone(), deadline)
@@ -852,15 +916,16 @@ impl StorageAsyncMailboxRuntime {
             let request_remaining = deadline.remaining().ok_or_else(|| {
                 AtmError::daemon_unavailable("mailbox request deadline expired while awaiting mail")
             })?;
-            let until_wait_deadline =
-                wait_deadline.saturating_duration_since(tokio::time::Instant::now());
-            let pause = Duration::from_millis(25)
-                .min(request_remaining)
-                .min(until_wait_deadline);
-            if pause.is_zero() {
-                return Ok((selection, match_count));
+            let request_deadline = tokio::time::Instant::now() + request_remaining;
+            match wait_for_mail_commit(&mut commit_wake, wait_deadline, request_deadline).await {
+                MailboxWaitOutcome::Commit => {}
+                MailboxWaitOutcome::WaitExpired => return Ok((selection, match_count)),
+                MailboxWaitOutcome::RequestExpired => {
+                    return Err(AtmError::daemon_unavailable(
+                        "mailbox request deadline expired while awaiting mail",
+                    ));
+                }
             }
-            tokio::time::sleep(pause).await;
         }
     }
 
@@ -1016,8 +1081,9 @@ mod tests {
     };
 
     use super::{
-        AsyncMailboxRuntime, AsyncMessageStore, HandoffConfig, HandoffRejected, MessageWriteOrigin,
-        StateHandoffSupervisor, StorageAsyncMailboxRuntime,
+        AsyncMailboxRuntime, AsyncMessageStore, HandoffConfig, HandoffRejected,
+        MailboxCommitFanout, MailboxWaitOutcome, MessageWriteOrigin, StateHandoffSupervisor,
+        StorageAsyncMailboxRuntime, wait_for_mail_commit,
     };
     use crate::mailbox_runtime::RequestDeadline;
 
@@ -1066,6 +1132,94 @@ mod tests {
                 extra: serde_json::Map::new(),
             },
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn committed_batch_wake_releases_mailbox_waiter() {
+        let (attempts, _) = tokio::sync::mpsc::unbounded_channel();
+        let writer = Arc::new(ControlledWriter {
+            attempts,
+            applied: Default::default(),
+        });
+        let fanout = MailboxCommitFanout::new(writer.subscribe_mailbox_commits());
+        fanout.start();
+        let mut receiver = fanout.subscribe();
+        let now = tokio::time::Instant::now();
+        let waiting = tokio::spawn(async move {
+            wait_for_mail_commit(
+                &mut receiver,
+                now + Duration::from_secs(30),
+                now + Duration::from_secs(60),
+            )
+            .await
+        });
+
+        writer.notify_commit();
+        assert_eq!(
+            waiting.await.expect("waiter task"),
+            MailboxWaitOutcome::Commit
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn commit_between_subscription_and_wait_is_not_lost() {
+        let (attempts, _) = tokio::sync::mpsc::unbounded_channel();
+        let writer = Arc::new(ControlledWriter {
+            attempts,
+            applied: Default::default(),
+        });
+        let fanout = MailboxCommitFanout::new(writer.subscribe_mailbox_commits());
+        fanout.start();
+        let mut receiver = fanout.subscribe();
+
+        // A commit after subscription but before the first wait remains
+        // visible to `changed`, so the subsequent query cannot be skipped.
+        writer.notify_commit();
+        let now = tokio::time::Instant::now();
+        assert_eq!(
+            wait_for_mail_commit(
+                &mut receiver,
+                now + Duration::from_secs(30),
+                now + Duration::from_secs(60),
+            )
+            .await,
+            MailboxWaitOutcome::Commit
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn mailbox_wait_expiry_and_request_expiry_keep_distinct_results() {
+        let (_sender, mut receiver) = tokio::sync::watch::channel(0_u64);
+        let now = tokio::time::Instant::now();
+        let wait = tokio::spawn(async move {
+            wait_for_mail_commit(
+                &mut receiver,
+                now + Duration::from_secs(5),
+                now + Duration::from_secs(10),
+            )
+            .await
+        });
+        tokio::time::advance(Duration::from_secs(5)).await;
+        assert_eq!(
+            wait.await.expect("wait expiry task"),
+            MailboxWaitOutcome::WaitExpired
+        );
+
+        let (_sender, mut receiver) = tokio::sync::watch::channel(0_u64);
+        let now = tokio::time::Instant::now();
+        let request = tokio::spawn(async move {
+            wait_for_mail_commit(
+                &mut receiver,
+                now + Duration::from_secs(10),
+                now + Duration::from_secs(5),
+            )
+            .await
+        });
+        tokio::time::advance(Duration::from_secs(5)).await;
+        assert_eq!(
+            request.await.expect("request expiry task"),
+            MailboxWaitOutcome::RequestExpired
+        );
     }
 
     fn runtime(messages: Vec<Message>) -> StorageAsyncMailboxRuntime {
@@ -1513,9 +1667,42 @@ mod tests {
         Vec<MessageKey>,
         tokio::sync::oneshot::Sender<Result<(), AtmError>>,
     );
+
+    struct ControlledWriterState {
+        applied: std::sync::Mutex<Vec<Vec<MessageKey>>>,
+        commit_wake: tokio::sync::watch::Sender<u64>,
+    }
+
+    impl Default for ControlledWriterState {
+        fn default() -> Self {
+            let (commit_wake, _) = tokio::sync::watch::channel(0);
+            Self {
+                applied: std::sync::Mutex::new(Vec::new()),
+                commit_wake,
+            }
+        }
+    }
+
     struct ControlledWriter {
         attempts: tokio::sync::mpsc::UnboundedSender<ControlledAttempt>,
-        applied: Arc<std::sync::Mutex<Vec<Vec<MessageKey>>>>,
+        applied: Arc<ControlledWriterState>,
+    }
+
+    impl ControlledWriter {
+        fn notify_commit(&self) {
+            self.applied.commit_wake.send_modify(|generation| {
+                *generation = generation.wrapping_add(1);
+            });
+        }
+    }
+
+    struct ControlledMailboxCommitWatch(tokio::sync::watch::Receiver<u64>);
+
+    #[async_trait::async_trait]
+    impl atm_storage::MailboxCommitWatch for ControlledMailboxCommitWatch {
+        async fn changed(&mut self) -> bool {
+            self.0.changed().await.is_ok()
+        }
     }
 
     async fn next_attempt(
@@ -1557,6 +1744,12 @@ mod tests {
 
     #[async_trait::async_trait]
     impl AsyncMessageStore for ControlledWriter {
+        fn subscribe_mailbox_commits(&self) -> Box<dyn atm_storage::MailboxCommitWatch> {
+            Box::new(ControlledMailboxCommitWatch(
+                self.applied.commit_wake.subscribe(),
+            ))
+        }
+
         async fn apply_read_display_state_async(
             &self,
             _: atm_storage::MailboxScope,
@@ -1564,6 +1757,7 @@ mod tests {
             _: Option<IsoTimestamp>,
         ) -> Result<(), AtmError> {
             self.applied
+                .applied
                 .lock()
                 .expect("applied lock")
                 .push(message_ids.clone());
@@ -1571,7 +1765,11 @@ mod tests {
             self.attempts
                 .send((message_ids, tx))
                 .expect("test receives attempt");
-            rx.await.expect("test releases writer")
+            let result = rx.await.expect("test releases writer");
+            if result.is_ok() {
+                self.notify_commit();
+            }
+            result
         }
         async fn admit_message_with_provenance_async(
             &self,
@@ -1689,6 +1887,40 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn shutdown_during_retry_backoff_joins_worker_and_retains_queue() {
+        let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
+        let supervisor = StateHandoffSupervisor::start(
+            HandoffConfig::default(),
+            Arc::new(ControlledWriter {
+                attempts: tx,
+                applied: Default::default(),
+            }),
+        )
+        .expect("supervisor starts");
+        let (backoff_tx, backoff_rx) = tokio::sync::oneshot::channel();
+        *supervisor
+            .inner
+            .backoff_started
+            .lock()
+            .expect("backoff test signal") = Some(backoff_tx);
+        let retained_inner = Arc::clone(&supervisor.inner);
+        let shutdown_complete = retained_inner.shutdown_complete.notified();
+        supervisor
+            .try_push(scope(), vec!["retry".parse().expect("key")], None)
+            .expect("queued");
+        let (_, attempt) = next_attempt(&mut attempts).await;
+        attempt
+            .send(Err(AtmError::daemon_unavailable("controlled failure")))
+            .expect("worker waiting");
+        backoff_rx.await.expect("worker entered retry backoff");
+        assert_eq!(supervisor.buffered_depth(), 1);
+
+        drop(supervisor);
+        shutdown_complete.await;
+        assert_eq!(retained_inner.queue.lock().expect("queue lock").len(), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn permanent_head_failure_is_discarded_and_next_transition_runs() {
         let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
         let supervisor = StateHandoffSupervisor::start(
@@ -1729,7 +1961,7 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn committed_timeout_retries_once_in_order_then_later_read_applies() {
         let (tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
-        let applied = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let applied = Arc::new(ControlledWriterState::default());
         let writer = Arc::new(ControlledWriter {
             attempts: tx,
             applied: applied.clone(),
@@ -1754,7 +1986,7 @@ mod tests {
         retry.send(Ok(())).expect("worker waiting");
         let (later_keys, later) = next_attempt(&mut attempts).await;
         assert_eq!(later_keys[0].as_str(), "later");
-        let rearmed = applied.lock().expect("applied lock").clone();
+        let rearmed = applied.applied.lock().expect("applied lock").clone();
         assert_eq!(
             rearmed
                 .iter()

@@ -238,6 +238,7 @@ pub(crate) struct QueuedWrite {
 pub(crate) struct SqliteWriter {
     sender: Option<tokio::sync::mpsc::Sender<WriterMessage>>,
     diagnostic_sender: Option<tokio::sync::mpsc::Sender<DiagnosticWriterMessage>>,
+    mailbox_commit_wake: tokio::sync::watch::Sender<u64>,
     diagnostic_stats: Arc<DiagnosticTimelinePersistenceStats>,
     worker: Option<JoinHandle<()>>,
     observability: Arc<dyn SqliteObservability>,
@@ -253,6 +254,7 @@ impl std::fmt::Debug for SqliteWriter {
                 "diagnostic_sender_present",
                 &self.diagnostic_sender.is_some(),
             )
+            .field("mailbox_commit_wake", &"watch<u64>")
             .field("worker_present", &self.worker.is_some())
             .field("write_op_deadline", &self.write_op_deadline)
             .field("shutdown_join_deadline", &self.shutdown_join_deadline)
@@ -314,6 +316,8 @@ impl SqliteWriter {
         let (sender, receiver) = tokio::sync::mpsc::channel(channel_capacity);
         let (diagnostic_sender, diagnostic_receiver) =
             tokio::sync::mpsc::channel(DIAGNOSTIC_QUEUE_BATCHES);
+        let (mailbox_commit_wake, _) = tokio::sync::watch::channel(0_u64);
+        let worker_mailbox_commit_wake = mailbox_commit_wake.clone();
         let diagnostic_stats = Arc::new(DiagnosticTimelinePersistenceStats::default());
         let worker_runtime = build_runtime().map_err(|error| {
             let error = AtmError::daemon_unavailable(format!(
@@ -341,6 +345,7 @@ impl SqliteWriter {
                     worker_observability,
                     worker_runtime,
                     BATCH_TIME_BUDGET,
+                    worker_mailbox_commit_wake,
                 )
             })
             .map_err(|error| {
@@ -358,12 +363,17 @@ impl SqliteWriter {
         Ok(Self {
             sender: Some(sender),
             diagnostic_sender: Some(diagnostic_sender),
+            mailbox_commit_wake,
             diagnostic_stats,
             worker: Some(worker),
             observability,
             write_op_deadline,
             shutdown_join_deadline,
         })
+    }
+
+    pub(crate) fn subscribe_mailbox_commits(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.mailbox_commit_wake.subscribe()
     }
 
     pub(crate) fn submit(&self, op: WriteOp) -> Result<WriteOpResult, AtmError> {
@@ -799,7 +809,13 @@ mod tests {
         )) else {
             panic!("a saturated diagnostic lane must not prevent primary selection");
         };
-        process_batch(&target, &mut connection, &mut cache, vec![primary]);
+        process_batch(
+            &target,
+            &mut connection,
+            &mut cache,
+            vec![primary],
+            &tokio::sync::watch::channel(0).0,
+        );
 
         assert!(matches!(
             reply.recv().expect("primary mailbox reply"),
@@ -872,7 +888,13 @@ mod tests {
         )) else {
             panic!("a full prune backlog must not prevent primary selection");
         };
-        process_batch(&target, &mut connection, &mut cache, vec![primary]);
+        process_batch(
+            &target,
+            &mut connection,
+            &mut cache,
+            vec![primary],
+            &tokio::sync::watch::channel(0).0,
+        );
         assert!(
             started.elapsed() <= PRIMARY_WRITE_DEADLINE,
             "primary write must complete within its hard bound while prune work is queued"
@@ -1263,6 +1285,7 @@ mod tests {
             &mut connection,
             &mut cache,
             vec![first, invalid, last],
+            &tokio::sync::watch::channel(0).0,
         );
 
         assert!(matches!(

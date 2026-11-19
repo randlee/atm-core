@@ -520,6 +520,13 @@ pub trait MessageStore: sealed::Sealed + Send + Sync {
 /// async backpressure without exposing its transaction queue or database.
 #[async_trait::async_trait]
 pub trait AsyncMessageStore: MessageStore {
+    /// Subscribes to durable mailbox commits that may change the result of a
+    /// mailbox read. Backends without commit notifications can retain the
+    /// default pending subscription.
+    fn subscribe_mailbox_commits(&self) -> Box<dyn MailboxCommitWatch> {
+        Box::new(NeverMailboxCommitWatch)
+    }
+
     /// Applies the narrow state transition requested by a successful mailbox
     /// read. Selection remains reader-lane work; this is the sole ordered
     /// writer-lane follow-up and is deliberately asynchronous.
@@ -612,6 +619,22 @@ pub trait AsyncMessageStore: MessageStore {
                 "message store does not implement fenced acknowledgement admission",
             ))
         }
+    }
+}
+
+/// A storage-owned stream of mailbox commit generations. Each successful
+/// `changed` result means a durable commit may have changed a mailbox read.
+#[async_trait::async_trait]
+pub trait MailboxCommitWatch: Send {
+    async fn changed(&mut self) -> bool;
+}
+
+struct NeverMailboxCommitWatch;
+
+#[async_trait::async_trait]
+impl MailboxCommitWatch for NeverMailboxCommitWatch {
+    async fn changed(&mut self) -> bool {
+        std::future::pending().await
     }
 }
 

@@ -11,6 +11,7 @@ pub(crate) fn writer_loop(
     observability: Arc<dyn SqliteObservability>,
     runtime: tokio::runtime::Runtime,
     batch_time_budget: Duration,
+    mailbox_commit_wake: tokio::sync::watch::Sender<u64>,
 ) {
     let mut cache = stmt_cache::WriterStatementCache;
     let mut shutting_down = false;
@@ -36,7 +37,7 @@ pub(crate) fn writer_loop(
                     item.timing.start();
                 }
                 serial_queue.with_connection(|connection| {
-                    process_batch(&target, connection, &mut cache, batch);
+                    process_batch(&target, connection, &mut cache, batch, &mailbox_commit_wake);
                 });
             }
             WriterWork::Diagnostics(message) => match message {
@@ -249,6 +250,7 @@ pub(crate) fn process_batch(
     connection: &mut SqliteConnection,
     cache: &mut stmt_cache::WriterStatementCache,
     batch: Vec<QueuedWrite>,
+    mailbox_commit_wake: &tokio::sync::watch::Sender<u64>,
 ) {
     let batch_len = batch.len();
     let mut transaction = match connection.transaction_with_behavior(TransactionBehavior::Immediate)
@@ -311,6 +313,11 @@ pub(crate) fn process_batch(
             error,
         )
     });
+    if commit_error.is_none() {
+        mailbox_commit_wake.send_modify(|generation| {
+            *generation = generation.wrapping_add(1);
+        });
+    }
     for (reply, result) in replies {
         reply.send(finalize_committed_reply(
             target,
