@@ -373,22 +373,8 @@ impl PeerConnectionPool {
             .try_with(|()| ())
             .is_ok()
         {
-            tokio::time::timeout(
-                remaining,
-                self.shared.addresses.connect(
-                    peer,
-                    port,
-                    dial_deadline,
-                    |_peer, port| async move {
-                        Ok(vec![std::net::SocketAddr::from((
-                            [192, 0, 2, 1],
-                            port.get(),
-                        ))])
-                    },
-                    |_address| std::future::pending::<std::io::Result<TcpStream>>(),
-                ),
-            )
-            .await
+            self.scripted_stalled_dial(peer, port, dial_deadline, remaining)
+                .await
         } else {
             tokio::time::timeout(
                 remaining,
@@ -430,6 +416,32 @@ impl PeerConnectionPool {
                     cause,
                 }
             })
+    }
+
+    #[cfg(test)]
+    async fn scripted_stalled_dial(
+        &self,
+        peer: &HostName,
+        port: NonZeroU16,
+        deadline: RequestDeadline,
+        remaining: std::time::Duration,
+    ) -> Result<Result<TcpStream, String>, tokio::time::error::Elapsed> {
+        tokio::time::timeout(
+            remaining,
+            self.shared.addresses.connect(
+                peer,
+                port,
+                deadline,
+                |_peer, port| async move {
+                    Ok(vec![std::net::SocketAddr::from((
+                        [192, 0, 2, 1],
+                        port.get(),
+                    ))])
+                },
+                |_address| std::future::pending::<std::io::Result<TcpStream>>(),
+            ),
+        )
+        .await
     }
 
     #[cfg(test)]
@@ -826,15 +838,15 @@ mod tests {
             self.0.take();
         }
     }
-    fn hold_paused_clock() -> PausedClockGuard {
+    async fn hold_paused_clock() -> PausedClockGuard {
         crate::peer_dial::set_test_virtual_time(true);
         let (release, hold) = tokio::sync::oneshot::channel::<()>();
-        let (started, ready) = std::sync::mpsc::sync_channel(1);
+        let (started, ready) = tokio::sync::oneshot::channel();
         tokio::task::spawn_blocking(move || {
             started.send(()).expect("clock guard started");
             let _ = hold.blocking_recv();
         });
-        ready.recv().expect("clock guard ready");
+        ready.await.expect("clock guard ready");
         PausedClockGuard(Some(release))
     }
     fn test_deadline(duration: std::time::Duration) -> atm_core::api::RequestDeadline {
@@ -862,7 +874,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn sequential_writes_reuse_one_authenticated_http1_connection() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
         let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
@@ -890,7 +902,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn pool_never_reuses_a_connection_across_configured_authorities() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
         let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
@@ -925,7 +937,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn overflow_connection_is_closed_instead_of_becoming_a_retained_entry() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
         let pool = PeerConnectionPool::new(
@@ -968,7 +980,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn overflow_drop_after_failed_exchange_closes_its_driver() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let port = start_keep_alive_peer().await;
         let pool = PeerConnectionPool::new(
             PeerPoolConfig {
@@ -1027,7 +1039,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn overflow_drop_without_exchange_closes_its_driver() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let port = start_keep_alive_peer().await;
         let pool = PeerConnectionPool::new(
             PeerPoolConfig {
@@ -1069,7 +1081,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn expired_idle_connection_is_evicted_and_redialed() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
         let pool = PeerConnectionPool::new(
@@ -1113,7 +1125,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn unused_pooled_borrow_closes_its_driver_and_releases_its_reservation() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let port = start_keep_alive_peer().await;
         let pool = PeerConnectionPool::new(
             PeerPoolConfig {
@@ -1140,7 +1152,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn stale_idle_sender_redials_once_before_the_next_request() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let port = start_close_after_response_peer().await;
         let adapter = Arc::new(CountingPassthroughAdapter::default());
         let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
@@ -1174,7 +1186,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn expired_deadline_releases_idle_reservation_without_probe_or_redial() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let port = start_keep_alive_peer().await;
         let adapter = Arc::new(CountingPassthroughAdapter::default());
         let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
@@ -1219,7 +1231,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn failed_exchange_is_not_retried_after_the_request_is_handed_to_the_sender() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let (port, accepted) = start_drop_peer().await;
         let adapter = Arc::new(CountingPassthroughAdapter::default());
         let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
@@ -1250,7 +1262,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn stale_redial_failure_releases_the_existing_reservation() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         let (port, shutdown_listener, listener_stopped) =
             start_close_peer_with_listener_shutdown().await;
         let adapter = Arc::new(CountingPassthroughAdapter::default());
@@ -1328,7 +1340,7 @@ mod tests {
     /// ADR-060 §7: a stalled dial reports its address before the outer timeout.
     #[tokio::test(start_paused = true)]
     async fn unresponsive_peer_reports_per_address_diagnosis_not_a_bare_timeout() {
-        let _clock_guard = hold_paused_clock();
+        let _clock_guard = hold_paused_clock().await;
         crate::peer_dial::SCRIPTED_PEER_DIAL
             .scope((), async {
                 let adapter = Arc::new(CountingPassthroughAdapter::default());
