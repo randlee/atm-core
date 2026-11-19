@@ -936,27 +936,21 @@ fn handle_graft_receiver_connection(
                 event,
                 kind: request.kind,
             };
-            let response = match (GraftReceiveHook {
-                injector,
-                snapshot: &ctx.snapshot,
-                observability: ctx.observability.as_ref(),
-            })
-            .emit_received_message(
-                &dispatch,
-                atm_core::RequestDeadline::after(GRAFT_RECEIVER_IO_DEADLINE),
-            ) {
-                Ok(_) => GraftPostSendResponse::Delivered,
-                Err(error) => GraftPostSendResponse::Error(error),
-            };
+            let response =
+                match GraftReceiveHook::new(injector, &ctx.snapshot, ctx.observability.as_ref())
+                    .emit_received_message(
+                        &dispatch,
+                        atm_core::RequestDeadline::after(GRAFT_RECEIVER_IO_DEADLINE),
+                    ) {
+                    Ok(_) => GraftPostSendResponse::Delivered,
+                    Err(error) => GraftPostSendResponse::Error(error),
+                };
             listener.write_response(stream, &response)
         }
         GraftReceiverRequest::CronLifecycle(request) => {
-            let receipt = (GraftReceiveHook {
-                injector,
-                snapshot: &ctx.snapshot,
-                observability: ctx.observability.as_ref(),
-            })
-            .deliver_cron_lifecycle(request);
+            let receipt =
+                GraftReceiveHook::new(injector, &ctx.snapshot, ctx.observability.as_ref())
+                    .deliver_cron_lifecycle(request);
             listener.write_cron_lifecycle_receipt(stream, &receipt)
         }
     }
