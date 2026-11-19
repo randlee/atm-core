@@ -1154,11 +1154,7 @@ mod tests {
         };
         let endpoint = listener.local_addr().expect("local addr");
         let capability = listener.capability().clone();
-        listener
-            .listener
-            .set_nonblocking(false)
-            .expect("blocking listener");
-        let sender = std::thread::spawn(move || {
+        let (response, received) = exchange_with_test_receiver(&listener, || {
             super::TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.set(true));
             deliver_graft_post_send(
                 endpoint,
@@ -1167,23 +1163,11 @@ mod tests {
                 Duration::ZERO,
                 Duration::ZERO,
             )
-            .expect("deliver graft post-send")
         });
-        let mut stream = listener
-            .poll_accept()
-            .expect("accept")
-            .expect("connected peer");
-        let received = match listener
-            .read_receiver_request_with_limit(&mut stream, None)
-            .expect("read request")
-        {
-            GraftReceiverRequest::PostSend(request) => request,
-            _ => panic!("expected post-send request"),
-        };
-        listener
-            .write_response(&mut stream, &GraftPostSendResponse::Delivered)
-            .expect("write response");
-        let response = sender.join().expect("sender thread");
+        let response = response.expect("deliver graft post-send");
+        let received = received
+            .expect("receiver request")
+            .expect("request received");
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.event.description, "loopback graft transport");
         assert_eq!(received.kind, NudgeKind::Steer);
@@ -1571,6 +1555,109 @@ mod tests {
         }
     }
 
+    struct ReceiverControl {
+        endpoint: std::net::SocketAddr,
+        state: std::sync::Mutex<ReceiverControlState>,
+    }
+
+    #[derive(Default)]
+    struct ReceiverControlState {
+        cancelled: bool,
+        stream: Option<TcpStream>,
+    }
+
+    impl ReceiverControl {
+        fn cancel(&self) {
+            let mut state = self.state.lock().expect("receiver control");
+            if state.cancelled {
+                return;
+            }
+            state.cancelled = true;
+            if let Some(stream) = &state.stream {
+                let _ = stream.shutdown(std::net::Shutdown::Both);
+            } else {
+                // A test-owned connection wakes a receiver still blocked in accept.
+                let _ = TcpStream::connect(self.endpoint);
+            }
+        }
+    }
+
+    struct ReceiverCompletionGuard(Arc<ReceiverControl>);
+
+    impl Drop for ReceiverCompletionGuard {
+        fn drop(&mut self) {
+            self.0.cancel();
+        }
+    }
+
+    type TestReceiver = std::thread::JoinHandle<Result<Option<GraftPostSendRequest>, AtmError>>;
+
+    fn spawn_test_receiver(
+        listener: &Arc<GraftReceiverListener>,
+    ) -> (
+        TestReceiver,
+        Arc<ReceiverControl>,
+        std::sync::mpsc::Receiver<()>,
+    ) {
+        listener
+            .listener
+            .set_nonblocking(false)
+            .expect("blocking listener");
+        let control = Arc::new(ReceiverControl {
+            endpoint: listener.local_addr().expect("local addr"),
+            state: std::sync::Mutex::new(ReceiverControlState::default()),
+        });
+        let worker_control = Arc::clone(&control);
+        let listener = Arc::clone(listener);
+        let (accepted_tx, accepted_rx) = std::sync::mpsc::channel();
+        let join = std::thread::spawn(move || {
+            let mut stream = listener
+                .poll_accept()?
+                .expect("blocking accept returns a peer");
+            {
+                let mut state = worker_control.state.lock().expect("receiver control");
+                if state.cancelled {
+                    return Ok(None);
+                }
+                state.stream = Some(stream.try_clone().map_err(|source| {
+                    AtmError::daemon_unavailable("clone test receiver stream").with_cause(source)
+                })?);
+            }
+            let _ = accepted_tx.send(());
+            let GraftReceiverRequest::PostSend(request) =
+                listener.read_receiver_request_with_limit(&mut stream, None)?
+            else {
+                return Err(AtmError::validation("expected post-send request"));
+            };
+            listener.write_response(&mut stream, &GraftPostSendResponse::Delivered)?;
+            Ok(Some(request))
+        });
+        (join, control, accepted_rx)
+    }
+
+    fn exchange_with_test_receiver<T>(
+        listener: &Arc<GraftReceiverListener>,
+        send: impl FnOnce() -> T,
+    ) -> (T, Result<Option<GraftPostSendRequest>, AtmError>) {
+        let (receiver, control, _accepted) = spawn_test_receiver(listener);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _completion = ReceiverCompletionGuard(control);
+            send()
+        }));
+        let request = receiver.join().expect("receiver thread");
+        listener
+            .listener
+            .set_nonblocking(true)
+            .expect("restore nonblocking listener");
+        while listener
+            .poll_accept()
+            .expect("drain test wake connections")
+            .is_some()
+        {}
+        let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+        (outcome, request)
+    }
+
     /// Runs one `deliver_published_receiver_hook` call concurrently with a
     /// background thread that serves exactly one accepted connection with
     /// `Delivered`, then joins that thread before returning. Borrows
@@ -1588,53 +1675,10 @@ mod tests {
         runtime: &GraftLeaseTestRuntime,
         listener: &Arc<GraftReceiverListener>,
     ) -> (Result<PostSendEmissionPath, AtmError>, GraftPostSendRequest) {
-        use std::sync::atomic::{AtomicBool, Ordering};
-        struct RestoreNonblocking<'a>(&'a GraftReceiverListener);
-
-        impl Drop for RestoreNonblocking<'_> {
-            fn drop(&mut self) {
-                self.0
-                    .listener
-                    .set_nonblocking(true)
-                    .expect("restore nonblocking listener");
-            }
-        }
-
-        listener
-            .listener
-            .set_nonblocking(false)
-            .expect("blocking listener");
-        let _restore = RestoreNonblocking(listener);
-        let endpoint = listener.local_addr().expect("local addr");
-        let client_finished = Arc::new(AtomicBool::new(false));
-        let receiver_listener = Arc::clone(listener);
-        let receiver_client_finished = Arc::clone(&client_finished);
-        let receiver = std::thread::spawn(move || {
-            let mut stream = receiver_listener
-                .poll_accept()
-                .expect("accept")
-                .expect("loopback peer");
-            if receiver_client_finished.load(Ordering::Acquire) {
-                None
-            } else {
-                let GraftReceiverRequest::PostSend(request) = receiver_listener
-                    .read_receiver_request_with_limit(&mut stream, None)
-                    .expect("read request")
-                else {
-                    panic!("expected post-send request");
-                };
-                receiver_listener
-                    .write_response(&mut stream, &GraftPostSendResponse::Delivered)
-                    .expect("write response");
-                Some(request)
-            }
-        });
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let (outcome, request) = exchange_with_test_receiver(listener, || {
             deliver_published_receiver_hook_with_transport(
                 runtime,
                 &dispatch_for(test_event()),
-                // The test transport has no time limits; an expired deadline
-                // makes an accidental return to budget-based success fail.
                 RequestDeadline::after_at(std::time::Instant::now(), Duration::ZERO),
                 |endpoint, capability, request, deadline| {
                     super::deliver_graft_post_send_with_limits(
@@ -1649,18 +1693,89 @@ mod tests {
                     )
                 },
             )
-        }));
-        if !matches!(outcome, Ok(Ok(_))) {
-            client_finished.store(true, Ordering::Release);
-            // Release accept when delivery failed before establishing a connection.
-            let _ = TcpStream::connect(endpoint);
-        }
-        let request = receiver
-            .join()
-            .expect("receiver thread after delivery handshake");
-        let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
-        let request = request.expect("delivery completed before receiver accepted a request");
+        });
+        let request = request
+            .expect("receiver thread")
+            .expect("delivery received");
         (outcome, request)
+    }
+
+    #[test]
+    fn receiver_is_released_when_sender_fails_or_panics_before_connect() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = bind_listener(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+            None,
+        )
+        .expect("bind listener");
+        let (outcome, received) =
+            exchange_with_test_receiver(&listener, || Err::<(), _>("sender failed"));
+        assert_eq!(outcome, Err("sender failed"));
+        assert!(received.expect("receiver exits").is_none());
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            exchange_with_test_receiver(&listener, || panic!("sender panic"));
+        }));
+        assert!(panic.is_err());
+    }
+
+    #[test]
+    fn receiver_is_released_on_sender_exit_after_accept() {
+        for panic_after_accept in [false, true] {
+            let tempdir = TempDir::new().expect("tempdir");
+            let listener = bind_listener(
+                tempdir.path(),
+                &TeamName::from_validated(TEST_TEAM),
+                &AgentName::from_validated(TEST_QA),
+                None,
+            )
+            .expect("bind listener");
+            let (receiver, control, accepted) = spawn_test_receiver(&listener);
+            let sender = TcpStream::connect(control.endpoint).expect("connect sender");
+            accepted.recv().expect("receiver accepted sender");
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _completion = ReceiverCompletionGuard(control);
+                if panic_after_accept {
+                    panic!("sender panic after accept");
+                }
+                Err::<(), _>("sender error after accept")
+            }));
+            if panic_after_accept {
+                assert!(result.is_err());
+            } else {
+                assert_eq!(
+                    result.expect("sender did not panic"),
+                    Err("sender error after accept")
+                );
+            }
+            assert!(receiver.join().expect("receiver thread").is_err());
+            drop(sender);
+        }
+    }
+
+    #[test]
+    fn receiver_is_released_when_sender_stalls_after_connect() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = bind_listener(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+            None,
+        )
+        .expect("bind listener");
+        let (receiver, control, accepted) = spawn_test_receiver(&listener);
+        let sender = TcpStream::connect(control.endpoint).expect("connect sender");
+        accepted.recv().expect("receiver accepted sender");
+        // The sender is deliberately held before writing; cancel at that
+        // checkpoint and prove shutdown releases the blocked receiver read.
+        control.cancel();
+        assert!(receiver.join().expect("receiver thread").is_err());
+        drop(sender);
+        listener
+            .listener
+            .set_nonblocking(true)
+            .expect("restore listener");
     }
 
     fn wait_receiver_completion<T>(
