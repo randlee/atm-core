@@ -1,0 +1,8 @@
+{
+  "task_id": "atm-test-1.sanity",
+  "error_id": "example",
+  "code": "SANITY_CLOSE.INVALID",
+  "detail": "commit differs",
+  "owner": "sanity",
+  "recovery": "Regenerate selected result and retry."
+}

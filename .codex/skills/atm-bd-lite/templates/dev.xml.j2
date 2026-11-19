@@ -1,0 +1,71 @@
+---
+name: lite-dev-assignment
+version: 1.0.0
+description: Lite development and stack task.
+format: xml
+required_variables: [provider, provider.create, task_id, phase, profile]
+metadata:
+  type: dev-assignment
+---
+<dev-task id="{{ task_id }}">
+  <phase>{{ phase }}</phase>
+  <profile>{{ profile }}</profile>
+  <provider-commands>
+    <create><![CDATA[{{ provider.create | replace("'{base}'", "<top>") | replace("'{head}'", "<branch>") | replace("'{title}'", "<one-line title>") | replace("'{body_file}'", "<scratch>/" ~ task_id ~ "-pr-body.md") | replace("{body_file}", "<scratch>/" ~ task_id ~ "-pr-body.md") | cdata_escape }}]]></create>
+  </provider-commands>
+  <instructions><![CDATA[
+Read your own bead with `bd show {{ task_id }} --json` for the work and metadata. Start with `atm task start {{ task_id }}`.
+Never write your own task bead: only the task hooks do that. Run no cache commands; hooks refresh what they read. The only `bd` writes below are to the stack bead.
+Run this setup block from the primary checkout; it locks the stack and creates an isolated worktree:
+
+```bash
+set -euo pipefail
+TASK_ID='{{ task_id }}'
+PHASE='{{ phase }}'
+ROW=$(bd show "$TASK_ID" --json | jq -e '.[0]')
+BRANCH=$(printf '%s' "$ROW" | jq -er '.metadata.branch')
+STACK=$(printf '%s' "$ROW" | jq -er '.metadata.stack_bead')
+REPO=$(sed -n 's/^repo = "\([^"]*\)"/\1/p' ".atm-bd/phase-$PHASE.toml")
+test -n "$REPO"
+ROOT="${TMPDIR:-/tmp}/lite-repo-$TASK_ID"
+WORKTREE="${TMPDIR:-/tmp}/lite-work-$TASK_ID"
+bd update "$STACK" --if-assignee '' --assignee "$ATM_IDENTITY" --status in_progress
+trap 'bd update "$STACK" --if-assignee "$ATM_IDENTITY" --assignee "" --status open' EXIT
+TOP=$(bd show "$STACK" --json | jq -er '.[0].metadata | .layers[-1].branch // .trunk')
+git clone --no-checkout "https://github.com/$REPO.git" "$ROOT"
+git -C "$ROOT" fetch origin "$TOP"
+git -C "$ROOT" worktree add -b "$BRANCH" "$WORKTREE" "origin/$TOP"
+```
+
+Do the bead's work in the worktree and commit it. Then run this stack block from the primary checkout:
+
+```bash
+set -euo pipefail
+TASK_ID='{{ task_id }}'
+PHASE='{{ phase }}'
+ROW=$(bd show "$TASK_ID" --json | jq -e '.[0]')
+BRANCH=$(printf '%s' "$ROW" | jq -er '.metadata.branch')
+STACK=$(printf '%s' "$ROW" | jq -er '.metadata.stack_bead')
+REPO=$(sed -n 's/^repo = "\([^"]*\)"/\1/p' ".atm-bd/phase-$PHASE.toml")
+WORKTREE="${TMPDIR:-/tmp}/lite-work-$TASK_ID"
+bd update "$STACK" --if-assignee '' --assignee "$ATM_IDENTITY" --status in_progress
+trap 'bd update "$STACK" --if-assignee "$ATM_IDENTITY" --assignee "" --status open' EXIT
+META=$(bd show "$STACK" --json | jq -e '.[0].metadata')
+TOP=$(printf '%s' "$META" | jq -er '.layers[-1].branch // .trunk')
+git -C "$WORKTREE" fetch origin "$TOP"
+git -C "$WORKTREE" rebase "origin/$TOP"
+git -C "$WORKTREE" push --force-with-lease origin "$BRANCH"
+```
+
+Write `Lite development layer` to `<scratch>/{{ task_id }}-pr-body.md`, create the pull request against `$TOP` with the provider command above, then record its number in `PR` before continuing:
+
+```bash
+PR='<created pull request number>'
+HEAD=$(git -C "$WORKTREE" rev-parse HEAD)
+UPDATED=$(printf '%s' "$META" | jq --arg branch "$BRANCH" --arg head "$HEAD" --arg base "$TOP" --argjson pr "$PR" '.layers += [{branch:$branch,head:$head,pr:$pr,base:$base}]')
+bd update "$STACK" --if-assignee "$ATM_IDENTITY" --metadata "$UPDATED"
+```
+
+Close only with `atm task close {{ task_id }} completed --stdin` and an inline report. If close fails, read the error, fix its named cause, and rerun the close; do not end your turn while your ATM task is open. Do not write the task bead.
+  ]]></instructions>
+</dev-task>

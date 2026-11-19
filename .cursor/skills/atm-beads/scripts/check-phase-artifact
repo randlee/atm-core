@@ -1,0 +1,59 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11,<3.12"
+# dependencies = ["pydantic>=2", "pyyaml", "sc-compose>=1.8.0,<2"]
+# ///
+# pyright: strict
+"""Check that the plan file the phase file `.atm-bd/phase-<p>.toml` names was pushed to its integration
+branch, parses, and equals the local copy. The DAG HTML is local only.
+
+The plan file is the planner's file, never a fresh export."""
+import argparse
+from pathlib import Path
+import subprocess
+import sys
+
+from sprint_index_common import load_phase_config, load_phase_plan, parse_plan, phase_of_root
+
+
+def check_artifact(repo: Path, root: str, expected_plan_path: Path) -> None:
+    config = load_phase_config(repo, phase_of_root(root))
+    if config['root'] != root:
+        raise RuntimeError(f"--root {root}; the phase file names {config['root']}")
+    branch = config['integration_branch']
+    def git(*args: str) -> str:
+        result = subprocess.run(['git', *args], cwd=repo, text=True, capture_output=True)
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or f'git {args[0]} failed')
+        return result.stdout
+    git('check-ref-format', '--branch', branch)
+    ref = f'refs/remotes/origin/{branch}'
+    git('fetch', '--no-tags', 'origin', f'refs/heads/{branch}:{ref}')
+    try:
+        published_plan = git('show', f"{ref}:{config['plan']}")
+    except RuntimeError as exc:
+        raise RuntimeError(f"{branch}: plan file {config['plan']} missing or unreadable: {exc}") from exc
+    _rows, problems = parse_plan(published_plan, f"{branch}:{config['plan']}")
+    if problems:
+        raise RuntimeError('; '.join(problems))
+    if published_plan != expected_plan_path.read_text():
+        raise RuntimeError(f'{branch}: published plan file differs from current plan')
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', required=True)
+    parser.add_argument('--index', required=True, type=Path)
+    args = parser.parse_args()
+    repo = Path(subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], text=True).strip())
+    load_phase_plan(args.index, args.root)
+    check_artifact(repo, args.root, args.index)
+    print('canonical phase plan is published on integration')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
+        print(f'check-phase-artifact: {exc}', file=sys.stderr)
+        raise SystemExit(5)

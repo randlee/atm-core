@@ -1,0 +1,74 @@
+---
+name: fix-complete
+version: 2.3.0
+description: Body of the hook's atm send --template report; the hook closes the dev task at dev complete.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - sprint
+  - outcome
+  - resolution_md
+  - validation_md
+defaults:
+  qa_task_id: ""
+  sanity_task_id: ""
+  dev_task_id: ""
+  branch: ""
+  commit: ""
+  rebased_onto: ""
+  pr_number: ""
+  pr_url: ""
+  notes_md: ""
+metadata:
+  type: fix-complete
+  tags:
+    - stage:fix
+    - orchestration:beads
+  workflow:
+    scope:
+      kind: sprint
+      variable: sprint
+    state: fix-complete
+    stage: fix
+    transition: complete
+---
+{% set task_id = dev_task_id if dev_task_id else task_id %}
+{% if outcome not in ["fixed", "not_reproducible"] %}{{ outcome | outcome_must_be_fixed_or_not_reproducible }}ERROR: outcome must be fixed or not_reproducible, got {{ outcome }}
+{% endif %}{% if outcome == "fixed" and not (commit and rebased_onto) %}{{ outcome | fixed_requires_commit_and_rebased_onto }}ERROR: outcome fixed requires commit and rebased_onto
+{% endif %}{% if outcome == "fixed" and not (pr_number and pr_url) %}{{ outcome | fixed_requires_pr }}ERROR: outcome fixed requires pr_number and pr_url
+{% endif %}# Fix Complete
+
+Generated: {{ generated_at }}
+Finding bead: {{ task_id }} (sprint {{ sprint }})
+Branch: `{{ branch }}`
+{% if commit %}Commit: `{{ commit }}`
+Rebased onto: `{{ rebased_onto }}`
+PR: [#{{ pr_number }}]({{ pr_url }})
+{% endif %}Outcome: **{{ outcome }}**
+
+Sanity verifies this outcome on its own task; the dev task is already closed. QA follows sanity PASS.
+
+## Machine Status (JSON)
+```json
+{
+  "task": {{ task_id | tojson }},
+  "sprint": {{ sprint | tojson }},
+  "branch": {{ branch | tojson }},
+  "commit": {{ commit | tojson }},
+  "rebased_onto": {{ rebased_onto | tojson }},
+  "pr": {{ pr_number | tojson }},
+  "pr_url": {{ pr_url | tojson }},
+  "outcome": {{ outcome | tojson }}
+}
+```
+
+## Resolution
+{{ resolution_md }}
+
+## Validation
+{{ validation_md }}
+{% if notes_md %}
+## Notes
+{{ notes_md }}
+{% endif %}

@@ -1,0 +1,21 @@
+---
+name: stack-bead
+version: 1.0.0
+description: Stack ledger and lock, rendered with the phase root and imported with the plan.
+format: json
+required_variables:
+  - id
+  - phase
+  - integration_branch
+---
+{
+  "id": {{ (id ~ ".stack") | tojson }},
+  "title": {{ ("phase-" ~ phase ~ ": stack") | tojson }},
+  "issue_type": "task",
+  "status": "open",
+  "labels": {{ ["phase-" ~ phase, "stage:stack"] | tojson }},
+  "dependencies": [
+    {"issue_id": {{ (id ~ ".stack") | tojson }}, "depends_on_id": {{ id | tojson }}, "type": "parent-child"}
+  ],
+  "metadata": {"phase": {{ phase | tojson }}, "trunk": {{ integration_branch | tojson }}, "stack_number": null, "layers": []}
+}

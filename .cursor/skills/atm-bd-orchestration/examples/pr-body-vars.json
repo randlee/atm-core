@@ -1,0 +1,9 @@
+{
+  "task_id": "atm-d-4",
+  "summary_md": "Adds the synchronous OTLP exporter behind the existing exporter trait and wires it into daemon startup. Export failures are logged with their typed error and never block message delivery.",
+  "deliverables": [
+    "`SyncOtlpExporter` implements `Exporter` in `crates/otel/src/sync.rs`, with unit tests for success, timeout and endpoint-refused.",
+    "Daemon startup selects the exporter from `[otel] mode`; an unknown mode is a typed config error."
+  ],
+  "generated_by": "dev@my-team codex:model"
+}

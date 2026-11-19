@@ -1,0 +1,16 @@
+{
+  "task_id": "atm-d-4-sanity",
+  "checked_bead": "atm-d-4",
+  "sprint": "d-4",
+  "worktree_path": "../atm-core-worktrees/sprint/d-4-otlp-sync-exporter",
+  "branch": "sprint/d-4-otlp-sync-exporter",
+  "commit": "4f1c2a9e7b3d5f60812a4c9e0b7d3f5a1c2e4b6d",
+  "base": "b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0",
+  "pr_number": 262,
+  "pr_url": "https://github.com/randlee/atm-core/pull/262",
+  "primary_checkout": "/path/to/atm-core",
+  "lint_command": "make lint",
+  "beads_dir": "/path/to/atm-core/.beads",
+  "close_context": {"example": "lead-supplied close contract"},
+  "sanity_close_mode": "daemon"
+}

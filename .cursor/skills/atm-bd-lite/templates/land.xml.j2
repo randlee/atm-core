@@ -1,0 +1,34 @@
+---
+name: lite-land-assignment
+version: 1.0.0
+description: Land a verified lite sprint.
+format: xml
+required_variables: [task_id, phase, profile, repo, pr_number, branch, commit]
+metadata:
+  type: land-assignment
+---
+<land-task id="{{ task_id }}">
+  <instructions><![CDATA[
+Start with `atm task start {{ task_id }}`. Never write your own task bead; the task hook owns it.
+The scheduler assigned this task after QA PASS and passing CI. Run this landing block immediately:
+
+```bash
+set -euo pipefail
+REPO='{{ repo }}'
+PR='{{ pr_number }}'
+EXPECTED='{{ commit }}'
+INFO=$(gh pr view "$PR" --repo "$REPO" --json headRefOid,statusCheckRollup)
+if [ "$(printf '%s' "$INFO" | jq -er '.headRefOid')" != "$EXPECTED" ] ||
+   ! printf '%s' "$INFO" | jq -e '.statusCheckRollup | length > 0 and all(.[]; (.conclusion // .state) as $state | ["SUCCESS", "NEUTRAL", "SKIPPED"] | index($state) != null)' >/dev/null; then
+  printf '%s\n' 'Assigned head changed or its checks are not passing.' | atm task close '{{ task_id }}' refused --stdin
+  exit 0
+fi
+gh pr merge "$PR" --repo "$REPO" --merge
+RESULT=$(gh pr view "$PR" --repo "$REPO" --json state,mergeCommit)
+test "$(printf '%s' "$RESULT" | jq -er '.state')" = MERGED
+MERGED=$(printf '%s' "$RESULT" | jq -er '.mergeCommit.oid')
+printf 'Merged\n```json\n{"merged":"%s"}\n```\n' "$MERGED" | atm task close '{{ task_id }}' completed --stdin
+```
+If the task close fails, read the error, fix its named cause, and rerun the close with the same merge SHA; do not merge again or end your turn while the ATM task is open.
+  ]]></instructions>
+</land-task>

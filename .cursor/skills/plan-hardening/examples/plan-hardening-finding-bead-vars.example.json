@@ -1,0 +1,13 @@
+{
+  "id": "proj-phase-bc-ph-s2-c1-plan-scope-001",
+  "root": "proj-phase-bc",
+  "phase": "bc",
+  "step_bead": "proj-phase-bc-ph-s2-c1",
+  "reviewer": "plan-scope-reviewer",
+  "finding_ref": "PLAN-SCOPE-001",
+  "severity": "Blocking",
+  "category": "SERIAL-RISK",
+  "issue": "bc-3 waits on bc-2 although it consumes nothing bc-2 produces.",
+  "correction": "Drop the bc-3 must_follow edge on bc-2.",
+  "target_refs": ["proj-bc-3:metadata.must_follow"]
+}

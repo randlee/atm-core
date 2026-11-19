@@ -1,0 +1,36 @@
+---
+name: plan-sprint-hardening-complete
+version: 1.0.0
+description: Completion report for a plan-sprint-hardening task; the body of `atm task close <task-id> completed`.
+format: markdown
+required_variables:
+  - generated_at
+  - task_id
+  - phase
+  - round_index
+  - status
+  - result_json
+metadata:
+  type: plan-sprint-hardening-complete
+  tags:
+    - stage:plan
+  workflow:
+    scope:
+      kind: phase
+      variable: phase
+    state: plan-sprint-hardening-complete
+    stage: plan
+    transition: complete
+    iteration_variable: round_index
+---
+# Sprint Scope Hardening Complete
+
+Generated: {{ generated_at }}
+Phase/Task: {{ phase }} / {{ task_id }}
+Round: {{ round_index }}
+Status: **{{ status }}**
+
+## Result (JSON)
+```json
+{{ result_json | safe }}
+```

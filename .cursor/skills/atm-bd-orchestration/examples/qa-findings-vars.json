@@ -1,0 +1,5 @@
+{
+  "findings": [
+    {"id": "example-f1", "severity": "important", "category": "correctness", "refs": ["src/example.py:42"], "issue": "The value is lost.", "required_correction": "Preserve the value.", "reviewer": "req-qa", "reviewer_display": "\uf029b req-qa"}
+  ]
+}

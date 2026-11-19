@@ -1,0 +1,52 @@
+---
+name: lite-qa-assignment
+version: 1.0.0
+description: QA assignment for the atm-bd-lite profile.
+format: xml
+required_variables: [task_id, phase, profile, repo, pr_number, branch, commit]
+metadata:
+  type: qa-assignment
+  tags: [stage:qa, profile:lite]
+---
+<qa-task id="{{ task_id | string }}">
+  <phase>{{ phase | string }}</phase>
+  <profile>{{ profile | string }}</profile>
+  <instructions><![CDATA[
+    Review repository {{ repo }}, PR {{ pr_number }}, branch {{ branch }}, commit {{ commit }}.
+    Read the task's acceptance criteria and
+    verify each against the exact layer contents. Run the validation required by the task and inspect the
+    stack using the installed sc-gh-stack-view skill. Always pass `--repo {{ repo }}` to GitHub PR commands;
+    the primary checkout may be a different repository. An unknown local catalog is not evidence of a defect:
+    verify the supplied PR base and head against the phase stack bead and report the catalog limitation.
+    Report concrete evidence for every criterion.
+    Close the QA task with PASS only when all criteria pass and no blocking or important findings remain;
+    otherwise file findings and close with FAIL. Follow task-close T-CLOSE-03 and T-CLOSE-04.
+    The task-close hook journals the bead update; never close or modify the QA bead directly.
+    For FINDINGS, write a JSON array to a file, one object per finding with `id`, `title`, `description`, and
+    boolean `blocking`. Then pour each finding and its required edge with this block (creating findings is allowed):
+
+```bash
+set -euo pipefail
+TASK_ID='{{ task_id }}'
+PHASE='{{ phase }}'
+FINDINGS_FILE="${TMPDIR:-/tmp}/$TASK_ID-findings.json"
+ROW=$(bd show "$TASK_ID" --json | jq -e '.[0]')
+SPRINT=$(printf '%s' "$ROW" | jq -er '.metadata.sprint_bead')
+ROOT=$(printf '%s' "$ROW" | jq -er '.metadata.phase_bead')
+jq -ce '.[]' "$FINDINGS_FILE" | while IFS= read -r finding; do
+  ID=$(printf '%s' "$finding" | jq -er '.id')
+  TITLE=$(printf '%s' "$finding" | jq -er '.title')
+  DESCRIPTION=$(printf '%s' "$finding" | jq -er '.description')
+  BLOCKING=$(printf '%s' "$finding" | jq -er '.blocking | if type == "boolean" then tostring else error("blocking must be boolean") end')
+  bd create "$TITLE" --id "$ID" --force --type bug --description "$DESCRIPTION" --labels "phase-$PHASE,stage:fix" \
+    --metadata "$(jq -cn --arg sprint "$SPRINT" --arg phase "$ROOT" --argjson blocking "$BLOCKING" '{sprint_bead:$sprint,phase_bead:$phase,blocking:$blocking}')"
+  if [ "$BLOCKING" = true ]; then TARGET="$SPRINT"; else TARGET="$ROOT"; fi
+  bd dep add "$TARGET" --blocked-by "$ID"
+done
+```
+    Close with an inline report ending in a single fenced JSON verdict: PASS has `verdict` and `sha`;
+    FINDINGS additionally has `findings`, an array of objects containing each poured `id` and its `blocking` boolean.
+    Use `atm task close {{ task_id }} completed --stdin`. If close fails, read the error, fix its named cause,
+    and rerun the close; do not end your turn while your ATM task is open.
+  ]]></instructions>
+</qa-task>

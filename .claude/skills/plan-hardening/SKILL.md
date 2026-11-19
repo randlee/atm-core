@@ -1,6 +1,6 @@
 ---
 name: plan-hardening
-version: 0.19.15
+version: 0.19.16
 description: >
   Harden a phase plan in beads before implementation: scope review, critical
   review and ceremony review, each followed by a planner fix pass, then the

@@ -1,0 +1,94 @@
+# pyright: strict
+"""Formula lookup and the small `bd` wrapper `bead-groups` uses.
+
+A formula is two files: `<name>.formula.toml.j2` (the sc-compose source) and
+`<name>.relations.json` (bead-groups data: attach ref and the attach relations).
+Each file is looked up on `search_path(repo)`, first match wins:
+
+1. `<repo>/.atm-bd/formula/` - the repository override (tracked in git; the
+   rest of `.atm-bd/` is not);
+2. `skills/atm-bd-orchestration/formulas/` - the package default.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+from subprocess import CompletedProcess
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "atm-beads/scripts"))
+from operation_models import BeadRecord, bead_record_to_json as bead_record_to_json, is_bead_records  # noqa: E402
+
+PACKAGE_FORMULAS = Path(__file__).resolve().parents[1] / "formulas"
+OVERRIDE_DIR = Path(".atm-bd") / "formula"
+TEMPLATE_SUFFIX = ".formula.toml.j2"
+RELATIONS_SUFFIX = ".relations.json"
+def search_path(repo: Path | None) -> list[Path]:
+    """Directories searched for formula files, highest precedence first."""
+    return ([Path(repo) / OVERRIDE_DIR] if repo is not None else []) + [PACKAGE_FORMULAS]
+
+
+def find(name: str, suffix: str, repo: Path | None) -> Path:
+    """The first `<name><suffix>` on the search path; FileNotFoundError when none exists."""
+    for directory in search_path(repo):
+        candidate = directory / f"{name}{suffix}"
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(f"no {name}{suffix} in {[str(d) for d in search_path(repo)]}")
+
+
+def template(name: str, repo: Path | None) -> Path:
+    return find(name, TEMPLATE_SUFFIX, repo)
+
+
+def relations(name: str, repo: Path | None) -> Path:
+    return find(name, RELATIONS_SUFFIX, repo)
+
+
+def attach_id(parent: str, ref: str, step: str) -> str:
+    """Stable id of a step poured directly under `parent`: <parent>.<ref>-<step>.
+
+    One dotted level only. `bd mol bond --ref` makes <parent>.<ref>.<step> under an
+    intermediate <parent>.<ref> molecule; bd 1.3.0 refuses a parent-child edge from
+    <parent>.<ref>.<step> straight to <parent> ("already a child ... via hierarchy"),
+    and that implicit id hierarchy does not stop `bd close <parent>`.
+    """
+    return f"{parent}.{ref}-{step}"
+
+
+class BdError(RuntimeError):
+    def __init__(self, argv: list[str], returncode: int, stdout: str, stderr: str):
+        detail = (stderr or "").strip() or (stdout or "").strip()
+        super().__init__(f"{' '.join(argv[:3])} exited {returncode}: {detail}")
+        self.argv, self.returncode, self.stdout, self.stderr = argv, returncode, stdout, stderr
+
+
+class Bd:
+    """Runs one `bd` executable; every call is logged in `self.log` as (argv, returncode)."""
+
+    def __init__(self, executable: str = "bd"):
+        self.executable = executable
+        self.log: list[tuple[list[str], int]] = []
+
+    def run(self, *args: str, check: bool = True) -> CompletedProcess[str]:
+        argv = [self.executable, *args]
+        proc = subprocess.run(argv, text=True, capture_output=True)
+        self.log.append((argv, proc.returncode))
+        if check and proc.returncode:
+            raise BdError(argv, proc.returncode, proc.stdout, proc.stderr)
+        return proc
+
+    def show(self, bead: str) -> BeadRecord | None:
+        """One validated bd bead record, or None when it does not exist."""
+        proc = self.run("show", bead, "--json", check=False)
+        if proc.returncode:
+            text = (proc.stderr + proc.stdout).lower()
+            if "not found" in text or "no issue" in text:
+                return None
+            raise BdError([self.executable, "show", bead], proc.returncode, proc.stdout, proc.stderr)
+        rows: object = json.loads(proc.stdout)
+        if not is_bead_records(rows):
+            raise ValueError("bd show returned invalid bead records")
+        return rows[0] if rows else None
+

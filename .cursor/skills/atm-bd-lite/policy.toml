@@ -1,0 +1,11 @@
+[params]
+dev_agent = "dev"
+dev_template = "templates/dev.xml.j2"
+qa_agent = "quality-mgr"
+qa_template = "templates/qa.xml.j2"
+lead = "team-lead"
+land_template = "templates/land.xml.j2"
+
+dev_startup = "Your role is dev in the lite profile. Work only from the assigned template; do not load the full orchestration skill. Use atm task start and atm task close as the only task transitions. Never write your own task bead. Run no cache commands; hooks refresh their reads."
+qa_startup = "Your role is qa in the lite profile. Work only from the assigned template; do not load the full orchestration skill. Use atm task start and atm task close as the only task transitions. Never write your own task bead. Run no cache commands; hooks refresh their reads."
+lead_startup = "Your role is lead in the lite profile. Work only from the assigned template; do not load the full orchestration skill. Use atm task start and atm task close as the only task transitions. Never write your own task bead. Run no cache commands; hooks refresh their reads."

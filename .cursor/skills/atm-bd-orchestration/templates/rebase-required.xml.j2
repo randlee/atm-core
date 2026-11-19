@@ -1,0 +1,14 @@
+---
+name: rebase-required
+version: 1.0.0
+format: xml
+required_variables:
+  - checked_bead
+  - branch
+  - stacked
+metadata:
+  type: rebase-required
+---
+<rebase-required bead="{{ checked_bead | string | cdata_escape }}">
+  <description><![CDATA[Rebase {{ branch | string | cdata_escape }} onto {{ stacked['top']['branch'] | string | cdata_escape }} at {{ stacked['top']['head'] | string | cdata_escape }}. Push and run the close hook again on the same task. This outcome does not increment sanity_round.]]></description>
+</rebase-required>

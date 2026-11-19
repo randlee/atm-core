@@ -1,0 +1,10 @@
+{
+  "id": "atm-phase-d",
+  "plan_scope": "epic",
+  "phase": "d",
+  "title": "logging, OTLP, and Python distribution",
+  "description": "## Goal\nLogging, OTLP 2.0 and Python distribution.\n\n## Stacks\n- otlp: lowest-risk contract first",
+  "design": "## Decisions\n- OTLP dual path (SDK/Tokio and sync)",
+  "acceptance_criteria": "## Success Criteria\n- every stack merged to integrate/phase-d",
+  "integration_branch": "integrate/phase-d"
+}

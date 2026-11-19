@@ -147,6 +147,20 @@ class CliTests(unittest.TestCase):
         self.assertIn("req-qa", bad.stderr)
         self.assertIn("ruthless-boundary-qa", bad.stderr)
 
+    def test_check_tests_changed_requires_flaky_test_qa(self):
+        ok = self.run_cli("check", "--carried", "carried.json", "--dispatch",
+                          "arch-qa,ruthless-boundary-qa,flaky-test-qa", "--tests-changed")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        missing = self.run_cli("check", "--carried", "carried.json", "--dispatch", "arch-qa,ruthless-boundary-qa",
+                               "--tests-changed")
+        self.assertEqual(missing.returncode, 5)
+        self.assertIn("filing reviewer not dispatched: flaky-test-qa", missing.stderr)
+        self.assertIn("with --tests-changed, flaky-test-qa must be dispatched", missing.stderr)
+        unflagged = self.run_cli("check", "--carried", "carried.json", "--dispatch",
+                                 "arch-qa,ruthless-boundary-qa,flaky-test-qa")
+        self.assertEqual(unflagged.returncode, 5)
+        self.assertIn("not a filing reviewer: flaky-test-qa", unflagged.stderr)
+
     def test_unlockable_carried_finding_is_a_named_error(self):
         (self.dir / "carried.json").write_text(json.dumps([{"id": "x-f9", "metadata": {}}]))
         out = self.run_cli("owned", "--carried", "carried.json")

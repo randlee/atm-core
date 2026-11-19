@@ -1,0 +1,15 @@
+---
+name: lite-qa-findings
+version: 1.0.0
+description: QA findings report for the atm-bd-lite profile.
+format: markdown
+required_variables: [sha, ids]
+metadata:
+  type: qa-findings
+  tags: [stage:qa, profile:lite]
+---
+# QA findings
+
+Reviewed commit: `{{ sha }}`
+
+Finding IDs: {{ ids }}

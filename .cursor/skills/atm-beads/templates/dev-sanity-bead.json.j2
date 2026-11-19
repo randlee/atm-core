@@ -1,0 +1,63 @@
+---
+name: dev-sanity-bead
+version: 0.4.0
+description: The sanity check bead the lead creates when it assigns an important or minor finding bead, with the finding's QA bead (sprint and fix groups pour their own); its `parent` is the finding's parent, since bd keeps one edge type per bead pair and a child of the finding would lose the `blocks` edge. It is blocked by the bead it checks, and carries the close fields (close_fields.POURED) so its close reads no other bead; `qa_bead` is the QA bead imported with it. Recipient and message are in resources/dev-sanity.md. Render strictly, then `jq -c .` into the import JSONL.
+format: json
+required_variables:
+  - id
+  - parent
+  - dev_bead
+  - phase
+  - sprint
+  - stack
+  - branch
+  - worktree
+  - pr_target
+  - difficulty
+  - qa_bead
+  - sprint_bead
+  - stack_bead
+  - checked_title
+  - phase_feature
+  - lint_command
+  - policy_path
+  - max_sanity_rounds
+defaults:
+  priority: 2
+---
+{
+  "id": {{ id | tojson }},
+  "title": {{ (sprint ~ ": sanity check") | tojson }},
+  "issue_type": "task",
+  "status": "open",
+  "priority": {{ priority }},
+  "description": {{ ("Sanity check of " ~ dev_bead ~ " (sprint " ~ sprint ~ ").\n\nVerify that the work is done:\n\n- each numbered deliverable is written;\n- lint passes.\n\nThis is not QA.") | tojson }},
+  "acceptance_criteria": {{ ("- [ ] each numbered deliverable of " ~ dev_bead ~ " is written in the pushed head (workflow steps that come after the sanity check, such as linking and QA, are not judged)\n- [ ] lint passes") | tojson }},
+  "labels": {{ ["phase-" ~ phase, "stage:dev-sanity", "stack:" ~ stack] | tojson }},
+  "dependencies": [
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ parent | tojson }}, "type": "parent-child"},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ dev_bead | tojson }}, "type": "blocks"}
+  ],
+  "metadata": {
+    "role": "sanity",
+    "sprint_bead": {{ sprint_bead | tojson }},
+    "stack_bead": {{ stack_bead | tojson }},
+    "base": {{ pr_target | tojson }},
+    "checked_bead": {{ dev_bead | tojson }},
+    "checked_title": {{ checked_title | tojson }},
+    "sanity_bead": {{ id | tojson }},
+    "qa_bead": {{ qa_bead | tojson }},
+    "phase_feature": {{ phase_feature | tojson }},
+    "lint_command": {{ lint_command | tojson }},
+    "policy_path": {{ policy_path | tojson }},
+    "max_sanity_rounds": {{ max_sanity_rounds | tojson }},
+    "phase": {{ phase | tojson }},
+    "sprint": {{ sprint | tojson }},
+    "stack": {{ stack | tojson }},
+    "dev_bead": {{ dev_bead | tojson }},
+    "branch": {{ branch | tojson }},
+    "worktree": {{ worktree | tojson }},
+    "pr_target": {{ pr_target | tojson }},
+    "difficulty": {{ difficulty | tojson }}
+  }
+}

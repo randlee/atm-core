@@ -1,0 +1,41 @@
+---
+name: plan-hardening-finding-bead
+version: 1.0.0
+description: One reviewer finding from a plan-hardening review step (2, 4 or 6) as a bead, a child of the phase root, discovered from that step's bead. The runner files one per entry in the reviewer's `findings` and `minor_wording` (for ceremony-qa, `data.findings`). The planner closes it in the next correction step with its ruling as the reason; it blocks the next review step's bead. Render strictly, then `jq -c .` into the import JSONL.
+format: json
+required_variables:
+  - id
+  - root
+  - phase
+  - step_bead
+  - reviewer
+  - finding_ref
+  - severity
+  - category
+  - issue
+  - correction
+defaults:
+  target_refs: []
+---
+{% set sev = severity | lower %}{% if sev not in ["blocking", "important", "minor"] %}ERROR: severity must be blocking, important or minor, got {{ severity }}
+{% endif %}{
+  "id": {{ id | tojson }},
+  "title": {{ ("phase-" ~ phase ~ " plan " ~ sev ~ ": " ~ finding_ref ~ " " ~ category) | tojson }},
+  "issue_type": "bug",
+  "status": "open",
+  "priority": {{ {"blocking": 1, "important": 2, "minor": 4}[sev] }},
+  "description": {{ (issue ~ "\n\n## Correction\n" ~ correction ~ "\n\n## Targets\n" ~ (target_refs | join("\n"))) | tojson }},
+  "design": {{ correction | tojson }},
+  "labels": {{ ["phase-" ~ phase, "stage:plan-finding", "severity:" ~ sev] | tojson }},
+  "dependencies": [
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ root | tojson }}, "type": "parent-child"},
+    {"issue_id": {{ id | tojson }}, "depends_on_id": {{ step_bead | tojson }}, "type": "discovered-from"}
+  ],
+  "metadata": {
+    "reviewer": {{ reviewer | tojson }},
+    "finding_ref": {{ finding_ref | tojson }},
+    "severity": {{ sev | tojson }},
+    "category": {{ category | tojson }},
+    "target_refs": {{ target_refs | tojson }}
+  }
+}

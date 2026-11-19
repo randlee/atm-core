@@ -1,0 +1,46 @@
+{
+  "formula": "finding-group",
+  "description": "bead-groups data for finding-group: the attach ref and the relations `sc-compose bead attach` adds with the group. The group attaches under the sprint container; there is no finding bead for a blocking finding. Endpoints are `step:<step>` (a step of this group) or `bead:<id>`, format strings over {vars[<name>]}.",
+  "ref": "{vars[finding_ref]}-r{vars[round]}",
+  "default_option": "C",
+  "defaults": {},
+  "options": {
+    "A": {
+      "description": "E1 option A: only the fix is poured; its sanity bead is created when the fix closes.",
+      "relations": []
+    },
+    "B": {
+      "description": "E1 option B: the poured sanity step has no `needs fix`; sanity and QA each `validates` the fix.",
+      "relations": [
+        {
+          "from": "step:sanity",
+          "to": "step:fix",
+          "type": "validates"
+        },
+        {
+          "from": "step:qa",
+          "to": "step:fix",
+          "type": "validates"
+        }
+      ]
+    },
+    "C": {
+      "description": "E1 option C, the existing schema: sanity `blocks` the fix (poured from `needs`) with metadata.dev_bead; QA `validates` the fix.",
+      "relations": [
+        {
+          "from": "step:qa",
+          "to": "step:fix",
+          "type": "validates"
+        }
+      ]
+    }
+  },
+  "relations": [
+    {
+      "description": "the fix bead was found while working the QA bead that filed it",
+      "from": "step:fix",
+      "to": "bead:{vars[filed_by]}",
+      "type": "discovered-from"
+    }
+  ]
+}

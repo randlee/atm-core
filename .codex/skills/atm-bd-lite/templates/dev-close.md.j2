@@ -1,0 +1,18 @@
+---
+name: lite-dev-close
+version: 1.0.0
+description: Dev close report for the atm-bd-lite profile.
+format: markdown
+required_variables: [branch, head, pr, base]
+metadata:
+  type: dev-close
+  tags: [stage:dev, profile:lite]
+---
+# Dev complete
+
+- Branch: `{{ branch }}`
+- Head: `{{ head }}`
+- PR: {{ pr }}
+- Base: `{{ base }}`
+
+The dev layer is ready for QA.

@@ -1,0 +1,21 @@
+---
+name: sanity-close-error
+version: 1.0.0
+format: markdown
+required_variables: [task_id, error_id, code, detail, owner, recovery]
+defaults:
+  escalation_to: "phase-lead"
+  state_summary: "Unknown; inspect the journal and current task/bead state before retrying."
+  command: "Not recorded"
+metadata:
+  type: sanity-close-error
+---
+# Sanity close rejected: {{ task_id }}
+Correlation: {{ error_id }}
+Code: {{ code }}
+Escalation recipient: {{ escalation_to }}
+Repair owner (assigned through phase lead): {{ owner }}
+Operation: {{ command }}
+Error: {{ detail }}
+Recovery: {{ recovery }}
+State: {{ state_summary }}
