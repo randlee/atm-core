@@ -143,11 +143,11 @@ fn owner_generation(listener: &GraftReceiverListener) -> OwnerGeneration {
 
 #[cfg(test)]
 thread_local! {
-    static TEST_LEASE_TIMEOUTS: std::cell::RefCell<Option<mpsc::Receiver<()>>> = const { std::cell::RefCell::new(None) };
+    static TEST_LEASE_TIMEOUTS: std::cell::RefCell<Option<Arc<super::TestDeadlineClock>>> = const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(test)]
-pub(super) fn install_test_lease_timeouts(timeouts: mpsc::Receiver<()>) {
+pub(super) fn install_test_lease_timeouts(timeouts: Arc<super::TestDeadlineClock>) {
     TEST_LEASE_TIMEOUTS.with(|slot| *slot.borrow_mut() = Some(timeouts));
 }
 
@@ -189,8 +189,7 @@ where
         if matches!(action, "lease_refresh" | "lease_unregister")
             && let Some(timeouts) = slot.as_ref()
         {
-            timeouts.recv().expect("test releases lease timeout");
-            return Err(RecvTimeoutError::Timeout);
+            return timeouts.wait_for_timeout(action, deadline);
         }
         result_rx.recv().map_err(|_| RecvTimeoutError::Disconnected)
     });

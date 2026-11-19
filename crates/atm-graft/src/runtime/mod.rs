@@ -580,12 +580,83 @@ pub(crate) fn set_session_state(
     Ok(())
 }
 
+#[cfg(test)]
+struct TestDeadlineClock {
+    now: std::sync::Mutex<Duration>,
+    changed: std::sync::Condvar,
+    events: mpsc::Sender<(&'static str, Duration)>,
+}
+
+#[cfg(test)]
+impl TestDeadlineClock {
+    fn wait_for_timeout<T>(
+        &self,
+        action: &'static str,
+        duration: Duration,
+    ) -> Result<T, RecvTimeoutError> {
+        let mut now = self.now.lock().expect("test clock");
+        let deadline = *now + duration;
+        self.events
+            .send((action, deadline))
+            .expect("deadline observer");
+        while *now < deadline {
+            now = self.changed.wait(now).expect("test clock wait");
+        }
+        Err(RecvTimeoutError::Timeout)
+    }
+
+    fn advance_to(&self, time: Duration) {
+        let mut now = self.now.lock().expect("test clock");
+        assert!(time >= *now);
+        *now = time;
+        self.changed.notify_all();
+    }
+
+    fn wait_for_join<T>(
+        &self,
+        receiver: &Receiver<T>,
+        duration: Duration,
+    ) -> Result<T, RecvTimeoutError> {
+        let mut now = self.now.lock().expect("test clock");
+        let deadline = *now + duration;
+        self.events
+            .send(("join", deadline))
+            .expect("deadline observer");
+        loop {
+            match receiver.try_recv() {
+                Ok(value) => return Ok(value),
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    return Err(RecvTimeoutError::Disconnected);
+                }
+                Err(mpsc::TryRecvError::Empty) if *now >= deadline => {
+                    return Err(RecvTimeoutError::Timeout);
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    now = self.changed.wait(now).expect("test clock wait")
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_JOIN_CLOCK: std::cell::RefCell<Option<Arc<TestDeadlineClock>>> = const { std::cell::RefCell::new(None) };
+}
+
 pub(crate) fn join_receive_loop_with_deadline(
     join_handle: JoinHandle<Result<(), AtmError>>,
 ) -> Result<(), AtmError> {
     let (result_rx, join_helper, join_helper_thread_id) =
         spawn_receive_loop_join_helper(join_handle)?;
-    match result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE) {
+    #[cfg(test)]
+    let result = TEST_JOIN_CLOCK.with(|clock| match clock.borrow().as_ref() {
+        Some(clock) => clock.wait_for_join(&result_rx, RECEIVE_LOOP_JOIN_DEADLINE),
+        None => result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE),
+    });
+    #[cfg(not(test))]
+    let result = result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE);
+    match result {
         Ok(result) => finish_join_receive_loop(join_helper, result),
         Err(RecvTimeoutError::Timeout) => {
             Err(join_receive_loop_timeout_error(join_helper_thread_id))
@@ -598,13 +669,23 @@ fn spawn_receive_loop_join_helper(
     join_handle: JoinHandle<Result<(), AtmError>>,
 ) -> Result<ReceiveLoopJoinHelper, AtmError> {
     let (result_tx, result_rx) = mpsc::sync_channel(1);
+    #[cfg(test)]
+    let test_clock = TEST_JOIN_CLOCK.with(|clock| clock.borrow().clone());
     let join_helper = thread::Builder::new()
         .name("atm-graft-receive-loop-join".to_string())
         .spawn(move || {
             let result = join_handle
                 .join()
                 .unwrap_or_else(|_| Err(receive_loop_panic_error()));
+            #[cfg(test)]
+            let _clock_guard = test_clock
+                .as_ref()
+                .map(|clock| clock.now.lock().expect("test clock"));
             let _ = result_tx.send(result);
+            #[cfg(test)]
+            if let Some(clock) = test_clock.as_ref() {
+                clock.changed.notify_all();
+            }
         })
         .map_err(join_helper_spawn_error)?;
     let join_helper_thread_id = join_helper.thread().id();
@@ -1386,7 +1467,7 @@ mod tests {
         graft_root: PathBuf,
         injector: Arc<dyn HostNudgeInjector>,
         client: GraftClient,
-        lease_timeouts: Option<mpsc::Receiver<()>>,
+        lease_timeouts: Option<Arc<super::TestDeadlineClock>>,
     ) -> (SpawnedReceiver, ManualLeaseTicks) {
         let (stop_tx, stop_rx) = mpsc::channel();
         let (events_tx, events) = mpsc::channel();
@@ -2535,29 +2616,59 @@ mod tests {
             },
         )));
 
-        let (timeout_tx, timeout_rx) = mpsc::channel();
+        let (deadline_tx, deadline_rx) = mpsc::channel();
+        let clock = Arc::new(super::TestDeadlineClock {
+            now: Mutex::new(Duration::ZERO),
+            changed: std::sync::Condvar::new(),
+            events: deadline_tx,
+        });
         let ((stop_tx, join, _snapshot, _target), ticks) =
             spawn_receiver_with_manual_ticks_and_timeouts(
                 paths.workspace_root.clone(),
                 Arc::new(RecordingInjector::default()),
                 client,
-                Some(timeout_rx),
+                Some(Arc::clone(&clock)),
             );
         ticks.advance_clock();
         refresh_started_rx
             .recv()
             .expect("timed out waiting for periodic refresh to enter the stalled refresh call");
 
-        timeout_tx.send(()).expect("expire refresh call");
+        let (action, refresh_deadline) = deadline_rx.recv().expect("refresh deadline registered");
+        assert_eq!(action, "lease_refresh");
         stop_tx.send(()).expect("stop");
         ticks.wake.send(()).expect("wake stopped receiver");
+        let join_clock = Arc::clone(&clock);
+        let (joined_tx, joined_rx) = mpsc::channel();
+        let join_waiter = std::thread::spawn(move || {
+            super::TEST_JOIN_CLOCK.with(|slot| *slot.borrow_mut() = Some(join_clock));
+            joined_tx
+                .send(super::join_receive_loop_with_deadline(join))
+                .expect("report join");
+        });
+        let (action, join_deadline) = deadline_rx.recv().expect("join deadline registered");
+        assert_eq!(action, "join");
+        assert!(
+            refresh_deadline < join_deadline,
+            "refresh must expire before the outer join deadline"
+        );
+        clock.advance_to(refresh_deadline);
         unregister_started_rx
             .recv()
-            .expect("shutdown entered the stalled unregister call");
-        timeout_tx.send(()).expect("expire unregister call");
-        join.join()
-            .expect("receiver thread")
-            .expect("receiver exits");
+            .expect("shutdown entered stalled unregister");
+        let (action, unregister_deadline) =
+            deadline_rx.recv().expect("unregister deadline registered");
+        assert_eq!(action, "lease_unregister");
+        assert!(
+            unregister_deadline < join_deadline,
+            "both lease deadlines must fit within the outer join deadline"
+        );
+        clock.advance_to(unregister_deadline);
+        joined_rx
+            .recv()
+            .expect("join returned")
+            .expect("receiver exits before join deadline");
+        join_waiter.join().expect("join waiter thread");
         assert_eq!(
             stalled_calls.load(Ordering::SeqCst),
             2,
@@ -2572,6 +2683,43 @@ mod tests {
         unregister_release_tx
             .send(())
             .expect("release stalled unregister");
+    }
+
+    #[test]
+    fn join_deadline_expires_when_receiver_remains_blocked() {
+        let (events_tx, events_rx) = mpsc::channel();
+        let clock = Arc::new(super::TestDeadlineClock {
+            now: Mutex::new(Duration::ZERO),
+            changed: std::sync::Condvar::new(),
+            events: events_tx,
+        });
+        let (release_tx, release_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let receiver = std::thread::spawn(move || {
+            release_rx.recv().expect("release receiver");
+            finished_tx.send(()).expect("receiver finished");
+            Ok(())
+        });
+        let join_clock = Arc::clone(&clock);
+        let (result_tx, result_rx) = mpsc::channel();
+        let waiter = std::thread::spawn(move || {
+            super::TEST_JOIN_CLOCK.with(|slot| *slot.borrow_mut() = Some(join_clock));
+            result_tx
+                .send(super::join_receive_loop_with_deadline(receiver))
+                .expect("report result");
+        });
+        let (action, deadline) = events_rx.recv().expect("join registered");
+        assert_eq!(action, "join");
+        assert_eq!(deadline, crate::RECEIVE_LOOP_JOIN_DEADLINE);
+        clock.advance_to(deadline);
+        let error = result_rx
+            .recv()
+            .expect("join returned")
+            .expect_err("blocked receiver exceeds join deadline");
+        assert!(error.to_string().contains("join deadline"));
+        waiter.join().expect("join waiter");
+        release_tx.send(()).expect("release receiver");
+        finished_rx.recv().expect("receiver finished");
     }
 
     // ATM-QA-006: dropping an already-superseded `RegisteredGraftReceiver`
