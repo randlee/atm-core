@@ -44,6 +44,8 @@ RESOLUTION_ALLOWED = {
 }
 DIAL_RE = re.compile(r"\b(?:TcpStream::connect(?:_timeout)?|TcpSocket::connect)\s*\(")
 DIAL_SCOPE_PREFIX = "crates/atm-http-runtime/"
+TEST_DIAL_HOOK_RE = re.compile(r"\b(?:SCRIPTED_PEER_DIAL|test_remaining|test_after)\b")
+TEST_DIAL_HOOK_FILES = {SEAM, "crates/atm-http-runtime/src/peer_connection_pool.rs"}
 LOCKED_LINES: dict[str, tuple[str, ...]] = {
     SEAM: (
         "pub(crate) const MAX_DIAL_CANDIDATES: usize = 4;",
@@ -76,7 +78,11 @@ def collect_seam_findings(repo_root: Path) -> list[str]:
         lines = abs_path.read_text(encoding="utf-8").splitlines()
         scope = rust_file_test_scope(Path(rel), lines)
         for number, (line, in_test) in enumerate(zip(lines, scope, strict=True), start=1):
-            if in_test or not is_code_line(line):
+            if not is_code_line(line):
+                continue
+            if rel in TEST_DIAL_HOOK_FILES and not in_test and TEST_DIAL_HOOK_RE.search(line):
+                findings.append(f"{rel}:{number}: peer dial test hook is not cfg(test)-only")
+            if in_test:
                 continue
             # A line that hands resolution to the seam (`peer_dial::...`) is
             # the seam being used, not bypassed.

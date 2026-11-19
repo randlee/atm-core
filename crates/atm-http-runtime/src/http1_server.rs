@@ -86,7 +86,7 @@ fn accept_failure_is_recoverable(consecutive_failures: u32) -> bool {
     consecutive_failures < MAX_CONSECUTIVE_ACCEPT_FAILURES
 }
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Backoff bounds retries after a recoverable listener accept failure.")]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070: EMFILE accept backoff is cancelled by server shutdown.")]
 async fn recover_from_accept_error(
     adapter: &'static str,
     error: io::Error,
@@ -128,6 +128,9 @@ where
     let mut connections = JoinSet::new();
     let permits = Arc::new(Semaphore::new(max_connections));
     let mut consecutive_accept_failures = 0u32;
+    // Every physical adapter owns this signal for its active connections.
+    let (connection_shutdown_tx, connection_shutdown_rx) = watch::channel(());
+    let mut terminal_error = None;
 
     loop {
         let permit = tokio::select! {
@@ -140,20 +143,35 @@ where
                 match accepted {
                     Ok((stream, peer)) => {
                         consecutive_accept_failures = 0;
-                        let connection_shutdown = shutdown_rx.clone();
+                        let connection_shutdown = connection_shutdown_rx.clone();
                         on_connection(&mut connections, stream, peer, connection_shutdown, permit);
                     }
                     Err(error) => {
                         drop(permit);
-                        recover_from_accept_error(adapter, error, &mut consecutive_accept_failures)
-                            .await?;
+                        let recovery = recover_from_accept_error(adapter, error, &mut consecutive_accept_failures);
+                        tokio::select! {
+                            _ = shutdown_rx.changed() => break,
+                            result = recovery => if let Err(error) = result {
+                                terminal_error = Some(error);
+                                break;
+                            },
+                        }
                     }
                 }
             }
         }
     }
 
-    drain_connections(connections).await
+    let _ = connection_shutdown_tx.send(());
+    let drain_result = drain_connections(connections).await;
+    if let Some(error) = terminal_error {
+        if let Err(drain_error) = drain_result {
+            tracing::warn!(%drain_error, adapter, "connection drain failed after accept error");
+        }
+        Err(error)
+    } else {
+        drain_result
+    }
 }
 
 /// Serves the capability-authenticated loopback adapter with bounded
@@ -334,10 +352,42 @@ where
 }
 
 async fn drain_connections(mut connections: JoinSet<()>) -> io::Result<()> {
+    let mut first_error = None;
     while let Some(result) = connections.join_next().await {
-        result.map_err(io::Error::other)?;
+        if let Err(error) = result {
+            first_error.get_or_insert_with(|| io::Error::other(error));
+        }
     }
-    Ok(())
+    first_error.map_or(Ok(()), Err)
+}
+
+#[cfg(test)]
+pub(crate) struct ChannelAcceptor<S> {
+    pub(crate) events: tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<io::Result<S>>>,
+    pub(crate) observed: Option<std::sync::Arc<tokio::sync::Notify>>,
+}
+
+#[cfg(test)]
+impl<S> Http1Acceptor for ChannelAcceptor<S>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    type Stream = S;
+    type Peer = SocketAddr;
+
+    async fn accept_connection(&self) -> io::Result<(Self::Stream, Self::Peer)> {
+        let event = self
+            .events
+            .lock()
+            .await
+            .recv()
+            .await
+            .unwrap_or_else(|| Err(io::Error::other("script exhausted")));
+        if let Some(observed) = &self.observed {
+            observed.notify_one();
+        }
+        event.map(|stream| (stream, SocketAddr::from(([127, 0, 0, 1], 1234))))
+    }
 }
 
 #[cfg(test)]
@@ -352,51 +402,161 @@ mod tests {
     use tokio::sync::watch;
 
     use std::io;
-    use std::net::SocketAddr;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicU32, Ordering};
-
-    use tokio::net::{TcpListener, TcpStream};
 
     use super::{
-        Http1Acceptor, MAX_CONSECUTIVE_ACCEPT_FAILURES, accept_failure_is_recoverable,
+        ChannelAcceptor, MAX_CONSECUTIVE_ACCEPT_FAILURES, accept_failure_is_recoverable,
         accept_retry_backoff, serve_connection, serve_loopback_http1,
     };
 
-    /// Listener that reports a scripted number of resource-pressure accept
-    /// failures before delegating to a real socket.
-    struct ScriptedAcceptor {
-        inner: TcpListener,
-        pending_failures: Arc<AtomicU32>,
+    struct ObservedRead {
+        stream: tokio::io::DuplexStream,
+        read: tokio::sync::mpsc::UnboundedSender<usize>,
     }
 
-    impl ScriptedAcceptor {
-        fn new(inner: TcpListener, pending_failures: Arc<AtomicU32>) -> Self {
-            Self {
-                inner,
-                pending_failures,
+    impl tokio::io::AsyncRead for ObservedRead {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<io::Result<()>> {
+            let before = buf.filled().len();
+            let result = std::pin::Pin::new(&mut self.stream).poll_read(cx, buf);
+            if matches!(result, std::task::Poll::Ready(Ok(()))) && buf.filled().len() > before {
+                self.read.send(buf.filled().len() - before).unwrap();
             }
+            result
         }
     }
 
-    impl Http1Acceptor for ScriptedAcceptor {
-        type Stream = TcpStream;
-        type Peer = SocketAddr;
-
-        async fn accept_connection(&self) -> io::Result<(Self::Stream, Self::Peer)> {
-            let fail_now = self
-                .pending_failures
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |pending| {
-                    pending.checked_sub(1)
-                })
-                .is_ok();
-            if fail_now {
-                // EMFILE: the process is out of descriptors, the listener
-                // itself is healthy.
-                return Err(io::Error::from_raw_os_error(24));
-            }
-            self.inner.accept().await
+    impl tokio::io::AsyncWrite for ObservedRead {
+        fn poll_write(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<io::Result<usize>> {
+            std::pin::Pin::new(&mut self.stream).poll_write(cx, buf)
         }
+        fn poll_flush(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<io::Result<()>> {
+            std::pin::Pin::new(&mut self.stream).poll_flush(cx)
+        }
+        fn poll_shutdown(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<io::Result<()>> {
+            std::pin::Pin::new(&mut self.stream).poll_shutdown(cx)
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn loopback_header_read_deadline_closes_an_incomplete_request() {
+        let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (read_tx, mut read_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (mut client, server) = tokio::io::duplex(1024);
+        events_tx
+            .send(Ok(ObservedRead {
+                stream: server,
+                read: read_tx,
+            }))
+            .unwrap();
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let server = tokio::spawn(serve_loopback_http1(
+            ChannelAcceptor {
+                events: tokio::sync::Mutex::new(events_rx),
+                observed: None,
+            },
+            Router::new(),
+            8,
+            Duration::from_millis(25),
+            shutdown_rx,
+        ));
+        let start = tokio::time::Instant::now();
+        let partial = b"POST /v1/messages HTTP/1.1\r\nHost: localhost\r\n";
+        client.write_all(partial).await.unwrap();
+        assert_eq!(read_rx.recv().await, Some(partial.len()));
+        tokio::time::advance(Duration::from_millis(25)).await;
+        let mut response = [0_u8; 1];
+        assert_eq!(
+            client.read(&mut response).await.unwrap(),
+            0,
+            "slow header connection must be closed"
+        );
+        assert_eq!(
+            tokio::time::Instant::now(),
+            start + Duration::from_millis(25)
+        );
+        shutdown_tx.send(()).unwrap();
+        server.await.unwrap().unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_cancels_accept_backoff_without_advancing_clock() {
+        let (events_tx, events_rx) =
+            tokio::sync::mpsc::unbounded_channel::<io::Result<tokio::io::DuplexStream>>();
+        events_tx
+            .send(Err(io::Error::other("resource pressure")))
+            .unwrap();
+        let observed = std::sync::Arc::new(tokio::sync::Notify::new());
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let start = tokio::time::Instant::now();
+        let server = tokio::spawn(super::accept_loop(
+            ChannelAcceptor {
+                events: tokio::sync::Mutex::new(events_rx),
+                observed: Some(observed.clone()),
+            },
+            1,
+            shutdown_rx,
+            "test",
+            |_, _, _, _, _| panic!("no connection expected"),
+        ));
+        observed.notified().await;
+        shutdown_tx.send(()).expect("signal shutdown");
+        server
+            .await
+            .expect("server task joins")
+            .expect("clean shutdown");
+        assert_eq!(tokio::time::Instant::now(), start);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn fatal_accept_error_notifies_and_drains_active_connection() {
+        let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_client, server) = tokio::io::duplex(64);
+        events_tx.send(Ok(server)).expect("queue connection");
+        for _ in 0..MAX_CONSECUTIVE_ACCEPT_FAILURES {
+            events_tx
+                .send(Err(io::Error::other("scripted accept failure")))
+                .expect("queue error");
+        }
+        let (_shutdown_tx, shutdown_rx) = watch::channel(());
+        let (drained_tx, drained_rx) = tokio::sync::oneshot::channel();
+        let mut drained_tx = Some(drained_tx);
+        let error = super::accept_loop(
+            ChannelAcceptor {
+                events: tokio::sync::Mutex::new(events_rx),
+                observed: None,
+            },
+            2,
+            shutdown_rx,
+            "test",
+            move |connections, _stream, _peer, mut shutdown, permit| {
+                let drained = drained_tx.take().expect("one connection");
+                connections.spawn(async move {
+                    let _permit = permit;
+                    shutdown
+                        .changed()
+                        .await
+                        .expect("connection shutdown signal");
+                    drained.send(()).expect("report drained");
+                });
+            },
+        )
+        .await
+        .expect_err("fatal accept must return error");
+        assert_eq!(error.to_string(), "scripted accept failure");
+        drained_rx.await.expect("connection drained before return");
     }
 
     #[tokio::test]
@@ -439,14 +599,21 @@ mod tests {
             .expect("HTTP/1 connection completes cleanly");
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn resource_pressure_accept_failures_do_not_end_the_listener() {
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind loopback listener");
-        let address = listener.local_addr().expect("listener address");
-        let pending_failures = Arc::new(AtomicU32::new(3));
-        let acceptor = ScriptedAcceptor::new(listener, Arc::clone(&pending_failures));
+        let started = tokio::time::Instant::now();
+        let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
+        for _ in 0..3 {
+            events_tx
+                .send(Err(io::Error::other("resource pressure")))
+                .unwrap();
+        }
+        let (mut client, server_stream) = tokio::io::duplex(4096);
+        events_tx.send(Ok(server_stream)).unwrap();
+        let acceptor = ChannelAcceptor {
+            events: tokio::sync::Mutex::new(events_rx),
+            observed: None,
+        };
         let router = Router::new().route("/messages", post(|| async { StatusCode::CREATED }));
         let (shutdown_tx, shutdown_rx) = watch::channel(());
         let server = tokio::spawn(serve_loopback_http1(
@@ -456,33 +623,22 @@ mod tests {
             Duration::from_secs(5),
             shutdown_rx,
         ));
-
-        let mut client = TcpStream::connect(address)
-            .await
-            .expect("connect after accept failures");
-        client
-            .write_all(
-                b"POST /messages HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-            )
-            .await
-            .expect("write request");
-        client.flush().await.expect("flush request");
+        client.write_all(
+            b"POST /messages HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        ).await.expect("write request");
         let mut response = Vec::new();
         client
             .read_to_end(&mut response)
             .await
             .expect("read response");
+        assert_eq!(
+            tokio::time::Instant::now() - started,
+            Duration::from_millis(7)
+        );
         assert!(
             response.starts_with(b"HTTP/1.1 201 Created"),
             "a listener that hit transient accept failures must still answer healthy clients"
         );
-
-        assert_eq!(
-            pending_failures.load(Ordering::SeqCst),
-            0,
-            "every scripted accept failure must have been retried rather than propagated"
-        );
-
         shutdown_tx.send(()).expect("signal shutdown");
         server
             .await

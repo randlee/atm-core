@@ -155,3 +155,12 @@ changed address without error, stale dial bounded by the cap, TTL expiry
 `OrderedPeerResolver` output shape. `peer_connection_pool.rs` proves the
 per-address diagnosis surfaces instead of a bare timeout and that a zero TTL
 is rejected.
+
+## Test-only stalled-dial control (2026-11-19)
+
+The owning crate may scope a scripted stalled connect and a Tokio-controlled
+clock to a single test task when checking the §7 reporting grace. The hook is
+compiled only under `cfg(test)`, is crate-internal, and does not change the
+release dial path, its resolver, or any deadline arithmetic. The peer-dial
+lint checks that references to this hook remain test-only. This amendment
+changes the verification mechanism and leaves the locked design unchanged.

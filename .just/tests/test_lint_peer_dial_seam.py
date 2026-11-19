@@ -101,6 +101,16 @@ class LintPeerDialSeamTests(unittest.TestCase):
             )
             self.assertEqual(collect_seam_findings(repo_root), [])
 
+    def test_peer_dial_hook_must_be_test_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            path = repo_root / SEAM
+            path.write_text(path.read_text(encoding="utf-8") +
+                            "\nfn leak() { SCRIPTED_PEER_DIAL.with(|_| ()); }\n", encoding="utf-8")
+            self.assertTrue(any("peer dial test hook is not cfg(test)-only" in finding
+                                for finding in collect_seam_findings(repo_root)))
+
     def test_adr_040_literal_ip_check_is_allowlisted_at_extracted_location(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
