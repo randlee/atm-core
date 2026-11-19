@@ -13,6 +13,6 @@
 {"sprint":"bg-14","depends_on":["bg-10"]}
 {"sprint":"bg-15","depends_on":["bg-10"]}
 {"sprint":"bg-16","depends_on":["bg-10"]}
-{"sprint":"bg-17","depends_on":["bg-10","bg-15"]}
-{"sprint":"bg-18","depends_on":["bg-10","bg-16"]}
+{"sprint":"bg-17","depends_on":["bg-10"]}
+{"sprint":"bg-18","depends_on":["bg-10"]}
 {"sprint":"bg-19","depends_on":["bg-10"]}
