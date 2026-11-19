@@ -10,3 +10,9 @@ site/cli/index.html text eol=lf
 site/cli/cli-reference.css text eol=lf
 site/cli/cli-reference.js text eol=lf
 crates/atm/tests/cli_surface_baseline.json text eol=lf
+
+# The sc-lint kit-drift check byte-compares these managed files with the LF
+# output of plugins/sc-lint/install.py, so a CRLF checkout reads as drift.
+sc-lint.toml text eol=lf
+Justfile text eol=lf
+.sc-lint/install.json text eol=lf

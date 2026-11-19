@@ -39,7 +39,12 @@ with free-form input.
     "docs/path/to/design-or-plan-doc-1.md",
     "docs/path/to/design-or-plan-doc-2.md"
   ],
-  "authoritative_sprint_doc": "docs/path/to/authoritative-sprint-doc.md",
+  "authoritative_sprint_doc": "docs/path/to/authoritative-sprint-doc.md, or null for a standalone PR review",
+  "pr_scope": {
+    "pr_number": "2457",
+    "head_sha": "full commit sha the scope is judged at",
+    "text": "the PR body and acceptance criteria as captured into the QA assignment"
+  },
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "optional branch name",
   "commit": "optional commit sha",
@@ -59,12 +64,25 @@ with free-form input.
 ```
 
 Rules:
-- `phase_or_sprint_docs` is an array and must contain one or more repo-relative
-  paths.
+- `phase_or_sprint_docs` is an array of repo-relative paths. It must contain
+  one or more when `authoritative_sprint_doc` is set; for a standalone PR
+  review (`pr_scope` set) it may be empty, because the captured `pr_scope.text`
+  is the task-level scope and the baseline sources above still apply.
 - `phase_sprint_documents` is a supported alias; if both are provided, merge
   and de-duplicate.
 - `authoritative_sprint_doc` is the primary task-level sprint source when
   provided.
+- `pr_scope` is the task-level source for a standalone PR review (a small fix
+  off `develop` with no sprint doc): exactly one of `authoritative_sprint_doc`
+  and `pr_scope` is non-null, or the input is `INPUT.INVALID`. Its `text` is
+  the PR body and acceptance criteria as the lead captured them into the QA
+  assignment; judge that text, never a re-fetched PR body or issue text,
+  which GitHub lets anyone edit after the assignment. Build the deliverable
+  checklist from it and verify at `head_sha`. Plan-sequencing compliance
+  (`docs/project-plan.md`) is `not-applicable` for a standalone PR, not a
+  finding; requirements and design compliance still apply. If the text states
+  no substantive deliverables or acceptance criteria, return `FAIL` with
+  `INPUT.INVALID` naming what is missing rather than inferring any.
 - `carry_forward_findings` and `triage_records` are prior-review context, not a
   substitute for re-verification
 - Treat provided phase or sprint docs as in-scope constraints that must align
@@ -123,6 +141,8 @@ For every req-qa review, explicitly perform these checks:
 1. Build an in-memory checklist from:
    - sprint or phase docs
    - `authoritative_sprint_doc` when provided
+   - `pr_scope.text` for a standalone PR review (the only task-level source
+     then; the live PR body is not consulted)
 2. For each checklist item, classify it as:
    - `present`
    - `partially-present`

@@ -30,7 +30,7 @@ TEMPLATES_WITH_UNQUOTED_INTERPOLATION = (
     ),
     (
         ".claude/skills/codex-orchestration/req-qa-assignment.json.j2",
-        '"authoritative_sprint_doc": {{ sprint_doc }},',
+        '"notes": {{ notes }}',
     ),
     (
         ".claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2",
