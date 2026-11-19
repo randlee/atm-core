@@ -16,9 +16,6 @@ pub struct SystemClock;
 
 pub(crate) const MAX_SLEEP_SLICE: Duration = Duration::from_secs(30);
 
-#[cfg(feature = "test-utils")]
-const TEST_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
-
 pub(crate) fn system_sleep_step(now: DateTime<Utc>, target: DateTime<Utc>) -> Duration {
     (target - now)
         .to_std()
@@ -32,7 +29,7 @@ impl Clock for SystemClock {
         Utc::now()
     }
 
-    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "The scheduler waits until its target wall-clock time, rechecking after bounded clock steps.")]
+    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070: the 30s wall-clock recheck detects clock steps; cancelled by the worker shutdown select.")]
     async fn sleep_until(&self, target: DateTime<Utc>) {
         loop {
             let duration = system_sleep_step(self.now(), target);
@@ -84,16 +81,10 @@ impl ManualClock {
 
     pub async fn wait_parks_above(&self, count: u64) {
         let mut parks = self.parks.subscribe();
-        let settled =
-            tokio::time::timeout(TEST_WAIT_TIMEOUT, parks.wait_for(|value| *value > count))
-                .await
-                .map(|result| result.expect("manual clock sender alive"));
-        if settled.is_err() {
-            panic!(
-                "manual clock park wait timed out: expected count above {count}, observed {}",
-                self.parks()
-            );
-        }
+        parks
+            .wait_for(|value| *value > count)
+            .await
+            .expect("manual clock sender alive");
     }
 
     pub async fn advance_settled(&self, duration: chrono::Duration) {

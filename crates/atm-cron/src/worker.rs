@@ -508,7 +508,7 @@ mod tests {
     }
 
     #[cfg(feature = "test-utils")]
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn merge_keeps_a_due_next_for_an_unchanged_slot() {
         let cron = AtmCron::new(AtmCronDeps {
             store: Arc::new(InMemoryCronScheduleStore::new()),
