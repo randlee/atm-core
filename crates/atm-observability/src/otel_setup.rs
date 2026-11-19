@@ -117,7 +117,6 @@ pub(crate) fn setup_on_channel_with_runtime<R: RuntimeChannel>(
     timeout: Duration,
     runtime: R,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
-    tokio::runtime::Handle::try_current()?;
     let interceptor = auth_interceptor(config)?;
     // Explicit gzip also prevents the upstream builder consulting ambient
     // compression settings; gRPC remains the only transport.
