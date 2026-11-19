@@ -487,6 +487,8 @@ where
             _ = async {
                 if let Some(interval) = interval.as_mut() {
                     interval.tick().await;
+                } else {
+                    tokio::task::yield_now().await;
                 }
             } => {}
         }
@@ -654,6 +656,68 @@ mod tests {
         .expect("cancellation exits cleanly");
 
         assert_eq!(polls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn zero_interval_yields_to_a_separately_scheduled_cancellation_task() {
+        use std::task::{Context, Poll, Waker};
+
+        // Poll the loop and cancellation task explicitly so the test controls
+        // their schedule and cannot hang if the loop stops yielding.
+        let (start_cancel_tx, start_cancel_rx) = tokio::sync::oneshot::channel();
+        let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+        let mut cancellation_task = Box::pin(async move {
+            start_cancel_rx
+                .await
+                .expect("follow loop starts the cancellation task");
+            cancel_tx
+                .send(())
+                .expect("follow loop is waiting for cancellation");
+        });
+
+        let mut start_cancel_tx = Some(start_cancel_tx);
+        let polls = AtomicUsize::new(0);
+        let loop_future = follow_loop(
+            || {
+                let count = polls.fetch_add(1, Ordering::SeqCst) + 1;
+                if count == 1 {
+                    start_cancel_tx
+                        .take()
+                        .expect("start cancellation once")
+                        .send(())
+                        .expect("cancellation task is pending on its gate");
+                    Ok(count)
+                } else {
+                    Err(anyhow::anyhow!(
+                        "zero-interval loop polled again before yielding to cancellation"
+                    ))
+                }
+            },
+            follow_interval(Duration::ZERO),
+            |_| Ok(true),
+            async move {
+                cancel_rx.await.map_err(anyhow::Error::from)?;
+                Ok(())
+            },
+        );
+        tokio::pin!(loop_future);
+        let mut context = Context::from_waker(Waker::noop());
+
+        assert!(matches!(
+            loop_future.as_mut().poll(&mut context),
+            Poll::Pending
+        ));
+        assert_eq!(polls.load(Ordering::SeqCst), 1);
+
+        assert!(matches!(
+            cancellation_task.as_mut().poll(&mut context),
+            Poll::Ready(())
+        ));
+        assert!(matches!(
+            loop_future.as_mut().poll(&mut context),
+            Poll::Ready(Ok(()))
+        ));
+        assert_eq!(polls.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test(start_paused = true)]
