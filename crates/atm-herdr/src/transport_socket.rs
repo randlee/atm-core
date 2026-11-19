@@ -1071,13 +1071,18 @@ mod tests {
         let attempts = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let observed = Arc::clone(&attempts);
         let (busy_tx, busy_rx) = tokio::sync::oneshot::channel();
+        let mut busy_tx = Some(busy_tx);
         let deadline = test_deadline(PIPE_BUSY_RETRY_DELAY + Duration::from_nanos(1));
         let retry = tokio::spawn(retry_pipe_busy(
             deadline,
             PIPE_BUSY_RETRY_DELAY,
             move || {
                 if observed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 0 {
-                    let _ = busy_tx.send(());
+                    busy_tx
+                        .take()
+                        .expect("first busy notification")
+                        .send(())
+                        .expect("busy receiver is waiting");
                     Err(io::Error::from_raw_os_error(231))
                 } else {
                     Ok(())
