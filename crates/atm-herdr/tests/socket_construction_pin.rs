@@ -165,9 +165,9 @@ fn socket_variant_is_constructed_only_by_the_ay9_factory_or_tests() {
             .file_name()
             .is_some_and(|name| name == "transport.rs");
         let markers = if is_transport_source {
-            vec!["#[cfg(test)]"]
+            vec!["#[cfg(test)]\nmod tests {"]
         } else if is_factory_source {
-            vec!["pub(crate) fn from_config", "#[cfg(test)]"]
+            vec!["pub(crate) fn from_config", "#[cfg(test)]\nmod tests {"]
         } else if source.file_name().is_some_and(|name| name == "lib.rs") {
             vec!["#[cfg(feature = \"test-utils\")]"]
         } else {
@@ -207,6 +207,15 @@ fn construction_pin_detects_aliases_and_variant_function_pointers() {
         )
         .is_empty()
     );
+}
+
+#[test]
+fn test_module_scope_is_selected_after_earlier_test_only_items() {
+    let source = "#[cfg(test)]\nstruct Helper;\n#[cfg(test)]\nmod tests { fn example() { let _ = HerdrIo::Socket(fake); } }\nfn leaked() { let _ = HerdrIo::Socket(fake); }";
+    let tokens = lex_rust(source);
+    let ranges = brace_ranges(&tokens, source, &["#[cfg(test)]\nmod tests {"]);
+    assert_eq!(ranges.len(), 1);
+    assert_eq!(construction_findings(source, &ranges).len(), 1);
 }
 
 #[test]

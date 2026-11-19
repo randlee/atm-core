@@ -25,6 +25,8 @@ const WINDOWS_CHILD_CLEANUP_GRACE: Duration = Duration::from_secs(5);
 pub(crate) struct CliIo {
     binary_path: Option<PathBuf>,
     extra_environment: Vec<(String, String)>,
+    #[cfg(test)]
+    test_output: Option<std::sync::Arc<std::sync::Mutex<Option<CommandOutput>>>>,
 }
 
 impl CliIo {
@@ -33,6 +35,8 @@ impl CliIo {
         Self {
             binary_path: config.binary_path().map(Path::to_path_buf),
             extra_environment: Vec::new(),
+            #[cfg(test)]
+            test_output: None,
         }
     }
 
@@ -44,7 +48,15 @@ impl CliIo {
         Self {
             binary_path: Some(binary_path),
             extra_environment,
+            #[cfg(test)]
+            test_output: None,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_output(mut self, output: CommandOutput) -> Self {
+        self.test_output = Some(std::sync::Arc::new(std::sync::Mutex::new(Some(output))));
+        self
     }
 
     pub(crate) async fn call(
@@ -53,6 +65,16 @@ impl CliIo {
         session: Option<&HerdrSession>,
         deadline: RequestDeadline,
     ) -> Result<HerdrEnvelope, HerdrError> {
+        #[cfg(test)]
+        if let Some(output) = &self.test_output {
+            let _ = command_args(op);
+            let output = output
+                .lock()
+                .expect("test output lock")
+                .take()
+                .expect("one CLI result");
+            return decode_envelope(&output);
+        }
         let args = command_args(op);
         let output = run_command(
             self.binary_path.as_deref(),
@@ -66,6 +88,7 @@ impl CliIo {
     }
 }
 
+#[derive(Debug)]
 pub(super) struct CommandOutput {
     pub(super) stdout: String,
     pub(super) stderr: String,
