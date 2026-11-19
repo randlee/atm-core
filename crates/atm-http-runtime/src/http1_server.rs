@@ -362,6 +362,35 @@ async fn drain_connections(mut connections: JoinSet<()>) -> io::Result<()> {
 }
 
 #[cfg(test)]
+pub(crate) struct ChannelAcceptor<S> {
+    pub(crate) events: tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<io::Result<S>>>,
+    pub(crate) observed: Option<std::sync::Arc<tokio::sync::Notify>>,
+}
+
+#[cfg(test)]
+impl<S> Http1Acceptor for ChannelAcceptor<S>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    type Stream = S;
+    type Peer = SocketAddr;
+
+    async fn accept_connection(&self) -> io::Result<(Self::Stream, Self::Peer)> {
+        let event = self
+            .events
+            .lock()
+            .await
+            .recv()
+            .await
+            .unwrap_or_else(|| Err(io::Error::other("script exhausted")));
+        if let Some(observed) = &self.observed {
+            observed.notify_one();
+        }
+        event.map(|stream| (stream, SocketAddr::from(([127, 0, 0, 1], 1234))))
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use std::time::Duration;
 
@@ -373,42 +402,99 @@ mod tests {
     use tokio::sync::watch;
 
     use std::io;
-    use std::net::SocketAddr;
 
     use super::{
-        Http1Acceptor, MAX_CONSECUTIVE_ACCEPT_FAILURES, accept_failure_is_recoverable,
+        ChannelAcceptor, MAX_CONSECUTIVE_ACCEPT_FAILURES, accept_failure_is_recoverable,
         accept_retry_backoff, serve_connection, serve_loopback_http1,
     };
 
-    struct ChannelAcceptor {
-        events: tokio::sync::Mutex<
-            tokio::sync::mpsc::UnboundedReceiver<io::Result<tokio::io::DuplexStream>>,
-        >,
-        observed: Option<std::sync::Arc<tokio::sync::Notify>>,
+    struct ObservedRead {
+        stream: tokio::io::DuplexStream,
+        read: tokio::sync::mpsc::UnboundedSender<usize>,
     }
 
-    impl Http1Acceptor for ChannelAcceptor {
-        type Stream = tokio::io::DuplexStream;
-        type Peer = SocketAddr;
-
-        async fn accept_connection(&self) -> io::Result<(Self::Stream, Self::Peer)> {
-            let event = self
-                .events
-                .lock()
-                .await
-                .recv()
-                .await
-                .unwrap_or_else(|| Err(io::Error::other("script exhausted")));
-            if let Some(observed) = &self.observed {
-                observed.notify_one();
+    impl tokio::io::AsyncRead for ObservedRead {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<io::Result<()>> {
+            let before = buf.filled().len();
+            let result = std::pin::Pin::new(&mut self.stream).poll_read(cx, buf);
+            if matches!(result, std::task::Poll::Ready(Ok(()))) && buf.filled().len() > before {
+                self.read.send(buf.filled().len() - before).unwrap();
             }
-            event.map(|stream| (stream, SocketAddr::from(([127, 0, 0, 1], 1234))))
+            result
+        }
+    }
+
+    impl tokio::io::AsyncWrite for ObservedRead {
+        fn poll_write(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<io::Result<usize>> {
+            std::pin::Pin::new(&mut self.stream).poll_write(cx, buf)
+        }
+        fn poll_flush(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<io::Result<()>> {
+            std::pin::Pin::new(&mut self.stream).poll_flush(cx)
+        }
+        fn poll_shutdown(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<io::Result<()>> {
+            std::pin::Pin::new(&mut self.stream).poll_shutdown(cx)
         }
     }
 
     #[tokio::test(start_paused = true)]
-    async fn shutdown_cancels_accept_backoff_without_advancing_clock() {
+    async fn loopback_header_read_deadline_closes_an_incomplete_request() {
         let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (read_tx, mut read_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (mut client, server) = tokio::io::duplex(1024);
+        events_tx
+            .send(Ok(ObservedRead {
+                stream: server,
+                read: read_tx,
+            }))
+            .unwrap();
+        let (shutdown_tx, shutdown_rx) = watch::channel(());
+        let server = tokio::spawn(serve_loopback_http1(
+            ChannelAcceptor {
+                events: tokio::sync::Mutex::new(events_rx),
+                observed: None,
+            },
+            Router::new(),
+            8,
+            Duration::from_millis(25),
+            shutdown_rx,
+        ));
+        let start = tokio::time::Instant::now();
+        let partial = b"POST /v1/messages HTTP/1.1\r\nHost: localhost\r\n";
+        client.write_all(partial).await.unwrap();
+        assert_eq!(read_rx.recv().await, Some(partial.len()));
+        tokio::time::advance(Duration::from_millis(25)).await;
+        let mut response = [0_u8; 1];
+        assert_eq!(
+            client.read(&mut response).await.unwrap(),
+            0,
+            "slow header connection must be closed"
+        );
+        assert_eq!(
+            tokio::time::Instant::now(),
+            start + Duration::from_millis(25)
+        );
+        shutdown_tx.send(()).unwrap();
+        server.await.unwrap().unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn shutdown_cancels_accept_backoff_without_advancing_clock() {
+        let (events_tx, events_rx) =
+            tokio::sync::mpsc::unbounded_channel::<io::Result<tokio::io::DuplexStream>>();
         events_tx
             .send(Err(io::Error::other("resource pressure")))
             .unwrap();

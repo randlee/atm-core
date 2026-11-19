@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use atm_core::api::{HttpRequest, RequestDeadline};
-use atm_core::error::{AtmError, AtmErrorCode};
+use atm_core::error::AtmError;
 
 use crate::client::{HttpRuntimeClientFailure, HttpRuntimeConnector, LoopbackTcpConnector};
 
@@ -25,22 +25,22 @@ pub(crate) async fn get_json(
     }
     let connector = LoopbackTcpConnector::new(endpoint_record_path)?;
     let deadline = RequestDeadline::after(request_timeout);
-    let remaining = deadline.remaining().ok_or_else(|| {
-        AtmError::new(
-            AtmErrorCode::WaitTimeout,
-            "loopback diagnostic request budget elapsed before dispatch",
-        )
-    })?;
-    let response = tokio::time::timeout(
-        remaining,
-        connector.exchange(
-            HttpRequest {
-                method: "GET".to_owned(),
-                path,
-                headers: Vec::new(),
-                body: Vec::new(),
-            },
-            deadline,
+    let proposed = tokio::time::Instant::now() + request_timeout;
+    let deadline_at =
+        crate::request_deadline::current().map_or(proposed, |outer| outer.min(proposed));
+    let response = crate::request_deadline::scope(
+        deadline_at,
+        tokio::time::timeout_at(
+            deadline_at,
+            connector.exchange(
+                HttpRequest {
+                    method: "GET".to_owned(),
+                    path,
+                    headers: Vec::new(),
+                    body: Vec::new(),
+                },
+                deadline,
+            ),
         ),
     )
     .await

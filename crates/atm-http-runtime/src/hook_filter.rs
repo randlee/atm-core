@@ -208,6 +208,14 @@ impl<D: HookActionDispatcher> HookedTaskCommands<D> {
 
 impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
     async fn filter(&self, cmd: TaskCommand, ctx: &TaskCallCtx) -> Result<ApiResponse, AtmError> {
+        crate::request_deadline::scope_if_absent(ctx.deadline, self.filter_scoped(cmd, ctx)).await
+    }
+
+    async fn filter_scoped(
+        &self,
+        cmd: TaskCommand,
+        ctx: &TaskCallCtx,
+    ) -> Result<ApiResponse, AtmError> {
         if ctx.ingress != AuthenticatedIngress::Local {
             return cmd.call(&*self.inner, ctx).await;
         }
@@ -235,7 +243,10 @@ impl<D: HookActionDispatcher + 'static> HookedTaskCommands<D> {
             body: cmd.clone(),
             hook,
         };
-        let chain = self.chains.spawn(run_chain(run))?;
+        let deadline = crate::request_deadline::capture(ctx.deadline);
+        let chain = self
+            .chains
+            .spawn(crate::request_deadline::scope(deadline, run_chain(run)))?;
         match chain.await {
             Err(join) if join.is_panic() => Err(AtmError::hook_exit(HookExitCause::Panic(
                 panic_text(join.into_panic()),
@@ -805,6 +816,51 @@ mod tests {
         let runner: Arc<dyn atm_core::boundary::HookRunner> = h.runner.clone();
         assert!(Arc::ptr_eq(h.commands.runner(), &runner));
         assert!(Arc::ptr_eq(h.commands.actions(), &h.actions));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn spawned_hook_chain_keeps_the_original_tokio_deadline() {
+        let store = Arc::new(InMemoryHookRegistrationStore::new());
+        register(&store, "task.assign", "bk", 1);
+        let h = harness(&store);
+        reply(&h.runner, HookReply::PassThrough);
+        let entered = Arc::new(tokio::sync::Notify::new());
+        let (release_tx, release_rx) = tokio::sync::watch::channel(false);
+        let (observed_tx, observed_rx) = tokio::sync::oneshot::channel();
+        let observed = Arc::new(Mutex::new(Some(observed_tx)));
+        *h.runner.before_reply.lock().unwrap() = Some(Arc::new({
+            let entered = entered.clone();
+            let observed = observed.clone();
+            move |_| {
+                let entered = entered.clone();
+                let observed = observed.clone();
+                let mut release = release_rx.clone();
+                Box::pin(async move {
+                    entered.notify_one();
+                    release.wait_for(|value| *value).await.unwrap();
+                    let seen = crate::request_deadline::current();
+                    observed.lock().unwrap().take().unwrap().send(seen).unwrap();
+                })
+            }
+        }));
+        let deadline_at = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        let commands = h.commands;
+        let task = tokio::spawn(crate::request_deadline::scope(deadline_at, async move {
+            commands
+                .assign(
+                    TaskAssign(Box::new(assign_request(false))),
+                    &ctx(atm_core::api::RequestDeadline::after(
+                        std::time::Duration::ZERO,
+                    )),
+                )
+                .await
+        }));
+        entered.notified().await;
+        tokio::time::advance(std::time::Duration::from_secs(2)).await;
+        release_tx.send(true).unwrap();
+        assert_eq!(observed_rx.await.unwrap(), Some(deadline_at));
+        assert_eq!(tokio::time::Instant::now(), deadline_at);
+        task.await.unwrap().unwrap();
     }
 
     #[tokio::test]

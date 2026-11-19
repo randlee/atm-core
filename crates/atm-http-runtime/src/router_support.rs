@@ -166,10 +166,7 @@ impl BoundedBlockingBridge {
         T: Send + 'static,
         F: FnOnce() -> Result<T, AtmError> + Send + 'static,
     {
-        let remaining = deadline
-            .remaining()
-            .ok_or(BlockingBridgeError::DeadlineBeforeStart)?;
-        let deadline = tokio::time::Instant::now() + remaining;
+        let deadline = crate::request_deadline::capture(deadline);
         self.run_with_policy_at(deadline, policy, stall_counter, job)
             .await
     }
@@ -357,12 +354,12 @@ fn source_preflight_error(description: &str, error: BlockingBridgeError) -> AtmE
 /// Reserves response encoding and loopback handoff time before a local
 /// receiver hook begins.  A hook remains advisory after durable persistence;
 /// it must never consume the daemon's final response budget.
-pub(super) fn receiver_hook_deadline(deadline: RequestDeadline) -> Option<RequestDeadline> {
-    deadline
-        .remaining()
-        .and_then(|remaining| remaining.checked_sub(RESPONSE_HANDOFF_GRACE))
-        .filter(|remaining| !remaining.is_zero())
-        .map(RequestDeadline::after)
+pub(super) fn receiver_hook_deadline(
+    deadline: RequestDeadline,
+) -> Option<(RequestDeadline, tokio::time::Instant)> {
+    let hook_at = crate::request_deadline::capture(deadline).checked_sub(RESPONSE_HANDOFF_GRACE)?;
+    (hook_at > tokio::time::Instant::now())
+        .then(|| (deadline.minus(RESPONSE_HANDOFF_GRACE), hook_at))
 }
 
 impl ControlPathSyncBridge {
@@ -436,20 +433,24 @@ impl DetachedReceivedHooks {
     where
         F: Future<Output = Vec<WarningEntry>> + Send + 'static,
     {
-        let task = tokio::spawn(async move {
-            for warning in hook.await {
-                runtime_health.record_detached_received_hook_warning();
-                tracing::warn!(
-                    subsystem = "atm_http_runtime.received_hook",
-                    action = "peer_received_hook",
-                    outcome = "warning",
-                    %request_id,
-                    code = ?warning.code,
-                    detail = %warning.message,
-                    "receiver hook reported a warning after the peer write was durably persisted"
-                );
-            }
-        });
+        let deadline = crate::request_deadline::current();
+        let task = tokio::spawn(crate::request_deadline::scope_optional(
+            deadline,
+            async move {
+                for warning in hook.await {
+                    runtime_health.record_detached_received_hook_warning();
+                    tracing::warn!(
+                        subsystem = "atm_http_runtime.received_hook",
+                        action = "peer_received_hook",
+                        outcome = "warning",
+                        %request_id,
+                        code = ?warning.code,
+                        detail = %warning.message,
+                        "receiver hook reported a warning after the peer write was durably persisted"
+                    );
+                }
+            },
+        ));
         let mut tasks = self.lock();
         tasks.retain(|task| !task.is_finished());
         tasks.push(task);

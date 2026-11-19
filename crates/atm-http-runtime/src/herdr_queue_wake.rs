@@ -89,6 +89,8 @@ pub struct HerdrQueueWakePump {
         Arc<Mutex<Option<crate::herdr_queue_wake_test_gates::Gate>>>,
     #[cfg(test)]
     pub(crate) prompt_started_test_gate: Arc<Mutex<Option<Arc<tokio::sync::Notify>>>>,
+    #[cfg(test)]
+    release_drain_started: Arc<tokio::sync::Notify>,
 }
 
 impl HerdrQueueWakePump {
@@ -123,6 +125,8 @@ impl HerdrQueueWakePump {
             handoff_cleanup_test_gate: Arc::new(Mutex::new(None)),
             #[cfg(test)]
             prompt_started_test_gate: Arc::new(Mutex::new(None)),
+            #[cfg(test)]
+            release_drain_started: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -176,6 +180,9 @@ impl HerdrQueueWakePump {
     }
 
     async fn await_release_handles(&self, deadline: RequestDeadline) {
+        let deadline = crate::request_deadline::from_core(deadline);
+        #[cfg(test)]
+        self.release_drain_started.notify_one();
         loop {
             let handles = std::mem::take(
                 &mut *self
@@ -187,7 +194,7 @@ impl HerdrQueueWakePump {
                 return;
             }
             for mut handle in handles {
-                let Some(remaining) = deadline.remaining() else {
+                if tokio::time::Instant::now() >= deadline {
                     handle.abort();
                     tracing::warn!(
                         subsystem = "herdr_queue_wake",
@@ -196,8 +203,11 @@ impl HerdrQueueWakePump {
                         "Herdr queue release drain exceeded its shutdown deadline"
                     );
                     continue;
-                };
-                if tokio::time::timeout(remaining, &mut handle).await.is_err() {
+                }
+                if tokio::time::timeout_at(deadline, &mut handle)
+                    .await
+                    .is_err()
+                {
                     handle.abort();
                     tracing::warn!(
                         subsystem = "herdr_queue_wake",

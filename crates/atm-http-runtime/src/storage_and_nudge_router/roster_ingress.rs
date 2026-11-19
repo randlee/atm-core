@@ -23,7 +23,7 @@ impl StorageAndNudgeRouter {
             },
         );
         if query.task_ledger.is_some() {
-            if deadline.expired() {
+            if crate::request_deadline::expired(deadline) {
                 return Err(AtmError::daemon_unavailable(
                     "request deadline expired before task-ledger inspection",
                 ));

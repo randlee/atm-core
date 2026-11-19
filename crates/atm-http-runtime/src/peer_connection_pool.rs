@@ -317,15 +317,8 @@ impl PeerConnectionPool {
         port: NonZeroU16,
         deadline: RequestDeadline,
     ) -> Result<PooledPeerConnection, HttpRuntimeClientFailure> {
-        let now = Instant::now();
-        self.acquire_until(
-            peer,
-            port,
-            deadline
-                .remaining()
-                .map_or(now, |remaining| now + remaining),
-        )
-        .await
+        self.acquire_until(peer, port, crate::request_deadline::capture(deadline))
+            .await
     }
 
     pub(crate) async fn acquire_until(
@@ -547,10 +540,7 @@ impl PooledPeerConnection {
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        let remaining = deadline
-            .remaining()
-            .ok_or(HttpRuntimeClientFailure::Cancelled)?;
-        self.exchange_until(request, Instant::now() + remaining)
+        self.exchange_until(request, crate::request_deadline::capture(deadline))
             .await
     }
 

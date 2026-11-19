@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
 
 use atm_core::api::RequestDeadline;
 use atm_core::error::AtmError;
@@ -101,11 +100,15 @@ impl ChainTracker {
     /// Waits for live chains until `deadline`, then aborts the rest.
     /// Returns how many chains were still live at the deadline.
     pub async fn drain(&self, deadline: RequestDeadline) -> usize {
+        self.drain_at(crate::request_deadline::from_core(deadline))
+            .await
+    }
+
+    async fn drain_at(&self, deadline: tokio::time::Instant) -> usize {
         self.begin_shutdown();
         let mut live = self.shared.live.subscribe();
         let idle = live.wait_for(|count| *count == 0);
-        let remaining = deadline.remaining().unwrap_or(Duration::ZERO);
-        if matches!(tokio::time::timeout(remaining, idle).await, Ok(Ok(_))) {
+        if matches!(tokio::time::timeout_at(deadline, idle).await, Ok(Ok(_))) {
             return 0;
         }
         let aborted = *self.shared.live.borrow();
@@ -190,7 +193,6 @@ mod tests {
     use std::task::{Context, Waker};
     use std::time::Duration;
 
-    use atm_core::api::RequestDeadline;
     use atm_core::boundary::{
         DummyHookRunner, RecordingHookActionDispatcher, RecordingTaskCommands, TaskAssign,
         TaskCommands,
@@ -278,14 +280,12 @@ mod tests {
         let entered = Arc::new(Notify::new());
         let held = held_hook(&hold, &entered);
         let caller = start_held_assign(&held);
-        tokio::time::timeout(Duration::from_secs(10), entered.notified())
-            .await
-            .expect("timed out waiting for held assign to enter the hook chain");
+        entered.notified().await;
 
         // One poll while the chain is held: drain must not finish yet.
         let mut drain = pin!(
             held.chains
-                .drain(RequestDeadline::after(Duration::from_secs(10)))
+                .drain_at(tokio::time::Instant::now() + Duration::from_secs(10))
         );
         let mut cx = Context::from_waker(Waker::noop());
         assert!(drain.as_mut().poll(&mut cx).is_pending());
@@ -305,15 +305,15 @@ mod tests {
         let entered = Arc::new(Notify::new());
         let held = held_hook(&hold, &entered);
         let caller = start_held_assign(&held);
-        tokio::time::timeout(Duration::from_secs(10), entered.notified())
-            .await
-            .expect("timed out waiting for held assign to enter before the drain deadline");
+        entered.notified().await;
 
-        let aborted = held
-            .chains
-            .drain(RequestDeadline::after(Duration::from_secs(1)))
-            .await;
-        assert_eq!(aborted, 1);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+        let mut drain = pin!(held.chains.drain_at(deadline));
+        let mut cx = Context::from_waker(Waker::noop());
+        assert!(drain.as_mut().poll(&mut cx).is_pending());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        assert_eq!(drain.await, 1);
+        assert_eq!(tokio::time::Instant::now(), deadline);
         let error = expect_err(caller.await.expect("caller task"));
         assert!(
             error
@@ -346,10 +346,13 @@ mod tests {
     async fn chain_registered_after_drain_collected_is_aborted() {
         let tracker = ChainTracker::new();
         let admission = tracker.admit().expect("admitted before shutdown");
-        let aborted = tracker
-            .drain(RequestDeadline::after(Duration::from_secs(1)))
-            .await;
-        assert_eq!(aborted, 1, "the admitted chain counts as live");
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+        let mut drain = pin!(tracker.drain_at(deadline));
+        let mut cx = Context::from_waker(Waker::noop());
+        assert!(drain.as_mut().poll(&mut cx).is_pending());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        assert_eq!(drain.await, 1, "the admitted chain counts as live");
+        assert_eq!(tokio::time::Instant::now(), deadline);
         let (_hold, held) = oneshot::channel::<()>();
         let chain = tracker.start(admission, async move {
             let _ = held.await;

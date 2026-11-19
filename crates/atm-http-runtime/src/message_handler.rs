@@ -335,9 +335,31 @@ pub fn canonical_message_router(
         .layer(LoadShedLayer::new())
         .layer(ConcurrencyLimitLayer::new(limits.max_connections));
 
+    let request_timeout = timeouts.request;
     Router::new()
         .route(canonical_write_path(), post(post_messages).layer(admission))
         .layer(DefaultBodyLimit::max(limits.max_body_bytes))
+        .layer(axum::middleware::from_fn(
+            move |request: axum::extract::Request, next: axum::middleware::Next| async move {
+                let deadline = {
+                    #[cfg(test)]
+                    if let Some(injected) = request
+                        .extensions()
+                        .get::<crate::request_deadline::InjectedDeadline>()
+                    {
+                        injected.0
+                    } else {
+                        tokio::time::Instant::now() + request_timeout
+                    }
+                    #[cfg(not(test))]
+                    {
+                        tokio::time::Instant::now() + request_timeout
+                    }
+                };
+                crate::request_deadline::ingress_at(request_timeout, deadline, next.run(request))
+                    .await
+            },
+        ))
         .with_state(state)
 }
 
@@ -369,6 +391,7 @@ pub fn canonical_api_router(
         .layer(LoadShedLayer::new())
         .layer(ConcurrencyLimitLayer::new(limits.max_connections));
 
+    let request_timeout = timeouts.request;
     http_route_surface()
         .fold(
             Router::new().layer(DefaultBodyLimit::max(limits.max_body_bytes)),
@@ -380,6 +403,27 @@ pub fn canonical_api_router(
             },
         )
         .route_layer(admission)
+        .layer(axum::middleware::from_fn(
+            move |request: axum::extract::Request, next: axum::middleware::Next| async move {
+                let deadline = {
+                    #[cfg(test)]
+                    if let Some(injected) = request
+                        .extensions()
+                        .get::<crate::request_deadline::InjectedDeadline>()
+                    {
+                        injected.0
+                    } else {
+                        tokio::time::Instant::now() + request_timeout
+                    }
+                    #[cfg(not(test))]
+                    {
+                        tokio::time::Instant::now() + request_timeout
+                    }
+                };
+                crate::request_deadline::ingress_at(request_timeout, deadline, next.run(request))
+                    .await
+            },
+        ))
         .with_state(state)
 }
 
@@ -439,7 +483,7 @@ async fn post_messages_with_request_id(
         ingress,
         AuthenticatedIngress::Peer | AuthenticatedIngress::UntrustedSmoke(_)
     );
-    let deadline = RequestDeadline::after(state.request_timeout);
+    let deadline = crate::request_deadline::core_at_ingress(state.request_timeout);
 
     let response = state
         .handler
@@ -515,7 +559,7 @@ async fn dispatch_request_with_request_id(
         Ok(ingress) => ingress,
         Err(error) => return error_response(error),
     };
-    let deadline = RequestDeadline::after(state.request_timeout);
+    let deadline = crate::request_deadline::core_at_ingress(state.request_timeout);
     state
         .handler
         .dispatch_with_request_id(request, ingress, deadline, request_id)
@@ -1077,6 +1121,131 @@ mod tests {
                 Ok(ApiResponse::new(self.response.clone()))
             })
         }
+    }
+
+    struct DeadlineCheckingRouter {
+        observed: Mutex<Option<tokio::sync::oneshot::Sender<bool>>>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for DeadlineCheckingRouter {}
+
+    impl CanonicalWriteHandler for DeadlineCheckingRouter {
+        fn write(
+            &self,
+            _request: atm_core::send::WriteRequest,
+            _ingress: AuthenticatedIngress,
+            deadline: RequestDeadline,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<ApiResponse, AtmError>> + Send + '_>,
+        > {
+            Box::pin(async move {
+                let expired = crate::request_deadline::expired(deadline);
+                self.observed
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .unwrap()
+                    .send(expired)
+                    .unwrap();
+                Err(AtmError::daemon_unavailable("test request complete"))
+            })
+        }
+    }
+
+    struct GatedRequestBody {
+        started: Option<tokio::sync::oneshot::Sender<()>>,
+        bytes: Option<tokio::sync::oneshot::Receiver<axum::body::Bytes>>,
+    }
+
+    impl hyper::body::Body for GatedRequestBody {
+        type Data = axum::body::Bytes;
+        type Error = std::convert::Infallible;
+
+        fn poll_frame(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+            if let Some(started) = self.started.take() {
+                let _ = started.send(());
+            }
+            let Some(bytes) = self.bytes.as_mut() else {
+                return std::task::Poll::Ready(None);
+            };
+            match std::future::Future::poll(std::pin::Pin::new(bytes), cx) {
+                std::task::Poll::Ready(Ok(bytes)) => {
+                    self.bytes = None;
+                    std::task::Poll::Ready(Some(Ok(hyper::body::Frame::data(bytes))))
+                }
+                std::task::Poll::Ready(Err(_)) => {
+                    self.bytes = None;
+                    std::task::Poll::Ready(None)
+                }
+                std::task::Poll::Pending => std::task::Poll::Pending,
+            }
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn request_body_delay_consumes_the_ingress_deadline() {
+        let (observed_tx, observed_rx) = tokio::sync::oneshot::channel();
+        let handler = Arc::new(DeadlineCheckingRouter {
+            observed: Mutex::new(Some(observed_tx)),
+        });
+        let router = canonical_message_router(
+            handler,
+            AuthenticatedConnector::local(),
+            limits(4096, 1),
+            timeouts_with_request(Duration::from_secs(2)),
+        );
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (body_tx, body_rx) = tokio::sync::oneshot::channel();
+        let request = Request::builder()
+            .method("POST")
+            .uri(canonical_write_path())
+            .header(CONTENT_TYPE, "application/json")
+            .body(Body::new(GatedRequestBody {
+                started: Some(started_tx),
+                bytes: Some(body_rx),
+            }))
+            .unwrap();
+        let task = tokio::spawn(router.oneshot(request));
+        started_rx.await.unwrap();
+        tokio::time::advance(Duration::from_secs(2)).await;
+        body_tx
+            .send(serde_json::to_vec(&write_request()).unwrap().into())
+            .unwrap();
+        assert!(
+            observed_rx.await.unwrap(),
+            "body decoding must not reset the request budget"
+        );
+        task.await.unwrap().unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn injected_expired_deadline_reaches_the_handler() {
+        let (observed_tx, observed_rx) = tokio::sync::oneshot::channel();
+        let handler = Arc::new(DeadlineCheckingRouter {
+            observed: Mutex::new(Some(observed_tx)),
+        });
+        let router = canonical_message_router(
+            handler,
+            AuthenticatedConnector::local(),
+            limits(4096, 1),
+            timeouts(),
+        );
+        let mut request = Request::builder()
+            .method("POST")
+            .uri(canonical_write_path())
+            .header(CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&write_request()).unwrap()))
+            .unwrap();
+        request
+            .extensions_mut()
+            .insert(crate::request_deadline::InjectedDeadline(
+                tokio::time::Instant::now(),
+            ));
+        router.oneshot(request).await.unwrap();
+        assert!(observed_rx.await.unwrap());
     }
 
     struct BlockingRouter {
@@ -2255,7 +2424,8 @@ mod tests {
             limits(4096, 1),
             timeouts_with_request(Duration::from_millis(10)),
         );
-        let response = tokio::spawn(post(
+        let start = tokio::time::Instant::now();
+        let mut response = tokio::spawn(post(
             app,
             serde_json::to_vec(&write_request()).expect("typed JSON"),
         ));
@@ -2264,9 +2434,14 @@ mod tests {
             .await
             .expect("wait for blocking handler");
         tokio::time::advance(Duration::from_millis(25)).await;
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
         assert!(
-            !response.is_finished(),
+            std::future::Future::poll(std::pin::Pin::new(&mut response), &mut cx).is_pending(),
             "the adapter must not synthesize a timeout while a started route owns the durable outcome"
+        );
+        assert_eq!(
+            tokio::time::Instant::now(),
+            start + Duration::from_millis(25)
         );
         gate.release();
         let response = response

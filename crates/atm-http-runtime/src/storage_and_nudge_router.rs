@@ -270,7 +270,7 @@ impl StorageAndNudgeRouter {
             ));
         };
         let port = self.resolved_peer_port(host, deadline).await?;
-        let remaining = deadline.remaining().ok_or_else(|| {
+        let remaining = crate::request_deadline::remaining(deadline).ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "request deadline expired before cross-host acknowledgement delivery",
             )
@@ -362,12 +362,24 @@ impl StorageAndNudgeRouter {
         dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
         deadline: RequestDeadline,
     ) -> Vec<WarningEntry> {
-        let Some(deadline) = receiver_hook_deadline(deadline) else {
+        let Some((deadline, hook_at)) = receiver_hook_deadline(deadline) else {
             return vec![hook_warning(AtmError::daemon_unavailable(
                 "received-message hook was skipped to reserve the durable write response handoff",
             ))];
         };
-        if deadline.expired() {
+        crate::request_deadline::scope(
+            hook_at,
+            self.emit_received_hook_scoped(dispatches, deadline),
+        )
+        .await
+    }
+
+    async fn emit_received_hook_scoped(
+        &self,
+        dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
+        deadline: RequestDeadline,
+    ) -> Vec<WarningEntry> {
+        if crate::request_deadline::expired(deadline) {
             return vec![hook_warning(AtmError::daemon_unavailable(
                 "received-message hook was skipped because the request deadline was exhausted after persistence",
             ))];
@@ -381,14 +393,15 @@ impl StorageAndNudgeRouter {
             let Some(emitter) = self.received_hook_selector.select_emitter(&dispatch) else {
                 continue;
             };
-            let Some(remaining) = deadline.remaining() else {
+            let hook_at = crate::request_deadline::capture(deadline);
+            if tokio::time::Instant::now() >= hook_at {
                 warnings.push(hook_warning(AtmError::daemon_unavailable(
                     "received-message hook was skipped because the request deadline was exhausted after persistence",
                 )));
                 break;
-            };
-            match tokio::time::timeout(
-                remaining,
+            }
+            match tokio::time::timeout_at(
+                hook_at,
                 emitter.emit_received_message(dispatch.clone(), deadline),
             )
             .await
@@ -758,7 +771,7 @@ impl StorageAndNudgeRouter {
     ) -> Result<ApiResponse, AtmError> {
         require_local_graft_ingress(ingress)?;
         validate_graft_receiver_member(&self.service_runtime, &team, &agent)?;
-        let remaining = deadline.remaining().ok_or_else(|| {
+        let remaining = crate::request_deadline::remaining(deadline).ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "request deadline expired before graft receiver lease lookup",
             )
@@ -827,24 +840,29 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         deadline: RequestDeadline,
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        Box::pin(async move {
-            let Some(commands) = self.hooks.task_commands.clone() else {
-                return self
-                    .write_unhooked(request, ingress, deadline, request_id)
-                    .await;
-            };
-            match atm_core::boundary::TaskCommand::classify(ApiRequest::Write(Box::new(request))) {
-                Ok(command) => {
-                    self.call_task_command(&*commands, command, ingress, deadline, request_id)
-                        .await
+        Box::pin(crate::request_deadline::scope_if_absent(
+            deadline,
+            async move {
+                let Some(commands) = self.hooks.task_commands.clone() else {
+                    return self
+                        .write_unhooked(request, ingress, deadline, request_id)
+                        .await;
+                };
+                match atm_core::boundary::TaskCommand::classify(ApiRequest::Write(Box::new(
+                    request,
+                ))) {
+                    Ok(command) => {
+                        self.call_task_command(&*commands, command, ingress, deadline, request_id)
+                            .await
+                    }
+                    Err(ApiRequest::Write(request)) => {
+                        self.write_unhooked(*request, ingress, deadline, request_id)
+                            .await
+                    }
+                    Err(_) => unreachable!("classify returns a write request unchanged"),
                 }
-                Err(ApiRequest::Write(request)) => {
-                    self.write_unhooked(*request, ingress, deadline, request_id)
-                        .await
-                }
-                Err(_) => unreachable!("classify returns a write request unchanged"),
-            }
-        })
+            },
+        ))
     }
 
     fn dispatch(
@@ -868,18 +886,21 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         deadline: RequestDeadline,
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        Box::pin(async move {
-            match request {
-                ApiRequest::Write(request) => {
-                    self.write_with_request_id(*request, ingress, deadline, request_id)
-                        .await
+        Box::pin(crate::request_deadline::scope_if_absent(
+            deadline,
+            async move {
+                match request {
+                    ApiRequest::Write(request) => {
+                        self.write_with_request_id(*request, ingress, deadline, request_id)
+                            .await
+                    }
+                    request => {
+                        self.dispatch_non_write(request, ingress, deadline, request_id)
+                            .await
+                    }
                 }
-                request => {
-                    self.dispatch_non_write(request, ingress, deadline, request_id)
-                        .await
-                }
-            }
-        })
+            },
+        ))
     }
 }
 
@@ -905,7 +926,7 @@ impl StorageAndNudgeRouter {
         cron_permit: Option<&'a atm_core::boundary::CronRunPermit>,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + 'a>> {
         Box::pin(async move {
-            if deadline.expired() {
+            if crate::request_deadline::expired(deadline) {
                 return Err(AtmError::daemon_unavailable(
                     "request deadline expired before replacement storage-writer ingress",
                 ));
