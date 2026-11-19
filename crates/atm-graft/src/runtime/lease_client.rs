@@ -182,6 +182,9 @@ where
     }
     #[cfg(test)]
     let result = TEST_LEASE_TIMEOUTS.with(|slot| {
+        if deadline.is_zero() {
+            return result_rx.recv_timeout(deadline);
+        }
         let slot = slot.borrow();
         if matches!(action, "lease_refresh" | "lease_unregister")
             && let Some(timeouts) = slot.as_ref()
@@ -402,6 +405,24 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::{GRAFT_LEASE_REFRESH_INTERVAL, LeaseRefreshBackoff};
+
+    #[test]
+    fn bounded_lease_call_reports_immediate_timeout_for_a_blocked_helper() {
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(1);
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let (finished_tx, finished_rx) = std::sync::mpsc::sync_channel(1);
+        let error = super::run_bounded_lease_call("test", Duration::ZERO, move || {
+            started_tx.send(()).expect("helper starts");
+            release_rx.recv().expect("release helper");
+            finished_tx.send(()).expect("helper finished");
+            Ok(())
+        })
+        .expect_err("blocked helper must time out at zero budget");
+        assert_eq!(error.code(), atm_core::error::AtmErrorCode::WaitTimeout);
+        started_rx.recv().expect("helper started");
+        release_tx.send(()).expect("release helper");
+        finished_rx.recv().expect("helper finished");
+    }
 
     // rust-service-hardening RSH-002: the refresh backoff grows on repeated
     // failure and resets to the base cadence on the next success, so a
