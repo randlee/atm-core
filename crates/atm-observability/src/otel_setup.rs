@@ -97,7 +97,26 @@ pub(crate) fn setup_with_timeouts(
     timeout: Duration,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
     tokio::runtime::Handle::try_current()?;
-    let (channel, interceptor) = grpc_transport(config, transport_timeout)?;
+    let channel = lazy_channel(config, transport_timeout)?;
+    setup_on_channel(config, channel, batch, transport_timeout, timeout)
+}
+
+/// Constructs the same SDK providers over a caller-supplied tonic channel.
+///
+/// This seam permits controlled in-memory transports in composition tests.
+/// Authentication and processor settings remain identical to normal setup.
+///
+/// # Errors
+/// Returns an error if the configuration or an SDK exporter cannot be built.
+pub fn setup_on_channel(
+    config: &TelemetryExportConfig,
+    channel: tonic::transport::Channel,
+    batch: usize,
+    transport_timeout: Duration,
+    timeout: Duration,
+) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
+    tokio::runtime::Handle::try_current()?;
+    let interceptor = auth_interceptor(config)?;
     // Explicit gzip also prevents the upstream builder consulting ambient
     // compression settings; gRPC remains the only transport.
     macro_rules! exporter {
@@ -153,15 +172,27 @@ fn grpc_transport(
     Box<dyn std::error::Error + Send + Sync>,
 > {
     let channel = lazy_channel(config, transport_timeout)?;
+    Ok((channel, auth_interceptor(config)?))
+}
+
+fn auth_interceptor(
+    config: &TelemetryExportConfig,
+) -> Result<
+    impl FnMut(tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status>
+    + Clone
+    + Send
+    + Sync
+    + 'static,
+    Box<dyn std::error::Error + Send + Sync>,
+> {
     let auth: Option<MetadataValue<Ascii>> = config.auth_header().map(str::parse).transpose()?;
-    let interceptor = move |mut request: tonic::Request<()>| {
+    Ok(move |mut request: tonic::Request<()>| {
         request.metadata_mut().clear();
         if let Some(auth) = &auth {
             request.metadata_mut().insert("authorization", auth.clone());
         }
         Ok(request)
-    };
-    Ok((channel, interceptor))
+    })
 }
 
 fn logger_provider(
