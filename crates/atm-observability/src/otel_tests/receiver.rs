@@ -1,17 +1,19 @@
 #![cfg(test)]
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use hyper_util::rt::TokioIo;
 use opentelemetry_proto::tonic::collector::{
     logs::v1 as logs, metrics::v1 as metrics, trace::v1 as traces,
 };
 use opentelemetry_proto::tonic::{logs::v1::LogRecord, metrics::v1::Metric, trace::v1::Span};
 use tokio::sync::{Notify, oneshot};
-use tokio_stream::wrappers::TcpListenerStream;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::codec::CompressionEncoding;
 use tonic::{Request, Response, Status};
+use tower::service_fn;
 
 /// The OTLP signal an export request belongs to.
 #[derive(Clone, Copy, Debug)]
@@ -49,11 +51,14 @@ pub(super) struct Capture {
     /// Releases one stalled export; a stalled export waits here until the
     /// test calls `release`, and never completes if the test does not.
     pub release: Arc<Notify>,
-    pub stall: bool,
+    pub stall: Arc<AtomicBool>,
 }
 
 impl Capture {
     async fn response(&self, signal: Signal) {
+        let release = self.release.notified();
+        tokio::pin!(release);
+        release.as_mut().enable();
         self.started[signal as usize].fetch_add(1, Ordering::SeqCst);
         self.changed.notify_waiters();
         struct Finished(Capture, Signal);
@@ -64,8 +69,8 @@ impl Capture {
             }
         }
         let _finished = Finished(self.clone(), signal);
-        if self.stall {
-            self.release.notified().await;
+        if self.stall.load(Ordering::SeqCst) {
+            release.await;
         }
     }
 
@@ -81,22 +86,22 @@ impl Capture {
         self.release.notify_one();
     }
 
-    /// Waits until `condition` holds, re-checking on every capture change.
-    /// The 30s bound is failure-only; on expiry the panic names `what`.
-    pub async fn wait(&self, what: &str, condition: impl Fn() -> bool) {
-        tokio::time::timeout(Duration::from_secs(30), async {
-            loop {
-                let changed = self.changed.notified();
-                tokio::pin!(changed);
-                changed.as_mut().enable();
-                if condition() {
-                    return;
-                }
-                changed.await;
+    pub fn release_all(&self) {
+        self.stall.store(false, Ordering::SeqCst);
+        self.release.notify_waiters();
+    }
+
+    /// Waits for a capture change; registration precedes the condition check.
+    pub async fn wait(&self, _what: &str, condition: impl Fn() -> bool) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if condition() {
+                return;
             }
-        })
-        .await
-        .unwrap_or_else(|_| panic!("the receiver never observed {what}"));
+            changed.await;
+        }
     }
 }
 
@@ -180,6 +185,8 @@ impl metrics::metrics_service_server::MetricsService for Capture {
 
 pub(super) struct Receiver {
     pub endpoint: String,
+    pub channel: tonic::transport::Channel,
+    pub runtime: super::runtime::ControlledRuntime,
     pub capture: Capture,
     stop: oneshot::Sender<()>,
     task: tokio::task::JoinHandle<()>,
@@ -187,36 +194,45 @@ pub(super) struct Receiver {
 
 impl Receiver {
     pub async fn start(stall: bool) -> Self {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        Self::start_with_timeout(stall, None).await
+    }
+
+    pub async fn start_with_timeout(stall: bool, timeout: Option<Duration>) -> Self {
+        let endpoint = "http://127.0.0.1:4317".to_owned();
+        let (incoming, receiver) = tokio::sync::mpsc::channel(16);
+        let mut endpoint_builder = tonic::transport::Endpoint::from_static("http://127.0.0.1:4317");
+        if let Some(timeout) = timeout {
+            endpoint_builder = endpoint_builder.timeout(timeout);
+        }
+        let channel = endpoint_builder.connect_with_connector_lazy(service_fn(move |_| {
+            let incoming = incoming.clone();
+            async move {
+                let (client, server) = tokio::io::duplex(1 << 20);
+                incoming
+                    .send(Ok::<_, std::io::Error>(server))
+                    .await
+                    .map_err(|_| std::io::Error::other("collector stopped"))?;
+                Ok::<_, std::io::Error>(TokioIo::new(client))
+            }
+        }));
         let capture = Capture {
-            stall,
+            stall: Arc::new(AtomicBool::new(stall)),
             ..Capture::default()
         };
         let (stop, stopped) = oneshot::channel();
-        let task = tokio::spawn(
-            tonic::transport::Server::builder()
-                .add_service(
-                    traces::trace_service_server::TraceServiceServer::new(capture.clone())
-                        .accept_compressed(CompressionEncoding::Gzip),
-                )
-                .add_service(
-                    logs::logs_service_server::LogsServiceServer::new(capture.clone())
-                        .accept_compressed(CompressionEncoding::Gzip),
-                )
-                .add_service(
-                    metrics::metrics_service_server::MetricsServiceServer::new(capture.clone())
-                        .accept_compressed(CompressionEncoding::Gzip),
-                )
-                .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async {
-                    let _ = stopped.await;
-                }),
-        );
+        let task = tokio::spawn(router(capture.clone()).serve_with_incoming_shutdown(
+            ReceiverStream::new(receiver),
+            async {
+                let _ = stopped.await;
+            },
+        ));
         let task = tokio::spawn(async move {
             task.await.unwrap().unwrap();
         });
         Self {
             endpoint,
+            channel,
+            runtime: Default::default(),
             capture,
             stop,
             task,
@@ -225,9 +241,27 @@ impl Receiver {
 
     pub async fn stop(self) {
         let _ = self.stop.send(());
-        tokio::time::timeout(Duration::from_secs(3), self.task)
-            .await
-            .unwrap()
-            .unwrap();
+        drop(self.channel);
+        self.task.abort();
+        let result = self.task.await;
+        if let Err(error) = result {
+            assert!(error.is_cancelled(), "collector task failed: {error}");
+        }
     }
+}
+
+fn router(capture: Capture) -> tonic::transport::server::Router {
+    tonic::transport::Server::builder()
+        .add_service(
+            traces::trace_service_server::TraceServiceServer::new(capture.clone())
+                .accept_compressed(CompressionEncoding::Gzip),
+        )
+        .add_service(
+            logs::logs_service_server::LogsServiceServer::new(capture.clone())
+                .accept_compressed(CompressionEncoding::Gzip),
+        )
+        .add_service(
+            metrics::metrics_service_server::MetricsServiceServer::new(capture)
+                .accept_compressed(CompressionEncoding::Gzip),
+        )
 }

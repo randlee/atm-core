@@ -133,6 +133,7 @@
           "allowed_dependencies": [
             "agent-team-mail-core",
             "atm-runtime",
+            "hyper-util",
             "opentelemetry",
             "opentelemetry_sdk",
             "opentelemetry-otlp",
@@ -147,6 +148,7 @@
             "tokio",
             "tokio-stream",
             "tonic",
+            "tower",
             "tracing",
             "tracing-subscriber",
             "trybuild"

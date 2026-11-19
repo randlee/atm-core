@@ -4,6 +4,7 @@ mod ambient;
 mod lifecycle;
 mod receiver;
 mod routing;
+mod runtime;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,18 +15,21 @@ use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry::trace::{Span, Tracer, TracerProvider};
 use opentelemetry_proto::tonic::metrics::v1::metric::Data;
 
-use super::otel_setup::{TelemetrySetup, setup_with_limits, setup_with_timeouts};
+use super::otel_setup::{TelemetrySetup, setup_on_channel, setup_on_channel_with_runtime};
 use receiver::{Receiver, Signal};
 
-// The CI job has a shorter overall deadline; this guard cannot determine a
-// successful export or shutdown before the job itself terminates.
-const SUCCESS_EXPORT_HANG_GUARD: Duration = Duration::from_secs(24 * 60 * 60);
-
-fn setup_success(
-    config: &TelemetryExportConfig,
+fn setup_memory(
+    receiver: &Receiver,
     batch: usize,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
-    setup_with_limits(config, batch, SUCCESS_EXPORT_HANG_GUARD)
+    setup_on_channel_with_runtime(
+        &config(&receiver.endpoint),
+        receiver.channel.clone(),
+        batch,
+        super::otel_setup::EXPORT_TRANSPORT_TIMEOUT,
+        super::otel_setup::EXPORT_TIMEOUT,
+        receiver.runtime.clone(),
+    )
 }
 
 fn config(endpoint: &str) -> TelemetryExportConfig {
@@ -85,7 +89,7 @@ async fn shutdown(setup: TelemetrySetup) {
     results.2.unwrap().unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn every_task_kind_exports_its_typed_name_and_facts() {
     use TaskTelemetryKind::*;
     let kinds = [
@@ -106,7 +110,7 @@ async fn every_task_kind_exports_its_typed_name_and_facts() {
         PromptHandoff,
     ];
     let receiver = Receiver::start(false).await;
-    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+    let setup = setup_memory(&receiver, 64).unwrap();
     for (index, kind) in kinds.into_iter().enumerate() {
         setup
             .0
@@ -142,10 +146,10 @@ async fn every_task_kind_exports_its_typed_name_and_facts() {
     receiver.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
     let receiver = Receiver::start(false).await;
-    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+    let setup = setup_memory(&receiver, 64).unwrap();
     for (kind, seq, second) in [
         (TaskTelemetryKind::Assigned, 1, 1),
         (TaskTelemetryKind::Started, 2, 3),
@@ -155,6 +159,7 @@ async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
         setup.0.sink.emit(record.clone()).unwrap();
         setup.0.sink.emit(record).unwrap();
     }
+    receiver.runtime.tick_cycle().await;
     receiver
         .capture
         .wait("a span and a metric export", || {
@@ -228,11 +233,11 @@ async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
     receiver.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn native_ids_are_deterministic_isolated_and_context_does_not_leak() {
     let receiver = Receiver::start(false).await;
     for _ in 0..2 {
-        let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+        let setup = setup_memory(&receiver, 64).unwrap();
         for (task, seq) in [("one", 1), ("two", 1), ("one", 4)] {
             setup
                 .0
@@ -283,10 +288,10 @@ async fn native_ids_are_deterministic_isolated_and_context_does_not_leak() {
     receiver.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn late_old_close_never_closes_new_assignment_and_missing_start_is_partial() {
     let receiver = Receiver::start(false).await;
-    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+    let setup = setup_memory(&receiver, 64).unwrap();
     for (kind, seq, second) in [
         (TaskTelemetryKind::Started, 2, 2),
         (TaskTelemetryKind::Assigned, 1, 1),
@@ -345,10 +350,10 @@ async fn late_old_close_never_closes_new_assignment_and_missing_start_is_partial
     receiver.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn receiver_metrics_cap_series_without_identity_labels() {
     let receiver = Receiver::start(false).await;
-    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+    let setup = setup_memory(&receiver, 64).unwrap();
     for index in 0..40 {
         let task = format!("distinct-task-{index}");
         for (kind, seq, second) in [
@@ -359,6 +364,7 @@ async fn receiver_metrics_cap_series_without_identity_labels() {
             setup.0.sink.emit(record(&task, kind, seq, second)).unwrap();
         }
     }
+    receiver.runtime.tick_cycle().await;
     receiver
         .capture
         .wait("the task metric export", || {
@@ -446,10 +452,10 @@ fn tls_is_enabled_for_an_https_scheme_in_any_case() {
 /// closed assignment of unknown generation starts a new assignment, decided by
 /// its higher seq. Negative: the new assignment's own close yields a second
 /// task span and is not dropped as an old terminal row.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn same_instant_reassign_after_a_close_starts_a_new_assignment_by_seq() {
     let receiver = Receiver::start(false).await;
-    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+    let setup = setup_memory(&receiver, 64).unwrap();
     for (kind, seq, second) in [
         (TaskTelemetryKind::Completed, 3, 3),
         (TaskTelemetryKind::Reassigned, 4, 3),

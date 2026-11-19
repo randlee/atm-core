@@ -131,16 +131,17 @@ fn real_unreachable_collector_diagnostics_do_not_claim_delivery_or_recovery() {
     );
 }
 
-/// A collector that accepts each connection and closes it at once.
-async fn start_closing_collector() -> (String, tokio::task::JoinHandle<()>) {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let endpoint = format!("http://{}", listener.local_addr().unwrap());
-    let collector = tokio::spawn(async move {
-        while let Ok((connection, _)) = listener.accept().await {
-            drop(connection);
-        }
-    });
-    (endpoint, collector)
+/// A controlled transport that closes each in-memory connection immediately.
+fn closing_channel() -> tonic::transport::Channel {
+    use hyper_util::rt::TokioIo;
+    use tower::service_fn;
+    tonic::transport::Endpoint::from_static("http://127.0.0.1:4317").connect_with_connector_lazy(
+        service_fn(|_| async {
+            let (client, server) = tokio::io::duplex(4096);
+            drop(server);
+            Ok::<_, std::io::Error>(TokioIo::new(client))
+        }),
+    )
 }
 
 fn assert_each_sdk_event_projects(observed: &ExportFailureObserved) {
@@ -192,17 +193,17 @@ fn install_global_subscriber() -> (
 }
 
 async fn unreachable_collector_scenario() {
-    // The collector accepts each connection and closes it at once, so every
-    // export fails immediately on every OS. A closed port is not equivalent:
-    // a refused connect is OS-timed, and on Windows CI no span or log export
-    // failure surfaced within 30 s.
-    let (endpoint, collector) = start_closing_collector().await;
     let (_root, diagnostics, observed) = install_global_subscriber();
-    // A one-span batch exports the first span at once through the SDK's
-    // full-batch path. The scheduled path first fires at 2x EXPORT_INTERVAL
-    // (the SDK interval sleeps before its first tick, then skips it), which
-    // a loaded runner can push past the deadline below.
-    let setup = setup_success(&config(&endpoint), 1).unwrap();
+    let runtime = super::runtime::ControlledRuntime::default();
+    let setup = setup_on_channel_with_runtime(
+        &config("http://127.0.0.1:4317"),
+        closing_channel(),
+        1,
+        EXPORT_TRANSPORT_TIMEOUT,
+        EXPORT_TIMEOUT,
+        runtime.clone(),
+    )
+    .unwrap();
     setup
         .0
         .sink
@@ -218,10 +219,8 @@ async fn unreachable_collector_scenario() {
         .u64_counter("fixture.count")
         .build()
         .add(1, &[]);
-    // 30 s is a hang diagnostic only; the periodic metric reader first fires
-    // at 2x EXPORT_INTERVAL, so success is far earlier than this ceiling.
-    let observed_failure =
-        tokio::time::timeout(Duration::from_secs(30), observed.all_signals_failed()).await;
+    runtime.tick_cycle().await;
+    observed.all_signals_failed().await;
     let mut evidence = health();
     diagnostics.project(&mut evidence);
     // The sink is still nonblocking even though transport failed.
@@ -244,14 +243,6 @@ async fn unreachable_collector_scenario() {
     for result in [trace, log, metric] {
         diagnostics.observe_result(result.unwrap());
     }
-    collector.abort();
-    // Assert after explicit shutdown, so fixture failure cannot deadlock the
-    // current-thread runtime by dropping live native providers during unwind.
-    assert!(
-        observed_failure.is_ok(),
-        "real span, log and metric export failures expected; SDK emitted {:?}",
-        observed.names()
-    );
     assert_eq!(
         evidence.last_failure,
         Some(AtmTelemetryExportFailure::Unavailable)
@@ -261,12 +252,13 @@ async fn unreachable_collector_scenario() {
 
 #[tokio::test(start_paused = true)]
 async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() {
-    let receiver = Receiver::start(true).await;
+    let receiver = Receiver::start_with_timeout(true, Some(Duration::from_millis(50))).await;
     // Deterministic by construction: the tonic transport bound is 50 ms while
     // the SDK processor bounds are 30 s, so only the transport timeout can end
     // a stalled export inside this test. Equal bounds would race.
-    let setup = setup_with_timeouts(
+    let setup = setup_on_channel(
         &config(&receiver.endpoint),
+        receiver.channel.clone(),
         64,
         Duration::from_millis(50),
         Duration::from_secs(30),
@@ -306,11 +298,7 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     // The blocking shutdown tasks keep virtual time from auto-advancing.
     // Start all requests first, then drive the transport deadline explicitly.
     tokio::time::advance(Duration::from_millis(50)).await;
-    let (trace, log, metric) = tokio::time::timeout(Duration::from_secs(5), async {
-        tokio::join!(trace, log, metric)
-    })
-    .await
-    .expect("all configured shutdown timeouts return before the test deadline");
+    let (trace, log, metric) = tokio::join!(trace, log, metric);
     // The receiver never releases these exports, so each one ends only when
     // the transport timeout cancels the request (the SDK bound is 30 s and
     // cannot fire). The pinned SDK wraps the tonic failure as InternalFailure
@@ -338,14 +326,23 @@ async fn configured_trace_log_metric_timeouts_cancel_stalled_nonempty_exports() 
     receiver.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabricated_losses() {
-    let receiver = Receiver::start(true).await;
-    let setup =
-        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+    let receiver = Receiver::start_with_timeout(true, None).await;
+    let setup = setup_memory(&receiver, 1).unwrap();
     let tracer = setup.1.tracer("full-backlog");
     let logger = setup.2.logger("full-backlog");
-    // No yield: saturate each SDK bounded queue before its worker can consume.
+    // Park both real SDK exporters before filling their queues.
+    tracer.start("held").end();
+    let mut held = logger.create_log_record();
+    held.set_body("held".into());
+    logger.emit(held);
+    receiver
+        .capture
+        .wait("trace and log exports started", || {
+            receiver.capture.started(Signal::Trace) > 0 && receiver.capture.started(Signal::Log) > 0
+        })
+        .await;
     for _ in 0..1024 {
         tracer.start("queued").end();
         let mut log = logger.create_log_record();
@@ -356,17 +353,12 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
     let (task, traces, logs, metrics) = setup;
     drop(task);
     let duplicate = traces.clone();
-    // The outer bound only names a hang; the pass criterion is the results.
-    let results = tokio::time::timeout(Duration::from_secs(120), async {
-        tokio::join!(
-            tokio::task::spawn_blocking(move || traces.shutdown()),
-            tokio::task::spawn_blocking(move || duplicate.shutdown()),
-            tokio::task::spawn_blocking(move || logs.shutdown()),
-            tokio::task::spawn_blocking(move || metrics.shutdown())
-        )
-    })
-    .await
-    .expect("the four concurrent SDK shutdowns never returned");
+    let results = tokio::join!(
+        tokio::task::spawn_blocking(move || traces.shutdown()),
+        tokio::task::spawn_blocking(move || duplicate.shutdown()),
+        tokio::task::spawn_blocking(move || logs.shutdown()),
+        tokio::task::spawn_blocking(move || metrics.shutdown())
+    );
     let results = [
         results.0.unwrap(),
         results.1.unwrap(),
@@ -410,15 +402,16 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
         (0, 0, 0, 0),
         "SDK quantities are unknown, never copied from synthetic estimates"
     );
+    receiver.capture.release();
+    receiver.capture.release();
     receiver.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_terminal_timeout() {
-    let receiver = Receiver::start(true).await;
-    // The export timeout outlives the test's hold, so only the receiver's
-    // release signal lets the blocking shutdown finish.
-    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+    let receiver = Receiver::start_with_timeout(true, None).await;
+    // The controlled SDK clock only expires on an explicit signal.
+    let setup = setup_memory(&receiver, 64).unwrap();
     for _ in 0..64 {
         setup.1.tracer("abandoned-wait").start("nonempty").end();
     }
@@ -435,9 +428,9 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     let (task, traces, logs, metrics) = setup;
     drop(task);
     let diagnostics = Arc::new(ExportDiagnostics::default());
-    let trace_call = tokio::task::spawn_blocking(move || traces.shutdown());
-    let log_call = tokio::task::spawn_blocking(move || logs.shutdown());
-    let metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
+    let mut trace_call = tokio::task::spawn_blocking(move || traces.shutdown());
+    let mut log_call = tokio::task::spawn_blocking(move || logs.shutdown());
+    let mut metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
     let capture = &receiver.capture;
     capture
         .wait("an export started for every signal", || {
@@ -447,9 +440,16 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
         })
         .await;
     // Each export is held by the receiver, so no shutdown can complete yet.
-    assert!(!trace_call.is_finished());
-    assert!(!log_call.is_finished());
-    assert!(!metric_call.is_finished());
+    for call in [&mut trace_call, &mut log_call, &mut metric_call] {
+        let state = std::future::poll_fn(|cx| {
+            std::task::Poll::Ready(std::pin::Pin::new(&mut *call).poll(cx))
+        })
+        .await;
+        assert!(
+            state.is_pending(),
+            "shutdown must remain held while export is parked"
+        );
+    }
     for signal in Signal::ALL {
         assert_eq!(capture.finished(signal), 0, "{signal:?} export still held");
     }
@@ -462,11 +462,7 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     for _ in 0..3 {
         receiver.capture.release();
     }
-    let (trace, log, metric) = tokio::time::timeout(Duration::from_secs(10), async {
-        tokio::join!(trace_call, log_call, metric_call)
-    })
-    .await
-    .expect("all abandoned shutdown calls finish after release");
+    let (trace, log, metric) = tokio::join!(trace_call, log_call, metric_call);
     // Each signal's abandoned call still completes its own released export,
     // and each terminal Ok is recorded without clearing the shutdown timeout.
     for (signal, result) in Signal::ALL.into_iter().zip([trace, log, metric]) {
@@ -525,12 +521,7 @@ fn sdk_queue_drops_degrade_export_health() {
 async fn queue_drop_scenario() {
     let receiver = Receiver::start(true).await;
     let (_root, diagnostics, observed) = install_global_subscriber();
-    let setup = setup_with_limits(
-        &config(&receiver.endpoint),
-        EXPORT_BATCH,
-        Duration::from_millis(50),
-    )
-    .unwrap();
+    let setup = setup_memory(&receiver, EXPORT_BATCH).unwrap();
     let mut before = health();
     diagnostics.project(&mut before);
     let tracer = setup.1.tracer("queue-drop");
@@ -547,6 +538,14 @@ async fn queue_drop_scenario() {
     diagnostics.project(&mut after);
     let (task, traces, logs, metrics) = setup;
     drop(task);
+    receiver.runtime.tick_cycle().await;
+    receiver
+        .capture
+        .wait("both full batch exports started", || {
+            receiver.capture.started(Signal::Trace) > 0 && receiver.capture.started(Signal::Log) > 0
+        })
+        .await;
+    receiver.capture.release_all();
     // The shutdown results describe the stalled collector, not the drops,
     // so they are not projected here.
     let _ = tokio::join!(
