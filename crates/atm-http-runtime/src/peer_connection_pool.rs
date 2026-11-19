@@ -1376,7 +1376,10 @@ mod tests {
                     .await;
                 assert!(std::future::Future::poll(request.as_mut(), &mut cx).is_pending());
                 tokio::time::advance(Duration::from_millis(1)).await;
-                let result = request.await;
+                let result = match std::future::Future::poll(request.as_mut(), &mut cx) {
+                    std::task::Poll::Ready(result) => result,
+                    std::task::Poll::Pending => panic!("dial must report at its reserved deadline"),
+                };
                 let cause = match result {
                     Ok(_) => panic!("a stalled dial must not connect"),
                     Err(super::HttpRuntimeClientFailure::PeerConnect { cause, .. }) => cause,
