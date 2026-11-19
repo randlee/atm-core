@@ -11,7 +11,7 @@ notes = "Private SQLite adapter verifies origin-host Ed25519 attestations agains
 type = "SqliteToolSenderPeerAdmissionStore"
 module = "atm_storage_rusqlite::tool_sender_peer_admission"
 visibility = "private"
-constructor = "none"
+constructor = "pub(crate)"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageFactory::with_tool_sender_peer_admission_config"]

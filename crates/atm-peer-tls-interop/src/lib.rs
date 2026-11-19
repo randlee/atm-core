@@ -62,7 +62,7 @@ impl CurlMtlsReceiverFixture {
         dead_code,
         reason = "the fixture is constructed by in-crate proof harnesses"
     )]
-    pub(crate) fn bind_ephemeral(config: TlsInteropConfig) -> Result<(Self, SocketAddr), AtmError> {
+    pub(crate) fn new(config: TlsInteropConfig) -> Result<(Self, SocketAddr), AtmError> {
         let listener = TcpListener::bind("127.0.0.1:0").map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
                 "failed to bind the curl mTLS interoperability fixture",
@@ -368,8 +368,7 @@ mod tests {
             vec![trusted_peer(client.certificate.fingerprint.as_str())],
         )
         .expect("interop config");
-        let (fixture, addr) =
-            CurlMtlsReceiverFixture::bind_ephemeral(config).expect("bind fixture");
+        let (fixture, addr) = CurlMtlsReceiverFixture::new(config).expect("bind fixture");
         let server_certificate = server.tls.certificates()[0].clone();
         let handle = thread::spawn(move || {
             fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
@@ -418,8 +417,7 @@ mod tests {
             vec![trusted_peer(&"00".repeat(32))],
         )
         .expect("interop config");
-        let (fixture, addr) =
-            CurlMtlsReceiverFixture::bind_ephemeral(config).expect("bind fixture");
+        let (fixture, addr) = CurlMtlsReceiverFixture::new(config).expect("bind fixture");
         let server_certificate = server.tls.certificates()[0].clone();
         let handle = thread::spawn(move || {
             fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
@@ -470,8 +468,7 @@ mod tests {
             vec![trusted_peer(client.certificate.fingerprint.as_str())],
         )
         .expect("interop config");
-        let (fixture, addr) =
-            CurlMtlsReceiverFixture::bind_ephemeral(config).expect("bind fixture");
+        let (fixture, addr) = CurlMtlsReceiverFixture::new(config).expect("bind fixture");
         let handle = thread::spawn(move || {
             fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
         });

@@ -10,7 +10,7 @@ trait = "HookRegistrationStore"
 type = "SqliteHookRegistrationStore"
 module = "atm_storage_rusqlite::hook_registration_store"
 visibility = "private"
-constructor = "none"
+constructor = "pub(crate)"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]

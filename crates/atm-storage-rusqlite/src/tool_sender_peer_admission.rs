@@ -146,7 +146,13 @@ pub(crate) fn tool_sender_peer_admission_store(
     db: Arc<SharedDb>,
     config: Option<ToolSenderPeerAdmissionConfig>,
 ) -> Arc<dyn ToolSenderPeerAdmissionStore + Send + Sync> {
-    Arc::new(SqliteToolSenderPeerAdmissionStore { db, config })
+    Arc::new(SqliteToolSenderPeerAdmissionStore::new(db, config))
+}
+
+impl SqliteToolSenderPeerAdmissionStore {
+    pub(crate) fn new(db: Arc<SharedDb>, config: Option<ToolSenderPeerAdmissionConfig>) -> Self {
+        Self { db, config }
+    }
 }
 
 impl sealed::Sealed for SqliteToolSenderPeerAdmissionStore {}

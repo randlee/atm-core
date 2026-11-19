@@ -493,7 +493,7 @@ mod tests {
         let target = SharedDbTarget::Path(path.clone());
         reset_opened_connection_count(&target);
 
-        let _database = SharedDb::open_with_reader_lanes(
+        let _database = SharedDb::new(
             &path,
             Arc::new(NullSqliteObservability),
             SharedReadPoolConfig::default(),

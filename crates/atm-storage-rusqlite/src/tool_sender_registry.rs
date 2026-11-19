@@ -176,7 +176,13 @@ pub(crate) fn tool_sender_registry(
     db: Arc<SharedDb>,
     config: Option<ToolSenderRegistryConfig>,
 ) -> Arc<dyn ToolSenderRegistry + Send + Sync> {
-    Arc::new(SqliteToolSenderRegistry { db, config })
+    Arc::new(SqliteToolSenderRegistry::new(db, config))
+}
+
+impl SqliteToolSenderRegistry {
+    pub(crate) fn new(db: Arc<SharedDb>, config: Option<ToolSenderRegistryConfig>) -> Self {
+        Self { db, config }
+    }
 }
 
 impl sealed::Sealed for SqliteToolSenderRegistry {}

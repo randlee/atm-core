@@ -541,11 +541,7 @@ impl SqliteStorageBackend {
         tool_sender_registry_config: Option<ToolSenderRegistryConfig>,
         tool_sender_peer_admission_config: Option<ToolSenderPeerAdmissionConfig>,
     ) -> Result<Self, AtmError> {
-        let db = Arc::new(SharedDb::open_with_reader_lanes(
-            path,
-            observability,
-            read_pool_config,
-        )?);
+        let db = Arc::new(SharedDb::new(path, observability, read_pool_config)?);
         Ok(Self {
             diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
                 &db,
