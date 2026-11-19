@@ -822,10 +822,12 @@ mod tests {
     struct PausedClockGuard(Option<tokio::sync::oneshot::Sender<()>>);
     impl Drop for PausedClockGuard {
         fn drop(&mut self) {
+            crate::peer_dial::set_test_virtual_time(false);
             self.0.take();
         }
     }
     fn hold_paused_clock() -> PausedClockGuard {
+        crate::peer_dial::set_test_virtual_time(true);
         let (release, hold) = tokio::sync::oneshot::channel::<()>();
         let (started, ready) = std::sync::mpsc::sync_channel(1);
         tokio::task::spawn_blocking(move || {

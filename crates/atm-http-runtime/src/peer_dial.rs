@@ -24,12 +24,27 @@ use tokio::time::Instant;
 tokio::task_local! { pub(crate) static SCRIPTED_PEER_DIAL: (); }
 
 #[cfg(test)]
+thread_local! { static TEST_PEER_VIRTUAL_TIME: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+#[cfg(test)]
+pub(crate) fn set_test_virtual_time(enabled: bool) {
+    TEST_PEER_VIRTUAL_TIME.with(|flag| flag.set(enabled));
+}
+
+#[cfg(test)]
 pub(crate) fn test_after(duration: Duration) -> RequestDeadline {
-    RequestDeadline::after_at(Instant::now().into_std(), duration)
+    if TEST_PEER_VIRTUAL_TIME.with(|flag| flag.get()) {
+        RequestDeadline::after_at(Instant::now().into_std(), duration)
+    } else {
+        RequestDeadline::after(duration)
+    }
 }
 
 #[cfg(test)]
 pub(crate) fn test_remaining(deadline: RequestDeadline) -> Option<Duration> {
+    if !TEST_PEER_VIRTUAL_TIME.with(|flag| flag.get()) {
+        return deadline.remaining();
+    }
     let millis = deadline.remaining_ms_at(Instant::now().into_std());
     (millis != 0).then(|| Duration::from_millis(millis))
 }
@@ -302,10 +317,7 @@ impl PeerAddressCache {
             });
             #[cfg(test)]
             let cached_deadline = test_remaining(deadline).map_or(deadline, |remaining| {
-                RequestDeadline::after_at(
-                    Instant::now().into_std(),
-                    (remaining / 2).min(STALE_ADDRESS_DIAL_CAP),
-                )
+                test_after((remaining / 2).min(STALE_ADDRESS_DIAL_CAP))
             });
             match dial_candidates(cached, cached_deadline, connect).await {
                 Ok(stream) => return Ok(stream),
@@ -399,6 +411,7 @@ mod tests {
     };
 
     fn deadline(duration: Duration) -> RequestDeadline {
+        super::set_test_virtual_time(true);
         RequestDeadline::after_at(tokio::time::Instant::now().into_std(), duration)
     }
 
