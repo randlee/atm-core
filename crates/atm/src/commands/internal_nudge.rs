@@ -138,6 +138,7 @@ fn render_template(template: &str, values: &BTreeMap<&'static str, String>) -> R
 struct TmuxNudgeSink;
 
 impl TmuxNudgeSink {
+    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-003), reason = "Synchronous tmux delivery runs outside an async runtime; #2515 tracks the bounded subprocess wait.")]
     fn deliver(&self, event: &PostSendHookEvent, rendered: &str) -> Result<()> {
         let pane_id = event
             .recipient_pane_id
@@ -256,6 +257,7 @@ fn run_tmux_command(mut command: Command, action: &'static str) -> Result<()> {
     ensure_tmux_success(output, action).map_err(Into::into)
 }
 
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-003), reason = "This synchronous tmux subprocess wait uses bounded polling and timeout cleanup; #2516 tracks replacing it with a nonblocking owner.")]
 fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Output> {
     let started_at = Instant::now();
     loop {
