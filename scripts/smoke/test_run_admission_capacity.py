@@ -719,7 +719,7 @@ class AdmissionCapacityTests(unittest.TestCase):
             mock.patch.object(RUNNER.HostStateBackup, "begin") as backup,
             mock.patch.object(RUNNER, "daemon_switch_result") as daemon_switch,
             mock.patch.object(
-                RUNNER,
+                SUPPORT,
                 "require_benchmark_account",
                 side_effect=RUNNER.BenchmarkAccountError("manifest is missing"),
             ),
