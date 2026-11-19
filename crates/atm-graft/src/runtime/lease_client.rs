@@ -24,7 +24,7 @@ use atm_core::types::{AgentName, TeamName};
 
 use crate::GraftClient;
 
-use super::{GraftReceiverLoopContext, read_snapshot, warn_runtime_error};
+use super::{GraftReceiverLoopContext, ResultWait, read_snapshot, warn_runtime_error};
 
 /// The narrow daemon-lease surface the receive loop needs from a graft
 /// client: announce/refresh/unregister for one loopback endpoint.
@@ -78,7 +78,6 @@ pub(crate) const ACTIVE_LEASE_WINDOW: Duration = Duration::from_secs(15);
 /// helper thread that actually runs the call is detached and its late result
 /// discarded on timeout, which is safe because every lease call this loop
 /// makes is already best-effort and retried on the next tick.
-const GRAFT_LEASE_CALL_DEADLINE: Duration = Duration::from_secs(1);
 /// Initial and per-failure cadence for the periodic lease refresh, growing
 /// with each consecutive failure (rust-service-hardening RSH-002) so a
 /// sustained daemon outage does not drive a reconnect attempt every single
@@ -153,7 +152,7 @@ fn owner_generation(listener: &GraftReceiverListener) -> OwnerGeneration {
 /// the next tick, so a stranded attempt causes no correctness issue.
 fn run_bounded_lease_call<F>(
     action: &'static str,
-    deadline: Duration,
+    wait: ResultWait,
     call: F,
 ) -> Result<(), AtmError>
 where
@@ -170,11 +169,14 @@ where
             "failed to spawn graft {action} helper"
         )));
     }
-    match result_rx.recv_timeout(deadline) {
+    match wait.receive(result_rx) {
         Ok(result) => result,
         Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
             AtmErrorCode::WaitTimeout,
-            format!("graft {action} exceeded the {deadline:?} bounded deadline"),
+            format!(
+                "graft {action} exceeded the {:?} bounded deadline",
+                wait.duration().expect("only bounded waits can time out")
+            ),
         )),
         Err(RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(format!(
             "graft {action} helper disconnected before returning a result"
@@ -188,6 +190,7 @@ pub(super) struct RegisteredGraftReceiver {
     team: TeamName,
     agent: AgentName,
     client: Option<Arc<dyn GraftReceiverLeaseClient>>,
+    lease_wait: ResultWait,
     /// Set once [`Self::announce`] has observed a successful register call.
     /// While `false`, the periodic loop keeps retrying `announce` (an
     /// idempotent upsert) instead of the owner-checked `refresh`, so a
@@ -212,6 +215,7 @@ impl RegisteredGraftReceiver {
             team: ctx.team.clone(),
             agent: ctx.agent.clone(),
             client: ctx.client.clone(),
+            lease_wait: ctx.lease_wait,
             announced: false,
             displaced: false,
         }
@@ -243,10 +247,9 @@ impl RegisteredGraftReceiver {
         let endpoint = self.listener.local_addr()?;
         let capability = self.listener.capability().clone();
         let generation = owner_generation(&self.listener);
-        let result =
-            run_bounded_lease_call("lease_announce", GRAFT_LEASE_CALL_DEADLINE, move || {
-                client.register_receiver_sync(team, agent, endpoint, capability, generation)
-            });
+        let result = run_bounded_lease_call("lease_announce", self.lease_wait, move || {
+            client.register_receiver_sync(team, agent, endpoint, capability, generation)
+        });
         if result.is_ok() {
             self.announced = true;
         }
@@ -266,10 +269,9 @@ impl RegisteredGraftReceiver {
         let team = self.team.clone();
         let agent = self.agent.clone();
         let generation = owner_generation(&self.listener);
-        let result =
-            run_bounded_lease_call("lease_refresh", GRAFT_LEASE_CALL_DEADLINE, move || {
-                client.refresh_receiver_sync(team, agent, generation)
-            });
+        let result = run_bounded_lease_call("lease_refresh", self.lease_wait, move || {
+            client.refresh_receiver_sync(team, agent, generation)
+        });
         if let Err(error) = &result
             && error.code() == AtmErrorCode::GraftReceiverNotOwner
         {
@@ -311,11 +313,9 @@ impl Drop for RegisteredGraftReceiver {
         let team = self.team.clone();
         let agent = self.agent.clone();
         let generation = owner_generation(&self.listener);
-        if let Err(error) =
-            run_bounded_lease_call("lease_unregister", GRAFT_LEASE_CALL_DEADLINE, move || {
-                client.unregister_receiver_sync(team, agent, generation)
-            })
-        {
+        if let Err(error) = run_bounded_lease_call("lease_unregister", self.lease_wait, move || {
+            client.unregister_receiver_sync(team, agent, generation)
+        }) {
             tracing::debug!(
                 subsystem = "atm_graft.receiver_loop",
                 action = "unregister_graft_receiver",
@@ -368,9 +368,40 @@ pub(super) fn tick_lease_refresh(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    use super::{GRAFT_LEASE_REFRESH_INTERVAL, LeaseRefreshBackoff};
+    use atm_core::error::{AtmError, AtmErrorCode};
+
+    use super::{GRAFT_LEASE_REFRESH_INTERVAL, LeaseRefreshBackoff, run_bounded_lease_call};
+    use crate::runtime::ResultWait;
+
+    #[test]
+    fn lease_call_obeys_injected_zero_wait_and_releases_its_helper() {
+        let (started_tx, started_rx) = mpsc::sync_channel(1);
+        let (release_tx, release_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::sync_channel(1);
+
+        let error = run_bounded_lease_call(
+            "lease_test",
+            ResultWait::Bounded(Duration::ZERO),
+            move || {
+                started_tx.send(()).expect("signal helper start");
+                release_rx.recv().expect("release lease helper");
+                finished_tx.send(()).expect("signal helper completion");
+                Ok::<(), AtmError>(())
+            },
+        )
+        .expect_err("a gated lease call cannot complete before a zero wait expires");
+        assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
+        started_rx.recv().expect("lease helper entered its gate");
+        release_tx
+            .send(())
+            .expect("release lease helper after timeout");
+        finished_rx
+            .recv()
+            .expect("lease helper exits after release");
+    }
 
     // rust-service-hardening RSH-002: the refresh backoff grows on repeated
     // failure and resets to the base cadence on the next success, so a
