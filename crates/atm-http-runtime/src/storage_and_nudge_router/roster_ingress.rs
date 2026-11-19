@@ -28,13 +28,23 @@ impl StorageAndNudgeRouter {
                     "request deadline expired before task-ledger inspection",
                 ));
             }
-            let read_deadline = atm_runtime::read_deadline(deadline)?;
-            return atm_core::list::list_task_ledger_with_runtime_async(
-                query,
-                &self.service_runtime,
-                read_deadline,
+            let read_deadline =
+                atm_runtime::read_deadline(crate::request_deadline::core_boundary(deadline))?;
+            let deadline_at = crate::request_deadline::capture(deadline);
+            return tokio::time::timeout_at(
+                deadline_at,
+                atm_core::list::list_task_ledger_with_runtime_async(
+                    query,
+                    &self.service_runtime,
+                    read_deadline,
+                ),
             )
             .await
+            .map_err(|_| {
+                AtmError::daemon_unavailable(
+                    "request deadline expired during task-ledger inspection",
+                )
+            })?
             .map(ResponseEnvelope::List)
             .map(ApiResponse::new);
         }

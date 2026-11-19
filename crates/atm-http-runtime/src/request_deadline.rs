@@ -50,6 +50,12 @@ pub(crate) fn remaining(deadline: RequestDeadline) -> Option<std::time::Duration
         .filter(|duration| !duration.is_zero())
 }
 
+/// Translate the remaining Tokio budget only when entering a core API that
+/// still requires its std-clock deadline type.
+pub(crate) fn core_boundary(deadline: RequestDeadline) -> RequestDeadline {
+    RequestDeadline::after(remaining(deadline).unwrap_or_default())
+}
+
 pub(crate) fn expired(deadline: RequestDeadline) -> bool {
     remaining(deadline).is_none()
 }

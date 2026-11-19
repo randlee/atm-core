@@ -1434,11 +1434,27 @@ pub(crate) mod tests {
         }
     }
 
+    struct SignalOnDrop(Arc<TestSignal>);
+
+    impl Drop for SignalOnDrop {
+        fn drop(&mut self) {
+            self.0.signal();
+        }
+    }
+
     struct BlockingTemplateComposer {
         source_bytes: Vec<u8>,
         inspection: atm_core::TemplateInspection,
         release: Arc<(Mutex<bool>, Condvar)>,
         started: Arc<TestSignal>,
+    }
+
+    struct ReleaseComposerOnDrop(Arc<BlockingTemplateComposer>);
+
+    impl Drop for ReleaseComposerOnDrop {
+        fn drop(&mut self) {
+            self.0.release();
+        }
     }
 
     impl BlockingTemplateComposer {
@@ -4070,15 +4086,16 @@ pub(crate) mod tests {
         for _ in 0..2 {
             let router = fixture.router.clone();
             let request = template_write_request(fixture, "template body");
-            stalled.spawn(async move {
+            let deadline_at = tokio::time::Instant::now() + deadline;
+            stalled.spawn(crate::request_deadline::scope(deadline_at, async move {
                 router
                     .dispatch(
                         ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
                         AuthenticatedIngress::Local,
-                        RequestDeadline::after(deadline),
+                        RequestDeadline::after(Duration::ZERO),
                     )
                     .await
-            });
+            }));
         }
         tokio::task::spawn_blocking(move || {
             starts.wait_for(2);
@@ -4105,18 +4122,20 @@ pub(crate) mod tests {
         )
         .expect("task-ledger list query")
         .with_task_ledger(atm_core::list::TaskLedgerQuery::Tasks { member: None });
-        let listed = fixture
-            .router
-            .dispatch(
+        let deadline_at = tokio::time::Instant::now() + deadline;
+        let listed = crate::request_deadline::scope(
+            deadline_at,
+            fixture.router.dispatch(
                 ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
                     list,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(deadline),
-            )
-            .await
-            .expect("list succeeds while template verification is stalled")
-            .into_inner();
+                RequestDeadline::after(Duration::ZERO),
+            ),
+        )
+        .await
+        .expect("list succeeds while template verification is stalled")
+        .into_inner();
         assert!(matches!(listed, ResponseEnvelope::List(_)));
     }
 
@@ -4124,14 +4143,18 @@ pub(crate) mod tests {
         fixture: &Fixture,
         deadline: Duration,
     ) {
+        let deadline_at = tokio::time::Instant::now() + deadline;
         let (blocked, ()) = tokio::join!(
-            fixture.router.dispatch(
-                ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
-                    fixture,
-                    "template body",
-                )))),
-                AuthenticatedIngress::Local,
-                RequestDeadline::after(deadline),
+            crate::request_deadline::scope(
+                deadline_at,
+                fixture.router.dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
+                        fixture,
+                        "template body",
+                    )))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::ZERO),
+                )
             ),
             async {
                 tokio::time::advance(deadline).await;
@@ -4201,7 +4224,8 @@ pub(crate) mod tests {
         through: bool,
     ) {
         let (fixture, composer, starts) = stalled_template_fixture(through);
-        let response_deadline = Duration::from_secs(30);
+        let _release = ReleaseComposerOnDrop(composer.clone());
+        let response_deadline = Duration::from_secs(1);
         let mut stalled =
             start_stalled_template_verifications(&fixture, starts, response_deadline).await;
         assert_task_list_remains_live(&fixture, response_deadline).await;
@@ -4228,6 +4252,7 @@ pub(crate) mod tests {
     async fn file_source_preflight_shares_bounded_admission_and_fails_closed() {
         let (composer, starts) = BlockingTemplateComposer::new("template body");
         let composer = Arc::new(composer);
+        let _release = ReleaseComposerOnDrop(composer.clone());
         let fixture = fixture_with_selector_and_template(
             true,
             None,
@@ -4243,15 +4268,16 @@ pub(crate) mod tests {
         for _ in 0..2 {
             let router = fixture.router.clone();
             let request = template_write_request(&fixture, "template body");
-            stalled.spawn(async move {
+            let deadline_at = tokio::time::Instant::now() + Duration::from_millis(250);
+            stalled.spawn(crate::request_deadline::scope(deadline_at, async move {
                 router
                     .dispatch(
                         ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
                         AuthenticatedIngress::Local,
-                        RequestDeadline::after(Duration::from_millis(250)),
+                        RequestDeadline::after(Duration::ZERO),
                     )
                     .await
-            });
+            }));
         }
         tokio::task::spawn_blocking(move || {
             starts.wait_for(2);
@@ -4259,14 +4285,18 @@ pub(crate) mod tests {
         .await
         .expect("source start waiter joins");
 
-        let response_deadline = Duration::from_secs(30);
+        let response_deadline = Duration::from_secs(1);
+        let deadline_at = tokio::time::Instant::now() + response_deadline;
         let (error, ()) = tokio::join!(
-            fixture.router.dispatch(
-                ApiRequest::new(RequestEnvelope::Write(Box::new(file_write_request(
-                    &fixture,
-                )))),
-                AuthenticatedIngress::Local,
-                RequestDeadline::after(response_deadline),
+            crate::request_deadline::scope(
+                deadline_at,
+                fixture.router.dispatch(
+                    ApiRequest::new(RequestEnvelope::Write(Box::new(file_write_request(
+                        &fixture,
+                    )))),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(Duration::ZERO),
+                )
             ),
             async {
                 tokio::time::advance(response_deadline).await;
@@ -5003,18 +5033,23 @@ pub(crate) mod tests {
         );
         let release_tx = Arc::new(TestSignal::default());
         let release_rx = Arc::clone(&release_tx);
+        let _release = SignalOnDrop(release_tx.clone());
         let started_tx = Arc::new(TestSignal::default());
         let started_rx = Arc::clone(&started_tx);
         let occupying_bridge = bridge.clone();
-        let occupying = tokio::spawn(async move {
-            occupying_bridge
-                .run(RequestDeadline::after(Duration::from_secs(2)), move || {
-                    started_tx.signal();
-                    release_rx.wait_for(1);
-                    Ok(())
-                })
-                .await
-        });
+        let occupying_deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        let occupying = tokio::spawn(crate::request_deadline::scope(
+            occupying_deadline,
+            async move {
+                occupying_bridge
+                    .run(RequestDeadline::after(Duration::ZERO), move || {
+                        started_tx.signal();
+                        release_rx.wait_for(1);
+                        Ok(())
+                    })
+                    .await
+            },
+        ));
         tokio::task::spawn_blocking(move || started_rx.wait_for(1))
             .await
             .expect("bridge start waiter joins");
@@ -5024,15 +5059,19 @@ pub(crate) mod tests {
             tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
 
         let telemetry = atm_runtime::TaskTelemetryRuntime::disabled();
+        let deadline_at = tokio::time::Instant::now() + Duration::from_millis(20);
         tokio::join!(
-            crate::prompt_handoff_record::record_prompt_handoff(
-                &bridge,
-                RequestDeadline::after(Duration::from_millis(20)),
-                Ok(Arc::new(atm_storage::DummyTaskStore::default())),
-                &dispatch,
-                PromptTrigger::Steer,
-                IsoTimestamp::now(),
-                &telemetry,
+            crate::request_deadline::scope(
+                deadline_at,
+                crate::prompt_handoff_record::record_prompt_handoff(
+                    &bridge,
+                    RequestDeadline::after(Duration::ZERO),
+                    Ok(Arc::new(atm_storage::DummyTaskStore::default())),
+                    &dispatch,
+                    PromptTrigger::Steer,
+                    IsoTimestamp::now(),
+                    &telemetry,
+                )
             ),
             async { tokio::time::advance(Duration::from_millis(20)).await },
         );
@@ -5053,8 +5092,6 @@ pub(crate) mod tests {
     /// response deadline passes is recorded as a timeout, and the Tokio worker
     /// stays live. The write is gated, so it is provably running when the
     /// paused clock is advanced past the deadline; nothing races a timer.
-    /// Negative: the real-clock deadline is 30s, a failure-only bound, so
-    /// admission can never observe it expired.
     #[tokio::test(start_paused = true)]
     async fn record_bridge_timeout_logs_and_emission_succeeds() {
         let dispatch = task_handoff_dispatch(Some("BB6-TIMEOUT"));
@@ -5067,7 +5104,7 @@ pub(crate) mod tests {
         );
         let store = Arc::new(atm_storage::DummyTaskStore::default());
         let (entered, release) = store.hold_next_prompt_handoff();
-        let response_deadline = Duration::from_secs(30);
+        let response_deadline = Duration::from_secs(1);
         let telemetry = atm_runtime::TaskTelemetryRuntime::disabled();
         let (probe_start, probe_gate) = tokio::sync::oneshot::channel();
         let (probe_done, probe_result) = tokio::sync::oneshot::channel();
@@ -5076,15 +5113,19 @@ pub(crate) mod tests {
                 let _ = probe_done.send(());
             }
         });
+        let deadline_at = tokio::time::Instant::now() + response_deadline;
         tokio::join!(
-            crate::prompt_handoff_record::record_prompt_handoff(
-                &bridge,
-                RequestDeadline::after(response_deadline),
-                Ok(store),
-                &dispatch,
-                PromptTrigger::Steer,
-                IsoTimestamp::now(),
-                &telemetry,
+            crate::request_deadline::scope(
+                deadline_at,
+                crate::prompt_handoff_record::record_prompt_handoff(
+                    &bridge,
+                    RequestDeadline::after(Duration::ZERO),
+                    Ok(store),
+                    &dispatch,
+                    PromptTrigger::Steer,
+                    IsoTimestamp::now(),
+                    &telemetry,
+                )
             ),
             async {
                 tokio::task::spawn_blocking(move || entered.recv())
