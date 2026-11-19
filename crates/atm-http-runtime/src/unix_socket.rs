@@ -436,7 +436,7 @@ enum SocketLiveness {
 }
 
 #[cfg(unix)]
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Bounded backoff separates socket liveness probes before stale socket recovery.")]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070: refused-socket liveness backoff is bounded by the probe schedule; cancellation drops the probe future.")]
 async fn probe_unix_socket_liveness(
     path: &Path,
     original: SocketRecoverySnapshot,

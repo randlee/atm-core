@@ -35,6 +35,7 @@ const DRIVER_ABORT_GRACE: Duration = Duration::from_millis(100);
 pub struct PeerPoolConfig {
     pub max_per_peer: usize,
     pub max_pooled_total: usize,
+    /// Maximum idle age for reuse; background reclamation is best effort.
     pub idle_timeout: Duration,
     /// How long one resolved address set is reused before the peer name is
     /// looked up again. This bounds only how long a *working* address is
@@ -95,9 +96,23 @@ struct PoolShared {
     addresses: PeerAddressCache,
     eviction_task: Mutex<Option<JoinHandle<()>>>,
     #[cfg(test)]
+    sweep_started: tokio::sync::Notify,
+    #[cfg(test)]
+    sweep_done: tokio::sync::Notify,
+    #[cfg(test)]
     completed_drivers: Arc<AtomicUsize>,
     #[cfg(test)]
     driver_signal: Arc<tokio::sync::Notify>,
+}
+
+impl Drop for PoolShared {
+    fn drop(&mut self) {
+        if let Ok(task) = self.eviction_task.get_mut()
+            && let Some(task) = task.take()
+        {
+            task.abort();
+        }
+    }
 }
 
 #[derive(Default)]
@@ -150,6 +165,10 @@ impl PeerConnectionPool {
             state: Mutex::new(PoolState::default()),
             addresses: PeerAddressCache::new(config.address_cache_ttl),
             eviction_task: Mutex::new(None),
+            #[cfg(test)]
+            sweep_started: tokio::sync::Notify::new(),
+            #[cfg(test)]
+            sweep_done: tokio::sync::Notify::new(),
             #[cfg(test)]
             completed_drivers: Arc::new(AtomicUsize::new(0)),
             #[cfg(test)]
@@ -566,20 +585,28 @@ fn take_expired_idle(
     expired
 }
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Periodic idle eviction waits for the configured timeout between sweeps.")]
 fn spawn_idle_eviction_task(shared: &Arc<PoolShared>) {
     let Ok(handle) = tokio::runtime::Handle::try_current() else {
+        tracing::warn!("peer pool idle sweeper was not started: no Tokio runtime");
         return;
     };
     let weak = Arc::downgrade(shared);
-    let interval = shared.config.idle_timeout;
+    let period = (shared.config.idle_timeout / 2).max(Duration::from_nanos(1));
     let task = handle.spawn(async move {
+        let mut sweep = tokio::time::interval_at(Instant::now() + period, period);
+        sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        #[cfg(test)]
+        if let Some(pool) = weak.upgrade() {
+            pool.sweep_started.notify_one();
+        }
         loop {
-            tokio::time::sleep(interval).await;
+            sweep.tick().await;
             let Some(pool) = weak.upgrade() else {
                 return;
             };
             pool.evict_expired();
+            #[cfg(test)]
+            pool.sweep_done.notify_one();
         }
     });
     *shared
@@ -638,6 +665,47 @@ mod tests {
         ) -> PeerStreamFuture<'a, AcceptedPeerStream> {
             Box::pin(async { Err(atm_core::error::AtmError::config("test accepts no peers")) })
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sweep_retains_idle_connection_until_its_timeout() {
+        let pool = PeerConnectionPool::new(
+            PeerPoolConfig {
+                idle_timeout: Duration::from_secs(2),
+                ..PeerPoolConfig::default()
+            },
+            Arc::new(CountingPassthroughAdapter::default()),
+        );
+        pool.shared.sweep_started.notified().await;
+        let (client, _server) = tokio::io::duplex(128);
+        let (sender, driver) =
+            hyper::client::conn::http1::handshake(hyper_util::rt::TokioIo::new(client))
+                .await
+                .expect("in-memory client handshake");
+        let driver = tokio::spawn(async move {
+            let _ = driver.await;
+        });
+        let peer: atm_core::types::HostName = "sweep.example".parse().expect("peer name");
+        {
+            let mut state = pool.shared.state.lock().expect("pool state");
+            state
+                .idle
+                .entry(peer.clone())
+                .or_default()
+                .push(super::IdlePeerConnection {
+                    sender,
+                    driver,
+                    idle_since: tokio::time::Instant::now(),
+                });
+            state.reservations_by_peer.insert(peer, 1);
+            state.pooled_total = 1;
+        }
+        tokio::time::advance(Duration::from_secs(1)).await;
+        pool.shared.sweep_done.notified().await;
+        assert_eq!(pool.pooled_count(), 1, "first tick retains unexpired entry");
+        tokio::time::advance(Duration::from_secs(1)).await;
+        pool.shared.sweep_done.notified().await;
+        assert_eq!(pool.pooled_count(), 0, "first eligible tick evicts entry");
     }
 
     async fn start_keep_alive_peer() -> u16 {

@@ -86,7 +86,7 @@ fn accept_failure_is_recoverable(consecutive_failures: u32) -> bool {
     consecutive_failures < MAX_CONSECUTIVE_ACCEPT_FAILURES
 }
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Backoff bounds retries after a recoverable listener accept failure.")]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070: EMFILE accept backoff is cancelled by server shutdown.")]
 async fn recover_from_accept_error(
     adapter: &'static str,
     error: io::Error,
@@ -128,6 +128,9 @@ where
     let mut connections = JoinSet::new();
     let permits = Arc::new(Semaphore::new(max_connections));
     let mut consecutive_accept_failures = 0u32;
+    // Every physical adapter owns this signal for its active connections.
+    let (connection_shutdown_tx, connection_shutdown_rx) = watch::channel(());
+    let mut terminal_error = None;
 
     loop {
         let permit = tokio::select! {
@@ -140,20 +143,35 @@ where
                 match accepted {
                     Ok((stream, peer)) => {
                         consecutive_accept_failures = 0;
-                        let connection_shutdown = shutdown_rx.clone();
+                        let connection_shutdown = connection_shutdown_rx.clone();
                         on_connection(&mut connections, stream, peer, connection_shutdown, permit);
                     }
                     Err(error) => {
                         drop(permit);
-                        recover_from_accept_error(adapter, error, &mut consecutive_accept_failures)
-                            .await?;
+                        let recovery = recover_from_accept_error(adapter, error, &mut consecutive_accept_failures);
+                        tokio::select! {
+                            _ = shutdown_rx.changed() => break,
+                            result = recovery => if let Err(error) = result {
+                                terminal_error = Some(error);
+                                break;
+                            },
+                        }
                     }
                 }
             }
         }
     }
 
-    drain_connections(connections).await
+    let _ = connection_shutdown_tx.send(());
+    let drain_result = drain_connections(connections).await;
+    if let Some(error) = terminal_error {
+        if let Err(drain_error) = drain_result {
+            tracing::warn!(%drain_error, adapter, "connection drain failed after accept error");
+        }
+        Err(error)
+    } else {
+        drain_result
+    }
 }
 
 /// Serves the capability-authenticated loopback adapter with bounded
@@ -362,6 +380,65 @@ mod tests {
         Http1Acceptor, MAX_CONSECUTIVE_ACCEPT_FAILURES, accept_failure_is_recoverable,
         accept_retry_backoff, serve_connection, serve_loopback_http1,
     };
+
+    struct ChannelAcceptor {
+        events: tokio::sync::Mutex<
+            tokio::sync::mpsc::UnboundedReceiver<io::Result<tokio::io::DuplexStream>>,
+        >,
+    }
+
+    impl Http1Acceptor for ChannelAcceptor {
+        type Stream = tokio::io::DuplexStream;
+        type Peer = ();
+
+        async fn accept_connection(&self) -> io::Result<(Self::Stream, Self::Peer)> {
+            self.events
+                .lock()
+                .await
+                .recv()
+                .await
+                .unwrap_or_else(|| Err(io::Error::other("script exhausted")))
+                .map(|stream| (stream, ()))
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn fatal_accept_error_notifies_and_drains_active_connection() {
+        let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_client, server) = tokio::io::duplex(64);
+        events_tx.send(Ok(server)).expect("queue connection");
+        for _ in 0..MAX_CONSECUTIVE_ACCEPT_FAILURES {
+            events_tx
+                .send(Err(io::Error::other("scripted accept failure")))
+                .expect("queue error");
+        }
+        let (_shutdown_tx, shutdown_rx) = watch::channel(());
+        let (drained_tx, drained_rx) = tokio::sync::oneshot::channel();
+        let mut drained_tx = Some(drained_tx);
+        let error = super::accept_loop(
+            ChannelAcceptor {
+                events: tokio::sync::Mutex::new(events_rx),
+            },
+            2,
+            shutdown_rx,
+            "test",
+            move |connections, _stream, (), mut shutdown, permit| {
+                let drained = drained_tx.take().expect("one connection");
+                connections.spawn(async move {
+                    let _permit = permit;
+                    shutdown
+                        .changed()
+                        .await
+                        .expect("connection shutdown signal");
+                    drained.send(()).expect("report drained");
+                });
+            },
+        )
+        .await
+        .expect_err("fatal accept must return error");
+        assert_eq!(error.to_string(), "scripted accept failure");
+        drained_rx.await.expect("connection drained before return");
+    }
 
     /// Listener that reports a scripted number of resource-pressure accept
     /// failures before delegating to a real socket.
