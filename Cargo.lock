@@ -364,6 +364,7 @@ version = "1.6.5"
 dependencies = [
  "agent-team-mail-core",
  "atm-runtime",
+ "hyper-util",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-proto",
@@ -378,6 +379,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "trybuild",

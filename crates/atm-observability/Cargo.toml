@@ -26,6 +26,8 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+hyper-util.workspace = true
+tower.workspace = true
 tonic = { workspace = true, features = ["router"] }
 atm-core = { workspace = true, features = ["test-utils"] }
 serial_test = "3"

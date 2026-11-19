@@ -14,7 +14,7 @@ use opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor
 use opentelemetry_sdk::logs::{BatchConfigBuilder as LogBatchConfigBuilder, SdkLoggerProvider};
 use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
 use opentelemetry_sdk::metrics::{SdkMeterProvider, Temporality};
-use opentelemetry_sdk::runtime::Tokio;
+use opentelemetry_sdk::runtime::{RuntimeChannel, Tokio};
 use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
 use opentelemetry_sdk::trace::{BatchConfigBuilder, Sampler, SdkTracerProvider};
 use tonic::metadata::{Ascii, MetadataValue};
@@ -78,15 +78,6 @@ pub fn setup_telemetry(
     })
 }
 
-#[cfg(test)]
-pub(crate) fn setup_with_limits(
-    config: &TelemetryExportConfig,
-    batch: usize,
-    timeout: Duration,
-) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
-    setup_with_timeouts(config, batch, timeout, timeout)
-}
-
 /// Production gives the tonic transport a bound below the SDK processors' so
 /// exactly one timer decides a stalled export; tests do the same with their
 /// own bounds.
@@ -115,6 +106,17 @@ pub fn setup_on_channel(
     transport_timeout: Duration,
     timeout: Duration,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
+    setup_on_channel_with_runtime(config, channel, batch, transport_timeout, timeout, Tokio)
+}
+
+pub(crate) fn setup_on_channel_with_runtime<R: RuntimeChannel>(
+    config: &TelemetryExportConfig,
+    channel: tonic::transport::Channel,
+    batch: usize,
+    transport_timeout: Duration,
+    timeout: Duration,
+    runtime: R,
+) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
     tokio::runtime::Handle::try_current()?;
     let interceptor = auth_interceptor(config)?;
     // Explicit gzip also prevents the upstream builder consulting ambient
@@ -139,9 +141,9 @@ pub fn setup_on_channel(
     let resource = Resource::builder_empty()
         .with_service_name(config.service_name().to_owned())
         .build();
-    let tracer = tracer_provider(spans, resource.clone(), batch, timeout);
-    let logger = logger_provider(logs, resource.clone(), batch, timeout);
-    let meter = meter_provider(metrics, resource, timeout)?;
+    let tracer = tracer_provider(spans, resource.clone(), batch, timeout, runtime.clone());
+    let logger = logger_provider(logs, resource.clone(), batch, timeout, runtime.clone());
+    let meter = meter_provider(metrics, resource, timeout, runtime)?;
     let sink = Arc::new(crate::task_exporter::TaskExporter::new(
         tracer.tracer("atm.task"),
         meter.meter("atm.task"),
@@ -188,16 +190,17 @@ fn auth_interceptor(
     })
 }
 
-fn logger_provider(
+fn logger_provider<R: RuntimeChannel>(
     logs: opentelemetry_otlp::LogExporter,
     resource: Resource,
     batch: usize,
     timeout: Duration,
+    runtime: R,
 ) -> SdkLoggerProvider {
     SdkLoggerProvider::builder()
         .with_resource(resource)
         .with_log_processor(
-            BatchLogProcessor::builder(logs, Tokio)
+            BatchLogProcessor::builder(logs, runtime)
                 .with_batch_config(
                     LogBatchConfigBuilder::default()
                         .with_max_queue_size(EXPORT_QUEUE)
@@ -316,6 +319,7 @@ fn log_provider(
         resource,
         EXPORT_BATCH,
         EXPORT_TIMEOUT,
+        Tokio,
     ))
 }
 
@@ -342,11 +346,12 @@ pub(crate) fn uses_tls(endpoint: &str) -> bool {
         .is_some_and(|scheme| scheme.eq_ignore_ascii_case("https://"))
 }
 
-fn tracer_provider(
+fn tracer_provider<R: RuntimeChannel>(
     spans: opentelemetry_otlp::SpanExporter,
     resource: Resource,
     batch: usize,
     timeout: Duration,
+    runtime: R,
 ) -> SdkTracerProvider {
     SdkTracerProvider::builder()
         .with_id_generator(crate::task_exporter::DurableIds)
@@ -358,7 +363,7 @@ fn tracer_provider(
         .with_max_links_per_span(0)
         .with_max_attributes_per_link(0)
         .with_span_processor(
-            BatchSpanProcessor::builder(spans, Tokio)
+            BatchSpanProcessor::builder(spans, runtime)
                 .with_batch_config(
                     BatchConfigBuilder::default()
                         .with_max_queue_size(EXPORT_QUEUE)
@@ -397,10 +402,11 @@ pub(crate) fn task_stream(
         .map_err(|source| MetricStreamError(source.to_string()))
 }
 
-fn meter_provider(
+fn meter_provider<R: RuntimeChannel>(
     metrics: opentelemetry_otlp::MetricExporter,
     resource: Resource,
     timeout: Duration,
+    runtime: R,
 ) -> Result<SdkMeterProvider, MetricStreamError> {
     // Validate once so a builder failure propagates through setup; the view
     // below rebuilds the same stream per instrument and cannot then fail.
@@ -415,7 +421,7 @@ fn meter_provider(
                 .flatten()
         })
         .with_reader(
-            PeriodicReader::builder(metrics, Tokio)
+            PeriodicReader::builder(metrics, runtime)
                 .with_interval(EXPORT_INTERVAL)
                 .with_timeout(timeout)
                 .build(),
