@@ -2171,6 +2171,7 @@ class CrossPlatformProvisionRegressionTests(unittest.TestCase):
         def value(path):
             return root.findtext("/".join("{*}" + part for part in path.split("/")))
         self.assertIsNotNone(root.find("{*}Triggers/{*}LogonTrigger"))
+        self.assertEqual(value("Triggers/LogonTrigger/UserId"), r"DOMAIN\user")
         self.assertEqual(value("Principals/Principal/UserId"), r"DOMAIN\user")
         self.assertEqual(value("Principals/Principal/LogonType"), "InteractiveToken")
         self.assertEqual(value("Principals/Principal/RunLevel"), "LeastPrivilege")

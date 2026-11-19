@@ -270,7 +270,7 @@ def provision_windows_task(args: argparse.Namespace, selected_links: Callable[[a
         node.text = value
         return node
     triggers = child(root, "Triggers")
-    child(triggers, "LogonTrigger")
+    child(child(triggers, "LogonTrigger"), "UserId", account)
     principal = child(child(root, "Principals"), "Principal")
     principal.set("id", "Author")
     child(principal, "UserId", account)
