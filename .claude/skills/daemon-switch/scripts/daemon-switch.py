@@ -1001,8 +1001,9 @@ def herdr_endpoint_name(raw: dict[str, object]) -> object:
 
 
 def herdr_default_observation(raw: dict[str, object]) -> dict[str, object]:
-    """Return doctor fields that must agree across default-session aliases."""
-    return {key: value for key, value in raw.items() if key not in ("session", "provenance")}
+    """Return endpoint-level doctor fields that must agree across aliases."""
+    endpoint_fields = ("transport", "endpoint", "binary", "state", "capabilities")
+    return {key: raw[key] for key in endpoint_fields if key in raw}
 
 
 def herdr_entry_endpoints(cli: Path, *, install: bool) -> list[HerdrEndpoint]:

@@ -2106,16 +2106,19 @@ class HerdrRestartTests(unittest.TestCase):
             ],
         )
 
-    def test_default_aliases_dedupe_only_when_the_complete_doctor_observation_matches(self) -> None:
+    def test_default_aliases_compare_endpoint_fields_and_ignore_group_metadata(self) -> None:
         default = {
             "session": None,
             "provenance": "herdr_default",
             "transport": "socket",
             "endpoint": r"\\.\pipe\%APPDATA%/herdr/herdr.sock",
+            "binary": r"C:\herdr\herdr.exe",
             "state": {"kind": "ok", "version": "0.9.5", "protocol": 22},
             "capabilities": {"live_handoff": False},
+            "members": ["implicit-a"],
+            "findings": [],
         }
-        alias = {**default, "session": "default", "provenance": "session"}
+        alias = {**default, "session": "default", "provenance": "session", "members": ["explicit-b"], "findings": [{"code": "group-only"}]}
         payload = self.doctor_payload(default, alias)
 
         self.assertEqual(len(DAEMON_SWITCH.herdr_restart_endpoints(self.cli, doctor_payload=payload)), 1)
@@ -2127,6 +2130,8 @@ class HerdrRestartTests(unittest.TestCase):
             {"state": {**default["state"], "protocol": 23}},
             {"state": {**default["state"], "kind": "error"}},
             {"capabilities": {"live_handoff": True}},
+            {"transport": "tcp"},
+            {"endpoint": r"\\.\pipe\%APPDATA%/herdr/other.sock"},
         ]
         for update in conflicting_updates:
             with self.subTest(update=update):
