@@ -660,24 +660,27 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn zero_interval_yields_to_a_separately_scheduled_cancellation_task() {
-        use std::task::{Context, Poll, Waker};
-
-        // Poll the loop and cancellation task explicitly so the test controls
-        // their schedule and cannot hang if the loop stops yielding.
+        let (cancel_ready_tx, cancel_ready_rx) = tokio::sync::oneshot::channel();
         let (start_cancel_tx, start_cancel_rx) = tokio::sync::oneshot::channel();
         let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
-        let mut cancellation_task = Box::pin(async move {
+        let cancellation_task = tokio::spawn(async move {
+            cancel_ready_tx
+                .send(())
+                .expect("test is waiting for cancellation task readiness");
             start_cancel_rx
                 .await
-                .expect("follow loop starts the cancellation task");
+                .expect("follow loop starts cancellation");
             cancel_tx
                 .send(())
-                .expect("follow loop is waiting for cancellation");
+                .expect("follow loop remains available for cancellation");
         });
+        cancel_ready_rx
+            .await
+            .expect("cancellation task is scheduled and waiting at its gate");
 
         let mut start_cancel_tx = Some(start_cancel_tx);
         let polls = AtomicUsize::new(0);
-        let loop_future = follow_loop(
+        follow_loop(
             || {
                 let count = polls.fetch_add(1, Ordering::SeqCst) + 1;
                 if count == 1 {
@@ -699,24 +702,12 @@ mod tests {
                 cancel_rx.await.map_err(anyhow::Error::from)?;
                 Ok(())
             },
-        );
-        tokio::pin!(loop_future);
-        let mut context = Context::from_waker(Waker::noop());
-
-        assert!(matches!(
-            loop_future.as_mut().poll(&mut context),
-            Poll::Pending
-        ));
-        assert_eq!(polls.load(Ordering::SeqCst), 1);
-
-        assert!(matches!(
-            cancellation_task.as_mut().poll(&mut context),
-            Poll::Ready(())
-        ));
-        assert!(matches!(
-            loop_future.as_mut().poll(&mut context),
-            Poll::Ready(Ok(()))
-        ));
+        )
+        .await
+        .expect("zero-interval loop yields for separately scheduled cancellation");
+        cancellation_task
+            .await
+            .expect("cancellation task completed");
         assert_eq!(polls.load(Ordering::SeqCst), 1);
     }
 
