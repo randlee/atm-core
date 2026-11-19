@@ -30,9 +30,9 @@ mod nudge_sink;
 mod runtime;
 
 use runtime::{
-    GraftReceiverLeaseClient, GraftReceiverLoopContext, RECEIVE_LOOP_READY_DEADLINE,
-    ReceiverReadyLatch, join_receive_loop_with_deadline, load_graft_config, read_snapshot,
-    run_graft_receiver_loop, set_session_state,
+    GRAFT_LEASE_CALL_DEADLINE, GraftReceiverLeaseClient, GraftReceiverLoopContext,
+    RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, ResultWait, join_receive_loop_with_deadline,
+    load_graft_config, read_snapshot, run_graft_receiver_loop, set_session_state,
 };
 
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
@@ -748,6 +748,7 @@ fn spawn_graft_receive_loop(
                 client,
                 snapshot: worker_snapshot,
                 injector,
+                lease_wait: ResultWait::Bounded(GRAFT_LEASE_CALL_DEADLINE),
                 observability: worker_observability,
                 stop_rx: channels.stop_rx,
                 ready_tx: Some(channels.ready_tx),
