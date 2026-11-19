@@ -99,7 +99,7 @@ pub(crate) fn setup_with_timeouts(
 ///
 /// # Errors
 /// Returns an error if the configuration or an SDK exporter cannot be built.
-pub fn setup_on_channel(
+pub(crate) fn setup_on_channel(
     config: &TelemetryExportConfig,
     channel: tonic::transport::Channel,
     batch: usize,
