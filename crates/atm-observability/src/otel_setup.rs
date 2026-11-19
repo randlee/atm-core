@@ -153,45 +153,38 @@ pub fn setup_on_channel(
 /// metadata with ATM's own. The upstream builder merges ambient OTEL headers
 /// even with metadata supplied; its standard interceptor runs after that
 /// merge, so no ambient credential is exported.
-#[allow(
-    clippy::type_complexity,
-    reason = "the interceptor closure type is unnameable"
-)]
 fn grpc_transport(
     config: &TelemetryExportConfig,
     transport_timeout: Duration,
-) -> Result<
-    (
-        tonic::transport::Channel,
-        impl FnMut(tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    ),
-    Box<dyn std::error::Error + Send + Sync>,
-> {
+) -> Result<(tonic::transport::Channel, AuthInterceptor), Box<dyn std::error::Error + Send + Sync>>
+{
     let channel = lazy_channel(config, transport_timeout)?;
     Ok((channel, auth_interceptor(config)?))
 }
 
-fn auth_interceptor(
-    config: &TelemetryExportConfig,
-) -> Result<
-    impl FnMut(tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status>
-    + Clone
-    + Send
-    + Sync
-    + 'static,
-    Box<dyn std::error::Error + Send + Sync>,
-> {
-    let auth: Option<MetadataValue<Ascii>> = config.auth_header().map(str::parse).transpose()?;
-    Ok(move |mut request: tonic::Request<()>| {
+#[derive(Clone)]
+struct AuthInterceptor {
+    auth: Option<MetadataValue<Ascii>>,
+}
+
+impl tonic::service::Interceptor for AuthInterceptor {
+    fn call(
+        &mut self,
+        mut request: tonic::Request<()>,
+    ) -> Result<tonic::Request<()>, tonic::Status> {
         request.metadata_mut().clear();
-        if let Some(auth) = &auth {
+        if let Some(auth) = &self.auth {
             request.metadata_mut().insert("authorization", auth.clone());
         }
         Ok(request)
+    }
+}
+
+fn auth_interceptor(
+    config: &TelemetryExportConfig,
+) -> Result<AuthInterceptor, Box<dyn std::error::Error + Send + Sync>> {
+    Ok(AuthInterceptor {
+        auth: config.auth_header().map(str::parse).transpose()?,
     })
 }
 
