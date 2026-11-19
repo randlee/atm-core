@@ -169,11 +169,31 @@ impl BoundedBlockingBridge {
         let remaining = deadline
             .remaining()
             .ok_or(BlockingBridgeError::DeadlineBeforeStart)?;
-        let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
+        let deadline = tokio::time::Instant::now() + remaining;
+        self.run_with_policy_at(deadline, policy, stall_counter, job)
+            .await
+    }
+
+    async fn run_with_policy_at<T, F>(
+        &self,
+        deadline: tokio::time::Instant,
+        policy: BlockingCompletionPolicy,
+        stall_counter: BlockingStallCounter,
+        job: F,
+    ) -> Result<T, BlockingBridgeError>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> Result<T, AtmError> + Send + 'static,
+    {
+        if tokio::time::Instant::now() >= deadline {
+            return Err(BlockingBridgeError::DeadlineBeforeStart);
+        }
+        let permit = tokio::time::timeout_at(deadline, Arc::clone(&self.permits).acquire_owned())
             .await
             .map_err(|_| BlockingBridgeError::DeadlineBeforeStart)?
             .map_err(|_| BlockingBridgeError::Closed)?;
-        if deadline.expired() {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
             return Err(BlockingBridgeError::DeadlineBeforeStart);
         }
         let started_at = self.now();
@@ -194,7 +214,7 @@ impl BoundedBlockingBridge {
                     let _permit = permit;
                     job()
                 });
-                match tokio::time::timeout(remaining, outcome).await {
+                match tokio::time::timeout_at(deadline, outcome).await {
                     Ok(Ok(result)) => result.map_err(BlockingBridgeError::Operation),
                     Ok(Err(source)) => Err(BlockingBridgeError::Join(source)),
                     Err(_) => {
@@ -492,4 +512,52 @@ pub(super) fn validate_graft_receiver_member(
         return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod deadline_tests {
+    use super::{
+        BlockingBridgeError, BlockingCompletionPolicy, BlockingStallCounter, BoundedBlockingBridge,
+    };
+    use crate::RuntimeHealth;
+    use std::num::NonZeroUsize;
+    use std::time::Duration;
+    use tokio::time::Instant;
+
+    #[tokio::test(start_paused = true)]
+    async fn admission_and_execution_share_the_same_deadline() {
+        let bridge =
+            BoundedBlockingBridge::new(NonZeroUsize::new(1).unwrap(), RuntimeHealth::with_owner(1));
+        let permit = bridge.permits.clone().acquire_owned().await.unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let (poll_tx, poll_rx) = tokio::sync::oneshot::channel();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let task = tokio::spawn(async move {
+            poll_tx.send(()).unwrap();
+            bridge
+                .run_with_policy_at(
+                    deadline,
+                    BlockingCompletionPolicy::AbandonResponseAtDeadline,
+                    BlockingStallCounter::CoreBridge,
+                    move || {
+                        started_tx.send(()).unwrap();
+                        release_rx.recv().unwrap();
+                        Ok(())
+                    },
+                )
+                .await
+        });
+        poll_rx.await.unwrap();
+        tokio::time::advance(Duration::from_secs(4)).await;
+        drop(permit);
+        started_rx.await.unwrap();
+        tokio::time::advance(Duration::from_secs(6)).await;
+        assert!(matches!(
+            task.await.unwrap(),
+            Err(BlockingBridgeError::DeadlineAfterStart)
+        ));
+        assert_eq!(Instant::now(), deadline);
+        release_tx.send(()).unwrap();
+    }
 }
