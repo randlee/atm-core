@@ -187,3 +187,17 @@ def test_quick_fix_qa_alone_may_omit_sanity_bead_and_dispatched_findings_carry_c
     assert any("stack_bead" in problem for problem in bead_schema.validate_phase([finding]))
     finding["metadata"].update({**FAMILY, **close("fix")})
     assert bead_schema.validate_phase([finding]) == []
+
+
+def test_plan_hardening_step_and_finding_beads_validate():
+    """plan-hardening's own beads, rendered from the shipped templates, are phase beads validate-plan accepts."""
+    sc_render = importlib.import_module("sc_render")
+    templates = Path(__file__).resolve().parents[2] / "plan-hardening"
+    step = json.loads(sc_render.render(templates / "plan-hardening-step-bead.json.j2", {
+        "id": "atm-phase-bi-ph-s1-c1", "root": "atm-phase-bi", "phase": "bi", "step": 1, "cycle": 1,
+        "route_to": "plan-scope-reviewer"}))
+    finding = json.loads(sc_render.render(templates / "plan-hardening-finding-bead.json.j2", {
+        "id": "atm-phase-bi-ph-s1-c1-plan-scope-001", "root": "atm-phase-bi", "phase": "bi",
+        "step_bead": step["id"], "reviewer": "plan-scope-reviewer", "finding_ref": "PLAN-SCOPE-001",
+        "severity": "Blocking", "category": "SERIAL-RISK", "issue": "serial edge", "correction": "drop it"}))
+    assert bead_schema.validate_phase([step, finding]) == []
