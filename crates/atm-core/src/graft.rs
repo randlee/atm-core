@@ -149,18 +149,6 @@ pub enum GraftPostSendResponse {
 
 const RECEIVER_HOOK_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
-#[cfg(test)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct HookTransportLimits {
-    connect: Option<Duration>,
-    io: Option<Duration>,
-}
-
-#[cfg(test)]
-const PRODUCTION_HOOK_TRANSPORT_LIMITS: HookTransportLimits = HookTransportLimits {
-    connect: Some(RECEIVER_HOOK_CONNECT_DEADLINE),
-    io: Some(RECEIVER_HOOK_IO_DEADLINE),
-};
 /// The outer replacement-runtime hook owner needs time to receive the blocking
 /// Graft result and turn it into a durable-success warning. Socket I/O must
 /// therefore end before, rather than race, the inherited absolute deadline.
@@ -384,23 +372,6 @@ fn remaining_hook_budget(
         })
 }
 
-#[cfg(test)]
-fn hook_budget_from_remaining(
-    remaining: Option<Duration>,
-    safety_cap: Duration,
-) -> Result<Duration, AtmError> {
-    remaining
-        .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
-        .filter(|remaining| !remaining.is_zero())
-        .map(|remaining| remaining.min(safety_cap))
-        .ok_or_else(|| {
-            AtmError::new(
-                AtmErrorCode::PostSendGraftUnavailable,
-                "received-message hook does not retain enough request budget for endpoint delivery and result handoff",
-            )
-        })
-}
-
 fn deliver_graft_post_send_with_deadline(
     endpoint: SocketAddr,
     capability: &LocalCapability,
@@ -420,54 +391,6 @@ fn deliver_graft_post_send_with_deadline(
     })?;
     let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
     apply_stream_deadlines(&stream, io_deadline)?;
-    let wire = GraftPostSendWireRequest {
-        capability_base64url: capability.to_base64url(),
-        request: request.clone(),
-    };
-    write_graft_post_send_message(
-        &mut stream,
-        &wire,
-        "failed to write graft post-send request",
-        "graft post-send request exceeded the bounded payload cap",
-    )?;
-    stream.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush graft post-send request").with_cause(source)
-    })?;
-    read_graft_post_send_message(
-        &mut stream,
-        "failed to read graft post-send response",
-        "graft post-send response exceeded the bounded payload cap",
-    )
-}
-
-#[cfg(test)]
-fn deliver_graft_post_send_with_limits(
-    endpoint: SocketAddr,
-    capability: &LocalCapability,
-    request: &GraftPostSendRequest,
-    deadline: RequestDeadline,
-    limits: HookTransportLimits,
-) -> Result<GraftPostSendResponse, AtmError> {
-    let connect_deadline = limits
-        .connect
-        .map(|cap| remaining_hook_budget(deadline, cap))
-        .transpose()?;
-    let connection = match connect_deadline {
-        Some(timeout) => TcpStream::connect_timeout(&endpoint, timeout),
-        None => TcpStream::connect(endpoint),
-    };
-    let mut stream = connection.map_err(|source| {
-        let detail =
-            connect_deadline.map_or_else(String::new, |timeout| format!(" within {timeout:?}"));
-        AtmError::new(
-            AtmErrorCode::PostSendGraftUnavailable,
-            format!("failed to connect to graft receiver endpoint {endpoint}{detail}"),
-        )
-        .with_cause(source)
-    })?;
-    if let Some(cap) = limits.io {
-        apply_stream_deadlines(&stream, remaining_hook_budget(deadline, cap)?)?;
-    }
     let wire = GraftPostSendWireRequest {
         capability_base64url: capability.to_base64url(),
         request: request.clone(),
@@ -861,6 +784,83 @@ impl GraftReceiverListener {
     pub fn owner_generation(&self) -> &OwnerGeneration {
         &self.owner_generation
     }
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct HookTransportLimits {
+    connect: Option<Duration>,
+    io: Option<Duration>,
+}
+
+#[cfg(test)]
+const PRODUCTION_HOOK_TRANSPORT_LIMITS: HookTransportLimits = HookTransportLimits {
+    connect: Some(RECEIVER_HOOK_CONNECT_DEADLINE),
+    io: Some(RECEIVER_HOOK_IO_DEADLINE),
+};
+#[cfg(test)]
+fn hook_budget_from_remaining(
+    remaining: Option<Duration>,
+    safety_cap: Duration,
+) -> Result<Duration, AtmError> {
+    remaining
+        .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
+        .filter(|remaining| !remaining.is_zero())
+        .map(|remaining| remaining.min(safety_cap))
+        .ok_or_else(|| {
+            AtmError::new(
+                AtmErrorCode::PostSendGraftUnavailable,
+                "received-message hook does not retain enough request budget for endpoint delivery and result handoff",
+            )
+        })
+}
+
+#[cfg(test)]
+fn deliver_graft_post_send_with_limits(
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
+    request: &GraftPostSendRequest,
+    deadline: RequestDeadline,
+    limits: HookTransportLimits,
+) -> Result<GraftPostSendResponse, AtmError> {
+    let connect_deadline = limits
+        .connect
+        .map(|cap| remaining_hook_budget(deadline, cap))
+        .transpose()?;
+    let connection = match connect_deadline {
+        Some(timeout) => TcpStream::connect_timeout(&endpoint, timeout),
+        None => TcpStream::connect(endpoint),
+    };
+    let mut stream = connection.map_err(|source| {
+        let detail =
+            connect_deadline.map_or_else(String::new, |timeout| format!(" within {timeout:?}"));
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            format!("failed to connect to graft receiver endpoint {endpoint}{detail}"),
+        )
+        .with_cause(source)
+    })?;
+    if let Some(cap) = limits.io {
+        apply_stream_deadlines(&stream, remaining_hook_budget(deadline, cap)?)?;
+    }
+    let wire = GraftPostSendWireRequest {
+        capability_base64url: capability.to_base64url(),
+        request: request.clone(),
+    };
+    write_graft_post_send_message(
+        &mut stream,
+        &wire,
+        "failed to write graft post-send request",
+        "graft post-send request exceeded the bounded payload cap",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft post-send request").with_cause(source)
+    })?;
+    read_graft_post_send_message(
+        &mut stream,
+        "failed to read graft post-send response",
+        "graft post-send response exceeded the bounded payload cap",
+    )
 }
 
 #[cfg(test)]
