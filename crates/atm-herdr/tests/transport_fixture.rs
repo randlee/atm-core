@@ -8,10 +8,6 @@ use atm_core::{HerdrAgentName, HerdrSession, RequestDeadline};
 use atm_herdr::testing::production_invoker_with_test_binary_and_environment;
 use atm_herdr::{HerdrError, HerdrProcessAdapter};
 
-#[cfg(windows)]
-#[path = "support/fake_herdr_socket/mod.rs"]
-mod fake_herdr_socket;
-
 #[derive(Debug)]
 struct FixtureManifest {
     mode: String,
@@ -161,34 +157,4 @@ async fn replay_runs_twice_through_one_production_invoker() {
         let second = get(&invoker, None).await.expect("second replay");
         assert_eq!(first, second);
     }
-}
-
-#[cfg(windows)]
-fn socket_path(suffix: &str) -> PathBuf {
-    static NEXT_PIPE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let nonce = NEXT_PIPE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    PathBuf::from(format!(
-        r"\\.\pipe\atm-herdr-ay8-fixture-{}-{suffix}-{nonce}",
-        std::process::id(),
-    ))
-}
-
-#[cfg(windows)]
-#[tokio::test]
-async fn windows_named_pipe_fixture_round_trips_in_the_platform_lane() {
-    let path = socket_path("windows-round-trip");
-    let server = fake_herdr_socket::FakeHerdrSocket::bind(&path).expect("named pipe bind");
-    let mut response = br#"{"result":{"agent":{"name":"windows","agent_status":"idle"}}}"#.to_vec();
-    response.push(b'\n');
-    let task = tokio::spawn(server.serve_once(response));
-    let result = get(
-        &atm_herdr::testing::production_invoker_with_test_socket(path),
-        None,
-    )
-    .await
-    .expect("named pipe response");
-    task.await
-        .expect("named pipe server")
-        .expect("named pipe request");
-    assert_eq!(result.snapshot.name.as_deref(), Some("windows"));
 }

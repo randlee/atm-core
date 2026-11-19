@@ -443,6 +443,33 @@ mod tests {
     use atm_core::types::AgentName;
     use atm_core::{HerdrAgentName, HerdrSession};
 
+    #[tokio::test(start_paused = true)]
+    async fn socket_doctor_ping_reports_compatible_status_and_rejection() {
+        use crate::transport_socket::scripted_socket;
+        use atm_core::RequestDeadline;
+
+        for (response, success) in [
+            (br#"{"result":{"type":"pong","version":"0.8.2","protocol":20,"capabilities":{"live_handoff":true}}}
+"#.as_slice(), true),
+            (br#"{"error":{"code":"internal_error","message":"ping rejected"}}
+"#.as_slice(), false),
+        ] {
+            let (socket, server) = scripted_socket(response.to_vec());
+            let mut probe = HerdrDoctorProbe::new(HerdrClientConfig::default());
+            probe.io.set_test_socket(socket);
+            let observation = probe.observe(None, &[], RequestDeadline::after(Duration::ZERO)).await;
+            let request: serde_json::Value = serde_json::from_slice(&server.await.unwrap()).unwrap();
+            assert_eq!(request["id"], "atm:agent:ping");
+            assert_eq!(request["method"], "ping");
+            if success {
+                assert!(matches!(observation.state, HerdrDoctorState::Ok { ref version, protocol: 20 } if version.as_str() == "0.8.2"));
+                assert_eq!(observation.live_handoff, Some(true));
+            } else {
+                assert!(matches!(observation.state, HerdrDoctorState::UnexpectedResponse { detail, .. } if detail == "ping rejected"));
+            }
+        }
+    }
+
     #[test]
     fn construction_selects_transport_without_running_a_command() {
         let _probe = HerdrDoctorProbe::new(Default::default());

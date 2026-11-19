@@ -141,6 +141,14 @@ impl HerdrIo {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_test_socket(&mut self, socket: SocketIo) {
+        match self {
+            Self::Socket(current) => *current = socket,
+            Self::Cli(_) => panic!("test expected a socket transport"),
+        }
+    }
+
     /// Returns only core's sanitized endpoint DTO; the raw endpoint stays in
     /// the private socket transport.
     pub(crate) fn endpoint_display(

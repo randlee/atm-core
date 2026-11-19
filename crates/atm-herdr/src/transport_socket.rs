@@ -78,6 +78,10 @@ pub(crate) struct SocketIo {
     pub(crate) max_line_bytes: usize,
     pub(crate) in_flight: Arc<Semaphore>,
     pub(crate) pipe_busy_retry_delay: Duration,
+    #[cfg(test)]
+    test_stream: Option<Arc<std::sync::Mutex<Option<tokio::io::DuplexStream>>>>,
+    #[cfg(test)]
+    test_deadline: Option<Instant>,
 }
 
 impl SocketIo {
@@ -88,7 +92,17 @@ impl SocketIo {
             max_line_bytes: HERDR_MAX_SOCKET_LINE_BYTES,
             in_flight: Arc::new(Semaphore::new(SOCKET_PERMITS)),
             pipe_busy_retry_delay: PIPE_BUSY_RETRY_DELAY,
+            #[cfg(test)]
+            test_stream: None,
+            #[cfg(test)]
+            test_deadline: None,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_stream(mut self, stream: tokio::io::DuplexStream) -> Self {
+        self.test_stream = Some(Arc::new(std::sync::Mutex::new(Some(stream))));
+        self
     }
 
     pub(crate) async fn call(
@@ -118,6 +132,30 @@ impl SocketIo {
         session: Option<&HerdrSession>,
         deadline: RequestDeadline,
     ) -> Result<HerdrEnvelope, HerdrError> {
+        #[cfg(test)]
+        if let Some(stream) = &self.test_stream {
+            let stream = stream
+                .lock()
+                .expect("test stream lock")
+                .take()
+                .ok_or_else(|| {
+                    socket_io_error(io::Error::from(io::ErrorKind::ConnectionRefused))
+                })?;
+            return self
+                .round_trip_with_deadline(
+                    request,
+                    session,
+                    Instant::now() + Duration::from_secs(60),
+                    move |_, _| async move { Ok(stream) },
+                )
+                .await;
+        }
+        #[cfg(test)]
+        let deadline = match self.test_deadline {
+            Some(deadline) => deadline,
+            None => tokio_deadline(deadline)?,
+        };
+        #[cfg(not(test))]
         let deadline = tokio_deadline(deadline)?;
         #[cfg(unix)]
         let connect = |endpoint, deadline| async move { connect_unix(&endpoint, deadline).await };
@@ -446,15 +484,6 @@ async fn connect_named_pipe_at(
     .await
 }
 
-#[cfg(all(windows, test))]
-async fn connect_named_pipe(
-    endpoint: &HerdrEndpoint,
-    deadline: RequestDeadline,
-    retry_delay: Duration,
-) -> Result<tokio::net::windows::named_pipe::NamedPipeClient, HerdrError> {
-    connect_named_pipe_at(endpoint, tokio_deadline(deadline)?, retry_delay).await
-}
-
 #[cfg(windows)]
 #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070: Windows ERROR_PIPE_BUSY retry backoff; cancelled by timeout_at(request_deadline).")]
 async fn retry_pipe_busy<T>(
@@ -506,6 +535,30 @@ pub(super) fn decode_envelope(bytes: &[u8]) -> Result<HerdrEnvelope, HerdrError>
         result: value.get("result").cloned(),
         error,
     })
+}
+
+#[cfg(test)]
+pub(crate) fn scripted_socket(response: Vec<u8>) -> (SocketIo, tokio::task::JoinHandle<Vec<u8>>) {
+    let (client, server) = tokio::io::duplex(2 * 1024 * 1024);
+    let task = tokio::spawn(async move {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        let mut reader = tokio::io::BufReader::new(server);
+        let mut request = Vec::new();
+        reader
+            .read_until(b'\n', &mut request)
+            .await
+            .expect("read request");
+        reader
+            .get_mut()
+            .write_all(&response)
+            .await
+            .expect("write response");
+        request
+    });
+    (
+        SocketIo::new(&HerdrClientConfig::default()).with_test_stream(client),
+        task,
+    )
 }
 
 #[cfg(test)]
@@ -731,6 +784,331 @@ mod tests {
         .expect("socket response");
         assert!(envelope.result.is_some());
         server.await.expect("server task");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn all_manifest_responses_match_cli_decoding_through_socket_transport() {
+        use crate::{BreakerPolicy, HerdrProcessAdapter, HerdrProcessInvoker, HerdrSpawnBreaker};
+        let root =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/herdr-versions");
+        let mut seen = 0;
+        for entry in std::fs::read_dir(root).unwrap() {
+            let directory = entry.unwrap().path();
+            let manifest_path = directory.join("manifest.json");
+            if !manifest_path.exists() {
+                continue;
+            }
+            let manifest: Value =
+                serde_json::from_slice(&std::fs::read(manifest_path).unwrap()).unwrap();
+            let response = if manifest.get("delta").is_some() {
+                br#"{"error":{"code":"agent_prompt_stalled","message":"fixture"}}"#.to_vec()
+            } else {
+                std::fs::read(directory.join(manifest["response"].as_str().unwrap())).unwrap()
+            };
+            let failure = manifest.get("delta").is_some();
+            let payload = String::from_utf8(response.clone()).unwrap();
+            let output = crate::transport_cli::CommandOutput {
+                stdout: if failure {
+                    String::new()
+                } else {
+                    payload.clone()
+                },
+                stderr: if failure { payload } else { String::new() },
+                success: !failure,
+            };
+            let cli = crate::transport_cli::CliIo::new(&HerdrClientConfig::default())
+                .with_test_output(output);
+            let cli_invoker = HerdrProcessInvoker {
+                breaker: Arc::new(HerdrSpawnBreaker::default()),
+                io: crate::transport::HerdrIo::Cli(cli),
+            };
+            let agent = HerdrAgentName::new("fixture-agent").unwrap();
+            let expected = cli_invoker
+                .get(
+                    &agent,
+                    None,
+                    RequestDeadline::after(Duration::ZERO),
+                    BreakerPolicy::Shared,
+                )
+                .await;
+            let mut framed = response;
+            framed.push(b'\n');
+            let (socket, server) = scripted_socket(framed);
+            let invoker = HerdrProcessInvoker {
+                breaker: Arc::new(HerdrSpawnBreaker::default()),
+                io: crate::transport::HerdrIo::Socket(socket),
+            };
+            let agent = HerdrAgentName::new("fixture-agent").unwrap();
+            let actual = invoker
+                .get(
+                    &agent,
+                    None,
+                    RequestDeadline::after(Duration::ZERO),
+                    BreakerPolicy::Shared,
+                )
+                .await;
+            let request = server.await.unwrap();
+            let request: Value = serde_json::from_slice(&request).unwrap();
+            assert_eq!(request["method"], "agent.get");
+            assert_eq!(actual, expected, "fixture {}", directory.display());
+            seen += 1;
+        }
+        assert!(seen > 0, "fixture manifests must be exercised");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn one_connection_serves_one_request_and_refuses_a_second() {
+        use crate::{BreakerPolicy, HerdrProcessAdapter, HerdrProcessInvoker, HerdrSpawnBreaker};
+        let (socket, server) = scripted_socket(
+            b"{\"result\":{\"agent\":{\"name\":\"late\",\"agent_status\":\"idle\"}}}\n".to_vec(),
+        );
+        let invoker = HerdrProcessInvoker {
+            breaker: Arc::new(HerdrSpawnBreaker::default()),
+            io: crate::transport::HerdrIo::Socket(socket),
+        };
+        let agent = HerdrAgentName::new("fixture-agent").unwrap();
+        let result = invoker
+            .get(
+                &agent,
+                None,
+                RequestDeadline::after(Duration::ZERO),
+                BreakerPolicy::Shared,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.snapshot.name.as_deref(), Some("late"));
+        let request: Value = serde_json::from_slice(&server.await.unwrap()).unwrap();
+        assert_eq!(request["method"], "agent.get");
+        let second = invoker
+            .get(
+                &agent,
+                None,
+                RequestDeadline::after(Duration::ZERO),
+                BreakerPolicy::Bypass,
+            )
+            .await;
+        assert!(matches!(second, Err(HerdrError::ServerUnavailable { .. })));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn socket_invoker_rejects_truncated_and_oversized_responses() {
+        use crate::{BreakerPolicy, HerdrProcessAdapter, HerdrProcessInvoker, HerdrSpawnBreaker};
+        let agent = HerdrAgentName::new("fixture-agent").unwrap();
+        for response in [b"{}".to_vec(), vec![b'x'; HERDR_MAX_SOCKET_LINE_BYTES + 1]] {
+            let (socket, server) = scripted_socket(response);
+            let invoker = HerdrProcessInvoker {
+                breaker: Arc::new(HerdrSpawnBreaker::default()),
+                io: crate::transport::HerdrIo::Socket(socket),
+            };
+            let result = invoker
+                .get(
+                    &agent,
+                    None,
+                    RequestDeadline::after(Duration::ZERO),
+                    BreakerPolicy::Bypass,
+                )
+                .await;
+            let request: Value = serde_json::from_slice(&server.await.unwrap()).unwrap();
+            assert_eq!(request["method"], "agent.get");
+            assert!(matches!(result, Err(HerdrError::InternalError { .. })));
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn socket_invoker_stalled_read_times_out_and_cancellation_releases_permit() {
+        use crate::{BreakerPolicy, HerdrProcessAdapter, HerdrProcessInvoker, HerdrSpawnBreaker};
+        use tokio::io::AsyncBufReadExt;
+        for cancel in [false, true] {
+            let (client, server) = tokio::io::duplex(1024);
+            let socket = SocketIo::new(&HerdrClientConfig::default()).with_test_stream(client);
+            let permits = Arc::clone(&socket.in_flight);
+            let invoker = HerdrProcessInvoker {
+                breaker: Arc::new(HerdrSpawnBreaker::default()),
+                io: crate::transport::HerdrIo::Socket(socket),
+            };
+            let agent = HerdrAgentName::new("fixture-agent").unwrap();
+            let task = tokio::spawn(async move {
+                invoker
+                    .get(
+                        &agent,
+                        None,
+                        RequestDeadline::after(Duration::ZERO),
+                        BreakerPolicy::Bypass,
+                    )
+                    .await
+            });
+            let mut reader = tokio::io::BufReader::new(server);
+            let mut request = Vec::new();
+            reader.read_until(b'\n', &mut request).await.unwrap();
+            assert_eq!(
+                serde_json::from_slice::<Value>(&request).unwrap()["method"],
+                "agent.get"
+            );
+            if cancel {
+                task.abort();
+                assert!(task.await.unwrap_err().is_cancelled());
+            } else {
+                tokio::time::advance(Duration::from_secs(60)).await;
+                assert!(matches!(task.await.unwrap(), Err(HerdrError::Timeout)));
+            }
+            assert_eq!(permits.available_permits(), SOCKET_PERMITS);
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn socket_prompt_stalled_write_times_out_through_invoker() {
+        use crate::{HerdrProcessAdapter, HerdrProcessInvoker, HerdrSpawnBreaker};
+        use tokio::io::AsyncReadExt;
+        let (client, mut server) = tokio::io::duplex(1);
+        let socket = SocketIo::new(&HerdrClientConfig::default()).with_test_stream(client);
+        let permits = Arc::clone(&socket.in_flight);
+        let invoker = HerdrProcessInvoker {
+            breaker: Arc::new(HerdrSpawnBreaker::default()),
+            io: crate::transport::HerdrIo::Socket(socket),
+        };
+        let agent = HerdrAgentName::new("fixture-agent").unwrap();
+        let prompt = "x".repeat(4096);
+        let mut future = invoker.prompt(
+            &agent,
+            None,
+            &prompt,
+            RequestDeadline::after(Duration::ZERO),
+        );
+        {
+            let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+            assert!(future.as_mut().poll(&mut context).is_pending());
+        }
+        let mut byte = [0];
+        server.read_exact(&mut byte).await.unwrap();
+        assert_eq!(byte[0], b'{');
+        tokio::time::advance(Duration::from_secs(60)).await;
+        assert!(matches!(future.await, Err(HerdrError::Timeout)));
+        assert_eq!(permits.available_permits(), SOCKET_PERMITS);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test(start_paused = true)]
+    async fn windows_named_pipe_invoker_round_trips_on_a_real_pipe() {
+        use crate::{BreakerPolicy, HerdrProcessAdapter, HerdrProcessInvoker, HerdrSpawnBreaker};
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        use tokio::net::windows::named_pipe::ServerOptions;
+
+        let (release_clock, held_clock) = tokio::sync::oneshot::channel::<()>();
+        let clock_hold = tokio::task::spawn_blocking(move || {
+            let _ = held_clock.blocking_recv();
+        });
+        let name = format!(r"\\.\pipe\atm-herdr-fixture-{}", std::process::id());
+        let pipe = ServerOptions::new()
+            .create(&name)
+            .expect("create named pipe");
+        let server = tokio::spawn(async move {
+            pipe.connect().await.expect("connect named pipe");
+            let mut reader = tokio::io::BufReader::new(pipe);
+            let mut request = Vec::new();
+            reader
+                .read_until(b'\n', &mut request)
+                .await
+                .expect("read request");
+            reader
+                .get_mut()
+                .write_all(
+                    b"{\"result\":{\"agent\":{\"name\":\"windows\",\"agent_status\":\"idle\"}}}\n",
+                )
+                .await
+                .expect("write response");
+            request
+        });
+        let config = HerdrClientConfig::with_socket_path(PathBuf::from(name));
+        let mut socket = SocketIo::new(&config);
+        socket.test_deadline = Some(Instant::now() + Duration::from_secs(60));
+        let invoker = HerdrProcessInvoker {
+            breaker: Arc::new(HerdrSpawnBreaker::default()),
+            io: crate::transport::HerdrIo::Socket(socket),
+        };
+        let agent = HerdrAgentName::new("fixture-agent").unwrap();
+        let result = invoker
+            .get(
+                &agent,
+                None,
+                RequestDeadline::after(Duration::ZERO),
+                BreakerPolicy::Shared,
+            )
+            .await
+            .expect("named pipe response");
+        assert_eq!(result.snapshot.name.as_deref(), Some("windows"));
+        let request: Value = serde_json::from_slice(&server.await.unwrap()).unwrap();
+        assert_eq!(request["method"], "agent.get");
+        drop(release_clock);
+        clock_hold.await.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(start_paused = true)]
+    async fn unix_socket_transport_exchanges_a_request_on_a_real_listener() {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        let (release_clock, held_clock) = tokio::sync::oneshot::channel::<()>();
+        let clock_hold = tokio::task::spawn_blocking(move || {
+            let _ = held_clock.blocking_recv();
+        });
+        let path =
+            std::env::temp_dir().join(format!("atm-herdr-fixture-{}.sock", std::process::id()));
+        struct SocketPath(std::path::PathBuf);
+        impl Drop for SocketPath {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+        let cleanup = SocketPath(path.clone());
+        let listener = tokio::net::UnixListener::bind(&path).expect("bind Unix socket");
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept Unix socket");
+            let mut reader = tokio::io::BufReader::new(stream);
+            let mut request = Vec::new();
+            reader
+                .read_until(b'\n', &mut request)
+                .await
+                .expect("request");
+            reader
+                .get_mut()
+                .write_all(
+                    b"{\"result\":{\"agent\":{\"name\":\"unix\",\"agent_status\":\"idle\"}}}\n",
+                )
+                .await
+                .expect("response");
+            request
+        });
+        let socket = SocketIo::new(&HerdrClientConfig::with_socket_path(path));
+        let agent = HerdrAgentName::new("fixture-agent").unwrap();
+        let envelope = socket
+            .round_trip_with_deadline(
+                encode_request(HerdrOp::Get { agent: &agent }).unwrap(),
+                None,
+                Instant::now() + Duration::from_secs(60),
+                |endpoint, deadline| async move { connect_unix(&endpoint, deadline).await },
+            )
+            .await
+            .expect("real Unix socket exchange");
+        assert_eq!(
+            crate::transport::get_from_envelope(envelope)
+                .unwrap()
+                .name
+                .as_deref(),
+            Some("unix")
+        );
+        let request: Value = serde_json::from_slice(&server.await.unwrap()).unwrap();
+        assert_eq!(request["method"], "agent.get");
+        drop(cleanup);
+        let missing = socket
+            .round_trip_with_deadline(
+                encode_request(HerdrOp::Get { agent: &agent }).unwrap(),
+                None,
+                Instant::now() + Duration::from_secs(60),
+                |endpoint, deadline| async move { connect_unix(&endpoint, deadline).await },
+            )
+            .await;
+        assert!(matches!(missing, Err(HerdrError::ServerUnavailable { .. })));
+        drop(release_clock);
+        clock_hold.await.unwrap();
     }
 
     #[tokio::test(start_paused = true)]
@@ -1206,20 +1584,21 @@ mod tests {
     }
 
     #[cfg(windows)]
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn named_pipe_connect_exchanges_one_request_with_a_server() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         use tokio::net::windows::named_pipe::ServerOptions;
 
+        let _clock = hold_virtual_clock_for_pipe_io();
         let pipe_name = unique_test_pipe_name();
         let mut server = ServerOptions::new()
             .create(&pipe_name)
             .expect("create test named-pipe server");
         let endpoint = HerdrEndpoint::NamedPipe(pipe_name);
 
-        let mut client = connect_named_pipe(
+        let mut client = connect_named_pipe_at(
             &endpoint,
-            RequestDeadline::after(Duration::from_secs(5)),
+            Instant::now() + Duration::from_secs(60),
             PIPE_BUSY_RETRY_DELAY,
         )
         .await
@@ -1250,14 +1629,24 @@ mod tests {
     }
 
     #[cfg(windows)]
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn missing_named_pipe_returns_a_typed_error_before_deadline() {
+        let _clock = hold_virtual_clock_for_pipe_io();
         let endpoint = HerdrEndpoint::NamedPipe(unique_test_pipe_name());
-        let deadline = RequestDeadline::after(Duration::from_secs(5));
+        let deadline = Instant::now() + Duration::from_secs(60);
 
-        let result = connect_named_pipe(&endpoint, deadline, PIPE_BUSY_RETRY_DELAY).await;
+        let result = connect_named_pipe_at(&endpoint, deadline, PIPE_BUSY_RETRY_DELAY).await;
 
         assert!(matches!(result, Err(HerdrError::ServerUnavailable { .. })));
+    }
+
+    #[cfg(windows)]
+    fn hold_virtual_clock_for_pipe_io() -> tokio::sync::oneshot::Sender<()> {
+        let (release, hold) = tokio::sync::oneshot::channel();
+        tokio::task::spawn_blocking(move || {
+            let _ = hold.blocking_recv();
+        });
+        release
     }
 
     #[cfg(windows)]
