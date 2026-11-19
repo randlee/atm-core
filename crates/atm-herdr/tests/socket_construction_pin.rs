@@ -148,6 +148,20 @@ fn construction_findings(source: &str, allowed_ranges: &[(usize, usize)]) -> Vec
         .collect()
 }
 
+// Marker matching and token offsets must use the same normalized text. Git's
+// Windows checkout can otherwise turn every line ending into CRLF and make a
+// test module invisible to an LF marker.
+fn source_findings(source: &str, markers: &[&str], is_integration_test: bool) -> Vec<usize> {
+    let source = source.replace("\r\n", "\n");
+    let tokens = lex_rust(&source);
+    let ranges = if is_integration_test {
+        vec![(0, source.len())]
+    } else {
+        brace_ranges(&tokens, &source, markers)
+    };
+    construction_findings(&source, &ranges)
+}
+
 #[test]
 fn socket_variant_is_constructed_only_by_the_ay9_factory_or_tests() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -173,13 +187,7 @@ fn socket_variant_is_constructed_only_by_the_ay9_factory_or_tests() {
         } else {
             Vec::new()
         };
-        let tokens = lex_rust(&contents);
-        let ranges = if is_integration_test {
-            vec![(0, contents.len())]
-        } else {
-            brace_ranges(&tokens, &contents, &markers)
-        };
-        let findings = construction_findings(&contents, &ranges);
+        let findings = source_findings(&contents, &markers, is_integration_test);
         assert!(
             findings.is_empty(),
             "socket construction escaped the AY.9 production factory or test scope in {} at offsets {findings:?}",
@@ -216,6 +224,23 @@ fn test_module_scope_is_selected_after_earlier_test_only_items() {
     let ranges = brace_ranges(&tokens, source, &["#[cfg(test)]\nmod tests {"]);
     assert_eq!(ranges.len(), 1);
     assert_eq!(construction_findings(source, &ranges).len(), 1);
+}
+
+#[test]
+fn crlf_transport_test_scope_does_not_hide_production_leaks() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/transport_socket.rs");
+    let source = fs::read_to_string(path)
+        .expect("socket transport source")
+        .replace("\r\n", "\n")
+        .replace('\n', "\r\n");
+    let markers = &["#[cfg(test)]\nmod tests {"];
+    assert!(
+        source_findings(&source, markers, false).is_empty(),
+        "test module must be recognized in CRLF checkout"
+    );
+    let leaked =
+        format!("{source}\r\nfn production_leak() {{ let _ = HerdrIo::Socket(fake); }}\r\n");
+    assert_eq!(source_findings(&leaked, markers, false).len(), 1);
 }
 
 #[test]
