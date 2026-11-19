@@ -150,10 +150,11 @@ impl SocketIo {
             return Err(HerdrError::Timeout);
         }
         let permit = acquire_permit(Arc::clone(&self.in_flight), deadline).await?;
+        if Instant::now() >= deadline {
+            return Err(HerdrError::Timeout);
+        }
         let endpoint = herdr_api_endpoint(&self.cfg, session, &self.env);
-        let mut stream = tokio::time::timeout_at(deadline, connect(endpoint, deadline))
-            .await
-            .map_err(|_| HerdrError::Timeout)??;
+        let mut stream = deadline_wait(deadline, connect(endpoint, deadline)).await??;
 
         let response =
             exchange_over_stream(&mut stream, &request, self.max_line_bytes, deadline).await?;
@@ -245,12 +246,11 @@ async fn acquire_permit(
     in_flight: Arc<Semaphore>,
     deadline: Instant,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, HerdrError> {
-    match tokio::time::timeout_at(deadline, in_flight.acquire_owned()).await {
-        Ok(Ok(permit)) => Ok(permit),
-        Ok(Err(_)) => Err(HerdrError::InternalError {
+    match deadline_wait(deadline, in_flight.acquire_owned()).await? {
+        Ok(permit) => Ok(permit),
+        Err(_) => Err(HerdrError::InternalError {
             message: "Herdr socket permit pool was closed".to_owned(),
         }),
-        Err(_) => Err(HerdrError::Timeout),
     }
 }
 
@@ -360,15 +360,26 @@ where
     }
 }
 
+async fn deadline_wait<F: Future>(deadline: Instant, future: F) -> Result<F::Output, HerdrError> {
+    let mut future = std::pin::pin!(future);
+    let checked = std::future::poll_fn(|cx| {
+        if Instant::now() >= deadline {
+            return std::task::Poll::Ready(Err(HerdrError::Timeout));
+        }
+        future.as_mut().poll(cx).map(Ok)
+    });
+    tokio::time::timeout_at(deadline, checked)
+        .await
+        .map_err(|_| HerdrError::Timeout)?
+}
+
 async fn deadline_io<T>(
     deadline: Instant,
     future: impl Future<Output = io::Result<T>>,
 ) -> Result<T, HerdrError> {
-    match tokio::time::timeout_at(deadline, future).await {
-        Ok(Ok(value)) => Ok(value),
-        Ok(Err(error)) => Err(socket_io_error(error)),
-        Err(_) => Err(HerdrError::Timeout),
-    }
+    deadline_wait(deadline, future)
+        .await?
+        .map_err(socket_io_error)
 }
 
 fn socket_io_error(error: io::Error) -> HerdrError {
@@ -454,6 +465,9 @@ async fn retry_pipe_busy<T>(
     const ERROR_PIPE_BUSY: i32 = 231;
     match tokio::time::timeout_at(deadline, async {
         loop {
+            if Instant::now() >= deadline {
+                return Err(HerdrError::Timeout);
+            }
             match open() {
                 Ok(client) => return Ok(client),
                 Err(error) if error.raw_os_error() == Some(ERROR_PIPE_BUSY) => {
@@ -725,6 +739,91 @@ mod tests {
         let result =
             read_response_line(&mut client, HERDR_MAX_SOCKET_LINE_BYTES, Instant::now()).await;
         assert!(matches!(result, Err(HerdrError::Timeout)));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn ready_io_is_not_polled_at_or_after_deadline() {
+        let polled = std::cell::Cell::new(false);
+        let deadline = Instant::now() + Duration::from_nanos(1);
+        tokio::time::advance(Duration::from_nanos(1)).await;
+        let result = deadline_io(deadline, async {
+            polled.set(true);
+            Ok(())
+        })
+        .await;
+        assert!(matches!(result, Err(HerdrError::Timeout)));
+        assert!(!polled.get());
+
+        let ready = deadline_io(Instant::now() + Duration::from_nanos(1), async { Ok(42) }).await;
+        assert_eq!(ready.expect("ready I/O before deadline"), 42);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_io_ready_at_deadline_is_not_polled_again() {
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let polled_after_release = std::cell::Cell::new(false);
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let future = deadline_io(deadline, async {
+            release_rx.await.unwrap();
+            polled_after_release.set(true);
+            Ok(())
+        });
+        let mut future = std::pin::pin!(future);
+        {
+            let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+            assert!(future.as_mut().poll(&mut context).is_pending());
+        }
+        tokio::time::advance(Duration::from_secs(1)).await;
+        release_tx.send(()).unwrap();
+        assert!(matches!(future.await, Err(HerdrError::Timeout)));
+        assert!(!polled_after_release.get());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn ready_permit_is_not_taken_at_deadline() {
+        let permits = Arc::new(Semaphore::new(1));
+        let deadline = Instant::now() + Duration::from_nanos(1);
+        tokio::time::advance(Duration::from_nanos(1)).await;
+        assert!(matches!(
+            acquire_permit(Arc::clone(&permits), deadline).await,
+            Err(HerdrError::Timeout)
+        ));
+        assert_eq!(permits.available_permits(), 1);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test(start_paused = true)]
+    async fn ready_pipe_open_is_not_called_at_deadline() {
+        let called = std::cell::Cell::new(false);
+        let deadline = Instant::now() + Duration::from_nanos(1);
+        tokio::time::advance(Duration::from_nanos(1)).await;
+        let result = retry_pipe_busy(deadline, PIPE_BUSY_RETRY_DELAY, || {
+            called.set(true);
+            Ok(())
+        })
+        .await;
+        assert!(matches!(result, Err(HerdrError::Timeout)));
+        assert!(!called.get());
+    }
+
+    #[cfg(windows)]
+    #[tokio::test(start_paused = true)]
+    async fn pipe_retry_does_not_open_again_at_deadline() {
+        let attempts = std::cell::Cell::new(0);
+        let deadline = Instant::now() + PIPE_BUSY_RETRY_DELAY;
+        let future = retry_pipe_busy(deadline, PIPE_BUSY_RETRY_DELAY, || {
+            attempts.set(attempts.get() + 1);
+            Err::<(), _>(io::Error::from_raw_os_error(231))
+        });
+        let mut future = std::pin::pin!(future);
+        {
+            let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+            assert!(future.as_mut().poll(&mut context).is_pending());
+        }
+        assert_eq!(attempts.get(), 1);
+        tokio::time::advance(PIPE_BUSY_RETRY_DELAY).await;
+        assert!(matches!(future.await, Err(HerdrError::Timeout)));
+        assert_eq!(attempts.get(), 1);
     }
 
     #[tokio::test(start_paused = true)]
