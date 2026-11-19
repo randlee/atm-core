@@ -188,13 +188,13 @@ fn daemon_must_not_read_caller_workspace_config() {
         "replacement daemon composition must select the daemon-only runtime assembly"
     );
     assert!(
-        composition.contains("pub fn assemble_daemon_runtime(")
+        composition.contains("pub(crate) fn assemble_daemon_runtime(")
             && composition.contains(".map(RuntimeAssembly::for_daemon)"),
         "daemon-only assembly must discard the workspace-backed configuration view"
     );
     assert!(
         !composition
-            .split("pub fn assemble_daemon_runtime(")
+            .split("pub(crate) fn assemble_daemon_runtime(")
             .nth(1)
             .unwrap_or_default()
             .split("/// Starts the replacement Tokio/Axum daemon")
@@ -2961,9 +2961,7 @@ fn al8_active_daemon_root_cannot_reach_frozen_server_composition() {
 
     assert!(
         manifest.contains("autolib = false")
-            && entrypoint.contains(
-                "atm_daemon_bootstrap::run_replacement_daemon_with_observability(observability).await",
-            )
+            && entrypoint.contains("atm_daemon_bootstrap::run_replacement_daemon().await",)
             && !entrypoint.contains("atm_daemon::"),
         "AL.8 must compile atm-daemon as the replacement binary only; its frozen library cannot remain an active server fallback"
     );
