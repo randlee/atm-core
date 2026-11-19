@@ -48,6 +48,13 @@ def variables(template: Path) -> dict[str, object]:
     values: dict[str, object] = {name: f"{name} {PAYLOAD}" for name in names}
     if "round_index" in values:
         values["round_index"] = 2
+    if "review_kind" in values:
+        # An enum the QA template validates; the payload is a `fix_verification`
+        # input elsewhere (filing_reviewers and triage_records are set above).
+        values["review_kind"] = "fix_verification"
+    if "pr_scope" in values and "sprint_doc" in values:
+        # Mutually exclusive scope sources; the QA template refuses both at once.
+        values["pr_scope"] = ""
     return values
 
 

@@ -106,8 +106,23 @@ Before starting a sprint:
    QA surprise.
 4. the lead opens or updates the PR.
 5. the lead assigns QA to `quality-mgr` using `qa-template.xml.j2`.
-   Every QA assignment must include `sprint_doc`, and `quality-mgr` must treat
-   that sprint document as the authoritative QA scope source.
+   Every QA assignment names its purpose with `review_kind` (`full` or
+   `fix_verification`; pass it explicitly) and its scope source. A sprint
+   review includes `sprint_doc`, and `quality-mgr` must treat that sprint
+   document as the authoritative QA scope source. A standalone PR review (a
+   small fix off `develop` with no sprint doc, CLAUDE.md "Small fixes")
+   leaves `sprint_doc` empty and passes `pr_head_sha` (the reviewed PR head)
+   and `pr_scope`: the PR body and acceptance criteria as the lead captured
+   them at assignment time (plus any `linked_issues` for reference). The
+   captured text is the scope of record, because the PR body on GitHub can
+   be edited after dispatch; reviewers judge the text in the assignment, not
+   a re-fetched body. The template carries it into `<pr-scope>` (a CDATA
+   section, so any text round-trips exactly), hands it to `req-qa` and
+   `arch-qa` as their `pr_scope` and to every other reviewer as `notes` with
+   the PR number and head, drops the sprint-doc and `gh stack` steps, and
+   `quality-mgr` closes the task `refused` when the
+   text states no substantive scope or acceptance criteria rather than
+   inventing them.
 6. `quality-mgr` launches the full reviewer set on QA-1 (the sprint's first
    QA pass):
    - `req-qa`
@@ -117,17 +132,22 @@ Before starting a sprint:
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
    - `flaky-test-qa` when test instability risk is present
-7. A review of an assigned fix (every QA of a `fix/` branch, whatever its
-   round number) is fix verification, not a sprint review; sprint QA rounds
-   1–2 stay full sprint reviews. Fix verification dispatches only the
-   reviewer(s) that filed the finding, locked to that finding id and its
-   original acceptance criterion. It reports fixed/open/regressed, files no
-   new findings, and runs only the focused checks the fix needs; there is no
-   automatic `req-qa`, `arch-qa`, `rust-qa-agent` or
-   `ceremony-finding-screen`, no sprint sweep and no TODO scan. Required CI
-   remains a separate merge requirement. Pass `triage_records` and
-   `filing_reviewers` to `qa-template.xml.j2`, which refuses a `fix/` branch
-   without them. All QA-1
+7. A review of an assigned fix (`review_kind: fix_verification`, whatever
+   its round number or branch name) is fix verification, not a sprint
+   review; sprint QA rounds 1–2 stay full sprint reviews. Fix verification
+   dispatches only the reviewer(s) that filed the finding, locked to that
+   finding id and its original acceptance criterion. It reports
+   fixed/open/regressed, files no new findings, and runs only the focused
+   checks the fix needs; there is no automatic `req-qa`, `arch-qa`,
+   `rust-qa-agent` or `ceremony-finding-screen`, no sprint sweep and no TODO
+   scan. Required CI remains a separate merge requirement. Pass
+   `triage_records` and `filing_reviewers` to `qa-template.xml.j2`, which
+   refuses a fix verification without both of them and a full review that
+   names filing reviewers. The branch prefix decides nothing: the first QA of
+   a standalone `fix/` PR verifies no prior finding and is a `full` review.
+   When `review_kind` is omitted the template's compatibility default is
+   `fix_verification` only when `filing_reviewers` is given or a plan round
+   is past the first, and `full` otherwise. All QA-1
    first-pass findings from every reviewer must still be fixed before
    merge — merge gate is 0B+0I+0m with no exceptions and no backlog
    deferral. QA-1 findings route back to the developer via
@@ -178,8 +198,10 @@ of §0.
 
    Plan QA-2 and later is fix verification: only each carried finding's
    filing reviewer runs, locked to that finding id; no other reviewer, no
-   screen, no new findings. Pass `triage_records` and `filing_reviewers` to
-   `qa-template.xml.j2`, which refuses a later plan round without them.
+   screen, no new findings. Pass `review_kind: fix_verification`,
+   `triage_records` and `filing_reviewers` to `qa-template.xml.j2`, which
+   refuses a later plan round without the records and filers (a later plan
+   round defaults to `fix_verification` when `review_kind` is omitted).
 5. If plan QA passes, the hardened plan is ready for implementation dispatch.
 6. If plan QA fails, the lead uses the normal codex-orchestration
    triage-and-fix loop to route concrete fixes back to the developer.
@@ -187,9 +209,11 @@ of §0.
 ## QA Coverage Rule
 
 - `quality-mgr` must extract every deliverable, acceptance criterion, deletion
-  target, required validation item, and expected artifact from `sprint_doc`
-  before launching `req-qa`
-- `req-qa` must independently treat `sprint_doc` as authoritative
+  target, required validation item, and expected artifact from the scope
+  source before launching `req-qa`: `sprint_doc`, or for a standalone PR
+  review the captured `pr_scope` text judged at `pr_head_sha`, listed in the
+  verdict
+- `req-qa` must independently treat that scope source as authoritative
 - `req-qa` must count deliverable completion and report a completion percentage
 - `arch-qa` must inspect sprint-doc structural gate artifacts directly when a
   deliverable points to a boundary, packaging, release-tracking, readiness, or
