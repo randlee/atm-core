@@ -30,6 +30,7 @@ fn missing_close() -> atm_storage::Message {
 #[test]
 fn bd2_commit_failure_discards_audit_rows_and_preserves_original_error() {
     let (target, mut connection, mut cache) = fixture();
+    let (commit_wake, commit_receiver) = tokio::sync::watch::channel(0_u64);
     // Test-only deferred constraint fails the outer COMMIT, after the real
     // Rust task-close operation and its rejection-audit append have run.
     connection
@@ -49,6 +50,7 @@ fn bd2_commit_failure_discards_audit_rows_and_preserves_original_error() {
         &mut connection,
         &mut cache,
         vec![rejected, ordinary],
+        &commit_wake,
     );
     let error = rejected_reply.recv().unwrap().unwrap_err();
     assert_eq!(error.code(), AtmErrorCode::TaskNotFound);
@@ -61,6 +63,30 @@ fn bd2_commit_failure_discards_audit_rows_and_preserves_original_error() {
         .query_row("SELECT COUNT(*) FROM mail_messages", [], |row| row.get(0))
         .unwrap();
     assert_eq!(count, 0);
+    assert!(!commit_receiver.has_changed().unwrap());
+}
+
+#[test]
+fn mailbox_commit_wake_advances_once_for_a_successful_batch() {
+    let (target, mut connection, mut cache) = fixture();
+    let (commit_wake, mut commit_receiver) = tokio::sync::watch::channel(0_u64);
+    let (first, first_reply) = super::tests::queued_upsert(super::tests::message("atm:bd2-first"));
+    let (second, second_reply) =
+        super::tests::queued_upsert(super::tests::message("atm:bd2-second"));
+
+    process_batch(
+        &target,
+        &mut connection,
+        &mut cache,
+        vec![first, second],
+        &commit_wake,
+    );
+
+    assert!(first_reply.recv().unwrap().unwrap().operation.is_ok());
+    assert!(second_reply.recv().unwrap().unwrap().operation.is_ok());
+    assert!(commit_receiver.has_changed().unwrap());
+    assert_eq!(*commit_receiver.borrow_and_update(), 1);
+    assert!(!commit_receiver.has_changed().unwrap());
 }
 
 #[test]
@@ -73,7 +99,13 @@ fn bd2_audit_failure_preserves_existing_audit_error_selection() {
         )
         .unwrap();
     let (queued, reply) = super::tests::queued_upsert(missing_close());
-    process_batch(&target, &mut connection, &mut cache, vec![queued]);
+    process_batch(
+        &target,
+        &mut connection,
+        &mut cache,
+        vec![queued],
+        &tokio::sync::watch::channel(0).0,
+    );
     let error = reply.recv().unwrap().unwrap_err();
     assert_eq!(error.code(), AtmError::validation("audit").code());
     assert!(error.message().contains("failed to append task event"));
@@ -97,7 +129,13 @@ fn bd2_rolled_back_assignment_returns_no_rows() {
     message.envelope.task_id = Some("TASK".parse().unwrap());
     message.envelope.message_id = Some(AtmMessageId::new());
     let (queued, reply) = super::tests::queued_upsert(message);
-    process_batch(&target, &mut connection, &mut cache, vec![queued]);
+    process_batch(
+        &target,
+        &mut connection,
+        &mut cache,
+        vec![queued],
+        &tokio::sync::watch::channel(0).0,
+    );
     let committed = reply.recv().unwrap().unwrap();
     assert!(committed.operation.is_err());
     assert!(committed.task_events.is_empty());
@@ -165,7 +203,13 @@ fn replies(
         .into_iter()
         .map(super::tests::queued_upsert)
         .unzip();
-    process_batch(target, connection, cache, queued);
+    process_batch(
+        target,
+        connection,
+        cache,
+        queued,
+        &tokio::sync::watch::channel(0).0,
+    );
     receivers
         .into_iter()
         .map(|receiver| receiver.recv().unwrap().unwrap())

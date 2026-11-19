@@ -2,7 +2,8 @@ use super::{SharedDb, deserialize_json};
 use atm_storage::AtmError;
 use atm_storage::contract::{
     AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, AsyncMessageStore,
-    MailboxBucketCounts, MailboxScope, Message, MessageKey, MessageQuery, MessageStore,
+    MailboxBucketCounts, MailboxCommitWatch, MailboxScope, Message, MessageKey, MessageQuery,
+    MessageStore,
 };
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::{AgentName, IsoTimestamp, TeamName};
@@ -97,6 +98,15 @@ impl SqliteMessageStore {
             envelope.expires_at = state.expires_at;
         }
         envelope
+    }
+}
+
+struct SqliteMailboxCommitWatch(tokio::sync::watch::Receiver<u64>);
+
+#[async_trait::async_trait]
+impl MailboxCommitWatch for SqliteMailboxCommitWatch {
+    async fn changed(&mut self) -> bool {
+        self.0.changed().await.is_ok()
     }
 }
 
@@ -370,6 +380,12 @@ impl MessageStore for SqliteMessageStore {
 
 #[async_trait::async_trait]
 impl AsyncMessageStore for SqliteMessageStore {
+    fn subscribe_mailbox_commits(&self) -> Box<dyn MailboxCommitWatch> {
+        Box::new(SqliteMailboxCommitWatch(
+            self.db.writer.subscribe_mailbox_commits(),
+        ))
+    }
+
     async fn apply_read_display_state_async(
         &self,
         scope: MailboxScope,
