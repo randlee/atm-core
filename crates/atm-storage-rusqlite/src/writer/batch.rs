@@ -1,6 +1,6 @@
 use super::*;
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-006), reason = "The SQLite writer owns a current-thread Tokio runtime on its dedicated OS thread to receive and batch work.")]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-006), reason = "The SQLite writer owns a current-thread Tokio runtime on its dedicated OS thread to receive and batch work. See https://github.com/randlee/atm-core/issues/2509.")]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn writer_loop(
     target: Arc<SharedDbTarget>,

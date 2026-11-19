@@ -86,7 +86,7 @@ fn accept_failure_is_recoverable(consecutive_failures: u32) -> bool {
     consecutive_failures < MAX_CONSECUTIVE_ACCEPT_FAILURES
 }
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Backoff bounds retries after a recoverable listener accept failure.")]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Backoff bounds retries after a recoverable listener accept failure. See https://github.com/randlee/atm-core/issues/2505.")]
 async fn recover_from_accept_error(
     adapter: &'static str,
     error: io::Error,

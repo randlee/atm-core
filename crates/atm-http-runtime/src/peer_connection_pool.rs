@@ -566,7 +566,7 @@ fn take_expired_idle(
     expired
 }
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Periodic idle eviction waits for the configured timeout between sweeps.")]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Periodic idle eviction waits for the configured timeout between sweeps. See https://github.com/randlee/atm-core/issues/2507.")]
 fn spawn_idle_eviction_task(shared: &Arc<PoolShared>) {
     let Ok(handle) = tokio::runtime::Handle::try_current() else {
         return;
