@@ -436,23 +436,43 @@ enum SocketLiveness {
 }
 
 #[cfg(unix)]
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070: refused-socket liveness backoff is bounded by the probe schedule; cancellation drops the probe future.")]
 async fn probe_unix_socket_liveness(
     path: &Path,
     original: SocketRecoverySnapshot,
 ) -> std::io::Result<SocketLiveness> {
-    // A refused AF_UNIX connection can be transient while a live listener's
-    // backlog drains. Treat an endpoint as dead only after a bounded
-    // observation window has both repeatedly refused connections and retained
-    // its exact socket inode and owner throughout that window.
-    for attempt in 0..SOCKET_LIVENESS_PROBE_ATTEMPTS {
-        match tokio::net::UnixStream::connect(path).await {
-            Ok(_) => return Ok(SocketLiveness::Reachable),
-            Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused => {
-                match recovery_target_observation(path.to_path_buf(), original)
+    probe_liveness_with(
+        || async { tokio::net::UnixStream::connect(path).await.map(|_| ()) },
+        || {
+            let path = path.to_path_buf();
+            async move {
+                recovery_target_observation(path, original)
                     .await
-                    .map_err(std::io::Error::other)?
-                {
+                    .map_err(std::io::Error::other)
+            }
+        },
+    )
+    .await
+}
+
+/// Drive the same liveness state machine with the physical probe or a scripted one.
+#[cfg(unix)]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070: refused-socket liveness backoff is bounded by the probe schedule; cancellation drops the probe future.")]
+async fn probe_liveness_with<Connect, ConnectFuture, Observe, ObserveFuture>(
+    mut connect: Connect,
+    mut observe: Observe,
+) -> std::io::Result<SocketLiveness>
+where
+    Connect: FnMut() -> ConnectFuture,
+    ConnectFuture: std::future::Future<Output = std::io::Result<()>>,
+    Observe: FnMut() -> ObserveFuture,
+    ObserveFuture: std::future::Future<Output = std::io::Result<RecoveryTargetObservation>>,
+{
+    // A refused AF_UNIX connection may be transient while a backlog drains.
+    for attempt in 0..SOCKET_LIVENESS_PROBE_ATTEMPTS {
+        match connect().await {
+            Ok(()) => return Ok(SocketLiveness::Reachable),
+            Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused => {
+                match observe().await? {
                     RecoveryTargetObservation::Matches => {}
                     RecoveryTargetObservation::Missing => return Ok(SocketLiveness::Disappeared),
                     RecoveryTargetObservation::Changed => return Ok(SocketLiveness::Changed),
@@ -462,16 +482,11 @@ async fn probe_unix_socket_liveness(
                     tokio::time::sleep(SOCKET_LIVENESS_PROBE_BACKOFF * multiplier).await;
                 }
             }
-            Err(error) => {
-                match recovery_target_observation(path.to_path_buf(), original)
-                    .await
-                    .map_err(std::io::Error::other)?
-                {
-                    RecoveryTargetObservation::Matches => return Err(error),
-                    RecoveryTargetObservation::Missing => return Ok(SocketLiveness::Disappeared),
-                    RecoveryTargetObservation::Changed => return Ok(SocketLiveness::Changed),
-                }
-            }
+            Err(error) => match observe().await? {
+                RecoveryTargetObservation::Matches => return Err(error),
+                RecoveryTargetObservation::Missing => return Ok(SocketLiveness::Disappeared),
+                RecoveryTargetObservation::Changed => return Ok(SocketLiveness::Changed),
+            },
         }
     }
     Ok(SocketLiveness::Dead)
@@ -702,8 +717,7 @@ mod tests {
     use super::{
         ORPHAN_STAGING_MIN_AGE, PrivateStagingDirectory, SocketLiveness, UNIX_SOCKET_PATH_CAPACITY,
         UnixSocketStartupLock, bind_unix_listener, inspect_recovery_target,
-        probe_unix_socket_liveness, reclaim_stale_unix_socket, remove_stale_socket_path,
-        validate_unix_socket_path_length,
+        reclaim_stale_unix_socket, remove_stale_socket_path, validate_unix_socket_path_length,
     };
     use crate::{UnixSocketConfig, UnixSocketMode, UnixSocketOwnerUid};
 
@@ -717,63 +731,80 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn refused_socket_is_retried_before_it_is_declared_dead() {
-        let directory = tempfile::tempdir().expect("temporary UDS parent");
-        let path = directory.path().join("atm-daemon.sock");
-        let uid = std::fs::metadata(directory.path())
-            .expect("temporary UDS parent metadata")
-            .uid();
-        let stale = std::os::unix::net::UnixListener::bind(&path).expect("create stale socket");
-        drop(stale);
-        let snapshot = inspect_recovery_target(socket_config(path.clone(), uid))
-            .await
-            .expect("inspect stale socket")
-            .expect("stale socket exists");
-
-        let probe_path = path.clone();
-        let probe =
-            tokio::spawn(async move { probe_unix_socket_liveness(&probe_path, snapshot).await });
-        tokio::task::yield_now().await;
-        assert!(
-            !probe.is_finished(),
-            "one refusal cannot prove the socket is dead"
-        );
-        tokio::time::advance(std::time::Duration::from_millis(1_500)).await;
+        let (attempt_tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
+        let started = tokio::time::Instant::now();
+        let probe = tokio::spawn(super::probe_liveness_with(
+            move || {
+                attempt_tx.send(()).unwrap();
+                async { Err(std::io::Error::from(std::io::ErrorKind::ConnectionRefused)) }
+            },
+            || async { Ok(super::RecoveryTargetObservation::Matches) },
+        ));
+        assert_eq!(attempts.recv().await, Some(()));
+        for millis in [100, 200, 400, 800] {
+            assert!(matches!(
+                attempts.try_recv(),
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+            ));
+            tokio::time::advance(std::time::Duration::from_millis(millis)).await;
+            assert_eq!(attempts.recv().await, Some(()));
+        }
+        assert_eq!(probe.await.unwrap().unwrap(), SocketLiveness::Dead);
         assert_eq!(
-            probe.await.expect("probe joins").expect("probe result"),
-            SocketLiveness::Dead
+            tokio::time::Instant::now(),
+            started + std::time::Duration::from_millis(1500)
         );
     }
 
     #[tokio::test(start_paused = true)]
     async fn changed_socket_is_never_classified_as_dead_after_a_refusal() {
-        let directory = tempfile::tempdir().expect("temporary UDS parent");
-        let path = directory.path().join("atm-daemon.sock");
-        let uid = std::fs::metadata(directory.path())
-            .expect("temporary UDS parent metadata")
-            .uid();
-        let stale = std::os::unix::net::UnixListener::bind(&path).expect("create stale socket");
-        drop(stale);
-        let snapshot = inspect_recovery_target(socket_config(path.clone(), uid))
-            .await
-            .expect("inspect stale socket")
-            .expect("stale socket exists");
-
-        let probe_path = path.clone();
-        let probe =
-            tokio::spawn(async move { probe_unix_socket_liveness(&probe_path, snapshot).await });
-        tokio::task::yield_now().await;
-        // Replace atomically: unlinking then writing leaves a real observation
-        // window in which the probe can correctly report `Disappeared` instead
-        // of the invariant this test is exercising (`Changed`).
-        let replacement = directory.path().join("replacement");
-        std::fs::write(&replacement, "different owner must be left alone")
-            .expect("prepare a different occupied path");
-        std::fs::rename(&replacement, &path).expect("atomically replace stale socket path");
+        let observations =
+            std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::from([
+                super::RecoveryTargetObservation::Matches,
+                super::RecoveryTargetObservation::Changed,
+            ])));
+        let (attempt_tx, mut attempts) = tokio::sync::mpsc::unbounded_channel();
+        let probe = tokio::spawn(super::probe_liveness_with(
+            move || {
+                attempt_tx.send(()).unwrap();
+                async { Err(std::io::Error::from(std::io::ErrorKind::ConnectionRefused)) }
+            },
+            move || {
+                let next = observations.lock().unwrap().pop_front().unwrap();
+                async move { Ok(next) }
+            },
+        ));
+        assert_eq!(attempts.recv().await, Some(()));
         tokio::time::advance(std::time::Duration::from_millis(100)).await;
-        assert_eq!(
-            probe.await.expect("probe joins").expect("probe result"),
-            SocketLiveness::Changed
-        );
+        assert_eq!(attempts.recv().await, Some(()));
+        assert_eq!(probe.await.unwrap().unwrap(), SocketLiveness::Changed);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn non_refused_errors_never_authorize_unlink() {
+        for observation in [
+            super::RecoveryTargetObservation::Matches,
+            super::RecoveryTargetObservation::Missing,
+            super::RecoveryTargetObservation::Changed,
+        ] {
+            let result = super::probe_liveness_with(
+                || async { Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied)) },
+                || async move { Ok(observation) },
+            )
+            .await;
+            match observation {
+                super::RecoveryTargetObservation::Matches => assert_eq!(
+                    result.unwrap_err().kind(),
+                    std::io::ErrorKind::PermissionDenied
+                ),
+                super::RecoveryTargetObservation::Missing => {
+                    assert_eq!(result.unwrap(), SocketLiveness::Disappeared)
+                }
+                super::RecoveryTargetObservation::Changed => {
+                    assert_eq!(result.unwrap(), SocketLiveness::Changed)
+                }
+            }
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -785,16 +816,19 @@ mod tests {
             .uid();
         let stale = std::os::unix::net::UnixListener::bind(&path).expect("create stale socket");
         drop(stale);
-        let snapshot = inspect_recovery_target(socket_config(path.clone(), uid))
+        inspect_recovery_target(socket_config(path.clone(), uid))
             .await
             .expect("inspect stale socket")
             .expect("stale socket exists");
 
         std::fs::remove_file(&path).expect("simulate concurrent stale-socket cleanup");
         assert_eq!(
-            probe_unix_socket_liveness(&path, snapshot)
-                .await
-                .expect("probe result"),
+            super::probe_liveness_with(
+                || async { Err(std::io::Error::from(std::io::ErrorKind::NotFound)) },
+                || async { Ok(super::RecoveryTargetObservation::Missing) },
+            )
+            .await
+            .expect("probe result"),
             SocketLiveness::Disappeared
         );
 

@@ -1014,7 +1014,8 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    use atm_core::api::ApiRequest;
+    use crate::client::{HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector};
+    use atm_core::api::{ApiRequest, DaemonApiClient};
     use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
     use atm_core::error::AtmError;
     use atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE;
@@ -1033,6 +1034,124 @@ mod tests {
         health_route, with_auxiliary_admission,
     };
     use ulid::Ulid;
+
+    struct DuplexConnector {
+        stream: Mutex<Option<tokio::io::DuplexStream>>,
+        started: Arc<tokio::sync::Notify>,
+    }
+
+    #[async_trait::async_trait]
+    impl HttpRuntimeConnector for DuplexConnector {
+        fn connection_target(&self) -> String {
+            "controlled loopback".to_owned()
+        }
+        fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
+            crate::client::local_request_timeout_failure(&self.connection_target())
+        }
+        async fn exchange(
+            &self,
+            request: atm_core::api::HttpRequest,
+            deadline: RequestDeadline,
+        ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+            let stream = self.stream.lock().unwrap().take().expect("one connection");
+            let (mut sender, connection) =
+                hyper::client::conn::http1::handshake(hyper_util::rt::TokioIo::new(stream))
+                    .await
+                    .map_err(|error| HttpRuntimeClientFailure::Connect(error.to_string()))?;
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            self.started.notify_one();
+            crate::client::execute_opaque_peer_request_with_sender(
+                &mut sender,
+                request,
+                crate::request_deadline::capture(deadline),
+            )
+            .await
+            .map_err(|error| match error {
+                HttpRuntimeClientFailure::Timeout => {
+                    crate::client::local_request_timeout_failure(&self.connection_target())
+                }
+                other => other,
+            })
+        }
+    }
+
+    async fn controlled_runtime(
+        config: HttpRuntimeConfig,
+        handler: Arc<dyn CanonicalWriteHandler>,
+    ) -> (
+        super::HttpRuntime<super::Running>,
+        tokio::sync::mpsc::UnboundedSender<std::io::Result<tokio::io::DuplexStream>>,
+    ) {
+        let configured = HttpRuntimeBuilder::new(config, handler)
+            .build()
+            .expect("valid runtime configuration");
+        let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 43101);
+        let (_, endpoint_record) = super::runtime_listener::publish_loopback_endpoint(
+            &configured.config,
+            address,
+            &configured.health,
+        )
+        .await
+        .expect("publish endpoint record");
+        #[cfg(unix)]
+        let unix_binding = super::runtime_listener::bind_configured_unix_listener(
+            &configured.config,
+            &configured.health,
+        )
+        .await
+        .expect("prepare Unix endpoint");
+        let router = configured.canonical_router();
+        let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(());
+        let (stopped_tx, server_stopped_rx) = tokio::sync::watch::channel(false);
+        let server_task =
+            super::spawn_supervised_server(configured.health.clone(), stopped_tx, async move {
+                #[cfg(unix)]
+                let _unix_binding = unix_binding;
+                super::http1_server::serve_loopback_http1(
+                    super::http1_server::ChannelAcceptor {
+                        events: tokio::sync::Mutex::new(events_rx),
+                        observed: None,
+                    },
+                    router,
+                    8,
+                    Duration::from_secs(1),
+                    shutdown_rx,
+                )
+                .await
+            });
+        configured.health.mark_ready();
+        let running = super::HttpRuntime {
+            config: configured.config,
+            handler: configured.handler,
+            health: configured.health,
+            maintenance: configured.maintenance,
+            diagnostic_counters: configured.diagnostic_counters,
+            diagnostic_timeline: configured.diagnostic_timeline,
+            state: super::Running {
+                local_address: address,
+                direct_peer_address: None,
+                shutdown_tx,
+                server_stopped_rx,
+                server_task,
+                maintenance_task: None,
+                endpoint_record,
+            },
+        };
+        (running, events_tx)
+    }
+
+    fn controlled_client(stream: tokio::io::DuplexStream) -> HttpRuntimeClient<DuplexConnector> {
+        HttpRuntimeClient::new(
+            Arc::new(DuplexConnector {
+                stream: Mutex::new(Some(stream)),
+                started: Arc::new(tokio::sync::Notify::new()),
+            }),
+            Duration::from_secs(1),
+        )
+    }
 
     struct TestRouter;
 
@@ -1941,42 +2060,40 @@ mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn unix_socket_shutdown_drains_an_in_flight_canonical_request_before_cleanup() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
         let handler = Arc::new(BlockingUdsRouter::new());
-        let configured = HttpRuntimeBuilder::new(
+        let (running, events) = controlled_runtime(
             uds_config(socket_path.clone(), owner_uid(temporary_directory.path())),
             handler.clone(),
         )
-        .build()
-        .expect("valid UDS configuration");
-        let running = configured.start().await.expect("UDS runtime starts");
-        let client = super::unix_socket_client(&socket_path, Duration::from_secs(1))
-            .expect("shared UDS client");
+        .await;
+        let (client, server) = tokio::io::duplex(4096);
+        events.send(Ok(server)).unwrap();
+        let client = controlled_client(client);
         let request =
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
-
         handler
             .wait_until_entered("unix_socket_shutdown_drains_in_flight_request")
             .await;
-        let drain = tokio::spawn(async move {
+        let now = tokio::time::Instant::now();
+        let mut drain = Box::pin(
             running
                 .begin_shutdown()
-                .finish(tokio::time::Instant::now() + Duration::from_secs(1))
-                .await
-        });
-        tokio::task::yield_now().await;
+                .finish(now + Duration::from_secs(1)),
+        );
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
         assert!(
-            !drain.is_finished(),
+            drain.as_mut().poll(&mut cx).is_pending(),
             "graceful shutdown must wait for an active UDS canonical request"
         );
+        assert_eq!(tokio::time::Instant::now(), now);
         assert!(
             socket_path.exists(),
             "the UDS endpoint remains present while its active request drains"
         );
-
         handler.release.notify_waiters();
         let response = request
             .await
@@ -1985,7 +2102,6 @@ mod tests {
         assert!(matches!(response.into_inner(), ResponseEnvelope::Error(_)));
         drain
             .await
-            .expect("drain task joins")
             .expect("runtime drains after request completion");
         assert!(
             !socket_path.exists(),
@@ -2339,51 +2455,6 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn loopback_connection_admission_stops_before_router_work() {
-        use crate::client::{HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector};
-        use atm_core::api::DaemonApiClient;
-
-        struct DuplexConnector {
-            stream: Mutex<Option<tokio::io::DuplexStream>>,
-            started: Arc<tokio::sync::Notify>,
-        }
-
-        #[async_trait::async_trait]
-        impl HttpRuntimeConnector for DuplexConnector {
-            fn connection_target(&self) -> String {
-                "controlled loopback".to_owned()
-            }
-            fn deadline_elapsed(&self) -> HttpRuntimeClientFailure {
-                crate::client::local_request_timeout_failure(&self.connection_target())
-            }
-            async fn exchange(
-                &self,
-                request: atm_core::api::HttpRequest,
-                deadline: RequestDeadline,
-            ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-                let stream = self.stream.lock().unwrap().take().expect("one connection");
-                let (mut sender, connection) =
-                    hyper::client::conn::http1::handshake(hyper_util::rt::TokioIo::new(stream))
-                        .await
-                        .map_err(|error| HttpRuntimeClientFailure::Connect(error.to_string()))?;
-                tokio::spawn(async move {
-                    let _ = connection.await;
-                });
-                self.started.notify_one();
-                crate::client::execute_opaque_peer_request_with_sender(
-                    &mut sender,
-                    request,
-                    crate::request_deadline::capture(deadline),
-                )
-                .await
-                .map_err(|error| match error {
-                    HttpRuntimeClientFailure::Timeout => {
-                        crate::client::local_request_timeout_failure(&self.connection_target())
-                    }
-                    other => other,
-                })
-            }
-        }
-
         let handler = Arc::new(CountingLoopbackRouter::new());
         let router = super::canonical_api_router(
             handler.clone(),
@@ -2920,14 +2991,14 @@ mod tests {
             .expect("body-limit runtime drains");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn loopback_shutdown_drains_an_in_flight_canonical_request_before_record_cleanup() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
         let instance_id = Ulid::new();
         write_owner_record(&record_path, instance_id);
         let handler = Arc::new(CountingLoopbackRouter::new());
-        let configured = HttpRuntimeBuilder::new(
+        let (running, events) = controlled_runtime(
             loopback_runtime_config(
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
                 record_path.clone(),
@@ -2937,33 +3008,31 @@ mod tests {
             ),
             handler.clone(),
         )
-        .build()
-        .expect("valid loopback runtime configuration");
-        let running = configured.start().await.expect("loopback runtime starts");
-        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
-            .expect("shared loopback client");
+        .await;
+        let (client, server) = tokio::io::duplex(4096);
+        events.send(Ok(server)).unwrap();
+        let client = controlled_client(client);
         let request =
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
-
         handler
             .wait_until_entered("loopback_shutdown_drains_in_flight_request")
             .await;
-        let drain = tokio::spawn(async move {
+        let now = tokio::time::Instant::now();
+        let mut drain = Box::pin(
             running
                 .begin_shutdown()
-                .finish(tokio::time::Instant::now() + Duration::from_secs(1))
-                .await
-        });
-        tokio::task::yield_now().await;
+                .finish(now + Duration::from_secs(1)),
+        );
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
         assert!(
-            !drain.is_finished(),
+            drain.as_mut().poll(&mut cx).is_pending(),
             "shutdown must retain an in-flight loopback request"
         );
+        assert_eq!(tokio::time::Instant::now(), now);
         assert!(
             record_path.exists(),
             "endpoint record remains while the request drains"
         );
-
         handler.release.notify_waiters();
         let response = request
             .await
@@ -2972,7 +3041,6 @@ mod tests {
         assert!(matches!(response.into_inner(), ResponseEnvelope::Error(_)));
         drain
             .await
-            .expect("drain task joins")
             .expect("loopback runtime drains after active request completes");
         assert!(
             !record_path.exists(),
@@ -2980,14 +3048,14 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn loopback_shutdown_deadline_aborts_an_in_flight_request_and_cleans_up() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
         let instance_id = Ulid::new();
         write_owner_record(&record_path, instance_id);
         let handler = Arc::new(CountingLoopbackRouter::new());
-        let configured = HttpRuntimeBuilder::new(
+        let (running, events) = controlled_runtime(
             HttpRuntimeConfig::new(
                 loopback_tcp_with_instance(
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
@@ -3000,22 +3068,27 @@ mod tests {
             ),
             handler.clone(),
         )
-        .build()
-        .expect("valid short-shutdown runtime configuration");
-        let running = configured.start().await.expect("loopback runtime starts");
-        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(1))
-            .expect("shared loopback client");
+        .await;
+        let (client, server) = tokio::io::duplex(4096);
+        events.send(Ok(server)).unwrap();
+        let client = controlled_client(client);
         let request =
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
-
-        handler
-            .wait_until_entered("stuck_server_and_maintenance_probe")
-            .await;
-        let shutdown = running
-            .begin_shutdown()
-            .finish(tokio::time::Instant::now() + Duration::from_millis(250))
-            .await;
-        let error = match shutdown {
+        handler.wait_until_entered("shutdown deadline").await;
+        let start = tokio::time::Instant::now();
+        let mut shutdown = Box::pin(
+            running
+                .begin_shutdown()
+                .finish(start + Duration::from_millis(250)),
+        );
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(shutdown.as_mut().poll(&mut cx).is_pending());
+        tokio::time::advance(Duration::from_millis(50)).await;
+        assert_eq!(
+            tokio::time::Instant::now(),
+            start + Duration::from_millis(50)
+        );
+        let error = match shutdown.await {
             Ok(_) => panic!("an in-flight request exceeds the configured shutdown deadline"),
             Err(error) => error,
         };
@@ -3269,6 +3342,7 @@ mod tests {
         cooperative: bool,
     ) -> (
         super::HttpRuntime<super::Running>,
+        tokio::sync::mpsc::UnboundedSender<std::io::Result<tokio::io::DuplexStream>>,
         Arc<AtomicBool>,
         Arc<AtomicBool>,
     ) {
@@ -3276,7 +3350,7 @@ mod tests {
         write_owner_record(record_path, instance_id);
         let ended = Arc::new(AtomicBool::new(false));
         let aborted = Arc::new(AtomicBool::new(false));
-        let running = HttpRuntimeBuilder::new(
+        let (mut running, events) = controlled_runtime(
             HttpRuntimeConfig::new(
                 loopback_tcp_with_instance(
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
@@ -3289,17 +3363,16 @@ mod tests {
             ),
             handler,
         )
-        .with_maintenance(Arc::new(ShutdownProbeMaintenance {
+        .await;
+        let maintenance: Arc<dyn super::RuntimeMaintenance> = Arc::new(ShutdownProbeMaintenance {
             cooperative,
             ended: Arc::clone(&ended),
             aborted: Arc::clone(&aborted),
-        }))
-        .build()
-        .expect("valid probe runtime configuration")
-        .start()
-        .await
-        .expect("probe runtime starts");
-        (running, ended, aborted)
+        });
+        running.state.maintenance_task =
+            Some(maintenance.start(running.state.shutdown_tx.subscribe()));
+        running.maintenance = Some(maintenance);
+        (running, events, ended, aborted)
     }
 
     /// Positive: with the server held by an in-flight request and maintenance
@@ -3307,32 +3380,34 @@ mod tests {
     /// removes the endpoint record within one shutdown bound, never a second
     /// fresh budget for maintenance. The clock is paused once the request is
     /// held, so the bound is exact virtual time.
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn stuck_server_and_maintenance_share_one_shutdown_bound() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
         let handler = Arc::new(CountingLoopbackRouter::new());
-        let (running, ended, aborted) =
+        let (running, events, ended, aborted) =
             probe_runtime(&record_path, Arc::clone(&handler), false).await;
-        let client = super::loopback_tcp_client(&record_path, Duration::from_secs(5))
-            .expect("shared loopback client");
+        let (client, server) = tokio::io::duplex(4096);
+        events.send(Ok(server)).unwrap();
+        let client = controlled_client(client);
         let request =
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
         handler
-            .wait_until_entered("shutdown_deadline_request")
+            .wait_until_entered("shutdown deadline request")
             .await;
-
-        // Pause only now: auto-advance during the real socket handshake above
-        // would run the client's own timeout out before the request lands.
-        tokio::time::pause();
-        let deadline = tokio::time::Instant::now() + PROBE_SHUTDOWN;
-        let result = running.begin_shutdown().finish(deadline).await;
-        let overrun = tokio::time::Instant::now().saturating_duration_since(deadline);
-        // The clock is paused, so virtual time passes only by timers firing:
-        // any overrun is a second budget, not wake-up latency.
-        assert_eq!(
-            overrun,
-            Duration::ZERO,
+        let start = tokio::time::Instant::now();
+        let deadline = start + PROBE_SHUTDOWN;
+        let mut finish = Box::pin(running.begin_shutdown().finish(deadline));
+        let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(finish.as_mut().poll(&mut cx).is_pending());
+        let drain_budget = PROBE_SHUTDOWN
+            - super::runtime_maintenance::ENDPOINT_CLEANUP_RESERVE
+            - super::runtime_maintenance::ABORT_JOIN_GRACE;
+        tokio::time::advance(drain_budget).await;
+        assert_eq!(tokio::time::Instant::now(), start + drain_budget);
+        let result = finish.await;
+        assert!(
+            tokio::time::Instant::now() <= deadline,
             "shutdown including endpoint cleanup overran the deadline"
         );
         assert_eq!(
@@ -3348,20 +3423,19 @@ mod tests {
 
     /// Negative: an idle server and cooperative maintenance drain on the
     /// signal, well inside the bound, without being cancelled.
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn cooperative_shutdown_drains_without_cancellation() {
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
-        let (running, ended, aborted) =
+        let (running, _events, ended, aborted) =
             probe_runtime(&record_path, Arc::new(CountingLoopbackRouter::new()), true).await;
-
         let started = tokio::time::Instant::now();
         running
             .begin_shutdown()
             .finish(started + PROBE_SHUTDOWN)
             .await
             .expect("cooperative shutdown succeeds");
-        assert!(started.elapsed() < PROBE_SHUTDOWN / 2);
+        assert_eq!(tokio::time::Instant::now(), started);
         assert!(ended.load(Ordering::SeqCst), "maintenance returned");
         assert!(
             !aborted.load(Ordering::SeqCst),
