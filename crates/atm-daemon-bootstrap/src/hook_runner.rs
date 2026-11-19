@@ -30,7 +30,9 @@ use atm_core::types::TeamName;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 
-use crate::process_deadline::{SpawnFailure, SpawnSpec, SpawnedOutput, spawn_with_deadline};
+#[cfg(test)]
+use crate::process_deadline::spawn_with_deadline;
+use crate::process_deadline::{SpawnFailure, SpawnSpec, SpawnedOutput};
 
 #[cfg(feature = "test-support")]
 #[path = "hook_runner/controlled_deadline.rs"]
@@ -187,16 +189,16 @@ impl DaemonHookRunner {
         }
     }
 
-    async fn execute(
+    async fn execute_at(
         &self,
         target: &HookTarget,
         hook: &str,
         stdin: Vec<u8>,
-        deadline: RequestDeadline,
+        at: tokio::time::Instant,
         doctor: bool,
     ) -> Result<SpawnedOutput, AtmError> {
         let started_at = tokio::time::Instant::now();
-        let remaining = deadline.remaining().unwrap_or_default();
+        let remaining = at.saturating_duration_since(started_at);
         let budget = if doctor {
             doctor_budget(target.timeout_ms, remaining)
         } else {
@@ -224,8 +226,15 @@ impl DaemonHookRunner {
             error
         })?;
         let started = tokio::time::Instant::now();
-        let _permit = self.acquire_permit(target, hook, budget, started).await?;
-        let spec = self.spec(target, hook).await?;
+        let hook_deadline = started_at + budget;
+        let _permit = self
+            .acquire_permit(target, hook, budget, started, hook_deadline)
+            .await?;
+        let spec = tokio::time::timeout_at(hook_deadline, self.spec(target, hook))
+            .await
+            .map_err(|_| {
+                AtmError::hook_timeout(&target.phase, "budget exhausted before spawn")
+            })??;
         let remaining = match self.deadline_source {
             HookDeadlineSource::System => {
                 remaining_spawn_budget(&target.phase, budget, started.elapsed())?
@@ -234,7 +243,7 @@ impl DaemonHookRunner {
             HookDeadlineSource::Controlled(_) => budget,
         };
         let output = self
-            .spawn(spec, &stdin, remaining)
+            .spawn(spec, &stdin, remaining, hook_deadline)
             .instrument(hook_spawn_span(target, hook, budget))
             .await
             .map_err(|failure| {
@@ -323,10 +332,11 @@ impl HookRunner for DaemonHookRunner {
         request: &HookRequest,
         deadline: RequestDeadline,
     ) -> Result<HookOutcome, AtmError> {
+        let at = tokio::time::Instant::now() + deadline.remaining().unwrap_or_default();
         let stdin = serde_json::to_vec(request)
             .map_err(|error| AtmError::hook_malformed(&error.to_string()))?;
         let output = self
-            .execute(target, request.hook.as_str(), stdin, deadline, false)
+            .execute_at(target, request.hook.as_str(), stdin, at, false)
             .await?;
         Ok(HookOutcome {
             reply: HookReply::parse(&output.stdout)?,
@@ -339,11 +349,10 @@ impl HookRunner for DaemonHookRunner {
         target: &HookTarget,
         deadline: RequestDeadline,
     ) -> Result<HookDoctorReply, AtmError> {
+        let at = tokio::time::Instant::now() + deadline.remaining().unwrap_or_default();
         let stdin = serde_json::to_vec(&HookDoctorRequest::for_target(target))
             .map_err(|error| AtmError::hook_malformed(&error.to_string()))?;
-        let output = self
-            .execute(target, "doctor", stdin, deadline, true)
-            .await?;
+        let output = self.execute_at(target, "doctor", stdin, at, true).await?;
         HookDoctorReply::parse(&output.stdout)
     }
 
@@ -353,10 +362,11 @@ impl HookRunner for DaemonHookRunner {
         request: &HookRequest,
         deadline: RequestDeadline,
     ) -> Result<StopReply, AtmError> {
+        let at = tokio::time::Instant::now() + deadline.remaining().unwrap_or_default();
         let stdin = serde_json::to_vec(request)
             .map_err(|error| AtmError::hook_malformed(&error.to_string()))?;
         let output = self
-            .execute(target, request.hook.as_str(), stdin, deadline, false)
+            .execute_at(target, request.hook.as_str(), stdin, at, false)
             .await?;
         StopReply::parse(&output.stdout)
     }
@@ -370,10 +380,11 @@ impl CronHookRunner for DaemonHookRunner {
         request: &HookRequest,
         deadline: RequestDeadline,
     ) -> Result<CronHookOutcome, AtmError> {
+        let at = tokio::time::Instant::now() + deadline.remaining().unwrap_or_default();
         let stdin = serde_json::to_vec(request)
             .map_err(|error| AtmError::hook_malformed(&error.to_string()))?;
         let output = self
-            .execute(target, request.hook.as_str(), stdin, deadline, false)
+            .execute_at(target, request.hook.as_str(), stdin, at, false)
             .await?;
         Ok(CronHookOutcome {
             reply: parse_cron_tick_reply(&output.stdout)?,
@@ -387,10 +398,11 @@ impl CronHookRunner for DaemonHookRunner {
         request: &HookRequest,
         deadline: RequestDeadline,
     ) -> Result<CronStopReply, AtmError> {
+        let at = tokio::time::Instant::now() + deadline.remaining().unwrap_or_default();
         let stdin = serde_json::to_vec(request)
             .map_err(|error| AtmError::hook_malformed(&error.to_string()))?;
         let output = self
-            .execute(target, request.hook.as_str(), stdin, deadline, false)
+            .execute_at(target, request.hook.as_str(), stdin, at, false)
             .await?;
         parse_cron_stop_reply(&output.stdout)
     }
@@ -837,6 +849,73 @@ mod tests {
             serde_json::to_string(&fixture.target.custom).unwrap()
         );
         assert_eq!(fixture.json("fixture_argv.json"), json!(["task.close"]));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn injected_deadline_expired_at_entry() {
+        let fixture = Fixture::new();
+        let runner = DaemonHookRunner::with_limit(&fixture.env, 0);
+        let result = runner
+            .execute_at(
+                &fixture.target,
+                "doctor",
+                Vec::new(),
+                tokio::time::Instant::now(),
+                true,
+            )
+            .await;
+        assert_eq!(result.unwrap_err().code(), AtmErrorCode::HookTimeout);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn injected_deadline_is_not_extended_by_delayed_entry() {
+        let fixture = Fixture::new();
+        let runner = DaemonHookRunner::with_limit(&fixture.env, 0);
+        let at = tokio::time::Instant::now() + Duration::from_secs(1);
+        tokio::time::advance(Duration::from_secs(1)).await;
+        let result = runner
+            .execute_at(&fixture.target, "doctor", Vec::new(), at, true)
+            .await;
+        assert_eq!(result.unwrap_err().code(), AtmErrorCode::HookTimeout);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn nested_permit_wait_uses_original_injected_deadline() {
+        let fixture = Fixture::new();
+        let runner = DaemonHookRunner::with_limit(&fixture.env, 0);
+        let at = tokio::time::Instant::now() + Duration::from_secs(2);
+        tokio::time::advance(Duration::from_secs(1)).await;
+        let future = runner.execute_at(&fixture.target, "doctor", Vec::new(), at, true);
+        tokio::pin!(future);
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(future.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        tokio::time::advance(Duration::from_secs(1)).await;
+        assert_eq!(future.await.unwrap_err().code(), AtmErrorCode::HookTimeout);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn injected_deadline_expires_at_exact_boundary() {
+        let fixture = Fixture::new();
+        let runner = DaemonHookRunner::with_limit(&fixture.env, 0);
+        let at = tokio::time::Instant::now() + Duration::from_secs(1);
+        let future = runner.execute_at(&fixture.target, "doctor", Vec::new(), at, true);
+        tokio::pin!(future);
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(future.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        tokio::time::advance(Duration::from_secs(1) - Duration::from_nanos(1)).await;
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(future.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        tokio::time::advance(Duration::from_nanos(1)).await;
+        assert_eq!(future.await.unwrap_err().code(), AtmErrorCode::HookTimeout);
     }
 
     #[tokio::test(flavor = "current_thread")]

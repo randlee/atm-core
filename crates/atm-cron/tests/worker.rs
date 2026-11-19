@@ -208,7 +208,7 @@ async fn wait_for_release(receiver: &mut watch::Receiver<bool>) {
     }
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn atm_cron_public_surface_is_worker_and_scheduler_trait() {
     let fixture = Fixture::new();
     let worker = fixture.cron.start_worker().await.unwrap();
@@ -328,7 +328,7 @@ fn atm_cron_has_no_unapproved_public_inherent_methods() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn start_refuses_invalid_expression_before_store_write() {
     let fixture = Fixture::new();
     let mut spec = fixture.spec("invalid");
@@ -337,7 +337,7 @@ async fn start_refuses_invalid_expression_before_store_write() {
     assert_eq!(fixture.store.writes.load(Ordering::SeqCst), 0);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn start_refuses_until_in_the_past() {
     let fixture = Fixture::new();
     for offset in [-1, 0] {
@@ -358,7 +358,7 @@ async fn start_refuses_until_in_the_past() {
     assert_eq!(fixture.store.writes.load(Ordering::SeqCst), 0);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn start_after_end_updates_in_place_and_keeps_the_id() {
     let fixture = Fixture::new();
     let spec = fixture.spec("first");
@@ -374,7 +374,7 @@ async fn start_after_end_updates_in_place_and_keeps_the_id() {
     assert_eq!(Some(restarted.generation), row.generation.next());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn start_returns_cron_expr_byte_identical() {
     let fixture = Fixture::new();
     let mut spec = fixture.spec("exact");
@@ -385,7 +385,7 @@ async fn start_returns_cron_expr_byte_identical() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn start_stamps_created_at_from_the_injected_clock() {
     let fixture = Fixture::new();
     fixture.clock.advance(chrono::Duration::seconds(17));
@@ -401,7 +401,7 @@ async fn start_stamps_created_at_from_the_injected_clock() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn start_requires_one_stop_condition_by_type() {
     let fixture = Fixture::new();
     let mut spec = fixture.spec("stop");
@@ -412,14 +412,14 @@ async fn start_requires_one_stop_condition_by_type() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn initial_load_error_is_returned_by_start_worker() {
     let fixture = Fixture::new();
     fixture.store.fail_active_all.store(true, Ordering::SeqCst);
     assert!(fixture.cron.start_worker().await.is_err());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn stopped_worker_refuses_start_end_and_list() {
     let fixture = Fixture::new();
     let worker = fixture.worker().await;
@@ -452,7 +452,7 @@ async fn stopped_worker_refuses_start_end_and_list() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn starting_worker_twice_returns_lifecycle_error_code() {
     let fixture = Fixture::new();
     let worker = fixture.cron.start_worker().await.unwrap();
@@ -468,7 +468,7 @@ async fn starting_worker_twice_returns_lifecycle_error_code() {
     shutdown(&worker).await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn shutdown_before_first_worker_poll_refuses_commands() {
     let fixture = Fixture::new();
     let worker = fixture.cron.start_worker().await.unwrap();
@@ -484,7 +484,7 @@ async fn shutdown_before_first_worker_poll_refuses_commands() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn ticks_fire_only_when_the_manual_clock_reaches_them() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::PassThrough);
@@ -498,7 +498,7 @@ async fn ticks_fire_only_when_the_manual_clock_reaches_them() {
     assert_eq!(fixture.row().last_outcome.as_deref(), Some("ok"));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn completion_waits_for_hook_dispatch_and_durable_outcome_record() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::PassThrough);
@@ -527,7 +527,7 @@ async fn completion_waits_for_hook_dispatch_and_durable_outcome_record() {
     shutdown(&worker).await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn completion_waiter_resolves_after_a_refusal_is_recorded() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::Refused {
@@ -550,7 +550,7 @@ async fn completion_waiter_resolves_after_a_refusal_is_recorded() {
     shutdown(&worker).await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn missed_ticks_are_not_replayed_after_a_pause() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::PassThrough);
@@ -575,7 +575,7 @@ async fn missed_ticks_are_not_replayed_after_a_pause() {
     shutdown(&worker).await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn tick_while_in_flight_is_skipped_and_logged() {
     let fixture = Fixture::new();
     let logs = capture_logs();
@@ -600,7 +600,7 @@ async fn tick_while_in_flight_is_skipped_and_logged() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn until_reached_ends_the_schedule_without_a_run() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::PassThrough);
@@ -627,7 +627,7 @@ async fn until_reached_ends_the_schedule_without_a_run() {
     assert_eq!(fixture.calls(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn refused_records_and_dispatches_nothing() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::Refused {
@@ -645,7 +645,7 @@ async fn refused_records_and_dispatches_nothing() {
     assert!(fixture.dispatcher.calls.lock().unwrap().is_empty());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn pass_through_and_not_applicable_record_ok() {
     for reply in [HookReply::PassThrough, HookReply::NotApplicable] {
         let fixture = Fixture::new();
@@ -658,7 +658,7 @@ async fn pass_through_and_not_applicable_record_ok() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn stop_hook_true_ends_the_schedule_with_its_reason() {
     let fixture = Fixture::new();
     let mut spec = fixture.spec("stop");
@@ -684,7 +684,7 @@ async fn stop_hook_true_ends_the_schedule_with_its_reason() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn stop_hook_false_runs_the_tick() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::PassThrough);
@@ -720,7 +720,7 @@ async fn stop_hook_false_runs_the_tick() {
     assert_eq!(calls[1].0.timeout_ms, 20000);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn tick_request_has_the_seven_keys_and_args_in_request_only() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::PassThrough);
@@ -756,7 +756,7 @@ async fn tick_request_has_the_seven_keys_and_args_in_request_only() {
     assert_eq!(target.timeout_ms, spec.timeout_ms);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     let fixture = Fixture::new();
     fixture.reply(HookReply::Handled(actions()));
@@ -798,7 +798,7 @@ async fn cron_tick_uses_cron_timeout_ms_not_timeout_ms() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn worker_schedules_only_active_rows() {
     let fixture = Fixture::new();
     for name in ["first", "second", "ended"] {
@@ -821,7 +821,7 @@ async fn worker_schedules_only_active_rows() {
     assert_eq!(fixture.calls(), 2);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn restart_inside_jitter_window_still_fires_that_occurrence() {
     let fixture = Fixture::new();
     fixture.jitter.values.lock().unwrap().push_back(600);
@@ -838,7 +838,7 @@ async fn restart_inside_jitter_window_still_fires_that_occurrence() {
     assert_eq!(fixture.calls(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn worker_fires_at_occurrence_plus_jitter() {
     let fixture = Fixture::new();
     fixture.clock.advance(chrono::Duration::minutes(30));
@@ -855,7 +855,7 @@ async fn worker_fires_at_occurrence_plus_jitter() {
     assert_eq!(fixture.calls(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn jitter_is_within_half_period_capped_at_30min() {
     for (expression, upper) in [("0 * * * * *", 30), ("@hourly", 1800), ("@daily", 1800)] {
         let fixture = Fixture::new();
@@ -867,7 +867,7 @@ async fn jitter_is_within_half_period_capped_at_30min() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn jitter_avoids_offsets_held_by_same_expression() {
     let fixture = Fixture::new();
     for index in 0..30 {
@@ -895,7 +895,7 @@ async fn jitter_avoids_offsets_held_by_same_expression() {
     assert_eq!(fixture.jitter.calls.lock().unwrap().last(), Some(&30));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn jitter_persists_across_restart() {
     let fixture = Fixture::new();
     fixture.jitter.values.lock().unwrap().push_back(17);
@@ -918,7 +918,7 @@ async fn jitter_persists_across_restart() {
     assert_eq!(fixture.jitter.calls.lock().unwrap().len(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn concurrent_starts_same_expression_get_distinct_jitter() {
     let fixture = Fixture::new();
     let (first, second) = tokio::join!(
@@ -928,7 +928,7 @@ async fn concurrent_starts_same_expression_get_distinct_jitter() {
     assert_ne!(first.unwrap().jitter_s, second.unwrap().jitter_s);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn start_while_running_ticks_without_restart() {
     let fixture = Fixture::new();
     let worker = fixture.worker().await;
@@ -941,7 +941,7 @@ async fn start_while_running_ticks_without_restart() {
     assert_eq!(fixture.calls(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn end_stops_its_ticks() {
     let fixture = Fixture::new();
     let spec = fixture.spec("ended");
@@ -959,7 +959,7 @@ async fn end_stops_its_ticks() {
     assert_eq!(fixture.calls(), 0);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn reload_keeps_in_flight_of_an_unchanged_slot() {
     let fixture = Fixture::new();
     let spec = fixture.spec("first");
@@ -986,7 +986,7 @@ async fn reload_keeps_in_flight_of_an_unchanged_slot() {
     assert_eq!(fixture.calls(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn end_then_start_before_reload_applies_new_expression_and_jitter() {
     let fixture = Fixture::new();
     fixture.clock.advance(chrono::Duration::minutes(30));
@@ -1018,7 +1018,7 @@ async fn end_then_start_before_reload_applies_new_expression_and_jitter() {
     assert_eq!(fixture.calls(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn stale_run_never_writes_the_restarted_row() {
     let fixture = Fixture::new();
     let spec = fixture.spec("restart");
@@ -1047,7 +1047,7 @@ async fn stale_run_never_writes_the_restarted_row() {
     assert_eq!(fixture.store.writes.load(Ordering::SeqCst), 3);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn restart_during_tick_does_not_replay_after_reload() {
     let fixture = Fixture::new();
     let spec = fixture.spec("restart");
@@ -1074,7 +1074,7 @@ async fn restart_during_tick_does_not_replay_after_reload() {
     assert_eq!(fixture.row().last_run_at, None);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn record_run_after_end_mid_run_writes_nothing() {
     let fixture = Fixture::new();
     let spec = fixture.spec("ended");
@@ -1108,7 +1108,7 @@ fn errors() -> Vec<(AtmError, &'static str)> {
     ]
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn runner_errors_record_and_dispatch_nothing() {
     for (error, expected) in errors() {
         let fixture = Fixture::new();
@@ -1122,7 +1122,7 @@ async fn runner_errors_record_and_dispatch_nothing() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn stop_hook_failure_skips_the_tick_and_keeps_the_row_active() {
     for (error, _) in errors() {
         let fixture = Fixture::new();
@@ -1148,7 +1148,7 @@ async fn stop_hook_failure_skips_the_tick_and_keeps_the_row_active() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn two_schedules_same_module_different_custom_get_their_own() {
     let fixture = Fixture::new();
     for name in ["first", "second"] {
@@ -1175,7 +1175,7 @@ async fn two_schedules_same_module_different_custom_get_their_own() {
     assert_eq!(names, vec!["first", "second"]);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn loaded_row_without_future_occurrence_is_ended() {
     let fixture = Fixture::new();
     fixture.clock.set("2019-01-01T00:00:00Z".parse().unwrap());
@@ -1193,7 +1193,7 @@ async fn loaded_row_without_future_occurrence_is_ended() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn last_finite_occurrence_ends_the_schedule() {
     let fixture = Fixture::new();
     let mut spec = fixture.spec("last");
@@ -1221,7 +1221,7 @@ async fn last_finite_occurrence_ends_the_schedule() {
     shutdown(&worker).await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn shutdown_joins_within_deadline_with_run_in_flight() {
     let fixture = Fixture::new();
     fixture.cron.start(fixture.spec("held")).await.unwrap();
@@ -1317,46 +1317,16 @@ async fn shutdown_records_settled_deadline_expiry() {
 
 #[tokio::test(start_paused = true)]
 async fn shutdown_waits_for_cleanup_after_worker_stops() {
-    struct Dropped {
-        entered: std::sync::mpsc::Sender<()>,
-        running: watch::Sender<usize>,
-        release: std::sync::mpsc::Receiver<()>,
-    }
-    impl Drop for Dropped {
-        fn drop(&mut self) {
-            self.entered.send(()).expect("cleanup entry was observed");
-            self.release
-                .recv_timeout(TEST_WAIT_TIMEOUT)
-                .expect("missing cleanup release event (timeout or disconnected)");
-            self.running.send_replace(0);
-        }
-    }
-
-    // The worker has stopped, but a cancelled run is still cleaning up.
-    // Polling shutdown directly makes its settled-wait decision observable
-    // without relying on when Tokio schedules a spawned shutdown task.
+    // Model cleanup as an outstanding count, released by a controlled event.
     let (running, settled) = watch::channel(1);
     let finished = settled.clone();
     let worker = CronWorkerHandle::with_settled_for_test(settled);
-    let (cleanup_entered, cleanup_started) = std::sync::mpsc::channel();
-    let (release, parked) = std::sync::mpsc::channel();
-    let cleanup = std::thread::spawn(move || {
-        drop(Dropped {
-            entered: cleanup_entered,
-            running,
-            release: parked,
-        });
-    });
-    cleanup_started
-        .recv_timeout(TEST_WAIT_TIMEOUT)
-        .expect("missing cleanup entry event (timeout or disconnected)");
 
     let mut shutdown = Box::pin(worker.shutdown(tokio::time::Instant::now() + TEST_WAIT_TIMEOUT));
     let waker = Waker::noop();
     let mut context = Context::from_waker(waker);
     let pending_while_held = matches!(shutdown.as_mut().poll(&mut context), Poll::Pending);
-    release.send(()).unwrap();
-    cleanup.join().unwrap();
+    running.send_replace(0);
     assert!(
         pending_while_held,
         "shutdown returned before cleanup finished"
@@ -1374,7 +1344,7 @@ fn actions() -> Vec<atm_core::hook::HookAction> {
     .unwrap()
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn three_actions_dispatch_once_in_order_as_created_by() {
     let fixture = Fixture::new();
     let expected = actions();
@@ -1409,7 +1379,7 @@ async fn three_actions_dispatch_once_in_order_as_created_by() {
     assert_eq!(fixture.row().last_outcome.as_deref(), Some("actions: 3"));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn dispatcher_error_records_action_err() {
     let fixture = Fixture::with_dispatcher(RecordingHookActionDispatcher {
         fail_at: Some(1),
@@ -1427,7 +1397,7 @@ async fn dispatcher_error_records_action_err() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn panicking_run_records_exit_and_worker_keeps_ticking() {
     let fixture = Fixture::new();
     fixture.runner.panic_on_run.store(true, Ordering::SeqCst);
@@ -1454,7 +1424,7 @@ async fn panicking_run_records_exit_and_worker_keeps_ticking() {
     assert_eq!(fixture.row().last_outcome.as_deref(), Some("ok"));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn cancelled_run_records_nothing() {
     let fixture = Fixture::new();
     let logs = capture_logs();
@@ -1483,7 +1453,7 @@ async fn cancelled_run_records_nothing() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn record_failure_is_logged() {
     let fixture = Fixture::new();
     let logs = capture_logs();
@@ -1511,7 +1481,7 @@ async fn record_failure_is_logged() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn reload_failure_keeps_slots_and_retries() {
     let fixture = Fixture::new();
     let logs = capture_logs();
@@ -1564,7 +1534,7 @@ fn reload_failures(logs: &Arc<std::sync::Mutex<Vec<String>>>) -> usize {
         .count()
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn failed_reload_retries_on_backoff_before_the_next_occurrence() {
     let fixture = Fixture::new();
     let logs = capture_logs();
@@ -1595,7 +1565,7 @@ async fn failed_reload_retries_on_backoff_before_the_next_occurrence() {
     shutdown(&worker).await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn tick_and_stop_check_log_entries() {
     let fixture = Fixture::new();
     let logs = capture_logs();

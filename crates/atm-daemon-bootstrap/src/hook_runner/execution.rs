@@ -7,12 +7,12 @@ use atm_core::boundary::{HookExitCause, HookTarget};
 use atm_core::error::AtmError;
 
 use super::{
-    DaemonHookRunner, HookDeadlineSource, SpawnFailure, SpawnSpec, SpawnedOutput, hook_env,
-    missing, spawn_with_deadline,
+    DaemonHookRunner, HookDeadlineSource, SpawnFailure, SpawnSpec, SpawnedOutput, hook_env, missing,
 };
 
 #[cfg(feature = "test-support")]
 use crate::process_deadline::spawn_until;
+use crate::process_deadline::spawn_with_deadline_at;
 
 struct CapturedEnv<'a>(&'a [(std::ffi::OsString, std::ffi::OsString)]);
 
@@ -73,10 +73,11 @@ impl DaemonHookRunner {
         hook: &str,
         budget: Duration,
         started: tokio::time::Instant,
+        at: tokio::time::Instant,
     ) -> Result<tokio::sync::OwnedSemaphorePermit, AtmError> {
         let permit = self.permits.clone().acquire_owned();
         match &self.deadline_source {
-            HookDeadlineSource::System => tokio::time::timeout(budget, permit)
+            HookDeadlineSource::System => tokio::time::timeout_at(at, permit)
                 .await
                 .map_err(|_| {
                     tracing::warn!(
@@ -101,9 +102,10 @@ impl DaemonHookRunner {
         spec: SpawnSpec,
         stdin: &[u8],
         remaining: Duration,
+        at: tokio::time::Instant,
     ) -> Result<SpawnedOutput, SpawnFailure> {
         match &self.deadline_source {
-            HookDeadlineSource::System => spawn_with_deadline(spec, stdin, remaining).await,
+            HookDeadlineSource::System => spawn_with_deadline_at(spec, stdin, remaining, at).await,
             #[cfg(feature = "test-support")]
             HookDeadlineSource::Controlled(deadline) => {
                 spawn_until(spec, stdin, deadline.wait_for_process_advance())

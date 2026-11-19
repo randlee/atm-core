@@ -242,13 +242,14 @@ pub(crate) async fn spawn_until(
     })
 }
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "The timer enforces the child process deadline and triggers cleanup.")]
-pub(crate) async fn spawn_with_deadline(
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "ADR-070: child deadline expiry triggers inline process-group cleanup and reap.")]
+pub(crate) async fn spawn_with_deadline_at(
     spec: SpawnSpec,
     stdin: &[u8],
     remaining: Duration,
+    at: tokio::time::Instant,
 ) -> Result<SpawnedOutput, SpawnFailure> {
-    spawn_until(spec, stdin, tokio::time::sleep(remaining))
+    spawn_until(spec, stdin, tokio::time::sleep_until(at))
         .await
         .map_err(|failure| match failure {
             SpawnFailure::TimedOut { .. } => SpawnFailure::TimedOut {
@@ -256,6 +257,21 @@ pub(crate) async fn spawn_with_deadline(
             },
             other => other,
         })
+}
+
+#[cfg(test)]
+pub(crate) async fn spawn_with_deadline(
+    spec: SpawnSpec,
+    stdin: &[u8],
+    remaining: Duration,
+) -> Result<SpawnedOutput, SpawnFailure> {
+    spawn_with_deadline_at(
+        spec,
+        stdin,
+        remaining,
+        tokio::time::Instant::now() + remaining,
+    )
+    .await
 }
 
 #[cfg(test)]
