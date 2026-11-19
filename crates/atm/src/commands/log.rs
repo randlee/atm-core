@@ -423,18 +423,19 @@ struct TailArgs {
 impl TailArgs {
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let mut session = observability.follow(self.query.build_query(LogMode::Tail)?)?;
-        let interval = follow_interval(Duration::from_millis(self.poll_interval_ms));
         let stdout = std::io::stdout();
         follow_loop(
-            || session.poll().map_err(anyhow::Error::from),
-            interval,
+            || std::future::ready(session.poll().map_err(anyhow::Error::from)),
+            Duration::from_millis(self.poll_interval_ms),
             |snapshot| {
-                output::print_log_records(
-                    &mut stdout.lock(),
-                    snapshot.records.iter(),
-                    self.query.json,
-                )?;
-                Ok(true)
+                std::future::ready(
+                    output::print_log_records(
+                        &mut stdout.lock(),
+                        snapshot.records.iter(),
+                        self.query.json,
+                    )
+                    .map(|()| true),
+                )
             },
             async {
                 tokio::signal::ctrl_c()
@@ -459,25 +460,30 @@ fn follow_interval(period: Duration) -> Option<tokio::time::Interval> {
     Some(interval)
 }
 
-async fn follow_loop<P, T, O, C>(
+async fn follow_loop<P, PFut, T, O, OFut, C>(
     mut poll: P,
-    mut interval: Option<tokio::time::Interval>,
+    period: Duration,
     mut output: O,
     cancellation: C,
 ) -> Result<()>
 where
-    P: FnMut() -> Result<T>,
-    O: FnMut(T) -> Result<bool>,
+    P: FnMut() -> PFut,
+    PFut: Future<Output = Result<T>>,
+    O: FnMut(T) -> OFut,
+    OFut: Future<Output = Result<bool>>,
     C: Future<Output = Result<()>>,
 {
     tokio::pin!(cancellation);
 
-    loop {
-        let snapshot = poll()?;
-        if !output(snapshot)? {
-            return Ok(());
-        }
+    let snapshot = poll().await?;
+    if !output(snapshot).await? {
+        return Ok(());
+    }
 
+    // Start each wait only after the previous poll and output have completed.
+    let mut interval = follow_interval(period);
+
+    loop {
         tokio::select! {
             biased;
             cancellation_result = &mut cancellation => {
@@ -489,6 +495,14 @@ where
                     interval.tick().await;
                 }
             } => {}
+        }
+
+        let snapshot = poll().await?;
+        if !output(snapshot).await? {
+            return Ok(());
+        }
+        if let Some(interval) = interval.as_mut() {
+            interval.reset();
         }
     }
 }
@@ -588,8 +602,8 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::{
-        LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord, follow_interval,
-        follow_loop, parse_log_level_filter, parse_match_expression, parse_relative_duration,
+        LogCommand, LogModeCommand, LogSource, QueryArgs, TimelineRecord, follow_loop,
+        parse_log_level_filter, parse_match_expression, parse_relative_duration,
     };
     use crate::observability::{CliObservability, CliObservabilityOptions};
 
@@ -603,10 +617,10 @@ mod tests {
             move || {
                 let count = poll_count.fetch_add(1, Ordering::SeqCst) + 1;
                 poll_tx.send(count).expect("poll observer remains open");
-                Ok(count)
+                async move { Ok(count) }
             },
-            follow_interval(Duration::from_millis(10)),
-            |_| Ok(true),
+            Duration::from_millis(10),
+            |_| async { Ok(true) },
             async move {
                 cancel_rx.await.map_err(anyhow::Error::from)?;
                 Ok(())
@@ -620,6 +634,92 @@ mod tests {
         assert_eq!(poll_rx.recv().await, Some(2));
 
         cancel_tx.send(()).expect("follow loop is still running");
+        task.await
+            .expect("follow loop task")
+            .expect("follow loop result");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn follow_loop_starts_each_wait_after_poll_and_output_finish() {
+        let (poll_started_tx, mut poll_started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (output_started_tx, mut output_started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (poll_release_tx, poll_release_rx) = tokio::sync::oneshot::channel();
+        let (output_release_tx, output_release_rx) = tokio::sync::oneshot::channel();
+        let (output_finished_tx, output_finished_rx) = tokio::sync::oneshot::channel();
+        let mut poll_release_rx = Some(poll_release_rx);
+        let mut output_release_rx = Some(output_release_rx);
+        let mut output_finished_tx = Some(output_finished_tx);
+        let polls = AtomicUsize::new(0);
+
+        let task = tokio::spawn(follow_loop(
+            move || {
+                let count = polls.fetch_add(1, Ordering::SeqCst) + 1;
+                let release = (count == 2).then(|| {
+                    poll_release_rx
+                        .take()
+                        .expect("second poll release is used once")
+                });
+                let started = poll_started_tx.clone();
+                async move {
+                    started.send(count).expect("poll observer remains open");
+                    if let Some(release) = release {
+                        release.await.expect("release slow second poll");
+                    }
+                    Ok(count)
+                }
+            },
+            Duration::from_millis(10),
+            move |count| {
+                let release = (count == 2).then(|| {
+                    output_release_rx
+                        .take()
+                        .expect("second output release is used once")
+                });
+                let finished = (count == 2).then(|| {
+                    output_finished_tx
+                        .take()
+                        .expect("second output completion is signaled once")
+                });
+                let started = output_started_tx.clone();
+                async move {
+                    started.send(count).expect("output observer remains open");
+                    if let Some(release) = release {
+                        release.await.expect("release slow second output");
+                    }
+                    if let Some(finished) = finished {
+                        finished
+                            .send(())
+                            .expect("test waits for second output completion");
+                    }
+                    Ok(count < 3)
+                }
+            },
+            std::future::pending(),
+        ));
+
+        assert_eq!(poll_started_rx.recv().await, Some(1));
+        assert_eq!(output_started_rx.recv().await, Some(1));
+        tokio::time::advance(Duration::from_millis(10)).await;
+        assert_eq!(poll_started_rx.recv().await, Some(2));
+
+        // Hold the second poll beyond its old deadline. The next wait starts
+        // after the second output is released.
+        tokio::time::advance(Duration::from_millis(25)).await;
+        poll_release_tx.send(()).expect("second poll is waiting");
+        assert_eq!(output_started_rx.recv().await, Some(2));
+        tokio::time::advance(Duration::from_millis(7)).await;
+        output_release_tx
+            .send(())
+            .expect("second output is waiting");
+        output_finished_rx
+            .await
+            .expect("second output completed before the next wait starts");
+
+        tokio::time::advance(Duration::from_millis(9)).await;
+        assert!(poll_started_rx.try_recv().is_err());
+        tokio::time::advance(Duration::from_millis(1)).await;
+        assert_eq!(poll_started_rx.recv().await, Some(3));
+        assert_eq!(output_started_rx.recv().await, Some(3));
         task.await
             .expect("follow loop task")
             .expect("follow loop result");
@@ -641,10 +741,10 @@ mod tests {
                         .send(())
                         .expect("follow loop awaits cancellation");
                 }
-                Ok(count)
+                async move { Ok(count) }
             },
-            follow_interval(Duration::ZERO),
-            |_| Ok(true),
+            Duration::ZERO,
+            |_| async { Ok(true) },
             async move {
                 cancel_rx.await.map_err(anyhow::Error::from)?;
                 Ok(())
@@ -663,15 +763,17 @@ mod tests {
         let error = follow_loop(
             || {
                 polls.fetch_add(1, Ordering::SeqCst);
-                Ok(AtmLogSnapshot {
+                std::future::ready(Ok(AtmLogSnapshot {
                     records: vec![follow_record()],
                     truncated: false,
-                })
+                }))
             },
-            follow_interval(Duration::from_secs(1)),
+            Duration::from_secs(1),
             |snapshot| {
-                crate::output::print_log_records(&mut writer, snapshot.records.iter(), false)?;
-                Ok(true)
+                std::future::ready(
+                    crate::output::print_log_records(&mut writer, snapshot.records.iter(), false)
+                        .map(|()| true),
+                )
             },
             std::future::pending(),
         )
@@ -716,9 +818,11 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn follow_loop_preserves_output_errors() {
         let error = follow_loop(
-            || Ok(()),
-            follow_interval(Duration::from_secs(1)),
-            |_| Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "closed stdout").into()),
+            || async { Ok(()) },
+            Duration::from_secs(1),
+            |_| async {
+                Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "closed stdout").into())
+            },
             std::future::pending(),
         )
         .await
