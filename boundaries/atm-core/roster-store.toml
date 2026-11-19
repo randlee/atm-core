@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-RosterStore"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "RosterStore"
+
+[public]
+trait = "RosterStore"
+notes = "legacy compile-bridge roster-store trait retained in atm_core::boundary after AC.1; authoritative shared contract now lives in crates/atm-storage as RosterStore"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["durable_roster_state", "member_routing_metadata"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+# `atm-daemon-bootstrap` and `atm` remain legitimate compile-bridge roster
+# consumers until the retained bootstrap/CLI cutover closes in phase-AD.
+allowed_dependents = ["atm-daemon", "atm-runtime", "atm-daemon-bootstrap", "atm"]
+allowed_dependencies = ["atm-error", "atm-storage"]
+allowed_dev_dependencies = ["atm-runtime-test-support"]
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["RosterStore method inputs"]
+response_types = ["atm-core roster DTOs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[status]
+state = "active"
+notes = ["AC.1 introduced crates/atm-storage::RosterStore as the authoritative shared roster contract", "legacy compile bridge remains active while retained production callers still route through atm-runtime::legacy_storage_adapters", "concrete store implementation lives in crates/atm-storage-rusqlite/src/roster_store.rs as SqliteRosterStore during the convergence window", "canonical roster truth remains explicit member rows rather than a TeamConfig snapshot document"]

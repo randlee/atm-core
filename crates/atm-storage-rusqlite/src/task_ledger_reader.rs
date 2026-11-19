@@ -24,7 +24,7 @@ struct TaskLedgerReader {
 }
 
 impl TaskLedgerReader {
-    fn from_pool(pool: ReaderPool) -> Self {
+    fn new(pool: ReaderPool) -> Self {
         Self { pool }
     }
 }
@@ -32,7 +32,7 @@ impl TaskLedgerReader {
 pub(crate) fn start_task_ledger_reader_from_pool(
     pool: ReaderPool,
 ) -> Arc<dyn AsyncTaskLedgerReader + Send + Sync> {
-    Arc::new(TaskLedgerReader::from_pool(pool))
+    Arc::new(TaskLedgerReader::new(pool))
 }
 
 impl atm_storage::contract::sealed::Sealed for TaskLedgerReader {}

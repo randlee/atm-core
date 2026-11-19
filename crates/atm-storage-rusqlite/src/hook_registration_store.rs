@@ -30,7 +30,13 @@ struct SqliteHookRegistrationStore {
 pub(crate) fn hook_registration_store(
     db: Arc<SharedDb>,
 ) -> Arc<dyn HookRegistrationStore + Send + Sync> {
-    Arc::new(SqliteHookRegistrationStore { db })
+    Arc::new(SqliteHookRegistrationStore::new(db))
+}
+
+impl SqliteHookRegistrationStore {
+    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
 }
 
 impl sealed::Sealed for SqliteHookRegistrationStore {}

@@ -149,16 +149,6 @@ pub enum GraftPostSendResponse {
 
 const RECEIVER_HOOK_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const RECEIVER_HOOK_IO_DEADLINE: Duration = Duration::from_secs(3);
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct HookTransportLimits {
-    connect: Option<Duration>,
-    io: Option<Duration>,
-}
-
-const PRODUCTION_HOOK_TRANSPORT_LIMITS: HookTransportLimits = HookTransportLimits {
-    connect: Some(RECEIVER_HOOK_CONNECT_DEADLINE),
-    io: Some(RECEIVER_HOOK_IO_DEADLINE),
-};
 /// The outer replacement-runtime hook owner needs time to receive the blocking
 /// Graft result and turn it into a durable-success warning. Socket I/O must
 /// therefore end before, rather than race, the inherited absolute deadline.
@@ -369,14 +359,8 @@ fn remaining_hook_budget(
     deadline: RequestDeadline,
     safety_cap: Duration,
 ) -> Result<Duration, AtmError> {
-    hook_budget_from_remaining(deadline.remaining(), safety_cap)
-}
-
-fn hook_budget_from_remaining(
-    remaining: Option<Duration>,
-    safety_cap: Duration,
-) -> Result<Duration, AtmError> {
-    remaining
+    deadline
+        .remaining()
         .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
         .filter(|remaining| !remaining.is_zero())
         .map(|remaining| remaining.min(safety_cap))
@@ -394,42 +378,19 @@ fn deliver_graft_post_send_with_deadline(
     request: &GraftPostSendRequest,
     deadline: RequestDeadline,
 ) -> Result<GraftPostSendResponse, AtmError> {
-    deliver_graft_post_send_with_limits(
-        endpoint,
-        capability,
-        request,
-        deadline,
-        PRODUCTION_HOOK_TRANSPORT_LIMITS,
-    )
-}
-
-fn deliver_graft_post_send_with_limits(
-    endpoint: SocketAddr,
-    capability: &LocalCapability,
-    request: &GraftPostSendRequest,
-    deadline: RequestDeadline,
-    limits: HookTransportLimits,
-) -> Result<GraftPostSendResponse, AtmError> {
-    let connect_deadline = limits
-        .connect
-        .map(|cap| remaining_hook_budget(deadline, cap))
-        .transpose()?;
-    let connection = match connect_deadline {
-        Some(timeout) => TcpStream::connect_timeout(&endpoint, timeout),
-        None => TcpStream::connect(endpoint),
-    };
-    let mut stream = connection.map_err(|source| {
-        let detail =
-            connect_deadline.map_or_else(String::new, |timeout| format!(" within {timeout:?}"));
+    let connect_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_CONNECT_DEADLINE)?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
         AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
-            format!("failed to connect to graft receiver endpoint {endpoint}{detail}"),
+            format!(
+                "failed to connect to graft receiver endpoint {} within {:?}",
+                endpoint, connect_deadline
+            ),
         )
         .with_cause(source)
     })?;
-    if let Some(cap) = limits.io {
-        apply_stream_deadlines(&stream, remaining_hook_budget(deadline, cap)?)?;
-    }
+    let io_deadline = remaining_hook_budget(deadline, RECEIVER_HOOK_IO_DEADLINE)?;
+    apply_stream_deadlines(&stream, io_deadline)?;
     let wire = GraftPostSendWireRequest {
         capability_base64url: capability.to_base64url(),
         request: request.clone(),
@@ -727,9 +688,21 @@ impl GraftReceiverListener {
         stream: &mut TcpStream,
         io_deadline: Duration,
     ) -> Result<GraftReceiverRequest, AtmError> {
-        self.read_receiver_request_with_limit(stream, Some(io_deadline))
+        apply_stream_deadlines(stream, io_deadline)?;
+        let wire: GraftReceiverWireRequest = read_graft_post_send_message(
+            stream,
+            "failed to read graft receiver request",
+            "graft receiver request exceeded the bounded payload cap",
+        )?;
+        if !self.capability.matches_header(&wire.capability_base64url) {
+            return Err(AtmError::validation(
+                "graft receiver request presented an invalid local capability",
+            ));
+        }
+        Ok(wire.request)
     }
 
+    #[cfg(test)]
     fn read_receiver_request_with_limit(
         &self,
         stream: &mut TcpStream,
@@ -813,6 +786,86 @@ impl GraftReceiverListener {
     }
 }
 
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct HookTransportLimits {
+    connect: Option<Duration>,
+    io: Option<Duration>,
+}
+
+#[cfg(test)]
+const PRODUCTION_HOOK_TRANSPORT_LIMITS: HookTransportLimits = HookTransportLimits {
+    connect: Some(RECEIVER_HOOK_CONNECT_DEADLINE),
+    io: Some(RECEIVER_HOOK_IO_DEADLINE),
+};
+#[cfg(test)]
+fn hook_budget_from_remaining(
+    remaining: Option<Duration>,
+    safety_cap: Duration,
+) -> Result<Duration, AtmError> {
+    remaining
+        .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
+        .filter(|remaining| !remaining.is_zero())
+        .map(|remaining| remaining.min(safety_cap))
+        .ok_or_else(|| {
+            AtmError::new(
+                AtmErrorCode::PostSendGraftUnavailable,
+                "received-message hook does not retain enough request budget for endpoint delivery and result handoff",
+            )
+        })
+}
+
+#[cfg(test)]
+fn deliver_graft_post_send_with_limits(
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
+    request: &GraftPostSendRequest,
+    deadline: RequestDeadline,
+    limits: HookTransportLimits,
+) -> Result<GraftPostSendResponse, AtmError> {
+    let connect_deadline = limits
+        .connect
+        .map(|cap| remaining_hook_budget(deadline, cap))
+        .transpose()?;
+    let connection = match connect_deadline {
+        Some(timeout) => TcpStream::connect_timeout(&endpoint, timeout),
+        None => TcpStream::connect(endpoint),
+    };
+    let mut stream = connection.map_err(|source| {
+        let detail =
+            connect_deadline.map_or_else(String::new, |timeout| format!(" within {timeout:?}"));
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            format!("failed to connect to graft receiver endpoint {endpoint}{detail}"),
+        )
+        .with_cause(source)
+    })?;
+    if let Some(cap) = limits.io {
+        apply_stream_deadlines(&stream, remaining_hook_budget(deadline, cap)?)?;
+    }
+    let wire = GraftPostSendWireRequest {
+        capability_base64url: capability.to_base64url(),
+        request: request.clone(),
+    };
+    write_graft_post_send_message(
+        &mut stream,
+        &wire,
+        "failed to write graft post-send request",
+        "graft post-send request exceeded the bounded payload cap",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft post-send request").with_cause(source)
+    })?;
+    read_graft_post_send_message(
+        &mut stream,
+        "failed to read graft post-send response",
+        "graft post-send response exceeded the bounded payload cap",
+    )
+}
+
+#[cfg(test)]
+thread_local! { static TEST_POST_SEND_WITHOUT_DEADLINES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
 /// Deliver one post-send nudge to an embedded agent's loopback receiver.
 ///
 /// This is the shared sender used by both the CLI post-send hook and the
@@ -831,7 +884,15 @@ pub fn deliver_graft_post_send(
     connect_deadline: Duration,
     io_deadline: Duration,
 ) -> Result<GraftPostSendResponse, AtmError> {
-    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+    #[cfg(test)]
+    let connection = if TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.get()) {
+        TcpStream::connect(endpoint)
+    } else {
+        TcpStream::connect_timeout(&endpoint, connect_deadline)
+    };
+    #[cfg(not(test))]
+    let connection = TcpStream::connect_timeout(&endpoint, connect_deadline);
+    let mut stream = connection.map_err(|source| {
         AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
             format!(
@@ -841,6 +902,11 @@ pub fn deliver_graft_post_send(
         )
         .with_cause(source)
     })?;
+    #[cfg(test)]
+    if !TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.get()) {
+        apply_stream_deadlines(&stream, io_deadline)?;
+    }
+    #[cfg(not(test))]
     apply_stream_deadlines(&stream, io_deadline)?;
     let wire = GraftPostSendWireRequest {
         capability_base64url: capability.to_base64url(),
@@ -1092,36 +1158,32 @@ mod tests {
             .listener
             .set_nonblocking(false)
             .expect("blocking listener");
-        let (completed_tx, completed_rx) = std::sync::mpsc::sync_channel(1);
-        let receiver = std::thread::spawn(move || {
-            let mut stream = listener
-                .poll_accept()
-                .expect("accept")
-                .expect("loopback peer");
-            let received = listener
-                .read_request(&mut stream, Duration::from_secs(3))
-                .expect("read request");
-            listener
-                .write_response(&mut stream, &GraftPostSendResponse::Delivered)
-                .expect("write response");
-            let _ = completed_tx.send(received);
+        let sender = std::thread::spawn(move || {
+            super::TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.set(true));
+            deliver_graft_post_send(
+                endpoint,
+                &capability,
+                &request,
+                Duration::ZERO,
+                Duration::ZERO,
+            )
+            .expect("deliver graft post-send")
         });
-        let outcome = deliver_graft_post_send(
-            endpoint,
-            &capability,
-            &request,
-            Duration::from_secs(1),
-            Duration::from_secs(3),
-        );
-        if outcome.is_err() {
-            let _ = TcpStream::connect_timeout(&endpoint, Duration::from_secs(3));
-        }
-        let received = wait_receiver_completion(&completed_rx, Duration::from_secs(10))
-            .unwrap_or_else(|error| panic!("{error}"));
-        receiver
-            .join()
-            .expect("receiver thread after completion signal");
-        let response = outcome.expect("deliver");
+        let mut stream = listener
+            .poll_accept()
+            .expect("accept")
+            .expect("connected peer");
+        let received = match listener
+            .read_receiver_request_with_limit(&mut stream, None)
+            .expect("read request")
+        {
+            GraftReceiverRequest::PostSend(request) => request,
+            _ => panic!("expected post-send request"),
+        };
+        listener
+            .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+            .expect("write response");
+        let response = sender.join().expect("sender thread");
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.event.description, "loopback graft transport");
         assert_eq!(received.kind, NudgeKind::Steer);

@@ -302,7 +302,7 @@ impl RestartCause {
     }
 }
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "bounded retry delay between attempts; cancelled by worker or daemon shutdown")]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "bounded retry delay between attempts; cancelled by worker or daemon shutdown See https://github.com/randlee/atm-core/issues/2510.")]
 async fn wait_backoff(delay: Duration) {
     tokio::time::sleep(delay).await;
 }
@@ -830,7 +830,7 @@ impl StorageAsyncMailboxRuntime {
         self.select_matching(scope, request, limit, deadline).await
     }
 
-    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Mailbox long-poll checks for new messages at bounded intervals until the request deadline.")]
+    #[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Mailbox long-poll checks for new messages at bounded intervals until the request deadline. See https://github.com/randlee/atm-core/issues/2510.")]
     async fn select_for_read(
         &self,
         scope: MailboxScope,

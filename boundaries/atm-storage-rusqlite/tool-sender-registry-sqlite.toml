@@ -11,7 +11,7 @@ notes = "Private SQLite adapter verifies the storage-neutral installer/runtime s
 type = "SqliteToolSenderRegistry"
 module = "atm_storage_rusqlite::tool_sender_registry"
 visibility = "private"
-constructor = "none"
+constructor = "pub(crate)"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageFactory::with_tool_sender_registry_config"]

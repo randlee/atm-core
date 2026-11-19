@@ -703,9 +703,13 @@ pub(crate) async fn execute_opaque_peer_request_with_sender(
     deadline: RequestDeadline,
 ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
     let request = build_opaque_peer_request(request)?;
+    #[cfg(not(test))]
     let remaining = deadline
         .remaining()
         .ok_or(HttpRuntimeClientFailure::Cancelled)?;
+    #[cfg(test)]
+    let remaining =
+        crate::peer_dial::test_remaining(deadline).ok_or(HttpRuntimeClientFailure::Cancelled)?;
     let response = tokio::time::timeout(remaining, sender.send_request(request))
         .await
         .map_err(|_| HttpRuntimeClientFailure::Timeout)?

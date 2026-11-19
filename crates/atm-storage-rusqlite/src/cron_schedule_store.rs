@@ -31,7 +31,13 @@ struct SqliteCronScheduleStore {
 }
 
 pub(crate) fn cron_schedule_store(db: Arc<SharedDb>) -> Arc<dyn CronScheduleStore + Send + Sync> {
-    Arc::new(SqliteCronScheduleStore { db })
+    Arc::new(SqliteCronScheduleStore::new(db))
+}
+
+impl SqliteCronScheduleStore {
+    pub(crate) fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
 }
 
 impl sealed::Sealed for SqliteCronScheduleStore {}

@@ -11,7 +11,7 @@ type = "SharedDb"
 module = "atm_storage_rusqlite::shared_db_reader_lanes"
 # The crate root and sibling adapters share the database and its reader lanes.
 visibility = "pub(crate)"
-constructor = "none"
+constructor = "pub(crate)"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]

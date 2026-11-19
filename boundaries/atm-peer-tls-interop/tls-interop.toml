@@ -10,7 +10,7 @@ facade = "TlsInteropConfig"
 type = "CurlMtlsReceiverFixture"
 module = "atm_peer_tls_interop"
 visibility = "public"
-constructor = "none"
+constructor = "pub(crate)"
 
 [composition]
 roots = []

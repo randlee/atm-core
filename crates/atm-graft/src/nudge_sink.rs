@@ -17,6 +17,20 @@ pub(crate) struct GraftReceiveHook<'a> {
     pub(crate) observability: &'a dyn GraftObservability,
 }
 
+impl<'a> GraftReceiveHook<'a> {
+    pub(crate) fn new(
+        injector: &'a dyn HostNudgeInjector,
+        snapshot: &'a Arc<RwLock<SessionSnapshot>>,
+        observability: &'a dyn GraftObservability,
+    ) -> Self {
+        Self {
+            injector,
+            snapshot,
+            observability,
+        }
+    }
+}
+
 impl GraftReceiveHook<'_> {
     pub(crate) fn deliver(&self, nudge: HostNudge) -> Result<(), AtmError> {
         match self.injector.inject_nudge(&nudge) {

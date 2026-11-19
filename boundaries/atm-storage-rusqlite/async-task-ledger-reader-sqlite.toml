@@ -10,7 +10,7 @@ trait = "AsyncTaskLedgerReader"
 type = "TaskLedgerReader"
 module = "atm_storage_rusqlite::task_ledger_reader"
 visibility = "private"
-constructor = "none"
+constructor = "private"
 
 [composition]
 roots = ["atm_storage_rusqlite::SqliteStorageBackend::new"]

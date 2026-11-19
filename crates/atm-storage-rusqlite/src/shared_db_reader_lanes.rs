@@ -76,10 +76,10 @@ impl SharedDb {
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
-        Self::open_with_reader_lanes(path, observability, SharedReadPoolConfig::default())
+        Self::new(path, observability, SharedReadPoolConfig::default())
     }
 
-    pub(crate) fn open_with_reader_lanes(
+    pub(crate) fn new(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
         reader_lanes: SharedReadPoolConfig,

@@ -1,14 +1,36 @@
+// This Phase AC boundary file mixes seams that are dormant in the library
+// build with helpers still exercised by retained/test callers. Under
+// `--all-targets`, `#[expect(dead_code)]` turns into
+// `unfulfilled_lint_expectations` on the test-reachable subset before the
+// later cutover/deletion work lands, so this branch intentionally keeps
+// `allow(dead_code)` here.
+#![allow(
+    dead_code,
+    reason = "AC.2 internalizes Claude-only storage seams before their later deletion or full consumer cutover."
+)]
+
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 use crate::schema::{AgentMember, HOME_DIR_METADATA_KEY, InboxMessage};
-use crate::types::{AgentName, PaneId, TeamName};
+use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use super::mail::DoctorFinding;
 use super::sealed;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreHealthSnapshot {
+    pub team: TeamName,
+    pub member_count: u64,
+    #[serde(default)]
+    pub stale: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refreshed_at: Option<IsoTimestamp>,
+}
 
 pub type RosterEntry = atm_storage::contract::RosterMember;
 
@@ -55,6 +77,42 @@ pub fn roster_member_record_from_claude_code_member(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectedRosterEntry {
+    pub member_name: AgentName,
+    pub harness: RosterHarness,
+    pub inbox_path: Option<PathBuf>,
+    pub tmux_pane_id: Option<PaneId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectionRoster {
+    pub team_name: TeamName,
+    pub members: Arc<[ProjectedRosterEntry]>,
+}
+
+impl ProjectionRoster {
+    pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterEntry]) -> Self {
+        let members = records
+            .iter()
+            .map(|record| ProjectedRosterEntry {
+                member_name: record.agent_name.clone(),
+                harness: record.harness,
+                inbox_path: None,
+                tmux_pane_id: record.recipient_pane_id.clone(),
+            })
+            .collect::<Vec<_>>()
+            .into();
+        Self { team_name, members }
+    }
+
+    pub fn contains_member(&self, member: &AgentName) -> bool {
+        self.members
+            .iter()
+            .any(|entry| entry.member_name == *member)
+    }
+}
+
 fn roster_harness_from_metadata(value: &str) -> Option<RosterHarness> {
     match value {
         "claude-code" => Some(RosterHarness::ClaudeCode),
@@ -89,6 +147,12 @@ pub struct ConfigDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProjectionAppendMode {
+    RecoveredLogicalMessageSet,
+}
+
 /// Canonical non-Claude outbound request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NonClaudeOutboundDeliveryRequest {
@@ -105,6 +169,52 @@ pub struct NonClaudeOutboundDeliveryRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NonClaudeOutboundDeliveryResponse {
     pub delivered_messages: usize,
+}
+
+/// BOUNDARY-RosterStore — see docs/atm-core/boundaries.md.
+#[deprecated(note = "use canonical atm-storage types instead")]
+pub trait RosterStore: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when roster replacement cannot be applied safely.
+    fn replace_roster(&self, team: &TeamName, members: &[RosterEntry]) -> Result<(), AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when one roster snapshot cannot be loaded.
+    fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when membership cannot be queried.
+    fn query_membership(
+        &self,
+        team: &TeamName,
+        member: &AgentName,
+    ) -> Result<Option<RosterEntry>, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the canonical roster team set cannot be
+    /// enumerated safely.
+    fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
+    /// # Errors
+    ///
+    /// Returns every effective (alias-or-canonical) durable roster name for
+    /// preflight diagnostics. The durable store transaction remains the sole
+    /// authority for enforcing this invariant.
+    fn unique_names(&self) -> Result<Vec<atm_storage::RosterUniqueName>, AtmError> {
+        let mut names = Vec::new();
+        for team in self.list_teams()? {
+            names.extend(
+                self.load_roster(&team)?
+                    .iter()
+                    .map(atm_storage::RosterUniqueName::from_member),
+            );
+        }
+        Ok(names)
+    }
+    /// # Errors
+    ///
+    /// Returns `AtmError` when roster health cannot be collected.
+    fn health_snapshot(&self, team: &TeamName) -> Result<RosterStoreHealthSnapshot, AtmError>;
 }
 
 /// BOUNDARY-RosterStoreDoctor — see docs/atm-core/boundaries.md.

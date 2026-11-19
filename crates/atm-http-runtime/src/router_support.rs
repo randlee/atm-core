@@ -121,12 +121,23 @@ impl BoundedBlockingBridge {
         }
     }
 
+    #[cfg(test)]
     fn now(&self) -> std::time::Instant {
-        #[cfg(test)]
         if let Some(clock) = &self.clock {
             return clock();
         }
         std::time::Instant::now()
+    }
+
+    #[cfg(test)]
+    fn remaining(&self, deadline: RequestDeadline) -> Option<std::time::Duration> {
+        match &self.clock {
+            Some(clock) => {
+                let millis = deadline.remaining_ms_at(clock());
+                (millis != 0).then(|| std::time::Duration::from_millis(millis))
+            }
+            None => deadline.remaining(),
+        }
     }
 
     #[cfg(test)]
@@ -166,6 +177,11 @@ impl BoundedBlockingBridge {
         T: Send + 'static,
         F: FnOnce() -> Result<T, AtmError> + Send + 'static,
     {
+        #[cfg(test)]
+        let remaining = self
+            .remaining(deadline)
+            .ok_or(BlockingBridgeError::DeadlineBeforeStart)?;
+        #[cfg(not(test))]
         let remaining = deadline
             .remaining()
             .ok_or(BlockingBridgeError::DeadlineBeforeStart)?;
@@ -173,18 +189,32 @@ impl BoundedBlockingBridge {
             .await
             .map_err(|_| BlockingBridgeError::DeadlineBeforeStart)?
             .map_err(|_| BlockingBridgeError::Closed)?;
+        #[cfg(test)]
+        if self.remaining(deadline).is_none() {
+            return Err(BlockingBridgeError::DeadlineBeforeStart);
+        }
+        #[cfg(not(test))]
         if deadline.expired() {
             return Err(BlockingBridgeError::DeadlineBeforeStart);
         }
+        #[cfg(test)]
         let started_at = self.now();
+        #[cfg(not(test))]
+        let started_at = std::time::Instant::now();
         match policy {
             BlockingCompletionPolicy::AwaitCompletion => {
                 let outcome = tokio::task::spawn_blocking(job)
                     .await
                     .map_err(BlockingBridgeError::Join)?;
+                #[cfg(test)]
                 let elapsed = self.now().saturating_duration_since(started_at);
+                #[cfg(test)]
                 if elapsed > remaining {
                     self.record_stall(stall_counter, elapsed, remaining);
+                }
+                #[cfg(not(test))]
+                if started_at.elapsed() > remaining {
+                    self.record_stall(stall_counter, started_at.elapsed(), remaining);
                 }
                 drop(permit);
                 outcome.map_err(BlockingBridgeError::Operation)
@@ -198,11 +228,12 @@ impl BoundedBlockingBridge {
                     Ok(Ok(result)) => result.map_err(BlockingBridgeError::Operation),
                     Ok(Err(source)) => Err(BlockingBridgeError::Join(source)),
                     Err(_) => {
-                        self.record_stall(
-                            stall_counter,
-                            self.now().saturating_duration_since(started_at),
-                            remaining,
-                        );
+                        #[cfg(test)]
+                        let elapsed = self.now().saturating_duration_since(started_at);
+                        #[cfg(test)]
+                        self.record_stall(stall_counter, elapsed, remaining);
+                        #[cfg(not(test))]
+                        self.record_stall(stall_counter, started_at.elapsed(), remaining);
                         Err(BlockingBridgeError::DeadlineAfterStart)
                     }
                 }

@@ -2,14 +2,10 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::boundary::RosterEntry;
+use crate::boundary::{RosterEntry, RosterStore};
 use crate::delivery_channel::local_message_received_backend;
 use crate::error::AtmError;
 use crate::roles::ROLE_TEAM_LEAD;
-#[allow(
-    deprecated,
-    reason = "remove the obsolete cwd field from compatibility projections"
-)]
 use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
 #[cfg(test)]
 use crate::schema::{AgentMember, TeamConfig};
@@ -17,7 +13,6 @@ use crate::schema::{HOME_DIR_METADATA_KEY, canonical_home_dir};
 #[cfg(test)]
 use crate::types::AgentId;
 use crate::types::AgentName;
-use atm_storage::RosterStore;
 
 use super::{MemberSummary, MembersList, MembersQuery};
 
@@ -44,9 +39,7 @@ pub(super) fn load_team_roster(
     roster_store: &dyn RosterStore,
     team: &crate::types::TeamName,
 ) -> Result<Vec<RosterEntry>, AtmError> {
-    roster_store
-        .load_roster(team)
-        .map(|snapshot| snapshot.members)
+    roster_store.load_roster(team)
 }
 
 #[cfg(test)]
