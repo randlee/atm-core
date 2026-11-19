@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Delete when randlee/sc-lint#783 ships workspace Python pin validation."""
+"""Delete when randlee/sc-lint#982 ships workspace Python pin validation."""
 from __future__ import annotations
 
 import re
@@ -123,7 +123,7 @@ def workspace_tracked_python_packages(repo_root: Path, workspace_version: str) -
 
 
 def validate_python_dependency_pins(repo_root: Path, workspace_version: str) -> bool:
-    """Keep the ATM-specific Python pin gap until randlee/sc-lint#783 ships.
+    """Keep the ATM-specific Python pin gap until randlee/sc-lint#982 ships.
 
     Fail if any in-workspace pyproject.toml pins a workspace-tracked Python
     package (e.g. hermes-atm's ``atm-graft`` dependency) with a specifier the

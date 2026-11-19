@@ -302,7 +302,7 @@ impl RestartCause {
     }
 }
 
-#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "bounded retry delay between attempts; cancelled by worker or daemon shutdown See https://github.com/randlee/atm-core/issues/2510.")]
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "bounded retry delay between attempts; cancelled by worker or daemon shutdown See https://github.com/randlee/atm-core/issues/2529.")]
 async fn wait_backoff(delay: Duration) {
     tokio::time::sleep(delay).await;
 }
