@@ -317,6 +317,73 @@ pub(crate) fn validate_connection_budget(
     Ok(())
 }
 
+#[cfg(test)]
+struct ManualReaderClock {
+    now: Mutex<Instant>,
+    changed: std::sync::Condvar,
+    registered_waits: AtomicUsize,
+}
+
+#[cfg(test)]
+impl ManualReaderClock {
+    fn new() -> Self {
+        Self {
+            now: Mutex::new(Instant::now()),
+            changed: std::sync::Condvar::new(),
+            registered_waits: AtomicUsize::new(0),
+        }
+    }
+
+    fn now(&self) -> Instant {
+        *self.now.lock().expect("manual reader clock")
+    }
+
+    fn advance(&self, duration: Duration) {
+        let mut now = self.now.lock().expect("manual reader clock");
+        *now += duration;
+        self.changed.notify_all();
+    }
+
+    fn notify(&self) {
+        let _guard = self.now.lock().expect("manual reader clock");
+        self.changed.notify_all();
+    }
+
+    fn wait_for_receivers(&self, count: usize) {
+        let now = self.now.lock().expect("manual reader clock");
+        let _guard = self
+            .changed
+            .wait_while(now, |_| {
+                self.registered_waits.load(Ordering::SeqCst) < count
+            })
+            .expect("manual reader clock");
+    }
+
+    fn receive<T>(
+        &self,
+        receiver: &mpsc::Receiver<T>,
+        deadline: Instant,
+    ) -> Result<T, mpsc::RecvTimeoutError> {
+        let mut now = self.now.lock().expect("manual reader clock");
+        self.registered_waits.fetch_add(1, Ordering::SeqCst);
+        self.changed.notify_all();
+        loop {
+            match receiver.try_recv() {
+                Ok(value) => return Ok(value),
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    return Err(mpsc::RecvTimeoutError::Disconnected);
+                }
+                Err(mpsc::TryRecvError::Empty) if *now >= deadline => {
+                    return Err(mpsc::RecvTimeoutError::Timeout);
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    now = self.changed.wait(now).expect("manual reader clock")
+                }
+            }
+        }
+    }
+}
+
 struct PoolInner {
     lane: &'static str,
     target: Arc<SharedDbTarget>,
@@ -335,6 +402,8 @@ struct PoolInner {
     worker_exit_count: Arc<AtomicUsize>,
     #[cfg(test)]
     shutdown_count: AtomicUsize,
+    #[cfg(test)]
+    manual_clock: Arc<Mutex<Option<Arc<ManualReaderClock>>>>,
 }
 
 struct PoolShutdownGuard {
@@ -365,6 +434,8 @@ struct WorkerState {
     status: AtomicUsize,
     active: AtomicBool,
     active_request: AtomicUsize,
+    #[cfg(test)]
+    manual_clock: Arc<Mutex<Option<Arc<ManualReaderClock>>>>,
 }
 
 struct WorkerReservation {
@@ -439,6 +510,8 @@ impl ReaderPool {
             worker_exit_count: Arc::new(AtomicUsize::new(0)),
             #[cfg(test)]
             shutdown_count: AtomicUsize::new(0),
+            #[cfg(test)]
+            manual_clock: Arc::new(Mutex::new(None)),
         });
         let pool = Self {
             _ownership: Arc::new(PoolShutdownGuard {
@@ -631,7 +704,29 @@ impl ReaderPool {
         T: Send + 'static,
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
-        self.submit_blocking_with_class_at(deadline_at(deadline)?, deadline, None, operation)
+        #[cfg(test)]
+        let expires_at = self
+            .test_now()
+            .checked_add(deadline)
+            .ok_or_else(|| deadline_expired("computing reader deadline", deadline))?;
+        #[cfg(not(test))]
+        let expires_at = deadline_at(deadline)?;
+        self.submit_blocking_with_class_at(expires_at, deadline, None, operation)
+    }
+
+    #[cfg(test)]
+    fn test_now(&self) -> Instant {
+        self.inner
+            .manual_clock
+            .lock()
+            .expect("reader clock hook")
+            .as_ref()
+            .map_or_else(Instant::now, |clock| clock.now())
+    }
+
+    #[cfg(test)]
+    fn use_manual_clock(&self, clock: Arc<ManualReaderClock>) {
+        *self.inner.manual_clock.lock().expect("reader clock hook") = Some(clock);
     }
 
     pub(crate) fn request_deadline(&self) -> Duration {
@@ -652,9 +747,23 @@ impl ReaderPool {
         let reservation = self.reserve_worker()?;
         let request_id = RequestId::next(&self.inner.next_request);
         let (reply, response) = mpsc::sync_channel(1);
+        #[cfg(test)]
+        let manual_clock = self
+            .inner
+            .manual_clock
+            .lock()
+            .expect("reader clock hook")
+            .clone();
+        #[cfg(test)]
+        let reply_clock = manual_clock.clone();
         let request = Request {
             id: request_id,
+            #[cfg(not(test))]
             queued_at: Instant::now(),
+            #[cfg(test)]
+            queued_at: manual_clock
+                .as_ref()
+                .map_or_else(Instant::now, |clock| clock.now()),
             deadline: expires_at,
             _tool_class_slot: tool_class_slot,
             run: Box::new(move |connection, target, disposition| {
@@ -666,19 +775,28 @@ impl ReaderPool {
                     RequestDisposition::Rejected(error) => Err(error),
                 };
                 let _ = reply.send(result);
+                #[cfg(test)]
+                if let Some(clock) = reply_clock {
+                    clock.notify();
+                }
             }),
         };
         self.enqueue_request(&reservation, request, expires_at, deadline)?;
-        response
-            .recv_timeout(expires_at.saturating_duration_since(Instant::now()))
-            .map_err(|error| match error {
-                mpsc::RecvTimeoutError::Timeout => {
-                    self.expire_waiting_request(reservation, request_id, deadline)
-                }
-                mpsc::RecvTimeoutError::Disconnected => ReadLaneError::Unavailable {
-                    message: "reader worker closed its reply channel".to_owned(),
-                },
-            })?
+        #[cfg(test)]
+        let received = match manual_clock {
+            Some(clock) => clock.receive(&response, expires_at),
+            None => response.recv_timeout(expires_at.saturating_duration_since(Instant::now())),
+        };
+        #[cfg(not(test))]
+        let received = response.recv_timeout(expires_at.saturating_duration_since(Instant::now()));
+        received.map_err(|error| match error {
+            mpsc::RecvTimeoutError::Timeout => {
+                self.expire_waiting_request(reservation, request_id, deadline)
+            }
+            mpsc::RecvTimeoutError::Disconnected => ReadLaneError::Unavailable {
+                message: "reader worker closed its reply channel".to_owned(),
+            },
+        })?
     }
 
     /// Pushes `request` onto the worker's bounded queue, retrying until the
@@ -811,6 +929,8 @@ impl PoolInner {
             status: AtomicUsize::new(WorkerStatus::Ready as usize),
             active: AtomicBool::new(false),
             active_request: AtomicUsize::new(RequestId::NONE),
+            #[cfg(test)]
+            manual_clock: Arc::clone(&self.manual_clock),
         });
         let weak = Arc::downgrade(self);
         let worker_state = Arc::clone(&state);
@@ -1101,7 +1221,15 @@ fn run_worker(
         let WorkerMessage::Request(request) = message else {
             return false;
         };
+        #[cfg(not(test))]
         let now = Instant::now();
+        #[cfg(test)]
+        let now = state
+            .manual_clock
+            .lock()
+            .expect("reader clock hook")
+            .as_ref()
+            .map_or_else(Instant::now, |clock| clock.now());
         metrics
             .queue_depth
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |depth| {
@@ -1154,8 +1282,8 @@ fn run_worker(
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_MAX_READER_CONNECTIONS, ReaderLaneMetrics, ReaderPool, ReaderPoolConfig,
-        WorkerLifecycleEvent, deadline_at, validate_connection_budget,
+        DEFAULT_MAX_READER_CONNECTIONS, ManualReaderClock, ReaderLaneMetrics, ReaderPool,
+        ReaderPoolConfig, WorkerLifecycleEvent, deadline_at, validate_connection_budget,
     };
     use crate::shared_db::SharedDbTarget;
     use std::num::NonZeroUsize;
@@ -1325,6 +1453,63 @@ mod tests {
         assert!(message.contains("read_pool=8"));
         assert!(message.contains("tool_class_max_in_flight=6"));
         assert!(message.contains("max_connections=17"));
+    }
+
+    #[test]
+    fn controlled_clock_expires_queued_read_without_running_it() {
+        let pool = Arc::new(test_pool(test_config(1, 2, Duration::from_millis(250), 1)));
+        let clock = Arc::new(ManualReaderClock::new());
+        pool.use_manual_clock(Arc::clone(&clock));
+        let (started_tx, started_rx) = mpsc::sync_channel(1);
+        let (release_tx, release_rx) = mpsc::sync_channel::<()>(1);
+        let first_pool = Arc::clone(&pool);
+        let first = std::thread::spawn(move || {
+            first_pool.submit_blocking(Duration::from_secs(10), move |connection, _| {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok::<_, atm_storage::ReadLaneError>(
+                    connection
+                        .query_row("SELECT 42", [], |row| row.get::<_, i32>(0))
+                        .unwrap(),
+                )
+            })
+        });
+        started_rx.recv().unwrap();
+        let second_pool = Arc::clone(&pool);
+        let ran = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let second_ran = Arc::clone(&ran);
+        let second = std::thread::spawn(move || {
+            second_pool.submit_blocking(Duration::from_secs(1), move |_, _| {
+                second_ran.store(true, Ordering::SeqCst);
+                Ok::<_, atm_storage::ReadLaneError>(())
+            })
+        });
+        clock.wait_for_receivers(2);
+        clock.advance(Duration::from_secs(1));
+        assert!(matches!(
+            second.join().unwrap(),
+            Err(atm_storage::ReadLaneError::DeadlineExpired {
+                stage: "waiting in queue",
+                ..
+            })
+        ));
+        assert!(!ran.load(Ordering::SeqCst));
+        release_tx.send(()).unwrap();
+        assert_eq!(first.join().unwrap().unwrap(), 42);
+        let sentinel = pool
+            .submit_blocking(Duration::from_secs(1), |connection, _| {
+                Ok::<_, atm_storage::ReadLaneError>(
+                    connection
+                        .query_row("SELECT 7", [], |row| row.get::<_, i32>(0))
+                        .unwrap(),
+                )
+            })
+            .unwrap();
+        assert_eq!(sentinel, 7);
+        assert!(
+            !ran.load(Ordering::SeqCst),
+            "expired queued operation never ran"
+        );
     }
 
     #[test]
