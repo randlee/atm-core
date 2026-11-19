@@ -113,14 +113,10 @@ impl DiagnosticSink for RecordingDiagnosticSink {
 
 #[tokio::test(start_paused = true)]
 async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
-    let gate = Arc::new(atm_storage::testing::ReleaseBlocker::default());
-    struct ReleaseGateGuard(Arc<atm_storage::testing::ReleaseBlocker>);
-    impl Drop for ReleaseGateGuard {
-        fn drop(&mut self) {
-            self.0.release();
-        }
-    }
-    let release_guard = ReleaseGateGuard(Arc::clone(&gate));
+    use crate::herdr_queue_wake_test_gates::{BlockingGate, BlockingGateReleaseGuard};
+
+    let gate = Arc::new(BlockingGate::default());
+    let release_guard = BlockingGateReleaseGuard(Arc::clone(&gate));
     let worker_gate = Arc::clone(&gate);
     let bridge = BoundedBlockingBridge::new(
         std::num::NonZeroUsize::new(1).expect("non-zero test bridge capacity"),
@@ -2598,20 +2594,12 @@ async fn ac11_claim_drop_guard_release_is_joined_before_pump_shutdown() {
 
 #[tokio::test(start_paused = true)]
 async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
+    use crate::herdr_queue_wake_test_gates::{BlockingGate, BlockingGateReleaseGuard};
+
     let (_root, runtime, _fake, pump, health, key) = build_test_pump();
-    let release_gate = Arc::new(atm_storage::testing::ReleaseBlocker::default());
-    struct ReleaseGateGuard(Arc<atm_storage::testing::ReleaseBlocker>);
-    impl Drop for ReleaseGateGuard {
-        fn drop(&mut self) {
-            self.0.release();
-        }
-    }
-    let release_guard = ReleaseGateGuard(Arc::clone(&release_gate));
-    let store = Arc::new(
-        atm_storage::testing::DummyPendingNudgeStore::default()
-            .with_release_blocker(Arc::clone(&release_gate)),
-    );
-    let store: Arc<dyn atm_core::boundary::PendingNudgeStore + Send + Sync> = store;
+    let release_gate = Arc::new(BlockingGate::default());
+    let release_guard = BlockingGateReleaseGuard(Arc::clone(&release_gate));
+    let store = runtime.pending_nudge_store().expect("pending store");
     let release = ReleasePendingOnDrop::new(
         store,
         key,
@@ -2623,7 +2611,8 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
         runtime,
         Arc::clone(&pump.release_handles),
         pump.blocking_bridge.clone(),
-    );
+    )
+    .with_release_test_gate(Arc::clone(&release_gate));
     drop(release);
     let started_gate = Arc::clone(&release_gate);
     tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
@@ -2634,15 +2623,10 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
     let task = pump.start(shutdown_rx);
     shutdown_tx.send(()).expect("shutdown notification");
     tokio::time::advance(HERDR_REQUEST_BUDGET).await;
-    tokio::task::yield_now().await;
-
-    assert!(
-        task.is_finished(),
-        "a stalled release store must not hold pump shutdown past its request deadline"
-    );
+    task.await
+        .expect("pump shutdown completes at its request deadline");
     assert_eq!(health.snapshot().blocking_core_bridge_stalls_total, 1);
     drop(release_guard);
-    task.await.expect("bounded pump shutdown joins");
 }
 
 #[test]

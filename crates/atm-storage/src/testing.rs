@@ -864,50 +864,9 @@ pub(crate) struct PendingStoreState {
     mark_failure: Option<AtmError>,
     mark_failures_remaining: std::sync::atomic::AtomicUsize,
     rearm_failure: Option<AtmError>,
-    release_blocker: Option<std::sync::Arc<ReleaseBlocker>>,
     operation_calls: std::sync::atomic::AtomicUsize,
     rearm_calls: std::sync::atomic::AtomicUsize,
     mark_pending_calls: std::sync::Mutex<Vec<(MemberKey, AtmMessageId)>>,
-}
-
-/// A signal-driven blocker for synchronous pending-store tests.
-#[derive(Default)]
-pub struct ReleaseBlocker {
-    state: std::sync::Mutex<ReleaseBlockerState>,
-    changed: std::sync::Condvar,
-}
-
-#[derive(Default)]
-struct ReleaseBlockerState {
-    entered: bool,
-    released: bool,
-}
-
-impl ReleaseBlocker {
-    pub fn release(&self) {
-        self.state.lock().expect("release blocker lock").released = true;
-        self.changed.notify_all();
-    }
-
-    pub fn enter_and_wait(&self) {
-        let mut state = self.state.lock().expect("release blocker lock");
-        state.entered = true;
-        self.changed.notify_all();
-        let state = self
-            .changed
-            .wait_while(state, |state| !state.released)
-            .expect("release blocker state is not poisoned");
-        assert!(state.released, "release gate was released");
-    }
-
-    pub fn wait_until_entered(&self) {
-        let state = self.state.lock().expect("release blocker lock");
-        let state = self
-            .changed
-            .wait_while(state, |state| !state.entered)
-            .expect("release blocker state is not poisoned");
-        assert!(state.entered, "release gate entered");
-    }
 }
 
 impl Default for DummyPendingNudgeStore {
@@ -917,7 +876,6 @@ impl Default for DummyPendingNudgeStore {
             mark_failure: None,
             mark_failures_remaining: std::sync::atomic::AtomicUsize::new(0),
             rearm_failure: None,
-            release_blocker: None,
             operation_calls: std::sync::atomic::AtomicUsize::new(0),
             rearm_calls: std::sync::atomic::AtomicUsize::new(0),
             mark_pending_calls: std::sync::Mutex::new(Vec::new()),
@@ -944,14 +902,6 @@ impl DummyPendingNudgeStore {
     #[must_use]
     pub fn with_rearm_failure(mut self, failure: AtmError) -> Self {
         self.0.rearm_failure = Some(failure);
-        self
-    }
-
-    /// Blocks release operations until `blocker` becomes false, exposing the
-    /// synchronous-store stall needed by bounded-shutdown tests.
-    #[must_use]
-    pub fn with_release_blocker(mut self, blocker: std::sync::Arc<ReleaseBlocker>) -> Self {
-        self.0.release_blocker = Some(blocker);
         self
     }
 
@@ -1036,9 +986,6 @@ impl DummyPendingNudgeStore {
 
     pub(crate) fn release(&self, member: &MemberKey, claim: &NudgeClaim) -> Result<(), AtmError> {
         self.record_operation();
-        if let Some(blocker) = &self.0.release_blocker {
-            blocker.enter_and_wait();
-        }
         self.0
             .inner
             .as_ref()

@@ -15,6 +15,8 @@ pub(crate) struct ReleasePendingOnDrop {
     release_streaks: Arc<Mutex<HashMap<MemberKey, u32>>>,
     release_handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     blocking_bridge: BoundedBlockingBridge,
+    #[cfg(test)]
+    release_test_gate: Option<Arc<crate::herdr_queue_wake_test_gates::BlockingGate>>,
     /// Clears the member's ephemeral Herdr wake-pending roster flag when this
     /// claim attempt concludes (success, requeue, or release), regardless of
     /// which exit path was taken. Set alongside claiming a pending nudge in
@@ -42,9 +44,20 @@ impl ReleasePendingOnDrop {
             release_streaks,
             release_handles,
             blocking_bridge,
+            #[cfg(test)]
+            release_test_gate: None,
             service_runtime,
             armed: true,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_release_test_gate(
+        mut self,
+        gate: Arc<crate::herdr_queue_wake_test_gates::BlockingGate>,
+    ) -> Self {
+        self.release_test_gate = Some(gate);
+        self
     }
 
     pub(crate) async fn release_without_input(&mut self) {
@@ -132,7 +145,13 @@ impl ReleasePendingOnDrop {
         let store = Arc::clone(&self.store);
         let member = self.member.clone();
         let claim = self.claim.clone();
+        #[cfg(test)]
+        let test_gate = self.release_test_gate.clone();
         let release = move || {
+            #[cfg(test)]
+            if let Some(gate) = test_gate {
+                gate.enter_and_wait();
+            }
             if should_requeue {
                 store.requeue_pending(&member, &claim)
             } else {
