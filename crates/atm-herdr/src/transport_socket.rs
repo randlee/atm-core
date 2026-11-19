@@ -119,14 +119,41 @@ impl SocketIo {
         deadline: RequestDeadline,
     ) -> Result<HerdrEnvelope, HerdrError> {
         let deadline = tokio_deadline(deadline)?;
+        #[cfg(unix)]
+        let connect = |endpoint, deadline| async move { connect_unix(&endpoint, deadline).await };
+        #[cfg(windows)]
+        let connect = {
+            let retry_delay = self.pipe_busy_retry_delay;
+            move |endpoint, deadline| async move {
+                connect_named_pipe_at(&endpoint, deadline, retry_delay).await
+            }
+        };
+        self.round_trip_with_deadline(request, session, deadline, connect)
+            .await
+    }
+
+    /// Internal transport-entry seam. The injected absolute deadline covers
+    /// permit acquisition, connection setup, and the complete stream exchange.
+    async fn round_trip_with_deadline<C, F, S>(
+        &self,
+        request: Vec<u8>,
+        session: Option<&HerdrSession>,
+        deadline: Instant,
+        connect: C,
+    ) -> Result<HerdrEnvelope, HerdrError>
+    where
+        C: FnOnce(HerdrEndpoint, Instant) -> F,
+        F: Future<Output = Result<S, HerdrError>>,
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
+        if Instant::now() >= deadline {
+            return Err(HerdrError::Timeout);
+        }
         let permit = acquire_permit(Arc::clone(&self.in_flight), deadline).await?;
         let endpoint = herdr_api_endpoint(&self.cfg, session, &self.env);
-
-        #[cfg(unix)]
-        let mut stream = connect_unix(&endpoint, deadline).await?;
-        #[cfg(windows)]
-        let mut stream =
-            connect_named_pipe_at(&endpoint, deadline, self.pipe_busy_retry_delay).await?;
+        let mut stream = tokio::time::timeout_at(deadline, connect(endpoint, deadline))
+            .await
+            .map_err(|_| HerdrError::Timeout)??;
 
         let response =
             exchange_over_stream(&mut stream, &request, self.max_line_bytes, deadline).await?;
@@ -706,6 +733,92 @@ mod tests {
             tokio_deadline(RequestDeadline::after(Duration::ZERO)),
             Err(HerdrError::Timeout)
         ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn injected_transport_entry_deadline_expires_before_connection() {
+        let io = SocketIo::new(&HerdrClientConfig::default());
+        let connector_called = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let connector_was_called = Arc::clone(&connector_called);
+
+        let result = io
+            .round_trip_with_deadline(
+                b"request\n".to_vec(),
+                None,
+                Instant::now(),
+                move |_endpoint, _deadline| async move {
+                    connector_was_called.store(true, std::sync::atomic::Ordering::SeqCst);
+                    let (client, _server) = tokio::io::duplex(16);
+                    Ok(client)
+                },
+            )
+            .await;
+
+        assert!(matches!(result, Err(HerdrError::Timeout)));
+        assert!(!connector_called.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn injected_transport_entry_deadline_covers_connection_and_stream_io() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let io = SocketIo::new(&HerdrClientConfig::default());
+        let deadline = test_deadline(Duration::from_nanos(4));
+        let (client, mut server) = tokio::io::duplex(16);
+        let (connect_started_tx, connect_started_rx) = tokio::sync::oneshot::channel();
+        let (connect_gate_tx, connect_gate_rx) = tokio::sync::oneshot::channel();
+        let (request_seen_tx, request_seen_rx) = tokio::sync::oneshot::channel();
+        let (response_gate_tx, response_gate_rx) = tokio::sync::oneshot::channel();
+        let server_task = tokio::spawn(async move {
+            let mut request = [0_u8; 8];
+            server
+                .read_exact(&mut request)
+                .await
+                .expect("request reaches the stream after delayed connection");
+            assert_eq!(&request, b"payload\n");
+            request_seen_tx.send(()).expect("request observed");
+            response_gate_rx.await.expect("response gate");
+            let _ = server.write_all(b"{}\n").await;
+        });
+        let (result_tx, mut result_rx) = tokio::sync::oneshot::channel();
+        let exchange = tokio::spawn(async move {
+            let result = io
+                .round_trip_with_deadline(
+                    b"payload\n".to_vec(),
+                    None,
+                    deadline,
+                    move |_endpoint, _deadline| async move {
+                        connect_started_tx.send(()).expect("connector started");
+                        connect_gate_rx.await.expect("release connector");
+                        Ok(client)
+                    },
+                )
+                .await;
+            let _ = result_tx.send(result);
+        });
+
+        connect_started_rx.await.expect("connector entry");
+        tokio::time::advance(Duration::from_nanos(3)).await;
+        connect_gate_tx
+            .send(())
+            .expect("release connector before deadline");
+        request_seen_rx
+            .await
+            .expect("request reached stream exchange");
+        assert_eq!(Instant::now(), deadline - Duration::from_nanos(1));
+        assert!(matches!(
+            result_rx.try_recv(),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+        ));
+        tokio::time::advance(Duration::from_nanos(1)).await;
+
+        assert!(matches!(
+            result_rx.await.expect("transport result"),
+            Err(HerdrError::Timeout)
+        ));
+        response_gate_tx.send(()).expect("release response fixture");
+        exchange.await.expect("transport task");
+        server_task.await.expect("server fixture");
     }
 
     #[tokio::test(start_paused = true)]
