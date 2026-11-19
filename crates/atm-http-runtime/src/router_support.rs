@@ -83,6 +83,10 @@ pub struct BoundedBlockingBridge {
     runtime_health: RuntimeHealth,
     #[cfg(test)]
     clock: Option<Arc<dyn Fn() -> std::time::Instant + Send + Sync>>,
+    #[cfg(test)]
+    admission_count: Arc<std::sync::atomic::AtomicUsize>,
+    #[cfg(test)]
+    admission_signal: Arc<tokio::sync::Notify>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,6 +122,10 @@ impl BoundedBlockingBridge {
             runtime_health,
             #[cfg(test)]
             clock: None,
+            #[cfg(test)]
+            admission_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            #[cfg(test)]
+            admission_signal: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -132,6 +140,25 @@ impl BoundedBlockingBridge {
     #[cfg(test)]
     pub(crate) fn available_permits(&self) -> usize {
         self.permits.available_permits()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn admission_count(&self) -> usize {
+        self.admission_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn wait_for_admissions(&self, count: usize) {
+        loop {
+            let notified = self.admission_signal.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if self.admission_count() >= count {
+                return;
+            }
+            notified.await;
+        }
     }
 
     /// Runs synchronous work without allowing either permit admission or the
@@ -184,6 +211,12 @@ impl BoundedBlockingBridge {
     {
         if tokio::time::Instant::now() >= deadline {
             return Err(BlockingBridgeError::DeadlineBeforeStart);
+        }
+        #[cfg(test)]
+        {
+            self.admission_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.admission_signal.notify_waiters();
         }
         let permit = tokio::time::timeout_at(deadline, Arc::clone(&self.permits).acquire_owned())
             .await

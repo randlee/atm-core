@@ -1529,11 +1529,19 @@ mod tests {
         )
     }
 
-    fn bounded_test_http_client() -> reqwest::Client {
+    fn test_http_client() -> reqwest::Client {
         reqwest::Client::builder()
-            .timeout(Duration::from_secs(1))
             .build()
-            .expect("bounded test HTTP client")
+            .expect("test HTTP client")
+    }
+
+    /// Keep virtual time fixed while the platform transport completes real I/O.
+    fn freeze_test_clock() -> tokio::sync::oneshot::Sender<()> {
+        let (release, held) = tokio::sync::oneshot::channel();
+        tokio::task::spawn_blocking(move || {
+            let _ = held.blocking_recv();
+        });
+        release
     }
 
     #[test]
@@ -1614,8 +1622,9 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn direct_peer_listener_uses_the_canonical_router_and_normalizes_provenance() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
             .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test());
@@ -1685,8 +1694,9 @@ mod tests {
             .expect("runtime shuts down cleanly");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn authenticated_peer_stream_uses_the_same_canonical_router_after_the_adapter() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let config = config_with_record(0, temporary_directory.path().join("local-http.json"))
             .with_direct_peer_tcp(DirectPeerTcpConfig::ephemeral_for_test())
@@ -1788,9 +1798,10 @@ mod tests {
         assert!(NonZeroDuration::new(Duration::ZERO).is_none());
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn runtime_health_becomes_ready_only_after_all_enabled_binds_and_not_ready_during_drain()
     {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
         let instance_id = Ulid::new();
@@ -1929,8 +1940,9 @@ mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn unix_socket_uses_the_shared_client_router_and_owner_only_endpoint() {
+        let _clock = freeze_test_clock();
         use std::os::unix::fs::MetadataExt;
 
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
@@ -1975,8 +1987,9 @@ mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn unix_socket_response_matches_the_in_process_canonical_route_bytes() {
+        let _clock = freeze_test_clock();
         use axum::body::{Body, to_bytes};
         use axum::http::Request;
         use axum::http::header::{CONTENT_TYPE, LOCATION};
@@ -2022,7 +2035,6 @@ mod tests {
         let raw_uds_client = reqwest::Client::builder()
             .unix_socket(socket_path.clone())
             .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(1))
             .build()
             .expect("raw UDS comparison client");
         let actual = raw_uds_client
@@ -2207,8 +2219,9 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn an_unexpected_server_task_exit_revokes_readiness_and_cleans_the_endpoint() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let endpoint_record = temporary_directory.path().join("local-http.json");
         let health = RuntimeHealth::with_owner(99);
@@ -2279,8 +2292,9 @@ mod tests {
         );
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn lifecycle_is_consuming_and_requires_validated_configuration() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let configured = HttpRuntimeBuilder::new(
             config_with_record(0, temporary_directory.path().join("local-http.json")),
@@ -2296,8 +2310,9 @@ mod tests {
             .expect("runtime must drain");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn runtime_binds_serves_and_joins_the_axum_task() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let configured = HttpRuntimeBuilder::new(
             config_with_record(0, temporary_directory.path().join("local-http.json")),
@@ -2311,7 +2326,7 @@ mod tests {
                 .expect("read active loopback endpoint record"),
         )
         .expect("decode active loopback endpoint record");
-        let response = bounded_test_http_client()
+        let response = test_http_client()
             .get(format!(
                 "http://{}/v1/atm/messages",
                 running.local_address()
@@ -2331,8 +2346,9 @@ mod tests {
             .expect("replacement server joins after shutdown");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn an15_http_differential_probe_exercises_live_loopback_request_shapes() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let configured = HttpRuntimeBuilder::new(
             config_with_record(0, temporary_directory.path().join("local-http.json")),
@@ -2347,7 +2363,7 @@ mod tests {
         )
         .expect("decode active loopback endpoint record");
         let endpoint = format!("http://{}", running.local_address());
-        let client = bounded_test_http_client();
+        let client = test_http_client();
 
         for case_index in 0..100 {
             // Each case changes the search-query shape consumed by
@@ -2417,8 +2433,9 @@ mod tests {
             .expect("replacement server joins after HTTP fuzz probe");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn os_selected_loopback_port_is_published_from_the_bound_listener() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
         let instance_id = Ulid::new();
@@ -2692,8 +2709,9 @@ mod tests {
         test.await;
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn loopback_rejects_missing_and_mismatched_capability_before_handler() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
         let instance_id = Ulid::new();
@@ -2725,7 +2743,7 @@ mod tests {
         let base_url = format!("http://{}", running.local_address());
 
         for capability in [None, Some("wrong-capability")] {
-            let request = bounded_test_http_client()
+            let request = test_http_client()
                 .post(format!("{base_url}/v1/atm/messages"))
                 .header("content-type", "application/json")
                 .body(body.clone());
@@ -2759,7 +2777,7 @@ mod tests {
                     .expect("test capability is an HTTP header value"),
             );
         }
-        let duplicate_capability_response = bounded_test_http_client()
+        let duplicate_capability_response = test_http_client()
             .post(format!("{base_url}/v1/atm/messages"))
             .headers(duplicate_headers)
             .body(body.clone())
@@ -2787,7 +2805,7 @@ mod tests {
             "duplicate capability must happen before CanonicalWriteHandler"
         );
 
-        let valid_request = bounded_test_http_client()
+        let valid_request = test_http_client()
             .post(format!("{base_url}/v1/atm/messages"))
             .header("content-type", "application/json")
             .header(LOCAL_CAPABILITY_HEADER, record.capability_base64url)
@@ -2889,8 +2907,9 @@ mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn loopback_and_uds_return_identical_canonical_json() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let socket_path = temporary_directory.path().join("atm-http-runtime.sock");
         let record_path = temporary_directory.path().join("local-http.json");
@@ -2937,8 +2956,9 @@ mod tests {
             .expect("parity runtime drains");
     }
 
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn loopback_body_limit_rejects_before_handler() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
         let instance_id = Ulid::new();
@@ -2963,7 +2983,7 @@ mod tests {
             &std::fs::read(&record_path).expect("read active endpoint record"),
         )
         .expect("decode active endpoint record");
-        let response = bounded_test_http_client()
+        let response = test_http_client()
             .post(format!(
                 "http://{}/v1/atm/messages",
                 running.local_address()
@@ -3104,8 +3124,9 @@ mod tests {
     }
 
     #[cfg(windows)]
-    #[tokio::test(flavor = "current_thread")]
+    #[tokio::test(start_paused = true)]
     async fn windows_loopback_fixture_uses_the_same_capability_authenticated_route() {
+        let _clock = freeze_test_clock();
         let temporary_directory = tempfile::tempdir().expect("temporary directory");
         let record_path = temporary_directory.path().join("local-http.json");
         let instance_id = Ulid::new();

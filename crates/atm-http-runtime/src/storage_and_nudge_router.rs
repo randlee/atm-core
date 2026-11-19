@@ -523,17 +523,28 @@ impl StorageAndNudgeRouter {
         let caller_team = query.caller_team.clone();
         let team_override = query.team_override.clone();
         let all_teams = query.all_teams;
-        let mut report = doctor_projection
-            .project(
+        let deadline_at = crate::request_deadline::capture(deadline);
+        if tokio::time::Instant::now() >= deadline_at {
+            return Err(AtmError::daemon_unavailable(
+                "request deadline expired before doctor projection",
+            ));
+        }
+        let mut report = tokio::time::timeout_at(
+            deadline_at,
+            doctor_projection.project(
                 query.with_daemon_paths(self.daemon_home.clone()),
                 DoctorProjectionContext {
                     runtime_status: Some(initial_runtime_status),
                     daemon_context,
                     handoff,
                 },
-                deadline,
-            )
-            .await?;
+                crate::request_deadline::core_boundary(deadline),
+            ),
+        )
+        .await
+        .map_err(|_| {
+            AtmError::daemon_unavailable("request deadline expired during doctor projection")
+        })??;
         let mut runtime_status = report.member_roster.as_ref().map_or_else(
             || runtime_health.snapshot(),
             |roster| {
@@ -1693,6 +1704,23 @@ pub(crate) mod tests {
         };
     }
 
+    macro_rules! through_normal_task_commands_with_physical_runtime {
+        ($plain:ident, $through:ident, $body:ident) => {
+            #[tokio::test(start_paused = true)]
+            async fn $plain() {
+                let _clock = freeze_peer_test_clock();
+                let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+                crate::request_deadline::scope(deadline, $body(false)).await;
+            }
+            #[tokio::test(start_paused = true)]
+            async fn $through() {
+                let _clock = freeze_peer_test_clock();
+                let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
+                crate::request_deadline::scope(deadline, $body(true)).await;
+            }
+        };
+    }
+
     async fn router_peer_ingress_rejects_task_move_body(through: bool) {
         let fixture = route_task_commands(fixture(true, None, None), through);
         let team: TeamName = "test-team".parse().expect("team");
@@ -2319,7 +2347,7 @@ pub(crate) mod tests {
             .expect("task lifecycle daemon shuts down");
     }
 
-    through_normal_task_commands!(non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_through_normal_task_commands, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_body);
+    through_normal_task_commands_with_physical_runtime!(non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_through_normal_task_commands, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_body);
 
     async fn recorded_assigner_reassign_still_succeeds_through_daemon_body(through: bool) {
         let fixture = route_task_commands(fixture(true, None, None), through);
@@ -2355,33 +2383,23 @@ pub(crate) mod tests {
             .expect("task lifecycle daemon shuts down");
     }
 
-    through_normal_task_commands!(
+    through_normal_task_commands_with_physical_runtime!(
         recorded_assigner_reassign_still_succeeds_through_daemon,
         recorded_assigner_reassign_still_succeeds_through_daemon_through_normal_task_commands,
         recorded_assigner_reassign_still_succeeds_through_daemon_body
     );
 
-    /// Hang detector for two-runtime router tests that dispatch a canonical
-    /// write or ACK over a real reqwest client to a real, in-process peer
-    /// HTTP runtime. This is not a timing assertion on how fast delivery
-    /// should be: it exists only to fail a genuinely hung exchange instead of
-    /// blocking `cargo test` forever. A fresh client build (TLS/connector
-    /// init), TCP connect, remote accept, remote `commit_write` (including a
-    /// SQLite fsync), and the synchronous received-hook path all happen
-    /// inside this budget on a shared executor, so it must stay generous on
-    /// loaded CI runners. See `DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT` for
-    /// the server-side counterpart, which must stay strictly larger than
-    /// this value per the request-budget contract.
-    const TWO_RUNTIME_TEST_REQUEST_BUDGET: Duration = Duration::from_secs(30);
+    // Physical peer I/O remains covered, while Tokio time is held fixed so
+    // host load cannot consume a request budget.
+    const DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
-    /// Hang detector for tests that host a real accept loop and a real
-    /// client dispatch on the same executor (see `TWO_RUNTIME_TEST_REQUEST_BUDGET`
-    /// for the client-side counterpart). This is not a timing assertion: it
-    /// only needs to be comfortably larger than the client-side budget so a
-    /// slow-but-correct exchange cannot be starved by the server closing the
-    /// connection first. Per the request-budget contract, the server budget
-    /// must stay strictly greater than the client budget.
-    const DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(35);
+    fn freeze_peer_test_clock() -> tokio::sync::oneshot::Sender<()> {
+        let (release, held) = tokio::sync::oneshot::channel();
+        tokio::task::spawn_blocking(move || {
+            let _ = held.blocking_recv();
+        });
+        release
+    }
 
     fn direct_peer_runtime_config(
         fixture: &Fixture,
@@ -3912,29 +3930,34 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied() {
+        let _clock = freeze_peer_test_clock();
+        let deadline_at = tokio::time::Instant::now() + Duration::from_secs(1);
         let fixture = fixture(true, None, None);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
-        fixture
-            .router
-            .dispatch(
+        crate::request_deadline::scope(
+            deadline_at,
+            fixture.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .await
-            .expect("seed mailbox");
+                RequestDeadline::after(Duration::ZERO),
+            ),
+        )
+        .await
+        .expect("seed mailbox");
 
         let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
         let async_mailbox_runtime = assembly
             .async_mailbox_runtime
             .with_state_handoff(HandoffConfig::default())
             .expect("start mailbox handoff");
+        let mut doctor_ports = assembly.doctor_ports;
+        doctor_ports.herdr_endpoint = Arc::new(atm_core::doctor::ClosedHerdrEndpointDoctor);
         let doctor_projection = StorageDoctorProjection::start(
             DoctorProjectionConfig::default(),
             assembly.service_runtime,
-            assembly.doctor_ports,
+            doctor_ports,
             Arc::new(NullObservability),
         )
         .expect("start doctor projection");
@@ -3944,19 +3967,22 @@ pub(crate) mod tests {
             .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
             .with_doctor_projection(Arc::new(doctor_projection));
         let bridge = router.control_path_sync_bridge.clone();
+        let observed_bridge = bridge.blocking_bridge().clone();
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let release_tx = Arc::new(TestSignal::default());
         let release_rx = Arc::clone(&release_tx);
-        let bridge_task = tokio::spawn(async move {
+        let _release = SignalOnDrop(release_tx.clone());
+        let bridge_task = tokio::spawn(crate::request_deadline::scope(deadline_at, async move {
             bridge
-                .run(RequestDeadline::after(Duration::from_secs(30)), move || {
+                .run(RequestDeadline::after(Duration::ZERO), move || {
                     started_tx.send(()).expect("signal occupied bridge");
                     release_rx.wait_for(1);
                     Ok(())
                 })
                 .await
-        });
+        }));
         started_rx.await.expect("bridge started");
+        let admissions_before_doctor = observed_bridge.admission_count();
 
         let root = fixture.home_dir.clone();
         let list = atm_core::list::ListQuery::new(
@@ -4022,20 +4048,37 @@ pub(crate) mod tests {
                 )),
                 _ => ApiRequest::Doctor(atm_core::doctor::DoctorQuery::default()),
             };
-            calls.push(tokio::spawn(async move {
-                router
-                    .dispatch(
-                        request,
-                        AuthenticatedIngress::Local,
-                        RequestDeadline::after(Duration::from_secs(1)),
-                    )
-                    .await
-            }));
+            calls.push(tokio::spawn(crate::request_deadline::scope(
+                deadline_at,
+                async move {
+                    router
+                        .dispatch(
+                            request,
+                            AuthenticatedIngress::Local,
+                            RequestDeadline::after(Duration::ZERO),
+                        )
+                        .await
+                },
+            )));
         }
-        for call in calls {
+        let mut doctor_calls = Vec::new();
+        for (index, call) in calls.into_iter().enumerate() {
+            if index % 4 == 3 {
+                doctor_calls.push(call);
+            } else {
+                call.await
+                    .expect("mailbox task joins")
+                    .expect("mailbox request completes while bridge is occupied");
+            }
+        }
+        observed_bridge
+            .wait_for_admissions(admissions_before_doctor + doctor_calls.len())
+            .await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+        for call in doctor_calls {
             call.await
-                .expect("fanout task joins")
-                .expect("fanout request completes while bridge is occupied");
+                .expect("doctor task joins")
+                .expect("doctor request completes while bridge is occupied");
         }
         release_tx.signal();
         bridge_task
@@ -4043,7 +4086,6 @@ pub(crate) mod tests {
             .expect("bridge task joins")
             .expect("bridge task completes");
     }
-
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {
         let path = atm_core::api::http_route_surface()
             .find(|route| route.method == "POST" && route.path_template.ends_with("/messages"))
@@ -5326,8 +5368,9 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn templated_send_over_loopback_tcp_uses_decomposed_admission_once() {
+        let _clock = freeze_peer_test_clock();
         let body = "template body";
         let fixture = fixture_with_selector_and_template(
             true,
@@ -5658,8 +5701,9 @@ pub(crate) mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn uds_runtime_reaches_the_canonical_storage_and_received_hook_path() {
+        let _clock = freeze_peer_test_clock();
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
         use std::num::NonZeroU32;
         use std::os::unix::fs::MetadataExt;
@@ -5750,8 +5794,9 @@ pub(crate) mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn uds_and_loopback_search_use_the_same_local_storage_port() {
+        let _clock = freeze_peer_test_clock();
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
         use std::num::NonZeroU32;
         use std::os::unix::fs::MetadataExt;
@@ -5848,8 +5893,9 @@ pub(crate) mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn templated_send_over_uds_uses_the_same_decomposed_admission() {
+        let _clock = freeze_peer_test_clock();
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
         use std::num::NonZeroU32;
         use std::os::unix::fs::MetadataExt;
@@ -5930,8 +5976,9 @@ pub(crate) mod tests {
             .expect("UDS runtime drains");
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn direct_peer_runtime_reaches_storage_once_and_skips_duplicate_hook() {
+        let _clock = freeze_peer_test_clock();
         let fixture = fixture(true, None, None);
         let running = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&fixture, crate::DirectPeerTcpConfig::ephemeral_for_test()),
@@ -6028,8 +6075,10 @@ pub(crate) mod tests {
             .expect("direct peer runtime drains");
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(start_paused = true)]
     async fn locally_admitted_host_qualified_write_is_forwarded_by_the_selected_daemon() {
+        let _clock = freeze_peer_test_clock();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
@@ -6063,15 +6112,16 @@ pub(crate) mod tests {
                 .parse()
                 .expect("host-qualified remote recipient"),
         );
-        let response = local
-            .router
-            .dispatch(
+        let response = crate::request_deadline::scope(
+            deadline,
+            local.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
-            )
-            .await
-            .expect("local daemon owns host-qualified delivery");
+                RequestDeadline::after(Duration::ZERO),
+            ),
+        )
+        .await
+        .expect("local daemon owns host-qualified delivery");
         let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
         else {
             panic!("local daemon must own host-qualified delivery");
@@ -6135,8 +6185,10 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn host_qualified_write_without_trusted_port_fails_with_peer_config_error() {
+        let _clock = freeze_peer_test_clock();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let mut local = fixture(false, None, None);
         local.router = local
             .router
@@ -6148,23 +6200,26 @@ pub(crate) mod tests {
                 .parse()
                 .expect("host-qualified recipient"),
         );
-        let error = local
-            .router
-            .dispatch(
+        let error = crate::request_deadline::scope(
+            deadline,
+            local.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
-            )
-            .await
-            .expect_err("missing trusted peer must not dial a default port");
+                RequestDeadline::after(Duration::ZERO),
+            ),
+        )
+        .await
+        .expect_err("missing trusted peer must not dial a default port");
         assert_eq!(
             error.code(),
             atm_core::error_codes::AtmErrorCode::PeerConfigValidationFailed
         );
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(start_paused = true)]
     async fn selected_router_reuses_one_opaque_peer_connection_across_three_loopback_writes() {
+        let _clock = freeze_peer_test_clock();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let adapter = Arc::new(CountingPassthroughPeerAdapter::default());
         let remote = fixture(true, None, None);
         // The pooled sender marks these writes as mTLS. Configure the receiver
@@ -6200,15 +6255,16 @@ pub(crate) mod tests {
                     .parse()
                     .expect("host-qualified loopback recipient"),
             );
-            let response = local
-                .router
-                .dispatch(
+            let response = crate::request_deadline::scope(
+                deadline,
+                local.router.dispatch(
                     ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                     AuthenticatedIngress::Local,
-                    RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
-                )
-                .await
-                .expect("selected router forwards the local write");
+                    RequestDeadline::after(Duration::ZERO),
+                ),
+            )
+            .await
+            .expect("selected router forwards the local write");
             assert!(matches!(
                 response.into_inner(),
                 ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
@@ -6244,8 +6300,10 @@ pub(crate) mod tests {
             .expect("remote runtime drains");
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(start_paused = true)]
     async fn local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge() {
+        let _clock = freeze_peer_test_clock();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
@@ -6342,15 +6400,16 @@ pub(crate) mod tests {
             reply_body: "received".to_owned(),
         }
         .into_write_request();
-        let response = local
-            .router
-            .dispatch(
+        let response = crate::request_deadline::scope(
+            deadline,
+            local.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
-            )
-            .await
-            .expect("local acknowledgement is delivered to the stored peer host");
+                RequestDeadline::after(Duration::ZERO),
+            ),
+        )
+        .await
+        .expect("local acknowledgement is delivered to the stored peer host");
         let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) =
             response.into_inner()
         else {
@@ -6416,8 +6475,10 @@ pub(crate) mod tests {
             .expect("remote direct peer runtime drains");
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[tokio::test(start_paused = true)]
     async fn local_ack_returns_peer_delivery_failure_after_the_local_commit() {
+        let _clock = freeze_peer_test_clock();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
@@ -6484,15 +6545,16 @@ pub(crate) mod tests {
             reply_body: "received".to_owned(),
         }
         .into_write_request();
-        let error = local
-            .router
-            .dispatch(
+        let error = crate::request_deadline::scope(
+            deadline,
+            local.router.dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
-            )
-            .await
-            .expect_err("post-commit peer acknowledgement forwarding failure reaches the caller");
+                RequestDeadline::after(Duration::ZERO),
+            ),
+        )
+        .await
+        .expect_err("post-commit peer acknowledgement forwarding failure reaches the caller");
         assert_eq!(
             error.code(),
             atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed,
@@ -6517,8 +6579,9 @@ pub(crate) mod tests {
             .expect("local direct peer runtime drains");
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn direct_peer_hook_failure_keeps_the_write_successful_with_a_warning() {
+        let _clock = freeze_peer_test_clock();
         let fixture = fixture(
             true,
             Some(AtmError::daemon_unavailable(

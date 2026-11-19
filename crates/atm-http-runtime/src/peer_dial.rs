@@ -395,14 +395,29 @@ mod tests {
         NonZeroU16::new(value).expect("non-zero port")
     }
 
-    // Return the selected address as an in-memory stand-in for a connection.
+    #[derive(Debug)]
+    struct SimulatedStream {
+        address: SocketAddr,
+        client: tokio::io::DuplexStream,
+        peer: tokio::io::DuplexStream,
+    }
+
+    fn connected(address: SocketAddr) -> SimulatedStream {
+        let (client, peer) = tokio::io::duplex(128);
+        SimulatedStream {
+            address,
+            client,
+            peer,
+        }
+    }
+
     fn loopback_only_connector(
         address: SocketAddr,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>>
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<SimulatedStream>> + Send>>
     {
         Box::pin(async move {
             if address.ip().is_loopback() {
-                Ok(address)
+                Ok(connected(address))
             } else {
                 std::future::pending().await
             }
@@ -412,11 +427,11 @@ mod tests {
     fn controlled_connector(
         address: SocketAddr,
         success: SocketAddr,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>>
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<SimulatedStream>> + Send>>
     {
         Box::pin(async move {
             if address == success {
-                Ok(address)
+                Ok(connected(address))
             } else {
                 std::future::pending().await
             }
@@ -475,14 +490,19 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn mixed_family_host_connects_without_stalling_on_link_local_ipv6() {
         let port = 43_101;
-        let stream = dial_candidates(
+        let mut stream = dial_candidates(
             order_connect_candidates([v6("fe80::4af:1", port, 0), v4("127.0.0.1", port)]),
             deadline(Duration::from_secs(10)),
             loopback_only_connector,
         )
         .await
         .expect("the routable IPv4 address must be reached");
-        assert_eq!(stream, v4("127.0.0.1", port));
+        assert_eq!(stream.address, v4("127.0.0.1", port));
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        stream.client.write_all(b"peer").await.unwrap();
+        let mut bytes = [0; 4];
+        stream.peer.read_exact(&mut bytes).await.unwrap();
+        assert_eq!(&bytes, b"peer");
     }
 
     #[tokio::test(start_paused = true)]
@@ -518,7 +538,7 @@ mod tests {
             .await
             .expect("dial task joins")
             .expect("second candidate connects");
-        assert_eq!(stream, second);
+        assert_eq!(stream.address, second);
     }
 
     #[tokio::test(start_paused = true)]
@@ -544,7 +564,7 @@ mod tests {
             },
             deadline(Duration::from_millis(400)),
             |address| -> std::pin::Pin<
-                Box<dyn std::future::Future<Output = std::io::Result<SocketAddr>> + Send>,
+                Box<dyn std::future::Future<Output = std::io::Result<SimulatedStream>> + Send>,
             > {
                 Box::pin(async move {
                     if address.ip().is_loopback() {
@@ -651,7 +671,7 @@ mod tests {
             )
             .await
             .expect("the moved peer is reached inside the same request");
-        assert_eq!(stream, fresh);
+        assert_eq!(stream.address, fresh);
         assert_eq!(
             calls.load(Ordering::SeqCst),
             1,
@@ -736,7 +756,7 @@ mod tests {
             .await
             .expect("dial task joins")
             .expect("moved peer connects");
-        assert_eq!(stream, fresh);
+        assert_eq!(stream.address, fresh);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
