@@ -414,7 +414,7 @@ fn protocol_mismatch(message: impl Into<String>) -> HerdrError {
 mod tests {
     use super::{HerdrClientConfig, HerdrIo, socket_endpoint_display};
     use atm_core::doctor::HerdrTransportKind;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use crate::transport_socket::{HerdrHostEnv, Platform};
 
@@ -462,5 +462,60 @@ mod tests {
 
         assert_eq!(endpoint.as_str(), r"\\.\pipe\%APPDATA%/herdr/herdr.sock");
         assert!(!endpoint.as_str().contains("atlas"));
+    }
+
+    #[test]
+    fn fixture_manifests_decode_equivalently_without_transport_io() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/herdr-versions");
+        let mut directories = std::fs::read_dir(root)
+            .expect("fixture directories")
+            .map(|entry| entry.expect("fixture entry").path())
+            .collect::<Vec<_>>();
+        directories.sort();
+
+        for directory in directories {
+            let manifest: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(directory.join("manifest.json")).expect("fixture manifest"),
+            )
+            .expect("manifest JSON");
+            let response = if manifest.get("delta").is_some() {
+                let mut bytes =
+                    br#"{"error":{"code":"agent_prompt_stalled","message":"fixture"}}"#.to_vec();
+                bytes.push(b'\n');
+                bytes
+            } else {
+                let mut bytes =
+                    std::fs::read(directory.join("response.json")).expect("fixture response");
+                bytes.push(b'\n');
+                bytes
+            };
+            let cli_output = crate::transport_cli::CommandOutput {
+                stdout: String::from_utf8(response.clone()).expect("fixture UTF-8 JSON"),
+                stderr: String::new(),
+                success: true,
+            };
+            let cli =
+                crate::transport_cli::decode_envelope(&cli_output).expect("CLI envelope decode");
+            let socket = crate::transport_socket::decode_envelope(&response)
+                .expect("socket envelope decode");
+
+            assert_eq!(
+                socket.result, cli.result,
+                "result mismatch for {directory:?}"
+            );
+            assert_eq!(
+                socket.error.as_ref().map(|error| (
+                    error.code.as_str(),
+                    error.message.as_str(),
+                    error.retry_after_ms,
+                )),
+                cli.error.as_ref().map(|error| (
+                    error.code.as_str(),
+                    error.message.as_str(),
+                    error.retry_after_ms,
+                )),
+                "error mismatch for {directory:?}"
+            );
+        }
     }
 }
