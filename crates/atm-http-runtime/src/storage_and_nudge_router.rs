@@ -498,14 +498,40 @@ impl StorageAndNudgeRouter {
         )))
     }
 
+    async fn project_doctor_with_deadline(
+        &self,
+        query: DoctorQuery,
+        context: DoctorProjectionContext,
+        deadline: RequestDeadline,
+    ) -> Result<atm_core::doctor::DoctorReport, AtmError> {
+        let projection = self.doctor_projection.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable("doctor projection was not installed at daemon startup")
+        })?;
+        let deadline_at = crate::request_deadline::capture(deadline);
+        if crate::request_deadline::expired(deadline) {
+            return Err(AtmError::daemon_unavailable(
+                "request deadline expired before doctor projection",
+            ));
+        }
+        tokio::time::timeout_at(
+            deadline_at,
+            projection.project(
+                query.with_daemon_paths(self.daemon_home.clone()),
+                context,
+                crate::request_deadline::core_boundary(deadline),
+            ),
+        )
+        .await
+        .map_err(|_| {
+            AtmError::daemon_unavailable("request deadline expired during doctor projection")
+        })?
+    }
+
     async fn doctor(
         &self,
         query: DoctorQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
-        let doctor_projection = self.doctor_projection.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable("doctor projection was not installed at daemon startup")
-        })?;
         let handoff = self
             .async_mailbox_runtime
             .as_ref()
@@ -523,28 +549,17 @@ impl StorageAndNudgeRouter {
         let caller_team = query.caller_team.clone();
         let team_override = query.team_override.clone();
         let all_teams = query.all_teams;
-        let deadline_at = crate::request_deadline::capture(deadline);
-        if tokio::time::Instant::now() >= deadline_at {
-            return Err(AtmError::daemon_unavailable(
-                "request deadline expired before doctor projection",
-            ));
-        }
-        let mut report = tokio::time::timeout_at(
-            deadline_at,
-            doctor_projection.project(
-                query.with_daemon_paths(self.daemon_home.clone()),
+        let mut report = self
+            .project_doctor_with_deadline(
+                query,
                 DoctorProjectionContext {
                     runtime_status: Some(initial_runtime_status),
                     daemon_context,
                     handoff,
                 },
-                crate::request_deadline::core_boundary(deadline),
-            ),
-        )
-        .await
-        .map_err(|_| {
-            AtmError::daemon_unavailable("request deadline expired during doctor projection")
-        })??;
+                deadline,
+            )
+            .await?;
         let mut runtime_status = report.member_roster.as_ref().map_or_else(
             || runtime_health.snapshot(),
             |roster| {

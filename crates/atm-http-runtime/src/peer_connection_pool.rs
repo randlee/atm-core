@@ -95,7 +95,7 @@ pub struct PeerConnectionPool {
 
 struct PoolShared {
     config: PeerPoolConfig,
-    dialer: Arc<dyn PeerTransportDialer>,
+    dialer: Arc<dyn PeerStreamDialer>,
     state: Mutex<PoolState>,
     #[cfg(test)]
     addresses: Arc<PeerAddressCache>,
@@ -111,7 +111,7 @@ struct PoolShared {
 }
 
 /// Produces an authenticated stream without coupling pooling to a transport.
-trait PeerTransportDialer: Send + Sync {
+trait PeerStreamDialer: Send + Sync {
     fn dial<'a>(
         &'a self,
         peer: &'a HostName,
@@ -127,12 +127,12 @@ trait PeerTransportDialer: Send + Sync {
     >;
 }
 
-struct TcpPeerTransportDialer {
+struct TcpPeerStreamDialer {
     adapter: Arc<dyn PeerStreamAdapter>,
     addresses: Arc<PeerAddressCache>,
 }
 
-impl PeerTransportDialer for TcpPeerTransportDialer {
+impl PeerStreamDialer for TcpPeerStreamDialer {
     fn dial<'a>(
         &'a self,
         peer: &'a HostName,
@@ -167,7 +167,7 @@ impl PeerTransportDialer for TcpPeerTransportDialer {
     }
 }
 
-impl TcpPeerTransportDialer {
+impl TcpPeerStreamDialer {
     /// Resolves and dials the peer through the ADR-060 seam (`peer_dial`).
     async fn dial_transport(
         &self,
@@ -276,7 +276,7 @@ impl PeerConnectionPool {
             .validate()
             .expect("peer pool configuration must be validated before composition");
         let addresses = Arc::new(PeerAddressCache::new(config.address_cache_ttl));
-        let dialer = Arc::new(TcpPeerTransportDialer {
+        let dialer = Arc::new(TcpPeerStreamDialer {
             adapter,
             addresses: Arc::clone(&addresses),
         });
@@ -285,7 +285,7 @@ impl PeerConnectionPool {
 
     fn with_dialer(
         config: PeerPoolConfig,
-        dialer: Arc<dyn PeerTransportDialer>,
+        dialer: Arc<dyn PeerStreamDialer>,
         addresses: Arc<PeerAddressCache>,
     ) -> Self {
         #[cfg(not(test))]
@@ -763,7 +763,7 @@ mod tests {
         }
     }
 
-    impl super::PeerTransportDialer for CountingPassthroughAdapter {
+    impl super::PeerStreamDialer for CountingPassthroughAdapter {
         fn dial<'a>(
             &'a self,
             _peer: &'a atm_core::types::HostName,
@@ -812,7 +812,7 @@ mod tests {
                         let _ = serve_connection(
                             hyper_util::rt::TokioIo::new(server),
                             router,
-                            Duration::from_secs(30),
+                            Duration::from_secs(2),
                             shutdown_rx,
                         )
                         .await;
@@ -839,7 +839,7 @@ mod tests {
         calls: AtomicUsize,
     }
 
-    impl super::PeerTransportDialer for DuplexDialer {
+    impl super::PeerStreamDialer for DuplexDialer {
         fn dial<'a>(
             &'a self,
             _peer: &'a atm_core::types::HostName,
@@ -888,12 +888,12 @@ mod tests {
         let server = tokio::spawn(serve_connection(
             hyper_util::rt::TokioIo::new(server),
             router,
-            Duration::from_secs(30),
+            Duration::from_secs(2),
             shutdown_rx,
         ));
         let peer = "peer.example".parse().unwrap();
         let port = std::num::NonZeroU16::new(43101).unwrap();
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         for _ in 0..2 {
             let mut connection = pool
                 .acquire_until(&peer, port, deadline)
@@ -1444,7 +1444,7 @@ mod tests {
         adapter: Arc<CountingPassthroughAdapter>,
     }
 
-    impl super::PeerTransportDialer for UnresponsiveDialer {
+    impl super::PeerStreamDialer for UnresponsiveDialer {
         fn dial<'a>(
             &'a self,
             peer: &'a atm_core::types::HostName,

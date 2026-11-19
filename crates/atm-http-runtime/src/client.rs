@@ -1214,7 +1214,7 @@ mod tests {
                     let _ = crate::http1_server::serve_connection(
                         hyper_util::rt::TokioIo::new(stream),
                         router,
-                        Duration::from_secs(30),
+                        Duration::from_secs(2),
                         shutdown_rx,
                     )
                     .await;
@@ -1224,8 +1224,13 @@ mod tests {
         (port, accepted)
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn shared_plaintext_client_reuses_the_daemon_lifetime_connection_pool() {
+        let (release, held) = tokio::sync::oneshot::channel::<()>();
+        tokio::task::spawn_blocking(move || {
+            let _ = held.blocking_recv();
+        });
+        let _clock = release;
         let (port, accepted) = start_plaintext_peer_with_connection_counter().await;
         let connector = DirectPeerTcpConnector::new(
             shared_direct_peer_client().expect("shared plaintext client"),
@@ -1239,13 +1244,12 @@ mod tests {
             body: Vec::new(),
         };
         for _ in 0..3 {
-            let response = connector
-                .exchange(
-                    request.clone(),
-                    RequestDeadline::after(Duration::from_secs(1)),
-                )
-                .await
-                .expect("shared plaintext connection writes successfully");
+            let response = crate::request_deadline::scope(
+                tokio::time::Instant::now() + Duration::from_secs(1),
+                connector.exchange(request.clone(), RequestDeadline::after(Duration::ZERO)),
+            )
+            .await
+            .expect("shared plaintext connection writes successfully");
             assert_eq!(response.status(), StatusCode::CREATED);
         }
         assert_eq!(

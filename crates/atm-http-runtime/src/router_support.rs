@@ -566,7 +566,7 @@ mod deadline_tests {
         let deadline = Instant::now() + Duration::from_secs(10);
         let (poll_tx, poll_rx) = tokio::sync::oneshot::channel();
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
         let task = tokio::spawn(async move {
             poll_tx.send(()).unwrap();
             bridge
@@ -576,7 +576,7 @@ mod deadline_tests {
                     BlockingStallCounter::CoreBridge,
                     move || {
                         started_tx.send(()).unwrap();
-                        release_rx.recv().unwrap();
+                        release_rx.blocking_recv().unwrap();
                         Ok(())
                     },
                 )
