@@ -194,7 +194,7 @@ pub(crate) async fn execute_reqwest_request(
     deadline: RequestDeadline,
     additional_header: Option<(&'static str, String)>,
 ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-    if crate::request_deadline::expired(deadline) {
+    if deadline.expired() {
         return Err(HttpRuntimeClientFailure::Cancelled);
     }
     let outbound = build_outbound_reqwest_request(url, request, additional_header)?;
@@ -319,7 +319,11 @@ impl<Connector> HttpRuntimeClient<Connector> {
         }
     }
 
-    #[tracing::instrument(name = "atm_http_runtime.client.execute", skip(self, request))]
+    #[tracing::instrument(
+        name = "atm_http_runtime.client.execute",
+        skip(self, request),
+        fields(deadline_remaining_ms = ?deadline.remaining().map(|duration| duration.as_millis()))
+    )]
     async fn execute_with_deadline(
         &self,
         request: ApiRequest,
@@ -351,53 +355,49 @@ impl<Connector> HttpRuntimeClient<Connector> {
     where
         Connector: HttpRuntimeConnector,
     {
-        crate::request_deadline::scope_if_absent(deadline, async move {
-            let request_id = request_id.unwrap_or_else(next_request_id);
-            let request_id_value = request_id.to_string();
-            let encoded = encode_http_request(&request, &[(REQUEST_ID_HEADER, &request_id_value)])?;
-            let deadline_at = crate::request_deadline::capture(deadline);
-            if tokio::time::Instant::now() >= deadline_at {
-                return Err(AtmError::new(
-                    AtmErrorCode::WaitTimeout,
-                    "HTTP client request budget elapsed before connector dispatch",
-                ));
-            }
-            let response = tokio::time::timeout_at(deadline_at, async {
-                match self.connector.exchange(encoded.clone(), deadline).await {
-                    Ok(response) => Ok(response),
-                    Err(failure) if failure.is_safe_to_reconnect() => {
-                        if self.connector.prepare_pre_send_reconnect().await? {
-                            self.connector.exchange(encoded, deadline).await
-                        } else {
-                            Err(failure)
-                        }
-                    }
-                    Err(failure) => Err(failure),
-                }
-            })
-            .await
-            .map_err(|_| self.connector.deadline_elapsed().into_atm_error())?
-            .map_err(HttpRuntimeClientFailure::into_atm_error)?;
-            let headers = response
-                .headers()
-                .iter()
-                .map(|(name, value)| {
-                    format!(
-                        "{name}: {}",
-                        value.to_str().unwrap_or("<non-UTF-8 header value>")
-                    )
-                })
-                .collect::<Vec<_>>();
-            decode_http_response(
-                &response_shape,
-                response.status().as_u16(),
-                &headers,
-                response.body(),
+        let request_id = request_id.unwrap_or_else(next_request_id);
+        let request_id_value = request_id.to_string();
+        let encoded = encode_http_request(&request, &[(REQUEST_ID_HEADER, &request_id_value)])?;
+        let remaining = deadline.remaining().ok_or_else(|| {
+            AtmError::new(
+                AtmErrorCode::WaitTimeout,
+                "HTTP client request budget elapsed before connector dispatch",
             )
-            .map(ApiResponse::new)
-            .map_err(|error| HttpRuntimeClientFailure::ResponseDecode(error).into_atm_error())
+        })?;
+        let response = tokio::time::timeout(remaining, async {
+            match self.connector.exchange(encoded.clone(), deadline).await {
+                Ok(response) => Ok(response),
+                Err(failure) if failure.is_safe_to_reconnect() => {
+                    if self.connector.prepare_pre_send_reconnect().await? {
+                        self.connector.exchange(encoded, deadline).await
+                    } else {
+                        Err(failure)
+                    }
+                }
+                Err(failure) => Err(failure),
+            }
         })
         .await
+        .map_err(|_| self.connector.deadline_elapsed().into_atm_error())?
+        .map_err(HttpRuntimeClientFailure::into_atm_error)?;
+        let headers = response
+            .headers()
+            .iter()
+            .map(|(name, value)| {
+                format!(
+                    "{name}: {}",
+                    value.to_str().unwrap_or("<non-UTF-8 header value>")
+                )
+            })
+            .collect::<Vec<_>>();
+        decode_http_response(
+            &response_shape,
+            response.status().as_u16(),
+            &headers,
+            response.body(),
+        )
+        .map(ApiResponse::new)
+        .map_err(|error| HttpRuntimeClientFailure::ResponseDecode(error).into_atm_error())
     }
 }
 

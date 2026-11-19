@@ -83,10 +83,6 @@ pub struct BoundedBlockingBridge {
     runtime_health: RuntimeHealth,
     #[cfg(test)]
     clock: Option<Arc<dyn Fn() -> std::time::Instant + Send + Sync>>,
-    #[cfg(test)]
-    admission_count: Arc<std::sync::atomic::AtomicUsize>,
-    #[cfg(test)]
-    admission_signal: Arc<tokio::sync::Notify>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,10 +118,6 @@ impl BoundedBlockingBridge {
             runtime_health,
             #[cfg(test)]
             clock: None,
-            #[cfg(test)]
-            admission_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-            #[cfg(test)]
-            admission_signal: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -140,25 +132,6 @@ impl BoundedBlockingBridge {
     #[cfg(test)]
     pub(crate) fn available_permits(&self) -> usize {
         self.permits.available_permits()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn admission_count(&self) -> usize {
-        self.admission_count
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn wait_for_admissions(&self, count: usize) {
-        loop {
-            let notified = self.admission_signal.notified();
-            tokio::pin!(notified);
-            notified.as_mut().enable();
-            if self.admission_count() >= count {
-                return;
-            }
-            notified.await;
-        }
     }
 
     /// Runs synchronous work without allowing either permit admission or the
@@ -193,37 +166,14 @@ impl BoundedBlockingBridge {
         T: Send + 'static,
         F: FnOnce() -> Result<T, AtmError> + Send + 'static,
     {
-        let deadline = crate::request_deadline::capture(deadline);
-        self.run_with_policy_at(deadline, policy, stall_counter, job)
-            .await
-    }
-
-    async fn run_with_policy_at<T, F>(
-        &self,
-        deadline: tokio::time::Instant,
-        policy: BlockingCompletionPolicy,
-        stall_counter: BlockingStallCounter,
-        job: F,
-    ) -> Result<T, BlockingBridgeError>
-    where
-        T: Send + 'static,
-        F: FnOnce() -> Result<T, AtmError> + Send + 'static,
-    {
-        if tokio::time::Instant::now() >= deadline {
-            return Err(BlockingBridgeError::DeadlineBeforeStart);
-        }
-        #[cfg(test)]
-        {
-            self.admission_count
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            self.admission_signal.notify_waiters();
-        }
-        let permit = tokio::time::timeout_at(deadline, Arc::clone(&self.permits).acquire_owned())
+        let remaining = deadline
+            .remaining()
+            .ok_or(BlockingBridgeError::DeadlineBeforeStart)?;
+        let permit = tokio::time::timeout(remaining, Arc::clone(&self.permits).acquire_owned())
             .await
             .map_err(|_| BlockingBridgeError::DeadlineBeforeStart)?
             .map_err(|_| BlockingBridgeError::Closed)?;
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if remaining.is_zero() {
+        if deadline.expired() {
             return Err(BlockingBridgeError::DeadlineBeforeStart);
         }
         let started_at = self.now();
@@ -244,7 +194,7 @@ impl BoundedBlockingBridge {
                     let _permit = permit;
                     job()
                 });
-                match tokio::time::timeout_at(deadline, outcome).await {
+                match tokio::time::timeout(remaining, outcome).await {
                     Ok(Ok(result)) => result.map_err(BlockingBridgeError::Operation),
                     Ok(Err(source)) => Err(BlockingBridgeError::Join(source)),
                     Err(_) => {
@@ -387,12 +337,12 @@ fn source_preflight_error(description: &str, error: BlockingBridgeError) -> AtmE
 /// Reserves response encoding and loopback handoff time before a local
 /// receiver hook begins.  A hook remains advisory after durable persistence;
 /// it must never consume the daemon's final response budget.
-pub(super) fn receiver_hook_deadline(
-    deadline: RequestDeadline,
-) -> Option<(RequestDeadline, tokio::time::Instant)> {
-    let hook_at = crate::request_deadline::capture(deadline).checked_sub(RESPONSE_HANDOFF_GRACE)?;
-    (hook_at > tokio::time::Instant::now())
-        .then(|| (deadline.minus(RESPONSE_HANDOFF_GRACE), hook_at))
+pub(super) fn receiver_hook_deadline(deadline: RequestDeadline) -> Option<RequestDeadline> {
+    deadline
+        .remaining()
+        .and_then(|remaining| remaining.checked_sub(RESPONSE_HANDOFF_GRACE))
+        .filter(|remaining| !remaining.is_zero())
+        .map(RequestDeadline::after)
 }
 
 impl ControlPathSyncBridge {
@@ -466,24 +416,20 @@ impl DetachedReceivedHooks {
     where
         F: Future<Output = Vec<WarningEntry>> + Send + 'static,
     {
-        let deadline = crate::request_deadline::current();
-        let task = tokio::spawn(crate::request_deadline::scope_optional(
-            deadline,
-            async move {
-                for warning in hook.await {
-                    runtime_health.record_detached_received_hook_warning();
-                    tracing::warn!(
-                        subsystem = "atm_http_runtime.received_hook",
-                        action = "peer_received_hook",
-                        outcome = "warning",
-                        %request_id,
-                        code = ?warning.code,
-                        detail = %warning.message,
-                        "receiver hook reported a warning after the peer write was durably persisted"
-                    );
-                }
-            },
-        ));
+        let task = tokio::spawn(async move {
+            for warning in hook.await {
+                runtime_health.record_detached_received_hook_warning();
+                tracing::warn!(
+                    subsystem = "atm_http_runtime.received_hook",
+                    action = "peer_received_hook",
+                    outcome = "warning",
+                    %request_id,
+                    code = ?warning.code,
+                    detail = %warning.message,
+                    "receiver hook reported a warning after the peer write was durably persisted"
+                );
+            }
+        });
         let mut tasks = self.lock();
         tasks.retain(|task| !task.is_finished());
         tasks.push(task);
@@ -546,52 +492,4 @@ pub(super) fn validate_graft_receiver_member(
         return Err(AtmError::agent_not_found(agent.as_str(), team.as_str()));
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod deadline_tests {
-    use super::{
-        BlockingBridgeError, BlockingCompletionPolicy, BlockingStallCounter, BoundedBlockingBridge,
-    };
-    use crate::RuntimeHealth;
-    use std::num::NonZeroUsize;
-    use std::time::Duration;
-    use tokio::time::Instant;
-
-    #[tokio::test(start_paused = true)]
-    async fn admission_and_execution_share_the_same_deadline() {
-        let bridge =
-            BoundedBlockingBridge::new(NonZeroUsize::new(1).unwrap(), RuntimeHealth::with_owner(1));
-        let permit = bridge.permits.clone().acquire_owned().await.unwrap();
-        let deadline = Instant::now() + Duration::from_secs(10);
-        let (poll_tx, poll_rx) = tokio::sync::oneshot::channel();
-        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
-        let task = tokio::spawn(async move {
-            poll_tx.send(()).unwrap();
-            bridge
-                .run_with_policy_at(
-                    deadline,
-                    BlockingCompletionPolicy::AbandonResponseAtDeadline,
-                    BlockingStallCounter::CoreBridge,
-                    move || {
-                        started_tx.send(()).unwrap();
-                        release_rx.blocking_recv().unwrap();
-                        Ok(())
-                    },
-                )
-                .await
-        });
-        poll_rx.await.unwrap();
-        tokio::time::advance(Duration::from_secs(4)).await;
-        drop(permit);
-        started_rx.await.unwrap();
-        tokio::time::advance(Duration::from_secs(6)).await;
-        assert!(matches!(
-            task.await.unwrap(),
-            Err(BlockingBridgeError::DeadlineAfterStart)
-        ));
-        assert_eq!(Instant::now(), deadline);
-        release_tx.send(()).unwrap();
-    }
 }

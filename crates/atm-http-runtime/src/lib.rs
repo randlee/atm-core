@@ -76,7 +76,6 @@ mod peer_dial;
 mod peer_stream;
 mod private_staging;
 mod prompt_handoff_record;
-mod request_deadline;
 mod router_support;
 mod runtime_health;
 mod runtime_listener;
@@ -1062,18 +1061,14 @@ mod tests {
                 let _ = connection.await;
             });
             self.started.notify_one();
-            crate::client::execute_opaque_peer_request_with_sender(
-                &mut sender,
-                request,
-                crate::request_deadline::capture(deadline),
-            )
-            .await
-            .map_err(|error| match error {
-                HttpRuntimeClientFailure::Timeout => {
-                    crate::client::local_request_timeout_failure(&self.connection_target())
-                }
-                other => other,
-            })
+            crate::client::execute_opaque_peer_request_with_sender(&mut sender, request, deadline)
+                .await
+                .map_err(|error| match error {
+                    HttpRuntimeClientFailure::Timeout => {
+                        crate::client::local_request_timeout_failure(&self.connection_target())
+                    }
+                    other => other,
+                })
         }
     }
 

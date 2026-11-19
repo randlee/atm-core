@@ -6,6 +6,7 @@
 //! routes pass the scheduler's own results and errors through unchanged.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use atm_core::api::{ApiResponse, AuthenticatedIngress, RequestDeadline};
 use atm_core::boundary::{CronName, CronScheduler, HookName, HookRegistration};
@@ -47,18 +48,10 @@ fn check_timeout(timeout_ms: u32, max: u32, name: &str) -> Result<(), AtmError> 
     Ok(())
 }
 
-fn cron_scheduler_deadline(
-    deadline: RequestDeadline,
-    operation: &str,
-) -> Result<tokio::time::Instant, AtmError> {
-    let deadline = crate::request_deadline::capture(deadline);
-    if tokio::time::Instant::now() >= deadline {
-        Err(AtmError::daemon_unavailable(format!(
-            "request deadline expired before {operation}"
-        )))
-    } else {
-        Ok(deadline)
-    }
+fn cron_scheduler_budget(deadline: RequestDeadline, operation: &str) -> Result<Duration, AtmError> {
+    deadline.remaining().ok_or_else(|| {
+        AtmError::daemon_unavailable(format!("request deadline expired before {operation}"))
+    })
 }
 
 /// Refreshes the snapshot after a committed write. A failure keeps the row and
@@ -196,8 +189,8 @@ impl StorageAndNudgeRouter {
         let spec = request.into_spec()?;
         self.check_roster_member(&spec.team, &spec.created_by)?;
         let scheduler = self.cron_scheduler()?;
-        let schedule = tokio::time::timeout_at(
-            cron_scheduler_deadline(deadline, "cron schedule start")?,
+        let schedule = tokio::time::timeout(
+            cron_scheduler_budget(deadline, "cron schedule start")?,
             scheduler.start(spec),
         )
         .await
@@ -217,8 +210,8 @@ impl StorageAndNudgeRouter {
         let name = request.name.as_deref().map(CronName::parse).transpose()?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let rows = tokio::time::timeout_at(
-            cron_scheduler_deadline(deadline, "cron schedule end")?,
+        let rows = tokio::time::timeout(
+            cron_scheduler_budget(deadline, "cron schedule end")?,
             scheduler.end(&request.caller_team, &request.phase, name.as_ref()),
         )
         .await
@@ -237,8 +230,8 @@ impl StorageAndNudgeRouter {
         require_local(ingress)?;
         self.check_roster_member(&request.caller_team, &request.caller_identity)?;
         let scheduler = self.cron_scheduler()?;
-        let rows = tokio::time::timeout_at(
-            cron_scheduler_deadline(deadline, "cron schedule list")?,
+        let rows = tokio::time::timeout(
+            cron_scheduler_budget(deadline, "cron schedule list")?,
             scheduler.list(Some(&request.caller_team), request.phase.as_ref()),
         )
         .await

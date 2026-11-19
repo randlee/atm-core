@@ -5,16 +5,14 @@
 //! HTTP/1 handshakes, never raw pre-handshake streams.
 
 use std::collections::HashMap;
-use std::future::Future;
 use std::num::NonZeroU16;
-use std::pin::Pin;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use atm_core::api::HttpRequest;
+use atm_core::api::{HttpRequest, RequestDeadline};
 use atm_core::types::HostName;
 use axum::body::Body;
 use hyper::client::conn::http1;
@@ -23,12 +21,12 @@ use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
+use crate::PeerStreamAdapter;
 use crate::client::{
     HttpRuntimeClientFailure, direct_peer_authority, direct_peer_connection_failure,
     execute_opaque_peer_request_with_sender, peer_connect_deadline_failure,
 };
 use crate::peer_dial::{DIAL_REPORT_GRACE, PeerAddressCache, resolve_peer_addresses};
-use crate::{EstablishedPeerStream, PeerStreamAdapter};
 
 const DRIVER_ABORT_GRACE: Duration = Duration::from_millis(100);
 
@@ -93,10 +91,9 @@ pub struct PeerConnectionPool {
 
 struct PoolShared {
     config: PeerPoolConfig,
-    dialer: Arc<dyn PeerStreamDialer>,
+    adapter: Arc<dyn PeerStreamAdapter>,
     state: Mutex<PoolState>,
-    #[cfg(test)]
-    addresses: Arc<PeerAddressCache>,
+    addresses: PeerAddressCache,
     eviction_task: Mutex<Option<JoinHandle<()>>>,
     #[cfg(test)]
     sweep_started: tokio::sync::Notify,
@@ -106,117 +103,6 @@ struct PoolShared {
     completed_drivers: Arc<AtomicUsize>,
     #[cfg(test)]
     driver_signal: Arc<tokio::sync::Notify>,
-}
-
-/// Produces an authenticated stream without coupling pooling to a transport.
-pub(crate) trait PeerStreamDialer: Send + Sync {
-    fn dial<'a>(
-        &'a self,
-        peer: &'a HostName,
-        port: NonZeroU16,
-        deadline: Instant,
-        authority: &'a str,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<EstablishedPeerStream, HttpRuntimeClientFailure>>
-                + Send
-                + 'a,
-        >,
-    >;
-}
-
-struct TcpPeerStreamDialer {
-    adapter: Arc<dyn PeerStreamAdapter>,
-    addresses: Arc<PeerAddressCache>,
-}
-
-impl PeerStreamDialer for TcpPeerStreamDialer {
-    fn dial<'a>(
-        &'a self,
-        peer: &'a HostName,
-        port: NonZeroU16,
-        deadline: Instant,
-        authority: &'a str,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<EstablishedPeerStream, HttpRuntimeClientFailure>>
-                + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            let target = format!("direct peer `{authority}`");
-            let connect_timeout = || peer_connect_deadline_failure(authority, &target);
-            let stream = self
-                .dial_transport(peer, port, deadline, authority, &connect_timeout)
-                .await?;
-            if Instant::now() >= deadline {
-                return Err(connect_timeout());
-            }
-            tokio::time::timeout_at(deadline, self.adapter.connect(stream, peer))
-                .await
-                .map_err(|_| connect_timeout())?
-                .map_err(|error| {
-                    let cause = error.to_string();
-                    tracing::warn!(%peer, %authority, %cause, "direct peer stream adapter rejected the connection");
-                    HttpRuntimeClientFailure::PeerConnect { target: authority.to_owned(), cause }
-                })
-        })
-    }
-}
-
-impl TcpPeerStreamDialer {
-    /// Resolves and dials the peer through the ADR-060 seam (`peer_dial`).
-    async fn dial_transport(
-        &self,
-        peer: &HostName,
-        port: NonZeroU16,
-        deadline: Instant,
-        authority: &str,
-        connect_timeout: &(dyn Fn() -> HttpRuntimeClientFailure + Sync),
-    ) -> Result<TcpStream, HttpRuntimeClientFailure> {
-        if Instant::now() >= deadline {
-            return Err(connect_timeout());
-        }
-        // The caller's own request timeout fires exactly at `deadline`, so the
-        // dial loop is bounded slightly *inside* the budget: it finishes, and
-        // reports its per-address diagnosis, before any bare timeout can win
-        // the race. The outer guard here is only a backstop at the budget.
-        let dial_deadline = dial_deadline(deadline);
-        tokio::time::timeout_at(
-            deadline,
-            self.addresses.connect(
-                peer,
-                port,
-                dial_deadline,
-                resolve_peer_addresses,
-                TcpStream::connect,
-            ),
-        )
-        .await
-        .map_err(|_| {
-            tracing::warn!(
-                %peer,
-                %authority,
-                "direct peer TCP connect exhausted the request budget"
-            );
-            connect_timeout()
-        })?
-        .map_err(|cause| {
-            tracing::warn!(%peer, %authority, %cause, "direct peer TCP connect failed");
-            HttpRuntimeClientFailure::PeerConnect {
-                target: authority.to_owned(),
-                cause,
-            }
-        })
-    }
-}
-
-fn dial_deadline(deadline: Instant) -> Instant {
-    deadline
-        .checked_sub(DIAL_REPORT_GRACE)
-        .filter(|reserved| *reserved > Instant::now())
-        .unwrap_or(deadline)
 }
 
 impl Drop for PoolShared {
@@ -273,27 +159,11 @@ impl PeerConnectionPool {
         let config = config
             .validate()
             .expect("peer pool configuration must be validated before composition");
-        let addresses = Arc::new(PeerAddressCache::new(config.address_cache_ttl));
-        let dialer = Arc::new(TcpPeerStreamDialer {
-            adapter,
-            addresses: Arc::clone(&addresses),
-        });
-        Self::with_dialer(config, dialer, addresses)
-    }
-
-    pub(crate) fn with_dialer(
-        config: PeerPoolConfig,
-        dialer: Arc<dyn PeerStreamDialer>,
-        addresses: Arc<PeerAddressCache>,
-    ) -> Self {
-        #[cfg(not(test))]
-        let _ = addresses;
         let shared = Arc::new(PoolShared {
             config,
-            dialer,
+            adapter,
             state: Mutex::new(PoolState::default()),
-            #[cfg(test)]
-            addresses,
+            addresses: PeerAddressCache::new(config.address_cache_ttl),
             eviction_task: Mutex::new(None),
             #[cfg(test)]
             sweep_started: tokio::sync::Notify::new(),
@@ -308,11 +178,11 @@ impl PeerConnectionPool {
         Self { shared }
     }
 
-    pub(crate) async fn acquire_until(
+    pub(crate) async fn acquire(
         &self,
         peer: &HostName,
         port: NonZeroU16,
-        deadline: Instant,
+        deadline: RequestDeadline,
     ) -> Result<PooledPeerConnection, HttpRuntimeClientFailure> {
         let authority = direct_peer_authority(peer, port);
         let (idle, expired) = {
@@ -328,14 +198,11 @@ impl PeerConnectionPool {
             let ready = if idle.sender.is_closed() {
                 false
             } else {
-                if Instant::now() >= deadline {
+                let remaining = deadline.remaining().ok_or_else(|| {
                     self.shared.release_reservation(peer);
-                    return Err(peer_connect_deadline_failure(
-                        &authority,
-                        &connection_target,
-                    ));
-                }
-                match tokio::time::timeout_at(deadline, idle.sender.ready()).await {
+                    peer_connect_deadline_failure(&authority, &connection_target)
+                })?;
+                match tokio::time::timeout(remaining, idle.sender.ready()).await {
                     Ok(Ok(())) => true,
                     Ok(Err(_)) => false,
                     Err(_) => {
@@ -377,7 +244,7 @@ impl PeerConnectionPool {
         &self,
         peer: &HostName,
         port: NonZeroU16,
-        deadline: Instant,
+        deadline: RequestDeadline,
         authority: String,
     ) -> Result<PooledPeerConnection, HttpRuntimeClientFailure> {
         match self.open(peer, port, deadline, &authority).await {
@@ -401,7 +268,7 @@ impl PeerConnectionPool {
         &self,
         peer: &HostName,
         port: NonZeroU16,
-        deadline: Instant,
+        deadline: RequestDeadline,
         authority: String,
         origin: ConnectionOrigin,
     ) -> Result<PooledPeerConnection, HttpRuntimeClientFailure> {
@@ -428,21 +295,34 @@ impl PeerConnectionPool {
         &self,
         peer: &HostName,
         port: NonZeroU16,
-        deadline: Instant,
+        deadline: RequestDeadline,
         authority: &str,
     ) -> Result<(http1::SendRequest<Body>, JoinHandle<()>), HttpRuntimeClientFailure> {
         let target = format!("direct peer `{authority}`");
         let connect_timeout = || peer_connect_deadline_failure(authority, &target);
         let stream = self
-            .shared
-            .dialer
-            .dial(peer, port, deadline, authority)
+            .dial_transport(peer, port, deadline, authority, &connect_timeout)
             .await?;
-        if Instant::now() >= deadline {
-            return Err(connect_timeout());
-        }
-        let (sender, connection) = tokio::time::timeout_at(
-            deadline,
+        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
+        let stream = tokio::time::timeout(remaining, self.shared.adapter.connect(stream, peer))
+            .await
+            .map_err(|_| connect_timeout())?
+            .map_err(|error| {
+                let cause = error.to_string();
+                tracing::warn!(
+                    %peer,
+                    %authority,
+                    %cause,
+                    "direct peer stream adapter rejected the connection"
+                );
+                HttpRuntimeClientFailure::PeerConnect {
+                    target: authority.to_owned(),
+                    cause,
+                }
+            })?;
+        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
+        let (sender, connection) = tokio::time::timeout(
+            remaining,
             http1::handshake(TokioIo::new(stream)),
         )
         .await
@@ -467,6 +347,54 @@ impl PeerConnectionPool {
             }
         });
         Ok((sender, driver))
+    }
+
+    /// Resolves and dials the peer through the ADR-060 seam (`peer_dial`).
+    async fn dial_transport(
+        &self,
+        peer: &HostName,
+        port: NonZeroU16,
+        deadline: RequestDeadline,
+        authority: &str,
+        connect_timeout: &(dyn Fn() -> HttpRuntimeClientFailure + Sync),
+    ) -> Result<TcpStream, HttpRuntimeClientFailure> {
+        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
+        // The caller's own request timeout fires exactly at `deadline`, so the
+        // dial loop is bounded slightly *inside* the budget: it finishes, and
+        // reports its per-address diagnosis, before any bare timeout can win
+        // the race. The outer guard here is only a backstop at the budget.
+        let dial_deadline = RequestDeadline::after(
+            remaining
+                .checked_sub(DIAL_REPORT_GRACE)
+                .filter(|reserved| !reserved.is_zero())
+                .unwrap_or(remaining),
+        );
+        tokio::time::timeout(
+            remaining,
+            self.shared.addresses.connect(
+                peer,
+                port,
+                dial_deadline,
+                resolve_peer_addresses,
+                TcpStream::connect,
+            ),
+        )
+        .await
+        .map_err(|_| {
+            tracing::warn!(
+                %peer,
+                %authority,
+                "direct peer TCP connect exhausted the request budget"
+            );
+            connect_timeout()
+        })?
+        .map_err(|cause| {
+            tracing::warn!(%peer, %authority, %cause, "direct peer TCP connect failed");
+            HttpRuntimeClientFailure::PeerConnect {
+                target: authority.to_owned(),
+                cause,
+            }
+        })
     }
 
     #[cfg(test)]
@@ -521,10 +449,10 @@ impl PeerConnectionPool {
 }
 
 impl PooledPeerConnection {
-    pub(crate) async fn exchange_until(
+    pub(crate) async fn exchange(
         &mut self,
         request: HttpRequest,
-        deadline: Instant,
+        deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
         let sender = self.sender.as_mut().expect("pool guard owns sender");
         let result = execute_opaque_peer_request_with_sender(sender, request, deadline)
@@ -701,14 +629,15 @@ async fn drain_driver(mut driver: JoinHandle<()>, shutdown_deadline: Instant) {
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
     use axum::Router;
     use axum::http::{StatusCode, header};
-    use axum::response::IntoResponse;
     use axum::routing::post;
+    use tokio::net::TcpListener;
     use tokio::sync::watch;
 
     use super::{PeerConnectionPool, PeerPoolConfig};
@@ -718,8 +647,6 @@ mod tests {
     #[derive(Default)]
     struct CountingPassthroughAdapter {
         connects: AtomicUsize,
-        accepted: AtomicUsize,
-        disabled: std::sync::atomic::AtomicBool,
     }
 
     impl PeerStreamAdapter for CountingPassthroughAdapter {
@@ -738,158 +665,6 @@ mod tests {
         ) -> PeerStreamFuture<'a, AcceptedPeerStream> {
             Box::pin(async { Err(atm_core::error::AtmError::config("test accepts no peers")) })
         }
-    }
-
-    impl super::PeerStreamDialer for CountingPassthroughAdapter {
-        fn dial<'a>(
-            &'a self,
-            _peer: &'a atm_core::types::HostName,
-            port: std::num::NonZeroU16,
-            _deadline: tokio::time::Instant,
-            authority: &'a str,
-        ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<
-                        Output = Result<
-                            EstablishedPeerStream,
-                            crate::client::HttpRuntimeClientFailure,
-                        >,
-                    > + Send
-                    + 'a,
-            >,
-        > {
-            Box::pin(async move {
-                if self.disabled.load(Ordering::SeqCst) {
-                    return Err(crate::client::HttpRuntimeClientFailure::PeerConnect {
-                        target: authority.to_owned(),
-                        cause: "scripted refusal".into(),
-                    });
-                }
-                self.connects.fetch_add(1, Ordering::SeqCst);
-                let (client, server) = tokio::io::duplex(4096);
-                if port.get() == 43103 {
-                    self.accepted.fetch_add(1, Ordering::SeqCst);
-                    drop(server);
-                } else {
-                    let close = port.get() == 43102;
-                    let router = Router::new().route(
-                        "/v1/atm/messages",
-                        post(move || async move {
-                            if close {
-                                ([(header::CONNECTION, "close")], StatusCode::CREATED)
-                                    .into_response()
-                            } else {
-                                StatusCode::CREATED.into_response()
-                            }
-                        }),
-                    );
-                    let (shutdown_tx, shutdown_rx) = watch::channel(());
-                    tokio::spawn(async move {
-                        let _shutdown_tx = shutdown_tx;
-                        let _ = serve_connection(
-                            hyper_util::rt::TokioIo::new(server),
-                            router,
-                            Duration::from_secs(2),
-                            shutdown_rx,
-                        )
-                        .await;
-                    });
-                }
-                Ok(Box::new(client) as EstablishedPeerStream)
-            })
-        }
-    }
-
-    fn test_pool(
-        config: PeerPoolConfig,
-        dialer: Arc<CountingPassthroughAdapter>,
-    ) -> PeerConnectionPool {
-        PeerConnectionPool::with_dialer(
-            config,
-            dialer,
-            Arc::new(super::PeerAddressCache::new(config.address_cache_ttl)),
-        )
-    }
-
-    struct DuplexDialer {
-        stream: std::sync::Mutex<Option<tokio::io::DuplexStream>>,
-        calls: AtomicUsize,
-    }
-
-    impl super::PeerStreamDialer for DuplexDialer {
-        fn dial<'a>(
-            &'a self,
-            _peer: &'a atm_core::types::HostName,
-            _port: std::num::NonZeroU16,
-            _deadline: tokio::time::Instant,
-            _authority: &'a str,
-        ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<
-                        Output = Result<
-                            EstablishedPeerStream,
-                            crate::client::HttpRuntimeClientFailure,
-                        >,
-                    > + Send
-                    + 'a,
-            >,
-        > {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            let stream = self.stream.lock().unwrap().take();
-            Box::pin(async move {
-                stream
-                    .map(|stream| Box::new(stream) as EstablishedPeerStream)
-                    .ok_or_else(|| {
-                        crate::client::HttpRuntimeClientFailure::Connect("unexpected redial".into())
-                    })
-            })
-        }
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn pool_reuses_a_duplex_connection_after_a_successful_response() {
-        let (client, server) = tokio::io::duplex(4096);
-        let dialer = Arc::new(DuplexDialer {
-            stream: std::sync::Mutex::new(Some(client)),
-            calls: AtomicUsize::new(0),
-        });
-        let config = PeerPoolConfig::default();
-        let pool = PeerConnectionPool::with_dialer(
-            config,
-            dialer.clone(),
-            Arc::new(super::PeerAddressCache::new(config.address_cache_ttl)),
-        );
-        let router =
-            Router::new().route("/v1/atm/messages", post(|| async { StatusCode::CREATED }));
-        let (_shutdown_tx, shutdown_rx) = watch::channel(());
-        let server = tokio::spawn(serve_connection(
-            hyper_util::rt::TokioIo::new(server),
-            router,
-            Duration::from_secs(2),
-            shutdown_rx,
-        ));
-        let peer = "peer.example".parse().unwrap();
-        let port = std::num::NonZeroU16::new(43101).unwrap();
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
-        for _ in 0..2 {
-            let mut connection = pool
-                .acquire_until(&peer, port, deadline)
-                .await
-                .expect("acquire peer");
-            let response = connection
-                .exchange_until(request(), deadline)
-                .await
-                .expect("peer response");
-            assert_eq!(response.status(), StatusCode::CREATED);
-            drop(connection);
-        }
-        assert_eq!(dialer.calls.load(Ordering::SeqCst), 1);
-        assert_eq!(pool.pooled_count(), 1);
-        drop(pool);
-        server
-            .await
-            .expect("server task joins")
-            .expect("connection closes cleanly");
     }
 
     #[tokio::test(start_paused = true)]
@@ -933,6 +708,122 @@ mod tests {
         assert_eq!(pool.pooled_count(), 0, "first eligible tick evicts entry");
     }
 
+    async fn start_keep_alive_peer() -> u16 {
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("test listener binds");
+        let port = listener.local_addr().expect("listener address").port();
+        tokio::spawn(async move {
+            let router = Router::new().route(
+                "/v1/atm/messages",
+                post(|| async { Result::<_, Infallible>::Ok(StatusCode::CREATED) }),
+            );
+            loop {
+                let (stream, _) = listener.accept().await.expect("peer accepts connection");
+                let router = router.clone();
+                let (shutdown_tx, shutdown_rx) = watch::channel(());
+                tokio::spawn(async move {
+                    let _shutdown_tx = shutdown_tx;
+                    let _ = serve_connection(
+                        hyper_util::rt::TokioIo::new(stream),
+                        router,
+                        std::time::Duration::from_secs(30),
+                        shutdown_rx,
+                    )
+                    .await;
+                });
+            }
+        });
+        port
+    }
+
+    async fn start_close_after_response_peer() -> u16 {
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("test listener binds");
+        let port = listener.local_addr().expect("listener address").port();
+        tokio::spawn(async move {
+            let router = Router::new().route(
+                "/v1/atm/messages",
+                post(|| async { ([(header::CONNECTION, "close")], StatusCode::CREATED) }),
+            );
+            loop {
+                let (stream, _) = listener.accept().await.expect("peer accepts connection");
+                let router = router.clone();
+                let (shutdown_tx, shutdown_rx) = watch::channel(());
+                tokio::spawn(async move {
+                    let _shutdown_tx = shutdown_tx;
+                    let _ = serve_connection(
+                        hyper_util::rt::TokioIo::new(stream),
+                        router,
+                        std::time::Duration::from_secs(30),
+                        shutdown_rx,
+                    )
+                    .await;
+                });
+            }
+        });
+        port
+    }
+
+    async fn start_drop_peer() -> (u16, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("test listener binds");
+        let port = listener.local_addr().expect("listener address").port();
+        let accepted = Arc::new(AtomicUsize::new(0));
+        let accepted_for_task = Arc::clone(&accepted);
+        tokio::spawn(async move {
+            loop {
+                let (stream, _) = listener.accept().await.expect("peer accepts connection");
+                accepted_for_task.fetch_add(1, Ordering::SeqCst);
+                drop(stream);
+            }
+        });
+        (port, accepted)
+    }
+
+    async fn start_close_peer_with_listener_shutdown() -> (
+        u16,
+        tokio::sync::oneshot::Sender<()>,
+        tokio::sync::oneshot::Receiver<()>,
+    ) {
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("test listener binds");
+        let port = listener.local_addr().expect("listener address").port();
+        let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel();
+        let (stopped_tx, stopped_rx) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            let router = Router::new().route(
+                "/v1/atm/messages",
+                post(|| async { ([(header::CONNECTION, "close")], StatusCode::CREATED) }),
+            );
+            loop {
+                tokio::select! {
+                    _ = &mut shutdown_rx => break,
+                    accepted = listener.accept() => {
+                        let (stream, _) = accepted.expect("peer accepts connection");
+                        let router = router.clone();
+                        let (connection_shutdown_tx, connection_shutdown_rx) = watch::channel(());
+                        tokio::spawn(async move {
+                            let _connection_shutdown_tx = connection_shutdown_tx;
+                            let _ = serve_connection(
+                                hyper_util::rt::TokioIo::new(stream),
+                                router,
+                                std::time::Duration::from_secs(30),
+                                connection_shutdown_rx,
+                            )
+                            .await;
+                        });
+                    }
+                }
+            }
+            let _ = stopped_tx.send(());
+        });
+        (port, shutdown_tx, stopped_rx)
+    }
+
     fn request() -> atm_core::api::HttpRequest {
         atm_core::api::HttpRequest {
             method: "POST".to_owned(),
@@ -944,9 +835,9 @@ mod tests {
 
     async fn complete_one_request(connection: &mut super::PooledPeerConnection) {
         let response = connection
-            .exchange_until(
+            .exchange(
                 request(),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("peer request succeeds");
@@ -964,19 +855,19 @@ mod tests {
         }
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn sequential_writes_reuse_one_authenticated_http1_connection() {
-        let port = 43101;
+        let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
-        let pool = test_pool(PeerPoolConfig::default(), adapter.clone());
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
         let peer = "127.0.0.1".parse().expect("peer authority");
 
         for _ in 0..3 {
             let mut connection = pool
-                .acquire_until(
+                .acquire(
                     &peer,
                     std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                    tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                    atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
                 )
                 .await
                 .expect("pool acquires peer connection");
@@ -991,11 +882,11 @@ mod tests {
         assert_driver_completions(&pool, completed_before_shutdown + 1).await;
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn pool_never_reuses_a_connection_across_configured_authorities() {
-        let port = 43101;
+        let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
-        let pool = test_pool(PeerPoolConfig::default(), adapter.clone());
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
         let localhost = "localhost".parse().expect("peer authority");
         pool.shared.addresses.store(
             &localhost,
@@ -1008,10 +899,10 @@ mod tests {
         for peer in ["127.0.0.1", "localhost"] {
             let peer = peer.parse().expect("peer authority");
             let mut connection = pool
-                .acquire_until(
+                .acquire(
                     &peer,
                     std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                    tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                    atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
                 )
                 .await
                 .expect("pool acquires peer connection");
@@ -1025,11 +916,11 @@ mod tests {
         assert_driver_completions(&pool, completed_before_shutdown + 2).await;
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn overflow_connection_is_closed_instead_of_becoming_a_retained_entry() {
-        let port = 43101;
+        let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
-        let pool = test_pool(
+        let pool = PeerConnectionPool::new(
             PeerPoolConfig {
                 max_per_peer: 1,
                 max_pooled_total: 1,
@@ -1039,18 +930,18 @@ mod tests {
         );
         let peer = "127.0.0.1".parse().expect("peer authority");
         let mut retained = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("first connection reserves pooled slot");
         let mut overflow = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("overflow falls back without queueing");
@@ -1067,10 +958,10 @@ mod tests {
         assert_driver_completions(&pool, completed_before_drop + 2).await;
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn overflow_drop_after_failed_exchange_closes_its_driver() {
-        let port = 43101;
-        let pool = test_pool(
+        let port = start_keep_alive_peer().await;
+        let pool = PeerConnectionPool::new(
             PeerPoolConfig {
                 max_per_peer: 1,
                 max_pooled_total: 1,
@@ -1080,31 +971,31 @@ mod tests {
         );
         let peer = "127.0.0.1".parse().expect("peer authority");
         let retained = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("first borrow reserves the only retained slot");
         let mut overflow = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("second borrow dials overflow connection");
 
         let failure = overflow
-            .exchange_until(
+            .exchange(
                 atm_core::api::HttpRequest {
                     method: "POST".to_owned(),
                     path: "/v1/atm/messages".to_owned(),
                     headers: vec!["malformed-header".to_owned()],
                     body: Vec::new(),
                 },
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect_err("malformed request marks the overflow guard failed before write");
@@ -1125,10 +1016,10 @@ mod tests {
         pool.shutdown(std::time::Duration::from_secs(1)).await;
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn overflow_drop_without_exchange_closes_its_driver() {
-        let port = 43101;
-        let pool = test_pool(
+        let port = start_keep_alive_peer().await;
+        let pool = PeerConnectionPool::new(
             PeerPoolConfig {
                 max_per_peer: 1,
                 max_pooled_total: 1,
@@ -1138,18 +1029,18 @@ mod tests {
         );
         let peer = "127.0.0.1".parse().expect("peer authority");
         let retained = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("first borrow reserves the only retained slot");
         let overflow = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("second borrow dials overflow connection");
@@ -1168,9 +1059,9 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn expired_idle_connection_is_evicted_and_redialed() {
-        let port = 43101;
+        let port = start_keep_alive_peer().await;
         let adapter = std::sync::Arc::new(CountingPassthroughAdapter::default());
-        let pool = test_pool(
+        let pool = PeerConnectionPool::new(
             PeerPoolConfig {
                 idle_timeout: std::time::Duration::from_millis(5),
                 ..PeerPoolConfig::default()
@@ -1179,10 +1070,10 @@ mod tests {
         );
         let peer = "127.0.0.1".parse().expect("peer authority");
         let mut connection = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("initial connection");
@@ -1194,10 +1085,10 @@ mod tests {
         assert_eq!(pool.pooled_count(), 0);
         assert_driver_completions(&pool, completed_before_eviction + 1).await;
         let mut redial = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("post-eviction redial");
@@ -1209,10 +1100,10 @@ mod tests {
         assert_driver_completions(&pool, completed_before_shutdown + 1).await;
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn unused_pooled_borrow_closes_its_driver_and_releases_its_reservation() {
-        let port = 43101;
-        let pool = test_pool(
+        let port = start_keep_alive_peer().await;
+        let pool = PeerConnectionPool::new(
             PeerPoolConfig {
                 max_per_peer: 1,
                 max_pooled_total: 1,
@@ -1222,10 +1113,10 @@ mod tests {
         );
         let peer = "127.0.0.1".parse().expect("peer authority");
         let connection = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("pooled connection is acquired");
@@ -1235,18 +1126,18 @@ mod tests {
         assert_driver_completions(&pool, completed_before_drop + 1).await;
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn stale_idle_sender_redials_once_before_the_next_request() {
-        let port = 43102;
+        let port = start_close_after_response_peer().await;
         let adapter = Arc::new(CountingPassthroughAdapter::default());
-        let pool = test_pool(PeerPoolConfig::default(), adapter.clone());
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
         let peer = "127.0.0.1".parse().expect("peer authority");
 
         let mut first = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("first connection opens");
@@ -1255,10 +1146,10 @@ mod tests {
         assert_driver_completions(&pool, 1).await;
 
         let mut redialed = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("stale idle entry redials before a new exchange");
@@ -1268,17 +1159,17 @@ mod tests {
         pool.shutdown(std::time::Duration::from_secs(1)).await;
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn expired_deadline_releases_idle_reservation_without_probe_or_redial() {
-        let port = 43101;
+        let port = start_keep_alive_peer().await;
         let adapter = Arc::new(CountingPassthroughAdapter::default());
-        let pool = test_pool(PeerPoolConfig::default(), adapter.clone());
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
         let peer = "127.0.0.1".parse().expect("peer authority");
         let mut initial = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("initial connection is pooled");
@@ -1286,10 +1177,10 @@ mod tests {
         drop(initial);
 
         let result = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now(),
+                atm_core::api::RequestDeadline::after(std::time::Duration::ZERO),
             )
             .await;
         let failure = match result {
@@ -1312,25 +1203,25 @@ mod tests {
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn failed_exchange_is_not_retried_after_the_request_is_handed_to_the_sender() {
-        let port = 43103;
+        let (port, accepted) = start_drop_peer().await;
         let adapter = Arc::new(CountingPassthroughAdapter::default());
-        let pool = test_pool(PeerPoolConfig::default(), adapter.clone());
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
         let peer = "127.0.0.1".parse().expect("peer authority");
         let mut connection = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("TCP and HTTP/1 setup completes before the peer drop is observed");
 
         let failure = connection
-            .exchange_until(
+            .exchange(
                 request(),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect_err("peer close during request is surfaced");
@@ -1341,34 +1232,40 @@ mod tests {
         drop(connection);
         assert_driver_completions(&pool, 1).await;
         assert_eq!(adapter.connects.load(Ordering::SeqCst), 1);
-        assert_eq!(adapter.accepted.load(Ordering::SeqCst), 1);
+        assert_eq!(accepted.load(Ordering::SeqCst), 1);
         assert_eq!(pool.pooled_count(), 0);
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn stale_redial_failure_releases_the_existing_reservation() {
-        let port = 43102;
+        let (port, shutdown_listener, listener_stopped) =
+            start_close_peer_with_listener_shutdown().await;
         let adapter = Arc::new(CountingPassthroughAdapter::default());
-        let pool = test_pool(PeerPoolConfig::default(), adapter.clone());
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
         let peer = "127.0.0.1".parse().expect("peer authority");
         let mut first = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await
             .expect("initial pooled connection opens");
         complete_one_request(&mut first).await;
         drop(first);
         assert_driver_completions(&pool, 1).await;
-        adapter.disabled.store(true, Ordering::SeqCst);
+        shutdown_listener
+            .send(())
+            .expect("listener shutdown requested");
+        listener_stopped
+            .await
+            .expect("listener closed before redial");
 
         let result = pool
-            .acquire_until(
+            .acquire(
                 &peer,
                 std::num::NonZeroU16::new(port).expect("non-zero test port"),
-                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                atm_core::api::RequestDeadline::after(std::time::Duration::from_secs(1)),
             )
             .await;
         let failure = match result {
@@ -1377,12 +1274,12 @@ mod tests {
         };
         assert!(
             matches!(failure, super::HttpRuntimeClientFailure::PeerConnect { .. }),
-            "a refused redial is reported as a peer connection failure: {failure:?}"
+            "a refused redial is reported with its per-address cause: {failure:?}"
         );
         assert_eq!(
             adapter.connects.load(Ordering::SeqCst),
             1,
-            "the scripted replacement failed before establishing a stream"
+            "the replacement TCP dial failed before it could invoke the stream adapter"
         );
         assert_eq!(
             pool.pooled_count(),
@@ -1415,91 +1312,28 @@ mod tests {
         }
     }
 
-    /// A controlled transport still exercises the address cache and candidate loop.
-    struct UnresponsiveDialer {
-        addresses: super::PeerAddressCache,
-        adapter: Arc<CountingPassthroughAdapter>,
-    }
-
-    impl super::PeerStreamDialer for UnresponsiveDialer {
-        fn dial<'a>(
-            &'a self,
-            peer: &'a atm_core::types::HostName,
-            port: std::num::NonZeroU16,
-            deadline: tokio::time::Instant,
-            authority: &'a str,
-        ) -> std::pin::Pin<
-            Box<
-                dyn std::future::Future<
-                        Output = Result<
-                            EstablishedPeerStream,
-                            crate::client::HttpRuntimeClientFailure,
-                        >,
-                    > + Send
-                    + 'a,
-            >,
-        > {
-            Box::pin(async move {
-                let dial_deadline = super::dial_deadline(deadline);
-                let stream = self
-                    .addresses
-                    .connect(
-                        peer,
-                        port,
-                        dial_deadline,
-                        |_host, port| async move {
-                            Ok(vec![std::net::SocketAddr::from((
-                                [10, 255, 255, 1],
-                                port.get(),
-                            ))])
-                        },
-                        |_address| async {
-                            std::future::pending::<std::io::Result<tokio::net::TcpStream>>().await
-                        },
-                    )
-                    .await
-                    .map_err(
-                        |cause| crate::client::HttpRuntimeClientFailure::PeerConnect {
-                            target: authority.to_owned(),
-                            cause,
-                        },
-                    )?;
-                self.adapter.connect(stream, peer).await.map_err(|error| {
-                    crate::client::HttpRuntimeClientFailure::PeerConnect {
-                        target: authority.to_owned(),
-                        cause: error.to_string(),
-                    }
-                })
-            })
-        }
-    }
-
-    /// ADR-060 §7: per-address diagnosis arrives inside the request budget.
-    #[tokio::test(start_paused = true)]
+    /// ADR-060 §7: the dial loop is bounded inside the request budget, so an
+    /// unresponsive peer is reported with its per-address diagnosis rather
+    /// than losing the race to a bare connect timeout.
+    #[tokio::test]
     async fn unresponsive_peer_reports_per_address_diagnosis_not_a_bare_timeout() {
-        let config = PeerPoolConfig::default();
         let adapter = Arc::new(CountingPassthroughAdapter::default());
-        let dialer = Arc::new(UnresponsiveDialer {
-            addresses: super::PeerAddressCache::new(config.address_cache_ttl),
-            adapter: adapter.clone(),
-        });
-        let pool = PeerConnectionPool::with_dialer(
-            config,
-            dialer,
-            Arc::new(super::PeerAddressCache::new(config.address_cache_ttl)),
-        );
+        let pool = PeerConnectionPool::new(PeerPoolConfig::default(), adapter.clone());
+        // A black-holed address: nothing answers, so the attempt runs to its
+        // budget share unless the OS rejects the route outright.
         let peer = "10.255.255.1".parse().expect("peer authority");
-        let start = tokio::time::Instant::now();
         let budget = Duration::from_millis(600);
+        let started = std::time::Instant::now();
         let result = pool
-            .acquire_until(
+            .acquire(
                 &peer,
-                std::num::NonZeroU16::new(43_101).unwrap(),
-                start + budget,
+                std::num::NonZeroU16::new(43_101).expect("non-zero test port"),
+                atm_core::api::RequestDeadline::after(budget),
             )
             .await;
+        let elapsed = started.elapsed();
         let cause = match result {
-            Ok(_) => panic!("an unresponsive peer must not connect"),
+            Ok(_) => panic!("a black-holed peer must not connect"),
             Err(super::HttpRuntimeClientFailure::PeerConnect { cause, .. }) => cause,
             Err(other) => panic!("per-address diagnosis expected, got {other:?}"),
         };
@@ -1507,9 +1341,9 @@ mod tests {
             cause.contains("10.255.255.1:43101: "),
             "cause names the attempted address and reason: {cause}"
         );
-        assert_eq!(
-            tokio::time::Instant::now(),
-            start + budget - super::DIAL_REPORT_GRACE
+        assert!(
+            elapsed < budget,
+            "the dial loop finishes inside the request budget: {elapsed:?}"
         );
         assert_eq!(adapter.connects.load(Ordering::SeqCst), 0);
         assert_eq!(pool.pooled_count(), 0);

@@ -22,7 +22,7 @@ impl StorageAndNudgeRouter {
         deadline: RequestDeadline,
         request_id: RequestId,
     ) -> Result<ApiResponse, AtmError> {
-        if crate::request_deadline::expired(deadline) {
+        if deadline.expired() {
             return Err(AtmError::daemon_unavailable(
                 "request deadline expired before replacement route dispatch",
             ));

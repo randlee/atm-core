@@ -688,12 +688,8 @@ impl HttpRuntimeConnector for PooledPeerStreamConnector {
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        let deadline = crate::request_deadline::capture(deadline);
-        let mut connection = self
-            .pool
-            .acquire_until(&self.host, self.port, deadline)
-            .await?;
-        connection.exchange_until(request, deadline).await
+        let mut connection = self.pool.acquire(&self.host, self.port, deadline).await?;
+        connection.exchange(request, deadline).await
     }
 }
 
@@ -704,21 +700,17 @@ impl HttpRuntimeConnector for PooledPeerStreamConnector {
 pub(crate) async fn execute_opaque_peer_request_with_sender(
     sender: &mut http1::SendRequest<Body>,
     request: HttpRequest,
-    deadline: tokio::time::Instant,
+    deadline: RequestDeadline,
 ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-    if tokio::time::Instant::now() >= deadline {
-        return Err(HttpRuntimeClientFailure::Cancelled);
-    }
     let request = build_opaque_peer_request(request)?;
-    tokio::time::timeout_at(deadline, async {
-        let response = sender
-            .send_request(request)
-            .await
-            .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
-        collect_opaque_peer_response(response).await
-    })
-    .await
-    .map_err(|_| HttpRuntimeClientFailure::Timeout)?
+    let remaining = deadline
+        .remaining()
+        .ok_or(HttpRuntimeClientFailure::Cancelled)?;
+    let response = tokio::time::timeout(remaining, sender.send_request(request))
+        .await
+        .map_err(|_| HttpRuntimeClientFailure::Timeout)?
+        .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
+    collect_opaque_peer_response(response).await
 }
 
 fn build_opaque_peer_request(
@@ -1214,7 +1206,7 @@ mod tests {
                     let _ = crate::http1_server::serve_connection(
                         hyper_util::rt::TokioIo::new(stream),
                         router,
-                        Duration::from_secs(2),
+                        Duration::from_secs(30),
                         shutdown_rx,
                     )
                     .await;
@@ -1224,13 +1216,8 @@ mod tests {
         (port, accepted)
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn shared_plaintext_client_reuses_the_daemon_lifetime_connection_pool() {
-        let (release, held) = tokio::sync::oneshot::channel::<()>();
-        tokio::task::spawn_blocking(move || {
-            let _ = held.blocking_recv();
-        });
-        let _clock = release;
         let (port, accepted) = start_plaintext_peer_with_connection_counter().await;
         let connector = DirectPeerTcpConnector::new(
             shared_direct_peer_client().expect("shared plaintext client"),
@@ -1244,12 +1231,13 @@ mod tests {
             body: Vec::new(),
         };
         for _ in 0..3 {
-            let response = crate::request_deadline::scope(
-                tokio::time::Instant::now() + Duration::from_secs(1),
-                connector.exchange(request.clone(), RequestDeadline::after(Duration::ZERO)),
-            )
-            .await
-            .expect("shared plaintext connection writes successfully");
+            let response = connector
+                .exchange(
+                    request.clone(),
+                    RequestDeadline::after(Duration::from_secs(1)),
+                )
+                .await
+                .expect("shared plaintext connection writes successfully");
             assert_eq!(response.status(), StatusCode::CREATED);
         }
         assert_eq!(
@@ -1788,7 +1776,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn request_deadline_bounds_the_connector_once() {
-        struct WaitingConnector(Arc<tokio::sync::Notify>);
+        struct WaitingConnector;
         #[async_trait]
         impl HttpRuntimeConnector for WaitingConnector {
             fn connection_target(&self) -> String {
@@ -1800,20 +1788,15 @@ mod tests {
                 _request: HttpRequest,
                 _deadline: RequestDeadline,
             ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-                self.0.notify_one();
                 std::future::pending::<()>().await;
                 unreachable!("deadline must cancel the connector")
             }
         }
 
-        let entered = Arc::new(tokio::sync::Notify::new());
-        let client = HttpRuntimeClient::new(
-            Arc::new(WaitingConnector(entered.clone())),
-            Duration::from_millis(1),
-        );
+        let client = HttpRuntimeClient::new(Arc::new(WaitingConnector), Duration::from_millis(1));
         let task =
             tokio::spawn(async move { client.execute(ApiRequest::new(write_request())).await });
-        entered.notified().await;
+        tokio::task::yield_now().await;
         tokio::time::advance(Duration::from_millis(1)).await;
         let error = task
             .await

@@ -36,7 +36,7 @@ pub(crate) async fn record_prompt_handoff(
         log_failure(dispatch, kind, trigger, FailureReason::Storage, &error);
         return;
     };
-    if crate::request_deadline::expired(deadline) {
+    if deadline.expired() {
         let error = AtmError::new(
             AtmErrorCode::InternalError,
             "prompt-handoff recording deadline expired before bridge admission",

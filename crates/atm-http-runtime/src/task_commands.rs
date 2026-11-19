@@ -29,54 +29,34 @@ impl sealed::Sealed for NormalTaskCommands {}
 #[async_trait]
 impl TaskCommands for NormalTaskCommands {
     async fn assign(&self, req: TaskAssign, ctx: &TaskCallCtx) -> Result<ApiResponse, AtmError> {
-        crate::request_deadline::scope_if_absent(
-            ctx.deadline,
-            self.router
-                .write_unhooked(*req.0, ctx.ingress.clone(), ctx.deadline, ctx.request_id),
-        )
-        .await
+        self.router
+            .write_unhooked(*req.0, ctx.ingress.clone(), ctx.deadline, ctx.request_id)
+            .await
     }
     async fn start(&self, req: TaskStart, ctx: &TaskCallCtx) -> Result<ApiResponse, AtmError> {
-        crate::request_deadline::scope_if_absent(
-            ctx.deadline,
-            self.router
-                .write_unhooked(*req.0, ctx.ingress.clone(), ctx.deadline, ctx.request_id),
-        )
-        .await
+        self.router
+            .write_unhooked(*req.0, ctx.ingress.clone(), ctx.deadline, ctx.request_id)
+            .await
     }
     async fn close(&self, req: TaskClose, ctx: &TaskCallCtx) -> Result<ApiResponse, AtmError> {
-        crate::request_deadline::scope_if_absent(
-            ctx.deadline,
-            self.router
-                .write_unhooked(*req.0, ctx.ingress.clone(), ctx.deadline, ctx.request_id),
-        )
-        .await
+        self.router
+            .write_unhooked(*req.0, ctx.ingress.clone(), ctx.deadline, ctx.request_id)
+            .await
     }
     async fn move_task(
         &self,
         req: TaskMoveRequest,
         ctx: &TaskCallCtx,
     ) -> Result<ApiResponse, AtmError> {
-        crate::request_deadline::scope_if_absent(
-            ctx.deadline,
-            self.router
-                .task_move(req, ctx.ingress.clone(), ctx.deadline, None),
-        )
-        .await
+        self.router
+            .task_move(req, ctx.ingress.clone(), ctx.deadline, None)
+            .await
     }
     async fn list(&self, req: TaskList, ctx: &TaskCallCtx) -> Result<ApiResponse, AtmError> {
-        crate::request_deadline::scope_if_absent(
-            ctx.deadline,
-            self.router.list_messages(req.0, ctx.deadline),
-        )
-        .await
+        self.router.list_messages(req.0, ctx.deadline).await
     }
     async fn events(&self, req: TaskEvents, ctx: &TaskCallCtx) -> Result<ApiResponse, AtmError> {
-        crate::request_deadline::scope_if_absent(
-            ctx.deadline,
-            self.router.list_messages(req.0, ctx.deadline),
-        )
-        .await
+        self.router.list_messages(req.0, ctx.deadline).await
     }
 }
 

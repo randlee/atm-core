@@ -2631,15 +2631,18 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
         .expect("release-start signal waiter joins");
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
-    let drain_started = pump.release_drain_started.clone();
     let task = pump.start(shutdown_rx);
     shutdown_tx.send(()).expect("shutdown notification");
-    drain_started.notified().await;
     tokio::time::advance(HERDR_REQUEST_BUDGET).await;
-    task.await
-        .expect("a stalled release store must not hold pump shutdown past its request deadline");
+    tokio::task::yield_now().await;
+
+    assert!(
+        task.is_finished(),
+        "a stalled release store must not hold pump shutdown past its request deadline"
+    );
     assert_eq!(health.snapshot().blocking_core_bridge_stalls_total, 1);
     drop(release_guard);
+    task.await.expect("bounded pump shutdown joins");
 }
 
 #[test]

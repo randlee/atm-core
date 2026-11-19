@@ -142,7 +142,7 @@ impl StorageAndNudgeRouter {
         phase: &atm_core::boundary::PhaseId,
         deadline: RequestDeadline,
     ) -> Result<(), AtmError> {
-        if crate::request_deadline::expired(deadline) {
+        if deadline.expired() {
             return Err(AtmError::daemon_unavailable(
                 "cron action deadline expired before permit admission",
             ));
@@ -152,8 +152,10 @@ impl StorageAndNudgeRouter {
         let generation = permit.generation();
         let team = team.clone();
         let phase = phase.clone();
-        let deadline_at = crate::request_deadline::capture(deadline);
-        tokio::time::timeout_at(deadline_at, tokio::task::spawn_blocking(move || {
+        let remaining = deadline.remaining().ok_or_else(|| {
+            AtmError::daemon_unavailable("cron action deadline expired before permit admission")
+        })?;
+        tokio::time::timeout(remaining, tokio::task::spawn_blocking(move || {
                 let schedules = store.active_all()?;
                 let admitted = schedules.iter().any(|schedule| {
                     schedule.active

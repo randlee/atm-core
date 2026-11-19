@@ -188,16 +188,11 @@ async fn run_groups(
             .collect();
     };
     let doctor_deadline: RequestDeadline = deadline.minus(Duration::from_millis(250));
-    let doctor_at = crate::request_deadline::capture(deadline)
-        .checked_sub(Duration::from_millis(250))
-        .unwrap_or_else(tokio::time::Instant::now);
     let mut calls = tokio::task::JoinSet::new();
     for (index, group) in groups.iter().enumerate() {
         let runner = Arc::clone(&runner);
         let target = group.target.clone();
-        calls.spawn(crate::request_deadline::scope(doctor_at, async move {
-            (index, runner.doctor(&target, doctor_deadline).await)
-        }));
+        calls.spawn(async move { (index, runner.doctor(&target, doctor_deadline).await) });
     }
     let mut results: Vec<Option<Result<HookDoctorReply, AtmError>>> =
         (0..groups.len()).map(|_| None).collect();

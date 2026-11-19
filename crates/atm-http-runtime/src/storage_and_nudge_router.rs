@@ -270,7 +270,7 @@ impl StorageAndNudgeRouter {
             ));
         };
         let port = self.resolved_peer_port(host, deadline).await?;
-        let remaining = crate::request_deadline::remaining(deadline).ok_or_else(|| {
+        let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "request deadline expired before cross-host acknowledgement delivery",
             )
@@ -362,24 +362,12 @@ impl StorageAndNudgeRouter {
         dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
         deadline: RequestDeadline,
     ) -> Vec<WarningEntry> {
-        let Some((deadline, hook_at)) = receiver_hook_deadline(deadline) else {
+        let Some(deadline) = receiver_hook_deadline(deadline) else {
             return vec![hook_warning(AtmError::daemon_unavailable(
                 "received-message hook was skipped to reserve the durable write response handoff",
             ))];
         };
-        crate::request_deadline::scope(
-            hook_at,
-            self.emit_received_hook_scoped(dispatches, deadline),
-        )
-        .await
-    }
-
-    async fn emit_received_hook_scoped(
-        &self,
-        dispatches: Result<Vec<atm_core::boundary::BuiltInPostSendDispatch>, AtmError>,
-        deadline: RequestDeadline,
-    ) -> Vec<WarningEntry> {
-        if crate::request_deadline::expired(deadline) {
+        if deadline.expired() {
             return vec![hook_warning(AtmError::daemon_unavailable(
                 "received-message hook was skipped because the request deadline was exhausted after persistence",
             ))];
@@ -393,15 +381,14 @@ impl StorageAndNudgeRouter {
             let Some(emitter) = self.received_hook_selector.select_emitter(&dispatch) else {
                 continue;
             };
-            let hook_at = crate::request_deadline::capture(deadline);
-            if tokio::time::Instant::now() >= hook_at {
+            let Some(remaining) = deadline.remaining() else {
                 warnings.push(hook_warning(AtmError::daemon_unavailable(
                     "received-message hook was skipped because the request deadline was exhausted after persistence",
                 )));
                 break;
-            }
-            match tokio::time::timeout_at(
-                hook_at,
+            };
+            match tokio::time::timeout(
+                remaining,
                 emitter.emit_received_message(dispatch.clone(), deadline),
             )
             .await
@@ -498,40 +485,14 @@ impl StorageAndNudgeRouter {
         )))
     }
 
-    async fn project_doctor_with_deadline(
-        &self,
-        query: DoctorQuery,
-        context: DoctorProjectionContext,
-        deadline: RequestDeadline,
-    ) -> Result<atm_core::doctor::DoctorReport, AtmError> {
-        let projection = self.doctor_projection.as_ref().ok_or_else(|| {
-            AtmError::daemon_unavailable("doctor projection was not installed at daemon startup")
-        })?;
-        let deadline_at = crate::request_deadline::capture(deadline);
-        if crate::request_deadline::expired(deadline) {
-            return Err(AtmError::daemon_unavailable(
-                "request deadline expired before doctor projection",
-            ));
-        }
-        tokio::time::timeout_at(
-            deadline_at,
-            projection.project(
-                query.with_daemon_paths(self.daemon_home.clone()),
-                context,
-                crate::request_deadline::core_boundary(deadline),
-            ),
-        )
-        .await
-        .map_err(|_| {
-            AtmError::daemon_unavailable("request deadline expired during doctor projection")
-        })?
-    }
-
     async fn doctor(
         &self,
         query: DoctorQuery,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
+        let doctor_projection = self.doctor_projection.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable("doctor projection was not installed at daemon startup")
+        })?;
         let handoff = self
             .async_mailbox_runtime
             .as_ref()
@@ -549,9 +510,9 @@ impl StorageAndNudgeRouter {
         let caller_team = query.caller_team.clone();
         let team_override = query.team_override.clone();
         let all_teams = query.all_teams;
-        let mut report = self
-            .project_doctor_with_deadline(
-                query,
+        let mut report = doctor_projection
+            .project(
+                query.with_daemon_paths(self.daemon_home.clone()),
                 DoctorProjectionContext {
                     runtime_status: Some(initial_runtime_status),
                     daemon_context,
@@ -797,7 +758,7 @@ impl StorageAndNudgeRouter {
     ) -> Result<ApiResponse, AtmError> {
         require_local_graft_ingress(ingress)?;
         validate_graft_receiver_member(&self.service_runtime, &team, &agent)?;
-        let remaining = crate::request_deadline::remaining(deadline).ok_or_else(|| {
+        let remaining = deadline.remaining().ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "request deadline expired before graft receiver lease lookup",
             )
@@ -866,29 +827,24 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         deadline: RequestDeadline,
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        Box::pin(crate::request_deadline::scope_if_absent(
-            deadline,
-            async move {
-                let Some(commands) = self.hooks.task_commands.clone() else {
-                    return self
-                        .write_unhooked(request, ingress, deadline, request_id)
-                        .await;
-                };
-                match atm_core::boundary::TaskCommand::classify(ApiRequest::Write(Box::new(
-                    request,
-                ))) {
-                    Ok(command) => {
-                        self.call_task_command(&*commands, command, ingress, deadline, request_id)
-                            .await
-                    }
-                    Err(ApiRequest::Write(request)) => {
-                        self.write_unhooked(*request, ingress, deadline, request_id)
-                            .await
-                    }
-                    Err(_) => unreachable!("classify returns a write request unchanged"),
+        Box::pin(async move {
+            let Some(commands) = self.hooks.task_commands.clone() else {
+                return self
+                    .write_unhooked(request, ingress, deadline, request_id)
+                    .await;
+            };
+            match atm_core::boundary::TaskCommand::classify(ApiRequest::Write(Box::new(request))) {
+                Ok(command) => {
+                    self.call_task_command(&*commands, command, ingress, deadline, request_id)
+                        .await
                 }
-            },
-        ))
+                Err(ApiRequest::Write(request)) => {
+                    self.write_unhooked(*request, ingress, deadline, request_id)
+                        .await
+                }
+                Err(_) => unreachable!("classify returns a write request unchanged"),
+            }
+        })
     }
 
     fn dispatch(
@@ -912,21 +868,18 @@ impl CanonicalWriteHandler for StorageAndNudgeRouter {
         deadline: RequestDeadline,
         request_id: RequestId,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + '_>> {
-        Box::pin(crate::request_deadline::scope_if_absent(
-            deadline,
-            async move {
-                match request {
-                    ApiRequest::Write(request) => {
-                        self.write_with_request_id(*request, ingress, deadline, request_id)
-                            .await
-                    }
-                    request => {
-                        self.dispatch_non_write(request, ingress, deadline, request_id)
-                            .await
-                    }
+        Box::pin(async move {
+            match request {
+                ApiRequest::Write(request) => {
+                    self.write_with_request_id(*request, ingress, deadline, request_id)
+                        .await
                 }
-            },
-        ))
+                request => {
+                    self.dispatch_non_write(request, ingress, deadline, request_id)
+                        .await
+                }
+            }
+        })
     }
 }
 
@@ -952,7 +905,7 @@ impl StorageAndNudgeRouter {
         cron_permit: Option<&'a atm_core::boundary::CronRunPermit>,
     ) -> Pin<Box<dyn Future<Output = Result<ApiResponse, AtmError>> + Send + 'a>> {
         Box::pin(async move {
-            if crate::request_deadline::expired(deadline) {
+            if deadline.expired() {
                 return Err(AtmError::daemon_unavailable(
                     "request deadline expired before replacement storage-writer ingress",
                 ));
@@ -1460,27 +1413,11 @@ pub(crate) mod tests {
         }
     }
 
-    struct SignalOnDrop(Arc<TestSignal>);
-
-    impl Drop for SignalOnDrop {
-        fn drop(&mut self) {
-            self.0.signal();
-        }
-    }
-
     struct BlockingTemplateComposer {
         source_bytes: Vec<u8>,
         inspection: atm_core::TemplateInspection,
         release: Arc<(Mutex<bool>, Condvar)>,
         started: Arc<TestSignal>,
-    }
-
-    struct ReleaseComposerOnDrop(Arc<BlockingTemplateComposer>);
-
-    impl Drop for ReleaseComposerOnDrop {
-        fn drop(&mut self) {
-            self.0.release();
-        }
     }
 
     impl BlockingTemplateComposer {
@@ -1715,23 +1652,6 @@ pub(crate) mod tests {
             #[tokio::test]
             async fn $through() {
                 $body(true).await;
-            }
-        };
-    }
-
-    macro_rules! through_normal_task_commands_with_physical_runtime {
-        ($plain:ident, $through:ident, $body:ident) => {
-            #[tokio::test(start_paused = true)]
-            async fn $plain() {
-                let _clock = freeze_peer_test_clock();
-                let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
-                crate::request_deadline::scope(deadline, $body(false)).await;
-            }
-            #[tokio::test(start_paused = true)]
-            async fn $through() {
-                let _clock = freeze_peer_test_clock();
-                let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
-                crate::request_deadline::scope(deadline, $body(true)).await;
             }
         };
     }
@@ -2362,7 +2282,7 @@ pub(crate) mod tests {
             .expect("task lifecycle daemon shuts down");
     }
 
-    through_normal_task_commands_with_physical_runtime!(non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_through_normal_task_commands, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_body);
+    through_normal_task_commands!(non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_through_normal_task_commands, non_assigner_reassign_is_refused_without_mail_or_task_mutation_through_daemon_body);
 
     async fn recorded_assigner_reassign_still_succeeds_through_daemon_body(through: bool) {
         let fixture = route_task_commands(fixture(true, None, None), through);
@@ -2398,23 +2318,33 @@ pub(crate) mod tests {
             .expect("task lifecycle daemon shuts down");
     }
 
-    through_normal_task_commands_with_physical_runtime!(
+    through_normal_task_commands!(
         recorded_assigner_reassign_still_succeeds_through_daemon,
         recorded_assigner_reassign_still_succeeds_through_daemon_through_normal_task_commands,
         recorded_assigner_reassign_still_succeeds_through_daemon_body
     );
 
-    // Physical peer I/O remains covered, while Tokio time is held fixed so
-    // host load cannot consume a request budget.
-    const DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+    /// Hang detector for two-runtime router tests that dispatch a canonical
+    /// write or ACK over a real reqwest client to a real, in-process peer
+    /// HTTP runtime. This is not a timing assertion on how fast delivery
+    /// should be: it exists only to fail a genuinely hung exchange instead of
+    /// blocking `cargo test` forever. A fresh client build (TLS/connector
+    /// init), TCP connect, remote accept, remote `commit_write` (including a
+    /// SQLite fsync), and the synchronous received-hook path all happen
+    /// inside this budget on a shared executor, so it must stay generous on
+    /// loaded CI runners. See `DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT` for
+    /// the server-side counterpart, which must stay strictly larger than
+    /// this value per the request-budget contract.
+    const TWO_RUNTIME_TEST_REQUEST_BUDGET: Duration = Duration::from_secs(30);
 
-    fn freeze_peer_test_clock() -> tokio::sync::oneshot::Sender<()> {
-        let (release, held) = tokio::sync::oneshot::channel();
-        tokio::task::spawn_blocking(move || {
-            let _ = held.blocking_recv();
-        });
-        release
-    }
+    /// Hang detector for tests that host a real accept loop and a real
+    /// client dispatch on the same executor (see `TWO_RUNTIME_TEST_REQUEST_BUDGET`
+    /// for the client-side counterpart). This is not a timing assertion: it
+    /// only needs to be comfortably larger than the client-side budget so a
+    /// slow-but-correct exchange cannot be starved by the server closing the
+    /// connection first. Per the request-budget contract, the server budget
+    /// must stay strictly greater than the client budget.
+    const DIRECT_PEER_TEST_SERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(35);
 
     fn direct_peer_runtime_config(
         fixture: &Fixture,
@@ -2442,7 +2372,7 @@ pub(crate) mod tests {
         .with_direct_peer_tcp(direct_peer)
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn blocking_core_bridge_rejects_saturation_without_starting_a_second_job() {
         let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
@@ -2451,33 +2381,29 @@ pub(crate) mod tests {
         let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
         let release_first_tx = Arc::new(TestSignal::default());
         let release_first_rx = Arc::clone(&release_first_tx);
-        let _release = SignalOnDrop(release_first_tx.clone());
         let first_admission = admission.clone();
-        let first_deadline = tokio::time::Instant::now() + Duration::from_secs(1);
-        let first = tokio::spawn(crate::request_deadline::scope(first_deadline, async move {
+        let first = tokio::spawn(async move {
             first_admission
-                .run(RequestDeadline::after(Duration::ZERO), move || {
+                .run(RequestDeadline::after(Duration::from_secs(1)), move || {
                     first_started_tx.send(()).expect("signal started job");
                     release_first_rx.wait_for(1);
                     Ok("first durable result")
                 })
                 .await
-        }));
+        });
         first_started_rx.await.expect("first job starts");
 
         let second_started = Arc::new(AtomicBool::new(false));
         let second_job_started = Arc::clone(&second_started);
-        let second_deadline = tokio::time::Instant::now() + Duration::from_millis(20);
-        let (saturated, ()) = tokio::join!(
-            crate::request_deadline::scope(
-                second_deadline,
-                admission.run(RequestDeadline::after(Duration::ZERO), move || {
+        let saturated = admission
+            .run(
+                RequestDeadline::after(Duration::from_millis(20)),
+                move || {
                     second_job_started.store(true, Ordering::SeqCst);
                     Ok(())
-                },)
-            ),
-            tokio::time::advance(Duration::from_millis(20)),
-        );
+                },
+            )
+            .await;
         assert!(
             saturated.is_err(),
             "saturated admission rejects before start"
@@ -2497,7 +2423,7 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn expired_blocking_core_bridge_never_starts_a_blocking_job() {
         let admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
@@ -2521,7 +2447,7 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn blocking_core_bridge_records_a_stall_when_a_job_outlives_its_budget() {
         let health = RuntimeHealth::default();
         let mut admission = ControlPathSyncBridge::new(
@@ -2542,17 +2468,15 @@ pub(crate) mod tests {
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let release_tx = Arc::new(TestSignal::default());
         let release_rx = Arc::clone(&release_tx);
-        let _release = SignalOnDrop(release_tx.clone());
-        let deadline_at = tokio::time::Instant::now() + Duration::from_secs(1);
-        let task = tokio::spawn(crate::request_deadline::scope(deadline_at, async move {
+        let task = tokio::spawn(async move {
             admission
-                .run(RequestDeadline::after(Duration::ZERO), move || {
+                .run(RequestDeadline::after(Duration::from_secs(30)), move || {
                     started_tx.send(()).expect("signal started job");
                     release_rx.wait_for(1);
                     Ok("slow job still finished")
                 })
                 .await
-        }));
+        });
         started_rx.await.expect("job starts");
         advanced.store(true, Ordering::SeqCst);
         release_tx.signal();
@@ -2563,7 +2487,7 @@ pub(crate) mod tests {
         assert_eq!(health.snapshot().blocking_core_bridge_stalls_total, 1);
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn blocking_core_bridge_does_not_record_a_stall_for_jobs_within_budget() {
         let health = RuntimeHealth::default();
         let admission = ControlPathSyncBridge::new(
@@ -2571,12 +2495,10 @@ pub(crate) mod tests {
             health.clone(),
         );
 
-        crate::request_deadline::scope(
-            tokio::time::Instant::now() + Duration::from_secs(1),
-            admission.run(RequestDeadline::after(Duration::ZERO), || Ok(())),
-        )
-        .await
-        .expect("a fast job completes within its budget");
+        admission
+            .run(RequestDeadline::after(Duration::from_secs(1)), || Ok(()))
+            .await
+            .expect("a fast job completes within its budget");
 
         assert_eq!(
             health.snapshot().blocking_core_bridge_stalls_total,
@@ -3945,34 +3867,29 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied() {
-        let _clock = freeze_peer_test_clock();
-        let deadline_at = tokio::time::Instant::now() + Duration::from_secs(1);
         let fixture = fixture(true, None, None);
         let write = write_request(fixture.home_dir.clone(), fixture.current_dir.clone());
-        crate::request_deadline::scope(
-            deadline_at,
-            fixture.router.dispatch(
+        fixture
+            .router
+            .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::ZERO),
-            ),
-        )
-        .await
-        .expect("seed mailbox");
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .await
+            .expect("seed mailbox");
 
         let assembly = open_sqlite_boundary(&fixture.database_path).expect("reopen async boundary");
         let async_mailbox_runtime = assembly
             .async_mailbox_runtime
             .with_state_handoff(HandoffConfig::default())
             .expect("start mailbox handoff");
-        let mut doctor_ports = assembly.doctor_ports;
-        doctor_ports.herdr_endpoint = Arc::new(atm_core::doctor::ClosedHerdrEndpointDoctor);
         let doctor_projection = StorageDoctorProjection::start(
             DoctorProjectionConfig::default(),
             assembly.service_runtime,
-            doctor_ports,
+            assembly.doctor_ports,
             Arc::new(NullObservability),
         )
         .expect("start doctor projection");
@@ -3982,22 +3899,19 @@ pub(crate) mod tests {
             .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
             .with_doctor_projection(Arc::new(doctor_projection));
         let bridge = router.control_path_sync_bridge.clone();
-        let observed_bridge = bridge.blocking_bridge().clone();
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let release_tx = Arc::new(TestSignal::default());
         let release_rx = Arc::clone(&release_tx);
-        let _release = SignalOnDrop(release_tx.clone());
-        let bridge_task = tokio::spawn(crate::request_deadline::scope(deadline_at, async move {
+        let bridge_task = tokio::spawn(async move {
             bridge
-                .run(RequestDeadline::after(Duration::ZERO), move || {
+                .run(RequestDeadline::after(Duration::from_secs(30)), move || {
                     started_tx.send(()).expect("signal occupied bridge");
                     release_rx.wait_for(1);
                     Ok(())
                 })
                 .await
-        }));
+        });
         started_rx.await.expect("bridge started");
-        let admissions_before_doctor = observed_bridge.admission_count();
 
         let root = fixture.home_dir.clone();
         let list = atm_core::list::ListQuery::new(
@@ -4063,37 +3977,20 @@ pub(crate) mod tests {
                 )),
                 _ => ApiRequest::Doctor(atm_core::doctor::DoctorQuery::default()),
             };
-            calls.push(tokio::spawn(crate::request_deadline::scope(
-                deadline_at,
-                async move {
-                    router
-                        .dispatch(
-                            request,
-                            AuthenticatedIngress::Local,
-                            RequestDeadline::after(Duration::ZERO),
-                        )
-                        .await
-                },
-            )));
+            calls.push(tokio::spawn(async move {
+                router
+                    .dispatch(
+                        request,
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(Duration::from_secs(1)),
+                    )
+                    .await
+            }));
         }
-        let mut doctor_calls = Vec::new();
-        for (index, call) in calls.into_iter().enumerate() {
-            if index % 4 == 3 {
-                doctor_calls.push(call);
-            } else {
-                call.await
-                    .expect("mailbox task joins")
-                    .expect("mailbox request completes while bridge is occupied");
-            }
-        }
-        observed_bridge
-            .wait_for_admissions(admissions_before_doctor + doctor_calls.len())
-            .await;
-        tokio::time::advance(Duration::from_secs(1)).await;
-        for call in doctor_calls {
+        for call in calls {
             call.await
-                .expect("doctor task joins")
-                .expect("doctor request completes while bridge is occupied");
+                .expect("fanout task joins")
+                .expect("fanout request completes while bridge is occupied");
         }
         release_tx.signal();
         bridge_task
@@ -4101,6 +3998,7 @@ pub(crate) mod tests {
             .expect("bridge task joins")
             .expect("bridge task completes");
     }
+
     async fn post_write(app: axum::Router, write: &WriteRequest) -> axum::response::Response {
         let path = atm_core::api::http_route_surface()
             .find(|route| route.method == "POST" && route.path_template.ends_with("/messages"))
@@ -4151,16 +4049,15 @@ pub(crate) mod tests {
         for _ in 0..2 {
             let router = fixture.router.clone();
             let request = template_write_request(fixture, "template body");
-            let deadline_at = tokio::time::Instant::now() + deadline;
-            stalled.spawn(crate::request_deadline::scope(deadline_at, async move {
+            stalled.spawn(async move {
                 router
                     .dispatch(
                         ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
                         AuthenticatedIngress::Local,
-                        RequestDeadline::after(Duration::ZERO),
+                        RequestDeadline::after(deadline),
                     )
                     .await
-            }));
+            });
         }
         tokio::task::spawn_blocking(move || {
             starts.wait_for(2);
@@ -4187,20 +4084,18 @@ pub(crate) mod tests {
         )
         .expect("task-ledger list query")
         .with_task_ledger(atm_core::list::TaskLedgerQuery::Tasks { member: None });
-        let deadline_at = tokio::time::Instant::now() + deadline;
-        let listed = crate::request_deadline::scope(
-            deadline_at,
-            fixture.router.dispatch(
+        let listed = fixture
+            .router
+            .dispatch(
                 ApiRequest::Messages(Box::new(atm_core::api::MessageCollectionRequest::List(
                     list,
                 ))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::ZERO),
-            ),
-        )
-        .await
-        .expect("list succeeds while template verification is stalled")
-        .into_inner();
+                RequestDeadline::after(deadline),
+            )
+            .await
+            .expect("list succeeds while template verification is stalled")
+            .into_inner();
         assert!(matches!(listed, ResponseEnvelope::List(_)));
     }
 
@@ -4208,18 +4103,14 @@ pub(crate) mod tests {
         fixture: &Fixture,
         deadline: Duration,
     ) {
-        let deadline_at = tokio::time::Instant::now() + deadline;
         let (blocked, ()) = tokio::join!(
-            crate::request_deadline::scope(
-                deadline_at,
-                fixture.router.dispatch(
-                    ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
-                        fixture,
-                        "template body",
-                    )))),
-                    AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::ZERO),
-                )
+            fixture.router.dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(template_write_request(
+                    fixture,
+                    "template body",
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(deadline),
             ),
             async {
                 tokio::time::advance(deadline).await;
@@ -4289,8 +4180,7 @@ pub(crate) mod tests {
         through: bool,
     ) {
         let (fixture, composer, starts) = stalled_template_fixture(through);
-        let _release = ReleaseComposerOnDrop(composer.clone());
-        let response_deadline = Duration::from_secs(1);
+        let response_deadline = Duration::from_secs(30);
         let mut stalled =
             start_stalled_template_verifications(&fixture, starts, response_deadline).await;
         assert_task_list_remains_live(&fixture, response_deadline).await;
@@ -4317,7 +4207,6 @@ pub(crate) mod tests {
     async fn file_source_preflight_shares_bounded_admission_and_fails_closed() {
         let (composer, starts) = BlockingTemplateComposer::new("template body");
         let composer = Arc::new(composer);
-        let _release = ReleaseComposerOnDrop(composer.clone());
         let fixture = fixture_with_selector_and_template(
             true,
             None,
@@ -4333,16 +4222,15 @@ pub(crate) mod tests {
         for _ in 0..2 {
             let router = fixture.router.clone();
             let request = template_write_request(&fixture, "template body");
-            let deadline_at = tokio::time::Instant::now() + Duration::from_millis(250);
-            stalled.spawn(crate::request_deadline::scope(deadline_at, async move {
+            stalled.spawn(async move {
                 router
                     .dispatch(
                         ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
                         AuthenticatedIngress::Local,
-                        RequestDeadline::after(Duration::ZERO),
+                        RequestDeadline::after(Duration::from_millis(250)),
                     )
                     .await
-            }));
+            });
         }
         tokio::task::spawn_blocking(move || {
             starts.wait_for(2);
@@ -4350,18 +4238,14 @@ pub(crate) mod tests {
         .await
         .expect("source start waiter joins");
 
-        let response_deadline = Duration::from_secs(1);
-        let deadline_at = tokio::time::Instant::now() + response_deadline;
+        let response_deadline = Duration::from_secs(30);
         let (error, ()) = tokio::join!(
-            crate::request_deadline::scope(
-                deadline_at,
-                fixture.router.dispatch(
-                    ApiRequest::new(RequestEnvelope::Write(Box::new(file_write_request(
-                        &fixture,
-                    )))),
-                    AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::ZERO),
-                )
+            fixture.router.dispatch(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(file_write_request(
+                    &fixture,
+                )))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(response_deadline),
             ),
             async {
                 tokio::time::advance(response_deadline).await;
@@ -5098,23 +4982,18 @@ pub(crate) mod tests {
         );
         let release_tx = Arc::new(TestSignal::default());
         let release_rx = Arc::clone(&release_tx);
-        let _release = SignalOnDrop(release_tx.clone());
         let started_tx = Arc::new(TestSignal::default());
         let started_rx = Arc::clone(&started_tx);
         let occupying_bridge = bridge.clone();
-        let occupying_deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-        let occupying = tokio::spawn(crate::request_deadline::scope(
-            occupying_deadline,
-            async move {
-                occupying_bridge
-                    .run(RequestDeadline::after(Duration::ZERO), move || {
-                        started_tx.signal();
-                        release_rx.wait_for(1);
-                        Ok(())
-                    })
-                    .await
-            },
-        ));
+        let occupying = tokio::spawn(async move {
+            occupying_bridge
+                .run(RequestDeadline::after(Duration::from_secs(2)), move || {
+                    started_tx.signal();
+                    release_rx.wait_for(1);
+                    Ok(())
+                })
+                .await
+        });
         tokio::task::spawn_blocking(move || started_rx.wait_for(1))
             .await
             .expect("bridge start waiter joins");
@@ -5124,19 +5003,15 @@ pub(crate) mod tests {
             tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
 
         let telemetry = atm_runtime::TaskTelemetryRuntime::disabled();
-        let deadline_at = tokio::time::Instant::now() + Duration::from_millis(20);
         tokio::join!(
-            crate::request_deadline::scope(
-                deadline_at,
-                crate::prompt_handoff_record::record_prompt_handoff(
-                    &bridge,
-                    RequestDeadline::after(Duration::ZERO),
-                    Ok(Arc::new(atm_storage::DummyTaskStore::default())),
-                    &dispatch,
-                    PromptTrigger::Steer,
-                    IsoTimestamp::now(),
-                    &telemetry,
-                )
+            crate::prompt_handoff_record::record_prompt_handoff(
+                &bridge,
+                RequestDeadline::after(Duration::from_millis(20)),
+                Ok(Arc::new(atm_storage::DummyTaskStore::default())),
+                &dispatch,
+                PromptTrigger::Steer,
+                IsoTimestamp::now(),
+                &telemetry,
             ),
             async { tokio::time::advance(Duration::from_millis(20)).await },
         );
@@ -5157,6 +5032,8 @@ pub(crate) mod tests {
     /// response deadline passes is recorded as a timeout, and the Tokio worker
     /// stays live. The write is gated, so it is provably running when the
     /// paused clock is advanced past the deadline; nothing races a timer.
+    /// Negative: the real-clock deadline is 30s, a failure-only bound, so
+    /// admission can never observe it expired.
     #[tokio::test(start_paused = true)]
     async fn record_bridge_timeout_logs_and_emission_succeeds() {
         let dispatch = task_handoff_dispatch(Some("BB6-TIMEOUT"));
@@ -5169,7 +5046,7 @@ pub(crate) mod tests {
         );
         let store = Arc::new(atm_storage::DummyTaskStore::default());
         let (entered, release) = store.hold_next_prompt_handoff();
-        let response_deadline = Duration::from_secs(1);
+        let response_deadline = Duration::from_secs(30);
         let telemetry = atm_runtime::TaskTelemetryRuntime::disabled();
         let (probe_start, probe_gate) = tokio::sync::oneshot::channel();
         let (probe_done, probe_result) = tokio::sync::oneshot::channel();
@@ -5178,19 +5055,15 @@ pub(crate) mod tests {
                 let _ = probe_done.send(());
             }
         });
-        let deadline_at = tokio::time::Instant::now() + response_deadline;
         tokio::join!(
-            crate::request_deadline::scope(
-                deadline_at,
-                crate::prompt_handoff_record::record_prompt_handoff(
-                    &bridge,
-                    RequestDeadline::after(Duration::ZERO),
-                    Ok(store),
-                    &dispatch,
-                    PromptTrigger::Steer,
-                    IsoTimestamp::now(),
-                    &telemetry,
-                )
+            crate::prompt_handoff_record::record_prompt_handoff(
+                &bridge,
+                RequestDeadline::after(response_deadline),
+                Ok(store),
+                &dispatch,
+                PromptTrigger::Steer,
+                IsoTimestamp::now(),
+                &telemetry,
             ),
             async {
                 tokio::task::spawn_blocking(move || entered.recv())
@@ -5383,9 +5256,8 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn templated_send_over_loopback_tcp_uses_decomposed_admission_once() {
-        let _clock = freeze_peer_test_clock();
         let body = "template body";
         let fixture = fixture_with_selector_and_template(
             true,
@@ -5716,9 +5588,8 @@ pub(crate) mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn uds_runtime_reaches_the_canonical_storage_and_received_hook_path() {
-        let _clock = freeze_peer_test_clock();
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
         use std::num::NonZeroU32;
         use std::os::unix::fs::MetadataExt;
@@ -5809,9 +5680,8 @@ pub(crate) mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn uds_and_loopback_search_use_the_same_local_storage_port() {
-        let _clock = freeze_peer_test_clock();
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
         use std::num::NonZeroU32;
         use std::os::unix::fs::MetadataExt;
@@ -5908,9 +5778,8 @@ pub(crate) mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn templated_send_over_uds_uses_the_same_decomposed_admission() {
-        let _clock = freeze_peer_test_clock();
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
         use std::num::NonZeroU32;
         use std::os::unix::fs::MetadataExt;
@@ -5991,9 +5860,8 @@ pub(crate) mod tests {
             .expect("UDS runtime drains");
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn direct_peer_runtime_reaches_storage_once_and_skips_duplicate_hook() {
-        let _clock = freeze_peer_test_clock();
         let fixture = fixture(true, None, None);
         let running = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&fixture, crate::DirectPeerTcpConfig::ephemeral_for_test()),
@@ -6090,10 +5958,8 @@ pub(crate) mod tests {
             .expect("direct peer runtime drains");
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn locally_admitted_host_qualified_write_is_forwarded_by_the_selected_daemon() {
-        let _clock = freeze_peer_test_clock();
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
@@ -6127,16 +5993,15 @@ pub(crate) mod tests {
                 .parse()
                 .expect("host-qualified remote recipient"),
         );
-        let response = crate::request_deadline::scope(
-            deadline,
-            local.router.dispatch(
+        let response = local
+            .router
+            .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::ZERO),
-            ),
-        )
-        .await
-        .expect("local daemon owns host-qualified delivery");
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+            )
+            .await
+            .expect("local daemon owns host-qualified delivery");
         let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response.into_inner()
         else {
             panic!("local daemon must own host-qualified delivery");
@@ -6200,10 +6065,8 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn host_qualified_write_without_trusted_port_fails_with_peer_config_error() {
-        let _clock = freeze_peer_test_clock();
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let mut local = fixture(false, None, None);
         local.router = local
             .router
@@ -6215,26 +6078,23 @@ pub(crate) mod tests {
                 .parse()
                 .expect("host-qualified recipient"),
         );
-        let error = crate::request_deadline::scope(
-            deadline,
-            local.router.dispatch(
+        let error = local
+            .router
+            .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                 AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::ZERO),
-            ),
-        )
-        .await
-        .expect_err("missing trusted peer must not dial a default port");
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+            )
+            .await
+            .expect_err("missing trusted peer must not dial a default port");
         assert_eq!(
             error.code(),
             atm_core::error_codes::AtmErrorCode::PeerConfigValidationFailed
         );
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn selected_router_reuses_one_opaque_peer_connection_across_three_loopback_writes() {
-        let _clock = freeze_peer_test_clock();
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let adapter = Arc::new(CountingPassthroughPeerAdapter::default());
         let remote = fixture(true, None, None);
         // The pooled sender marks these writes as mTLS. Configure the receiver
@@ -6270,16 +6130,15 @@ pub(crate) mod tests {
                     .parse()
                     .expect("host-qualified loopback recipient"),
             );
-            let response = crate::request_deadline::scope(
-                deadline,
-                local.router.dispatch(
+            let response = local
+                .router
+                .dispatch(
                     ApiRequest::new(RequestEnvelope::Write(Box::new(outbound))),
                     AuthenticatedIngress::Local,
-                    RequestDeadline::after(Duration::ZERO),
-                ),
-            )
-            .await
-            .expect("selected router forwards the local write");
+                    RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+                )
+                .await
+                .expect("selected router forwards the local write");
             assert!(matches!(
                 response.into_inner(),
                 ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
@@ -6315,10 +6174,8 @@ pub(crate) mod tests {
             .expect("remote runtime drains");
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn local_ack_routes_to_the_received_peer_and_peer_receipt_does_not_reacknowledge() {
-        let _clock = freeze_peer_test_clock();
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
@@ -6415,16 +6272,15 @@ pub(crate) mod tests {
             reply_body: "received".to_owned(),
         }
         .into_write_request();
-        let response = crate::request_deadline::scope(
-            deadline,
-            local.router.dispatch(
+        let response = local
+            .router
+            .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::ZERO),
-            ),
-        )
-        .await
-        .expect("local acknowledgement is delivered to the stored peer host");
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+            )
+            .await
+            .expect("local acknowledgement is delivered to the stored peer host");
         let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) =
             response.into_inner()
         else {
@@ -6490,10 +6346,8 @@ pub(crate) mod tests {
             .expect("remote direct peer runtime drains");
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn local_ack_returns_peer_delivery_failure_after_the_local_commit() {
-        let _clock = freeze_peer_test_clock();
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
         let remote = fixture(true, None, None);
         let remote_runtime = HttpRuntimeBuilder::new(
             direct_peer_runtime_config(&remote, crate::DirectPeerTcpConfig::ephemeral_for_test()),
@@ -6560,16 +6414,15 @@ pub(crate) mod tests {
             reply_body: "received".to_owned(),
         }
         .into_write_request();
-        let error = crate::request_deadline::scope(
-            deadline,
-            local.router.dispatch(
+        let error = local
+            .router
+            .dispatch(
                 ApiRequest::new(RequestEnvelope::Write(Box::new(acknowledgement))),
                 atm_core::AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::ZERO),
-            ),
-        )
-        .await
-        .expect_err("post-commit peer acknowledgement forwarding failure reaches the caller");
+                RequestDeadline::after(TWO_RUNTIME_TEST_REQUEST_BUDGET),
+            )
+            .await
+            .expect_err("post-commit peer acknowledgement forwarding failure reaches the caller");
         assert_eq!(
             error.code(),
             atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed,
@@ -6594,9 +6447,8 @@ pub(crate) mod tests {
             .expect("local direct peer runtime drains");
     }
 
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn direct_peer_hook_failure_keeps_the_write_successful_with_a_warning() {
-        let _clock = freeze_peer_test_clock();
         let fixture = fixture(
             true,
             Some(AtmError::daemon_unavailable(
@@ -7129,12 +6981,9 @@ pub(crate) mod tests {
 
     /// Holds an authenticated stream open after the client closes: its
     /// shutdown never completes, so the pooled driver stalls.
-    struct StallOnCloseDialer(
-        std::sync::Mutex<Option<tokio::io::DuplexStream>>,
-        Arc<tokio::sync::Notify>,
-    );
+    struct StallOnCloseAdapter;
 
-    struct StallOnClose(tokio::io::DuplexStream, Arc<tokio::sync::Notify>);
+    struct StallOnClose(tokio::net::TcpStream);
 
     impl tokio::io::AsyncRead for StallOnClose {
         fn poll_read(
@@ -7166,90 +7015,70 @@ pub(crate) mod tests {
             self: Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
         ) -> std::task::Poll<std::io::Result<()>> {
-            self.1.notify_one();
             std::task::Poll::Pending
         }
     }
 
-    impl crate::peer_connection_pool::PeerStreamDialer for StallOnCloseDialer {
-        fn dial<'a>(
+    impl PeerStreamAdapter for StallOnCloseAdapter {
+        fn connect<'a>(
             &'a self,
+            stream: tokio::net::TcpStream,
             _peer: &'a atm_core::types::HostName,
-            _port: NonZeroU16,
-            _deadline: tokio::time::Instant,
-            _authority: &'a str,
-        ) -> Pin<
-            Box<
-                dyn std::future::Future<
-                        Output = Result<
-                            EstablishedPeerStream,
-                            crate::client::HttpRuntimeClientFailure,
-                        >,
-                    > + Send
-                    + 'a,
-            >,
-        > {
-            let stream = self.0.lock().expect("dialer lock").take();
-            let started = Arc::clone(&self.1);
-            Box::pin(async move {
-                stream
-                    .map(|s| Box::new(StallOnClose(s, started)) as EstablishedPeerStream)
-                    .ok_or_else(|| {
-                        crate::client::HttpRuntimeClientFailure::Connect("unexpected redial".into())
-                    })
-            })
+        ) -> PeerStreamFuture<'a, EstablishedPeerStream> {
+            Box::pin(async move { Ok(Box::new(StallOnClose(stream)) as EstablishedPeerStream) })
+        }
+
+        fn accept<'a>(
+            &'a self,
+            _stream: tokio::net::TcpStream,
+        ) -> PeerStreamFuture<'a, AcceptedPeerStream> {
+            Box::pin(async { Err(AtmError::config("test accepts no peers")) })
         }
     }
 
     /// The pooled-driver, detached-hook, and hook-chain drains share the
     /// caller's one absolute deadline: a stalled driver leaves later drains
     /// only what remains, never a fresh budget.
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn shutdown_peer_connections_spends_one_deadline_across_pool_hooks_and_chains() {
-        let _clock = freeze_peer_test_clock();
-        let (client, server) = tokio::io::duplex(4096);
-        let close_started = Arc::new(tokio::sync::Notify::new());
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("test peer binds");
+        let port = listener.local_addr().expect("test peer address").port();
         tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("peer accepts");
             let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(());
             let router = axum::Router::new().route(
                 "/v1/atm/messages",
                 axum::routing::post(|| async { StatusCode::CREATED }),
             );
             let _ = crate::http1_server::serve_connection(
-                hyper_util::rt::TokioIo::new(server),
+                hyper_util::rt::TokioIo::new(stream),
                 router,
                 Duration::from_secs(30),
                 shutdown_rx,
             )
             .await;
         });
-        let pool = PeerConnectionPool::with_dialer(
-            PeerPoolConfig::default(),
-            Arc::new(StallOnCloseDialer(
-                std::sync::Mutex::new(Some(client)),
-                Arc::clone(&close_started),
-            )),
-            Arc::new(crate::peer_dial::PeerAddressCache::new(
-                Duration::from_secs(60),
-            )),
-        );
+        let pool =
+            PeerConnectionPool::new(PeerPoolConfig::default(), Arc::new(StallOnCloseAdapter));
         let mut connection = pool
-            .acquire_until(
+            .acquire(
                 &"127.0.0.1".parse().expect("peer authority"),
-                NonZeroU16::new(12345).expect("non-zero test port"),
-                tokio::time::Instant::now() + Duration::from_secs(1),
+                NonZeroU16::new(port).expect("non-zero test port"),
+                RequestDeadline::after(Duration::from_secs(1)),
             )
             .await
             .expect("pooled peer connection");
         let response = connection
-            .exchange_until(
+            .exchange(
                 atm_core::api::HttpRequest {
                     method: "POST".to_owned(),
                     path: "/v1/atm/messages".to_owned(),
                     headers: Vec::new(),
                     body: Vec::new(),
                 },
-                tokio::time::Instant::now() + Duration::from_secs(1),
+                RequestDeadline::after(Duration::from_secs(1)),
             )
             .await
             .expect("peer request succeeds");
@@ -7267,15 +7096,20 @@ pub(crate) mod tests {
             .hook_chains()
             .spawn(std::future::pending::<()>())
             .expect("hook chain starts before shutdown");
+        // Real I/O set the stall up; virtual time measures the drain.
+        tokio::time::pause();
         let started = tokio::time::Instant::now();
+        // Shorter than any step's own budget, so a fresh one shows.
         let deadline = Duration::from_secs(3);
-        let shutdown = tokio::spawn(async move {
-            router.shutdown_peer_connections(started + deadline).await;
-        });
-        close_started.notified().await;
-        tokio::time::advance(deadline).await;
-        shutdown.await.expect("shutdown completes");
-        assert_eq!(tokio::time::Instant::now(), started + deadline);
+
+        router.shutdown_peer_connections(started + deadline).await;
+
+        // Timer registrations round up to the 1ms wheel tick.
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= deadline && elapsed <= deadline + Duration::from_millis(10),
+            "{elapsed:?}"
+        );
         assert!(
             hook_chain
                 .await
