@@ -769,6 +769,39 @@ fn serve_registered_receiver_with_clock(
     }
 }
 
+#[cfg(test)]
+fn receiver_loop_iteration(
+    ctx: &GraftReceiverLoopContext,
+    injector: &BoundedHostNudgeInjector,
+    mut listener: RegisteredGraftReceiver,
+    lease_backoff: &mut LeaseRefreshBackoff,
+    now: &impl Fn() -> Instant,
+) -> Result<Option<RegisteredGraftReceiver>, AtmError> {
+    if stop_requested(&ctx.stop_rx) {
+        return Ok(None);
+    }
+    tick_lease_refresh(ctx, &mut listener, lease_backoff, now);
+    match listener.listener.poll_accept() {
+        Ok(Some(mut stream)) => {
+            if stop_requested(&ctx.stop_rx) {
+                return Ok(None);
+            }
+            if let Err(error) =
+                handle_graft_receiver_connection(ctx, injector, &listener.listener, &mut stream)
+            {
+                warn_runtime_error(
+                    "handle_graft_receiver_connection",
+                    Some(&ctx.graft_root),
+                    &error,
+                );
+            }
+            Ok(Some(listener))
+        }
+        Ok(None) => Ok(Some(listener)),
+        Err(error) => recover_after_poll_accept_error(ctx, listener, &error),
+    }
+}
+
 fn publish_receiver_target(ctx: &GraftReceiverLoopContext, listener: &GraftReceiverListener) {
     if let Some(target_tx) = &ctx.receiver_target_tx
         && let Ok(endpoint) = listener.local_addr()
@@ -1333,16 +1366,15 @@ mod tests {
         }
     }
 
-    fn drive_receiver_on_test_thread(
+    async fn drive_receiver_on_test_thread(
         graft_root: PathBuf,
         client: GraftClient,
         stop_after: usize,
-        mut clock_at_call: impl FnMut(usize) -> Instant,
+        mut before_step: impl FnMut(usize),
     ) -> DrivenReceiver {
         assert!(stop_after > 0, "the receiver needs a stop-after-N nudge");
         let (stop_tx, stop_rx) = mpsc::channel();
         let (lease_events_tx, lease_events) = mpsc::channel();
-        let (target_tx, target_rx) = mpsc::sync_channel(1);
         let injector_calls = Arc::new(AtomicUsize::new(0));
         let injector = Arc::new(StopAfterNInjector {
             calls: Arc::clone(&injector_calls),
@@ -1361,59 +1393,71 @@ mod tests {
             owner_chat_id: None,
             client: Some(Arc::new(client)),
             snapshot: Arc::clone(&snapshot),
-            injector,
+            injector: injector.clone(),
             lease_wait: ResultWait::UntilComplete,
             observability: Arc::new(LeaseTickObserver {
                 events: lease_events_tx,
             }),
             stop_rx,
             ready_tx: None,
-            receiver_target_tx: Some(target_tx),
+            receiver_target_tx: None,
         };
-        let target_slot = Arc::new(Mutex::new(None));
-        let client_streams_slot = Arc::new(Mutex::new(Vec::with_capacity(stop_after)));
-        let clock_call = AtomicUsize::new(0);
-        let clock_at_call = Mutex::new(&mut clock_at_call);
-        let target_for_clock = Arc::clone(&target_slot);
-        let clients_for_clock = Arc::clone(&client_streams_slot);
-        let now = move || {
-            let call = clock_call.fetch_add(1, Ordering::SeqCst);
-            if call == 0 {
-                let target = target_rx.recv().expect("receiver publishes its endpoint");
-                for _ in 0..stop_after {
-                    let mut stream = TcpStream::connect(target.0).expect("connect test client");
-                    let wire = GraftPostSendWireRequest {
-                        capability_base64url: target.1.to_base64url(),
-                        request: GraftPostSendRequest {
-                            event: request_event(),
-                            kind: NudgeKind::Steer,
-                            rendered_nudge: "review failing smoke lane".to_string(),
-                        },
-                    };
-                    write_graft_post_send_message(
-                        &mut stream,
-                        &wire,
-                        "write queued request",
-                        "queued request too large",
-                    )
-                    .expect("queue request before driving the receiver loop");
-                    clients_for_clock
-                        .lock()
-                        .expect("client stream lock")
-                        .push(stream);
-                }
-                *target_for_clock.lock().expect("target lock") = Some(target);
-            }
-            (clock_at_call.lock().expect("clock closure"))(call)
-        };
-
-        super::run_graft_receiver_loop_with_wait_and_clock(ctx, ResultWait::UntilComplete, now)
-            .expect("receiver loop stops after the injected nudge count");
+        let listener = GraftReceiverListener::bind(&ctx.graft_root, &ctx.team, &ctx.agent, None)
+            .expect("bind test receiver");
+        let endpoint = listener.local_addr().expect("receiver endpoint");
+        let capability = listener.capability().clone();
+        let mut client_streams = Vec::with_capacity(stop_after);
+        for _ in 0..stop_after {
+            let mut stream = TcpStream::connect(endpoint).expect("connect test client");
+            let wire = GraftPostSendWireRequest {
+                capability_base64url: capability.to_base64url(),
+                request: GraftPostSendRequest {
+                    event: request_event(),
+                    kind: NudgeKind::Steer,
+                    rendered_nudge: "review failing smoke lane".to_string(),
+                },
+            };
+            write_graft_post_send_message(
+                &mut stream,
+                &wire,
+                "write queued request",
+                "queued request too large",
+            )
+            .expect("queue request before driving the receiver loop");
+            client_streams.push(stream);
+        }
+        let mut receiver = RegisteredGraftReceiver::new(listener, &ctx);
+        let _ = receiver.announce();
+        let bounded = BoundedHostNudgeInjector::spawn(injector.clone(), ResultWait::UntilComplete);
+        let mut lease_backoff =
+            super::LeaseRefreshBackoff::new(tokio::time::Instant::now().into_std());
+        let mut listener = Some(receiver);
+        for step in 1..=(stop_after + 2) {
+            before_step(step);
+            tokio::time::advance(Duration::from_secs(30)).await;
+            let current = listener.take().expect("receiver listener is present");
+            let now = || tokio::time::Instant::now().into_std();
+            let next =
+                super::receiver_loop_iteration(&ctx, &bounded, current, &mut lease_backoff, &now)
+                    .expect("receiver loop iteration");
+            let Some(next) = next else {
+                break;
+            };
+            listener = Some(next);
+        }
+        assert!(
+            listener.is_none(),
+            "receiver loop stops after injected nudges"
+        );
+        super::set_session_state(
+            &snapshot,
+            GraftSessionState::Closed,
+            ctx.observability.as_ref(),
+        )
+        .expect("close driven receiver session");
 
         DrivenReceiver {
-            client_streams: std::mem::take(
-                &mut *client_streams_slot.lock().expect("client stream lock"),
-            ),
+            client_streams,
             snapshot,
             injector_calls,
             lease_events,
@@ -2172,23 +2216,22 @@ mod tests {
     // file record to fall back on at all — the loopback bind and flock
     // acquisition alone keep it functional), and the next tick after the
     // daemon returns registers the lease with no manual step.
-    #[test]
-    fn ac2_bind_with_daemon_down_succeeds_and_registers_once_daemon_returns() {
+    #[tokio::test(start_paused = true)]
+    async fn ac2_bind_with_daemon_down_succeeds_and_registers_once_daemon_returns() {
         let paths = test_paths();
         let registry = FakeGraftRegistry::new(false);
         let registry_for_clock = Arc::clone(&registry);
-        let start = Instant::now();
         let mut receiver = drive_receiver_on_test_thread(
             paths.workspace_root.clone(),
             registry.client(),
             1,
-            move |call| {
-                if call == 1 {
+            move |step| {
+                if step == 1 {
                     registry_for_clock.set_online(true);
                 }
-                start + Duration::from_secs(30 * call as u64)
             },
-        );
+        )
+        .await;
         receiver.expect_lease_event("ok", GraftSessionState::Listening);
         receiver.assert_all_delivered();
         assert_eq!(receiver.injector_calls.load(Ordering::SeqCst), 1);
@@ -2198,8 +2241,8 @@ mod tests {
     // AC3: daemon restart with a live receiver — the lease persists across a
     // reopened store and refresh ticks keep advancing `last_seen_at` without
     // any receiver-side action.
-    #[test]
-    fn ac3_daemon_restart_persists_lease_and_refresh_keeps_advancing_last_seen() {
+    #[tokio::test(start_paused = true)]
+    async fn ac3_daemon_restart_persists_lease_and_refresh_keeps_advancing_last_seen() {
         let paths = test_paths();
         let db_path = paths._tempdir.path().join("graft-registry.sqlite3");
         // Uses the same test-support seam (`atm-runtime-test-support`) that
@@ -2260,10 +2303,9 @@ mod tests {
         let after_refresh = Arc::new(Mutex::new(None));
         let after_for_clock = Arc::clone(&after_refresh);
         let store_for_clock = Arc::clone(&store);
-        let start = Instant::now();
         let mut receiver =
-            drive_receiver_on_test_thread(paths.workspace_root.clone(), client, 1, move |call| {
-                if call == 1 {
+            drive_receiver_on_test_thread(paths.workspace_root.clone(), client, 1, move |step| {
+                if step == 1 {
                     *before_for_clock.lock().expect("before restart") = store_for_clock
                         .lock()
                         .expect("store")
@@ -2273,7 +2315,7 @@ mod tests {
                     *store_for_clock.lock().expect("store") =
                         atm_runtime_test_support::open_graft_receiver_endpoint_store(&db_path)
                             .expect("reopen sqlite-backed graft receiver endpoint store");
-                } else if call == 2 {
+                } else if step == 2 {
                     *after_for_clock.lock().expect("after refresh") = store_for_clock
                         .lock()
                         .expect("store")
@@ -2281,8 +2323,8 @@ mod tests {
                         .ok()
                         .flatten();
                 }
-                start + Duration::from_secs(30 * call as u64)
-            });
+            })
+            .await;
 
         receiver.expect_lease_event("ok", GraftSessionState::Listening);
         receiver.assert_all_delivered();
@@ -2429,8 +2471,8 @@ mod tests {
         assert_eq!(registry.refresh_failure_count(), failures_before + 1);
     }
 
-    #[test]
-    fn rrg_graft_lease_restart_001_live_receiver_reannounces_after_lease_row_loss() {
+    #[tokio::test(start_paused = true)]
+    async fn rrg_graft_lease_restart_001_live_receiver_reannounces_after_lease_row_loss() {
         let paths = test_paths();
         let registry = FakeGraftRegistry::new(true);
         let team = TeamName::from_validated(TEST_TEAM);
@@ -2442,24 +2484,23 @@ mod tests {
         let registry_for_clock = Arc::clone(&registry);
         let team_for_clock = team.clone();
         let agent_for_clock = agent.clone();
-        let start = Instant::now();
         let mut receiver = drive_receiver_on_test_thread(
             paths.workspace_root.clone(),
             registry.client(),
             2,
-            move |call| {
-                if call == 1 {
+            move |step| {
+                if step == 1 {
                     *generation_for_clock.lock().expect("generation") = registry_for_clock
                         .lease(&team_for_clock, &agent_for_clock)
                         .map(|lease| lease.owner_generation);
                     registry_for_clock.remove_lease(&team_for_clock, &agent_for_clock);
-                } else if call == 4 {
+                } else if step == 3 {
                     *reannounced_for_clock.lock().expect("reannounced lease") =
                         registry_for_clock.lease(&team_for_clock, &agent_for_clock);
                 }
-                start + Duration::from_secs(30 * call as u64)
             },
-        );
+        )
+        .await;
         receiver.expect_lease_event("error", GraftSessionState::Listening);
         receiver.expect_lease_event("ok", GraftSessionState::Listening);
         receiver.assert_all_delivered();
@@ -2483,17 +2524,17 @@ mod tests {
     // (back-to-back accepted connections, no idle iterations) still refreshes
     // on cadence — deliverable 2's per-iteration check is not gated behind
     // the idle-only arm that `handle_idle_graft_receiver` used to own.
-    #[test]
-    fn ac6_sustained_connection_load_never_starves_the_lease_refresh_cadence() {
+    #[tokio::test(start_paused = true)]
+    async fn ac6_sustained_connection_load_never_starves_the_lease_refresh_cadence() {
         let paths = test_paths();
         let registry = FakeGraftRegistry::new(true);
-        let start = Instant::now();
         let mut receiver = drive_receiver_on_test_thread(
             paths.workspace_root.clone(),
             registry.client(),
             2,
-            move |call| start + Duration::from_secs(30 * call as u64),
-        );
+            |_| {},
+        )
+        .await;
         assert_eq!(registry.registration_count(), 1);
 
         receiver.expect_lease_event("ok", GraftSessionState::Listening);
@@ -2506,25 +2547,25 @@ mod tests {
     // AC7: a refresh/republish failure injected mid-loop is logged and does
     // not terminate `listen_for_graft_nudges` — the receiver keeps accepting
     // connections on subsequent iterations after the injected failure.
-    #[test]
-    fn ac7_refresh_failure_injected_mid_loop_never_terminates_the_accept_loop() {
+    #[tokio::test(start_paused = true)]
+    async fn ac7_refresh_failure_injected_mid_loop_never_terminates_the_accept_loop() {
         let paths = test_paths();
         let registry = FakeGraftRegistry::new(true);
         let registry_for_clock = Arc::clone(&registry);
-        let start = Instant::now();
         let mut receiver = drive_receiver_on_test_thread(
             paths.workspace_root.clone(),
             registry.client(),
-            2,
-            move |call| {
-                if call == 1 {
+            3,
+            move |step| {
+                if step == 1 {
                     registry_for_clock.set_online(false);
-                } else if call == 3 {
+                } else if step == 3 {
                     registry_for_clock.set_online(true);
                 }
-                start + Duration::from_secs(30 * call as u64)
             },
-        );
+        )
+        .await;
+        receiver.expect_lease_event("error", GraftSessionState::Listening);
         receiver.expect_lease_event("error", GraftSessionState::Listening);
         receiver.expect_lease_event("ok", GraftSessionState::Listening);
         receiver.assert_all_delivered();
@@ -2606,20 +2647,33 @@ mod tests {
             receiver_target_tx: Some(target_tx),
         };
         let start = Instant::now();
-        let clock_call = AtomicUsize::new(0);
+        let clock = Arc::new(Mutex::new(start));
+        let clock_for_loop = Arc::clone(&clock);
+        let (clock_initialized_tx, clock_initialized_rx) = mpsc::sync_channel(1);
+        let clock_initialized_tx = Mutex::new(Some(clock_initialized_tx));
         let join = std::thread::spawn(move || {
             super::run_graft_receiver_loop_with_wait_and_clock(
                 ctx,
                 ResultWait::UntilComplete,
-                || {
-                    start
-                        + Duration::from_secs(30 * clock_call.fetch_add(1, Ordering::SeqCst) as u64)
+                move || {
+                    if let Some(initialized_tx) = clock_initialized_tx
+                        .lock()
+                        .expect("clock initialization signal lock")
+                        .take()
+                    {
+                        let _ = initialized_tx.send(());
+                    }
+                    *clock_for_loop.lock().expect("controlled clock lock")
                 },
             )
         });
-        target_rx
+        let _target = target_rx
             .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
             .expect("receiver target");
+        clock_initialized_rx
+            .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
+            .expect("receive loop initializes its lease clock");
+        *clock.lock().expect("controlled clock lock") = start + Duration::from_secs(30);
         refresh_started_rx
             .recv_timeout(STALLED_CALL_SIGNAL_DEADLINE)
             .expect("timed out waiting for periodic refresh to enter the stalled refresh call");
