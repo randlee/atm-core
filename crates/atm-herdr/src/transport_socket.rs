@@ -80,6 +80,8 @@ pub(crate) struct SocketIo {
     pub(crate) pipe_busy_retry_delay: Duration,
     #[cfg(test)]
     test_stream: Option<Arc<std::sync::Mutex<Option<tokio::io::DuplexStream>>>>,
+    #[cfg(test)]
+    test_deadline: Option<Instant>,
 }
 
 impl SocketIo {
@@ -92,6 +94,8 @@ impl SocketIo {
             pipe_busy_retry_delay: PIPE_BUSY_RETRY_DELAY,
             #[cfg(test)]
             test_stream: None,
+            #[cfg(test)]
+            test_deadline: None,
         }
     }
 
@@ -146,6 +150,12 @@ impl SocketIo {
                 )
                 .await;
         }
+        #[cfg(test)]
+        let deadline = match self.test_deadline {
+            Some(deadline) => deadline,
+            None => tokio_deadline(deadline)?,
+        };
+        #[cfg(not(test))]
         let deadline = tokio_deadline(deadline)?;
         #[cfg(unix)]
         let connect = |endpoint, deadline| async move { connect_unix(&endpoint, deadline).await };
@@ -472,15 +482,6 @@ async fn connect_named_pipe_at(
         tokio::net::windows::named_pipe::ClientOptions::new().open(name)
     })
     .await
-}
-
-#[cfg(all(windows, test))]
-async fn connect_named_pipe(
-    endpoint: &HerdrEndpoint,
-    deadline: RequestDeadline,
-    retry_delay: Duration,
-) -> Result<tokio::net::windows::named_pipe::NamedPipeClient, HerdrError> {
-    connect_named_pipe_at(endpoint, tokio_deadline(deadline)?, retry_delay).await
 }
 
 #[cfg(windows)]
@@ -983,6 +984,62 @@ mod tests {
         tokio::time::advance(Duration::from_secs(60)).await;
         assert!(matches!(future.await, Err(HerdrError::Timeout)));
         assert_eq!(permits.available_permits(), SOCKET_PERMITS);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test(start_paused = true)]
+    async fn windows_named_pipe_invoker_round_trips_on_a_real_pipe() {
+        use crate::{BreakerPolicy, HerdrProcessAdapter, HerdrProcessInvoker, HerdrSpawnBreaker};
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        use tokio::net::windows::named_pipe::ServerOptions;
+
+        let (release_clock, held_clock) = tokio::sync::oneshot::channel::<()>();
+        let clock_hold = tokio::task::spawn_blocking(move || {
+            let _ = held_clock.blocking_recv();
+        });
+        let name = format!(r"\\.\pipe\atm-herdr-fixture-{}", std::process::id());
+        let pipe = ServerOptions::new()
+            .create(&name)
+            .expect("create named pipe");
+        let server = tokio::spawn(async move {
+            pipe.connect().await.expect("connect named pipe");
+            let mut reader = tokio::io::BufReader::new(pipe);
+            let mut request = Vec::new();
+            reader
+                .read_until(b'\n', &mut request)
+                .await
+                .expect("read request");
+            reader
+                .get_mut()
+                .write_all(
+                    b"{\"result\":{\"agent\":{\"name\":\"windows\",\"agent_status\":\"idle\"}}}\n",
+                )
+                .await
+                .expect("write response");
+            request
+        });
+        let config = HerdrClientConfig::with_socket_path(PathBuf::from(name));
+        let mut socket = SocketIo::new(&config);
+        socket.test_deadline = Some(Instant::now() + Duration::from_secs(60));
+        let invoker = HerdrProcessInvoker {
+            breaker: Arc::new(HerdrSpawnBreaker::default()),
+            io: crate::transport::HerdrIo::Socket(socket),
+        };
+        let agent = HerdrAgentName::new("fixture-agent").unwrap();
+        let result = invoker
+            .get(
+                &agent,
+                None,
+                RequestDeadline::after(Duration::ZERO),
+                BreakerPolicy::Shared,
+            )
+            .await
+            .expect("named pipe response");
+        assert_eq!(result.snapshot.name.as_deref(), Some("windows"));
+        let request: Value = serde_json::from_slice(&server.await.unwrap()).unwrap();
+        assert_eq!(request["method"], "agent.get");
+        drop(release_clock);
+        clock_hold.await.unwrap();
     }
 
     #[cfg(unix)]
@@ -1527,20 +1584,21 @@ mod tests {
     }
 
     #[cfg(windows)]
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn named_pipe_connect_exchanges_one_request_with_a_server() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         use tokio::net::windows::named_pipe::ServerOptions;
 
+        let _clock = hold_virtual_clock_for_pipe_io();
         let pipe_name = unique_test_pipe_name();
         let mut server = ServerOptions::new()
             .create(&pipe_name)
             .expect("create test named-pipe server");
         let endpoint = HerdrEndpoint::NamedPipe(pipe_name);
 
-        let mut client = connect_named_pipe(
+        let mut client = connect_named_pipe_at(
             &endpoint,
-            RequestDeadline::after(Duration::from_secs(5)),
+            Instant::now() + Duration::from_secs(60),
             PIPE_BUSY_RETRY_DELAY,
         )
         .await
@@ -1571,14 +1629,24 @@ mod tests {
     }
 
     #[cfg(windows)]
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn missing_named_pipe_returns_a_typed_error_before_deadline() {
+        let _clock = hold_virtual_clock_for_pipe_io();
         let endpoint = HerdrEndpoint::NamedPipe(unique_test_pipe_name());
-        let deadline = RequestDeadline::after(Duration::from_secs(5));
+        let deadline = Instant::now() + Duration::from_secs(60);
 
-        let result = connect_named_pipe(&endpoint, deadline, PIPE_BUSY_RETRY_DELAY).await;
+        let result = connect_named_pipe_at(&endpoint, deadline, PIPE_BUSY_RETRY_DELAY).await;
 
         assert!(matches!(result, Err(HerdrError::ServerUnavailable { .. })));
+    }
+
+    #[cfg(windows)]
+    fn hold_virtual_clock_for_pipe_io() -> tokio::sync::oneshot::Sender<()> {
+        let (release, hold) = tokio::sync::oneshot::channel();
+        tokio::task::spawn_blocking(move || {
+            let _ = hold.blocking_recv();
+        });
+        release
     }
 
     #[cfg(windows)]
