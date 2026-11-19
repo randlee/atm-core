@@ -2,12 +2,24 @@
 
 Rendered from the beads plan (`bd show`); the beads are authoritative. The unchecked bg-1..bg-6 acceptance boxes below are historical planning criteria, not live completion status; use the current phase state and bead states to track completion.
 
-**State (2026-11-18).** bg-1 through bg-7 and the phase-end fixes are landed on `integrate/phase-bg`. atm-core lints with the published sc-lint 0.8.9 adoption kit and consumer runner (`minimum_version = "0.8.9"`), parallel and keep-going. The vendored `sc-lint-boundary` and `sc-lint-directives` crates are deleted. The test manifest is repository-owned. Version alignment runs the published `sc_lint.check_version_sync`. Each Python lint and test row has Linux, macOS and Windows variants: repository scripts run on the `.bootstrap-venv` interpreter, published `sc_lint` modules on `.sc-lint/venv`. CI runs `just lint ci all`; `.just/run_lint.py` is deleted. The merge to `develop` is blocked on Rand's ruling on the requirement, architecture and ADR wording changes ([#2445](https://github.com/randlee/atm-core/issues/2445)).
+**State (2026-11-19).** The phase finishes under finish-plan rev 3.1 (Rand approved 2026-11-19). The phase root bead `atm-phase-bg` carries its design and acceptance.
+
+Root cause: sc-lint 0.8.9 flags violations written before its rules could catch them. bg-11..bg-19 each redesigned production code to clear one, which turned a lint bump into a production rewrite.
+
+- Pre-existing violations get a closed baseline: an `sc_lint(allow(...))` whose reason links its issue (#2505-#2516), fixed later outside the phase.
+- Cut sprints, now issues: bg-11 and bg-12 #2517, bg-13 #2518, bg-14 #2505 #2506 #2507 #2519, bg-15 #2512 #2513, bg-16 #2510, bg-17 #2511 #2515 #2516, bg-18 #2509, bg-19 #2514, output.rs #2520. Their stack (#2493) did not land.
+- Finish units, landed on `integrate/phase-bg` as stack #2524 (cec96f198):
+  - F2, #2521: boundary records back to develop's values.
+  - F4, #2523: refactor reverts.
+  - F3, #2522: daemon-observability API narrowed.
+  - F1, #2525: test seams reverted or made cfg(test)-only.
+  - FIN-1 r2, #2526: deterministic graft stop-deadline test.
+- Test rule (rev 3.1): a revert never restores a timing test. Each test is deterministic, using test-owned inputs or a crate-private `#[cfg(test)]` hook. Release code matches develop's.
+- Remaining before develop: one phase-end review, #2496, Rand's ruling on the requirement, architecture and ADR wording ([#2445](https://github.com/randlee/atm-core/issues/2445), bead `atm-phase-bg-rand1`), then the integrate/phase-bg -> develop PR.
 
 Open items:
 - BG4-2: the SCB-RUNTIME-001/002 finding-set diff was not recorded before the vendored analyzer was deleted; a later run at `deb2cec42` found no SCB-RUNTIME-001/002 findings from either analyzer.
-- BG6-4: speed evidence is open (bead `atm-phase-bg-readiness-f5`).
-- bg-8 (bead `atm-bg-8`) moves to sc-lint 0.8.9. Built after rbg8-r1, which restored the general direct-read guard pending [sc-lint#984](https://github.com/randlee/sc-lint/issues/984). `SCB-ENV-001` covers general direct reads; `.just/check_env_var_boundary.py` retains the exact call-site guard until [sc-lint#983](https://github.com/randlee/sc-lint/issues/983) and the cross-file reader-call guard until [sc-lint#981](https://github.com/randlee/sc-lint/issues/981). `.just/check_python_dependency_pins.py` stays until [sc-lint#982](https://github.com/randlee/sc-lint/issues/982) (unpinned sibling, manifest discovery).
+- bg-8 (bead `atm-bg-8`) moves to sc-lint 0.8.9. `SCB-ENV-001` covers general direct reads; `.just/check_env_var_boundary.py` keeps the exact call-site guard until [sc-lint#983](https://github.com/randlee/sc-lint/issues/983) and the cross-file reader-call guard until [sc-lint#981](https://github.com/randlee/sc-lint/issues/981). `.just/check_python_dependency_pins.py` stays until [sc-lint#982](https://github.com/randlee/sc-lint/issues/982).
 
 ---
 
