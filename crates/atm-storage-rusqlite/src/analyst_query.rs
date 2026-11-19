@@ -30,9 +30,7 @@ fn fixture_sql(sql: &str) -> String {
 pub fn open_analyst_query_store(
     path: impl AsRef<Path>,
 ) -> Result<Box<dyn AnalystQueryStore>, AtmError> {
-    Ok(Box::new(SqliteAnalystQueryStore {
-        path: path.as_ref().to_owned(),
-    }))
+    Ok(Box::new(SqliteAnalystQueryStore::new(path.as_ref())))
 }
 
 /// Creates a durable analyst-view fixture for raw-query consumers.
@@ -189,6 +187,14 @@ pub fn create_an12_workflow_query_fixture_for_test(path: impl AsRef<Path>) -> Re
 #[sc_lint(boundary.internal_only)]
 struct SqliteAnalystQueryStore {
     path: PathBuf,
+}
+
+impl SqliteAnalystQueryStore {
+    fn new(path: &Path) -> Self {
+        Self {
+            path: path.to_owned(),
+        }
+    }
 }
 
 impl AnalystQueryStore for SqliteAnalystQueryStore {
