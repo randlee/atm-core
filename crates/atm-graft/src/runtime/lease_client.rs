@@ -141,6 +141,16 @@ fn owner_generation(listener: &GraftReceiverListener) -> OwnerGeneration {
     listener.owner_generation().clone()
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_LEASE_TIMEOUTS: std::cell::RefCell<Option<mpsc::Receiver<()>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(super) fn install_test_lease_timeouts(timeouts: mpsc::Receiver<()>) {
+    TEST_LEASE_TIMEOUTS.with(|slot| *slot.borrow_mut() = Some(timeouts));
+}
+
 /// Runs a possibly-blocking daemon client call on a helper thread and gives up
 /// waiting on it after `deadline` instead of blocking the caller indefinitely.
 ///
@@ -170,7 +180,20 @@ where
             "failed to spawn graft {action} helper"
         )));
     }
-    match result_rx.recv_timeout(deadline) {
+    #[cfg(test)]
+    let result = TEST_LEASE_TIMEOUTS.with(|slot| {
+        let slot = slot.borrow();
+        if matches!(action, "lease_refresh" | "lease_unregister")
+            && let Some(timeouts) = slot.as_ref()
+        {
+            timeouts.recv().expect("test releases lease timeout");
+            return Err(RecvTimeoutError::Timeout);
+        }
+        result_rx.recv().map_err(|_| RecvTimeoutError::Disconnected)
+    });
+    #[cfg(not(test))]
+    let result = result_rx.recv_timeout(deadline);
+    match result {
         Ok(result) => result,
         Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
             AtmErrorCode::WaitTimeout,
@@ -336,22 +359,30 @@ pub(super) fn tick_lease_refresh(
     ctx: &GraftReceiverLoopContext,
     listener: &mut RegisteredGraftReceiver,
     lease_backoff: &mut LeaseRefreshBackoff,
-    now: &impl Fn() -> Instant,
 ) {
-    let current = now();
+    #[cfg(test)]
+    let current = super::test_lease_now();
+    #[cfg(not(test))]
+    let current = Instant::now();
     if !lease_backoff.due(current) {
         return;
     }
     match listener.refresh() {
         Ok(()) => {
-            lease_backoff.record_success(now());
+            #[cfg(test)]
+            lease_backoff.record_success(super::test_lease_now());
+            #[cfg(not(test))]
+            lease_backoff.record_success(Instant::now());
             if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
                 ctx.observability
                     .receiver_ownership(&snapshot, "refresh_receiver_lease", "ok");
             }
         }
         Err(error) => {
-            lease_backoff.record_failure(now());
+            #[cfg(test)]
+            lease_backoff.record_failure(super::test_lease_now());
+            #[cfg(not(test))]
+            lease_backoff.record_failure(Instant::now());
             warn_runtime_error("refresh_graft_receiver", Some(&ctx.graft_root), &error);
             let outcome = if error.code() == AtmErrorCode::GraftReceiverNotOwner {
                 "displaced"

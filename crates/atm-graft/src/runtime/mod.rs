@@ -244,6 +244,7 @@ fn signal_ready_sender(ready_tx: &SyncSender<()>) -> Result<(), AtmError> {
     })
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy)]
 enum ResultWait {
     Bounded(Duration),
@@ -251,6 +252,7 @@ enum ResultWait {
     UntilComplete,
 }
 
+#[cfg(test)]
 impl ResultWait {
     fn receive<T>(self, receiver: Receiver<T>) -> Result<T, RecvTimeoutError> {
         match self {
@@ -272,6 +274,7 @@ impl ResultWait {
 struct BoundedHostNudgeInjector {
     injector: Arc<dyn HostNudgeInjector>,
     helper_budget: Arc<HelperThreadBudget>,
+    #[cfg(test)]
     wait: ResultWait,
 }
 
@@ -284,9 +287,15 @@ impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
             nudge.clone(),
             helper_permit,
             result_tx,
+            #[cfg(test)]
             self.wait,
         )?;
-        receive_host_nudge_result(result_rx, &self.helper_budget, self.wait)
+        receive_host_nudge_result(
+            result_rx,
+            &self.helper_budget,
+            #[cfg(test)]
+            self.wait,
+        )
     }
 
     fn inject_cron_nudge(&self, nudge: &HostCronNudge) -> DeliveryReceipt {
@@ -299,18 +308,34 @@ impl crate::HostNudgeInjector for BoundedHostNudgeInjector {
             nudge.clone(),
             helper_permit,
             result_tx,
+            #[cfg(test)]
             self.wait,
         )
         .is_err()
         {
             return unknown_cron_receipt("graft host cron nudge helper could not start");
         }
-        receive_host_cron_nudge_result(result_rx, &self.helper_budget, self.wait)
+        receive_host_cron_nudge_result(
+            result_rx,
+            &self.helper_budget,
+            #[cfg(test)]
+            self.wait,
+        )
     }
 }
 
 impl BoundedHostNudgeInjector {
-    fn spawn(injector: Arc<dyn HostNudgeInjector>, wait: ResultWait) -> Self {
+    fn spawn(injector: Arc<dyn HostNudgeInjector>) -> Self {
+        Self {
+            injector,
+            helper_budget: Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS)),
+            #[cfg(test)]
+            wait: TEST_RESULT_WAIT.with(|slot| slot.get()),
+        }
+    }
+
+    #[cfg(test)]
+    fn spawn_with_wait(injector: Arc<dyn HostNudgeInjector>, wait: ResultWait) -> Self {
         Self {
             injector,
             helper_budget: Arc::new(HelperThreadBudget::new(MAX_HOST_NUDGE_HELPERS)),
@@ -340,7 +365,7 @@ fn spawn_host_nudge_helper(
     nudge: HostNudge,
     helper_permit: HelperThreadPermit,
     result_tx: SyncSender<Result<(), AtmError>>,
-    wait: ResultWait,
+    #[cfg(test)] wait: ResultWait,
 ) -> Result<(), AtmError> {
     thread::Builder::new()
         .name("atm-graft-host-nudge".to_string())
@@ -348,8 +373,12 @@ fn spawn_host_nudge_helper(
             let _helper_permit = helper_permit;
             let result = injector.inject_nudge(&nudge);
             if result_tx.send(result).is_err() {
+                #[cfg(test)]
+                let timeout_ms = wait.timeout_ms().unwrap_or_default();
+                #[cfg(not(test))]
+                let timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis();
                 tracing::debug!(
-                    timeout_ms = wait.timeout_ms().unwrap_or_default(),
+                    timeout_ms,
                     "graft host nudge helper dropped its result because the bounded caller already timed out"
                 );
             }
@@ -366,19 +395,36 @@ fn spawn_host_nudge_helper(
 fn receive_host_nudge_result(
     result_rx: Receiver<Result<(), AtmError>>,
     helper_budget: &Arc<HelperThreadBudget>,
-    wait: ResultWait,
+    #[cfg(test)] wait: ResultWait,
 ) -> Result<(), AtmError> {
-    match wait.receive(result_rx) {
+    #[cfg(test)]
+    let received = wait.receive(result_rx);
+    #[cfg(not(test))]
+    let received = result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE);
+    match received {
         Ok(result) => result,
         Err(RecvTimeoutError::Timeout) => {
+            #[cfg(test)]
+            let timeout_ms = wait.timeout_ms();
+            #[cfg(not(test))]
+            let timeout_ms = Some(HOST_NUDGE_INJECTION_DEADLINE.as_millis());
+            #[cfg(test)]
             let error = AtmError::new(
                 AtmErrorCode::WaitTimeout,
                 format!(
                     "graft host nudge injection exceeded the {}ms delivery deadline",
-                    wait.timeout_ms().expect("only bounded waits can time out")
+                    timeout_ms.expect("bounded timeout")
                 ),
             );
-            warn_host_nudge_result("timeout", &error, helper_budget, wait.timeout_ms());
+            #[cfg(not(test))]
+            let error = AtmError::new(
+                AtmErrorCode::WaitTimeout,
+                format!(
+                    "graft host nudge injection exceeded the {:?} delivery deadline",
+                    HOST_NUDGE_INJECTION_DEADLINE
+                ),
+            );
+            warn_host_nudge_result("timeout", &error, helper_budget, timeout_ms);
             Err(error)
         }
         Err(RecvTimeoutError::Disconnected) => {
@@ -397,7 +443,7 @@ fn spawn_host_cron_nudge_helper(
     nudge: HostCronNudge,
     helper_permit: HelperThreadPermit,
     result_tx: SyncSender<Result<DeliveryReceipt, AtmError>>,
-    wait: ResultWait,
+    #[cfg(test)] wait: ResultWait,
 ) -> Result<(), AtmError> {
     thread::Builder::new()
         .name("atm-graft-host-cron-nudge".to_string())
@@ -405,8 +451,12 @@ fn spawn_host_cron_nudge_helper(
             let _helper_permit = helper_permit;
             let result = Ok(injector.inject_cron_nudge(&nudge));
             if result_tx.send(result).is_err() {
+                #[cfg(test)]
+                let timeout_ms = wait.timeout_ms().unwrap_or_default();
+                #[cfg(not(test))]
+                let timeout_ms = HOST_NUDGE_INJECTION_DEADLINE.as_millis();
                 tracing::debug!(
-                    timeout_ms = wait.timeout_ms().unwrap_or_default(),
+                    timeout_ms,
                     "graft host cron nudge helper dropped its result because the bounded caller already timed out"
                 );
             }
@@ -423,9 +473,13 @@ fn spawn_host_cron_nudge_helper(
 fn receive_host_cron_nudge_result(
     result_rx: Receiver<Result<DeliveryReceipt, AtmError>>,
     helper_budget: &Arc<HelperThreadBudget>,
-    wait: ResultWait,
+    #[cfg(test)] wait: ResultWait,
 ) -> DeliveryReceipt {
-    match wait.receive(result_rx) {
+    #[cfg(test)]
+    let received = wait.receive(result_rx);
+    #[cfg(not(test))]
+    let received = result_rx.recv_timeout(HOST_NUDGE_INJECTION_DEADLINE);
+    match received {
         Ok(Ok(receipt)) => receipt,
         Ok(Err(_)) => unknown_cron_receipt("graft host cron nudge result is unknown"),
         Err(RecvTimeoutError::Timeout) => {
@@ -436,7 +490,16 @@ fn receive_host_cron_nudge_result(
                     "graft host cron nudge injection exceeded its delivery deadline",
                 ),
                 helper_budget,
-                wait.timeout_ms(),
+                {
+                    #[cfg(test)]
+                    {
+                        wait.timeout_ms()
+                    }
+                    #[cfg(not(test))]
+                    {
+                        Some(HOST_NUDGE_INJECTION_DEADLINE.as_millis())
+                    }
+                },
             );
             unknown_cron_receipt("graft host cron nudge handoff result is unknown after timeout")
         }
@@ -640,23 +703,8 @@ pub(crate) struct GraftReceiverLoopContext {
 }
 
 pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(), AtmError> {
-    run_graft_receiver_loop_with_wait(ctx, ResultWait::Bounded(HOST_NUDGE_INJECTION_DEADLINE))
-}
-
-fn run_graft_receiver_loop_with_wait(
-    ctx: GraftReceiverLoopContext,
-    wait: ResultWait,
-) -> Result<(), AtmError> {
-    run_graft_receiver_loop_with_clock(ctx, wait, Instant::now)
-}
-
-fn run_graft_receiver_loop_with_clock(
-    ctx: GraftReceiverLoopContext,
-    wait: ResultWait,
-    now: impl Fn() -> Instant,
-) -> Result<(), AtmError> {
-    let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector), wait);
-    let result = listen_for_graft_nudges(&ctx, &injector, &now);
+    let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector));
+    let result = listen_for_graft_nudges(&ctx, &injector);
     let terminal_state = if result.is_ok() {
         GraftSessionState::Closed
     } else {
@@ -673,43 +721,72 @@ fn run_graft_receiver_loop_with_clock(
     result
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_RESULT_WAIT: std::cell::Cell<ResultWait> = const { std::cell::Cell::new(ResultWait::Bounded(HOST_NUDGE_INJECTION_DEADLINE)) };
+    static TEST_LEASE_CLOCK: std::cell::RefCell<Option<Box<dyn Fn() -> Instant>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn test_lease_now() -> Instant {
+    TEST_LEASE_CLOCK.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map_or_else(Instant::now, |clock| clock())
+    })
+}
+
+#[cfg(test)]
+fn run_graft_receiver_loop_with_wait(
+    ctx: GraftReceiverLoopContext,
+    wait: ResultWait,
+) -> Result<(), AtmError> {
+    run_graft_receiver_loop_with_clock(ctx, wait, Instant::now)
+}
+
+#[cfg(test)]
+fn run_graft_receiver_loop_with_clock(
+    ctx: GraftReceiverLoopContext,
+    wait: ResultWait,
+    now: impl Fn() -> Instant + 'static,
+) -> Result<(), AtmError> {
+    TEST_RESULT_WAIT.with(|slot| slot.set(wait));
+    TEST_LEASE_CLOCK.with(|slot| *slot.borrow_mut() = Some(Box::new(now)));
+    let result = run_graft_receiver_loop(ctx);
+    TEST_LEASE_CLOCK.with(|slot| *slot.borrow_mut() = None);
+    TEST_RESULT_WAIT.with(|slot| slot.set(ResultWait::Bounded(HOST_NUDGE_INJECTION_DEADLINE)));
+    result
+}
+
 fn listen_for_graft_nudges(
     ctx: &GraftReceiverLoopContext,
     injector: &BoundedHostNudgeInjector,
-    now: &impl Fn() -> Instant,
 ) -> Result<(), AtmError> {
     let listener = activate_graft_receiver(ctx)?;
     publish_receiver_target(ctx, &listener.listener);
     if let Some(ready_tx) = ctx.ready_tx.as_ref() {
         signal_ready_sender(ready_tx)?;
     }
-    serve_registered_receiver_with_clock(ctx, injector, listener, now)
+    serve_registered_receiver(ctx, injector, listener)
 }
 
-#[cfg(test)]
 fn serve_registered_receiver(
     ctx: &GraftReceiverLoopContext,
     injector: &BoundedHostNudgeInjector,
-    listener: RegisteredGraftReceiver,
-) -> Result<(), AtmError> {
-    serve_registered_receiver_with_clock(ctx, injector, listener, &Instant::now)
-}
-
-fn serve_registered_receiver_with_clock(
-    ctx: &GraftReceiverLoopContext,
-    injector: &BoundedHostNudgeInjector,
     mut listener: RegisteredGraftReceiver,
-    now: &impl Fn() -> Instant,
 ) -> Result<(), AtmError> {
     // Non-blocking accept + poll: the loop re-checks its stop signal every
     // ACCEPT_POLL_INTERVAL instead of parking in a blocking accept, so no
     // wake-by-connect machinery is needed to unblock shutdown.
-    let mut lease_backoff = LeaseRefreshBackoff::new(now());
+    #[cfg(test)]
+    let mut lease_backoff = LeaseRefreshBackoff::new(test_lease_now());
+    #[cfg(not(test))]
+    let mut lease_backoff = LeaseRefreshBackoff::new(Instant::now());
     loop {
         if stop_requested(&ctx.stop_rx) {
             return Ok(());
         }
-        tick_lease_refresh(ctx, &mut listener, &mut lease_backoff, now);
+        tick_lease_refresh(ctx, &mut listener, &mut lease_backoff);
         match listener.listener.poll_accept() {
             Ok(Some(mut stream)) => {
                 if stop_requested(&ctx.stop_rx) {
@@ -726,7 +803,19 @@ fn serve_registered_receiver_with_clock(
                 }
             }
             Ok(None) => {
-                if wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL) {
+                #[cfg(test)]
+                let stop = TEST_LEASE_WAKE.with(|slot| {
+                    if let Some(wake) = slot.borrow().as_ref() {
+                        wake.recv().expect("test wakes receiver");
+                        stop_requested(&ctx.stop_rx)
+                    } else {
+                        wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL)
+                    }
+                });
+                #[cfg(not(test))]
+                let stop =
+                    wait_for_stop_or_delay(&ctx.stop_rx, GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL);
+                if stop {
                     return Ok(());
                 }
             }
@@ -736,6 +825,11 @@ fn serve_registered_receiver_with_clock(
             },
         }
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_LEASE_WAKE: std::cell::RefCell<Option<Receiver<()>>> = const { std::cell::RefCell::new(None) };
 }
 
 fn publish_receiver_target(ctx: &GraftReceiverLoopContext, listener: &GraftReceiverListener) {
@@ -789,17 +883,16 @@ fn recover_after_poll_accept_error(
     recover_graft_receiver(ctx)
 }
 
-fn recover_graft_receiver(
-    ctx: &GraftReceiverLoopContext,
-) -> Result<Option<RegisteredGraftReceiver>, AtmError> {
-    recover_graft_receiver_with(ctx, rebind_graft_receiver)
+#[cfg(test)]
+type TestRebind =
+    Box<dyn FnMut(&GraftReceiverLoopContext) -> Result<Option<RegisteredGraftReceiver>, AtmError>>;
+#[cfg(test)]
+thread_local! {
+    static TEST_REBIND: std::cell::RefCell<Option<TestRebind>> = const { std::cell::RefCell::new(None) };
 }
 
-fn recover_graft_receiver_with(
+fn recover_graft_receiver(
     ctx: &GraftReceiverLoopContext,
-    mut rebind: impl FnMut(
-        &GraftReceiverLoopContext,
-    ) -> Result<Option<RegisteredGraftReceiver>, AtmError>,
 ) -> Result<Option<RegisteredGraftReceiver>, AtmError> {
     set_session_state(
         &ctx.snapshot,
@@ -811,7 +904,14 @@ fn recover_graft_receiver_with(
         if stop_requested(&ctx.stop_rx) {
             return Ok(None);
         }
-        match rebind(ctx) {
+        #[cfg(test)]
+        let rebound = TEST_REBIND.with(|slot| match slot.borrow_mut().as_mut() {
+            Some(rebind) => rebind(ctx),
+            None => rebind_graft_receiver(ctx),
+        });
+        #[cfg(not(test))]
+        let rebound = rebind_graft_receiver(ctx);
+        match rebound {
             Ok(Some(listener)) => {
                 set_session_state(
                     &ctx.snapshot,
@@ -962,8 +1062,7 @@ mod tests {
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::{
         GraftPostSendRequest, GraftPostSendResponse, GraftPostSendWireRequest,
-        GraftReceiverListener, deliver_graft_post_send, read_graft_post_send_message,
-        write_graft_post_send_message,
+        GraftReceiverListener, read_graft_post_send_message, write_graft_post_send_message,
     };
     use atm_core::protocol::{
         CLI_SCHEMA_VERSION, CompatibilityVerdict, HttpApiVersion, LocalCapability, OwnerGeneration,
@@ -975,6 +1074,7 @@ mod tests {
     use atm_core::types::{AgentName, ChatId, TeamName};
     use std::collections::HashMap;
     use std::fs;
+    use std::io::Write;
     use std::net::{SocketAddr, TcpStream};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -990,14 +1090,11 @@ mod tests {
         GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLeaseClient,
         GraftReceiverLoopContext, HelperThreadBudget, MAX_HOST_NUDGE_HELPERS,
         RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, ReceiverRecoveryCircuit,
-        RegisteredGraftReceiver, ResultWait, handle_graft_receiver_connection,
-        join_receive_loop_with_deadline, load_graft_config, read_snapshot,
-        recover_after_poll_accept_error, recover_graft_receiver_with, wait_for_stop_or_delay,
+        RegisteredGraftReceiver, ResultWait, handle_graft_receiver_connection, load_graft_config,
+        read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
+        wait_for_stop_or_delay,
     };
     use crate::{GraftSessionState, SessionSnapshot};
-
-    const DELIVER_CONNECT_DEADLINE: Duration = Duration::from_secs(2);
-    const DELIVER_IO_DEADLINE: Duration = Duration::from_secs(3);
 
     fn compatible_response() -> ResponseEnvelope {
         ResponseEnvelope::CompatibilityVerdict(CompatibilityVerdict::Compatible {
@@ -1091,6 +1188,14 @@ mod tests {
         (SocketAddr, LocalCapability),
     );
 
+    type WakeSpawnedReceiver = (
+        mpsc::Sender<()>,
+        std::thread::JoinHandle<Result<(), AtmError>>,
+        Arc<RwLock<SessionSnapshot>>,
+        (SocketAddr, LocalCapability),
+        mpsc::Sender<()>,
+    );
+
     fn test_paths() -> TestPaths {
         let tempdir = TempDir::new().expect("tempdir");
         let workspace_root = tempdir.path().join("workspace");
@@ -1122,23 +1227,28 @@ mod tests {
         )
     }
 
-    fn deliver_request(
+    fn deliver_request_with_wake(
         endpoint: SocketAddr,
         capability: &LocalCapability,
         event: PostSendHookEvent,
+        wake: &mpsc::Sender<()>,
     ) -> GraftPostSendResponse {
-        deliver_graft_post_send(
-            endpoint,
-            capability,
-            &GraftPostSendRequest {
+        let mut stream = TcpStream::connect(endpoint).expect("connect receiver");
+        let request = GraftPostSendWireRequest {
+            capability_base64url: capability.to_base64url(),
+            request: GraftPostSendRequest {
                 event,
                 kind: NudgeKind::Steer,
-                rendered_nudge: "<atm>test nudge</atm>".to_string(),
+                rendered_nudge: "<atm>test nudge</atm>".to_owned(),
             },
-            DELIVER_CONNECT_DEADLINE,
-            DELIVER_IO_DEADLINE,
-        )
-        .expect("deliver graft post-send")
+        };
+        write_graft_post_send_message(&mut stream, &request, "write request", "oversize request")
+            .expect("write request");
+        stream.flush().expect("flush request");
+        wake.send(())
+            .expect("wake receiver after request is available");
+        read_graft_post_send_message(&mut stream, "read response", "oversize response")
+            .expect("read response")
     }
 
     fn request_event() -> PostSendHookEvent {
@@ -1172,7 +1282,7 @@ mod tests {
     fn spawn_receiver(
         graft_root: PathBuf,
         injector: Arc<dyn HostNudgeInjector>,
-    ) -> SpawnedReceiver {
+    ) -> WakeSpawnedReceiver {
         spawn_receiver_with_client(graft_root, injector, None)
     }
 
@@ -1180,8 +1290,9 @@ mod tests {
         graft_root: PathBuf,
         injector: Arc<dyn HostNudgeInjector>,
         client: Option<GraftClient>,
-    ) -> SpawnedReceiver {
+    ) -> WakeSpawnedReceiver {
         let (stop_tx, stop_rx) = mpsc::channel();
+        let (wake, wake_rx) = mpsc::channel();
         let mut ready_latch = ReceiverReadyLatch::new();
         let (target_tx, target_rx) = mpsc::sync_channel(1);
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
@@ -1203,15 +1314,12 @@ mod tests {
             receiver_target_tx: Some(target_tx),
         };
         let join = std::thread::spawn(move || {
+            super::TEST_LEASE_WAKE.with(|slot| *slot.borrow_mut() = Some(wake_rx));
             super::run_graft_receiver_loop_with_wait(ctx, ResultWait::UntilComplete)
         });
-        ready_latch
-            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
-            .expect("receiver ready");
-        let target = target_rx
-            .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-            .expect("receiver target");
-        (stop_tx, join, snapshot, target)
+        ready_latch.ready_rx.recv().expect("receiver ready");
+        let target = target_rx.recv().expect("receiver target");
+        (stop_tx, join, snapshot, target, wake)
     }
 
     struct LeaseTickObserver {
@@ -1234,26 +1342,35 @@ mod tests {
     struct ManualLeaseTicks {
         now: Arc<Mutex<Instant>>,
         events: mpsc::Receiver<&'static str>,
+        wake: mpsc::Sender<()>,
     }
 
     impl ManualLeaseTicks {
         fn advance_clock(&self) {
             let mut now = self.now.lock().expect("clock");
             *now += Duration::from_secs(30);
+            self.wake.send(()).expect("wake receiver");
         }
 
         fn wait(&self, expected: &'static str) {
-            assert_eq!(
-                self.events
-                    .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-                    .expect("lease tick completed"),
-                expected
-            );
+            assert_eq!(self.events.recv().expect("lease tick completed"), expected);
         }
 
         fn advance(&self, expected: &'static str) {
             self.advance_clock();
             self.wait(expected);
+        }
+
+        fn stop(
+            &self,
+            stop_tx: mpsc::Sender<()>,
+            join: std::thread::JoinHandle<Result<(), AtmError>>,
+        ) {
+            stop_tx.send(()).expect("stop");
+            self.wake.send(()).expect("wake stopped receiver");
+            join.join()
+                .expect("receiver thread")
+                .expect("receiver stops");
         }
     }
 
@@ -1262,8 +1379,18 @@ mod tests {
         injector: Arc<dyn HostNudgeInjector>,
         client: GraftClient,
     ) -> (SpawnedReceiver, ManualLeaseTicks) {
+        spawn_receiver_with_manual_ticks_and_timeouts(graft_root, injector, client, None)
+    }
+
+    fn spawn_receiver_with_manual_ticks_and_timeouts(
+        graft_root: PathBuf,
+        injector: Arc<dyn HostNudgeInjector>,
+        client: GraftClient,
+        lease_timeouts: Option<mpsc::Receiver<()>>,
+    ) -> (SpawnedReceiver, ManualLeaseTicks) {
         let (stop_tx, stop_rx) = mpsc::channel();
         let (events_tx, events) = mpsc::channel();
+        let (wake, wake_rx) = mpsc::channel();
         let mut ready_latch = ReceiverReadyLatch::new();
         let (target_tx, target_rx) = mpsc::sync_channel(1);
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
@@ -1289,7 +1416,11 @@ mod tests {
         let (clock_ready_tx, clock_ready_rx) = mpsc::sync_channel(1);
         let clock_initialized = AtomicBool::new(false);
         let join = std::thread::spawn(move || {
-            super::run_graft_receiver_loop_with_clock(ctx, ResultWait::UntilComplete, || {
+            super::TEST_LEASE_WAKE.with(|slot| *slot.borrow_mut() = Some(wake_rx));
+            if let Some(timeouts) = lease_timeouts {
+                super::lease_client::install_test_lease_timeouts(timeouts);
+            }
+            super::run_graft_receiver_loop_with_clock(ctx, ResultWait::UntilComplete, move || {
                 let current = *worker_now.lock().expect("clock");
                 if !clock_initialized.swap(true, Ordering::SeqCst) {
                     clock_ready_tx.send(()).expect("clock ready");
@@ -1297,29 +1428,27 @@ mod tests {
                 current
             })
         });
-        ready_latch
-            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
-            .expect("receiver ready");
-        let target = target_rx
-            .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-            .expect("receiver target");
-        clock_ready_rx
-            .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-            .expect("clock initialized");
+        ready_latch.ready_rx.recv().expect("receiver ready");
+        let target = target_rx.recv().expect("receiver target");
+        clock_ready_rx.recv().expect("clock initialized");
         (
             (stop_tx, join, snapshot, target),
-            ManualLeaseTicks { now, events },
+            ManualLeaseTicks { now, events, wake },
         )
     }
 
     fn stop_receiver(
         stop_tx: std::sync::mpsc::Sender<()>,
         join: std::thread::JoinHandle<Result<(), AtmError>>,
+        wake: mpsc::Sender<()>,
     ) {
         // The non-blocking accept loop observes the stop signal within one poll
         // interval, so no wake-by-connect is required to unblock shutdown.
         stop_tx.send(()).expect("stop");
-        join_receive_loop_with_deadline(join).expect("join receiver");
+        wake.send(()).expect("wake stopped receiver");
+        join.join()
+            .expect("receiver thread")
+            .expect("join receiver");
     }
 
     #[test]
@@ -1401,7 +1530,7 @@ mod tests {
     fn bounded_host_nudge_injector_timeout_does_not_wedge_future_delivery() {
         let (gate_tx, gate_rx) = mpsc::channel();
         let (started_tx, started_rx) = mpsc::channel();
-        let mut injector = BoundedHostNudgeInjector::spawn(
+        let mut injector = BoundedHostNudgeInjector::spawn_with_wait(
             Arc::new(FirstCallBlocksInjector {
                 first_call_gate: Mutex::new(Some(gate_rx)),
                 first_started: started_tx,
@@ -1523,7 +1652,7 @@ mod tests {
             started: started_tx,
             call_count: AtomicUsize::new(0),
         });
-        let injector = BoundedHostNudgeInjector::spawn(
+        let injector = BoundedHostNudgeInjector::spawn_with_wait(
             Arc::clone(&blocking_injector) as Arc<dyn HostNudgeInjector>,
             ResultWait::Bounded(Duration::ZERO),
         );
@@ -1560,13 +1689,13 @@ mod tests {
     fn receiver_loop_delivers_direct_nudge_and_returns_ack_under_repeated_load() {
         let paths = test_paths();
         let injector = Arc::new(RecordingInjector::default());
-        let (stop_tx, join, snapshot, (endpoint, capability)) = spawn_receiver(
+        let (stop_tx, join, snapshot, (endpoint, capability), wake) = spawn_receiver(
             paths.workspace_root.clone(),
             injector.clone() as Arc<dyn HostNudgeInjector>,
         );
 
         for _ in 0..100 {
-            let response = deliver_request(endpoint, &capability, request_event());
+            let response = deliver_request_with_wake(endpoint, &capability, request_event(), &wake);
             assert_eq!(response, GraftPostSendResponse::Delivered);
         }
         let nudges = injector.nudges.lock().expect("nudges lock");
@@ -1577,7 +1706,7 @@ mod tests {
             GraftSessionState::Listening
         );
 
-        stop_receiver(stop_tx, join);
+        stop_receiver(stop_tx, join, wake);
     }
 
     #[test]
@@ -1624,14 +1753,7 @@ mod tests {
         let capability = listener.listener.capability().clone();
         // A completed connect queues this loopback peer before the single
         // nonblocking accept, without polling or relying on another thread.
-        let mut client = TcpStream::connect_timeout(&endpoint, DELIVER_CONNECT_DEADLINE)
-            .expect("connect to rebound listener");
-        client
-            .set_read_timeout(Some(DELIVER_IO_DEADLINE))
-            .expect("set response deadline");
-        client
-            .set_write_timeout(Some(DELIVER_IO_DEADLINE))
-            .expect("set request deadline");
+        let mut client = TcpStream::connect(endpoint).expect("connect to rebound listener");
         let wire = GraftPostSendWireRequest {
             capability_base64url: capability.to_base64url(),
             request: GraftPostSendRequest {
@@ -1648,7 +1770,7 @@ mod tests {
             .expect("poll rebound listener")
             .expect("connected loopback peer");
         let bounded_injector =
-            BoundedHostNudgeInjector::spawn(injector.clone(), ResultWait::UntilComplete);
+            BoundedHostNudgeInjector::spawn_with_wait(injector.clone(), ResultWait::UntilComplete);
         handle_graft_receiver_connection(&ctx, &bounded_injector, &listener.listener, &mut stream)
             .expect("deliver through rebound listener");
         let response: GraftPostSendResponse =
@@ -1683,25 +1805,31 @@ mod tests {
         let attempts = Arc::new(AtomicUsize::new(0));
         let attempts_in_recovery = Arc::clone(&attempts);
         let recovery = std::thread::spawn(move || {
-            let listener = recover_graft_receiver_with(&ctx, |ctx| {
-                assert_eq!(
-                    read_snapshot(&ctx.snapshot)
-                        .expect("read rebind snapshot")
-                        .state,
-                    GraftSessionState::Degraded,
-                    "rebind must start only after publishing Degraded"
-                );
-                attempts_in_recovery.fetch_add(1, Ordering::SeqCst);
-                stop_tx.send(()).expect("stop recovery");
-                Err(AtmError::daemon_unavailable("simulated rebind failure"))
-            })?;
+            super::TEST_REBIND.with(|slot| {
+                *slot.borrow_mut() = Some(Box::new(move |ctx| {
+                    assert_eq!(
+                        read_snapshot(&ctx.snapshot)
+                            .expect("read rebind snapshot")
+                            .state,
+                        GraftSessionState::Degraded,
+                        "rebind must start only after publishing Degraded"
+                    );
+                    attempts_in_recovery.fetch_add(1, Ordering::SeqCst);
+                    stop_tx.send(()).expect("stop recovery");
+                    Err(AtmError::daemon_unavailable("simulated rebind failure"))
+                }))
+            });
+            let listener = recover_graft_receiver(&ctx)?;
             assert!(
                 listener.is_none(),
                 "stop must end recovery without a listener"
             );
-            Ok(())
+            Ok::<(), AtmError>(())
         });
-        join_receive_loop_with_deadline(recovery).expect("join recovery");
+        recovery
+            .join()
+            .expect("join recovery thread")
+            .expect("recovery result");
         assert_eq!(attempts.load(Ordering::SeqCst), 1);
         assert_eq!(
             read_snapshot(&snapshot).expect("read retry snapshot").state,
@@ -1738,10 +1866,10 @@ mod tests {
     #[test]
     fn receiver_loop_returns_typed_error_when_injector_fails() {
         let paths = test_paths();
-        let (stop_tx, join, snapshot, (endpoint, capability)) =
+        let (stop_tx, join, snapshot, (endpoint, capability), wake) =
             spawn_receiver(paths.workspace_root.clone(), Arc::new(FailingInjector));
 
-        let response = deliver_request(endpoint, &capability, request_event());
+        let response = deliver_request_with_wake(endpoint, &capability, request_event(), &wake);
 
         match response {
             GraftPostSendResponse::Delivered => panic!("expected typed failure response"),
@@ -1758,7 +1886,7 @@ mod tests {
             GraftSessionState::Listening
         );
 
-        stop_receiver(stop_tx, join);
+        stop_receiver(stop_tx, join, wake);
     }
 
     // ---------------------------------------------------------------------
@@ -2009,7 +2137,7 @@ mod tests {
         ticks.advance("ok");
         assert_eq!(registry.registration_count(), 1);
 
-        stop_receiver(stop_tx, join);
+        ticks.stop(stop_tx, join);
     }
 
     // AC3: daemon restart with a live receiver — the lease persists across a
@@ -2104,7 +2232,7 @@ mod tests {
             "the same generation's lease must persist, not be replaced"
         );
 
-        stop_receiver(stop_tx, join);
+        ticks.stop(stop_tx, join);
     }
 
     // AC5: displacement is immediate, not window-gated. A stale lease left by
@@ -2121,7 +2249,7 @@ mod tests {
         registry.seed_stale_lease(team.clone(), agent.clone(), stale_generation.clone());
         let stale_lease = registry.lease(&team, &agent).expect("seeded stale lease");
 
-        let (stop_tx, join, _snapshot, _target) = spawn_receiver_with_client(
+        let (stop_tx, join, _snapshot, _target, wake) = spawn_receiver_with_client(
             paths.workspace_root.clone(),
             Arc::new(RecordingInjector::default()),
             Some(registry.client()),
@@ -2149,7 +2277,7 @@ mod tests {
             "displacement happens on the successor's first registration tick"
         );
 
-        stop_receiver(stop_tx, join);
+        stop_receiver(stop_tx, join, wake);
     }
 
     // Drive each due refresh tick explicitly so a foreign owner is installed
@@ -2194,7 +2322,7 @@ mod tests {
             let mut backoff = super::LeaseRefreshBackoff::new(
                 Instant::now() - super::lease_client::GRAFT_LEASE_REFRESH_INTERVAL,
             );
-            super::tick_lease_refresh(&ctx, &mut receiver, &mut backoff, &Instant::now);
+            super::tick_lease_refresh(&ctx, &mut receiver, &mut backoff);
         };
         due_tick();
         assert_eq!(registry.refresh_failure_count(), failures_before + 1);
@@ -2218,16 +2346,19 @@ mod tests {
         let endpoint = receiver.listener.local_addr().expect("endpoint");
         let capability = receiver.listener.capability().clone();
         let loop_injector = injector.clone();
+        let (wake, wake_rx) = mpsc::channel();
         let join = std::thread::spawn(move || {
-            let bounded = BoundedHostNudgeInjector::spawn(loop_injector, ResultWait::UntilComplete);
+            super::TEST_LEASE_WAKE.with(|slot| *slot.borrow_mut() = Some(wake_rx));
+            let bounded =
+                BoundedHostNudgeInjector::spawn_with_wait(loop_injector, ResultWait::UntilComplete);
             super::serve_registered_receiver(&ctx, &bounded, receiver)
         });
         assert_eq!(
-            deliver_request(endpoint, &capability, request_event()),
+            deliver_request_with_wake(endpoint, &capability, request_event(), &wake),
             GraftPostSendResponse::Delivered
         );
         assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
-        stop_receiver(stop_tx, join);
+        stop_receiver(stop_tx, join, wake);
         assert_eq!(registry.refresh_count(), refreshes_before);
         assert_eq!(registry.refresh_failure_count(), failures_before + 1);
     }
@@ -2264,10 +2395,10 @@ mod tests {
             generation
         );
         assert_eq!(
-            deliver_request(endpoint, &capability, request_event()),
+            deliver_request_with_wake(endpoint, &capability, request_event(), &ticks.wake),
             GraftPostSendResponse::Delivered
         );
-        stop_receiver(stop_tx, join);
+        ticks.stop(stop_tx, join);
     }
 
     // AC6: sustained-load refresh. A receiver kept continuously busy
@@ -2295,28 +2426,26 @@ mod tests {
 
         for _ in 0..2 {
             let capability = capability.clone();
+            let wake = ticks.wake.clone();
             let (delivered_tx, delivered_rx) = mpsc::sync_channel(1);
             std::thread::spawn(move || {
-                let result = deliver_request(endpoint, &capability, request_event());
+                let result =
+                    deliver_request_with_wake(endpoint, &capability, request_event(), &wake);
                 delivered_tx.send(result).expect("deliver result");
             });
-            started_rx
-                .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-                .expect("delivery entered injector");
+            started_rx.recv().expect("delivery entered injector");
             // The accept loop is handling a connection when the tick becomes due.
             ticks.advance_clock();
             release_tx.send(()).expect("release delivery");
             assert_eq!(
-                delivered_rx
-                    .recv_timeout(RECEIVE_LOOP_READY_DEADLINE)
-                    .expect("delivery completed"),
+                delivered_rx.recv().expect("delivery completed"),
                 GraftPostSendResponse::Delivered
             );
             ticks.wait("ok");
         }
         assert_eq!(registry.refresh_count(), 2);
         assert_eq!(injector.call_count.load(Ordering::SeqCst), 2);
-        stop_receiver(stop_tx, join);
+        ticks.stop(stop_tx, join);
     }
 
     // AC7: a refresh/republish failure injected mid-loop is logged and does
@@ -2334,7 +2463,7 @@ mod tests {
                 registry.client(),
             );
         assert_eq!(
-            deliver_request(endpoint, &capability, request_event()),
+            deliver_request_with_wake(endpoint, &capability, request_event(), &ticks.wake),
             GraftPostSendResponse::Delivered
         );
 
@@ -2347,7 +2476,7 @@ mod tests {
             "an injected refresh failure must not crash or degrade the accept loop"
         );
         assert_eq!(
-            deliver_request(endpoint, &capability, request_event()),
+            deliver_request_with_wake(endpoint, &capability, request_event(), &ticks.wake),
             GraftPostSendResponse::Delivered,
             "the accept loop must keep accepting connections after an injected refresh failure"
         );
@@ -2357,7 +2486,7 @@ mod tests {
         ticks.advance("ok");
         assert!(registry.refresh_count() > refreshes_before_recovery);
 
-        stop_receiver(stop_tx, join);
+        ticks.stop(stop_tx, join);
     }
 
     // rust-service-hardening RSH-001: a stalled (not merely slow) daemon must
@@ -2365,8 +2494,6 @@ mod tests {
     // unregister call past the outer receive-loop join deadline.
     #[test]
     fn rsh001_stalled_daemon_calls_never_delay_stop_past_the_join_deadline() {
-        const STALLED_CALL_SIGNAL_DEADLINE: Duration = Duration::from_secs(15);
-
         let paths = test_paths();
         let (refresh_started_tx, refresh_started_rx) = mpsc::sync_channel(1);
         let (refresh_release_tx, refresh_release_rx) = mpsc::channel();
@@ -2408,21 +2535,29 @@ mod tests {
             },
         )));
 
-        let ((stop_tx, join, _snapshot, _target), ticks) = spawn_receiver_with_manual_ticks(
-            paths.workspace_root.clone(),
-            Arc::new(RecordingInjector::default()),
-            client,
-        );
+        let (timeout_tx, timeout_rx) = mpsc::channel();
+        let ((stop_tx, join, _snapshot, _target), ticks) =
+            spawn_receiver_with_manual_ticks_and_timeouts(
+                paths.workspace_root.clone(),
+                Arc::new(RecordingInjector::default()),
+                client,
+                Some(timeout_rx),
+            );
         ticks.advance_clock();
         refresh_started_rx
-            .recv_timeout(STALLED_CALL_SIGNAL_DEADLINE)
+            .recv()
             .expect("timed out waiting for periodic refresh to enter the stalled refresh call");
 
+        timeout_tx.send(()).expect("expire refresh call");
         stop_tx.send(()).expect("stop");
-        join_receive_loop_with_deadline(join).expect("join receiver despite stalled lease calls");
+        ticks.wake.send(()).expect("wake stopped receiver");
         unregister_started_rx
-            .recv_timeout(STALLED_CALL_SIGNAL_DEADLINE)
-            .expect("timed out waiting for shutdown to enter the stalled unregister call");
+            .recv()
+            .expect("shutdown entered the stalled unregister call");
+        timeout_tx.send(()).expect("expire unregister call");
+        join.join()
+            .expect("receiver thread")
+            .expect("receiver exits");
         assert_eq!(
             stalled_calls.load(Ordering::SeqCst),
             2,

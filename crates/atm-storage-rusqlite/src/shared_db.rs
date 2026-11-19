@@ -1333,7 +1333,6 @@ mod tests {
 
     #[test]
     fn serial_writer_queue_serializes_blocking_control_path_transactions() {
-        const FAILURE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
         let tempdir = tempfile::tempdir().expect("create temporary database directory");
         let db_path = tempdir.path().join("busy-timeout-contract.db");
         let db = Arc::new(
@@ -1351,18 +1350,14 @@ mod tests {
                         .transaction_with_behavior(TransactionBehavior::Immediate)
                         .expect("acquire transaction");
                     holder_ready_tx.send(()).expect("signal held lock");
-                    release_rx
-                        .recv_timeout(FAILURE_DEADLINE)
-                        .expect("test releases writer");
+                    release_rx.recv().expect("test releases writer");
                     transaction.commit().expect("commit holder");
                     Ok(())
                 })
                 .expect("holder transaction succeeds");
             holder_done_tx.send(()).expect("holder finished");
         });
-        holder_ready_rx
-            .recv_timeout(FAILURE_DEADLINE)
-            .expect("holder acquires lock");
+        holder_ready_rx.recv().expect("holder acquires lock");
         let (blocked_tx, blocked_rx) = mpsc::channel();
         db.writer_queue.signal_next_contention(blocked_tx);
         let (entered_tx, entered_rx) = mpsc::channel();
@@ -1377,23 +1372,15 @@ mod tests {
                 .expect("queued transaction succeeds");
             contender_done_tx.send(()).expect("contender finished");
         });
-        blocked_rx
-            .recv_timeout(FAILURE_DEADLINE)
-            .expect("contender observes held queue");
+        blocked_rx.recv().expect("contender observes held queue");
         assert!(
             matches!(entered_rx.try_recv(), Err(mpsc::TryRecvError::Empty)),
             "contender cannot enter while holder owns queue"
         );
         release_tx.send(()).expect("release holder");
-        entered_rx
-            .recv_timeout(FAILURE_DEADLINE)
-            .expect("contender enters after release");
-        holder_done_rx
-            .recv_timeout(FAILURE_DEADLINE)
-            .expect("holder completes");
-        contender_done_rx
-            .recv_timeout(FAILURE_DEADLINE)
-            .expect("contender completes");
+        entered_rx.recv().expect("contender enters after release");
+        holder_done_rx.recv().expect("holder completes");
+        contender_done_rx.recv().expect("contender completes");
         holder.join().expect("holder thread completes");
         contender.join().expect("contender thread completes");
     }

@@ -21,7 +21,15 @@ use tokio::net::TcpStream;
 use tokio::time::Instant;
 
 #[cfg(test)]
-fn test_remaining(deadline: RequestDeadline) -> Option<Duration> {
+tokio::task_local! { pub(crate) static SCRIPTED_PEER_DIAL: (); }
+
+#[cfg(test)]
+pub(crate) fn test_after(duration: Duration) -> RequestDeadline {
+    RequestDeadline::after_at(Instant::now().into_std(), duration)
+}
+
+#[cfg(test)]
+pub(crate) fn test_remaining(deadline: RequestDeadline) -> Option<Duration> {
     let millis = deadline.remaining_ms_at(Instant::now().into_std());
     (millis != 0).then(|| Duration::from_millis(millis))
 }
@@ -141,11 +149,15 @@ where
     let total = usable.len();
     let mut failures = Vec::with_capacity(total);
     for (index, address) in usable.into_iter().enumerate() {
-        #[cfg(test)]
-        let remaining = test_remaining(deadline);
         #[cfg(not(test))]
-        let remaining = deadline.remaining();
-        let Some(remaining) = remaining else {
+        let Some(remaining) = deadline.remaining() else {
+            failures.push(format!(
+                "{address}: request budget elapsed before the attempt"
+            ));
+            break;
+        };
+        #[cfg(test)]
+        let Some(remaining) = test_remaining(deadline) else {
             failures.push(format!(
                 "{address}: request budget elapsed before the attempt"
             ));
@@ -309,10 +321,11 @@ impl PeerAddressCache {
         }
 
         #[cfg(not(test))]
-        let remaining = deadline.remaining();
+        let remaining = deadline
+            .remaining()
+            .ok_or_else(|| "request budget elapsed before the peer name was resolved".to_owned())?;
         #[cfg(test)]
-        let remaining = test_remaining(deadline);
-        let remaining = remaining
+        let remaining = test_remaining(deadline)
             .ok_or_else(|| "request budget elapsed before the peer name was resolved".to_owned())?;
         let resolved = tokio::time::timeout(remaining, resolve(peer.clone(), port))
             .await

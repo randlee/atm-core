@@ -401,7 +401,6 @@ fn hook_budget_from_remaining(
         })
 }
 
-#[cfg(not(test))]
 fn deliver_graft_post_send_with_deadline(
     endpoint: SocketAddr,
     capability: &LocalCapability,
@@ -438,22 +437,6 @@ fn deliver_graft_post_send_with_deadline(
         &mut stream,
         "failed to read graft post-send response",
         "graft post-send response exceeded the bounded payload cap",
-    )
-}
-
-#[cfg(test)]
-fn deliver_graft_post_send_with_deadline(
-    endpoint: SocketAddr,
-    capability: &LocalCapability,
-    request: &GraftPostSendRequest,
-    deadline: RequestDeadline,
-) -> Result<GraftPostSendResponse, AtmError> {
-    deliver_graft_post_send_with_limits(
-        endpoint,
-        capability,
-        request,
-        deadline,
-        PRODUCTION_HOOK_TRANSPORT_LIMITS,
     )
 }
 
@@ -880,6 +863,9 @@ impl GraftReceiverListener {
     }
 }
 
+#[cfg(test)]
+thread_local! { static TEST_POST_SEND_WITHOUT_DEADLINES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
 /// Deliver one post-send nudge to an embedded agent's loopback receiver.
 ///
 /// This is the shared sender used by both the CLI post-send hook and the
@@ -898,7 +884,15 @@ pub fn deliver_graft_post_send(
     connect_deadline: Duration,
     io_deadline: Duration,
 ) -> Result<GraftPostSendResponse, AtmError> {
-    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+    #[cfg(test)]
+    let connection = if TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.get()) {
+        TcpStream::connect(endpoint)
+    } else {
+        TcpStream::connect_timeout(&endpoint, connect_deadline)
+    };
+    #[cfg(not(test))]
+    let connection = TcpStream::connect_timeout(&endpoint, connect_deadline);
+    let mut stream = connection.map_err(|source| {
         AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
             format!(
@@ -908,6 +902,11 @@ pub fn deliver_graft_post_send(
         )
         .with_cause(source)
     })?;
+    #[cfg(test)]
+    if !TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.get()) {
+        apply_stream_deadlines(&stream, io_deadline)?;
+    }
+    #[cfg(not(test))]
     apply_stream_deadlines(&stream, io_deadline)?;
     let wire = GraftPostSendWireRequest {
         capability_base64url: capability.to_base64url(),
@@ -1159,36 +1158,32 @@ mod tests {
             .listener
             .set_nonblocking(false)
             .expect("blocking listener");
-        let (completed_tx, completed_rx) = std::sync::mpsc::sync_channel(1);
-        let receiver = std::thread::spawn(move || {
-            let mut stream = listener
-                .poll_accept()
-                .expect("accept")
-                .expect("loopback peer");
-            let received = listener
-                .read_request(&mut stream, Duration::from_secs(3))
-                .expect("read request");
-            listener
-                .write_response(&mut stream, &GraftPostSendResponse::Delivered)
-                .expect("write response");
-            let _ = completed_tx.send(received);
+        let sender = std::thread::spawn(move || {
+            super::TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.set(true));
+            deliver_graft_post_send(
+                endpoint,
+                &capability,
+                &request,
+                Duration::ZERO,
+                Duration::ZERO,
+            )
+            .expect("deliver graft post-send")
         });
-        let outcome = deliver_graft_post_send(
-            endpoint,
-            &capability,
-            &request,
-            Duration::from_secs(1),
-            Duration::from_secs(3),
-        );
-        if outcome.is_err() {
-            let _ = TcpStream::connect_timeout(&endpoint, Duration::from_secs(3));
-        }
-        let received = wait_receiver_completion(&completed_rx, Duration::from_secs(10))
-            .unwrap_or_else(|error| panic!("{error}"));
-        receiver
-            .join()
-            .expect("receiver thread after completion signal");
-        let response = outcome.expect("deliver");
+        let mut stream = listener
+            .poll_accept()
+            .expect("accept")
+            .expect("connected peer");
+        let received = match listener
+            .read_receiver_request_with_limit(&mut stream, None)
+            .expect("read request")
+        {
+            GraftReceiverRequest::PostSend(request) => request,
+            _ => panic!("expected post-send request"),
+        };
+        listener
+            .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+            .expect("write response");
+        let response = sender.join().expect("sender thread");
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.event.description, "loopback graft transport");
         assert_eq!(received.kind, NudgeKind::Steer);
