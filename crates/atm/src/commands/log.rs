@@ -424,11 +424,16 @@ impl TailArgs {
     async fn run(self, observability: &CliObservability) -> Result<()> {
         let mut session = observability.follow(self.query.build_query(LogMode::Tail)?)?;
         let interval = follow_interval(Duration::from_millis(self.poll_interval_ms));
+        let stdout = std::io::stdout();
         follow_loop(
             || session.poll().map_err(anyhow::Error::from),
             interval,
             |snapshot| {
-                output::print_log_records(snapshot.records, self.query.json)?;
+                output::print_log_records(
+                    &mut stdout.lock(),
+                    snapshot.records.iter(),
+                    self.query.json,
+                )?;
                 Ok(true)
             },
             async {
@@ -654,19 +659,58 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn follow_loop_stops_when_output_closes() {
         let polls = AtomicUsize::new(0);
-        follow_loop(
+        let mut writer = BrokenPipeWriter;
+        let error = follow_loop(
             || {
                 polls.fetch_add(1, Ordering::SeqCst);
-                Ok(())
+                Ok(AtmLogSnapshot {
+                    records: vec![follow_record()],
+                    truncated: false,
+                })
             },
             follow_interval(Duration::from_secs(1)),
-            |_| Ok(false),
+            |snapshot| {
+                crate::output::print_log_records(&mut writer, snapshot.records.iter(), false)?;
+                Ok(true)
+            },
             std::future::pending(),
         )
         .await
-        .expect("closed output ends follow mode");
+        .expect_err("broken pipe ends follow mode");
 
         assert_eq!(polls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            error
+                .downcast_ref::<std::io::Error>()
+                .map(std::io::Error::kind),
+            Some(std::io::ErrorKind::BrokenPipe)
+        );
+    }
+
+    struct BrokenPipeWriter;
+
+    impl std::io::Write for BrokenPipeWriter {
+        fn write(&mut self, _buffer: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe))
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn follow_record() -> atm_core::observability::AtmLogRecord {
+        AtmLogRecord {
+            timestamp: chrono::DateTime::from_timestamp_millis(0)
+                .expect("fixture timestamp")
+                .into(),
+            level: LogLevelFilter::Info,
+            service: atm_core::observability::service_name("atm").expect("fixture service"),
+            target: Some("cli.command".to_owned()),
+            action: Some("tail".to_owned()),
+            message: Some("fixture record".to_owned()),
+            fields: Default::default(),
+        }
     }
 
     #[tokio::test(start_paused = true)]

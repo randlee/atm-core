@@ -263,24 +263,52 @@ pub fn print_log_snapshot(snapshot: &AtmLogSnapshot, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    for record in &snapshot.records {
-        print_log_record_line(record);
+    let stdout = std::io::stdout();
+    print_log_records(&mut stdout.lock(), &snapshot.records, false)
+}
+
+/// Print one stream of retained log records in human-readable or JSON form.
+pub(crate) fn print_log_records<'a>(
+    writer: &mut impl std::io::Write,
+    records: impl IntoIterator<Item = &'a AtmLogRecord>,
+    json: bool,
+) -> Result<()> {
+    for record in records {
+        if json {
+            writeln!(writer, "{}", serde_json::to_string(record)?)?;
+        } else {
+            write_log_record_line(writer, record)?;
+        }
     }
 
     Ok(())
 }
 
-/// Print one stream of retained log records in human-readable or JSON form.
-pub fn print_log_records<I>(records: I, json: bool) -> Result<()>
-where
-    I: IntoIterator<Item = AtmLogRecord>,
-{
-    for record in records {
-        if json {
-            println!("{}", serde_json::to_string(&record)?);
-        } else {
-            print_log_record_line(&record);
-        }
+fn write_log_record_line(
+    writer: &mut impl std::io::Write,
+    record: &AtmLogRecord,
+) -> std::io::Result<()> {
+    let target = record.target.as_deref().unwrap_or("-");
+    let action = record.action.as_deref().unwrap_or("-");
+    let message = record.message.as_deref().unwrap_or("");
+
+    writeln!(
+        writer,
+        "{} {:?} {} {} {}",
+        record.timestamp.into_inner().to_rfc3339(),
+        record.level,
+        record.service,
+        target,
+        action
+    )?;
+
+    if !message.is_empty() {
+        writeln!(writer, "  {message}")?;
+    }
+
+    if !record.fields.is_empty() {
+        let fields = serde_json::to_string(&record.fields).unwrap_or_else(|_| "{}".to_owned());
+        writeln!(writer, "  fields: {fields}")?;
     }
 
     Ok(())
@@ -947,32 +975,6 @@ fn empty_dash(value: &str) -> &str {
 
 fn empty_dash_opt(value: Option<&str>) -> &str {
     value.filter(|value| !value.is_empty()).unwrap_or("-")
-}
-
-fn print_log_record_line(record: &AtmLogRecord) {
-    let target = record.target.as_deref().unwrap_or("-");
-    let action = record.action.as_deref().unwrap_or("-");
-    let message = record.message.as_deref().unwrap_or("");
-
-    println!(
-        "{} {:?} {} {} {}",
-        record.timestamp.into_inner().to_rfc3339(),
-        record.level,
-        record.service,
-        target,
-        action
-    );
-
-    if !message.is_empty() {
-        println!("  {message}");
-    }
-
-    if !record.fields.is_empty() {
-        println!(
-            "  fields: {}",
-            serde_json::to_string(&record.fields).unwrap_or_else(|_| "{}".to_string())
-        );
-    }
 }
 
 fn render_doctor_state(
