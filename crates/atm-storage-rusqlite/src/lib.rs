@@ -4828,11 +4828,10 @@ mod tests {
             barrier.wait();
             right_store.save_roster(&right)
         });
-        let results = [
+        [
             left_handle.join().expect("left writer"),
             right_handle.join().expect("right writer"),
-        ];
-        results
+        ]
     }
 
     #[test]

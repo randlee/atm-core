@@ -322,6 +322,8 @@ struct ManualReaderClock {
     now: Mutex<Instant>,
     changed: std::sync::Condvar,
     registered_waits: AtomicUsize,
+    expired_jobs: AtomicUsize,
+    completed_jobs: AtomicUsize,
 }
 
 #[cfg(test)]
@@ -331,6 +333,8 @@ impl ManualReaderClock {
             now: Mutex::new(Instant::now()),
             changed: std::sync::Condvar::new(),
             registered_waits: AtomicUsize::new(0),
+            expired_jobs: AtomicUsize::new(0),
+            completed_jobs: AtomicUsize::new(0),
         }
     }
 
@@ -356,6 +360,42 @@ impl ManualReaderClock {
             .wait_while(now, |_| {
                 self.registered_waits.load(Ordering::SeqCst) < count
             })
+            .expect("manual reader clock");
+    }
+
+    fn mark_expired(&self) {
+        let _guard = self.now.lock().expect("manual reader clock");
+        self.expired_jobs.fetch_add(1, Ordering::SeqCst);
+        self.changed.notify_all();
+    }
+
+    fn wait_for_expired(&self) {
+        let now = self.now.lock().expect("manual reader clock");
+        let _guard = self
+            .changed
+            .wait_while(now, |_| self.expired_jobs.load(Ordering::SeqCst) == 0)
+            .expect("manual reader clock");
+    }
+
+    fn wait_until(&self, target: Instant) {
+        let now = self.now.lock().expect("manual reader clock");
+        let _guard = self
+            .changed
+            .wait_while(now, |now| *now < target)
+            .expect("manual reader clock");
+    }
+
+    fn mark_completed(&self) {
+        let _guard = self.now.lock().expect("manual reader clock");
+        self.completed_jobs.fetch_add(1, Ordering::SeqCst);
+        self.changed.notify_all();
+    }
+
+    fn wait_for_completed(&self) {
+        let now = self.now.lock().expect("manual reader clock");
+        let _guard = self
+            .changed
+            .wait_while(now, |_| self.completed_jobs.load(Ordering::SeqCst) == 0)
             .expect("manual reader clock");
     }
 
@@ -456,6 +496,11 @@ struct Request {
 enum WorkerMessage {
     Request(Request),
     Shutdown,
+    #[cfg(test)]
+    InstallProgress(
+        Box<dyn FnMut() -> bool + Send>,
+        tokio::sync::oneshot::Sender<()>,
+    ),
 }
 
 type ReaderJob = dyn FnOnce(&Connection, &SharedDbTarget, RequestDisposition) + Send;
@@ -559,8 +604,18 @@ impl ReaderPool {
         T: Send + 'static,
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
+        #[cfg(test)]
+        let expires_at = self
+            .test_now()
+            .checked_add(deadline)
+            .ok_or_else(|| deadline_expired("computing reader deadline", deadline))?;
+        #[cfg(not(test))]
         let expires_at = deadline_at(deadline)?;
-        let remaining = expires_at.saturating_duration_since(Instant::now());
+        #[cfg(test)]
+        let now = self.test_now();
+        #[cfg(not(test))]
+        let now = Instant::now();
+        let remaining = expires_at.saturating_duration_since(now);
         let permit = tokio::time::timeout(
             remaining,
             Arc::clone(&self.inner.tool_class_slots).acquire_owned(),
@@ -584,7 +639,14 @@ impl ReaderPool {
         T: Send + 'static,
         F: FnOnce(&Connection, &SharedDbTarget) -> Result<T, ReadLaneError> + Send + 'static,
     {
-        self.submit_with_class_at(deadline_at(deadline)?, deadline, tool_class_slot, operation)
+        #[cfg(test)]
+        let expires_at = self
+            .test_now()
+            .checked_add(deadline)
+            .ok_or_else(|| deadline_expired("computing reader deadline", deadline))?;
+        #[cfg(not(test))]
+        let expires_at = deadline_at(deadline)?;
+        self.submit_with_class_at(expires_at, deadline, tool_class_slot, operation)
             .await
     }
 
@@ -604,6 +666,9 @@ impl ReaderPool {
         let (reply, response) = tokio::sync::oneshot::channel();
         let request = Request {
             id: request_id,
+            #[cfg(test)]
+            queued_at: self.test_now(),
+            #[cfg(not(test))]
             queued_at: Instant::now(),
             deadline: expires_at,
             _tool_class_slot: tool_class_slot,
@@ -622,7 +687,11 @@ impl ReaderPool {
             .metrics
             .queue_depth
             .fetch_add(1, Ordering::Relaxed);
-        let remaining = expires_at.saturating_duration_since(Instant::now());
+        #[cfg(test)]
+        let now = self.test_now();
+        #[cfg(not(test))]
+        let now = Instant::now();
+        let remaining = expires_at.saturating_duration_since(now);
         match tokio::time::timeout(
             remaining,
             reservation.sender.send(WorkerMessage::Request(request)),
@@ -651,7 +720,11 @@ impl ReaderPool {
             }
             Ok(Ok(())) => {}
         }
-        let remaining = expires_at.saturating_duration_since(Instant::now());
+        #[cfg(test)]
+        let now = self.test_now();
+        #[cfg(not(test))]
+        let now = Instant::now();
+        let remaining = expires_at.saturating_duration_since(now);
         match tokio::time::timeout(remaining, response).await {
             Err(_) => Err(self.expire_waiting_request(reservation, request_id, deadline)),
             Ok(Err(_)) => Err(ReadLaneError::Unavailable {
@@ -827,6 +900,10 @@ impl ReaderPool {
                 Err(tokio::sync::mpsc::error::TrySendError::Full(WorkerMessage::Shutdown)) => {
                     unreachable!("reader submissions never send a shutdown message")
                 }
+                #[cfg(test)]
+                Err(tokio::sync::mpsc::error::TrySendError::Full(
+                    WorkerMessage::InstallProgress(..),
+                )) => unreachable!("reader submissions never install progress handlers"),
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                     metrics.queue_depth.fetch_sub(1, Ordering::Relaxed);
                     return Err(ReadLaneError::Unavailable {
@@ -844,9 +921,26 @@ impl ReaderPool {
     fn schedule_quarantine(&self, reservation: WorkerReservation, request_id: RequestId) {
         let grace = self.inner.config.interrupt_grace;
         let pool = Arc::clone(&self.inner);
+        #[cfg(test)]
+        let manual_wait = self
+            .inner
+            .manual_clock
+            .lock()
+            .expect("reader clock hook")
+            .clone()
+            .map(|clock| {
+                let target = clock.now() + grace;
+                (clock, target)
+            });
         thread::spawn(move || {
             // A watchdog is exceptional cleanup, not a Tokio request task.
             // Park gives the thread no runnable work during its grace delay.
+            #[cfg(test)]
+            match manual_wait {
+                Some((clock, target)) => clock.wait_until(target),
+                None => thread::park_timeout(grace),
+            }
+            #[cfg(not(test))]
             thread::park_timeout(grace);
             if !pool.shutting_down.load(Ordering::Acquire)
                 && reservation.state.active.load(Ordering::Acquire)
@@ -1217,9 +1311,20 @@ fn run_worker(
     state: Arc<WorkerState>,
     metrics: Arc<ReaderLaneMetrics>,
 ) -> bool {
+    #[cfg(test)]
+    let mut connection = connection;
     while let Some(message) = receiver.blocking_recv() {
-        let WorkerMessage::Request(request) = message else {
-            return false;
+        let request = match message {
+            WorkerMessage::Request(request) => request,
+            WorkerMessage::Shutdown => return false,
+            #[cfg(test)]
+            WorkerMessage::InstallProgress(callback, ready) => {
+                connection
+                    .progress_handler(1, Some(callback))
+                    .expect("install progress handler");
+                let _ = ready.send(());
+                continue;
+            }
         };
         #[cfg(not(test))]
         let now = Instant::now();
@@ -1258,6 +1363,15 @@ fn run_worker(
                 target.as_ref(),
                 RequestDisposition::ExpiredInQueue,
             );
+            #[cfg(test)]
+            if let Some(clock) = state
+                .manual_clock
+                .lock()
+                .expect("reader clock hook")
+                .as_ref()
+            {
+                clock.mark_expired();
+            }
             continue;
         }
         request.id.activate(&state.active_request);
@@ -1272,6 +1386,15 @@ fn run_worker(
         metrics.in_flight.fetch_sub(1, Ordering::Relaxed);
         state.active.store(false, Ordering::Release);
         RequestId::clear(&state.active_request);
+        #[cfg(test)]
+        if let Some(clock) = state
+            .manual_clock
+            .lock()
+            .expect("reader clock hook")
+            .as_ref()
+        {
+            clock.mark_completed();
+        }
         if WorkerStatus::load(&state.status) == WorkerStatus::Quarantined {
             return true;
         }
@@ -1524,102 +1647,121 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn two_reader_workers_execute_independent_queries_in_parallel() {
-        let pool = test_pool(test_config(2, 2, Duration::from_millis(250), 2));
-        let (left_arrived_tx, left_arrived_rx) = mpsc::sync_channel(1);
-        let (right_arrived_tx, right_arrived_rx) = mpsc::sync_channel(1);
-        let (left, right) = tokio::join!(
-            pool.submit(Duration::from_secs(10), move |_, _| {
-                let _ = left_arrived_tx.send(());
-                Ok::<_, atm_storage::ReadLaneError>((
-                    "left",
-                    right_arrived_rx
-                        .recv_timeout(Duration::from_secs(5))
-                        .is_ok(),
-                ))
-            }),
-            pool.submit(Duration::from_secs(10), move |_, _| {
-                let _ = right_arrived_tx.send(());
-                Ok::<_, atm_storage::ReadLaneError>((
-                    "right",
-                    left_arrived_rx.recv_timeout(Duration::from_secs(5)).is_ok(),
-                ))
+    #[test]
+    fn two_reader_workers_execute_independent_queries_in_parallel() {
+        let pool = Arc::new(test_pool(test_config(2, 2, Duration::from_millis(250), 2)));
+        pool.use_manual_clock(Arc::new(ManualReaderClock::new()));
+        let (left_tx, left_rx) = mpsc::sync_channel(1);
+        let (right_tx, right_rx) = mpsc::sync_channel(1);
+        let left_pool = Arc::clone(&pool);
+        let left = std::thread::spawn(move || {
+            left_pool.submit_blocking(Duration::from_secs(10), move |_, _| {
+                left_tx.send(()).unwrap();
+                right_rx.recv().unwrap();
+                Ok::<_, atm_storage::ReadLaneError>("left")
             })
-        );
-        let (left_name, left_observed_right) = left.expect("left query");
-        let (right_name, right_observed_left) = right.expect("right query");
-        assert_eq!(left_name, "left");
-        assert_eq!(right_name, "right");
-        assert!(
-            left_observed_right && right_observed_left,
-            "two worker pool must keep both independent reads in flight simultaneously"
-        );
+        });
+        let right_pool = Arc::clone(&pool);
+        let right = std::thread::spawn(move || {
+            right_pool.submit_blocking(Duration::from_secs(10), move |_, _| {
+                right_tx.send(()).unwrap();
+                left_rx.recv().unwrap();
+                Ok::<_, atm_storage::ReadLaneError>("right")
+            })
+        });
+        assert_eq!(left.join().unwrap().unwrap(), "left");
+        assert_eq!(right.join().unwrap().unwrap(), "right");
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn tool_reads_are_capped_below_shared_pool_capacity() {
         let pool = Arc::new(test_pool(test_config(2, 2, Duration::from_millis(50), 2)));
+        let clock = Arc::new(ManualReaderClock::new());
+        pool.use_manual_clock(Arc::clone(&clock));
+        let (clock_release, clock_hold) = tokio::sync::oneshot::channel::<()>();
+        let clock_task = tokio::task::spawn_blocking(move || {
+            let _ = clock_hold.blocking_recv();
+        });
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let tool_task = {
-            let pool = Arc::clone(&pool);
-            tokio::spawn(async move {
-                pool.submit_tool(Duration::from_secs(1), move |_, _| {
-                    let _ = started_tx.send(());
-                    std::thread::park_timeout(Duration::from_millis(80));
+        let (release_tx, release_rx) = mpsc::sync_channel::<()>(1);
+        let tool_pool = Arc::clone(&pool);
+        let tool_task = tokio::spawn(async move {
+            tool_pool
+                .submit_tool(Duration::from_secs(10), move |_, _| {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
                     Ok::<_, atm_storage::ReadLaneError>(())
                 })
                 .await
-            })
-        };
-        started_rx.await.expect("tool read started");
-        let capped = pool
-            .submit_tool(Duration::from_millis(10), |_, _| {
-                Ok::<_, atm_storage::ReadLaneError>(())
-            })
-            .await
-            .expect_err("second tool read must respect the sub-cap");
+        });
+        started_rx.await.unwrap();
+        let capped = pool.submit_tool(Duration::from_millis(10), |_, _| {
+            Ok::<_, atm_storage::ReadLaneError>(())
+        });
+        let mut capped = std::pin::pin!(capped);
+        {
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            assert!(std::future::Future::poll(capped.as_mut(), &mut cx).is_pending());
+        }
+        clock.advance(Duration::from_millis(10));
+        tokio::time::advance(Duration::from_millis(10)).await;
         assert_eq!(
-            capped,
+            capped.await.unwrap_err(),
             atm_storage::ReadLaneError::DeadlineExpired {
                 stage: "waiting for tool read capacity",
                 budget_ms: 10,
                 elapsed_ms: 10,
             }
         );
-        pool.submit(Duration::from_millis(50), |_, _| {
-            Ok::<_, atm_storage::ReadLaneError>("agent")
-        })
-        .await
-        .expect("agent traffic may use the second shared worker");
-        tool_task.await.expect("tool join").expect("tool result");
+        assert_eq!(
+            pool.submit(Duration::from_secs(1), |_, _| Ok::<
+                _,
+                atm_storage::ReadLaneError,
+            >("agent"))
+                .await
+                .unwrap(),
+            "agent"
+        );
+        release_tx.send(()).unwrap();
+        tool_task.await.unwrap().unwrap();
+        drop(clock_release);
+        clock_task.await.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn bounded_queue_expires_and_rejects_saturation_without_serializing_reads() {
         let pool = Arc::new(test_pool(test_config(1, 1, Duration::from_millis(20), 1)));
+        let clock = Arc::new(ManualReaderClock::new());
+        pool.use_manual_clock(Arc::clone(&clock));
+        let (clock_release, clock_hold) = tokio::sync::oneshot::channel::<()>();
+        let clock_task = tokio::task::spawn_blocking(move || {
+            let _ = clock_hold.blocking_recv();
+        });
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = mpsc::sync_channel::<()>(1);
         let active_pool = Arc::clone(&pool);
         let active_task = tokio::spawn(async move {
             active_pool
-                .submit(Duration::from_secs(1), move |_, _| {
-                    let _ = started_tx.send(());
-                    std::thread::park_timeout(Duration::from_millis(80));
+                .submit(Duration::from_secs(10), move |_, _| {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
                     Ok::<_, atm_storage::ReadLaneError>(())
                 })
                 .await
         });
-        started_rx.await.expect("worker started");
-        // The second request waits in the bounded queue and reaches its own
-        // deadline without being mistaken for an active SQLite statement.
-        let queued = pool
-            .submit(Duration::from_millis(10), |_, _| {
-                Ok::<_, atm_storage::ReadLaneError>(())
-            })
-            .await
-            .expect_err("queued request must expire");
+        started_rx.await.unwrap();
+        let queued = pool.submit(Duration::from_millis(10), |_, _| {
+            Ok::<_, atm_storage::ReadLaneError>(())
+        });
+        let mut queued = std::pin::pin!(queued);
+        {
+            let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+            assert!(std::future::Future::poll(queued.as_mut(), &mut cx).is_pending());
+        }
+        clock.advance(Duration::from_millis(10));
+        tokio::time::advance(Duration::from_millis(10)).await;
         assert_eq!(
-            queued,
+            queued.await.unwrap_err(),
             atm_storage::ReadLaneError::DeadlineExpired {
                 stage: "waiting in queue",
                 budget_ms: 10,
@@ -1627,26 +1769,24 @@ mod tests {
             }
         );
         let saturated = pool
-            .submit(Duration::from_millis(20), |_, _| {
+            .submit(Duration::from_secs(1), |_, _| {
                 Ok::<_, atm_storage::ReadLaneError>(())
             })
             .await
-            .expect_err("full pool plus queue must fail closed");
+            .unwrap_err();
         assert!(matches!(
             saturated,
             atm_storage::ReadLaneError::Saturated { .. }
         ));
-        active_task
-            .await
-            .expect("join active")
-            .expect("active request");
-        wait_for_metrics(&pool, |metrics| metrics.queue_depth == 0)
-            .await
-            .expect("worker drains the expired queued request");
+        release_tx.send(()).unwrap();
+        active_task.await.unwrap().unwrap();
+        clock.wait_for_expired();
         let metrics = pool.metrics();
         assert!(metrics.expired_in_queue >= 1);
         assert!(metrics.saturated >= 1);
         assert_eq!(metrics.queue_depth, 0);
+        drop(clock_release);
+        clock_task.await.unwrap();
     }
 
     #[tokio::test]
@@ -1761,60 +1901,74 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn active_sqlite_statement_is_interrupted_and_worker_capacity_is_reclaimed() {
-        let pool = test_pool(test_config(1, 1, Duration::from_millis(100), 1));
+        let pool = Arc::new(test_pool(test_config(1, 1, Duration::from_millis(100), 1)));
+        let clock = Arc::new(ManualReaderClock::new());
+        pool.use_manual_clock(Arc::clone(&clock));
+        let (clock_release, clock_hold) = tokio::sync::oneshot::channel::<()>();
+        let clock_task = tokio::task::spawn_blocking(move || {
+            let _ = clock_hold.blocking_recv();
+        });
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let (interrupted_tx, interrupted_rx) = std::sync::mpsc::sync_channel(1);
-        let timed_out = pool
-            .submit(Duration::from_millis(500), move |connection, _| {
-                let _ = started_tx.send(());
-                let result = connection.query_row(
-                    "WITH RECURSIVE count(value) AS (
-                         VALUES(0)
-                         UNION ALL
-                         SELECT value + 1 FROM count WHERE value < 1000000000
-                     )
-                     SELECT sum(value) FROM count;",
-                    [],
-                    |_| Ok(()),
-                );
-                let interrupted = matches!(
-                    &result,
-                    Err(rusqlite::Error::SqliteFailure(error, _))
-                        if error.code == rusqlite::ErrorCode::OperationInterrupted
-                );
-                let _ = interrupted_tx.send(interrupted);
-                result.map_err(|error| atm_storage::ReadLaneError::Unavailable {
-                    message: error.to_string(),
-                })
-            })
+        let (release_tx, release_rx) = mpsc::sync_channel::<()>(1);
+        let armed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let callback_armed = Arc::clone(&armed);
+        let mut started_tx = Some(started_tx);
+        let callback = Box::new(move || {
+            if callback_armed.load(Ordering::SeqCst)
+                && let Some(started) = started_tx.take()
+            {
+                let _ = started.send(());
+                let _ = release_rx.recv();
+            }
+            false
+        });
+        let sender = pool.inner.workers.lock().unwrap().active[0].sender.clone();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        sender
+            .send(super::WorkerMessage::InstallProgress(callback, ready_tx))
             .await
-            .expect_err("active recursive statement must reach its deadline");
+            .ok()
+            .unwrap();
+        ready_rx.await.unwrap();
+        let (interrupted_tx, interrupted_rx) = tokio::sync::oneshot::channel();
+        let task_pool = Arc::clone(&pool);
+        let task = tokio::spawn(async move {
+            task_pool.submit(Duration::from_millis(500), move |connection, _| {
+                let mut statement = connection.prepare("WITH RECURSIVE count(value) AS (VALUES(0) UNION ALL SELECT value + 1 FROM count WHERE value < 1000000000) SELECT sum(value) FROM count;").unwrap();
+                armed.store(true, Ordering::SeqCst);
+                let result = statement.query_row([], |_| Ok(()));
+                let interrupted = matches!(&result, Err(rusqlite::Error::SqliteFailure(error, _)) if error.code == rusqlite::ErrorCode::OperationInterrupted);
+                let _ = interrupted_tx.send(interrupted);
+                result.map_err(|error| atm_storage::ReadLaneError::Unavailable { message: error.to_string() })
+            }).await
+        });
+        started_rx
+            .await
+            .expect("SQLite statement entered progress handler");
+        clock.advance(Duration::from_millis(500));
+        tokio::time::advance(Duration::from_millis(500)).await;
         assert_eq!(
-            timed_out,
+            task.await.unwrap().unwrap_err(),
             atm_storage::ReadLaneError::DeadlineExpired {
                 stage: "executing active query",
                 budget_ms: 500,
                 elapsed_ms: 500,
             }
         );
-        started_rx.await.expect("statement started before deadline");
+        release_tx.send(()).unwrap();
         assert!(
-            interrupted_rx
-                .recv_timeout(Duration::from_secs(1))
-                .expect("worker reports query termination"),
-            "the worker must observe SQLite's interrupt, not merely abandon the query"
+            interrupted_rx.await.unwrap(),
+            "SQLite must observe the interrupt"
         );
-        wait_for_metrics(&pool, |metrics| {
-            metrics.interrupted_while_active == 1
-                && metrics.in_flight == 0
-                && metrics.queue_depth == 0
-                && metrics.current_quarantined_workers == 0
-                && metrics.pool_size == 1
-        })
-        .await
-        .expect("reader worker reclaim signal");
+        clock.wait_for_completed();
+        let metrics = pool.metrics();
+        assert_eq!(metrics.interrupted_while_active, 1);
+        assert_eq!(metrics.in_flight, 0);
+        assert_eq!(metrics.queue_depth, 0);
+        assert_eq!(metrics.current_quarantined_workers, 0);
+        assert_eq!(metrics.pool_size, 1);
         assert_eq!(
             pool.submit(Duration::from_secs(5), |connection, _| {
                 connection
@@ -1827,10 +1981,9 @@ mod tests {
             .expect("interrupted worker remains reusable"),
             1
         );
-        let metrics = pool.metrics();
-        assert_eq!(metrics.interrupted_while_active, 1);
-        assert_eq!(metrics.current_quarantined_workers, 0);
-        assert_eq!(metrics.pool_size, 1);
+        clock.advance(Duration::from_millis(100));
+        drop(clock_release);
+        clock_task.await.unwrap();
     }
 
     #[tokio::test]
