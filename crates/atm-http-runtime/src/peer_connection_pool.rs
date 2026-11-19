@@ -5,14 +5,18 @@
 //! HTTP/1 handshakes, never raw pre-handshake streams.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::num::NonZeroU16;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use atm_core::api::{HttpRequest, RequestDeadline};
+use atm_core::api::HttpRequest;
+#[cfg(test)]
+use atm_core::api::RequestDeadline;
 use atm_core::types::HostName;
 use axum::body::Body;
 use hyper::client::conn::http1;
@@ -21,12 +25,12 @@ use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
-use crate::PeerStreamAdapter;
 use crate::client::{
     HttpRuntimeClientFailure, direct_peer_authority, direct_peer_connection_failure,
     execute_opaque_peer_request_with_sender, peer_connect_deadline_failure,
 };
 use crate::peer_dial::{DIAL_REPORT_GRACE, PeerAddressCache, resolve_peer_addresses};
+use crate::{EstablishedPeerStream, PeerStreamAdapter};
 
 const DRIVER_ABORT_GRACE: Duration = Duration::from_millis(100);
 
@@ -91,9 +95,10 @@ pub struct PeerConnectionPool {
 
 struct PoolShared {
     config: PeerPoolConfig,
-    adapter: Arc<dyn PeerStreamAdapter>,
+    dialer: Arc<dyn PeerTransportDialer>,
     state: Mutex<PoolState>,
-    addresses: PeerAddressCache,
+    #[cfg(test)]
+    addresses: Arc<PeerAddressCache>,
     eviction_task: Mutex<Option<JoinHandle<()>>>,
     #[cfg(test)]
     sweep_started: tokio::sync::Notify,
@@ -103,6 +108,113 @@ struct PoolShared {
     completed_drivers: Arc<AtomicUsize>,
     #[cfg(test)]
     driver_signal: Arc<tokio::sync::Notify>,
+}
+
+/// Produces an authenticated stream without coupling pooling to a transport.
+trait PeerTransportDialer: Send + Sync {
+    fn dial<'a>(
+        &'a self,
+        peer: &'a HostName,
+        port: NonZeroU16,
+        deadline: Instant,
+        authority: &'a str,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<EstablishedPeerStream, HttpRuntimeClientFailure>>
+                + Send
+                + 'a,
+        >,
+    >;
+}
+
+struct TcpPeerTransportDialer {
+    adapter: Arc<dyn PeerStreamAdapter>,
+    addresses: Arc<PeerAddressCache>,
+}
+
+impl PeerTransportDialer for TcpPeerTransportDialer {
+    fn dial<'a>(
+        &'a self,
+        peer: &'a HostName,
+        port: NonZeroU16,
+        deadline: Instant,
+        authority: &'a str,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<EstablishedPeerStream, HttpRuntimeClientFailure>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            let target = format!("direct peer `{authority}`");
+            let connect_timeout = || peer_connect_deadline_failure(authority, &target);
+            let stream = self
+                .dial_transport(peer, port, deadline, authority, &connect_timeout)
+                .await?;
+            if Instant::now() >= deadline {
+                return Err(connect_timeout());
+            }
+            tokio::time::timeout_at(deadline, self.adapter.connect(stream, peer))
+                .await
+                .map_err(|_| connect_timeout())?
+                .map_err(|error| {
+                    let cause = error.to_string();
+                    tracing::warn!(%peer, %authority, %cause, "direct peer stream adapter rejected the connection");
+                    HttpRuntimeClientFailure::PeerConnect { target: authority.to_owned(), cause }
+                })
+        })
+    }
+}
+
+impl TcpPeerTransportDialer {
+    /// Resolves and dials the peer through the ADR-060 seam (`peer_dial`).
+    async fn dial_transport(
+        &self,
+        peer: &HostName,
+        port: NonZeroU16,
+        deadline: Instant,
+        authority: &str,
+        connect_timeout: &(dyn Fn() -> HttpRuntimeClientFailure + Sync),
+    ) -> Result<TcpStream, HttpRuntimeClientFailure> {
+        if Instant::now() >= deadline {
+            return Err(connect_timeout());
+        }
+        // The caller's own request timeout fires exactly at `deadline`, so the
+        // dial loop is bounded slightly *inside* the budget: it finishes, and
+        // reports its per-address diagnosis, before any bare timeout can win
+        // the race. The outer guard here is only a backstop at the budget.
+        let dial_deadline = deadline
+            .checked_sub(DIAL_REPORT_GRACE)
+            .filter(|reserved| *reserved > Instant::now())
+            .unwrap_or(deadline);
+        tokio::time::timeout_at(
+            deadline,
+            self.addresses.connect(
+                peer,
+                port,
+                dial_deadline,
+                resolve_peer_addresses,
+                TcpStream::connect,
+            ),
+        )
+        .await
+        .map_err(|_| {
+            tracing::warn!(
+                %peer,
+                %authority,
+                "direct peer TCP connect exhausted the request budget"
+            );
+            connect_timeout()
+        })?
+        .map_err(|cause| {
+            tracing::warn!(%peer, %authority, %cause, "direct peer TCP connect failed");
+            HttpRuntimeClientFailure::PeerConnect {
+                target: authority.to_owned(),
+                cause,
+            }
+        })
+    }
 }
 
 impl Drop for PoolShared {
@@ -159,11 +271,27 @@ impl PeerConnectionPool {
         let config = config
             .validate()
             .expect("peer pool configuration must be validated before composition");
+        let addresses = Arc::new(PeerAddressCache::new(config.address_cache_ttl));
+        let dialer = Arc::new(TcpPeerTransportDialer {
+            adapter,
+            addresses: Arc::clone(&addresses),
+        });
+        Self::with_dialer(config, dialer, addresses)
+    }
+
+    fn with_dialer(
+        config: PeerPoolConfig,
+        dialer: Arc<dyn PeerTransportDialer>,
+        addresses: Arc<PeerAddressCache>,
+    ) -> Self {
+        #[cfg(not(test))]
+        let _ = addresses;
         let shared = Arc::new(PoolShared {
             config,
-            adapter,
+            dialer,
             state: Mutex::new(PoolState::default()),
-            addresses: PeerAddressCache::new(config.address_cache_ttl),
+            #[cfg(test)]
+            addresses,
             eviction_task: Mutex::new(None),
             #[cfg(test)]
             sweep_started: tokio::sync::Notify::new(),
@@ -178,11 +306,25 @@ impl PeerConnectionPool {
         Self { shared }
     }
 
+    #[cfg(test)]
     pub(crate) async fn acquire(
         &self,
         peer: &HostName,
         port: NonZeroU16,
         deadline: RequestDeadline,
+    ) -> Result<PooledPeerConnection, HttpRuntimeClientFailure> {
+        let now = Instant::now();
+        let deadline = deadline
+            .remaining()
+            .map_or(now, |remaining| now + remaining);
+        self.acquire_until(peer, port, deadline).await
+    }
+
+    pub(crate) async fn acquire_until(
+        &self,
+        peer: &HostName,
+        port: NonZeroU16,
+        deadline: Instant,
     ) -> Result<PooledPeerConnection, HttpRuntimeClientFailure> {
         let authority = direct_peer_authority(peer, port);
         let (idle, expired) = {
@@ -198,11 +340,14 @@ impl PeerConnectionPool {
             let ready = if idle.sender.is_closed() {
                 false
             } else {
-                let remaining = deadline.remaining().ok_or_else(|| {
+                if Instant::now() >= deadline {
                     self.shared.release_reservation(peer);
-                    peer_connect_deadline_failure(&authority, &connection_target)
-                })?;
-                match tokio::time::timeout(remaining, idle.sender.ready()).await {
+                    return Err(peer_connect_deadline_failure(
+                        &authority,
+                        &connection_target,
+                    ));
+                }
+                match tokio::time::timeout_at(deadline, idle.sender.ready()).await {
                     Ok(Ok(())) => true,
                     Ok(Err(_)) => false,
                     Err(_) => {
@@ -244,7 +389,7 @@ impl PeerConnectionPool {
         &self,
         peer: &HostName,
         port: NonZeroU16,
-        deadline: RequestDeadline,
+        deadline: Instant,
         authority: String,
     ) -> Result<PooledPeerConnection, HttpRuntimeClientFailure> {
         match self.open(peer, port, deadline, &authority).await {
@@ -268,7 +413,7 @@ impl PeerConnectionPool {
         &self,
         peer: &HostName,
         port: NonZeroU16,
-        deadline: RequestDeadline,
+        deadline: Instant,
         authority: String,
         origin: ConnectionOrigin,
     ) -> Result<PooledPeerConnection, HttpRuntimeClientFailure> {
@@ -295,34 +440,21 @@ impl PeerConnectionPool {
         &self,
         peer: &HostName,
         port: NonZeroU16,
-        deadline: RequestDeadline,
+        deadline: Instant,
         authority: &str,
     ) -> Result<(http1::SendRequest<Body>, JoinHandle<()>), HttpRuntimeClientFailure> {
         let target = format!("direct peer `{authority}`");
         let connect_timeout = || peer_connect_deadline_failure(authority, &target);
         let stream = self
-            .dial_transport(peer, port, deadline, authority, &connect_timeout)
+            .shared
+            .dialer
+            .dial(peer, port, deadline, authority)
             .await?;
-        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
-        let stream = tokio::time::timeout(remaining, self.shared.adapter.connect(stream, peer))
-            .await
-            .map_err(|_| connect_timeout())?
-            .map_err(|error| {
-                let cause = error.to_string();
-                tracing::warn!(
-                    %peer,
-                    %authority,
-                    %cause,
-                    "direct peer stream adapter rejected the connection"
-                );
-                HttpRuntimeClientFailure::PeerConnect {
-                    target: authority.to_owned(),
-                    cause,
-                }
-            })?;
-        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
-        let (sender, connection) = tokio::time::timeout(
-            remaining,
+        if Instant::now() >= deadline {
+            return Err(connect_timeout());
+        }
+        let (sender, connection) = tokio::time::timeout_at(
+            deadline,
             http1::handshake(TokioIo::new(stream)),
         )
         .await
@@ -347,53 +479,6 @@ impl PeerConnectionPool {
             }
         });
         Ok((sender, driver))
-    }
-
-    /// Resolves and dials the peer through the ADR-060 seam (`peer_dial`).
-    async fn dial_transport(
-        &self,
-        peer: &HostName,
-        port: NonZeroU16,
-        deadline: RequestDeadline,
-        authority: &str,
-        connect_timeout: &(dyn Fn() -> HttpRuntimeClientFailure + Sync),
-    ) -> Result<TcpStream, HttpRuntimeClientFailure> {
-        let remaining = deadline.remaining().ok_or_else(connect_timeout)?;
-        // The caller's own request timeout fires exactly at `deadline`, so the
-        // dial loop is bounded slightly *inside* the budget: it finishes, and
-        // reports its per-address diagnosis, before any bare timeout can win
-        // the race. The outer guard here is only a backstop at the budget.
-        let dial_deadline = Instant::now()
-            + (remaining
-                .checked_sub(DIAL_REPORT_GRACE)
-                .filter(|reserved| !reserved.is_zero())
-                .unwrap_or(remaining));
-        tokio::time::timeout(
-            remaining,
-            self.shared.addresses.connect(
-                peer,
-                port,
-                dial_deadline,
-                resolve_peer_addresses,
-                TcpStream::connect,
-            ),
-        )
-        .await
-        .map_err(|_| {
-            tracing::warn!(
-                %peer,
-                %authority,
-                "direct peer TCP connect exhausted the request budget"
-            );
-            connect_timeout()
-        })?
-        .map_err(|cause| {
-            tracing::warn!(%peer, %authority, %cause, "direct peer TCP connect failed");
-            HttpRuntimeClientFailure::PeerConnect {
-                target: authority.to_owned(),
-                cause,
-            }
-        })
     }
 
     #[cfg(test)]
@@ -448,10 +533,23 @@ impl PeerConnectionPool {
 }
 
 impl PooledPeerConnection {
+    #[cfg(test)]
     pub(crate) async fn exchange(
         &mut self,
         request: HttpRequest,
         deadline: RequestDeadline,
+    ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+        let remaining = deadline
+            .remaining()
+            .ok_or(HttpRuntimeClientFailure::Cancelled)?;
+        self.exchange_until(request, Instant::now() + remaining)
+            .await
+    }
+
+    pub(crate) async fn exchange_until(
+        &mut self,
+        request: HttpRequest,
+        deadline: Instant,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
         let sender = self.sender.as_mut().expect("pool guard owns sender");
         let result = execute_opaque_peer_request_with_sender(sender, request, deadline)
@@ -664,6 +762,87 @@ mod tests {
         ) -> PeerStreamFuture<'a, AcceptedPeerStream> {
             Box::pin(async { Err(atm_core::error::AtmError::config("test accepts no peers")) })
         }
+    }
+
+    struct DuplexDialer {
+        stream: std::sync::Mutex<Option<tokio::io::DuplexStream>>,
+        calls: AtomicUsize,
+    }
+
+    impl super::PeerTransportDialer for DuplexDialer {
+        fn dial<'a>(
+            &'a self,
+            _peer: &'a atm_core::types::HostName,
+            _port: std::num::NonZeroU16,
+            _deadline: tokio::time::Instant,
+            _authority: &'a str,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = Result<
+                            EstablishedPeerStream,
+                            crate::client::HttpRuntimeClientFailure,
+                        >,
+                    > + Send
+                    + 'a,
+            >,
+        > {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let stream = self.stream.lock().unwrap().take();
+            Box::pin(async move {
+                stream
+                    .map(|stream| Box::new(stream) as EstablishedPeerStream)
+                    .ok_or_else(|| {
+                        crate::client::HttpRuntimeClientFailure::Connect("unexpected redial".into())
+                    })
+            })
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pool_reuses_a_duplex_connection_after_a_successful_response() {
+        let (client, server) = tokio::io::duplex(4096);
+        let dialer = Arc::new(DuplexDialer {
+            stream: std::sync::Mutex::new(Some(client)),
+            calls: AtomicUsize::new(0),
+        });
+        let config = PeerPoolConfig::default();
+        let pool = PeerConnectionPool::with_dialer(
+            config,
+            dialer.clone(),
+            Arc::new(super::PeerAddressCache::new(config.address_cache_ttl)),
+        );
+        let router =
+            Router::new().route("/v1/atm/messages", post(|| async { StatusCode::CREATED }));
+        let (_shutdown_tx, shutdown_rx) = watch::channel(());
+        let server = tokio::spawn(serve_connection(
+            hyper_util::rt::TokioIo::new(server),
+            router,
+            Duration::from_secs(30),
+            shutdown_rx,
+        ));
+        let peer = "peer.example".parse().unwrap();
+        let port = std::num::NonZeroU16::new(43101).unwrap();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        for _ in 0..2 {
+            let mut connection = pool
+                .acquire_until(&peer, port, deadline)
+                .await
+                .expect("acquire peer");
+            let response = connection
+                .exchange_until(request(), deadline)
+                .await
+                .expect("peer response");
+            assert_eq!(response.status(), StatusCode::CREATED);
+            drop(connection);
+        }
+        assert_eq!(dialer.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(pool.pooled_count(), 1);
+        drop(pool);
+        server
+            .await
+            .expect("server task joins")
+            .expect("connection closes cleanly");
     }
 
     #[tokio::test(start_paused = true)]

@@ -688,8 +688,15 @@ impl HttpRuntimeConnector for PooledPeerStreamConnector {
         request: HttpRequest,
         deadline: RequestDeadline,
     ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-        let mut connection = self.pool.acquire(&self.host, self.port, deadline).await?;
-        connection.exchange(request, deadline).await
+        let now = tokio::time::Instant::now();
+        let deadline = deadline
+            .remaining()
+            .map_or(now, |remaining| now + remaining);
+        let mut connection = self
+            .pool
+            .acquire_until(&self.host, self.port, deadline)
+            .await?;
+        connection.exchange_until(request, deadline).await
     }
 }
 
@@ -700,17 +707,21 @@ impl HttpRuntimeConnector for PooledPeerStreamConnector {
 pub(crate) async fn execute_opaque_peer_request_with_sender(
     sender: &mut http1::SendRequest<Body>,
     request: HttpRequest,
-    deadline: RequestDeadline,
+    deadline: tokio::time::Instant,
 ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
+    if tokio::time::Instant::now() >= deadline {
+        return Err(HttpRuntimeClientFailure::Cancelled);
+    }
     let request = build_opaque_peer_request(request)?;
-    let remaining = deadline
-        .remaining()
-        .ok_or(HttpRuntimeClientFailure::Cancelled)?;
-    let response = tokio::time::timeout(remaining, sender.send_request(request))
-        .await
-        .map_err(|_| HttpRuntimeClientFailure::Timeout)?
-        .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
-    collect_opaque_peer_response(response).await
+    tokio::time::timeout_at(deadline, async {
+        let response = sender
+            .send_request(request)
+            .await
+            .map_err(|source| HttpRuntimeClientFailure::Connect(source.to_string()))?;
+        collect_opaque_peer_response(response).await
+    })
+    .await
+    .map_err(|_| HttpRuntimeClientFailure::Timeout)?
 }
 
 fn build_opaque_peer_request(
