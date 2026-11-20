@@ -688,6 +688,11 @@ impl GraftReceiverListener {
         stream: &mut TcpStream,
         io_deadline: Duration,
     ) -> Result<GraftReceiverRequest, AtmError> {
+        #[cfg(test)]
+        if !TEST_RECEIVER_WITHOUT_DEADLINES.with(|flag| flag.get()) {
+            apply_stream_deadlines(stream, io_deadline)?;
+        }
+        #[cfg(not(test))]
         apply_stream_deadlines(stream, io_deadline)?;
         let wire: GraftReceiverWireRequest = read_graft_post_send_message(
             stream,
@@ -867,6 +872,7 @@ fn deliver_graft_post_send_with_limits(
 #[cfg(test)]
 thread_local! {
     static TEST_POST_SEND_WITHOUT_DEADLINES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static TEST_RECEIVER_WITHOUT_DEADLINES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static TEST_RECEIVER_CONNECTED: std::cell::RefCell<Option<TestConnectHook>> = const { std::cell::RefCell::new(None) };
 }
 
@@ -1344,13 +1350,18 @@ mod tests {
         };
         super::write_graft_post_send_message(&mut forger, &wire, "write", "oversized")
             .expect("write forged request");
+        // EOF is controlled by the test even if a malformed frame is incomplete.
+        forger
+            .shutdown(std::net::Shutdown::Write)
+            .expect("finish forged request");
         let mut stream = listener
             .poll_accept()
             .expect("accept")
             .expect("connected loopback peer");
-        let error = listener
-            .read_request(&mut stream, Duration::from_secs(3))
-            .expect_err("forged capability must be rejected");
+        super::TEST_RECEIVER_WITHOUT_DEADLINES.with(|flag| flag.set(true));
+        let result = listener.read_request(&mut stream, Duration::ZERO);
+        super::TEST_RECEIVER_WITHOUT_DEADLINES.with(|flag| flag.set(false));
+        let error = result.expect_err("forged capability must be rejected");
         assert!(
             error.message().contains("invalid local capability"),
             "{error:?}"
