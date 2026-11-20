@@ -17,6 +17,8 @@ pub(crate) struct ReleasePendingOnDrop {
     blocking_bridge: BoundedBlockingBridge,
     #[cfg(test)]
     release_test_gate: Option<Arc<crate::herdr_queue_wake_test_gates::BlockingGate>>,
+    #[cfg(test)]
+    release_test_deadline: Option<atm_core::api::RequestDeadline>,
     /// Clears the member's ephemeral Herdr wake-pending roster flag when this
     /// claim attempt concludes (success, requeue, or release), regardless of
     /// which exit path was taken. Set alongside claiming a pending nudge in
@@ -46,6 +48,8 @@ impl ReleasePendingOnDrop {
             blocking_bridge,
             #[cfg(test)]
             release_test_gate: None,
+            #[cfg(test)]
+            release_test_deadline: None,
             service_runtime,
             armed: true,
         }
@@ -57,6 +61,15 @@ impl ReleasePendingOnDrop {
         gate: Arc<crate::herdr_queue_wake_test_gates::BlockingGate>,
     ) -> Self {
         self.release_test_gate = Some(gate);
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_release_test_deadline(
+        mut self,
+        deadline: atm_core::api::RequestDeadline,
+    ) -> Self {
+        self.release_test_deadline = Some(deadline);
         self
     }
 
@@ -149,6 +162,12 @@ impl ReleasePendingOnDrop {
         let test_gate = self.release_test_gate.clone();
         #[cfg(test)]
         let signal_gate = test_gate.clone();
+        #[cfg(test)]
+        let deadline = self
+            .release_test_deadline
+            .unwrap_or_else(herdr_request_deadline);
+        #[cfg(not(test))]
+        let deadline = herdr_request_deadline();
         let release = move || {
             #[cfg(test)]
             if let Some(gate) = test_gate {
@@ -164,7 +183,7 @@ impl ReleasePendingOnDrop {
             let bridge = self.blocking_bridge.clone();
             let log_member = self.member.clone();
             let release_handle = handle.spawn(async move {
-                let outcome = bridge.run(herdr_request_deadline(), release).await;
+                let outcome = bridge.run(deadline, release).await;
                 #[cfg(test)]
                 if outcome.is_err()
                     && let Some(gate) = signal_gate

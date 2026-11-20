@@ -47,7 +47,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
 use tracing_subscriber::prelude::*;
@@ -66,6 +66,29 @@ struct PromptHandoffLogLayer {
 struct PromptHandoffLogFields {
     action: String,
     reason: String,
+}
+
+#[derive(Clone)]
+struct ControlledInstantClock(Arc<Mutex<Instant>>);
+
+impl ControlledInstantClock {
+    fn new() -> Self {
+        Self(Arc::new(Mutex::new(Instant::now())))
+    }
+
+    fn callback(&self) -> Arc<dyn Fn() -> Instant + Send + Sync> {
+        let now = Arc::clone(&self.0);
+        Arc::new(move || *now.lock().expect("controlled clock lock"))
+    }
+
+    fn reset(&self, now: Instant) {
+        *self.0.lock().expect("controlled clock lock") = now;
+    }
+
+    fn advance(&self, duration: Duration) {
+        let mut now = self.0.lock().expect("controlled clock lock");
+        *now += duration;
+    }
 }
 
 impl tracing::field::Visit for PromptHandoffLogFields {
@@ -119,13 +142,17 @@ async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
     let release_guard = BlockingGateReleaseGuard(Arc::clone(&gate));
     let worker_gate = Arc::clone(&gate);
     let failure_gate = Arc::clone(&gate);
-    let bridge = BoundedBlockingBridge::new(
+    let test_clock = ControlledInstantClock::new();
+    let mut bridge = BoundedBlockingBridge::new(
         std::num::NonZeroUsize::new(1).expect("non-zero test bridge capacity"),
         RuntimeHealth::default(),
     );
+    bridge.set_test_clock(test_clock.callback());
+    let deadline = herdr_request_deadline();
+    test_clock.reset(Instant::now());
     let operation = tokio::spawn(async move {
         let outcome = bridge
-            .run(herdr_request_deadline(), move || {
+            .run(deadline, move || {
                 worker_gate.enter_and_wait();
                 Ok(())
             })
@@ -143,6 +170,7 @@ async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
             .expect("blocking work start signal waiter joins"),
         "blocking work enters before the controlled deadline"
     );
+    test_clock.advance(HERDR_REQUEST_BUDGET);
     tokio::time::advance(HERDR_REQUEST_BUDGET).await;
     let error = operation
         .await
@@ -2605,6 +2633,11 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
     use crate::herdr_queue_wake_test_gates::{BlockingGate, BlockingGateReleaseGuard};
 
     let (_root, runtime, _fake, pump, health, key) = build_test_pump();
+    let test_clock = ControlledInstantClock::new();
+    let mut release_bridge = pump.blocking_bridge.clone();
+    release_bridge.set_test_clock(test_clock.callback());
+    let release_deadline = herdr_request_deadline();
+    test_clock.reset(Instant::now());
     let release_gate = Arc::new(BlockingGate::default());
     let release_guard = BlockingGateReleaseGuard(Arc::clone(&release_gate));
     let store = runtime.pending_nudge_store().expect("pending store");
@@ -2618,9 +2651,10 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
         Arc::new(Mutex::new(HashMap::new())),
         runtime,
         Arc::clone(&pump.release_handles),
-        pump.blocking_bridge.clone(),
+        release_bridge,
     )
-    .with_release_test_gate(Arc::clone(&release_gate));
+    .with_release_test_gate(Arc::clone(&release_gate))
+    .with_release_test_deadline(release_deadline);
     drop(release);
     let started_gate = Arc::clone(&release_gate);
     assert!(
@@ -2633,6 +2667,7 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
     shutdown_tx.send(()).expect("shutdown notification");
+    test_clock.advance(HERDR_REQUEST_BUDGET);
     tokio::time::advance(HERDR_REQUEST_BUDGET).await;
     task.await
         .expect("pump shutdown completes at its request deadline");

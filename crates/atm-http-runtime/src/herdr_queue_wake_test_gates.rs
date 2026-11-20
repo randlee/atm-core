@@ -60,6 +60,16 @@ impl BlockingGate {
     }
 }
 
+#[test]
+fn blocking_gate_waiter_returns_when_work_fails_before_entry() {
+    let gate = BlockingGate::default();
+
+    gate.fail_before_entry();
+
+    assert!(!gate.wait_until_entered());
+    gate.enter_and_wait();
+}
+
 pub(crate) struct BlockingGateReleaseGuard(pub(crate) Arc<BlockingGate>);
 
 impl Drop for BlockingGateReleaseGuard {
