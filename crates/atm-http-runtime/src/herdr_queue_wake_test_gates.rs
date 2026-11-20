@@ -12,6 +12,7 @@ pub(crate) type Gate = (Arc<Notify>, Arc<Notify>);
 struct BlockingGateState {
     entered: bool,
     released: bool,
+    failed_before_entry: bool,
 }
 
 /// A test-owned gate for synchronous work submitted to a blocking thread.
@@ -24,6 +25,9 @@ pub(crate) struct BlockingGate {
 impl BlockingGate {
     pub(crate) fn enter_and_wait(&self) {
         let mut state = self.state.lock().expect("blocking gate lock");
+        if state.failed_before_entry {
+            return;
+        }
         state.entered = true;
         self.changed.notify_all();
         let state = self
@@ -33,13 +37,21 @@ impl BlockingGate {
         assert!(state.released, "blocking gate was released");
     }
 
-    pub(crate) fn wait_until_entered(&self) {
+    pub(crate) fn wait_until_entered(&self) -> bool {
         let state = self.state.lock().expect("blocking gate lock");
         let state = self
             .changed
-            .wait_while(state, |state| !state.entered)
+            .wait_while(state, |state| !state.entered && !state.failed_before_entry)
             .expect("blocking gate state is not poisoned");
-        assert!(state.entered, "blocking gate was entered");
+        state.entered
+    }
+
+    pub(crate) fn fail_before_entry(&self) {
+        let mut state = self.state.lock().expect("blocking gate lock");
+        if !state.entered {
+            state.failed_before_entry = true;
+            self.changed.notify_all();
+        }
     }
 
     pub(crate) fn release(&self) {

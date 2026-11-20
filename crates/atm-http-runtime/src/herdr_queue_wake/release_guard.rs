@@ -147,6 +147,8 @@ impl ReleasePendingOnDrop {
         let claim = self.claim.clone();
         #[cfg(test)]
         let test_gate = self.release_test_gate.clone();
+        #[cfg(test)]
+        let signal_gate = test_gate.clone();
         let release = move || {
             #[cfg(test)]
             if let Some(gate) = test_gate {
@@ -162,7 +164,14 @@ impl ReleasePendingOnDrop {
             let bridge = self.blocking_bridge.clone();
             let log_member = self.member.clone();
             let release_handle = handle.spawn(async move {
-                if let Err(error) = bridge.run(herdr_request_deadline(), release).await {
+                let outcome = bridge.run(herdr_request_deadline(), release).await;
+                #[cfg(test)]
+                if outcome.is_err()
+                    && let Some(gate) = signal_gate
+                {
+                    gate.fail_before_entry();
+                }
+                if let Err(error) = outcome {
                     tracing::warn!(
                         subsystem = "herdr_queue_wake",
                         action = "queue_claim_release",

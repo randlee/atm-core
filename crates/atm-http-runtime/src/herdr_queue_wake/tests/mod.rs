@@ -118,23 +118,31 @@ async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
     let gate = Arc::new(BlockingGate::default());
     let release_guard = BlockingGateReleaseGuard(Arc::clone(&gate));
     let worker_gate = Arc::clone(&gate);
+    let failure_gate = Arc::clone(&gate);
     let bridge = BoundedBlockingBridge::new(
         std::num::NonZeroUsize::new(1).expect("non-zero test bridge capacity"),
         RuntimeHealth::default(),
     );
     let operation = tokio::spawn(async move {
-        bridge
+        let outcome = bridge
             .run(herdr_request_deadline(), move || {
                 worker_gate.enter_and_wait();
                 Ok(())
             })
-            .await
+            .await;
+        if outcome.is_err() {
+            failure_gate.fail_before_entry();
+        }
+        outcome
     });
 
     let started_gate = Arc::clone(&gate);
-    tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
-        .await
-        .expect("blocking work start signal waiter joins");
+    assert!(
+        tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
+            .await
+            .expect("blocking work start signal waiter joins"),
+        "blocking work enters before the controlled deadline"
+    );
     tokio::time::advance(HERDR_REQUEST_BUDGET).await;
     let error = operation
         .await
@@ -2615,9 +2623,12 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
     .with_release_test_gate(Arc::clone(&release_gate));
     drop(release);
     let started_gate = Arc::clone(&release_gate);
-    tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
-        .await
-        .expect("release-start signal waiter joins");
+    assert!(
+        tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
+            .await
+            .expect("release-start signal waiter joins"),
+        "release work enters before the controlled deadline"
+    );
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
