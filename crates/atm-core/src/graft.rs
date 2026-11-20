@@ -1727,6 +1727,19 @@ mod tests {
     }
 
     #[test]
+    fn sender_completion_wakes_receiver_without_a_usable_wake_endpoint() {
+        let (connected, receiver_event) = std::sync::mpsc::channel();
+        let control = Arc::new(ReceiverControl {
+            // Port zero cannot be used as a TCP wake endpoint.
+            endpoint: std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
+            state: std::sync::Mutex::new(ReceiverControlState::default()),
+            connected,
+        });
+        drop(ReceiverCompletionGuard(control));
+        assert!(!receiver_event.recv().expect("cancellation event"));
+    }
+
+    #[test]
     fn receiver_is_released_when_sender_fails_or_panics_before_connect() {
         let tempdir = TempDir::new().expect("tempdir");
         let listener = bind_listener(
