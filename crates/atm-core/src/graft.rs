@@ -1354,6 +1354,12 @@ mod tests {
         forger
             .shutdown(std::net::Shutdown::Write)
             .expect("finish forged request");
+        // A successful connect may precede the listener becoming readable.
+        // Blocking accept is safe here: the test has already connected.
+        listener
+            .listener
+            .set_nonblocking(false)
+            .expect("blocking accept");
         let mut stream = listener
             .poll_accept()
             .expect("accept")
@@ -1741,13 +1747,6 @@ mod tests {
                 return Err(AtmError::validation("expected post-send request"));
             };
             listener.write_response(&mut stream, &GraftPostSendResponse::Delivered)?;
-            // Close the receiver's write half after sending the complete reply;
-            // TCP preserves the queued response for the sender to read.
-            stream
-                .shutdown(std::net::Shutdown::Write)
-                .map_err(|source| {
-                    AtmError::daemon_unavailable("close test receiver reply").with_cause(source)
-                })?;
             guard.completed = true;
             Ok(Some(request))
         });
