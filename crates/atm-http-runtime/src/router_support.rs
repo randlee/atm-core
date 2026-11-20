@@ -130,6 +130,14 @@ impl BoundedBlockingBridge {
     }
 
     #[cfg(test)]
+    pub(crate) fn set_test_clock(
+        &mut self,
+        clock: Arc<dyn Fn() -> std::time::Instant + Send + Sync>,
+    ) {
+        self.clock = Some(clock);
+    }
+
+    #[cfg(test)]
     fn remaining(&self, deadline: RequestDeadline) -> Option<std::time::Duration> {
         match &self.clock {
             Some(clock) => {
@@ -388,7 +396,7 @@ impl ControlPathSyncBridge {
         &mut self,
         clock: Arc<dyn Fn() -> std::time::Instant + Send + Sync>,
     ) {
-        self.bridge.clock = Some(clock);
+        self.bridge.set_test_clock(clock);
     }
 
     pub(crate) fn blocking_bridge(&self) -> &BoundedBlockingBridge {

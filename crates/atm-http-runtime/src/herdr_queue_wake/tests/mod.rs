@@ -10,7 +10,7 @@ use super::task_pass::{observe_escalation_episode_if_eligible, runtime_state};
 use super::{
     BoundedBlockingBridge, HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK,
     HERDR_POLL_INTERVAL_MS, HERDR_REQUEST_BUDGET, HerdrQueueWakePump, ReleasePendingOnDrop,
-    RuntimeHealth, herdr_request_deadline, log_herdr_list_failure,
+    RuntimeHealth, log_herdr_list_failure,
 };
 use atm_core::LocalServiceRuntime;
 use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -47,7 +47,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::watch;
 
 use tracing_subscriber::prelude::*;
@@ -66,6 +66,29 @@ struct PromptHandoffLogLayer {
 struct PromptHandoffLogFields {
     action: String,
     reason: String,
+}
+
+#[derive(Clone)]
+struct ControlledInstantClock(Arc<Mutex<Instant>>);
+
+impl ControlledInstantClock {
+    fn new() -> Self {
+        Self(Arc::new(Mutex::new(Instant::now())))
+    }
+
+    fn callback(&self) -> Arc<dyn Fn() -> Instant + Send + Sync> {
+        let now = Arc::clone(&self.0);
+        Arc::new(move || *now.lock().expect("controlled clock lock"))
+    }
+
+    fn now(&self) -> Instant {
+        *self.0.lock().expect("controlled clock lock")
+    }
+
+    fn advance(&self, duration: Duration) {
+        let mut now = self.0.lock().expect("controlled clock lock");
+        *now += duration;
+    }
 }
 
 impl tracing::field::Visit for PromptHandoffLogFields {
@@ -113,32 +136,40 @@ impl DiagnosticSink for RecordingDiagnosticSink {
 
 #[tokio::test(start_paused = true)]
 async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
-    let gate = Arc::new(atm_storage::testing::ReleaseBlocker::default());
-    struct ReleaseGateGuard(Arc<atm_storage::testing::ReleaseBlocker>);
-    impl Drop for ReleaseGateGuard {
-        fn drop(&mut self) {
-            self.0.release();
-        }
-    }
-    let release_guard = ReleaseGateGuard(Arc::clone(&gate));
+    use crate::herdr_queue_wake_test_gates::{BlockingGate, BlockingGateReleaseGuard};
+
+    let gate = Arc::new(BlockingGate::default());
+    let release_guard = BlockingGateReleaseGuard(Arc::clone(&gate));
     let worker_gate = Arc::clone(&gate);
-    let bridge = BoundedBlockingBridge::new(
+    let failure_gate = Arc::clone(&gate);
+    let test_clock = ControlledInstantClock::new();
+    let deadline = atm_core::api::RequestDeadline::after_at(test_clock.now(), HERDR_REQUEST_BUDGET);
+    let mut bridge = BoundedBlockingBridge::new(
         std::num::NonZeroUsize::new(1).expect("non-zero test bridge capacity"),
         RuntimeHealth::default(),
     );
+    bridge.set_test_clock(test_clock.callback());
     let operation = tokio::spawn(async move {
-        bridge
-            .run(herdr_request_deadline(), move || {
+        let outcome = bridge
+            .run(deadline, move || {
                 worker_gate.enter_and_wait();
                 Ok(())
             })
-            .await
+            .await;
+        if outcome.is_err() {
+            failure_gate.fail_before_entry();
+        }
+        outcome
     });
 
     let started_gate = Arc::clone(&gate);
-    tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
-        .await
-        .expect("blocking work start signal waiter joins");
+    assert!(
+        tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
+            .await
+            .expect("blocking work start signal waiter joins"),
+        "blocking work enters before the controlled deadline"
+    );
+    test_clock.advance(HERDR_REQUEST_BUDGET);
     tokio::time::advance(HERDR_REQUEST_BUDGET).await;
     let error = operation
         .await
@@ -2598,20 +2629,17 @@ async fn ac11_claim_drop_guard_release_is_joined_before_pump_shutdown() {
 
 #[tokio::test(start_paused = true)]
 async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
+    use crate::herdr_queue_wake_test_gates::{BlockingGate, BlockingGateReleaseGuard};
+
     let (_root, runtime, _fake, pump, health, key) = build_test_pump();
-    let release_gate = Arc::new(atm_storage::testing::ReleaseBlocker::default());
-    struct ReleaseGateGuard(Arc<atm_storage::testing::ReleaseBlocker>);
-    impl Drop for ReleaseGateGuard {
-        fn drop(&mut self) {
-            self.0.release();
-        }
-    }
-    let release_guard = ReleaseGateGuard(Arc::clone(&release_gate));
-    let store = Arc::new(
-        atm_storage::testing::DummyPendingNudgeStore::default()
-            .with_release_blocker(Arc::clone(&release_gate)),
-    );
-    let store: Arc<dyn atm_core::boundary::PendingNudgeStore + Send + Sync> = store;
+    let test_clock = ControlledInstantClock::new();
+    let release_deadline =
+        atm_core::api::RequestDeadline::after_at(test_clock.now(), HERDR_REQUEST_BUDGET);
+    let mut release_bridge = pump.blocking_bridge.clone();
+    release_bridge.set_test_clock(test_clock.callback());
+    let release_gate = Arc::new(BlockingGate::default());
+    let release_guard = BlockingGateReleaseGuard(Arc::clone(&release_gate));
+    let store = runtime.pending_nudge_store().expect("pending store");
     let release = ReleasePendingOnDrop::new(
         store,
         key,
@@ -2622,27 +2650,28 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
         Arc::new(Mutex::new(HashMap::new())),
         runtime,
         Arc::clone(&pump.release_handles),
-        pump.blocking_bridge.clone(),
-    );
+        release_bridge,
+    )
+    .with_release_test_gate(Arc::clone(&release_gate))
+    .with_release_test_deadline(release_deadline);
     drop(release);
     let started_gate = Arc::clone(&release_gate);
-    tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
-        .await
-        .expect("release-start signal waiter joins");
+    assert!(
+        tokio::task::spawn_blocking(move || started_gate.wait_until_entered())
+            .await
+            .expect("release-start signal waiter joins"),
+        "release work enters before the controlled deadline"
+    );
 
     let (shutdown_tx, shutdown_rx) = watch::channel(());
     let task = pump.start(shutdown_rx);
     shutdown_tx.send(()).expect("shutdown notification");
+    test_clock.advance(HERDR_REQUEST_BUDGET);
     tokio::time::advance(HERDR_REQUEST_BUDGET).await;
-    tokio::task::yield_now().await;
-
-    assert!(
-        task.is_finished(),
-        "a stalled release store must not hold pump shutdown past its request deadline"
-    );
+    task.await
+        .expect("pump shutdown completes at its request deadline");
     assert_eq!(health.snapshot().blocking_core_bridge_stalls_total, 1);
     drop(release_guard);
-    task.await.expect("bounded pump shutdown joins");
 }
 
 #[test]
