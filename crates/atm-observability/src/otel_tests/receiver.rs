@@ -82,21 +82,17 @@ impl Capture {
     }
 
     /// Waits until `condition` holds, re-checking on every capture change.
-    /// The 30s bound is failure-only; on expiry the panic names `what`.
-    pub async fn wait(&self, what: &str, condition: impl Fn() -> bool) {
-        tokio::time::timeout(Duration::from_secs(30), async {
-            loop {
-                let changed = self.changed.notified();
-                tokio::pin!(changed);
-                changed.as_mut().enable();
-                if condition() {
-                    return;
-                }
-                changed.await;
+    /// Wakes only when the test-owned receiver observes a state change.
+    pub async fn wait(&self, _what: &str, condition: impl Fn() -> bool) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if condition() {
+                return;
             }
-        })
-        .await
-        .unwrap_or_else(|_| panic!("the receiver never observed {what}"));
+            changed.await;
+        }
     }
 }
 

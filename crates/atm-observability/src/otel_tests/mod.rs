@@ -14,18 +14,17 @@ use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry::trace::{Span, Tracer, TracerProvider};
 use opentelemetry_proto::tonic::metrics::v1::metric::Data;
 
-use super::otel_setup::{TelemetrySetup, setup_with_limits, setup_with_timeouts};
+use super::otel_setup::{
+    EXPORT_TIMEOUT, EXPORT_TRANSPORT_TIMEOUT, TelemetrySetup, setup_with_limits,
+    setup_with_timeouts,
+};
 use receiver::{Receiver, Signal};
-
-// The CI job has a shorter overall deadline; this guard cannot determine a
-// successful export or shutdown before the job itself terminates.
-const SUCCESS_EXPORT_HANG_GUARD: Duration = Duration::from_secs(24 * 60 * 60);
 
 fn setup_success(
     config: &TelemetryExportConfig,
     batch: usize,
 ) -> Result<TelemetrySetup, Box<dyn std::error::Error + Send + Sync>> {
-    setup_with_limits(config, batch, SUCCESS_EXPORT_HANG_GUARD)
+    setup_with_timeouts(config, batch, EXPORT_TRANSPORT_TIMEOUT, EXPORT_TIMEOUT)
 }
 
 fn config(endpoint: &str) -> TelemetryExportConfig {
@@ -85,6 +84,21 @@ async fn shutdown(setup: TelemetrySetup) {
     results.2.unwrap().unwrap();
 }
 
+async fn wait_for_task_exports(receiver: &Receiver, trace_before: usize, metric_before: usize) {
+    receiver
+        .capture
+        .wait("the successful task span export to finish", || {
+            receiver.capture.finished(Signal::Trace) > trace_before
+        })
+        .await;
+    receiver
+        .capture
+        .wait("the successful task metric export to finish", || {
+            receiver.capture.finished(Signal::Metric) > metric_before
+        })
+        .await;
+}
+
 #[tokio::test]
 async fn every_task_kind_exports_its_typed_name_and_facts() {
     use TaskTelemetryKind::*;
@@ -106,6 +120,8 @@ async fn every_task_kind_exports_its_typed_name_and_facts() {
         PromptHandoff,
     ];
     let receiver = Receiver::start(false).await;
+    let trace_before = receiver.capture.finished(Signal::Trace);
+    let metric_before = receiver.capture.finished(Signal::Metric);
     let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
     for (index, kind) in kinds.into_iter().enumerate() {
         setup
@@ -115,6 +131,7 @@ async fn every_task_kind_exports_its_typed_name_and_facts() {
             .unwrap();
     }
     shutdown(setup).await;
+    wait_for_task_exports(&receiver, trace_before, metric_before).await;
     {
         let spans = receiver.capture.spans.lock().unwrap();
         let events: Vec<_> = spans
@@ -145,6 +162,8 @@ async fn every_task_kind_exports_its_typed_name_and_facts() {
 #[tokio::test]
 async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
     let receiver = Receiver::start(false).await;
+    let trace_before = receiver.capture.finished(Signal::Trace);
+    let metric_before = receiver.capture.finished(Signal::Metric);
     let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
     for (kind, seq, second) in [
         (TaskTelemetryKind::Assigned, 1, 1),
@@ -225,6 +244,7 @@ async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
             .all(|metadata| metadata.get("authorization").unwrap() == "Bearer fixture-auth")
     );
     shutdown(setup).await;
+    wait_for_task_exports(&receiver, trace_before, metric_before).await;
     receiver.stop().await;
 }
 
@@ -232,6 +252,8 @@ async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
 async fn native_ids_are_deterministic_isolated_and_context_does_not_leak() {
     let receiver = Receiver::start(false).await;
     for _ in 0..2 {
+        let trace_before = receiver.capture.finished(Signal::Trace);
+        let metric_before = receiver.capture.finished(Signal::Metric);
         let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
         for (task, seq) in [("one", 1), ("two", 1), ("one", 4)] {
             setup
@@ -257,6 +279,7 @@ async fn native_ids_are_deterministic_isolated_and_context_does_not_leak() {
         );
         setup.1.tracer("unrelated").start("unrelated").end();
         shutdown(setup).await;
+        wait_for_task_exports(&receiver, trace_before, metric_before).await;
     }
     {
         let spans = receiver.capture.spans.lock().unwrap();
@@ -286,6 +309,8 @@ async fn native_ids_are_deterministic_isolated_and_context_does_not_leak() {
 #[tokio::test]
 async fn late_old_close_never_closes_new_assignment_and_missing_start_is_partial() {
     let receiver = Receiver::start(false).await;
+    let trace_before = receiver.capture.finished(Signal::Trace);
+    let metric_before = receiver.capture.finished(Signal::Metric);
     let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
     for (kind, seq, second) in [
         (TaskTelemetryKind::Started, 2, 2),
@@ -307,6 +332,7 @@ async fn late_old_close_never_closes_new_assignment_and_missing_start_is_partial
         .emit(record("missing", TaskTelemetryKind::Completed, 9, 9))
         .unwrap();
     shutdown(setup).await;
+    wait_for_task_exports(&receiver, trace_before, metric_before).await;
     {
         let spans = receiver.capture.spans.lock().unwrap();
         let tasks: Vec<_> = spans
@@ -348,6 +374,8 @@ async fn late_old_close_never_closes_new_assignment_and_missing_start_is_partial
 #[tokio::test]
 async fn receiver_metrics_cap_series_without_identity_labels() {
     let receiver = Receiver::start(false).await;
+    let trace_before = receiver.capture.finished(Signal::Trace);
+    let metric_before = receiver.capture.finished(Signal::Metric);
     let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
     for index in 0..40 {
         let task = format!("distinct-task-{index}");
@@ -372,6 +400,7 @@ async fn receiver_metrics_cap_series_without_identity_labels() {
         })
         .await;
     shutdown(setup).await;
+    wait_for_task_exports(&receiver, trace_before, metric_before).await;
     {
         let metrics = receiver.capture.metrics.lock().unwrap();
         let (mut sums, mut histograms) = (0, 0);
@@ -449,6 +478,8 @@ fn tls_is_enabled_for_an_https_scheme_in_any_case() {
 #[tokio::test]
 async fn same_instant_reassign_after_a_close_starts_a_new_assignment_by_seq() {
     let receiver = Receiver::start(false).await;
+    let trace_before = receiver.capture.finished(Signal::Trace);
+    let metric_before = receiver.capture.finished(Signal::Metric);
     let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
     for (kind, seq, second) in [
         (TaskTelemetryKind::Completed, 3, 3),
@@ -462,6 +493,7 @@ async fn same_instant_reassign_after_a_close_starts_a_new_assignment_by_seq() {
             .unwrap();
     }
     shutdown(setup).await;
+    wait_for_task_exports(&receiver, trace_before, metric_before).await;
     {
         let spans = receiver.capture.spans.lock().unwrap();
         let tasks: Vec<_> = spans

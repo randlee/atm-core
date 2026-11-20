@@ -122,6 +122,8 @@ async fn ambient_child() {
         return;
     }
     let receiver = Receiver::start(false).await;
+    let trace_before = receiver.capture.finished(Signal::Trace);
+    let metric_before = receiver.capture.finished(Signal::Metric);
     let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
     setup
         .0
@@ -152,6 +154,7 @@ async fn ambient_child() {
         }
     }
     shutdown(setup).await;
+    wait_for_task_exports(&receiver, trace_before, metric_before).await;
     {
         let metrics = receiver.capture.metrics.lock().unwrap();
         assert!(

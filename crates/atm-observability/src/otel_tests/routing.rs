@@ -66,6 +66,7 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         LogDestination::Both,
     ] {
         let receiver = Receiver::start(false).await;
+        let log_before = receiver.capture.finished(Signal::Log);
         let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
         let root = tempfile::tempdir().unwrap();
         let log_dir = root.path().join("logs");
@@ -153,6 +154,14 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         record.set_body("after retained logger drop".into());
         sdk_logger.emit(record);
         shutdown(setup).await;
+        if destination != LogDestination::File {
+            receiver
+                .capture
+                .wait("successful routed log exports to finish", || {
+                    receiver.capture.finished(Signal::Log) > log_before
+                })
+                .await;
+        }
         let expected = if destination == LogDestination::File {
             1
         } else {
