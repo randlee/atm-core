@@ -163,11 +163,7 @@ impl ReleasePendingOnDrop {
         #[cfg(test)]
         let signal_gate = test_gate.clone();
         #[cfg(test)]
-        let deadline = self
-            .release_test_deadline
-            .unwrap_or_else(herdr_request_deadline);
-        #[cfg(not(test))]
-        let deadline = herdr_request_deadline();
+        let test_deadline = self.release_test_deadline;
         let release = move || {
             #[cfg(test)]
             if let Some(gate) = test_gate {
@@ -183,6 +179,10 @@ impl ReleasePendingOnDrop {
             let bridge = self.blocking_bridge.clone();
             let log_member = self.member.clone();
             let release_handle = handle.spawn(async move {
+                #[cfg(test)]
+                let deadline = test_deadline.unwrap_or_else(herdr_request_deadline);
+                #[cfg(not(test))]
+                let deadline = herdr_request_deadline();
                 let outcome = bridge.run(deadline, release).await;
                 #[cfg(test)]
                 if outcome.is_err()
