@@ -1730,6 +1730,13 @@ mod tests {
                 return Err(AtmError::validation("expected post-send request"));
             };
             listener.write_response(&mut stream, &GraftPostSendResponse::Delivered)?;
+            // Close the receiver's write half after sending the complete reply;
+            // TCP preserves the queued response for the sender to read.
+            stream
+                .shutdown(std::net::Shutdown::Write)
+                .map_err(|source| {
+                    AtmError::daemon_unavailable("close test receiver reply").with_cause(source)
+                })?;
             guard.completed = true;
             Ok(Some(request))
         });
@@ -1740,7 +1747,15 @@ mod tests {
         listener: &Arc<GraftReceiverListener>,
         send: impl FnOnce() -> T,
     ) -> (T, Result<Option<GraftPostSendRequest>, AtmError>) {
-        let (receiver, control, _accepted) = spawn_test_receiver(listener);
+        exchange_with_test_receiver_failure(listener, ReceiverFailure::None, send)
+    }
+
+    fn exchange_with_test_receiver_failure<T>(
+        listener: &Arc<GraftReceiverListener>,
+        failure: ReceiverFailure,
+        send: impl FnOnce() -> T,
+    ) -> (T, Result<Option<GraftPostSendRequest>, AtmError>) {
+        let (receiver, control, _accepted) = spawn_test_receiver_with_failure(listener, failure);
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let sender_control = Arc::clone(&control);
             super::TEST_RECEIVER_CONNECTED.with(|slot| {
@@ -1801,6 +1816,46 @@ mod tests {
             .expect("receiver thread")
             .expect("delivery received");
         (outcome, request)
+    }
+
+    #[test]
+    fn actual_graft_sender_returns_error_when_receiver_fails_after_accept() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = bind_listener(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+            None,
+        )
+        .expect("bind listener");
+        let endpoint = listener.local_addr().expect("endpoint");
+        let capability = listener.capability().clone();
+        let request = GraftPostSendRequest {
+            event: test_event(),
+            kind: NudgeKind::Steer,
+            rendered_nudge: "failure test".to_owned(),
+        };
+        let (sender_result, receiver_result) =
+            exchange_with_test_receiver_failure(&listener, ReceiverFailure::AfterAccept, || {
+                super::TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.set(true));
+                deliver_graft_post_send(
+                    endpoint,
+                    &capability,
+                    &request,
+                    Duration::ZERO,
+                    Duration::ZERO,
+                )
+            });
+        assert!(
+            sender_result.is_err(),
+            "sender must report receiver failure"
+        );
+        assert!(
+            receiver_result
+                .expect_err("injected receiver failure")
+                .message()
+                .contains("injected exchange failure")
+        );
     }
 
     #[test]
