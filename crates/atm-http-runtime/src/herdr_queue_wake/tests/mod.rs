@@ -10,7 +10,7 @@ use super::task_pass::{observe_escalation_episode_if_eligible, runtime_state};
 use super::{
     BoundedBlockingBridge, HERDR_MAX_CONSECUTIVE_RELEASES, HERDR_MAX_PROMPTS_PER_TICK,
     HERDR_POLL_INTERVAL_MS, HERDR_REQUEST_BUDGET, HerdrQueueWakePump, ReleasePendingOnDrop,
-    RuntimeHealth, herdr_request_deadline, log_herdr_list_failure,
+    RuntimeHealth, log_herdr_list_failure,
 };
 use atm_core::LocalServiceRuntime;
 use atm_core::ack::{AckRequest, ack_mail_with_runtime};
@@ -81,8 +81,8 @@ impl ControlledInstantClock {
         Arc::new(move || *now.lock().expect("controlled clock lock"))
     }
 
-    fn reset(&self, now: Instant) {
-        *self.0.lock().expect("controlled clock lock") = now;
+    fn now(&self) -> Instant {
+        *self.0.lock().expect("controlled clock lock")
     }
 
     fn advance(&self, duration: Duration) {
@@ -143,13 +143,12 @@ async fn blocking_work_is_bounded_by_the_existing_request_deadline() {
     let worker_gate = Arc::clone(&gate);
     let failure_gate = Arc::clone(&gate);
     let test_clock = ControlledInstantClock::new();
+    let deadline = atm_core::api::RequestDeadline::after_at(test_clock.now(), HERDR_REQUEST_BUDGET);
     let mut bridge = BoundedBlockingBridge::new(
         std::num::NonZeroUsize::new(1).expect("non-zero test bridge capacity"),
         RuntimeHealth::default(),
     );
     bridge.set_test_clock(test_clock.callback());
-    let deadline = herdr_request_deadline();
-    test_clock.reset(Instant::now());
     let operation = tokio::spawn(async move {
         let outcome = bridge
             .run(deadline, move || {
@@ -2634,10 +2633,10 @@ async fn stalled_drop_release_does_not_outlive_the_shutdown_deadline() {
 
     let (_root, runtime, _fake, pump, health, key) = build_test_pump();
     let test_clock = ControlledInstantClock::new();
+    let release_deadline =
+        atm_core::api::RequestDeadline::after_at(test_clock.now(), HERDR_REQUEST_BUDGET);
     let mut release_bridge = pump.blocking_bridge.clone();
     release_bridge.set_test_clock(test_clock.callback());
-    let release_deadline = herdr_request_deadline();
-    test_clock.reset(Instant::now());
     let release_gate = Arc::new(BlockingGate::default());
     let release_guard = BlockingGateReleaseGuard(Arc::clone(&release_gate));
     let store = runtime.pending_nudge_store().expect("pending store");
