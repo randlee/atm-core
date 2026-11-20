@@ -868,7 +868,23 @@ fn serve_registered_receiver(
             return Ok(());
         }
         tick_lease_refresh(ctx, &mut listener, &mut lease_backoff);
-        match listener.listener.poll_accept() {
+        #[cfg(test)]
+        let accepted = if TEST_FORCED_EMPTY_POLLS.with(|slot| {
+            slot.borrow().as_ref().is_some_and(|remaining| {
+                remaining
+                    .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
+                        count.checked_sub(1)
+                    })
+                    .is_ok()
+            })
+        }) {
+            Ok(None)
+        } else {
+            listener.listener.poll_accept()
+        };
+        #[cfg(not(test))]
+        let accepted = listener.listener.poll_accept();
+        match accepted {
             Ok(Some(mut stream)) => {
                 if stop_requested(&ctx.stop_rx) {
                     return Ok(());
@@ -884,6 +900,12 @@ fn serve_registered_receiver(
                 }
             }
             Ok(None) => {
+                #[cfg(test)]
+                TEST_POLL_EVENTS.with(|slot| {
+                    if let Some(events) = slot.borrow().as_ref() {
+                        let _ = events.send(TestWakeEvent::EmptyPoll);
+                    }
+                });
                 #[cfg(test)]
                 let stop = TEST_LEASE_WAKE.with(|slot| {
                     if let Some(wake) = slot.borrow().as_ref() {
@@ -909,8 +931,16 @@ fn serve_registered_receiver(
 }
 
 #[cfg(test)]
+enum TestWakeEvent {
+    EmptyPoll,
+    Response(Result<GraftPostSendResponse, AtmError>),
+}
+
+#[cfg(test)]
 thread_local! {
     static TEST_LEASE_WAKE: std::cell::RefCell<Option<Receiver<()>>> = const { std::cell::RefCell::new(None) };
+    static TEST_POLL_EVENTS: std::cell::RefCell<Option<mpsc::Sender<TestWakeEvent>>> = const { std::cell::RefCell::new(None) };
+    static TEST_FORCED_EMPTY_POLLS: std::cell::RefCell<Option<Arc<AtomicUsize>>> = const { std::cell::RefCell::new(None) };
 }
 
 fn publish_receiver_target(ctx: &GraftReceiverLoopContext, listener: &GraftReceiverListener) {
@@ -1171,9 +1201,8 @@ mod tests {
         GRAFT_RECEIVER_RECOVERY_WARN_INITIAL_DELAY, GraftReceiverLeaseClient,
         GraftReceiverLoopContext, HelperThreadBudget, MAX_HOST_NUDGE_HELPERS,
         RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch, ReceiverRecoveryCircuit,
-        RegisteredGraftReceiver, ResultWait, handle_graft_receiver_connection, load_graft_config,
-        read_snapshot, recover_after_poll_accept_error, recover_graft_receiver,
-        wait_for_stop_or_delay,
+        RegisteredGraftReceiver, ResultWait, load_graft_config, read_snapshot,
+        recover_after_poll_accept_error, recover_graft_receiver, wait_for_stop_or_delay,
     };
     use crate::{GraftSessionState, SessionSnapshot};
 
@@ -1269,12 +1298,38 @@ mod tests {
         (SocketAddr, LocalCapability),
     );
 
+    #[derive(Clone)]
+    struct TestWake {
+        wake: mpsc::Sender<()>,
+        events_tx: mpsc::Sender<super::TestWakeEvent>,
+        events_rx: Arc<Mutex<mpsc::Receiver<super::TestWakeEvent>>>,
+    }
+
+    impl TestWake {
+        fn send(&self, value: ()) -> Result<(), mpsc::SendError<()>> {
+            self.wake.send(value)
+        }
+    }
+
+    fn test_wake() -> (TestWake, mpsc::Receiver<()>) {
+        let (wake, wake_rx) = mpsc::channel();
+        let (events_tx, events_rx) = mpsc::channel();
+        (
+            TestWake {
+                wake,
+                events_tx,
+                events_rx: Arc::new(Mutex::new(events_rx)),
+            },
+            wake_rx,
+        )
+    }
+
     type WakeSpawnedReceiver = (
         mpsc::Sender<()>,
         std::thread::JoinHandle<Result<(), AtmError>>,
         Arc<RwLock<SessionSnapshot>>,
         (SocketAddr, LocalCapability),
-        mpsc::Sender<()>,
+        TestWake,
     );
 
     fn test_paths() -> TestPaths {
@@ -1312,7 +1367,7 @@ mod tests {
         endpoint: SocketAddr,
         capability: &LocalCapability,
         event: PostSendHookEvent,
-        wake: &mpsc::Sender<()>,
+        wake: &TestWake,
     ) -> GraftPostSendResponse {
         let mut stream = TcpStream::connect(endpoint).expect("connect receiver");
         let request = GraftPostSendWireRequest {
@@ -1326,10 +1381,29 @@ mod tests {
         write_graft_post_send_message(&mut stream, &request, "write request", "oversize request")
             .expect("write request");
         stream.flush().expect("flush request");
+        let events = wake.events_rx.lock().expect("one delivery at a time");
+        let response_events = wake.events_tx.clone();
+        let reader = std::thread::spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                read_graft_post_send_message(&mut stream, "read response", "oversize response")
+            }))
+            .unwrap_or_else(|_| {
+                Err(AtmError::daemon_unavailable(
+                    "test response reader panicked",
+                ))
+            });
+            let _ = response_events.send(super::TestWakeEvent::Response(result));
+        });
         wake.send(())
             .expect("wake receiver after request is available");
-        read_graft_post_send_message(&mut stream, "read response", "oversize response")
-            .expect("read response")
+        let response = loop {
+            match events.recv().expect("receiver event") {
+                super::TestWakeEvent::EmptyPoll => wake.send(()).expect("wake after empty poll"),
+                super::TestWakeEvent::Response(result) => break result,
+            }
+        };
+        reader.join().expect("response reader thread");
+        response.expect("read response")
     }
 
     fn request_event() -> PostSendHookEvent {
@@ -1372,8 +1446,18 @@ mod tests {
         injector: Arc<dyn HostNudgeInjector>,
         client: Option<GraftClient>,
     ) -> WakeSpawnedReceiver {
+        spawn_receiver_with_forced_empty(graft_root, injector, client, None)
+    }
+
+    fn spawn_receiver_with_forced_empty(
+        graft_root: PathBuf,
+        injector: Arc<dyn HostNudgeInjector>,
+        client: Option<GraftClient>,
+        forced_empty: Option<Arc<AtomicUsize>>,
+    ) -> WakeSpawnedReceiver {
         let (stop_tx, stop_rx) = mpsc::channel();
-        let (wake, wake_rx) = mpsc::channel();
+        let (wake, wake_rx) = test_wake();
+        let poll_events = wake.events_tx.clone();
         let mut ready_latch = ReceiverReadyLatch::new();
         let (target_tx, target_rx) = mpsc::sync_channel(1);
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
@@ -1396,6 +1480,8 @@ mod tests {
         };
         let join = std::thread::spawn(move || {
             super::TEST_LEASE_WAKE.with(|slot| *slot.borrow_mut() = Some(wake_rx));
+            super::TEST_POLL_EVENTS.with(|slot| *slot.borrow_mut() = Some(poll_events));
+            super::TEST_FORCED_EMPTY_POLLS.with(|slot| *slot.borrow_mut() = forced_empty);
             super::run_graft_receiver_loop_with_wait(ctx, ResultWait::UntilComplete)
         });
         ready_latch.ready_rx.recv().expect("receiver ready");
@@ -1423,7 +1509,7 @@ mod tests {
     struct ManualLeaseTicks {
         now: Arc<Mutex<Instant>>,
         events: mpsc::Receiver<&'static str>,
-        wake: mpsc::Sender<()>,
+        wake: TestWake,
     }
 
     impl ManualLeaseTicks {
@@ -1471,7 +1557,8 @@ mod tests {
     ) -> (SpawnedReceiver, ManualLeaseTicks) {
         let (stop_tx, stop_rx) = mpsc::channel();
         let (events_tx, events) = mpsc::channel();
-        let (wake, wake_rx) = mpsc::channel();
+        let (wake, wake_rx) = test_wake();
+        let poll_events = wake.events_tx.clone();
         let mut ready_latch = ReceiverReadyLatch::new();
         let (target_tx, target_rx) = mpsc::sync_channel(1);
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
@@ -1498,6 +1585,7 @@ mod tests {
         let clock_initialized = AtomicBool::new(false);
         let join = std::thread::spawn(move || {
             super::TEST_LEASE_WAKE.with(|slot| *slot.borrow_mut() = Some(wake_rx));
+            super::TEST_POLL_EVENTS.with(|slot| *slot.borrow_mut() = Some(poll_events));
             if let Some(timeouts) = lease_timeouts {
                 super::lease_client::install_test_lease_timeouts(timeouts);
             }
@@ -1521,7 +1609,7 @@ mod tests {
     fn stop_receiver(
         stop_tx: std::sync::mpsc::Sender<()>,
         join: std::thread::JoinHandle<Result<(), AtmError>>,
-        wake: mpsc::Sender<()>,
+        wake: TestWake,
     ) {
         // The non-blocking accept loop observes the stop signal within one poll
         // interval, so no wake-by-connect is required to unblock shutdown.
@@ -1791,10 +1879,33 @@ mod tests {
     }
 
     #[test]
+    fn delivery_wakes_again_after_controlled_empty_accepts() {
+        let paths = test_paths();
+        let injector = Arc::new(RecordingInjector::default());
+        // The first empty poll parks the loop; two more emulate readiness
+        // arriving only after the test has sent its initial wake.
+        let forced_empty = Arc::new(AtomicUsize::new(3));
+        let (stop_tx, join, _snapshot, (endpoint, capability), wake) =
+            spawn_receiver_with_forced_empty(
+                paths.workspace_root.clone(),
+                injector.clone(),
+                None,
+                Some(Arc::clone(&forced_empty)),
+            );
+        assert_eq!(
+            deliver_request_with_wake(endpoint, &capability, request_event(), &wake),
+            GraftPostSendResponse::Delivered
+        );
+        assert_eq!(forced_empty.load(Ordering::SeqCst), 0);
+        assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
+        stop_receiver(stop_tx, join, wake);
+    }
+
+    #[test]
     fn hard_accept_failure_rebinds_and_resumes_authenticated_delivery() {
         let paths = test_paths();
         let injector = Arc::new(RecordingInjector::default());
-        let (_stop_tx, stop_rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = mpsc::channel();
         let snapshot = Arc::new(RwLock::new(SessionSnapshot {
             team: TeamName::from_validated(TEST_TEAM),
             agent: AgentName::from_validated(TEST_QA),
@@ -1832,32 +1943,21 @@ mod tests {
         );
         let endpoint = listener.listener.local_addr().expect("rebound endpoint");
         let capability = listener.listener.capability().clone();
-        // A completed connect queues this loopback peer before the single
-        // nonblocking accept, without polling or relying on another thread.
-        let mut client = TcpStream::connect(endpoint).expect("connect to rebound listener");
-        let wire = GraftPostSendWireRequest {
-            capability_base64url: capability.to_base64url(),
-            request: GraftPostSendRequest {
-                event: request_event(),
-                kind: NudgeKind::Steer,
-                rendered_nudge: "<atm>test nudge</atm>".to_string(),
-            },
-        };
-        write_graft_post_send_message(&mut client, &wire, "write request", "oversize request")
-            .expect("write authenticated request");
-        let mut stream = listener
-            .listener
-            .poll_accept()
-            .expect("poll rebound listener")
-            .expect("connected loopback peer");
-        let bounded_injector =
-            BoundedHostNudgeInjector::spawn_with_wait(injector.clone(), ResultWait::UntilComplete);
-        handle_graft_receiver_connection(&ctx, &bounded_injector, &listener.listener, &mut stream)
-            .expect("deliver through rebound listener");
-        let response: GraftPostSendResponse =
-            read_graft_post_send_message(&mut client, "read response", "oversize response")
-                .expect("read delivered response");
+        // Serve the actual rebound listener; empty accepts are reported to the
+        // test, which supplies the next wake without a timer or polling guess.
+        let (wake, wake_rx) = test_wake();
+        let poll_events = wake.events_tx.clone();
+        let loop_injector = injector.clone();
+        let join = std::thread::spawn(move || {
+            super::TEST_LEASE_WAKE.with(|slot| *slot.borrow_mut() = Some(wake_rx));
+            super::TEST_POLL_EVENTS.with(|slot| *slot.borrow_mut() = Some(poll_events));
+            let bounded =
+                BoundedHostNudgeInjector::spawn_with_wait(loop_injector, ResultWait::UntilComplete);
+            super::serve_registered_receiver(&ctx, &bounded, listener)
+        });
+        let response = deliver_request_with_wake(endpoint, &capability, request_event(), &wake);
         assert_eq!(response, GraftPostSendResponse::Delivered);
+        stop_receiver(stop_tx, join, wake);
         assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
     }
 
@@ -2427,9 +2527,11 @@ mod tests {
         let endpoint = receiver.listener.local_addr().expect("endpoint");
         let capability = receiver.listener.capability().clone();
         let loop_injector = injector.clone();
-        let (wake, wake_rx) = mpsc::channel();
+        let (wake, wake_rx) = test_wake();
+        let poll_events = wake.events_tx.clone();
         let join = std::thread::spawn(move || {
             super::TEST_LEASE_WAKE.with(|slot| *slot.borrow_mut() = Some(wake_rx));
+            super::TEST_POLL_EVENTS.with(|slot| *slot.borrow_mut() = Some(poll_events));
             let bounded =
                 BoundedHostNudgeInjector::spawn_with_wait(loop_injector, ResultWait::UntilComplete);
             super::serve_registered_receiver(&ctx, &bounded, receiver)
