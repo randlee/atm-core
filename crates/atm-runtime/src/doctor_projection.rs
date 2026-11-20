@@ -68,6 +68,8 @@ pub struct StorageDoctorProjection {
     endpoint_doctor: Arc<dyn HerdrEndpointDoctor>,
     reader_lanes: Option<ReaderPoolDoctorReport>,
     workers: Arc<DoctorWorkers>,
+    #[cfg(test)]
+    frozen_clock: Option<std::time::Instant>,
 }
 
 struct DoctorWorkers {
@@ -125,6 +127,8 @@ impl StorageDoctorProjection {
             endpoint_doctor,
             reader_lanes,
             workers: Arc::new(DoctorWorkers { handles }),
+            #[cfg(test)]
+            frozen_clock: None,
         })
     }
 }
@@ -137,7 +141,11 @@ impl DoctorProjection for StorageDoctorProjection {
         context: DoctorProjectionContext,
         deadline: RequestDeadline,
     ) -> Result<DoctorReport, AtmError> {
-        let remaining = deadline.remaining().ok_or_else(|| {
+        #[cfg(test)]
+        let remaining = self.test_remaining(deadline);
+        #[cfg(not(test))]
+        let remaining = deadline.remaining();
+        let remaining = remaining.ok_or_else(|| {
             AtmError::daemon_unavailable_with_recovery(
                 "doctor request deadline expired before control-lane admission",
                 "increase the request deadline or retry when the daemon is ready.",
@@ -160,8 +168,11 @@ impl DoctorProjection for StorageDoctorProjection {
                     )
                 }
             })?;
-        let mut report = tokio::time::timeout(remaining, response_receiver)
-            .await
+        #[cfg(test)]
+        let response = self.test_response(remaining, response_receiver).await;
+        #[cfg(not(test))]
+        let response = tokio::time::timeout(remaining, response_receiver).await;
+        let mut report = response
             .map_err(|_| {
                 AtmError::daemon_unavailable_with_recovery(
                     "doctor request deadline expired",
@@ -209,6 +220,34 @@ impl DoctorProjection for StorageDoctorProjection {
 }
 
 impl StorageDoctorProjection {
+    #[cfg(test)]
+    fn test_remaining(&self, deadline: RequestDeadline) -> Option<std::time::Duration> {
+        self.frozen_clock.map_or_else(
+            || deadline.remaining(),
+            |now| {
+                let millis = deadline.remaining_ms_at(now);
+                (millis > 0).then(|| std::time::Duration::from_millis(millis))
+            },
+        )
+    }
+
+    #[cfg(test)]
+    async fn test_response(
+        &self,
+        remaining: std::time::Duration,
+        receiver: tokio::sync::oneshot::Receiver<Result<DoctorReport, AtmError>>,
+    ) -> Result<
+        Result<Result<DoctorReport, AtmError>, tokio::sync::oneshot::error::RecvError>,
+        tokio::time::error::Elapsed,
+    > {
+        if self.frozen_clock.is_some() {
+            // A frozen clock cannot reach the deadline; only the worker can complete.
+            Ok(receiver.await)
+        } else {
+            tokio::time::timeout(remaining, receiver).await
+        }
+    }
+
     async fn append_herdr_report(
         &self,
         report: &mut DoctorReport,
@@ -411,6 +450,78 @@ mod tests {
             }],
             refreshed_at: None,
         }
+    }
+
+    #[tokio::test]
+    async fn doctor_projection_rejects_control_lane_overload_explicitly() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-doctor-overload-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("temporary runtime root");
+        let assembly = open_isolated_sqlite_boundary(&root).expect("runtime assembly");
+        let mut ports = assembly.doctor_ports.clone();
+        let (gated, entered, release) =
+            atm_runtime_test_support::GatedConfigDoctor::new(ports.config_doctor);
+        ports.config_doctor = Arc::new(gated);
+        // Already expired against wall time, but still live on the frozen clock.
+        let now = std::time::Instant::now() - std::time::Duration::from_secs(2);
+        let deadline = RequestDeadline::after_at(now, std::time::Duration::from_secs(1));
+        let mut projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig {
+                worker_count: 1,
+                queue_depth: 1,
+                ..DoctorProjectionConfig::default()
+            },
+            assembly.service_runtime.clone(),
+            ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start bounded doctor projection");
+        projection.frozen_clock = Some(now);
+        let projection = Arc::new(projection);
+        let query = DoctorQuery {
+            home_dir: root.clone(),
+            current_dir: root.clone(),
+            ..DoctorQuery::default()
+        };
+        let held_projection = Arc::clone(&projection);
+        let held_query = query.clone();
+        let held = tokio::spawn(async move {
+            held_projection
+                .project(held_query, DoctorProjectionContext::default(), deadline)
+                .await
+        });
+        entered.await.expect("doctor port remains alive");
+
+        // A pending poll submits the request into the sole slot while the worker is held.
+        let mut queued = Box::pin(projection.project(
+            query.clone(),
+            DoctorProjectionContext::default(),
+            deadline,
+        ));
+        let queued_poll = std::future::poll_fn(|cx| {
+            std::task::Poll::Ready(std::future::Future::poll(queued.as_mut(), cx))
+        })
+        .await;
+        assert!(
+            queued_poll.is_pending(),
+            "second request waits in the queue"
+        );
+        let error = projection
+            .project(query, DoctorProjectionContext::default(), deadline)
+            .await
+            .expect_err("full queue rejects the third request");
+        assert_eq!(
+            error.code(),
+            atm_storage::AtmErrorCode::DaemonConnectionSaturated
+        );
+
+        release.send(()).expect("release doctor worker");
+        held.await
+            .expect("held request joins")
+            .expect("held request completes");
+        queued.await.expect("queued request completes");
     }
 
     #[tokio::test]
