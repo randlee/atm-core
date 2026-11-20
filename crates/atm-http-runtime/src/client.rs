@@ -1032,6 +1032,7 @@ mod tests {
 
     #[cfg(unix)]
     use super::client_tail::UnixSocketConnector;
+    use super::client_tail::with_test_deadline_expired;
     use super::{
         DirectPeerTcpConnector, HttpRuntimeClient, HttpRuntimeClientFailure, HttpRuntimeConnector,
         LoopbackTcpConnector, TransportGeneration, direct_peer_connection_failure,
@@ -1430,10 +1431,7 @@ mod tests {
     /// forcing a fresh transport.
     #[tokio::test]
     async fn a_refused_connection_is_classified_as_a_safe_to_reconnect_failure() {
-        let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_millis(500))
-            .build()
-            .expect("build a bounded test client");
+        let client = reqwest::Client::new();
         let url =
             reqwest::Url::parse("http://127.0.0.1:0/v1/atm/messages").expect("valid loopback url");
         let request = HttpRequest {
@@ -1443,12 +1441,15 @@ mod tests {
             body: Vec::new(),
         };
 
-        let failure = execute_reqwest_request(
-            &client,
-            url,
-            request,
-            RequestDeadline::after(Duration::from_secs(1)),
-            None,
+        let failure = with_test_deadline_expired(
+            false,
+            execute_reqwest_request(
+                &client,
+                url,
+                request,
+                RequestDeadline::after(Duration::ZERO),
+                None,
+            ),
         )
         .await
         .expect_err("nothing listens on the reserved port");
@@ -1461,27 +1462,37 @@ mod tests {
     }
 
     /// A peer that accepts the TCP connection and then closes it without
-    /// ever answering must NOT classify as a connect failure: by the time
-    /// the connection was accepted, the request may already have been
-    /// written, so reconnecting it could duplicate a write the peer already
-    /// received.
+    /// answering must NOT classify as a connect failure. The test releases
+    /// the close only after accept, so the result cannot depend on scheduling
+    /// a close against a connection that has not completed its handshake.
     #[tokio::test]
     async fn a_connection_closed_after_accept_is_not_classified_as_reconnect_safe() {
         let listener = TcpListener::bind(("127.0.0.1", 0))
             .await
             .expect("bind a test listener");
         let port = listener.local_addr().expect("listener address").port();
+        let (request_received_tx, request_received_rx) = tokio::sync::oneshot::channel();
+        let (close_tx, close_rx) = tokio::sync::oneshot::channel();
         let accept_task = tokio::spawn(async move {
-            let (stream, _) = listener.accept().await.expect("accept one connection");
-            // Immediately drop the accepted stream without reading or
-            // writing anything, simulating a peer that vanished the instant
-            // after the TCP handshake completed.
+            let (mut stream, _) = listener.accept().await.expect("accept one connection");
+            let mut request = Vec::new();
+            let mut chunk = [0; 1024];
+            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                let read = tokio::io::AsyncReadExt::read(&mut stream, &mut chunk)
+                    .await
+                    .expect("read the request headers");
+                assert_ne!(read, 0, "client closed before sending request headers");
+                request.extend_from_slice(&chunk[..read]);
+            }
+            request_received_tx
+                .send(())
+                .expect("test still awaits the sent request");
+            close_rx
+                .await
+                .expect("test releases the accepted connection");
             drop(stream);
         });
-        let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_millis(500))
-            .build()
-            .expect("build a bounded test client");
+        let client = reqwest::Client::new();
         let url = reqwest::Url::parse(&format!("http://127.0.0.1:{port}/v1/atm/messages"))
             .expect("valid loopback url");
         let request = HttpRequest {
@@ -1491,15 +1502,29 @@ mod tests {
             body: Vec::new(),
         };
 
-        let failure = execute_reqwest_request(
-            &client,
-            url,
-            request,
-            RequestDeadline::after(Duration::from_secs(1)),
-            None,
-        )
-        .await
-        .expect_err("the peer closes the connection without responding");
+        let request_task = tokio::spawn(async move {
+            with_test_deadline_expired(
+                false,
+                execute_reqwest_request(
+                    &client,
+                    url,
+                    request,
+                    RequestDeadline::after(Duration::ZERO),
+                    None,
+                ),
+            )
+            .await
+        });
+        request_received_rx
+            .await
+            .expect("peer accepted connection and received request headers");
+        close_tx
+            .send(())
+            .expect("accepted connection still awaits close");
+        let failure = request_task
+            .await
+            .expect("request execution task joins")
+            .expect_err("the peer closes the connection without responding");
 
         assert!(
             !matches!(failure, HttpRuntimeClientFailure::Connect(_)),
