@@ -19,6 +19,7 @@ from rust_source import extract_fn_body
 
 
 ROUTER = Path("crates/atm-http-runtime/src/storage_and_nudge_router.rs")
+DOCTOR_PROJECTION = Path("crates/atm-runtime/src/doctor_projection.rs")
 WRITE_OPS = Path("crates/atm-storage-rusqlite/src/writer/ops.rs")
 ALLOWED_WRITE_OPS = {
     "UpsertMessage",
@@ -84,10 +85,12 @@ def check(root: Path) -> list[str]:
         for term in PROHIBITED_READ_HANDLER_TERMS:
             if term in body:
                 findings.append(f"read handler `{handler}` references prohibited `{term}`")
+    projection = (root / DOCTOR_PROJECTION).read_text(encoding="utf-8")
     for test_name in REQUIRED_LIVENESS_TESTS:
+        source = projection if test_name == "doctor_projection_rejects_control_lane_overload_explicitly" else router
         test_match = re.search(
             rf"(?P<attributes>(?:\s*#\[[^\]]+\]\s*)*)\s*(?:async\s+)?fn\s+{test_name}\s*\(",
-            router,
+            source,
         )
         if test_match is None:
             findings.append(f"required AV.1b liveness test `{test_name}` is missing")

@@ -32,16 +32,23 @@ impl ExportFailureObserved {
         })
     }
 
-    async fn all_signals_failed(&self) {
+    async fn all_signals_failed(&self) -> Result<(), String> {
         loop {
             let changed = self.changed.notified();
             tokio::pin!(changed);
             changed.as_mut().enable();
+            if let Some(exit) = self
+                .names()
+                .into_iter()
+                .find(|name| name.contains("WorkerThreadTerminated"))
+            {
+                return Err(format!("export worker exited: {exit}"));
+            }
             if ["BatchSpanProcessor", "BatchLogProcessor", "PeriodicReader"]
                 .iter()
                 .all(|prefix| self.first_with_prefix(prefix).is_some())
             {
-                return;
+                return Ok(());
             }
             changed.await;
         }
@@ -202,7 +209,7 @@ async fn unreachable_collector_scenario() {
     // full-batch path. The scheduled path first fires at 2x EXPORT_INTERVAL
     // (the SDK interval sleeps before its first tick, then skips it), which
     // a loaded runner can push past the deadline below.
-    let setup = setup_success(&config(&endpoint), 1).unwrap();
+    let setup = setup_with_limits(&config(&endpoint), 1, Duration::from_millis(50)).unwrap();
     setup
         .0
         .sink
@@ -220,8 +227,7 @@ async fn unreachable_collector_scenario() {
         .add(1, &[]);
     // 30 s is a hang diagnostic only; the periodic metric reader first fires
     // at 2x EXPORT_INTERVAL, so success is far earlier than this ceiling.
-    let observed_failure =
-        tokio::time::timeout(Duration::from_secs(30), observed.all_signals_failed()).await;
+    let observed_failure = observed.all_signals_failed().await;
     let mut evidence = health();
     diagnostics.project(&mut evidence);
     // The sink is still nonblocking even though transport failed.
@@ -249,7 +255,7 @@ async fn unreachable_collector_scenario() {
     // current-thread runtime by dropping live native providers during unwind.
     assert!(
         observed_failure.is_ok(),
-        "real span, log and metric export failures expected; SDK emitted {:?}",
+        "real span, log and metric export failures expected; result: {observed_failure:?}; SDK emitted {:?}",
         observed.names()
     );
     assert_eq!(
@@ -410,15 +416,24 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
         (0, 0, 0, 0),
         "SDK quantities are unknown, never copied from synthetic estimates"
     );
+    receiver
+        .capture
+        .wait("stalled trace and log exports started", || {
+            receiver.capture.started(Signal::Trace) > 0 && receiver.capture.started(Signal::Log) > 0
+        })
+        .await;
+    receiver.capture.release();
+    receiver.capture.release();
     receiver.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_terminal_timeout() {
     let receiver = Receiver::start(true).await;
-    // The export timeout outlives the test's hold, so only the receiver's
-    // release signal lets the blocking shutdown finish.
-    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+    // Paused Tokio time keeps the configured exporter bound from deciding this
+    // success path. The receiver's release signal completes each real export.
+    let setup =
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_secs(30)).unwrap();
     for _ in 0..64 {
         setup.1.tracer("abandoned-wait").start("nonempty").end();
     }
@@ -435,6 +450,7 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     let (task, traces, logs, metrics) = setup;
     drop(task);
     let diagnostics = Arc::new(ExportDiagnostics::default());
+    let paused_at = tokio::time::Instant::now();
     let trace_call = tokio::task::spawn_blocking(move || traces.shutdown());
     let log_call = tokio::task::spawn_blocking(move || logs.shutdown());
     let metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
@@ -446,10 +462,16 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
                 .all(|signal| capture.started(*signal) >= 1)
         })
         .await;
-    // Each export is held by the receiver, so no shutdown can complete yet.
+    // The observed receiver requests are held on `release`, so each provider
+    // shutdown must remain pending until the test releases the receiver.
     assert!(!trace_call.is_finished());
     assert!(!log_call.is_finished());
     assert!(!metric_call.is_finished());
+    assert_eq!(
+        tokio::time::Instant::now(),
+        paused_at,
+        "active blocking shutdowns keep Tokio time paused"
+    );
     for signal in Signal::ALL {
         assert_eq!(capture.finished(signal), 0, "{signal:?} export still held");
     }
@@ -462,15 +484,12 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     for _ in 0..3 {
         receiver.capture.release();
     }
-    let (trace, log, metric) = tokio::time::timeout(Duration::from_secs(10), async {
-        tokio::join!(trace_call, log_call, metric_call)
-    })
-    .await
-    .expect("all abandoned shutdown calls finish after release");
+    let (trace, log, metric) = tokio::join!(trace_call, log_call, metric_call);
     // Each signal's abandoned call still completes its own released export,
     // and each terminal Ok is recorded without clearing the shutdown timeout.
     for (signal, result) in Signal::ALL.into_iter().zip([trace, log, metric]) {
-        let result = result.unwrap();
+        let result =
+            result.unwrap_or_else(|error| panic!("{signal:?} shutdown task failed: {error}"));
         assert!(result.is_ok(), "{signal:?} shutdown returned {result:?}");
         diagnostics.observe_result(result);
         assert_eq!(capture.finished(signal), capture.started(signal));
