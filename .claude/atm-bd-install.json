@@ -1,9 +1,9 @@
 {
-  "version": "0.20.1",
-  "commit": "c4294d70d4c91a4e18e20d42e864c3ae47f62c29",
+  "version": "0.20.2",
+  "commit": "c74672b8d30612825b276aeba97a7292575f7547",
   "source": {
     "ref": "bundled",
-    "manifest_aggregate": "f94487c7803541cdc4b8a04adcb01393d443b0bfa8bcdc77df0854d8eee4191a"
+    "manifest_aggregate": "f0a103ebbc2a97d476036c09075bd0903c05a9f970ae435869db77984707e554"
   },
   "files": [
     {
@@ -52,7 +52,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-lite/SKILL.md",
-      "sc_sha": "bd5a87a65f892c1182f265089beedb91e434ae707e14151bbc983db32e538a94"
+      "sc_sha": "fe7b5df67dc42d20326fe05db8a53142bc7d00c43c3b0f7ba918d1149cc8eb82"
     },
     {
       "path": ".claude/skills/atm-bd-lite/hooks/task-assign.md",
@@ -124,7 +124,7 @@
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/SKILL.md",
-      "sc_sha": "0f5a9d414642a2c280c0e59b824b211ddc804d922138ddd30a117a0a6310a392"
+      "sc_sha": "4ad14d0c77638599ae35900668ef96d4c9611a64960306d73a732ddf88ab2925"
     },
     {
       "path": ".claude/skills/atm-bd-orchestration/blocking-findings-guidelines.md",
@@ -844,7 +844,7 @@
     },
     {
       "path": ".claude/skills/atm-beads/SKILL.md",
-      "sc_sha": "b3f7e9ae86e5202907ee113fa0aa885bebf8e5570d948d296a56919562a8b455"
+      "sc_sha": "f5e9012804d33308b793320c6c3a1a6ae30794649fecf14f0bf1cbb7d7f694b6"
     },
     {
       "path": ".claude/skills/atm-beads/examples/dev-sanity-bead-vars-d-4.json",
@@ -1036,19 +1036,19 @@
     },
     {
       "path": ".claude/skills/plan-hardening/01-plan-scope-review.xml.j2",
-      "sc_sha": "db9cc43f879fb7d3c6332e7d9494461950cde34813f74cdce56f56f27868c53f"
+      "sc_sha": "f7fb552c1eb7e1b2263d2a0935ccb5dc7d74a56a82db659273bc113c8c6b9b0a"
     },
     {
       "path": ".claude/skills/plan-hardening/02-sprint-scope-hardening.xml.j2",
-      "sc_sha": "fe0a30c7d658a4238a99223ef04d80dd5885144d45c7ef740f0560f75805503a"
+      "sc_sha": "9fc2a95ab00887f0a758edeb88869559506f5a74358baac6e4504951d884bcb2"
     },
     {
       "path": ".claude/skills/plan-hardening/03-consistency-hardening.xml.j2",
-      "sc_sha": "efcdf5f6f3c5ff6f3a09f35f9ef21b99fc2b5ade60496763a93ad9d45ff02873"
+      "sc_sha": "8ee28b70b4d3fc1e366d530b57761f5e79baa7e711f02859c33b038048f3be35"
     },
     {
       "path": ".claude/skills/plan-hardening/SKILL.md",
-      "sc_sha": "ca2aec9bb350e2bf99d7e64966fc598355e0914628f51bc7595d837b88939bd0"
+      "sc_sha": "b449b8a3f73d938a5c3b7aa78b3b3e32d63a740785c87f528c1223f24d3b0df6"
     },
     {
       "path": ".claude/skills/plan-hardening/examples/plan-hardening-finding-bead-vars.example.json",
@@ -1076,7 +1076,7 @@
     },
     {
       "path": ".claude/skills/plan-hardening/plan-critical-review.xml.j2",
-      "sc_sha": "06efad15e4d0ef6b13eb5a2509e2335af22a0f1a73b00e5125a44a0179ddc625"
+      "sc_sha": "d0d11417c177442709a792fdc53e07a99f47c1d39198b79f1d752806c3f46de8"
     },
     {
       "path": ".claude/skills/plan-hardening/plan-hardening-finding-bead.json.j2",
