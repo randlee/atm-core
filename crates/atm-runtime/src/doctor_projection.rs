@@ -452,6 +452,30 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    enum GateEntryFailure {
+        GateClosed,
+        RequestFailed(atm_storage::AtmErrorCode),
+        RequestPanicked(String),
+        RequestCompletedBeforeEntry,
+    }
+
+    async fn wait_for_doctor_entry(
+        entered: tokio::sync::oneshot::Receiver<()>,
+        request: &mut tokio::task::JoinHandle<
+            Result<atm_core::doctor::DoctorReport, atm_storage::AtmError>,
+        >,
+    ) -> Result<(), GateEntryFailure> {
+        tokio::select! {
+            entry = entered => entry.map_err(|_| GateEntryFailure::GateClosed),
+            result = request => Err(match result {
+                Ok(Err(error)) => GateEntryFailure::RequestFailed(error.code()),
+                Err(error) => GateEntryFailure::RequestPanicked(error.to_string()),
+                Ok(Ok(_)) => GateEntryFailure::RequestCompletedBeforeEntry,
+            }),
+        }
+    }
+
     #[tokio::test]
     async fn doctor_projection_rejects_control_lane_overload_explicitly() {
         let root = std::env::temp_dir().join(format!(
@@ -487,12 +511,14 @@ mod tests {
         };
         let held_projection = Arc::clone(&projection);
         let held_query = query.clone();
-        let held = tokio::spawn(async move {
+        let mut held = tokio::spawn(async move {
             held_projection
                 .project(held_query, DoctorProjectionContext::default(), deadline)
                 .await
         });
-        entered.await.expect("doctor port remains alive");
+        wait_for_doctor_entry(entered, &mut held)
+            .await
+            .expect("doctor worker reaches the gate");
 
         // A pending poll submits the request into the sole slot while the worker is held.
         let mut queued = Box::pin(projection.project(
@@ -522,6 +548,138 @@ mod tests {
             .expect("held request joins")
             .expect("held request completes");
         queued.await.expect("queued request completes");
+    }
+
+    #[tokio::test]
+    async fn doctor_gate_reports_worker_exit_before_entry() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-doctor-worker-exit-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("temporary runtime root");
+        let assembly = open_isolated_sqlite_boundary(&root).expect("runtime assembly");
+        let mut ports = assembly.doctor_ports.clone();
+        let (gated, entered, _release) =
+            atm_runtime_test_support::GatedConfigDoctor::new(ports.config_doctor);
+        ports.config_doctor = Arc::new(gated);
+        // Retain the gate sender so only the request can report the worker exit.
+        let _gate = Arc::clone(&ports.config_doctor);
+        let now = std::time::Instant::now();
+        let deadline = RequestDeadline::after_at(now, std::time::Duration::from_secs(1));
+        let mut projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig {
+                worker_count: 1,
+                queue_depth: 1,
+                ..DoctorProjectionConfig::default()
+            },
+            assembly.service_runtime.clone(),
+            ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start bounded doctor projection");
+        projection.frozen_clock = Some(now);
+        projection.workers.handles[0].abort();
+        let mut request = tokio::spawn(async move {
+            projection
+                .project(
+                    DoctorQuery::default(),
+                    DoctorProjectionContext::default(),
+                    deadline,
+                )
+                .await
+        });
+        let failure = wait_for_doctor_entry(entered, &mut request)
+            .await
+            .expect_err("worker exit is reported");
+        match failure {
+            GateEntryFailure::RequestFailed(code) => {
+                assert_eq!(code, atm_storage::AtmErrorCode::DaemonUnavailable)
+            }
+            other => panic!("unexpected gate failure: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn doctor_gate_reports_request_panic_before_entry() {
+        let (_sender, entered) = tokio::sync::oneshot::channel();
+        let mut request: tokio::task::JoinHandle<
+            Result<atm_core::doctor::DoctorReport, atm_storage::AtmError>,
+        > = tokio::spawn(async { panic!("injected request panic") });
+        match wait_for_doctor_entry(entered, &mut request).await {
+            Err(GateEntryFailure::RequestPanicked(reason)) => {
+                assert!(reason.contains("injected request panic"))
+            }
+            other => panic!("expected request panic, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn doctor_requests_report_worker_exit_after_entry() {
+        let root = std::env::temp_dir().join(format!(
+            "atm-runtime-doctor-worker-exit-after-{}",
+            atm_storage::AtmMessageId::new()
+        ));
+        std::fs::create_dir_all(&root).expect("temporary runtime root");
+        let assembly = open_isolated_sqlite_boundary(&root).expect("runtime assembly");
+        let mut ports = assembly.doctor_ports.clone();
+        let (gated, entered, release) =
+            atm_runtime_test_support::GatedConfigDoctor::new(ports.config_doctor);
+        ports.config_doctor = Arc::new(gated);
+        let now = std::time::Instant::now();
+        let deadline = RequestDeadline::after_at(now, std::time::Duration::from_secs(1));
+        let mut projection = StorageDoctorProjection::start(
+            DoctorProjectionConfig {
+                worker_count: 1,
+                queue_depth: 1,
+                ..DoctorProjectionConfig::default()
+            },
+            assembly.service_runtime.clone(),
+            ports,
+            Arc::new(NullObservability),
+        )
+        .expect("start doctor projection");
+        projection.frozen_clock = Some(now);
+        let projection = Arc::new(projection);
+        let held_projection = Arc::clone(&projection);
+        let mut held = tokio::spawn(async move {
+            held_projection
+                .project(
+                    DoctorQuery::default(),
+                    DoctorProjectionContext::default(),
+                    deadline,
+                )
+                .await
+        });
+        wait_for_doctor_entry(entered, &mut held)
+            .await
+            .expect("worker enters gate");
+        let mut queued = Box::pin(projection.project(
+            DoctorQuery::default(),
+            DoctorProjectionContext::default(),
+            deadline,
+        ));
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(queued.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        projection.workers.handles[0].abort();
+        release.send(()).expect("release blocking gate");
+        let held_error = held
+            .await
+            .expect("request joins")
+            .expect_err("held request reports worker exit");
+        let queued_error = queued
+            .await
+            .expect_err("queued request reports worker exit");
+        assert_eq!(
+            held_error.code(),
+            atm_storage::AtmErrorCode::DaemonUnavailable
+        );
+        assert_eq!(
+            queued_error.code(),
+            atm_storage::AtmErrorCode::DaemonUnavailable
+        );
     }
 
     #[tokio::test]
