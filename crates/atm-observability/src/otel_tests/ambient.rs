@@ -86,7 +86,7 @@ async fn explicit_atm_configuration_ignores_ambient_otel_settings() {
     assert!(!String::from_utf8_lossy(&output.stderr).contains("ambient-secret"));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn ambient_child() {
     // The parent invokes this exact libtest filter in a separate process.
     if !std::env::args().any(|argument| argument == "otel_tests::ambient::ambient_child") {
@@ -95,7 +95,7 @@ async fn ambient_child() {
     let receiver = Receiver::start(false).await;
     let trace_before = receiver.capture.finished(Signal::Trace);
     let metric_before = receiver.capture.finished(Signal::Metric);
-    let setup = setup_production(&config(&receiver.endpoint));
+    let setup = setup_transport(&config(&receiver.endpoint));
     setup
         .0
         .sink

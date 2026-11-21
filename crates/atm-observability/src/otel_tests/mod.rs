@@ -166,8 +166,18 @@ async fn shutdown_production(setup: super::otel_setup::TelemetrySetup) {
     results.2.unwrap().unwrap();
 }
 
-fn setup_production(config: &TelemetryExportConfig) -> super::otel_setup::TelemetrySetup {
-    crate::setup_telemetry(config, &crate::ExportDiagnostics::default()).unwrap()
+// This is the production OTLP path with test-owned time bounds. Both callers
+// pause Tokio time; their blocking shutdowns stay active until receiver RPCs
+// complete, so neither bound can decide a successful export.
+fn setup_transport(config: &TelemetryExportConfig) -> super::otel_setup::TelemetrySetup {
+    let timeout = Duration::from_secs(30);
+    super::otel_setup::setup_with_timeouts(
+        config,
+        super::otel_setup::EXPORT_BATCH,
+        timeout,
+        timeout,
+    )
+    .unwrap()
 }
 
 fn assert_transport_metadata(capture: &Capture) {
@@ -301,12 +311,12 @@ async fn every_task_kind_exports_its_typed_name_and_facts() {
     receiver.stop().await;
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
     let receiver = Receiver::start(false).await;
     let trace_before = receiver.capture.finished(Signal::Trace);
     let metric_before = receiver.capture.finished(Signal::Metric);
-    let setup = setup_production(&config(&receiver.endpoint));
+    let setup = setup_transport(&config(&receiver.endpoint));
     for (kind, seq, second) in [
         (TaskTelemetryKind::Assigned, 1, 1),
         (TaskTelemetryKind::Started, 2, 3),
