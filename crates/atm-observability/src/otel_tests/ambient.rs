@@ -95,13 +95,13 @@ async fn ambient_child() {
     let receiver = Receiver::start(false).await;
     let trace_before = receiver.capture.finished(Signal::Trace);
     let metric_before = receiver.capture.finished(Signal::Metric);
-    let setup = setup_success(&config(&receiver.endpoint), 64, receiver.capture.clone()).unwrap();
+    let setup = setup_production(&config(&receiver.endpoint));
     setup
-        .task
+        .0
         .sink
         .emit(record("ambient", TaskTelemetryKind::Completed, 1, 1))
         .unwrap();
-    shutdown(setup).await;
+    shutdown_production(setup).await;
     receiver
         .capture
         .wait("a span and a metric export", || {
@@ -119,6 +119,7 @@ async fn ambient_child() {
         }
     }
     wait_for_task_exports(&receiver, trace_before, metric_before).await;
+    assert_transport_metadata(&receiver.capture);
     {
         let metrics = receiver.capture.metrics.lock().unwrap();
         assert!(

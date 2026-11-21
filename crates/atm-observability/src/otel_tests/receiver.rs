@@ -45,7 +45,9 @@ pub(super) struct Capture {
     pub spans: Arc<Mutex<Vec<Span>>>,
     pub logs: Arc<Mutex<Vec<LogRecord>>>,
     pub metrics: Arc<Mutex<Vec<Metric>>>,
-    pub metadata: Arc<Mutex<Vec<tonic::metadata::MetadataMap>>>,
+    pub trace_metadata: Arc<Mutex<Vec<tonic::metadata::MetadataMap>>>,
+    pub log_metadata: Arc<Mutex<Vec<tonic::metadata::MetadataMap>>>,
+    pub metric_metadata: Arc<Mutex<Vec<tonic::metadata::MetadataMap>>>,
     pub resources: Arc<Mutex<Vec<opentelemetry_proto::tonic::resource::v1::Resource>>>,
     /// Exports begun and ended, per signal; an export ends when its
     /// handler returns or its request is cancelled.
@@ -230,7 +232,7 @@ impl traces::trace_service_server::TraceService for Capture {
                 .iter()
                 .filter_map(|resource| resource.resource.clone()),
         );
-        self.metadata
+        self.trace_metadata
             .lock()
             .unwrap()
             .push(request.metadata().clone());
@@ -253,7 +255,7 @@ impl logs::logs_service_server::LogsService for Capture {
         &self,
         request: Request<logs::ExportLogsServiceRequest>,
     ) -> Result<Response<logs::ExportLogsServiceResponse>, Status> {
-        self.metadata
+        self.log_metadata
             .lock()
             .unwrap()
             .push(request.metadata().clone());
@@ -276,10 +278,17 @@ impl metrics::metrics_service_server::MetricsService for Capture {
         &self,
         request: Request<metrics::ExportMetricsServiceRequest>,
     ) -> Result<Response<metrics::ExportMetricsServiceResponse>, Status> {
-        self.metadata
+        self.metric_metadata
             .lock()
             .unwrap()
             .push(request.metadata().clone());
+        self.resources.lock().unwrap().extend(
+            request
+                .get_ref()
+                .resource_metrics
+                .iter()
+                .filter_map(|resource| resource.resource.clone()),
+        );
         self.metrics.lock().unwrap().extend(
             request
                 .into_inner()

@@ -416,6 +416,14 @@ async fn full_backlog_and_concurrent_shutdown_keep_terminal_failure_without_fabr
         (0, 0, 0, 0),
         "SDK quantities are unknown, never copied from synthetic estimates"
     );
+    receiver
+        .capture
+        .wait("stalled trace and log exports started", || {
+            receiver.capture.started(Signal::Trace) > 0 && receiver.capture.started(Signal::Log) > 0
+        })
+        .await;
+    receiver.capture.release();
+    receiver.capture.release();
     receiver.stop().await;
 }
 
@@ -425,7 +433,7 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     // The export timeout outlives the test's hold, so only the receiver's
     // release signal lets the blocking shutdown finish.
     let setup =
-        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_secs(30)).unwrap();
     for _ in 0..64 {
         setup.1.tracer("abandoned-wait").start("nonempty").end();
     }
@@ -442,9 +450,9 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     let (task, traces, logs, metrics) = setup;
     drop(task);
     let diagnostics = Arc::new(ExportDiagnostics::default());
-    let trace_call = tokio::task::spawn_blocking(move || traces.shutdown());
-    let log_call = tokio::task::spawn_blocking(move || logs.shutdown());
-    let metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
+    let mut trace_call = tokio::task::spawn_blocking(move || traces.shutdown());
+    let mut log_call = tokio::task::spawn_blocking(move || logs.shutdown());
+    let mut metric_call = tokio::task::spawn_blocking(move || metrics.shutdown());
     let capture = &receiver.capture;
     capture
         .wait("an export started for every signal", || {
@@ -454,9 +462,21 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
         })
         .await;
     // Each export is held by the receiver, so no shutdown can complete yet.
-    assert!(!trace_call.is_finished());
-    assert!(!log_call.is_finished());
-    assert!(!metric_call.is_finished());
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), &mut trace_call)
+            .await
+            .is_err()
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), &mut log_call)
+            .await
+            .is_err()
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), &mut metric_call)
+            .await
+            .is_err()
+    );
     for signal in Signal::ALL {
         assert_eq!(capture.finished(signal), 0, "{signal:?} export still held");
     }

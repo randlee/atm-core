@@ -153,6 +153,49 @@ async fn shutdown(setup: SuccessSetup) {
     results.2.unwrap().unwrap();
 }
 
+async fn shutdown_production(setup: super::otel_setup::TelemetrySetup) {
+    let (task, tracer, logger, meter) = setup;
+    drop(task);
+    let results = tokio::join!(
+        tokio::task::spawn_blocking(move || tracer.shutdown()),
+        tokio::task::spawn_blocking(move || logger.shutdown()),
+        tokio::task::spawn_blocking(move || meter.shutdown()),
+    );
+    results.0.unwrap().unwrap();
+    results.1.unwrap().unwrap();
+    results.2.unwrap().unwrap();
+}
+
+fn setup_production(config: &TelemetryExportConfig) -> super::otel_setup::TelemetrySetup {
+    crate::setup_telemetry(config, &crate::ExportDiagnostics::default()).unwrap()
+}
+
+fn assert_transport_metadata(capture: &Capture) {
+    for (signal, requests) in [
+        ("trace", &capture.trace_metadata),
+        ("metric", &capture.metric_metadata),
+    ] {
+        let requests = requests.lock().unwrap();
+        assert!(
+            !requests.is_empty(),
+            "no production {signal} request received"
+        );
+        for metadata in requests.iter() {
+            assert_eq!(
+                metadata
+                    .get("authorization")
+                    .and_then(|value| value.to_str().ok()),
+                Some("Bearer fixture-auth"),
+                "production {signal} request must use ATM auth"
+            );
+            assert!(
+                metadata.get("x-ambient").is_none(),
+                "production {signal} request must omit ambient headers"
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn event_wait_returns_exporter_error_and_receiver_exit_evidence() {
     let capture = Capture::default();
@@ -263,17 +306,17 @@ async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
     let receiver = Receiver::start(false).await;
     let trace_before = receiver.capture.finished(Signal::Trace);
     let metric_before = receiver.capture.finished(Signal::Metric);
-    let setup = setup_success(&config(&receiver.endpoint), 64, receiver.capture.clone()).unwrap();
+    let setup = setup_production(&config(&receiver.endpoint));
     for (kind, seq, second) in [
         (TaskTelemetryKind::Assigned, 1, 1),
         (TaskTelemetryKind::Started, 2, 3),
         (TaskTelemetryKind::Completed, 3, 7),
     ] {
         let record = record("task-normal", kind, seq, second);
-        setup.task.sink.emit(record.clone()).unwrap();
-        setup.task.sink.emit(record).unwrap();
+        setup.0.sink.emit(record.clone()).unwrap();
+        setup.0.sink.emit(record).unwrap();
     }
-    shutdown(setup).await;
+    shutdown_production(setup).await;
     receiver
         .capture
         .wait("a span and a metric export", || {
@@ -335,6 +378,7 @@ async fn receiver_observes_live_durable_spans_metrics_and_dedup() {
         }
     }
     wait_for_task_exports(&receiver, trace_before, metric_before).await;
+    assert_transport_metadata(&receiver.capture);
     receiver.stop().await;
 }
 
