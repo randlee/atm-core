@@ -546,9 +546,7 @@ async fn failing_stalled_and_full_sinks_never_change_the_task_outcome() {
 
     let (stalled_sink, release) = StalledTaskTelemetrySink::new();
     let stalled_runtime = TaskTelemetryRuntime::start(Arc::new(stalled_sink));
-    let stalled = tokio::time::timeout(Duration::from_secs(20), drive(stalled_runtime.clone()))
-        .await
-        .expect("handlers never await a stalled sink");
+    let stalled = drive(stalled_runtime.clone()).await;
     assert_eq!(stalled, baseline);
     // A burst past the production queue capacity, behind the held sink, must
     // drop full without ever blocking the producer.

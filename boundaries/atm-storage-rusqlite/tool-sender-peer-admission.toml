@@ -39,10 +39,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TOOL-SENDER-REGISTRY-REFERENCES"]
-review_gates = ["authenticated_origin_host", "exact_message_binding", "durable_nonce_replay", "commit_before_capability"]
-
 [status]
 state = "active"
 notes = ["Peer attestation verification uses immutable protected host key and sender allowlist configuration.", "Exact replay of origin_host/sender/nonce returns the same opaque binding; changed message or signature reuse is rejected.", "No expiry is added because ToolSenderAttestation has no expiry field."]

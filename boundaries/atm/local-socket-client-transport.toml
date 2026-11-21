@@ -7,10 +7,8 @@ name = "LocalIpcClientTransportAdapter"
 trait = "ClientTransport"
 
 [implementation]
-type = "LocalIpcClientTransportAdapter"
-module = "atm::composition"
-visibility = "private"
-constructor = "private"
+visibility = "trait_only"
+constructor = "none"
 
 [composition]
 roots = ["atm::composition::CliComposition::bootstrap"]
@@ -54,21 +52,12 @@ forbidden_test_bypasses = [
   "rusqlite::Connection",
 ]
 
-[enforcement]
-lint_rules = [
-  "LINT-BOUNDARY-CLIENT-TRANSPORT-CLI-EDGES",
-  "LINT-BOUNDARY-CLIENT-TRANSPORT-CLI-REFERENCES",
-]
-review_gates = [
-  "no_public_impl",
-  "no_public_constructor",
-  "no_cli_to_daemon_edge",
-  "no_cli_to_sqlite_edge",
-]
-
 [status]
 state = "retired"
 notes = [
   "Historical ClientTransport trait boundary retired by AI.6.",
   "The live CLI client now uses the sealed DaemonApiClient/HTTP-over-UDS path instead of the retired local socket frame transport contract.",
 ]
+
+[extensions.atm]
+no_in_repo_implementation = true

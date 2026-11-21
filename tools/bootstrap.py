@@ -26,6 +26,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = ROOT / "tools" / "bootstrap.toml"
 REQUIREMENTS_PATH = ROOT / "tools" / "bootstrap-requirements.txt"
+SC_LINT_INSTALL_PATH = ROOT / ".sc-lint" / "install.json"
 VENV_PATH = ROOT / ".bootstrap-venv"
 
 
@@ -50,7 +51,26 @@ class BootstrapManifest:
     python_packages: tuple[tuple[str, str], ...]
 
 
-def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
+def sc_lint_version(install_path: Path, requirements_path: Path) -> str:
+    """Use the kit version as authority and reject drift in the pip closure."""
+    version = json.loads(install_path.read_text(encoding="utf-8")).get("minimum_version")
+    if not isinstance(version, str) or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
+        raise BootstrapError(".sc-lint/install.json minimum_version must be an exact release version.")
+    pins = [
+        line.strip() for line in requirements_path.read_text(encoding="utf-8").splitlines()
+        if re.match(r"(?i)^sc[-_.]lint(?:\s|[<=>!~\[]|$)", line.strip())
+    ]
+    if pins != [f"sc-lint=={version}"]:
+        raise BootstrapError(f"bootstrap requirements must contain exactly sc-lint=={version}.")
+    return version
+
+
+def load_manifest(
+    path: Path = MANIFEST_PATH,
+    *,
+    install_path: Path = SC_LINT_INSTALL_PATH,
+    requirements_path: Path = REQUIREMENTS_PATH,
+) -> BootstrapManifest:
     """Load the exact tool versions from the one checked-in contract."""
     raw = tomllib.loads(path.read_text(encoding="utf-8"))
     toolchain = raw["toolchain"]
@@ -60,6 +80,9 @@ def load_manifest(path: Path = MANIFEST_PATH) -> BootstrapManifest:
     sc_compose = raw["sc-compose"]
     wyvern = raw["wyvern"]
     python = raw["python"]
+    if "sc-lint" in python:
+        raise BootstrapError("sc-lint belongs in .sc-lint/install.json, not bootstrap.toml.")
+    python = {**python, "sc-lint": sc_lint_version(install_path, requirements_path)}
     cargo_tools = (
         ("cargo-deny", cargo["cargo-deny"]),
         ("cargo-audit", cargo["cargo-audit"]),

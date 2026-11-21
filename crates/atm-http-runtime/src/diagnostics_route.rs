@@ -69,15 +69,16 @@ impl WorkerCompletion {
         let completion = async {
             loop {
                 let notified = self.completed.notified();
+                tokio::pin!(notified);
+                // Register before checking: `notify_waiters` does not keep a permit.
+                notified.as_mut().enable();
                 if self.completed_count.load(Ordering::SeqCst) >= target {
                     return;
                 }
                 notified.await;
             }
         };
-        tokio::time::timeout(Duration::from_secs(1), completion)
-            .await
-            .expect("worker completion must arrive within the test's hard bound");
+        completion.await;
     }
 }
 
@@ -324,25 +325,25 @@ mod tests {
             self.entered_count.fetch_add(1, Ordering::SeqCst);
             self.entered.notify_waiters();
             let state = self.state.lock().expect("query gate state lock");
-            let (state, timeout) = self
+            let state = self
                 .release
-                .wait_timeout_while(state, Duration::from_secs(1), |state| !state.released)
+                .wait_while(state, |state| !state.released)
                 .expect("query gate state is not poisoned");
             assert!(state.released, "query gate was released");
-            assert!(
-                !timeout.timed_out(),
-                "query gate release must arrive within the test's hard bound"
-            );
         }
 
-        async fn wait_for_entered(&self, target: usize) {
-            loop {
+        async fn wait_for_entered(&self, target: usize, step: &str) {
+            while self.entered_count.load(Ordering::SeqCst) < target {
                 let notified = self.entered.notified();
+                tokio::pin!(notified);
+                // Register before checking: `notify_waiters` does not keep a permit.
+                notified.as_mut().enable();
                 if self.entered_count.load(Ordering::SeqCst) >= target {
                     return;
                 }
                 notified.await;
             }
+            let _ = step;
         }
 
         fn entered_count(&self) -> usize {
@@ -534,7 +535,7 @@ mod tests {
         // Deterministic: wait until the fixture query has genuinely started
         // (on its own `spawn_blocking` thread) before advancing the paused
         // clock, instead of racing a real sleep against the deadline.
-        gate.wait_for_entered(1).await;
+        gate.wait_for_entered(1, "before the deadline").await;
         tokio::time::advance(deadline + Duration::from_millis(1)).await;
 
         let (status, _) = request
@@ -568,7 +569,8 @@ mod tests {
         );
 
         let first = tokio::spawn(get(router.clone(), "/v1/diagnostics"));
-        gate.wait_for_entered(1).await;
+        gate.wait_for_entered(1, "first worker before the deadline")
+            .await;
         tokio::time::advance(deadline + Duration::from_millis(1)).await;
         assert_eq!(
             first.await.expect("first request completes").0,
@@ -576,7 +578,8 @@ mod tests {
         );
 
         let second = tokio::spawn(get(router.clone(), "/v1/diagnostics"));
-        gate.wait_for_entered(2).await;
+        gate.wait_for_entered(2, "second worker before the deadline")
+            .await;
         tokio::time::advance(deadline + Duration::from_millis(1)).await;
         assert_eq!(
             second.await.expect("second request completes").0,

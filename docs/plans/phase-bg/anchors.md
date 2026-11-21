@@ -2,7 +2,7 @@
 
 Constraints captured during planning. Each anchor is a testable statement written by the orchestrator and approved by the user; the user's verbatim words are kept beneath it as provenance. Every anchor is judged at the planning gate and again at the development gate. Edit `anchors.json`, not this file; this file is rendered.
 
-Intent: `doc/plan/phase-current/intent.md`
+Intent: `docs/plans/phase-bg/intent.md`
 
 | ID | Status | Summary | Stated |
 | --- | --- | --- | --- |
@@ -185,8 +185,8 @@ Summary: Published sc-lint crates
 Scope: any bead that touches vendored sc-lint crates or the sc-lint version atm-core uses
 
 Fixtures:
-- pass: Install sc-lint 0.7.0 from its published release and delete the vendored sc-lint crates from the workspace.
-- fail: Keep building the vendored sc-lint crates from the workspace and pin them at 0.7.0.
+- pass: Install sc-lint 0.8.8 from its published release and delete the vendored sc-lint crates from the workspace.
+- fail: Keep building the vendored sc-lint crates from the workspace and pin them at 0.8.8.
 
 ## ANC-011
 

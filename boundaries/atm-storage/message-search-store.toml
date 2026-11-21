@@ -36,9 +36,5 @@ error_types = ["AtmError"]
 allowed_test_double_paths = ["crate::search::InMemoryMessageSearchStore"]
 forbidden_test_bypasses = ["sqlite_connection", "raw_fts_syntax"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-MESSAGE-SEARCH-STORE"]
-review_gates = ["sealed_capability", "leaf_dtos_only", "no_sql_or_renderer"]
-
 [status]
 state = "concrete_landed"

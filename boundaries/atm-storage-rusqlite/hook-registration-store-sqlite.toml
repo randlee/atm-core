@@ -42,9 +42,5 @@ notes = [
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-HOOK-REGISTRATION-STORE-SQLITE"]
-review_gates = ["private_sqlite_impl", "register_is_upsert"]
-
 [status]
 state = "concrete_landed"

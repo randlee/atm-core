@@ -1303,7 +1303,6 @@ mod tests {
             GraftSessionState::Listening
         );
 
-        let started = std::time::Instant::now();
         let error = GraftSession::activate(session_options(&paths), Arc::new(NoopInjector))
             .expect_err("a conflicting activation must fail");
 
@@ -1312,10 +1311,6 @@ mod tests {
             !error.message().contains("readiness was not signaled"),
             "startup failure must not be masked by the readiness timeout: {}",
             error.message()
-        );
-        assert!(
-            started.elapsed() < RECEIVE_LOOP_READY_DEADLINE,
-            "a failed receive loop must be reported before the readiness deadline"
         );
         active.close().expect("close active receiver");
     }

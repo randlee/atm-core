@@ -9,7 +9,8 @@
 `atm-runtime` is the concrete composition root introduced by `Phase AA`.
 
 It sits between:
-- storage-neutral interfaces in `atm-core`
+- storage-neutral store interfaces in `atm-storage` and diagnostic ports in
+  `atm-core`
 - backend implementation crates such as `atm-storage-rusqlite`
 - top-level callers such as the CLI and `atm-daemon`
 
@@ -17,13 +18,12 @@ It sits between:
 
 `atm-runtime` owns:
 - concrete production assembly of runtime/store dependencies
-- installation of the active `MailStore` and `RosterStore` implementations
+- installation of the active `atm_storage::MessageStore` and
+  `atm_storage::RosterStore` implementations
 - installation of subsystem doctor implementations
 - the concrete `ConfigDoctor` implementation and its direct local doctor-path
   assembly
 - no public SQLite observability bridge above `atm-storage-rusqlite`
-- the temporary legacy compile bridge from `atm-storage::{MessageStore,RosterStore}`
-  into `atm_core::boundary::{MailStore,RosterStore}` during AC.4 cutover
 
 `atm-runtime` does not own:
 - daemon request routing
@@ -37,15 +37,12 @@ The minimum landed Phase AC seam is a composition-root assembly with explicit
 shared-storage handles and doctor ports:
 
 ```rust
-pub struct StorageBackends<M: MessageStore, R: RosterStore> {
+pub struct StorageBackends<M: MessageStore> {
     pub messages: M,
-    pub rosters: R,
 }
 pub struct RuntimeAssembly {
     pub service_runtime: LocalServiceRuntime,
-    pub storage_backends: StorageBackends<Arc<dyn MessageStore>, Arc<dyn RosterStore>>,
-    pub mail_store: Arc<dyn MailStore>,
-    pub roster_store: Arc<dyn RosterStore>,
+    pub storage_backends: StorageBackends<Arc<dyn MessageStore + Send + Sync>>,
     pub doctor_ports: RuntimeDoctorPorts,
 }
 ```

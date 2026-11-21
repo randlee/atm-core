@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -23,6 +24,9 @@ from lint_boundaries import boundary_doc_section_lines
 from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import run
+from lint_boundaries import SCB_CONFIG_BOUNDARY_FILES, SCB_RETAINED_TARGET_FILES
+from lint_boundaries import SCB_WORKSPACE_TARGET_FILES, SCB_SINGLETON_TARGET_FILES
+from lint_boundaries import SCB_SINGLETON_ALLOWED_HOOK_CALLERS, SCB_OBSERVABILITY_ALLOWED_SRC_FILES
 
 
 
@@ -110,12 +114,6 @@ testing:
   forbidden_test_bypasses:
     - rusqlite::Connection
 
-enforcement:
-  lint_rules:
-    - LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES
-  review_gates:
-    - no_public_impl
-
 status:
   state: planned
   notes: []
@@ -162,9 +160,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]
-review_gates = ["no_public_impl"]
 
 [status]
 state = "planned"
@@ -173,15 +168,7 @@ notes = []
 
 
 class LintBoundariesTests(unittest.TestCase):
-    def test_declared_peer_dial_lint_rule_resolves_to_registered_runner(self) -> None:
-        records, parse_violations = parse_boundary_records(REPO_ROOT)
-        self.assertEqual(parse_violations, [])
-        runtime = next(
-            record
-            for record in records
-            if record.source_path == Path("boundaries/atm-http-runtime/http-runtime.toml")
-        )
-        self.assertIn("peer-dial-seam", runtime.lint_rules)
+    def test_peer_dial_lint_runner_is_registered(self) -> None:
         profiles = json.loads((REPO_ROOT / ".sc-lint/install.json").read_text(encoding="utf-8"))["profiles"]
         for platform, python in (
             ("linux", ".bootstrap-venv/bin/python"),
@@ -237,6 +224,12 @@ class LintBoundariesTests(unittest.TestCase):
         self.write_scb_workspace_support(repo_root)
         self.write_scb_singleton_support(repo_root)
         self.write_scb_observability_support(repo_root)
+        for path in (*SCB_CONFIG_BOUNDARY_FILES, *SCB_RETAINED_TARGET_FILES,
+                     *SCB_WORKSPACE_TARGET_FILES, *SCB_SINGLETON_TARGET_FILES,
+                     *SCB_SINGLETON_ALLOWED_HOOK_CALLERS, *SCB_OBSERVABILITY_ALLOWED_SRC_FILES):
+            target = repo_root / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.touch(exist_ok=True)
 
     def write_manifests(
         self,
@@ -655,6 +648,35 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any(item.startswith("SCB-SINGLETON-001 ") for item in rendered), rendered)
 
+    def test_missing_configured_targets_fail_with_named_error(self) -> None:
+        from lint_boundaries import collect_missing_configured_targets
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            targets = set((*SCB_CONFIG_BOUNDARY_FILES, *SCB_RETAINED_TARGET_FILES,
+                           *SCB_WORKSPACE_TARGET_FILES, *SCB_SINGLETON_TARGET_FILES,
+                           *SCB_SINGLETON_ALLOWED_HOOK_CALLERS, *SCB_OBSERVABILITY_ALLOWED_SRC_FILES))
+            self.assertEqual(collect_missing_configured_targets(repo_root), [])
+            for path in targets:
+                with self.subTest(path=path):
+                    target = repo_root / path
+                    target.unlink()
+                    rendered = [v.render() for v in collect_boundary_violations(repo_root, records=[], parse_violations=[])]
+                    self.assertTrue(any(item.startswith(f"SCB-TARGET-MISSING {path.as_posix()}") for item in rendered), rendered)
+                    target.touch()
+
+    def test_runtime_composition_is_checked_for_hidden_hooks(self) -> None:
+        from lint_boundaries import collect_scb_singleton_rule_violations
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            target = repo_root / "crates/atm-runtime/src/composition.rs"
+            target.write_text("runtime_install_hooks::install_retained_runtime_factory_for_test_support();\n", encoding="utf-8")
+            rendered = [v.render() for v in collect_scb_singleton_rule_violations(repo_root, [target])]
+            self.assertTrue(any(item.startswith("SCB-SINGLETON-001 ") for item in rendered), rendered)
+
 
     def test_parse_boundary_records_accepts_toml_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -669,6 +691,18 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
             self.assertEqual(records[0].boundary_id, "BOUNDARY-MailStore-Sqlite")
             self.assertEqual(records[0].source_path.as_posix(), "boundaries/atm-storage-rusqlite/mail-store.toml")
             self.assertFalse(records[0].is_active)
+
+
+    def test_parse_boundary_records_skips_malformed_toml(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_toml_record(repo_root, "atm-storage-rusqlite", text="invalid = [\n")
+
+            records, violations = parse_boundary_records(repo_root)
+
+            self.assertEqual(records, [])
+            self.assertEqual(violations, [])
 
 
     def test_boundary_doc_section_lines_reports_per_doc_counts(self) -> None:
@@ -985,7 +1019,7 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
                 )
 
     def test_telemetry_sink_rule_flags_a_production_sink_outside_owner_and_exporter(self) -> None:
-        """A record naming a telemetry-sink rule confines production impls of its
+        """The telemetry-sink boundary confines production impls of its
         trait to the owner and exporting crates; test-scoped impls pass."""
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -1004,7 +1038,7 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
                 .replace('allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]', "allowed_test_double_paths = []")
             )
             rule = "LINT-BOUNDARY-TASK-TELEMETRY-SINK-REFERENCES"
-            record = record.replace('lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]', f'lint_rules = ["{rule}"]')
+            record = re.sub(r'boundary_id = "[^"]+"', 'boundary_id = "BOUNDARY-TaskTelemetrySink"', record, count=1)
             self.write_toml_record(repo_root, "atm-core", text=record)
             (repo_root / "crates/atm-core/src/lib.rs").write_text(
                 "impl TaskTelemetrySink for NoopTaskTelemetrySink {}\n", encoding="utf-8"

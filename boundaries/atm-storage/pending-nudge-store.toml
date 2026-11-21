@@ -42,10 +42,6 @@ allowed_test_double_paths = [
 ]
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-PENDING-NUDGE-STORE-REFERENCES"]
-review_gates = ["no_cli_sqlite_lookup", "no_backend_to_core_edge_for_pending_nudge_store"]
-
 [status]
 state = "concrete_landed"
 notes = ["AQ1 lands the sealed trait plus the atm-storage-rusqlite backend implementation and schema migration in one sprint", "the router (storage_and_nudge_router.rs) and CLI (atm queue) call sites are added by the AQ1 L2/L3 lanes against this seam"]

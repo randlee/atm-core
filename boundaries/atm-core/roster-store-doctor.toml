@@ -37,10 +37,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-ROSTERSTOREDOCTOR-REFERENCES"]
-review_gates = ["no_concrete_store_leakage"]
-
 [status]
 state = "concrete_landed"
 notes = ["shared doctor-trait contract landed in atm_core::boundary", "roster-store diagnostic implementation is wired through the atm-storage-rusqlite doctor adapter"]

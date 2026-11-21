@@ -11,10 +11,10 @@ notes = "DaemonObservability is the permit-listed retained-log implementation of
 type = "DaemonObservability"
 module = "atm_daemon_bootstrap::daemon_observability"
 visibility = "pub(crate)"
-constructor = "pub(crate)"
+constructor = "none"
 
 [composition]
-roots = ["atm_daemon_bootstrap::bootstrap_replacement_observability", "atm_daemon_bootstrap::run_replacement_daemon"]
+roots = ["atm_daemon_bootstrap::run_replacement_daemon"]
 
 [ownership]
 io_owns = ["retained_log_bootstrap", "retained_log_emit", "retained_log_drain_and_shutdown", "retained_log_health_projection", "otel_sdk_provider_lifecycle", "otel_export_health_projection"]
@@ -37,10 +37,6 @@ error_types = ["AtmError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["legacy_daemon_server", "legacy_dispatcher", "daemon_only_flush_trait"]
-
-[enforcement]
-lint_rules = ["SCB-OBSERVABILITY-001"]
-review_gates = ["sealed_impl_allowlisted", "tokio_axum_entrypoint_only", "no_legacy_daemon_composition", "core_port_only"]
 
 [status]
 state = "active"

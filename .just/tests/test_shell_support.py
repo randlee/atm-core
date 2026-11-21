@@ -10,16 +10,16 @@ import shell_support
 
 class WindowsPosixShellDiscoveryTests(unittest.TestCase):
     def test_prefers_git_bash_and_rejects_system32_wsl_stub(self) -> None:
-        git_result = mock.Mock(stdout=r"C:\Program Files\Git\mingw64\libexec\git-core" + "\n")
-
         def is_git_bash(candidate: Path) -> bool:
             return str(candidate).replace("/", "\\").casefold() == r"c:\program files\git\bin\bash.exe"
 
         with (
-            mock.patch("shell_support.subprocess.run", return_value=git_result) as run,
             mock.patch(
                 "shell_support.shutil.which",
-                side_effect=lambda name: r"C:\Windows\System32\bash.exe" if name == "bash" else None,
+                side_effect=lambda name: {
+                    "git": r"C:\Program Files\Git\cmd\git.exe",
+                    "bash": r"C:\Windows\System32\bash.exe",
+                }.get(name),
             ),
             mock.patch("shell_support.Path.is_file", new=is_git_bash),
         ):
@@ -27,12 +27,10 @@ class WindowsPosixShellDiscoveryTests(unittest.TestCase):
                 shell_support.resolve_posix_shell(windows=True, windir=r"C:\Windows"),
                 r"C:\Program Files\Git\bin\bash.exe",
             )
-        self.assertEqual(run.call_args.kwargs["timeout"], 5)
 
     def test_ignores_ambient_git_bash_and_returns_none_without_git_bash(self) -> None:
         with (
             mock.patch.dict("shell_support.os.environ", {"GIT_BASH": r"C:\unsafe"}, clear=False),
-            mock.patch("shell_support.subprocess.run", side_effect=OSError),
             mock.patch("shell_support.shutil.which", return_value=None),
         ):
             self.assertIsNone(shell_support.resolve_posix_shell(windows=True))

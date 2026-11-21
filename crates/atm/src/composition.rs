@@ -25,8 +25,6 @@ use atm_core::search::{SearchRequest, SearchResponse};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
-#[cfg(test)]
-use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 #[cfg(test)]
@@ -547,6 +545,7 @@ pub(crate) mod tests {
     };
     use atm_core::error::AtmError;
     use atm_core::graft::AtmGraftClient;
+    use atm_core::home::HOST_RUNTIME_LAUNCH_LOCK_FILE;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::read::{PeekQuery, ReadQuery};
     use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
@@ -560,7 +559,7 @@ pub(crate) mod tests {
     };
     use atm_core::types::ReadSelection;
     use atm_core::types::{AgentName, ChatId, CommandAction, TeamName};
-    use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint};
+    use atm_daemon_client::DaemonLocalIpcEndpoint;
     use chrono::Utc;
     use serde_json::{Map, Value};
     use serial_test::serial;
@@ -568,8 +567,7 @@ pub(crate) mod tests {
     use tracing_subscriber::fmt::MakeWriter;
 
     use super::{
-        CliComposition, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
-        install_isolated_sqlite_runtime, open_isolated_sqlite_boundary,
+        CliComposition, install_isolated_sqlite_runtime, open_isolated_sqlite_boundary,
         resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
@@ -1771,15 +1769,12 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn daemon_path_newtypes_reject_empty_paths_and_preserve_path_access() {
+    fn daemon_endpoint_rejects_empty_path_and_preserves_path_access() {
         let tempdir = TempDir::new().expect("tempdir");
         let socket_path = tempdir.path().join("atm.sock");
-        let daemon_path = tempdir.path().join("atm-daemon");
         let socket = DaemonLocalIpcEndpoint::new(socket_path.clone()).expect("socket path");
-        let daemon = DaemonBinaryPath::new(daemon_path.clone()).expect("daemon path");
 
         assert_eq!(socket.as_ref(), socket_path.as_path());
-        assert_eq!(daemon.as_ref(), daemon_path.as_path());
 
         let socket_error =
             DaemonLocalIpcEndpoint::new(std::path::PathBuf::new()).expect_err("empty");
@@ -1788,24 +1783,6 @@ pub(crate) mod tests {
                 .to_string()
                 .contains("daemon local IPC endpoint")
         );
-
-        let daemon_error = DaemonBinaryPath::new(std::path::PathBuf::new()).expect_err("empty");
-        assert!(daemon_error.to_string().contains("daemon binary path"));
-    }
-
-    #[test]
-    fn launch_gate_is_host_wide_across_different_socket_paths() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-        let first =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
-                .expect("first acquire");
-        assert!(first.is_some());
-        let second =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
-                .expect("second acquire");
-        assert!(second.is_none());
-        drop(first);
     }
 
     #[test]
@@ -1917,55 +1894,17 @@ pub(crate) mod tests {
         );
     }
 
-    #[test]
-    fn launch_gate_busy_maps_to_typed_rejection() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-        let _gate =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
-                .expect("acquire")
-                .expect("gate");
-        let socket_path =
-            DaemonLocalIpcEndpoint::new(tempdir.path().join("one.sock")).expect("socket");
-        let second =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
-                .expect("second acquire");
-
-        assert!(second.is_none());
-        let error = LaunchGateGuard::rejected_error(&socket_path);
-
-        assert_eq!(
-            error.code(),
-            atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
-        );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn launch_gate_treats_windows_lock_and_sharing_violations_as_contention() {
-        assert!(atm_daemon_client::is_launch_gate_contention_error(
-            &std::io::Error::from_raw_os_error(32)
-        ));
-        assert!(atm_daemon_client::is_launch_gate_contention_error(
-            &std::io::Error::from_raw_os_error(33)
-        ));
-    }
-
     #[cfg(unix)]
     #[test]
     // ADR-003 Tier 2: Unix-only non-UTF-8 path construction uses OsStringExt, which does
     // not have a portable cross-platform equivalent for this exact boundary case.
-    fn daemon_path_newtypes_reject_non_utf8_paths_at_boundary() {
+    fn daemon_endpoint_rejects_non_utf8_path_at_boundary() {
         use std::os::unix::ffi::OsStringExt;
 
         let invalid = std::ffi::OsString::from_vec(vec![0x66, 0x6f, 0x80]);
 
-        let socket_error = DaemonLocalIpcEndpoint::new(std::path::PathBuf::from(invalid.clone()))
-            .expect_err("utf8");
+        let socket_error =
+            DaemonLocalIpcEndpoint::new(std::path::PathBuf::from(invalid)).expect_err("utf8");
         assert!(socket_error.to_string().contains("valid UTF-8"));
-
-        let daemon_error =
-            DaemonBinaryPath::new(std::path::PathBuf::from(invalid)).expect_err("utf8");
-        assert!(daemon_error.to_string().contains("valid UTF-8"));
     }
 }

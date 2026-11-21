@@ -8,7 +8,7 @@ outcome can be communicated from one source of truth.
 
 This document covers three separate machines:
 
-- CLI-side daemon bootstrap and auto-start attempts
+- CLI-side endpoint resolution and client construction
 - daemon runtime lifecycle transitions
 - reachable-daemon command and `doctor` outcomes
 
@@ -32,7 +32,7 @@ Each machine must satisfy:
 
 ## Implementation Owners
 
-- CLI bootstrap / auto-start trace:
+- CLI bootstrap:
   - `crates/atm-daemon-client/src/lib.rs`
   - `crates/atm/src/composition.rs`
 - daemon runtime lifecycle root:
@@ -50,10 +50,11 @@ Source:
 Code:
 
 - `crates/atm/src/composition.rs::CliComposition::bootstrap`
-- `crates/atm-daemon-client/src/lib.rs::DaemonSupervisor`
+- `crates/atm-daemon-client/src/lib.rs::resolve_daemon_local_ipc_endpoint`
 
-This machine ends before any request is sent. If it fails, the caller gets a
-typed bootstrap error and `doctor` does not return a report.
+This machine ends before any request is sent. Endpoint resolution or client
+construction can return a typed error; a configured client does not prove the
+daemon is running. The managed daemon is started separately.
 
 ## Machine 2: Daemon Runtime Lifecycle
 
@@ -81,8 +82,8 @@ Code:
 - `crates/atm-core/src/send/mod.rs`
 - `crates/atm-rusqlite/src/shared_db.rs`
 
-This machine starts only after bootstrap has already reached a live daemon. It
-defines what the caller sees versus what `doctor` can explain when runtime,
+This machine describes requests that reach a live daemon. It defines what the
+caller sees versus what `doctor` can explain when runtime,
 roster, or copied-state issues are encountered.
 - `Draining -> Stopped`
 
@@ -110,8 +111,8 @@ before the daemon reaches stable serving behavior for the copied-state lane.
 
 When communicating startup status, use these layers separately:
 
-1. CLI bootstrap trace
-   - did the client find, launch, wait for, or fail to connect to the daemon?
+1. CLI bootstrap
+   - did the client resolve the endpoint and construct its HTTP transport?
 2. daemon lifecycle
    - did the runtime reach `Starting`, `Running`, `Draining`, or `Stopped`?
 3. startup dependency result
@@ -120,9 +121,9 @@ When communicating startup status, use these layers separately:
 
 Recommended phrasing:
 
-- `daemon auto-started and reached Running, but ATM roster truth is still empty`
+- `daemon reached Running, but ATM roster truth is still empty`
 - `daemon startup failed during SQLite schema initialization on copied durable state`
-- `daemon did not start; launch gate was contended`
+- `daemon is unavailable; check the managed service`
 
 Avoid collapsing these into one vague statement like `startup failed` unless
 the exact failing transition is still unknown.
@@ -131,9 +132,8 @@ the exact failing transition is still unknown.
 
 | Layer | State / Outcome | Meaning |
 | --- | --- | --- |
-| CLI bootstrap | `daemon_connect = NotFound` | no same-host daemon connection yet |
-| CLI bootstrap | `daemon_launch_gate = Launched` | this client owned launch admission |
-| CLI bootstrap | `daemon_auto_start = AutoStarted` | client launched daemon and later connected |
+| CLI bootstrap | `ClientConfigured` | endpoint resolved and HTTP client constructed; no connection implied |
+| CLI bootstrap | `BootstrapFailed` | endpoint resolution or client construction returned a typed error |
 | daemon lifecycle | `Starting` | replay/lane/runtime preparation in progress |
 | daemon lifecycle | `Running` | daemon accepted activation and entered serve path |
 | daemon lifecycle | `Draining` | shutdown path is in progress |

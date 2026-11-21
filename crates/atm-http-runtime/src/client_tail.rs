@@ -1,5 +1,25 @@
 use super::*;
 
+#[cfg(test)]
+tokio::task_local! {
+    static TEST_DEADLINE_EXPIRED: bool;
+}
+
+#[cfg(test)]
+pub(super) async fn with_test_deadline_expired<T>(
+    expired: bool,
+    future: impl std::future::Future<Output = T>,
+) -> T {
+    TEST_DEADLINE_EXPIRED.scope(expired, future).await
+}
+
+#[cfg(test)]
+fn request_deadline_expired(deadline: RequestDeadline) -> bool {
+    TEST_DEADLINE_EXPIRED
+        .try_with(|expired| *expired)
+        .unwrap_or_else(|_| deadline.expired())
+}
+
 #[async_trait]
 pub(crate) trait HttpRuntimeConnector: Send + Sync {
     /// Context preserved if an OS DNS/connect operation outlives the ATM
@@ -194,7 +214,12 @@ pub(crate) async fn execute_reqwest_request(
     deadline: RequestDeadline,
     additional_header: Option<(&'static str, String)>,
 ) -> Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure> {
-    if deadline.expired() {
+    #[cfg(test)]
+    let deadline_expired = request_deadline_expired(deadline);
+    #[cfg(not(test))]
+    let deadline_expired = deadline.expired();
+
+    if deadline_expired {
         return Err(HttpRuntimeClientFailure::Cancelled);
     }
     let outbound = build_outbound_reqwest_request(url, request, additional_header)?;

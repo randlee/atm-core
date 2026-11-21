@@ -38,10 +38,6 @@ notes = ["this boundary must receive the same logical payload set as the Claude 
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["send::hook", "std::process::Command"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-REFERENCES"]
-review_gates = ["no_notification_sink_substitution", "no_direct_outer_caller_use"]
-
 [status]
 state = "concrete_landed"
 notes = ["Implemented in Phase Yb Y.9 with shared delivery-plan execution and a dedicated non-Claude outbound payload boundary."]

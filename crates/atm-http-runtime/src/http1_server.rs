@@ -86,6 +86,7 @@ fn accept_failure_is_recoverable(consecutive_failures: u32) -> bool {
     consecutive_failures < MAX_CONSECUTIVE_ACCEPT_FAILURES
 }
 
+#[sc_lint_attributes::sc_lint(allow(SCB-RUNTIME-005), reason = "Backoff bounds retries after a recoverable listener accept failure. See https://github.com/randlee/atm-core/issues/2505.")]
 async fn recover_from_accept_error(
     adapter: &'static str,
     error: io::Error,
@@ -420,9 +421,9 @@ mod tests {
         client.flush().await.expect("flush pipelined HTTP requests");
 
         let mut responses = Vec::new();
-        tokio::time::timeout(Duration::from_secs(1), client.read_to_end(&mut responses))
+        client
+            .read_to_end(&mut responses)
             .await
-            .expect("server closes after the bounded request batch")
             .expect("read pipelined HTTP responses");
         assert_eq!(
             responses
@@ -467,9 +468,9 @@ mod tests {
             .expect("write request");
         client.flush().await.expect("flush request");
         let mut response = Vec::new();
-        tokio::time::timeout(Duration::from_secs(5), client.read_to_end(&mut response))
+        client
+            .read_to_end(&mut response)
             .await
-            .expect("server answers after recovering from accept failures")
             .expect("read response");
         assert!(
             response.starts_with(b"HTTP/1.1 201 Created"),

@@ -72,7 +72,7 @@ use replacement_handler::{
 };
 use singleton_guard::SingletonGuards;
 
-pub use daemon_observability::DaemonObservability;
+use daemon_observability::DaemonObservability;
 pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
     configured_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
@@ -97,17 +97,6 @@ pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 /// remaining a bounded admission limit. The wire request's `max_message_bytes`
 /// can only lower the body policy; it cannot raise this server ceiling.
 const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
-
-/// Build the retained-log adapter and the optional native OpenTelemetry export
-/// at the active Tokio/Axum composition boundary. The SDK providers are built
-/// on this runtime; filesystem readiness is synchronous, so the retained
-/// logger is built off a runtime worker and joined before the daemon starts.
-pub async fn bootstrap_replacement_observability() -> Result<DaemonObservability, AtmError> {
-    let observability = DaemonObservability::bootstrap().await?;
-    observability.install_tracing_bridge()?;
-    observability.report_export_config();
-    Ok(observability)
-}
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///
@@ -241,7 +230,7 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 ///
 /// The supplied observability `owner` forwards its task telemetry setup here
 /// once; without an owner (or without an endpoint) the runtime is inert.
-pub fn assemble_daemon_runtime(
+pub(crate) fn assemble_daemon_runtime(
     owner: Option<&DaemonObservability>,
 ) -> Result<RuntimeAssembly, AtmError> {
     let tool_sender_configs = load_optional_protected_tool_sender_configs()?;
@@ -284,14 +273,9 @@ fn compose_daemon_assembly(
 /// harness selection. No legacy daemon server, dispatcher, worker, or framing
 /// module is referenced from this path.
 pub async fn run_replacement_daemon() -> Result<(), AtmError> {
-    run_replacement_daemon_with_owner(None).await
-}
-
-/// Starts the shipped replacement daemon with the observability owner
-/// bootstrapped by its binary entrypoint.
-pub async fn run_replacement_daemon_with_observability(
-    observability: DaemonObservability,
-) -> Result<(), AtmError> {
+    let observability = DaemonObservability::bootstrap().await?;
+    observability.install_tracing_bridge()?;
+    observability.report_export_config();
     run_replacement_daemon_with_owner(Some(observability)).await
 }
 

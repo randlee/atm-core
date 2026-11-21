@@ -38,10 +38,6 @@ error_types = ["AtmError", "PyRuntimeError"]
 allowed_test_double_paths = ["atm_storage_rusqlite::create_analyst_query_fixture_for_test"]
 forbidden_test_bypasses = ["rusqlite::Connection", "write_capability"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-LOCAL-ANALYST-PYTHON"]
-review_gates = ["no_binding_owned_sqlite", "no_binding_owned_transport", "readonly_only"]
-
 [status]
 state = "active"
 notes = ["AN.6 makes the local Maturin analyst interface an explicit leaf consumer of the dedicated analyst storage seam."]

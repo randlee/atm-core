@@ -49,6 +49,7 @@ struct RecordingWriterInner {
     attempts: std::sync::atomic::AtomicUsize,
     applied_transitions: Mutex<Vec<Vec<MessageKey>>>,
     submissions: Mutex<Vec<RecordedWriterSubmission>>,
+    submission_signal: tokio::sync::Notify,
 }
 
 /// Shared writer-lane recorder for runtime and HTTP behavior tests.
@@ -108,6 +109,19 @@ impl RecordingWriterIngress {
             .lock()
             .expect("recording writer ingress mutex")
             .clone()
+    }
+
+    pub async fn wait_for_submissions(&self, count: usize) {
+        loop {
+            let notified = self.inner.submission_signal.notified();
+            tokio::pin!(notified);
+            // Register before checking: `notify_one` can otherwise land in the gap.
+            notified.as_mut().enable();
+            if self.submissions().len() >= count {
+                return;
+            }
+            notified.await;
+        }
     }
 
     pub fn set_rejecting(&self, rejecting: bool) {
@@ -203,6 +217,7 @@ impl AsyncMessageStore for RecordingWriter {
                     RecordedWriterOutcome::Applied
                 },
             });
+        self.inner.submission_signal.notify_one();
         if rejected {
             return Err(AtmError::daemon_unavailable(
                 "test recording writer ingress rejected read-state handoff",
@@ -214,6 +229,50 @@ impl AsyncMessageStore for RecordingWriter {
             .expect("recording writer mutex")
             .push(message_ids);
         Ok(())
+    }
+}
+
+/// Blocks the first doctor inspection until a test releases it.
+pub struct GatedConfigDoctor {
+    inner: Arc<dyn atm_core::boundary::ConfigDoctor + Send + Sync>,
+    gate: Mutex<
+        Option<(
+            tokio::sync::oneshot::Sender<()>,
+            std::sync::mpsc::Receiver<()>,
+        )>,
+    >,
+}
+
+impl GatedConfigDoctor {
+    pub fn new(
+        inner: Arc<dyn atm_core::boundary::ConfigDoctor + Send + Sync>,
+    ) -> (
+        Self,
+        tokio::sync::oneshot::Receiver<()>,
+        std::sync::mpsc::Sender<()>,
+    ) {
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        (
+            Self {
+                inner,
+                gate: Mutex::new(Some((entered_tx, release_rx))),
+            },
+            entered_rx,
+            release_tx,
+        )
+    }
+}
+
+impl atm_core::boundary::sealed::Sealed for GatedConfigDoctor {}
+impl atm_core::boundary::ConfigDoctor for GatedConfigDoctor {
+    fn inspect_config(&self) -> Result<atm_core::boundary::ConfigDoctorReport, AtmError> {
+        let gate = self.gate.lock().expect("doctor gate").take();
+        if let Some((entered, release)) = gate {
+            let _ = entered.send(());
+            let _ = release.recv();
+        }
+        self.inner.inspect_config()
     }
 }
 

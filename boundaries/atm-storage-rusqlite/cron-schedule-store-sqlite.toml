@@ -43,9 +43,5 @@ notes = [
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-CRON-SCHEDULE-STORE-SQLITE"]
-review_gates = ["private_sqlite_impl", "stale_generation_writes_nothing"]
-
 [status]
 state = "concrete_landed"

@@ -19,7 +19,7 @@ use crate::types::HostName;
 ///
 /// The entire justification for this trait is that [`EnvSource::var`] is a
 /// **method call**, never the free-function `env::var`/`std::env::var` path
-/// form the `env-var-boundary` lint's `ENV_CALL_RE` matches (anchored on a
+/// form the `SCB-ENV-001` lint matches (anchored on a
 /// literal `::`). `resolve_atm_temp` is therefore lint-clean by
 /// construction and needs no allowlist entry (ADR-055's "M14" note).
 pub trait EnvSource {
@@ -359,7 +359,7 @@ fn validate_existing_scratch_dir(
 /// (`crate::transfer_script::check_script_safety`), and the daemon's
 /// UDS-socket owner check (`atm_http_runtime::unix_socket::is_owned_by`) all
 /// call this one function rather than each inventing their own comparison.
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "POSIX ownership verification reads Unix uid metadata; Windows uses its own scratch-directory policy.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "POSIX ownership verification reads Unix uid metadata; Windows validate_existing_scratch_dir applies the scratch-directory policy.")]
 #[cfg(unix)]
 #[must_use]
 pub fn is_owned_by_uid(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
@@ -373,7 +373,7 @@ pub fn is_owned_by_uid(metadata: &std::fs::Metadata, owner_uid: u32) -> bool {
 /// the `ATM_TEMP` scratch root (below) and the transfer-script safety check
 /// (`crate::transfer_script::check_script_safety`), which the daemon's
 /// UDS-socket precedent's narrower write-only `0o022` check does not cover.
-#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "POSIX mode bits determine shared-host scratch-directory access; Windows has no equivalent mode bits.")]
+#[sc_lint_attributes::sc_lint(allow(PORT-010), reason = "POSIX mode bits determine shared-host scratch-directory access; Windows validate_existing_scratch_dir checks the scratch root.")]
 #[cfg(unix)]
 pub(crate) fn has_group_or_world_bits(mode: u32) -> bool {
     mode & 0o077 != 0

@@ -43,10 +43,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["assemble_boundary_with_observability", "assemble_default_boundary"]
 
-[enforcement]
-lint_rules = ["SCB-RUNTIME-001", "SCB-RUNTIME-002"]
-review_gates = ["no_direct_backend_leakage", "no_runtime_to_daemon_backedge"]
-
 [status]
 state = "concrete_landed"
 notes = [

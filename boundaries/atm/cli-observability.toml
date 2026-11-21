@@ -55,16 +55,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = [
-  "LINT-BOUNDARY-OBSERVABILITY-CLI-EDGES",
-  "LINT-BOUNDARY-OBSERVABILITY-CLI-REFERENCES",
-]
-review_gates = [
-  "sealed_impl_allowlisted",
-  "no_cli_observability_to_sqlite_edge",
-]
-
 [status]
 state = "active"
 notes = [

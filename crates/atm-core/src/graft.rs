@@ -688,7 +688,34 @@ impl GraftReceiverListener {
         stream: &mut TcpStream,
         io_deadline: Duration,
     ) -> Result<GraftReceiverRequest, AtmError> {
+        #[cfg(test)]
+        if !TEST_RECEIVER_WITHOUT_DEADLINES.with(|flag| flag.get()) {
+            apply_stream_deadlines(stream, io_deadline)?;
+        }
+        #[cfg(not(test))]
         apply_stream_deadlines(stream, io_deadline)?;
+        let wire: GraftReceiverWireRequest = read_graft_post_send_message(
+            stream,
+            "failed to read graft receiver request",
+            "graft receiver request exceeded the bounded payload cap",
+        )?;
+        if !self.capability.matches_header(&wire.capability_base64url) {
+            return Err(AtmError::validation(
+                "graft receiver request presented an invalid local capability",
+            ));
+        }
+        Ok(wire.request)
+    }
+
+    #[cfg(test)]
+    fn read_receiver_request_with_limit(
+        &self,
+        stream: &mut TcpStream,
+        io_deadline: Option<Duration>,
+    ) -> Result<GraftReceiverRequest, AtmError> {
+        if let Some(timeout) = io_deadline {
+            apply_stream_deadlines(stream, timeout)?;
+        }
         let wire: GraftReceiverWireRequest = read_graft_post_send_message(
             stream,
             "failed to read graft receiver request",
@@ -764,6 +791,103 @@ impl GraftReceiverListener {
     }
 }
 
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct HookTransportLimits {
+    connect: Option<Duration>,
+    io: Option<Duration>,
+}
+
+#[cfg(test)]
+const PRODUCTION_HOOK_TRANSPORT_LIMITS: HookTransportLimits = HookTransportLimits {
+    connect: Some(RECEIVER_HOOK_CONNECT_DEADLINE),
+    io: Some(RECEIVER_HOOK_IO_DEADLINE),
+};
+#[cfg(test)]
+fn hook_budget_from_remaining(
+    remaining: Option<Duration>,
+    safety_cap: Duration,
+) -> Result<Duration, AtmError> {
+    remaining
+        .and_then(|remaining| remaining.checked_sub(RECEIVER_HOOK_RESULT_HANDOFF_GRACE))
+        .filter(|remaining| !remaining.is_zero())
+        .map(|remaining| remaining.min(safety_cap))
+        .ok_or_else(|| {
+            AtmError::new(
+                AtmErrorCode::PostSendGraftUnavailable,
+                "received-message hook does not retain enough request budget for endpoint delivery and result handoff",
+            )
+        })
+}
+
+#[cfg(test)]
+fn deliver_graft_post_send_with_limits(
+    endpoint: SocketAddr,
+    capability: &LocalCapability,
+    request: &GraftPostSendRequest,
+    deadline: RequestDeadline,
+    limits: HookTransportLimits,
+) -> Result<GraftPostSendResponse, AtmError> {
+    let connect_deadline = limits
+        .connect
+        .map(|cap| remaining_hook_budget(deadline, cap))
+        .transpose()?;
+    let connection = match connect_deadline {
+        Some(timeout) => TcpStream::connect_timeout(&endpoint, timeout),
+        None => TcpStream::connect(endpoint),
+    };
+    let mut stream = connection.map_err(|source| {
+        let detail =
+            connect_deadline.map_or_else(String::new, |timeout| format!(" within {timeout:?}"));
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            format!("failed to connect to graft receiver endpoint {endpoint}{detail}"),
+        )
+        .with_cause(source)
+    })?;
+    notify_test_receiver_connected(&stream);
+    if let Some(cap) = limits.io {
+        apply_stream_deadlines(&stream, remaining_hook_budget(deadline, cap)?)?;
+    }
+    let wire = GraftPostSendWireRequest {
+        capability_base64url: capability.to_base64url(),
+        request: request.clone(),
+    };
+    write_graft_post_send_message(
+        &mut stream,
+        &wire,
+        "failed to write graft post-send request",
+        "graft post-send request exceeded the bounded payload cap",
+    )?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft post-send request").with_cause(source)
+    })?;
+    read_graft_post_send_message(
+        &mut stream,
+        "failed to read graft post-send response",
+        "graft post-send response exceeded the bounded payload cap",
+    )
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_POST_SEND_WITHOUT_DEADLINES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static TEST_RECEIVER_WITHOUT_DEADLINES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static TEST_RECEIVER_CONNECTED: std::cell::RefCell<Option<TestConnectHook>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+type TestConnectHook = Box<dyn Fn(&TcpStream)>;
+
+#[cfg(test)]
+fn notify_test_receiver_connected(stream: &TcpStream) {
+    TEST_RECEIVER_CONNECTED.with(|slot| {
+        if let Some(notify) = slot.borrow().as_ref() {
+            notify(stream);
+        }
+    });
+}
+
 /// Deliver one post-send nudge to an embedded agent's loopback receiver.
 ///
 /// This is the shared sender used by both the CLI post-send hook and the
@@ -782,7 +906,15 @@ pub fn deliver_graft_post_send(
     connect_deadline: Duration,
     io_deadline: Duration,
 ) -> Result<GraftPostSendResponse, AtmError> {
-    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+    #[cfg(test)]
+    let connection = if TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.get()) {
+        TcpStream::connect(endpoint)
+    } else {
+        TcpStream::connect_timeout(&endpoint, connect_deadline)
+    };
+    #[cfg(not(test))]
+    let connection = TcpStream::connect_timeout(&endpoint, connect_deadline);
+    let mut stream = connection.map_err(|source| {
         AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
             format!(
@@ -792,6 +924,13 @@ pub fn deliver_graft_post_send(
         )
         .with_cause(source)
     })?;
+    #[cfg(test)]
+    notify_test_receiver_connected(&stream);
+    #[cfg(test)]
+    if !TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.get()) {
+        apply_stream_deadlines(&stream, io_deadline)?;
+    }
+    #[cfg(not(test))]
     apply_stream_deadlines(&stream, io_deadline)?;
     let wire = GraftPostSendWireRequest {
         capability_base64url: capability.to_base64url(),
@@ -907,7 +1046,7 @@ mod tests {
         GraftReceiverRequest, GraftReceiverWireRequest, RECEIVER_HOOK_RESULT_HANDOFF_GRACE,
         deliver_graft_post_send, deliver_published_cron_lifecycle, deliver_published_receiver_hook,
         deliver_published_receiver_hook_with_transport, graft_receiver_lock_path_from_root,
-        graft_receiver_not_registered_error, remaining_hook_budget,
+        graft_receiver_not_registered_error,
     };
     use crate::api::RequestDeadline;
     use crate::boundary::{
@@ -955,21 +1094,44 @@ mod tests {
     }
 
     #[test]
+    fn production_hook_transport_limits_remain_bounded() {
+        assert_eq!(
+            super::PRODUCTION_HOOK_TRANSPORT_LIMITS,
+            super::HookTransportLimits {
+                connect: Some(Duration::from_millis(250)),
+                io: Some(Duration::from_secs(3)),
+            }
+        );
+        let capability = crate::local_http::LocalCapability::generate().expect("capability");
+        let request = GraftPostSendRequest {
+            event: test_event(),
+            kind: NudgeKind::Steer,
+            rendered_nudge: "test".to_owned(),
+        };
+        let endpoint = "127.0.0.1:1".parse().expect("loopback address");
+        let expired = RequestDeadline::after_at(std::time::Instant::now(), Duration::ZERO);
+        let error =
+            super::deliver_graft_post_send_with_deadline(endpoint, &capability, &request, expired)
+                .expect_err("expired request must fail before connecting");
+        assert!(error.message().contains("request budget"));
+    }
+
+    #[test]
     fn graft_hook_budget_reserves_time_for_the_outer_result_handoff() {
-        let short = remaining_hook_budget(
-            RequestDeadline::after(RECEIVER_HOOK_RESULT_HANDOFF_GRACE),
+        let short = super::hook_budget_from_remaining(
+            Some(RECEIVER_HOOK_RESULT_HANDOFF_GRACE),
             Duration::from_secs(1),
         )
         .expect_err("a deadline with no handoff margin must not start socket I/O");
         assert!(short.message().contains("result handoff"));
 
-        let budget = remaining_hook_budget(
-            RequestDeadline::after(Duration::from_secs(1)),
-            Duration::from_secs(1),
-        )
-        .expect("larger request deadline retains socket budget");
-        assert!(budget < Duration::from_secs(1));
-        assert!(budget <= Duration::from_secs(1) - RECEIVER_HOOK_RESULT_HANDOFF_GRACE);
+        let budget =
+            super::hook_budget_from_remaining(Some(Duration::from_secs(1)), Duration::from_secs(1))
+                .expect("larger request deadline retains socket budget");
+        assert_eq!(
+            budget,
+            Duration::from_secs(1) - RECEIVER_HOOK_RESULT_HANDOFF_GRACE
+        );
     }
 
     fn test_event() -> PostSendHookEvent {
@@ -995,8 +1157,8 @@ mod tests {
         team: &TeamName,
         agent: &AgentName,
         owner_chat_id: Option<ChatId>,
-    ) -> Result<GraftReceiverListener, AtmError> {
-        GraftReceiverListener::bind(graft_root, team, agent, owner_chat_id)
+    ) -> Result<Arc<GraftReceiverListener>, AtmError> {
+        GraftReceiverListener::bind(graft_root, team, agent, owner_chat_id).map(Arc::new)
     }
 
     #[test]
@@ -1016,35 +1178,23 @@ mod tests {
         };
         let endpoint = listener.local_addr().expect("local addr");
         let capability = listener.capability().clone();
-        let sender = std::thread::spawn({
-            move || {
-                deliver_graft_post_send(
-                    endpoint,
-                    &capability,
-                    &request,
-                    Duration::from_secs(1),
-                    Duration::from_secs(3),
-                )
-            }
+        let (response, received) = exchange_with_test_receiver(&listener, || {
+            super::TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.set(true));
+            deliver_graft_post_send(
+                endpoint,
+                &capability,
+                &request,
+                Duration::ZERO,
+                Duration::ZERO,
+            )
         });
-
-        let mut stream = loop {
-            if let Some(stream) = listener.poll_accept().expect("poll accept") {
-                break stream;
-            }
-            std::thread::yield_now();
-        };
-        let received = listener
-            .read_request(&mut stream, Duration::from_secs(3))
-            .expect("read request");
+        let response = response.expect("deliver graft post-send");
+        let received = received
+            .expect("receiver request")
+            .expect("request received");
         assert_eq!(received.rendered_nudge, "<atm>test nudge</atm>");
         assert_eq!(received.event.description, "loopback graft transport");
         assert_eq!(received.kind, NudgeKind::Steer);
-        listener
-            .write_response(&mut stream, &GraftPostSendResponse::Delivered)
-            .expect("write response");
-
-        let response = sender.join().expect("join sender").expect("deliver");
         assert_eq!(response, GraftPostSendResponse::Delivered);
     }
 
@@ -1187,33 +1337,41 @@ mod tests {
         .expect("bind listener");
         let endpoint = listener.local_addr().expect("local addr");
 
-        let forger = std::thread::spawn(move || {
-            let mut stream = TcpStream::connect(endpoint).expect("connect to loopback receiver");
-            let wire = super::GraftPostSendWireRequest {
-                capability_base64url: "not-the-real-capability".to_string(),
-                request: GraftPostSendRequest {
-                    event: test_event(),
-                    kind: NudgeKind::Steer,
-                    rendered_nudge: "<atm>test nudge</atm>".to_string(),
-                },
-            };
-            super::write_graft_post_send_message(&mut stream, &wire, "write", "oversized")
-        });
-
-        let mut stream = loop {
-            if let Some(stream) = listener.poll_accept().expect("poll accept") {
-                break stream;
-            }
-            std::thread::yield_now();
+        // Connect and write before polling: a completed connect queues the
+        // loopback peer, so acceptance does not depend on a racing thread.
+        let mut forger = TcpStream::connect(endpoint).expect("connect to loopback receiver");
+        let wire = super::GraftPostSendWireRequest {
+            capability_base64url: "not-the-real-capability".to_string(),
+            request: GraftPostSendRequest {
+                event: test_event(),
+                kind: NudgeKind::Steer,
+                rendered_nudge: "<atm>test nudge</atm>".to_string(),
+            },
         };
-        let error = listener
-            .read_request(&mut stream, Duration::from_secs(3))
-            .expect_err("forged capability must be rejected");
+        super::write_graft_post_send_message(&mut forger, &wire, "write", "oversized")
+            .expect("write forged request");
+        // EOF is controlled by the test even if a malformed frame is incomplete.
+        forger
+            .shutdown(std::net::Shutdown::Write)
+            .expect("finish forged request");
+        // A successful connect may precede the listener becoming readable.
+        // Blocking accept is safe here: the test has already connected.
+        listener
+            .listener
+            .set_nonblocking(false)
+            .expect("blocking accept");
+        let mut stream = listener
+            .poll_accept()
+            .expect("accept")
+            .expect("connected loopback peer");
+        super::TEST_RECEIVER_WITHOUT_DEADLINES.with(|flag| flag.set(true));
+        let result = listener.read_request(&mut stream, Duration::ZERO);
+        super::TEST_RECEIVER_WITHOUT_DEADLINES.with(|flag| flag.set(false));
+        let error = result.expect_err("forged capability must be rejected");
         assert!(
             error.message().contains("invalid local capability"),
             "{error:?}"
         );
-        let _ = forger.join().expect("join forger");
     }
 
     #[test]
@@ -1432,6 +1590,202 @@ mod tests {
         }
     }
 
+    struct ReceiverControl {
+        endpoint: std::net::SocketAddr,
+        state: std::sync::Mutex<ReceiverControlState>,
+        connected: std::sync::mpsc::Sender<bool>,
+    }
+
+    #[derive(Default)]
+    struct ReceiverControlState {
+        cancelled: bool,
+        stream: Option<TcpStream>,
+        sender: Option<TcpStream>,
+    }
+
+    impl ReceiverControl {
+        fn cancel(&self) {
+            let mut state = self.state.lock().expect("receiver control");
+            if state.cancelled {
+                return;
+            }
+            state.cancelled = true;
+            for stream in [state.stream.as_ref(), state.sender.as_ref()]
+                .into_iter()
+                .flatten()
+            {
+                let _ = stream.shutdown(std::net::Shutdown::Both);
+            }
+            // Also release a receiver waiting for a sender connection.
+            let _ = self.connected.send(false);
+        }
+    }
+
+    impl ReceiverControl {
+        fn sender_connected(&self, stream: &TcpStream) {
+            let copy = stream.try_clone().expect("clone test sender stream");
+            let mut state = self.state.lock().expect("receiver control");
+            if state.cancelled {
+                let _ = copy.shutdown(std::net::Shutdown::Both);
+            } else {
+                state.sender = Some(copy);
+                let _ = self.connected.send(true);
+            }
+        }
+    }
+
+    struct ReceiverWorkerGuard {
+        control: Arc<ReceiverControl>,
+        accepted: Option<std::sync::mpsc::Sender<Result<(), &'static str>>>,
+        completed: bool,
+    }
+
+    impl Drop for ReceiverWorkerGuard {
+        fn drop(&mut self) {
+            if let Some(accepted) = self.accepted.take() {
+                let _ = accepted.send(Err("receiver exited before accept"));
+            }
+            if !self.completed {
+                self.control.cancel();
+            }
+        }
+    }
+
+    struct ReceiverCompletionGuard(Arc<ReceiverControl>);
+
+    impl Drop for ReceiverCompletionGuard {
+        fn drop(&mut self) {
+            self.0.cancel();
+        }
+    }
+
+    type TestReceiver = std::thread::JoinHandle<Result<Option<GraftPostSendRequest>, AtmError>>;
+
+    #[derive(Clone, Copy)]
+    enum ReceiverFailure {
+        None,
+        BeforeAccept,
+        AfterAccept,
+        PanicBeforeAccept,
+    }
+
+    fn spawn_test_receiver(
+        listener: &Arc<GraftReceiverListener>,
+    ) -> (
+        TestReceiver,
+        Arc<ReceiverControl>,
+        std::sync::mpsc::Receiver<Result<(), &'static str>>,
+    ) {
+        spawn_test_receiver_with_failure(listener, ReceiverFailure::None)
+    }
+
+    fn spawn_test_receiver_with_failure(
+        listener: &Arc<GraftReceiverListener>,
+        failure: ReceiverFailure,
+    ) -> (
+        TestReceiver,
+        Arc<ReceiverControl>,
+        std::sync::mpsc::Receiver<Result<(), &'static str>>,
+    ) {
+        listener
+            .listener
+            .set_nonblocking(false)
+            .expect("blocking listener");
+        let (connected_tx, connected_rx) = std::sync::mpsc::channel();
+        let control = Arc::new(ReceiverControl {
+            endpoint: listener.local_addr().expect("local addr"),
+            state: std::sync::Mutex::new(ReceiverControlState::default()),
+            connected: connected_tx,
+        });
+        let worker_control = Arc::clone(&control);
+        let listener = Arc::clone(listener);
+        let (accepted_tx, accepted_rx) = std::sync::mpsc::channel();
+        let join = std::thread::spawn(move || {
+            let mut guard = ReceiverWorkerGuard {
+                control: Arc::clone(&worker_control),
+                accepted: Some(accepted_tx),
+                completed: false,
+            };
+            connected_rx
+                .recv()
+                .expect("connection or cancellation event");
+            if worker_control
+                .state
+                .lock()
+                .expect("receiver control")
+                .cancelled
+            {
+                return Ok(None);
+            }
+            if matches!(failure, ReceiverFailure::PanicBeforeAccept) {
+                panic!("injected receiver panic before accept");
+            }
+            if matches!(failure, ReceiverFailure::BeforeAccept) {
+                return Err(AtmError::daemon_unavailable("injected accept failure"));
+            }
+            let mut stream = listener
+                .poll_accept()?
+                .expect("blocking accept returns a peer");
+            {
+                let mut state = worker_control.state.lock().expect("receiver control");
+                if state.cancelled {
+                    return Ok(None);
+                }
+                state.stream = Some(stream.try_clone().map_err(|source| {
+                    AtmError::daemon_unavailable("clone test receiver stream").with_cause(source)
+                })?);
+            }
+            if let Some(accepted) = guard.accepted.take() {
+                let _ = accepted.send(Ok(()));
+            }
+            if matches!(failure, ReceiverFailure::AfterAccept) {
+                return Err(AtmError::daemon_unavailable("injected exchange failure"));
+            }
+            let GraftReceiverRequest::PostSend(request) =
+                listener.read_receiver_request_with_limit(&mut stream, None)?
+            else {
+                return Err(AtmError::validation("expected post-send request"));
+            };
+            listener.write_response(&mut stream, &GraftPostSendResponse::Delivered)?;
+            guard.completed = true;
+            Ok(Some(request))
+        });
+        (join, control, accepted_rx)
+    }
+
+    fn exchange_with_test_receiver<T>(
+        listener: &Arc<GraftReceiverListener>,
+        send: impl FnOnce() -> T,
+    ) -> (T, Result<Option<GraftPostSendRequest>, AtmError>) {
+        exchange_with_test_receiver_failure(listener, ReceiverFailure::None, send)
+    }
+
+    fn exchange_with_test_receiver_failure<T>(
+        listener: &Arc<GraftReceiverListener>,
+        failure: ReceiverFailure,
+        send: impl FnOnce() -> T,
+    ) -> (T, Result<Option<GraftPostSendRequest>, AtmError>) {
+        let (receiver, control, _accepted) = spawn_test_receiver_with_failure(listener, failure);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let sender_control = Arc::clone(&control);
+            super::TEST_RECEIVER_CONNECTED.with(|slot| {
+                *slot.borrow_mut() = Some(Box::new(move |stream| {
+                    sender_control.sender_connected(stream)
+                }));
+            });
+            let _completion = ReceiverCompletionGuard(control);
+            send()
+        }));
+        super::TEST_RECEIVER_CONNECTED.with(|slot| *slot.borrow_mut() = None);
+        let request = receiver.join().expect("receiver thread");
+        listener
+            .listener
+            .set_nonblocking(true)
+            .expect("restore nonblocking listener");
+        let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+        (outcome, request)
+    }
+
     /// Runs one `deliver_published_receiver_hook` call concurrently with a
     /// background thread that serves exactly one accepted connection with
     /// `Delivered`, then joins that thread before returning. Borrows
@@ -1440,70 +1794,249 @@ mod tests {
     /// across a daemon restart" matrix cell).
     fn deliver_through_listener(
         runtime: &GraftLeaseTestRuntime,
-        listener: &GraftReceiverListener,
+        listener: &Arc<GraftReceiverListener>,
     ) -> Result<PostSendEmissionPath, AtmError> {
         deliver_through_listener_capturing_request(runtime, listener).0
     }
 
     fn deliver_through_listener_capturing_request(
         runtime: &GraftLeaseTestRuntime,
-        listener: &GraftReceiverListener,
+        listener: &Arc<GraftReceiverListener>,
     ) -> (Result<PostSendEmissionPath, AtmError>, GraftPostSendRequest) {
-        use std::sync::atomic::{AtomicBool, Ordering};
-        use std::sync::mpsc;
+        let (outcome, request) = exchange_with_test_receiver(listener, || {
+            deliver_published_receiver_hook_with_transport(
+                runtime,
+                &dispatch_for(test_event()),
+                RequestDeadline::after_at(std::time::Instant::now(), Duration::ZERO),
+                |endpoint, capability, request, deadline| {
+                    super::deliver_graft_post_send_with_limits(
+                        endpoint,
+                        capability,
+                        request,
+                        deadline,
+                        super::HookTransportLimits {
+                            connect: None,
+                            io: None,
+                        },
+                    )
+                },
+            )
+        });
+        let request = request
+            .expect("receiver thread")
+            .expect("delivery received");
+        (outcome, request)
+    }
 
-        struct ReceiverFinished(mpsc::Sender<()>);
-
-        impl Drop for ReceiverFinished {
-            fn drop(&mut self) {
-                let _ = self.0.send(());
-            }
-        }
-
-        let client_finished = AtomicBool::new(false);
-        std::thread::scope(|scope| {
-            let (finished_tx, finished_rx) = mpsc::channel();
-            let client_finished = &client_finished;
-            let receiver = scope.spawn(move || {
-                // Report completion after socket cleanup, including on panic.
-                let _completion = ReceiverFinished(finished_tx);
-                let mut stream = loop {
-                    if let Some(stream) = listener.poll_accept().expect("poll accept") {
-                        break stream;
-                    }
-                    if client_finished.load(Ordering::Acquire) {
-                        return None;
-                    }
-                    std::thread::yield_now();
-                };
-                let request = listener
-                    .read_request(&mut stream, Duration::from_secs(3))
-                    .expect("read request");
-                listener
-                    .write_response(&mut stream, &GraftPostSendResponse::Delivered)
-                    .expect("write response");
-                Some(request)
-            });
-            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                deliver_published_receiver_hook(
-                    runtime,
-                    &dispatch_for(test_event()),
-                    RequestDeadline::after(Duration::from_secs(3)),
+    #[test]
+    fn actual_graft_sender_returns_error_when_receiver_fails_after_accept() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = bind_listener(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+            None,
+        )
+        .expect("bind listener");
+        let endpoint = listener.local_addr().expect("endpoint");
+        let capability = listener.capability().clone();
+        let request = GraftPostSendRequest {
+            event: test_event(),
+            kind: NudgeKind::Steer,
+            rendered_nudge: "failure test".to_owned(),
+        };
+        let (sender_result, receiver_result) =
+            exchange_with_test_receiver_failure(&listener, ReceiverFailure::AfterAccept, || {
+                super::TEST_POST_SEND_WITHOUT_DEADLINES.with(|flag| flag.set(true));
+                deliver_graft_post_send(
+                    endpoint,
+                    &capability,
+                    &request,
+                    Duration::ZERO,
+                    Duration::ZERO,
                 )
+            });
+        assert!(
+            sender_result.is_err(),
+            "sender must report receiver failure"
+        );
+        assert!(
+            receiver_result
+                .expect_err("injected receiver failure")
+                .message()
+                .contains("injected exchange failure")
+        );
+    }
+
+    #[test]
+    fn receiver_failures_signal_waiters_and_close_sender_socket() {
+        use std::io::Read;
+        for failure in [
+            ReceiverFailure::BeforeAccept,
+            ReceiverFailure::AfterAccept,
+            ReceiverFailure::PanicBeforeAccept,
+        ] {
+            let tempdir = TempDir::new().expect("tempdir");
+            let listener = bind_listener(
+                tempdir.path(),
+                &TeamName::from_validated(TEST_TEAM),
+                &AgentName::from_validated(TEST_QA),
+                None,
+            )
+            .expect("bind listener");
+            let (receiver, control, accepted) =
+                spawn_test_receiver_with_failure(&listener, failure);
+            let _completion = ReceiverCompletionGuard(Arc::clone(&control));
+            let mut sender = TcpStream::connect(control.endpoint).expect("connect sender");
+            control.sender_connected(&sender);
+            let status = accepted.recv().expect("receiver signalled accept outcome");
+            assert_eq!(
+                status.is_ok(),
+                matches!(failure, ReceiverFailure::AfterAccept)
+            );
+            let joined = receiver.join();
+            if matches!(failure, ReceiverFailure::PanicBeforeAccept) {
+                assert!(joined.is_err());
+            } else {
+                assert!(joined.expect("receiver thread").is_err());
+            }
+            let mut byte = [0];
+            assert!(matches!(sender.read(&mut byte), Ok(0) | Err(_)));
+        }
+    }
+
+    #[test]
+    fn sender_completion_wakes_receiver_without_a_usable_wake_endpoint() {
+        let (connected, receiver_event) = std::sync::mpsc::channel();
+        let control = Arc::new(ReceiverControl {
+            // Port zero cannot be used as a TCP wake endpoint.
+            endpoint: std::net::SocketAddr::from(([127, 0, 0, 1], 0)),
+            state: std::sync::Mutex::new(ReceiverControlState::default()),
+            connected,
+        });
+        drop(ReceiverCompletionGuard(control));
+        assert!(!receiver_event.recv().expect("cancellation event"));
+    }
+
+    #[test]
+    fn receiver_is_released_when_sender_fails_or_panics_before_connect() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = bind_listener(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+            None,
+        )
+        .expect("bind listener");
+        let (outcome, received) =
+            exchange_with_test_receiver(&listener, || Err::<(), _>("sender failed"));
+        assert_eq!(outcome, Err("sender failed"));
+        assert!(received.expect("receiver exits").is_none());
+        assert!(
+            listener
+                .poll_accept()
+                .expect("no wake connection")
+                .is_none()
+        );
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            exchange_with_test_receiver(&listener, || panic!("sender panic"));
+        }));
+        assert!(panic.is_err());
+        assert!(
+            listener
+                .poll_accept()
+                .expect("no wake connection")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn receiver_is_released_on_sender_exit_after_accept() {
+        for panic_after_accept in [false, true] {
+            let tempdir = TempDir::new().expect("tempdir");
+            let listener = bind_listener(
+                tempdir.path(),
+                &TeamName::from_validated(TEST_TEAM),
+                &AgentName::from_validated(TEST_QA),
+                None,
+            )
+            .expect("bind listener");
+            let (receiver, control, accepted) = spawn_test_receiver(&listener);
+            let completion = ReceiverCompletionGuard(Arc::clone(&control));
+            let sender = TcpStream::connect(control.endpoint).expect("connect sender");
+            control.sender_connected(&sender);
+            accepted
+                .recv()
+                .expect("accept signal")
+                .expect("receiver accepted sender");
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _completion = completion;
+                if panic_after_accept {
+                    panic!("sender panic after accept");
+                }
+                Err::<(), _>("sender error after accept")
             }));
-            client_finished.store(true, Ordering::Release);
-            // On timeout, scoped cleanup is still bounded: accept checks the
-            // stop predicate and accepted sockets retain their 3s I/O timeouts.
-            finished_rx
-                .recv_timeout(Duration::from_secs(3))
-                .expect("graft test receiver did not report completion within 3s of client exit");
-            let request = receiver.join();
-            let outcome = outcome.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
-            let request = request
-                .expect("receiver thread")
-                .expect("delivery completed before the receiver accepted a request");
-            (outcome, request)
+            if panic_after_accept {
+                assert!(result.is_err());
+            } else {
+                assert_eq!(
+                    result.expect("sender did not panic"),
+                    Err("sender error after accept")
+                );
+            }
+            assert!(receiver.join().expect("receiver thread").is_err());
+            drop(sender);
+        }
+    }
+
+    #[test]
+    fn receiver_is_released_when_sender_stalls_after_connect() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = bind_listener(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+            None,
+        )
+        .expect("bind listener");
+        let (receiver, control, accepted) = spawn_test_receiver(&listener);
+        let _completion = ReceiverCompletionGuard(Arc::clone(&control));
+        let sender = TcpStream::connect(control.endpoint).expect("connect sender");
+        control.sender_connected(&sender);
+        accepted
+            .recv()
+            .expect("accept signal")
+            .expect("receiver accepted sender");
+        // The sender is deliberately held before writing; cancel at that
+        // checkpoint and prove shutdown releases the blocked receiver read.
+        control.cancel();
+        assert!(receiver.join().expect("receiver thread").is_err());
+        drop(sender);
+        listener
+            .listener
+            .set_nonblocking(true)
+            .expect("restore listener");
+    }
+
+    fn wait_receiver_completion<T>(
+        receiver: &std::sync::mpsc::Receiver<T>,
+        timeout: Duration,
+    ) -> Result<T, &'static str> {
+        receiver.recv_timeout(timeout).map_err(|error| match error {
+            std::sync::mpsc::RecvTimeoutError::Timeout => "receiver completion timed out",
+            std::sync::mpsc::RecvTimeoutError::Disconnected => {
+                "receiver exited before completion signal"
+            }
         })
+    }
+
+    #[test]
+    fn stuck_receiver_reports_completion_timeout() {
+        let (_held_sender, receiver) = std::sync::mpsc::sync_channel::<()>(1);
+        assert_eq!(
+            wait_receiver_completion(&receiver, Duration::ZERO),
+            Err("receiver completion timed out")
+        );
     }
 
     #[test]

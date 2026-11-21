@@ -62,6 +62,8 @@ const SUBMIT_RETRY_INTERVAL: Duration = Duration::from_millis(5);
 /// mutations cannot race on independent writer connections.
 pub(crate) struct SerialWriterQueue {
     connection: Mutex<SqliteConnection>,
+    #[cfg(test)]
+    contention_signal: Mutex<Option<std::sync::mpsc::Sender<()>>>,
 }
 
 impl SerialWriterQueue {
@@ -70,13 +72,37 @@ impl SerialWriterQueue {
         ensure_schema(&mut connection, target)?;
         Ok(Self {
             connection: Mutex::new(connection),
+            #[cfg(test)]
+            contention_signal: Mutex::new(None),
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn signal_next_contention(&self, signal: std::sync::mpsc::Sender<()>) {
+        *self.contention_signal.lock().expect("contention hook") = Some(signal);
     }
 
     pub(crate) fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut SqliteConnection) -> T,
     ) -> T {
+        #[cfg(test)]
+        if let Some(signal) = self
+            .contention_signal
+            .lock()
+            .expect("contention hook")
+            .take()
+        {
+            match self.connection.try_lock() {
+                Ok(mut connection) => return operation(&mut connection),
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    signal.send(()).expect("signal queued writer");
+                }
+                Err(std::sync::TryLockError::Poisoned(error)) => {
+                    return operation(&mut error.into_inner());
+                }
+            }
+        }
         let mut connection = self
             .connection
             .lock()

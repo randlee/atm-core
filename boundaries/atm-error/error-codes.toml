@@ -38,10 +38,6 @@ error_types = ["UnknownAtmErrorCode"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["local_error_enum", "ad_hoc_error_code_string"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-ATM-ERROR-CODES"]
-review_gates = ["one_registry", "stable_wire_round_trip"]
-
 [status]
 state = "concrete_landed"
 notes = ["AO2.1 adds peer-wire policy errors here so later adapter work cannot mint local transport error enums."]

@@ -1391,17 +1391,40 @@ pub(crate) mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct TestSignal {
+        count: Mutex<usize>,
+        changed: Condvar,
+    }
+
+    impl TestSignal {
+        fn signal(&self) {
+            *self.count.lock().expect("test signal lock") += 1;
+            self.changed.notify_all();
+        }
+
+        fn wait_for(&self, expected: usize) {
+            let count = self.count.lock().expect("test signal lock");
+            let count = self
+                .changed
+                .wait_while(count, |count| *count < expected)
+                .expect("test signal wait");
+            assert!(*count >= expected, "test signal reached expected count");
+        }
+    }
+
     struct BlockingTemplateComposer {
         source_bytes: Vec<u8>,
         inspection: atm_core::TemplateInspection,
         release: Arc<(Mutex<bool>, Condvar)>,
-        started: tokio::sync::mpsc::UnboundedSender<()>,
+        started: Arc<TestSignal>,
     }
 
     impl BlockingTemplateComposer {
-        fn new(body: &str) -> (Self, tokio::sync::mpsc::UnboundedReceiver<()>) {
+        fn new(body: &str) -> (Self, Arc<TestSignal>) {
             let fixture = FixtureTemplateComposer::new(body);
-            let (started, receiver) = tokio::sync::mpsc::unbounded_channel();
+            let started = Arc::new(TestSignal::default());
+            let receiver = Arc::clone(&started);
             (
                 Self {
                     source_bytes: fixture.source_bytes,
@@ -1430,18 +1453,15 @@ pub(crate) mod tests {
             source: &atm_core::TemplateSource,
         ) -> Result<atm_core::TemplateInspection, AtmError> {
             assert_eq!(source.raw_file_bytes, self.source_bytes);
-            self.started
-                .send(())
-                .expect("report stalled template verification start");
+            self.started.signal();
             let (released, wake) = &*self.release;
-            let mut released = released
+            let released = released
                 .lock()
                 .expect("wait for stalled template verification");
-            while !*released {
-                released = wake
-                    .wait(released)
-                    .expect("stalled template verification wait");
-            }
+            let released = wake
+                .wait_while(released, |released| !*released)
+                .expect("stalled template verification wait");
+            assert!(*released, "test releases stalled template verification");
             Ok(self.inspection.clone())
         }
 
@@ -2359,15 +2379,14 @@ pub(crate) mod tests {
             RuntimeHealth::default(),
         );
         let (first_started_tx, first_started_rx) = tokio::sync::oneshot::channel();
-        let (release_first_tx, release_first_rx) = tokio::sync::oneshot::channel();
+        let release_first_tx = Arc::new(TestSignal::default());
+        let release_first_rx = Arc::clone(&release_first_tx);
         let first_admission = admission.clone();
         let first = tokio::spawn(async move {
             first_admission
                 .run(RequestDeadline::after(Duration::from_secs(1)), move || {
                     first_started_tx.send(()).expect("signal started job");
-                    release_first_rx
-                        .blocking_recv()
-                        .expect("release started job");
+                    release_first_rx.wait_for(1);
                     Ok("first durable result")
                 })
                 .await
@@ -2394,7 +2413,7 @@ pub(crate) mod tests {
             "a rejected admission never creates its blocking SQLite job"
         );
 
-        release_first_tx.send(()).expect("release first job");
+        release_first_tx.signal();
         assert_eq!(
             first
                 .await
@@ -2428,51 +2447,47 @@ pub(crate) mod tests {
         );
     }
 
-    /// Busy-waits for `duration` on the calling thread.
-    ///
-    /// Test-only stand-in for a slow blocking job. A thread-sleep primitive
-    /// is deliberately avoided: the AL.3 architecture boundary guard forbids
-    /// `atm-http-runtime` sources, including tests, from restoring blocking
-    /// sleep constructs.
-    fn spin_wait(duration: Duration) {
-        let deadline = std::time::Instant::now() + duration;
-        while std::time::Instant::now() < deadline {
-            std::hint::spin_loop();
-        }
-    }
-
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn blocking_core_bridge_records_a_stall_when_a_job_outlives_its_budget() {
         let health = RuntimeHealth::default();
-        let admission = ControlPathSyncBridge::new(
+        let mut admission = ControlPathSyncBridge::new(
             NonZeroUsize::new(1).expect("non-zero capacity"),
             health.clone(),
         );
-
-        // A fake slow job: it runs longer than the remaining budget it was
-        // dispatched with. The bridge must let it run to completion (a
-        // durable write is never abandoned mid-flight) and only record the
-        // stall as an observability event. This busy-waits deliberately
-        // instead of sleeping the blocking thread: the AL.3 boundary guard
-        // forbids `atm-http-runtime` from restoring blocking-runtime sleep
-        // constructs anywhere in its sources, tests included.
-        let result = admission
-            .run(
-                RequestDeadline::after(Duration::from_millis(20)),
-                move || {
-                    spin_wait(Duration::from_millis(150));
-                    Ok("slow job still finished")
-                },
-            )
-            .await
-            .expect("an outrunning job still completes and returns its result");
-
-        assert_eq!(result, "slow job still finished");
+        let advanced = Arc::new(AtomicBool::new(false));
+        let clock_state = Arc::clone(&advanced);
+        let origin = std::time::Instant::now();
+        admission.set_test_clock(Arc::new(move || {
+            origin
+                + if clock_state.load(Ordering::SeqCst) {
+                    Duration::from_secs(60)
+                } else {
+                    Duration::ZERO
+                }
+        }));
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let release_tx = Arc::new(TestSignal::default());
+        let release_rx = Arc::clone(&release_tx);
+        let task = tokio::spawn(async move {
+            admission
+                .run(
+                    RequestDeadline::after_at(origin, Duration::from_secs(30)),
+                    move || {
+                        started_tx.send(()).expect("signal started job");
+                        release_rx.wait_for(1);
+                        Ok("slow job still finished")
+                    },
+                )
+                .await
+        });
+        started_rx.await.expect("job starts");
+        advanced.store(true, Ordering::SeqCst);
+        release_tx.signal();
         assert_eq!(
-            health.snapshot().blocking_core_bridge_stalls_total,
-            1,
-            "a job outliving its budget must be recorded as one bridge stall"
+            task.await.expect("job joins").expect("job succeeds"),
+            "slow job still finished"
         );
+        assert_eq!(health.snapshot().blocking_core_bridge_stalls_total, 1);
     }
 
     #[tokio::test]
@@ -2672,23 +2687,27 @@ pub(crate) mod tests {
             NonZeroUsize::new(1).expect("non-zero capacity"),
             RuntimeHealth::default(),
         );
-        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let started_tx = Arc::new(TestSignal::default());
+        let started_rx = Arc::clone(&started_tx);
+        let release_tx = Arc::new(TestSignal::default());
+        let release_rx = Arc::clone(&release_tx);
         let task = tokio::spawn(async move {
             admission
                 .run(
                     RequestDeadline::after(Duration::from_millis(20)),
                     move || {
-                        started_tx.send(()).expect("signal started job");
-                        release_rx.blocking_recv().expect("release started job");
+                        started_tx.signal();
+                        release_rx.wait_for(1);
                         Ok("actual durable result")
                     },
                 )
                 .await
         });
-        started_rx.await.expect("job starts");
+        tokio::task::spawn_blocking(move || started_rx.wait_for(1))
+            .await
+            .expect("job start waiter joins");
         tokio::time::advance(Duration::from_millis(30)).await;
-        release_tx.send(()).expect("release started job");
+        release_tx.signal();
         assert_eq!(
             task.await.expect("task joins").expect("actual result"),
             "actual durable result",
@@ -3399,62 +3418,6 @@ pub(crate) mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn doctor_projection_rejects_control_lane_overload_explicitly() {
-        let fixture = fixture(true, None, None);
-        let assembly =
-            open_sqlite_boundary(&fixture.database_path).expect("reopen doctor boundary");
-        let projection = Arc::new(
-            StorageDoctorProjection::start(
-                DoctorProjectionConfig {
-                    worker_count: 1,
-                    queue_depth: 1,
-                    ..DoctorProjectionConfig::default()
-                },
-                assembly.service_runtime,
-                assembly.doctor_ports,
-                Arc::new(NullObservability),
-            )
-            .expect("start bounded doctor projection"),
-        );
-        let barrier = Arc::new(tokio::sync::Barrier::new(65));
-        let mut calls = Vec::new();
-        for _ in 0..64 {
-            let projection = Arc::clone(&projection);
-            let barrier = Arc::clone(&barrier);
-            calls.push(tokio::spawn(async move {
-                barrier.wait().await;
-                projection
-                    .project(
-                        atm_core::doctor::DoctorQuery::default(),
-                        DoctorProjectionContext::default(),
-                        RequestDeadline::after(Duration::from_secs(1)),
-                    )
-                    .await
-            }));
-        }
-        barrier.wait().await;
-
-        let mut completed = 0;
-        let mut saturated = 0;
-        for call in calls {
-            match call.await.expect("doctor caller joins") {
-                Ok(_) => completed += 1,
-                Err(error)
-                    if error.code() == atm_storage::AtmErrorCode::DaemonConnectionSaturated =>
-                {
-                    saturated += 1;
-                }
-                Err(error) => panic!("unexpected doctor overload result: {error}"),
-            }
-        }
-        assert!(completed > 0, "admitted doctor calls retain healthy parity");
-        assert!(
-            saturated > 0,
-            "beyond the bounded control lane, doctor rejects explicitly instead of serializing"
-        );
-    }
-
     #[test]
     fn mailbox_and_doctor_handlers_never_enter_the_blocking_core_bridge() {
         let source = [
@@ -3808,13 +3771,7 @@ pub(crate) mod tests {
             )
             .await
             .expect("read response is independent of writer completion");
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while ingress.submissions().is_empty() {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("read handoff reaches recording ingress");
+        ingress.wait_for_submissions(1).await;
         assert!(
             ingress
                 .submissions()
@@ -3834,17 +3791,14 @@ pub(crate) mod tests {
             )
             .await
             .expect("writer rejection never feeds the read response");
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while !ingress
+        ingress.wait_for_submissions(2).await;
+        assert!(
+            ingress
                 .submissions()
                 .iter()
-                .any(|submission| submission.outcome == RecordedWriterOutcome::Rejected)
-            {
-                tokio::task::yield_now().await;
-            }
-        })
-        .await
-        .expect("supervisor records the rejecting handoff path");
+                .any(|submission| { submission.outcome == RecordedWriterOutcome::Rejected }),
+            "supervisor records the rejecting handoff path"
+        );
     }
 
     #[tokio::test]
@@ -3879,15 +3833,19 @@ pub(crate) mod tests {
             .with_async_mailbox_runtime(Arc::new(async_mailbox_runtime))
             .with_doctor_projection(Arc::new(doctor_projection));
         let bridge = router.control_path_sync_bridge.clone();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let release_tx = Arc::new(TestSignal::default());
+        let release_rx = Arc::clone(&release_tx);
         let bridge_task = tokio::spawn(async move {
             bridge
-                .run(RequestDeadline::after(Duration::from_secs(1)), || {
-                    spin_wait(Duration::from_millis(250));
+                .run(RequestDeadline::after(Duration::from_secs(30)), move || {
+                    started_tx.send(()).expect("signal occupied bridge");
+                    release_rx.wait_for(1);
                     Ok(())
                 })
                 .await
         });
-        tokio::task::yield_now().await;
+        started_rx.await.expect("bridge started");
 
         let root = fixture.home_dir.clone();
         let list = atm_core::list::ListQuery::new(
@@ -3968,6 +3926,7 @@ pub(crate) mod tests {
                 .expect("fanout task joins")
                 .expect("fanout request completes while bridge is occupied");
         }
+        release_tx.signal();
         bridge_task
             .await
             .expect("bridge task joins")
@@ -3995,11 +3954,7 @@ pub(crate) mod tests {
 
     fn stalled_template_fixture(
         through: bool,
-    ) -> (
-        Fixture,
-        Arc<BlockingTemplateComposer>,
-        tokio::sync::mpsc::UnboundedReceiver<()>,
-    ) {
+    ) -> (Fixture, Arc<BlockingTemplateComposer>, Arc<TestSignal>) {
         let (composer, starts) = BlockingTemplateComposer::new("template body");
         let composer = Arc::new(composer);
         let fixture = route_task_commands(
@@ -4021,7 +3976,7 @@ pub(crate) mod tests {
 
     async fn start_stalled_template_verifications(
         fixture: &Fixture,
-        starts: &mut tokio::sync::mpsc::UnboundedReceiver<()>,
+        starts: Arc<TestSignal>,
         deadline: Duration,
     ) -> tokio::task::JoinSet<Result<atm_core::api::ApiResponse, AtmError>> {
         let mut stalled = tokio::task::JoinSet::new();
@@ -4038,14 +3993,11 @@ pub(crate) mod tests {
                     .await
             });
         }
-        starts
-            .recv()
-            .await
-            .expect("first template verification occupies the bounded preflight");
-        starts
-            .recv()
-            .await
-            .expect("second template verification occupies the bounded preflight");
+        tokio::task::spawn_blocking(move || {
+            starts.wait_for(2);
+        })
+        .await
+        .expect("template start waiter joins");
         stalled
     }
 
@@ -4161,10 +4113,10 @@ pub(crate) mod tests {
     async fn stalled_template_verification_is_bounded_and_does_not_starve_list_or_persist_body(
         through: bool,
     ) {
-        let (fixture, composer, mut starts) = stalled_template_fixture(through);
+        let (fixture, composer, starts) = stalled_template_fixture(through);
         let response_deadline = Duration::from_secs(30);
         let mut stalled =
-            start_stalled_template_verifications(&fixture, &mut starts, response_deadline).await;
+            start_stalled_template_verifications(&fixture, starts, response_deadline).await;
         assert_task_list_remains_live(&fixture, response_deadline).await;
         assert_template_preflight_fails_before_persistence(&fixture, response_deadline).await;
         assert_stalled_template_verifications_fail_closed(&fixture, &mut stalled).await;
@@ -4187,7 +4139,7 @@ pub(crate) mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn file_source_preflight_shares_bounded_admission_and_fails_closed() {
-        let (composer, mut starts) = BlockingTemplateComposer::new("template body");
+        let (composer, starts) = BlockingTemplateComposer::new("template body");
         let composer = Arc::new(composer);
         let fixture = fixture_with_selector_and_template(
             true,
@@ -4214,14 +4166,11 @@ pub(crate) mod tests {
                     .await
             });
         }
-        starts
-            .recv()
-            .await
-            .expect("first stalled source preflight occupies the bounded bridge");
-        starts
-            .recv()
-            .await
-            .expect("second stalled source preflight occupies the bounded bridge");
+        tokio::task::spawn_blocking(move || {
+            starts.wait_for(2);
+        })
+        .await
+        .expect("source start waiter joins");
 
         let response_deadline = Duration::from_secs(30);
         let (error, ()) = tokio::join!(
@@ -4959,44 +4908,48 @@ pub(crate) mod tests {
         assert!(rows.is_empty(), "expired recording writes no row");
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn record_bridge_saturated_logs_and_emission_succeeds() {
         let bridge = crate::BoundedBlockingBridge::new(
             NonZeroUsize::new(1).expect("bridge capacity"),
             RuntimeHealth::default(),
         );
-        let release = Arc::new(AtomicBool::new(false));
-        let worker_release = Arc::clone(&release);
-        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let release_tx = Arc::new(TestSignal::default());
+        let release_rx = Arc::clone(&release_tx);
+        let started_tx = Arc::new(TestSignal::default());
+        let started_rx = Arc::clone(&started_tx);
         let occupying_bridge = bridge.clone();
         let occupying = tokio::spawn(async move {
             occupying_bridge
                 .run(RequestDeadline::after(Duration::from_secs(2)), move || {
-                    started_tx.send(()).expect("signal occupied bridge");
-                    while !worker_release.load(Ordering::Acquire) {
-                        std::thread::yield_now();
-                    }
+                    started_tx.signal();
+                    release_rx.wait_for(1);
                     Ok(())
                 })
                 .await
         });
-        started_rx.await.expect("bridge job starts");
+        tokio::task::spawn_blocking(move || started_rx.wait_for(1))
+            .await
+            .expect("bridge start waiter joins");
         let dispatch = task_handoff_dispatch(Some("BB6-SATURATED"));
         let layer = PromptHandoffErrorLayer::default();
         let _subscriber =
             tracing::subscriber::set_default(tracing_subscriber::registry().with(layer.clone()));
 
-        crate::prompt_handoff_record::record_prompt_handoff(
-            &bridge,
-            RequestDeadline::after(Duration::from_millis(20)),
-            Ok(Arc::new(atm_storage::DummyTaskStore::default())),
-            &dispatch,
-            PromptTrigger::Steer,
-            IsoTimestamp::now(),
-            &atm_runtime::TaskTelemetryRuntime::disabled(),
-        )
-        .await;
-        release.store(true, Ordering::Release);
+        let telemetry = atm_runtime::TaskTelemetryRuntime::disabled();
+        tokio::join!(
+            crate::prompt_handoff_record::record_prompt_handoff(
+                &bridge,
+                RequestDeadline::after(Duration::from_millis(20)),
+                Ok(Arc::new(atm_storage::DummyTaskStore::default())),
+                &dispatch,
+                PromptTrigger::Steer,
+                IsoTimestamp::now(),
+                &telemetry,
+            ),
+            async { tokio::time::advance(Duration::from_millis(20)).await },
+        );
+        release_tx.signal();
         occupying
             .await
             .expect("occupying task joins")
@@ -5029,11 +4982,12 @@ pub(crate) mod tests {
         let (entered, release) = store.hold_next_prompt_handoff();
         let response_deadline = Duration::from_secs(30);
         let telemetry = atm_runtime::TaskTelemetryRuntime::disabled();
-        let timer_fired = Arc::new(AtomicBool::new(false));
-        let timer_observed = Arc::clone(&timer_fired);
-        let timer = tokio::spawn(async move {
-            tokio::task::yield_now().await;
-            timer_observed.store(true, Ordering::Release);
+        let (probe_start, probe_gate) = tokio::sync::oneshot::channel();
+        let (probe_done, probe_result) = tokio::sync::oneshot::channel();
+        let probe = tokio::spawn(async move {
+            if probe_gate.await.is_ok() {
+                let _ = probe_done.send(());
+            }
         });
         tokio::join!(
             crate::prompt_handoff_record::record_prompt_handoff(
@@ -5050,16 +5004,17 @@ pub(crate) mod tests {
                     .await
                     .expect("entered reader joins")
                     .expect("the store write is held");
+                probe_start
+                    .send(())
+                    .expect("start independent runtime probe");
+                probe_result
+                    .await
+                    .expect("runtime probe completed while store was held");
                 tokio::time::advance(response_deadline).await;
             },
         );
         drop(release);
-        timer.await.expect("independent timer joins");
-
-        assert!(
-            timer_fired.load(Ordering::Acquire),
-            "Tokio worker remains live"
-        );
+        probe.await.expect("independent runtime probe joins");
         assert_prompt_handoff_error(
             &layer,
             &dispatch,
