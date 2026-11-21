@@ -1,0 +1,879 @@
+{
+  "schema": "plan-anchoring/run/1",
+  "run_id": "plan-20261118T035213Z-atm-bt-5",
+  "gate": "plan",
+  "created_at": "2026-11-18T03:52:13+00:00",
+  "anchors_path": "/Users/randlee/github/atm-core/scratchpad/bt-gate/anchors.json",
+  "plan": "phase-bt",
+  "item": {
+    "id": "atm-bt-5",
+    "title": "bt-5: bt-5: pour and sanity-close inputs typed (#922 #907 #906)",
+    "source": "/Users/randlee/github/atm-core/scratchpad/bt-gate/item-5.txt",
+    "chars": 1063,
+    "truncated": false,
+    "chars_before_reduction": 1063,
+    "code_reduced": {
+      "blocks": 0,
+      "lines": 0
+    }
+  },
+  "model_requested": "jev-latest",
+  "model_answered": "jev-1.14.0",
+  "threshold": 0.6,
+  "max_request_bytes": 24000,
+  "min_item_chars": 2000,
+  "dry_run": false,
+  "fixture": false,
+  "extra_questions": [
+    {
+      "path": "/Users/randlee/github/atm-core/.sc/plan-anchor/triage/plan-questions.jsonl",
+      "sha256": "68180fbd2de8a3dee2421351672f9a321506af1f4bb19531c2c26d7d21c2c521",
+      "ids": [
+        "owns",
+        "specific",
+        "stated",
+        "paraphrase",
+        "partial"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "anchor_id": "ANC-023",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint's diff must add only the code its named issues require, with no new scripts, checks or process steps.",
+      "quote": "Keep them short and focused.  This repo already has 10x more code than it should.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "anchor_version": 4,
+      "deterministic_check": "diff review: every added file and function traces to a named issue's deliverable",
+      "kind": "prohibition",
+      "leaning": "satisfied",
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "extra_questions_sha256": "2c336ccce283f2c51d6ae8000e7531cc7f44a06907bc0a28a13ead14170d7fb6",
+      "near_threshold": true,
+      "unstable": true,
+      "answers_second": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.33,
+          "probabilities": {
+            "yes": 0.55,
+            "no": 0.4,
+            "unclear": 0.05
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.55,
+          "probabilities": {
+            "yes": 0.28,
+            "no": 0.7,
+            "unclear": 0.02
+          }
+        }
+      },
+      "verdict_first": "satisfied",
+      "verdict_second": "underspecified",
+      "verdict": "underspecified",
+      "answers": {
+        "relevant": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.97,
+          "probabilities": {
+            "yes": 0.98,
+            "no": 0.02,
+            "unclear": 0.0
+          }
+        },
+        "addressed": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.26,
+          "probabilities": {
+            "yes": 0.51,
+            "no": 0.45,
+            "unclear": 0.04
+          }
+        },
+        "contradicted": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.68,
+          "probabilities": {
+            "yes": 0.2,
+            "no": 0.79,
+            "unclear": 0.01
+          }
+        },
+        "owns": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.74,
+          "probabilities": {
+            "yes": 0.14,
+            "no": 0.83,
+            "unclear": 0.03
+          }
+        },
+        "specific": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        },
+        "stated": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.98,
+          "probabilities": {
+            "yes": 0.01,
+            "no": 0.99,
+            "unclear": 0.0
+          }
+        },
+        "paraphrase": {
+          "type": "choice",
+          "choice": "no",
+          "confidence": 0.96,
+          "probabilities": {
+            "yes": 0.02,
+            "no": 0.97,
+            "unclear": 0.01
+          }
+        },
+        "partial": {
+          "type": "choice",
+          "choice": "yes",
+          "confidence": 0.79,
+          "probabilities": {
+            "yes": 0.86,
+            "no": 0.13,
+            "unclear": 0.01
+          }
+        }
+      },
+      "min_confidence": 0.55,
+      "explanation": "Jev was not confident (min confidence 0.55); the anchor or the bead may be underspecified.",
+      "usage": {
+        "input_tokens": 1313,
+        "output_tokens": 117
+      },
+      "low_questions": [
+        {
+          "ask": "second",
+          "role": "conflict",
+          "question_id": "contradicted",
+          "choice": "no",
+          "confidence": 0.55
+        }
+      ],
+      "triage_questions": [
+        "owns",
+        "specific",
+        "stated",
+        "paraphrase",
+        "partial"
+      ],
+      "triage_attempts": 1,
+      "attempts": 2,
+      "item_chars_sent": 1063,
+      "item_shortened": false,
+      "request_bytes": 4042
+    },
+    {
+      "anchor_id": "ANC-024",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each of issues #938, #937, #979, #986, #928, #922, #907, #906, #904, #932 and #935 must be named by at least one sprint in the phase-bt plan.",
+      "quote": "Create sprints for all these items as outlined above.  Keep them short and focused.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "anchor_version": 9,
+      "deterministic_check": "every issue in the release list (#979 #986 #928 #922 #907 #906 #904 #932 #935 #937 #938) appears in at least one atm-bt-* sprint bead title",
+      "kind": "structural",
+      "leaning": null,
+      "question_set": {
+        "gate": "plan",
+        "version": 1,
+        "overridden": false
+      },
+      "questions_sha256": "45c142d4b4a63bd5c580d2407d06af54171ebec6302dd62d0ba982450416f8cd",
+      "extra_questions_sha256": "2c336ccce283f2c51d6ae8000e7531cc7f44a06907bc0a28a13ead14170d7fb6",
+      "verdict": "deterministic_only",
+      "answers": null,
+      "min_confidence": null,
+      "explanation": "Structural anchor: verified by its deterministic_check, not by Jev",
+      "attempts": 0,
+      "item_chars_sent": 1063,
+      "item_shortened": false
+    },
+    {
+      "anchor_id": "ANC-001",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A phase plan too large for one sprint must be split into multiple sprints.",
+      "quote": "If plan is too large it MUST be split.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-002",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The plan split must place unrelated, non-intersecting work in separate sprints so the sprint dependency graph stays short.",
+      "quote": "The split should be done to optimize horizontal waves (keep height of graph short), unrelated/un-intersecting work split into separate sprints.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-003",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A large sprint of closely related work must be split into child beads under one dev, one child bead per background subagent.",
+      "quote": "Large sprints w/ closely related work should be split into child beads one per [background] subagent.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-004",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "atm-bd-orchestration planning guidance must recommend child beads for concentrated pockets of closely related work managed by a single dev agent.",
+      "quote": "we are adding a new option which we want to highly recommend for efficiency.  It is important to create a well balanced plan of waves with concentrated pockets of work managed by a single dev agent",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 3,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-005",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A child bead must declare its subagent's model with the existing beads class fast, normal or frontier.",
+      "quote": "Use already defined 'fast','normal','frontier' classification in beads.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-006",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sprint's dev must run each child bead with a background subagent.",
+      "quote": "I think it should be a strategy as part of planning to encourage agents to delegate work to multiple subagents (and specifically handle merging subagent work into their worktree)  when therre is a larger task.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-007",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Subagent work must not get its own PR; the sprint's dev must deliver one working, tested branch.",
+      "quote": "We do not need pr for subagent work.  Primary dev agent is responsible for delivering a single working tested branch.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-008",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each background subagent must run focused lint and tests on its own worktree.",
+      "quote": "Additionally background sub-agents should do small focused test/lint on their worktree.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-009",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The sprint's dev must delegate the full lint and test run to a background fast-class agent.",
+      "quote": "Dev should delegate running full lint/test to background 'fast' agent.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-010",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev's final rebase onto the top of the stack must happen after full lint and test pass.",
+      "quote": "Final rebase AFTER tests/lint pass.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-011",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev must not rerun full lint and test after the final rebase unless the rebase required resolving conflicts in code the sprint wrote.",
+      "quote": "Rebasing on top of stack AND make sure tests/lint pass 100% are impossible to both achieve if 5-15 minutes of testing are run after rebase. I have seen agents looping over run tests <-> rebase 10+ times in a row before they can land the stack. 4e could add 'unless conflicts with code written must be resolved' or similar.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 3,
+      "deterministic_check": "",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-012",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The dev task must state in a few words that the parent bead closes after its children, with enforcement left to the bd close failure and no hook or script.",
+      "quote": "beads does NOT allow closing parent w/ open children.  This does NOT need much explanation, the agent will be told he can not close parent first so few words in task/prompt need to talk about it.  No hook/python for this at all outside of returning close fail message from failed 'bd close'.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-013",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint must have exactly one sanity bead, and it must name every dev bead of the sprint.",
+      "quote": "There is ONE sanity bead for all dev work.  the sanity task/bead would specify all dev beads for split.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-014",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every dev bead, parent and child, must record its git commit so sanity can match each commit to its bead.",
+      "quote": "we should require git commit# per dev bead so sanity can coorelate commit to dev task/bead",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-015",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint must have exactly one QA bead and one QA run on the sprint's single worktree.",
+      "quote": "Single qa bead, subagents would handle all work on single worktree as single qa run.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 3,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-016",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Docs, templates and prompts under atm-bd-orchestration must not mention plan-anchoring.",
+      "quote": "don't mention plan-anchoring in atm-bd",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 2,
+      "deterministic_check": "grep -ri plan-anchoring plugins/atm-bd-orchestration returns nothing",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-017",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Prompts and task text for the subtask strategy must contain only necessary words.",
+      "quote": "in general prompts/tasks must be written with NO unnecessary words.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-07",
+      "context": "planning session 2026-11-07, issue atm-bd#937 subtask beads",
+      "anchor_version": 3,
+      "deterministic_check": "",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every sprint and subtask bead's deliverable text must fit within jev_client's 96,000-byte Jev request limit (MAX_REQUEST_BYTES).",
+      "quote": "I don't want sprints larger than Jev context.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "anchor_version": 4,
+      "deterministic_check": "validate-plan test: an oversized sprint bead fails with the typed oversize code",
+      "kind": "structural",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-019",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A sprint larger than the Jev context must be reduced by splitting it into subtask beads or by moving its code samples or reference documentation into reference beads.",
+      "quote": "I don't want sprints larger than Jev context.  Sub-tasks OR reference beads with code samples (or reference documentation) which would be skipped by Jev.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "anchor_version": 3,
+      "deterministic_check": "grep the refusal fix text and planning.md for both remedies",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The content of a reference bead (a bead holding code samples or reference documentation for a sprint) must never be included in a request sent to the Jev sanity judge.",
+      "quote": "I don't want sprints larger than Jev context.  Sub-tasks OR reference beads with code samples (or reference documentation) which would be skipped by Jev.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "anchor_version": 3,
+      "deterministic_check": "test: a deliverable with a linked reference bead produces a Jev request that omits the reference text",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Work too large for one 96,000-byte Jev request must be split into subtask beads when the plan is written; jev_client must never cut it into diff slices.",
+      "quote": "This won't work. We need to split into sub-tasks",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "anchor_version": 4,
+      "deterministic_check": "grep jev_client.py: no split_request or part evaluation; test: oversized request returns the typed refusal",
+      "kind": "prohibition",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The bead schema (bead_schema.py) must define a dedicated checked model for the stage:subtask bead stage.",
+      "quote": "subtask and reference should both show up.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "anchor_version": 3,
+      "deterministic_check": "MODELS_BY_STAGE maps both labels to dedicated models; schema test rejects a malformed subtask and reference bead",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8.",
+      "attempts": 0
+    },
+    {
+      "anchor_id": "ANC-025",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The bead schema (bead_schema.py) must define a dedicated checked model for the stage:reference bead stage.",
+      "quote": "subtask and reference should both show up.",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "anchor_version": 4,
+      "deterministic_check": "MODELS_BY_STAGE maps stage:reference to a dedicated model; schema test rejects a malformed reference bead",
+      "kind": "directive",
+      "leaning": null,
+      "verdict": "excluded",
+      "answers": null,
+      "min_confidence": null,
+      "exclusion": {
+        "item": "atm-bt-5",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      "explanation": "Excluded from this bead by the anchor's exclude list: atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8.",
+      "attempts": 0
+    }
+  ],
+  "summary": {
+    "counts": {
+      "underspecified": 1,
+      "deterministic_only": 1,
+      "excluded": 23
+    },
+    "failing": [
+      "ANC-023"
+    ],
+    "leaning_counts": {
+      "satisfied": 1
+    },
+    "unstable": [
+      "ANC-023"
+    ],
+    "errors": [],
+    "excluded": [
+      {
+        "anchor_id": "ANC-001",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-002",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-003",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-004",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-005",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-006",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-007",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-008",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-009",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-010",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-011",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-012",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-013",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-014",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-015",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-016",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-017",
+        "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+      },
+      {
+        "anchor_id": "ANC-018",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      {
+        "anchor_id": "ANC-019",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      {
+        "anchor_id": "ANC-020",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      {
+        "anchor_id": "ANC-021",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      {
+        "anchor_id": "ANC-022",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      },
+      {
+        "anchor_id": "ANC-025",
+        "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+      }
+    ],
+    "shortened": [],
+    "pass": false
+  }
+}
