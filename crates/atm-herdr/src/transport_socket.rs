@@ -894,13 +894,13 @@ mod tests {
             .expect("create test named-pipe server");
         let endpoint = HerdrEndpoint::NamedPipe(pipe_name);
 
-        let mut client = connect_named_pipe(
-            &endpoint,
-            RequestDeadline::after(Duration::from_secs(5)),
-            PIPE_BUSY_RETRY_DELAY,
-        )
-        .await
-        .expect("connect to test named-pipe server");
+        // A ready pipe opens immediately; the busy-retry deadline must not
+        // determine whether this request/response exchange passes.
+        let deadline = RequestDeadline::after(Duration::ZERO);
+        assert!(deadline.remaining().is_none());
+        let mut client = connect_named_pipe(&endpoint, deadline, PIPE_BUSY_RETRY_DELAY)
+            .await
+            .expect("connect to test named-pipe server");
         server.connect().await.expect("accept named-pipe client");
 
         client
@@ -928,9 +928,10 @@ mod tests {
 
     #[cfg(windows)]
     #[tokio::test]
-    async fn missing_named_pipe_returns_a_typed_error_before_deadline() {
+    async fn missing_named_pipe_returns_a_typed_error_with_expired_deadline() {
         let endpoint = HerdrEndpoint::NamedPipe(unique_test_pipe_name());
-        let deadline = RequestDeadline::after(Duration::from_secs(5));
+        let deadline = RequestDeadline::after(Duration::ZERO);
+        assert!(deadline.remaining().is_none());
 
         let result = connect_named_pipe(&endpoint, deadline, PIPE_BUSY_RETRY_DELAY).await;
 
