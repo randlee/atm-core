@@ -16,6 +16,7 @@ import platform
 import plistlib
 import re
 import subprocess
+import tempfile
 import time
 from typing import Callable
 from xml.etree import ElementTree
@@ -261,10 +262,37 @@ def provision_windows_task(args: argparse.Namespace, selected_links: Callable[[a
     account = os.environ.get("USERDOMAIN", "") + "\\" + os.environ.get("USERNAME", "")
     if account == "\\":
         raise SwitchError("cannot identify the current Windows account for the daemon task")
-    command = ["schtasks.exe", "/Create", "/TN", args.service, "/TR", str(daemon), "/SC", "ONLOGON", "/RU", account, "/IT", "/RL", "LIMITED", "/F"]
-    result = run(command, timeout=20.0)
-    if result.returncode != 0:
-        raise SwitchError(f"Windows task provisioning failed: {' '.join(command)}: {(result.stderr or result.stdout).strip()}")
+    namespace = "http://schemas.microsoft.com/windows/2004/02/mit/task"
+    ElementTree.register_namespace("", namespace)
+    root = ElementTree.Element(f"{{{namespace}}}Task", {"version": "1.2"})
+    def child(parent: ElementTree.Element, tag: str, value: str | None = None) -> ElementTree.Element:
+        node = ElementTree.SubElement(parent, f"{{{namespace}}}{tag}")
+        node.text = value
+        return node
+    triggers = child(root, "Triggers")
+    child(child(triggers, "LogonTrigger"), "UserId", account)
+    principal = child(child(root, "Principals"), "Principal")
+    principal.set("id", "Author")
+    child(principal, "UserId", account)
+    child(principal, "LogonType", "InteractiveToken")
+    child(principal, "RunLevel", "LeastPrivilege")
+    settings = child(root, "Settings")
+    child(settings, "ExecutionTimeLimit", "PT0S")
+    restart = child(settings, "RestartOnFailure")
+    child(restart, "Interval", "PT1M")
+    child(restart, "Count", "3")
+    child(settings, "DisallowStartIfOnBatteries", "false")
+    child(settings, "StopIfGoingOnBatteries", "false")
+    actions = child(root, "Actions")
+    actions.set("Context", "Author")
+    child(child(actions, "Exec"), "Command", str(daemon))
+    with tempfile.TemporaryDirectory(prefix="atm-task-") as directory:
+        definition = Path(directory) / "task.xml"
+        ElementTree.ElementTree(root).write(definition, encoding="utf-16", xml_declaration=True)
+        command = ["schtasks.exe", "/Create", "/TN", args.service, "/XML", str(definition), "/F"]
+        result = run(command, timeout=20.0)
+        if result.returncode != 0:
+            raise SwitchError(f"Windows task provisioning failed: {' '.join(command)}: {(result.stderr or result.stdout).strip()}")
     require_windows_task_selector(args, selected_links)
 
 
