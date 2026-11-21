@@ -1040,6 +1040,31 @@ mod tests {
         local_request_timeout_failure, selected_write_transport, shared_direct_peer_client,
     };
 
+    enum ReadinessFailure {
+        Listener(String),
+        Request(String),
+    }
+
+    async fn listener_ready_or_request_failure(
+        ready_rx: tokio::sync::oneshot::Receiver<Result<(), String>>,
+        request_task: &mut tokio::task::JoinHandle<
+            Result<axum::http::Response<Vec<u8>>, HttpRuntimeClientFailure>,
+        >,
+    ) -> Result<(), ReadinessFailure> {
+        tokio::select! {
+            readiness = ready_rx => match readiness {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(reason)) => Err(ReadinessFailure::Listener(format!("listener failed before request readiness: {reason}"))),
+                Err(error) => Err(ReadinessFailure::Listener(format!("listener ended without readiness evidence: {error}"))),
+            },
+            request = request_task => match request {
+                Ok(Err(failure)) => Err(ReadinessFailure::Request(format!("request failed before listener readiness: {failure:?}"))),
+                Ok(Ok(_)) => Err(ReadinessFailure::Request("request completed before listener readiness".to_owned())),
+                Err(error) => Err(ReadinessFailure::Request(format!("request task failed before listener readiness: {error}"))),
+            },
+        }
+    }
+
     struct LocalOnlyClient;
 
     impl atm_core::boundary::sealed::Sealed for LocalOnlyClient {}
@@ -1474,23 +1499,44 @@ mod tests {
         let (request_received_tx, request_received_rx) = tokio::sync::oneshot::channel();
         let (close_tx, close_rx) = tokio::sync::oneshot::channel();
         let accept_task = tokio::spawn(async move {
-            let (mut stream, _) = listener.accept().await.expect("accept one connection");
-            let mut request = Vec::new();
-            let mut chunk = [0; 1024];
-            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
-                let read = tokio::io::AsyncReadExt::read(&mut stream, &mut chunk)
-                    .await
-                    .expect("read the request headers");
-                assert_ne!(read, 0, "client closed before sending request headers");
-                request.extend_from_slice(&chunk[..read]);
+            let mut close_rx = close_rx;
+            let result = async {
+                let (mut stream, _) = tokio::select! {
+                    accepted = listener.accept() => accepted
+                        .map_err(|error| format!("listener accept failed: {error}"))?,
+                    _ = &mut close_rx => {
+                        return Err("test stopped the listener before accept".to_owned());
+                    }
+                };
+                let mut request = Vec::new();
+                let mut chunk = [0; 1024];
+                while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    let read = tokio::select! {
+                        read = tokio::io::AsyncReadExt::read(&mut stream, &mut chunk) => read
+                            .map_err(|error| format!("request header read failed: {error}"))?,
+                        _ = &mut close_rx => {
+                            return Err("test stopped the listener before request readiness".to_owned());
+                        }
+                    };
+                    if read == 0 {
+                        return Err("client closed before sending request headers".to_owned());
+                    }
+                    request.extend_from_slice(&chunk[..read]);
+                }
+                Ok(stream)
             }
-            request_received_tx
-                .send(())
-                .expect("test still awaits the sent request");
-            close_rx
-                .await
-                .expect("test releases the accepted connection");
-            drop(stream);
+            .await;
+
+            match result {
+                Ok(stream) => {
+                    let _ = request_received_tx.send(Ok(()));
+                    let _ = close_rx.await;
+                    drop(stream);
+                }
+                Err(reason) => {
+                    let _ = request_received_tx.send(Err(reason));
+                }
+            }
         });
         let client = reqwest::Client::new();
         let url = reqwest::Url::parse(&format!("http://127.0.0.1:{port}/v1/atm/messages"))
@@ -1502,7 +1548,7 @@ mod tests {
             body: Vec::new(),
         };
 
-        let request_task = tokio::spawn(async move {
+        let mut request_task = tokio::spawn(async move {
             with_test_deadline_expired(
                 false,
                 execute_reqwest_request(
@@ -1515,9 +1561,23 @@ mod tests {
             )
             .await
         });
-        request_received_rx
-            .await
-            .expect("peer accepted connection and received request headers");
+        if let Err(failure) =
+            listener_ready_or_request_failure(request_received_rx, &mut request_task).await
+        {
+            let reason = match failure {
+                ReadinessFailure::Listener(reason) => {
+                    request_task.abort();
+                    let _ = request_task.await;
+                    reason
+                }
+                ReadinessFailure::Request(reason) => reason,
+            };
+            let _ = close_tx.send(());
+            if let Err(error) = accept_task.await {
+                panic!("{reason}; listener task did not join: {error}");
+            }
+            panic!("{reason}");
+        }
         close_tx
             .send(())
             .expect("accepted connection still awaits close");
@@ -1532,6 +1592,66 @@ mod tests {
         );
         assert!(!failure.is_safe_to_reconnect());
         accept_task.await.expect("accepted-then-closed peer joins");
+    }
+
+    #[tokio::test]
+    async fn a_request_failure_before_listener_readiness_is_reported_and_stops_the_listener() {
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("bind a test listener that will not receive this request");
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel();
+        let listener_task = tokio::spawn(async move {
+            tokio::select! {
+                accepted = listener.accept() => {
+                    let (stream, _) = accepted.expect("test listener accepts if unexpectedly connected");
+                    let _ = ready_tx.send(Ok(()));
+                    drop(stream);
+                }
+                _ = stop_rx => {}
+            }
+        });
+        let client = reqwest::Client::new();
+        let url =
+            reqwest::Url::parse("http://127.0.0.1:0/v1/atm/messages").expect("valid loopback url");
+        let request = HttpRequest {
+            method: "POST".to_owned(),
+            path: "/v1/atm/messages".to_owned(),
+            headers: Vec::new(),
+            body: Vec::new(),
+        };
+        let mut request_task = tokio::spawn(async move {
+            with_test_deadline_expired(
+                false,
+                execute_reqwest_request(
+                    &client,
+                    url,
+                    request,
+                    RequestDeadline::after(Duration::ZERO),
+                    None,
+                ),
+            )
+            .await
+        });
+
+        let failure = listener_ready_or_request_failure(ready_rx, &mut request_task)
+            .await
+            .expect_err("request failure wins while listener readiness is still pending");
+        let _ = stop_tx.send(());
+        listener_task
+            .await
+            .expect("pending listener accept stops after the request fails");
+
+        match failure {
+            ReadinessFailure::Request(reason) => assert!(
+                reason.contains("request failed before listener readiness")
+                    && reason.contains("Connect"),
+                "failure evidence should identify the pre-readiness connection error, got {reason}"
+            ),
+            ReadinessFailure::Listener(reason) => {
+                panic!("listener failure should not mask request failure: {reason}");
+            }
+        }
     }
 
     #[tokio::test]
