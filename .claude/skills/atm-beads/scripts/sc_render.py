@@ -9,7 +9,6 @@ caller's working directory. The wheel and the CLI are the same version, in the
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -23,24 +22,29 @@ def render(template: str | Path, variables: Mapping[str, Any]) -> str:
 
     Always strict (`--strict`); there is no lenient render. A referenced
     variable that is missing or undeclared raises, naming the variable and the
-    template. A `.json` template's output must parse, as the CLI's checked render requires;
-    the wheel does not check it (sc-compose#787; delete this check when it does). Raises
-    `RenderError`; `error_text(exc)` is its message.
+    template. A `.json` template's output must parse: the wheel applies the CLI's
+    checked-render contract (sc-compose 1.8.0, sc-compose#787). Raises `RenderError`;
+    `error_text(exc)` is its diagnostic.
     """
     path = Path(template).resolve()
     request = sc_compose.ComposeRequest(
         str(path.parent), sc_compose.ComposeMode.file(str(path)), vars_input=dict(variables),
         policy=sc_compose.ComposePolicy(strict_undeclared_variables=True))
     text = sc_compose.compose_file(request).rendered_text
-    if path.name.removesuffix(".j2").endswith(".json"):
-        try:
-            json.loads(text)
-        except ValueError as exc:
-            raise sc_compose.ScRenderError(
-                f"ERR_RENDER_JSON_MALFORMED: rendered output failed the checked-render contract: {exc}") from exc
     return text if text.endswith("\n") else text + "\n"
 
 
 def error_text(exc: BaseException) -> str:
-    """The sc-compose diagnostic (`ERR_...: ... | location=...`) of a `RenderError`."""
-    return str(exc.args[0]) if exc.args else str(exc)
+    """The sc-compose diagnostic (`ERR_...: ... | location=...`) of a `RenderError`.
+
+    The wheel's error carries the message in `args[0]` and, since 1.8.0, the `ERR_...` code in
+    `args[1]`; the code is prefixed when the message does not already start with it, so callers
+    see the shape the CLI prints.
+    """
+    if not exc.args:
+        return str(exc)
+    message = str(exc.args[0])
+    code = exc.args[1] if len(exc.args) > 1 else None
+    if isinstance(code, str) and code.startswith("ERR_") and not message.startswith(code):
+        return f"{code}: {message}"
+    return message

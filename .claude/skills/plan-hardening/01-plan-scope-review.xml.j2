@@ -62,7 +62,7 @@ metadata:
 {% if reviewer_findings_json | trim %}
   <reviewer-findings-json>
 <![CDATA[
-{{ reviewer_findings_json }}
+{{ reviewer_findings_json | cdata_escape }}
 ]]>
   </reviewer-findings-json>
 {% endif %}

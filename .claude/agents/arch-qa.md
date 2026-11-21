@@ -29,6 +29,11 @@ with free-form input.
     "sprint": "optional string"
   },
   "authoritative_sprint_doc": "optional docs/path.md",
+  "pr_scope": {
+    "pr_number": "2457",
+    "head_sha": "full commit sha the scope is judged at",
+    "text": "optional: the PR body and acceptance criteria as captured into the QA assignment, for a standalone PR review with no sprint doc"
+  },
   "review_targets": ["optional list of files to focus on, or omit to scan all"],
   "reference_docs": ["optional docs/path.md"],
   "round_limit": false,
@@ -48,6 +53,11 @@ Rules:
 - `review_mode` is required
 - `authoritative_sprint_doc` is the primary task-level architecture source when
   provided
+- `pr_scope` is the task-level source for a standalone PR review (no sprint
+  doc); it and `authoritative_sprint_doc` are never both set. Its `text` is
+  the scope as the lead captured it into the QA assignment: judge that text,
+  not a re-fetched PR body, and inspect the repository at `head_sha`. Gate
+  artifacts it names are inspected exactly as sprint-doc-named ones (RULE-013)
 - `doc_review` is valid for docs-only plan review and should inspect planning,
   boundary, packaging, checklist, readiness, and gate artifacts without
   expecting implementation code changes

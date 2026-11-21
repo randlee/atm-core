@@ -79,6 +79,7 @@ class World:
         self.beads = {self.bead["id"]: self.bead}
         self.pulls = []
         self.stacks = []
+        self.closed = {}
         self.calls = []
         self.cwds = []
         self.unavailable = False
@@ -153,6 +154,8 @@ class World:
             self.clock.now += self.advance_on_pulls
             self.advance_on_pulls = 0
             output = json.dumps(self.pulls)
+        elif argv[:2] == ["gh", "api"] and argv[2].startswith("repos/{owner}/{repo}/pulls/"):
+            output = json.dumps(self.closed[int(argv[2].rsplit("/", 1)[1])])
         elif argv[:3] == ["gh", "api", "repos/{owner}/{repo}/stacks"]:
             if self.fail_verification and self.stacks:
                 status, error = 1, "injected hosted verification failure"
@@ -1095,3 +1098,56 @@ def test_hosted_ahead_must_include_the_unlinked_ledger_anchor(world):
     assert result["result"] == "stack_failed"
     assert "stack top mismatch" in result["evidence"]
     assert [layer["pr"] for layer in world.bead["metadata"]["layers"]] == [1]
+
+
+def land_bottom(world, merged=True, merge_into_trunk=True):
+    """Land PR 1 the way a scoped `gh stack merge` does: merge commit on trunk, PR closed, PR 2 retargeted,
+    and the hosted stack still listing PR 1 (#983)."""
+    first = next(pull for pull in world.pulls if pull["number"] == 1)
+    if merge_into_trunk:
+        world.git("checkout", "trunk")
+        world.git("merge", "--no-ff", "--no-edit", "first")
+        world.git("push", "origin", "trunk")
+    world.pulls.remove(first)
+    next(pull for pull in world.pulls if pull["number"] == 2)["base"] = "trunk"
+    world.closed[1] = {"merged": merged, "base": "trunk", "sha": first["sha"]}
+
+
+def test_partial_land_skips_merged_bottom_and_links_next_layer(world):
+    first = world.branch("first", "trunk", 1)
+    second = world.branch("second", "first", 2)
+    third = world.branch("third", "second", 3)
+    assert [world.link(item)["result"] for item in (first, second, third)] == ["stacked"] * 3
+    land_bottom(world)
+    assert world.stacks[0]["prs"] == [1, 2, 3]
+    fourth = world.branch("fourth", "third", 4)
+
+    result = world.link(fourth)
+
+    assert result["result"] == "stacked", result
+    assert world.stacks[0]["prs"] == [1, 2, 3, 4]
+    layers = world.bead["metadata"]["layers"]
+    assert [(layer["pr"], layer["base"]) for layer in layers] == [(2, "trunk"), (3, "second"), (4, "third")]
+    assert all(layer["linked"] for layer in layers)
+    assert world.link(fourth)["result"] == "stacked"
+
+
+@pytest.mark.parametrize("merged, merge_into_trunk, evidence", [
+    (False, False, "hosted stack PR #1 is closed without merging"),
+    (True, False, "hosted stack PR #1 merged but its head is not in origin/trunk"),
+])
+def test_unlanded_closed_bottom_still_fails_without_writes(world, merged, merge_into_trunk, evidence):
+    first = world.branch("first", "trunk", 1)
+    second = world.branch("second", "first", 2)
+    assert [world.link(item)["result"] for item in (first, second)] == ["stacked"] * 2
+    land_bottom(world, merged=merged, merge_into_trunk=merge_into_trunk)
+    before = copy.deepcopy(world.bead["metadata"])
+    world.calls.clear()
+    third = world.branch("third", "second", 3)
+
+    result = world.link(third)
+
+    assert result["result"] == "stack_failed"
+    assert evidence in result["evidence"]
+    assert world.bead["metadata"] == before
+    assert not any(call[:3] == ["gh", "stack", "link"] or "--metadata" in call for call in world.calls)

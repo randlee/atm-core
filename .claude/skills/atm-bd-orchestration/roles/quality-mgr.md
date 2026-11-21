@@ -18,6 +18,13 @@ Where this role and `quality-mgr.md` differ, this role wins:
 | `atm task start`, then claim | readiness check, claim, then `atm task start` (the assignment's step a) |
 | plan review (`review_mode: plan`) needs an open plan PR and posts its report there | the plan is the beads under the root; there is no plan PR, and the report is the task close |
 
+## Package policy
+
+Read `.claude/skills/atm-bd-orchestration/package-policy.md` before the
+repository policy (`policy_path`). Its mandatory rules apply in every
+repository; where the repository policy or `quality-mgr.md` says less, the
+package policy wins.
+
 ## Tasks
 
 Ordinary QA tasks use `qa-template.xml.j2`; plan reviews use
@@ -116,10 +123,19 @@ runs `reviewers_round1`. Sprint rounds 1–2 remain sprint reviews with that
 set; a fix does not become a sprint review because it has a new PR or round
 number.
 
-Conditional reviewers (sprint reviews only): add any reviewer the repository
-QA policy (`policy_path`) requires for the change, for example a flaky-test
-reviewer when tests changed or a schema reviewer when a governed interface is
-in scope, as `quality-mgr.md` ("Reviewer Selection") says.
+Conditional reviewers (sprint reviews): add any reviewer the repository
+QA policy (`policy_path`) requires for the change, for example a schema
+reviewer when a governed interface is in scope, as `quality-mgr.md`
+("Reviewer Selection") says.
+
+`flaky-test-qa` is mandatory, whatever the repository policy says, in every
+round whose layer changes test code: a sprint review and a fix round alike.
+Test code is a file under a `tests/` or `test/` directory, a `test_*` or
+`*_test*` file, or a source file whose diff adds or changes a test (a test
+function, `#[test]`, `#[cfg(test)]`). Its assignment carries the flaky-test
+rule; every finding it files under that rule is blocking, whatever severity
+it gave. A passing run, even repeated under load, never stands in for this
+review.
 
 Upstream-owned installed `.claude/` skill, agent and template content is out of
 QA reviewer scope; the lead accepts such changes by diff review and the
@@ -129,8 +145,17 @@ package's template tests.
 
 A fix round (`carry_forward` set) dispatches only each carried finding's
 filing reviewer, locked to the carried finding ids and their original
-acceptance criteria: no req-qa/arch-qa/rust-qa or screening panel, no sweep,
-no new findings. Required CI stays a separate merge requirement.
+acceptance criteria: no req-qa/arch-qa/rust-qa panel, no sweep, no new
+findings. `ceremony-finding-screen` still screens every finding the round
+reports, as in every QA run; a carried finding it screens `ceremony` is not
+poured again. Required CI stays a separate merge requirement.
+
+The one addition: when the fix layer changes test code, `flaky-test-qa` also
+runs, unlocked, over the changed test files (`changed_files` = those files,
+`carry_forward_findings_json` = `[]`), beside its locked verification if it
+filed a carried finding. Its findings are new blocking findings, filed as in
+round 1. A fix that swaps a bounded wait for an unbounded one is the defect
+this catches.
 
 `scripts/fix-round-scope` enforces the dispatch set and the lock; the
 assignment's step d says how.
@@ -184,7 +209,8 @@ depends on the verdict:
   P2, so a blocking finding comes up ahead of the next dev bead. Reviewers
   spell severity their own way; normalize before rendering: `critical`,
   `Blocking`, `BLOCKING` → `blocking`; `Important` → `important`; `Minor`,
-  `low` → `minor`.
+  `low` → `minor`. A `flaky-test-qa` finding under the flaky-test rule is
+  `blocking` whatever severity it carries.
 - Render each finding to a file and gate it with `jq -e` before appending it
   to the import JSONL, so a finding the template rejects stops you instead of
   disappearing.

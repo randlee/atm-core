@@ -98,7 +98,7 @@ def test_template_rebase_and_hook_ancestry_use_the_same_stack_top(world, templat
     def gate_runner(command, **kwargs):
         if command[:3] == ["gh", "api", "repos/{owner}/{repo}/stacks"]:
             linked = [layer["pr"] for layer in layers if layer["linked"]]
-            stacks = [{"number": 7, "base": "integrate/phase-bj", "prs": linked}] if linked else []
+            stacks = [{"number": 7, "base": "integrate/phase-bj", "prs": linked, "open": linked}] if linked else []
             return subprocess.CompletedProcess(command, 0, json.dumps(stacks), "")
         if command[:2] == ["git", "-C"]:
             command = ["git", *command[3:]]
