@@ -1285,12 +1285,14 @@ mod tests {
     struct AlwaysBlocksInjector {
         release: Mutex<mpsc::Receiver<()>>,
         started: mpsc::Sender<Result<(), String>>,
+        entered: Arc<AtomicBool>,
         call_count: AtomicUsize,
     }
 
     impl HostNudgeInjector for AlwaysBlocksInjector {
         fn inject_nudge(&self, _nudge: &HostNudge) -> Result<(), AtmError> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
+            self.entered.store(true, Ordering::SeqCst);
             self.started.send(Ok(())).expect("signal helper started");
             self.release
                 .lock()
@@ -1299,6 +1301,32 @@ mod tests {
                 .expect("release helper");
             Ok(())
         }
+    }
+
+    struct DeliveryEntryGuard {
+        entered: Arc<AtomicBool>,
+        started: mpsc::Sender<Result<(), String>>,
+    }
+
+    impl Drop for DeliveryEntryGuard {
+        fn drop(&mut self) {
+            if !self.entered.load(Ordering::SeqCst) {
+                let _ = self
+                    .started
+                    .send(Err("delivery exited before injector entry".to_owned()));
+            }
+        }
+    }
+
+    fn spawn_observed_delivery<T: Send + 'static>(
+        entered: Arc<AtomicBool>,
+        started: mpsc::Sender<Result<(), String>>,
+        deliver: impl FnOnce() -> T + Send + 'static,
+    ) -> std::thread::JoinHandle<T> {
+        std::thread::spawn(move || {
+            let _entry_guard = DeliveryEntryGuard { entered, started };
+            deliver()
+        })
     }
 
     struct TestPaths {
@@ -1948,6 +1976,7 @@ mod tests {
         let blocking_injector = Arc::new(AlwaysBlocksInjector {
             release: Mutex::new(release_rx),
             started: started_tx,
+            entered: Arc::new(AtomicBool::new(false)),
             call_count: AtomicUsize::new(0),
         });
         let injector = BoundedHostNudgeInjector::spawn_with_wait(
@@ -2782,6 +2811,34 @@ mod tests {
         ticks.stop(stop_tx, join);
     }
 
+    #[test]
+    fn delivery_panic_before_injector_entry_signals_waiter() {
+        let (started, waiter) = mpsc::channel();
+        let entered = Arc::new(AtomicBool::new(false));
+        let delivery = spawn_observed_delivery(entered, started, || {
+            panic!("injected delivery panic before injector entry");
+        });
+        let reason = waiter
+            .recv()
+            .expect("delivery exit signal")
+            .expect_err("delivery did not enter injector");
+        assert!(reason.contains("delivery exited before injector entry"));
+        assert!(delivery.join().is_err());
+    }
+
+    #[test]
+    fn delivery_return_before_injector_entry_signals_waiter() {
+        let (started, waiter) = mpsc::channel();
+        let entered = Arc::new(AtomicBool::new(false));
+        let delivery = spawn_observed_delivery(entered, started, || ());
+        let reason = waiter
+            .recv()
+            .expect("delivery exit signal")
+            .expect_err("delivery did not enter injector");
+        assert!(reason.contains("delivery exited before injector entry"));
+        delivery.join().expect("delivery returned");
+    }
+
     // AC6: sustained-load refresh. A receiver kept continuously busy
     // (back-to-back accepted connections, no idle iterations) still refreshes
     // on cadence — deliverable 2's per-iteration check is not gated behind
@@ -2795,6 +2852,7 @@ mod tests {
         let injector = Arc::new(AlwaysBlocksInjector {
             release: Mutex::new(release_rx),
             started: started_tx.clone(),
+            entered: Arc::new(AtomicBool::new(false)),
             call_count: AtomicUsize::new(0),
         });
         let ((stop_tx, join, _snapshot, (endpoint, capability)), ticks) =
@@ -2804,17 +2862,22 @@ mod tests {
                 registry.client(),
             );
         assert_eq!(registry.registration_count(), 1);
-        ticks.wake.watch_exit(started_tx);
+        ticks.wake.watch_exit(started_tx.clone());
 
         for _ in 0..2 {
+            injector.entered.store(false, Ordering::SeqCst);
             let capability = capability.clone();
             let wake = ticks.wake.clone();
             let (delivered_tx, delivered_rx) = mpsc::sync_channel(1);
-            std::thread::spawn(move || {
-                let result =
-                    deliver_request_with_wake(endpoint, &capability, request_event(), &wake);
-                delivered_tx.send(result).expect("deliver result");
-            });
+            let delivery = spawn_observed_delivery(
+                Arc::clone(&injector.entered),
+                started_tx.clone(),
+                move || {
+                    let result =
+                        deliver_request_with_wake(endpoint, &capability, request_event(), &wake);
+                    delivered_tx.send(result).expect("deliver result");
+                },
+            );
             started_rx
                 .recv()
                 .expect("injector signal")
@@ -2826,6 +2889,7 @@ mod tests {
                 delivered_rx.recv().expect("delivery completed"),
                 GraftPostSendResponse::Delivered
             );
+            delivery.join().expect("delivery thread");
             ticks.wait("ok");
         }
         assert_eq!(registry.refresh_count(), 2);
