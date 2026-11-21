@@ -183,6 +183,13 @@ def build_graph(index: object, beads: object) -> Graph:
         gates = [key for key, bead in beads.items()
                  if 'stage:dev-sanity' in (bead.get('labels') or [])
                  and dev in prerequisites(bead)]
+        if pairs[dev] in gates:
+            # Closed re-sanity iterations are history; only another open gate is ambiguous.
+            others = [key for key in gates if key != pairs[dev] and beads[key].get('status') != 'closed']
+            if others:
+                raise RuntimeError(f'{dev}: expected one live sanity gate, found {pairs[dev]} and open '
+                                   + ', '.join(sorted(others)))
+            continue
         if len(gates) != 1:
             raise RuntimeError(f'{dev}: expected one live sanity gate, found {len(gates)}')
         if pairs[dev] != gates[0]:

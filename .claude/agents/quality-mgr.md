@@ -91,10 +91,14 @@ from the QA template. Do not reinterpret free-form QA assignments.
 Treat the assignment as the source of truth for:
 - sprint or phase identifier
 - review mode
+- review kind (`<review-kind>`: `full` or `fix_verification`); the branch
+  name never decides this
 - PR number
 - branch
 - worktree path
-- authoritative sprint doc
+- scope source (`<scope-source>`): the authoritative sprint doc, or for a
+  standalone PR review the PR body plus linked issues pinned to the PR head
+  SHA
 - review targets
 - changed files
 - triage records
@@ -117,7 +121,11 @@ Treat `review_mode: plan` as docs-only plan review.
 ## Fix verification takes precedence
 
 A review of an assigned fix is not a sprint review, regardless of its round
-number or inherited `review_mode`. Dispatch only the agent necessary to
+number, branch name or inherited `review_mode`; the rendered `<review-kind>`
+(`fix_verification`) names it, and it carries the triage records and filing
+reviewers it verifies. A `fix/` branch with no carried finding, such as a
+standalone small-fix PR on its first QA, is a `full` review, not a fix
+verification. Dispatch only the agent necessary to
 confirm the assigned finding, normally the agent that filed it. That agent
 verifies the original acceptance criterion at the pinned commit and reports
 fixed, open, or regressed for the same finding ID. It files no new findings.
@@ -158,6 +166,38 @@ TODO-specific rule:
 - if the scan finds a TODO, report it as a finding unless it is fixed, removed,
   or rewritten immediately as a non-action explanatory comment before the final
   verdict
+
+## Standalone PR Review Scope
+
+An assignment whose `<scope-source kind="pr">` names a PR and head SHA
+reviews a standalone PR (a small fix off `develop`) that has no sprint doc,
+no project-plan entry and no phase stack:
+- the assignment's `<pr-scope>` text, as the lead captured it, is the
+  authoritative scope, judged at that head SHA. It sits in a CDATA section so
+  XML metacharacters round-trip exactly; a `]]]]><![CDATA[>` split inside it
+  reads as a literal `]]>`. Its line endings are LF (the template normalizes
+  CRLF and lone CR once); every other byte is the lead's capture, and that
+  same text goes to every reviewer. The PR body and issue text on GitHub are live,
+  editable metadata: never substitute a re-fetched body for the captured
+  text. Extract the deliverables and acceptance criteria from the captured
+  text and list what you extracted, with the head SHA, in the verdict
+- if the captured text states no substantive scope or acceptance criteria,
+  close the task `refused` naming what is missing so the lead can re-issue
+  the assignment; never invent scope or acceptance criteria
+- render `req-qa` and `arch-qa` with the captured text verbatim as
+  `pr_scope`, plus `pr_number` and `pr_head_sha`, and no `sprint_doc`; both
+  templates refuse a PR scope without its head and a sprint doc alongside a
+  PR scope; `req-qa` accepts an empty `phase_or_sprint_docs` here. The Rust
+  reviewers, `ruthless-boundary-qa` and `flaky-test-qa` take no sprint doc
+  and render as for a sprint review, with the same scope of record in their
+  `notes`: `PR scope of record (PR #<n>, head <sha>): ` followed by the
+  captured text verbatim. No reviewer runs without the captured scope and
+  the pinned head
+- there is no sprint-doc frontmatter gate and no `gh stack` step; the
+  active-PR requirement and the CI check (`gh pr checks`) still apply, and
+  the review is pinned to the named head, never a moving checkout
+- expand `review_targets` to `git diff <base>...<head> --name-only` as for a
+  sprint review, and run the full reviewer set for the review mode
 
 ## Workflow
 

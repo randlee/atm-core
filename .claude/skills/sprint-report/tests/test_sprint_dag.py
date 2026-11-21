@@ -73,6 +73,16 @@ class DagTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'expected one'):
             dag.build_graph(self.index, self.beads)
 
+    def test_closed_historical_re_sanity_is_not_a_second_gate(self):
+        self.beads['gate-1-r1'] = bead('gate-1-r1', ['stage:dev-sanity'], ['work-1'], reason='FAIL at abc')
+        graph = dag.build_graph(self.index, self.beads)
+        self.assertEqual(graph['gate_pairs']['work-1'], 'gate-1')
+        self.assertNotIn('gate-1-r1', graph['nodes'])
+        self.assertIn('gate-1-r1', self.beads)
+        self.beads['gate-1-r1']['status'] = 'open'
+        with self.assertRaisesRegex(RuntimeError, 'expected one live sanity gate, found gate-1 and open gate-1-r1'):
+            dag.build_graph(self.index, self.beads)
+
     def test_sanity_counts_and_stale_pass(self):
         self.snapshot['iterations']['gate-1'] = 14
         result = dag.states(self.graph, self.snapshot, self.index)

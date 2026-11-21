@@ -64,7 +64,7 @@ metadata:
 {% if reviewer_findings_json | trim %}
   <reviewer-findings-json>
 <![CDATA[
-{{ reviewer_findings_json }}
+{{ reviewer_findings_json | cdata_escape }}
 ]]>
   </reviewer-findings-json>
 {% endif %}
@@ -105,7 +105,7 @@ metadata:
     }
     ```
 <![CDATA[
-{{ previous_step_json }}
+{{ previous_step_json | cdata_escape }}
 ]]>
   </required-input>
 
@@ -117,8 +117,8 @@ metadata:
     critical path or width changes in this pass, report both old and new
     values and the reason in the fenced JSON `parallelism` block.
 
-    Read the current plan docs from disk first, using `<source-of-truth>` and
-    `<references>`, before doing anything else.
+    Read the current plan docs from disk first, using `&lt;source-of-truth&gt;` and
+    `&lt;references&gt;`, before doing anything else.
 
     The plan is in beads: the plan file is `docs/plans/phase-{{ phase }}.jsonl`
     (one sprint bead per line); read "plan docs" as that file and "sprint doc"
@@ -254,7 +254,7 @@ metadata:
         "mode": "plan-hardening-consistency",
         "round_id": "{{ round_id }}",
         "round_index": {{ round_index }},
-        "reviewed_commit": "<commit-sha>",
+        "reviewed_commit": "&lt;commit-sha&gt;",
         "previous_reviewed_commit": "{{ previous_reviewed_commit }}",
         "iterations": 0,
         "findings_resolved": 0,
@@ -270,13 +270,13 @@ metadata:
   </plan-hardening-consistency>
 
   <workflow>
-    <step id="a">Start the task immediately with `atm task start {{ task_id }} "<one line on what you will do first>"`. If the required fenced JSON handoff from `critical-plan-reviewer` is missing or malformed, reject the task immediately. If the task includes questions or concerns, report them to the lead before proceeding; if it materially changes the discussed scope, state that consistency hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="a">Start the task immediately with `atm task start {{ task_id }} "&lt;one line on what you will do first&gt;"`. If the required fenced JSON handoff from `critical-plan-reviewer` is missing or malformed, reject the task immediately. If the task includes questions or concerns, report them to the lead before proceeding; if it materially changes the discussed scope, state that consistency hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after task start, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away with a plain `atm send {{ lead }} --stdin` (never close the task on a push) so {{ lead }} critical review can begin in parallel. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --template .claude/skills/plan-hardening/plan-consistency-hardening-complete.md.j2 --vars <scratch>/plan-consistency-hardening-complete-{{ task_id }}-vars.json`, with `status` the PASS/FAIL line, `result_json` the fenced JSON body verbatim, and `task_id`, `phase` and `round_index` unchanged from this assignment; write the vars file outside the repository. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. The reviewer findings are also open finding beads: `bd list -l phase-{{ phase }},stage:plan-finding --json`. Before your close, close each with your ruling: `bd close <id> --reason "fixed: <change>"` or `bd close <id> --reason "rejected: <why>"`. The next step after this pass is codex-orchestration plan QA through `quality-mgr`, not another local plan-hardening review loop. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
+    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only, delivered as the close: `atm task close {{ task_id }} completed --template .claude/skills/plan-hardening/plan-consistency-hardening-complete.md.j2 --vars &lt;scratch&gt;/plan-consistency-hardening-complete-{{ task_id }}-vars.json`, with `status` the PASS/FAIL line, `result_json` the fenced JSON body verbatim, and `task_id`, `phase` and `round_index` unchanged from this assignment; write the vars file outside the repository. Only this close frees your queue: the next assignment stays queued until `{{ task_id }}` is closed, and a plain `atm send` report does not close it. The reviewer findings are also open finding beads: `bd list -l phase-{{ phase }},stage:plan-finding --json`. Before your close, close each with your ruling: `bd close &lt;id&gt; --reason "fixed: &lt;change&gt;"` or `bd close &lt;id&gt; --reason "rejected: &lt;why&gt;"`. The next step after this pass is codex-orchestration plan QA through `quality-mgr`, not another local plan-hardening review loop. {% if cc and cc != lead %}Copy a one-line summary to `{{ cc }}` with a plain `atm send {{ cc }} --stdin`.{% endif %}</step>
     <step id="h">After the close, read ATM again: the next queued task starts only now.</step>
   </workflow>
 </atm-task>
