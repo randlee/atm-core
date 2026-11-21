@@ -32,16 +32,23 @@ impl ExportFailureObserved {
         })
     }
 
-    async fn all_signals_failed(&self) {
+    async fn all_signals_failed(&self) -> Result<(), String> {
         loop {
             let changed = self.changed.notified();
             tokio::pin!(changed);
             changed.as_mut().enable();
+            if let Some(exit) = self
+                .names()
+                .into_iter()
+                .find(|name| name.contains("WorkerThreadTerminated"))
+            {
+                return Err(format!("export worker exited: {exit}"));
+            }
             if ["BatchSpanProcessor", "BatchLogProcessor", "PeriodicReader"]
                 .iter()
                 .all(|prefix| self.first_with_prefix(prefix).is_some())
             {
-                return;
+                return Ok(());
             }
             changed.await;
         }
@@ -202,7 +209,7 @@ async fn unreachable_collector_scenario() {
     // full-batch path. The scheduled path first fires at 2x EXPORT_INTERVAL
     // (the SDK interval sleeps before its first tick, then skips it), which
     // a loaded runner can push past the deadline below.
-    let setup = setup_success(&config(&endpoint), 1).unwrap();
+    let setup = setup_with_limits(&config(&endpoint), 1, Duration::from_millis(50)).unwrap();
     setup
         .0
         .sink
@@ -220,8 +227,7 @@ async fn unreachable_collector_scenario() {
         .add(1, &[]);
     // 30 s is a hang diagnostic only; the periodic metric reader first fires
     // at 2x EXPORT_INTERVAL, so success is far earlier than this ceiling.
-    let observed_failure =
-        tokio::time::timeout(Duration::from_secs(30), observed.all_signals_failed()).await;
+    let observed_failure = observed.all_signals_failed().await;
     let mut evidence = health();
     diagnostics.project(&mut evidence);
     // The sink is still nonblocking even though transport failed.
@@ -249,7 +255,7 @@ async fn unreachable_collector_scenario() {
     // current-thread runtime by dropping live native providers during unwind.
     assert!(
         observed_failure.is_ok(),
-        "real span, log and metric export failures expected; SDK emitted {:?}",
+        "real span, log and metric export failures expected; result: {observed_failure:?}; SDK emitted {:?}",
         observed.names()
     );
     assert_eq!(
@@ -418,7 +424,8 @@ async fn abandoning_shutdown_wait_does_not_abort_blocking_calls_or_clear_termina
     let receiver = Receiver::start(true).await;
     // The export timeout outlives the test's hold, so only the receiver's
     // release signal lets the blocking shutdown finish.
-    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+    let setup =
+        setup_with_limits(&config(&receiver.endpoint), 64, Duration::from_millis(50)).unwrap();
     for _ in 0..64 {
         setup.1.tracer("abandoned-wait").start("nonempty").end();
     }

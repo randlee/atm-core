@@ -67,7 +67,8 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
     ] {
         let receiver = Receiver::start(false).await;
         let log_before = receiver.capture.finished(Signal::Log);
-        let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+        let setup =
+            setup_success(&config(&receiver.endpoint), 64, receiver.capture.clone()).unwrap();
         let root = tempfile::tempdir().unwrap();
         let log_dir = root.path().join("logs");
         let logger = Arc::new(
@@ -77,7 +78,7 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
                 policy(),
                 Some(RetainedLogLevel::Info),
                 destination,
-                Some(setup.2.logger("atm.structured")),
+                Some(setup.logger.logger("atm.structured")),
             )
             .unwrap(),
         );
@@ -149,7 +150,7 @@ async fn file_otel_both_route_once_filter_secrets_and_leave_caller_provider_aliv
         tokio::task::spawn_blocking(move || logger.shutdown())
             .await
             .unwrap();
-        let sdk_logger = setup.2.logger("caller-still-owns-provider");
+        let sdk_logger = setup.logger.logger("caller-still-owns-provider");
         let mut record = sdk_logger.create_log_record();
         record.set_body("after retained logger drop".into());
         sdk_logger.emit(record);

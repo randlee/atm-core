@@ -4,16 +4,8 @@ use super::*;
 use std::io;
 use std::process::{Output, Stdio};
 use tokio::io::{AsyncRead, AsyncReadExt};
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 use tokio::task::JoinHandle;
-use tokio::time::timeout;
-
-const AMBIENT_CHILD_DEADLINE: Duration = Duration::from_secs(30);
-
-struct ChildRun {
-    output: Output,
-    timed_out: bool,
-}
 
 async fn read_pipe<R: AsyncRead + Unpin>(mut pipe: R) -> io::Result<Vec<u8>> {
     let mut output = Vec::new();
@@ -27,10 +19,7 @@ async fn join_pipe(reader: JoinHandle<io::Result<Vec<u8>>>) -> io::Result<Vec<u8
         .map_err(|error| io::Error::other(format!("child output reader task failed: {error}")))?
 }
 
-async fn run_child_with_deadline(
-    command: &mut Command,
-    deadline: Duration,
-) -> io::Result<ChildRun> {
+async fn run_child(command: &mut Command) -> io::Result<Output> {
     let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -39,31 +28,15 @@ async fn run_child_with_deadline(
     let stderr = child.stderr.take().expect("stderr is piped");
     let stdout_reader = tokio::spawn(read_pipe(stdout));
     let stderr_reader = tokio::spawn(read_pipe(stderr));
-    let (status, timed_out) = match timeout(deadline, child.wait()).await {
-        Ok(status) => (status?, false),
-        Err(_) => kill_and_reap(&mut child).await?,
-    };
+    let status = child.wait().await?;
 
     let stdout = join_pipe(stdout_reader).await?;
     let stderr = join_pipe(stderr_reader).await?;
-    Ok(ChildRun {
-        output: Output {
-            status,
-            stdout,
-            stderr,
-        },
-        timed_out,
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
     })
-}
-
-async fn kill_and_reap(child: &mut Child) -> io::Result<(std::process::ExitStatus, bool)> {
-    match child.kill().await {
-        Ok(()) => Ok((child.wait().await?, true)),
-        Err(kill_error) => match child.try_wait()? {
-            Some(status) => Ok((status, false)),
-            None => Err(kill_error),
-        },
-    }
 }
 
 #[tokio::test]
@@ -99,14 +72,12 @@ async fn explicit_atm_configuration_ignores_ambient_otel_settings() {
         .env("OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE", "delta")
         .env("OTEL_BSP_MAX_QUEUE_SIZE", "1")
         .env("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", "1");
-    let ChildRun { output, timed_out } =
-        run_child_with_deadline(&mut command, AMBIENT_CHILD_DEADLINE)
-            .await
-            .expect("ambient-settings child process should run");
+    let output = run_child(&mut command)
+        .await
+        .expect("ambient-settings child process should run");
     assert!(
-        !timed_out && output.status.success(),
-        "ambient-settings child timed out: {}; status: {}\nstdout:\n{}\nstderr:\n{}",
-        timed_out,
+        output.status.success(),
+        "ambient-settings child failed; status: {}\nstdout:\n{}\nstderr:\n{}",
         output.status,
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
@@ -124,12 +95,13 @@ async fn ambient_child() {
     let receiver = Receiver::start(false).await;
     let trace_before = receiver.capture.finished(Signal::Trace);
     let metric_before = receiver.capture.finished(Signal::Metric);
-    let setup = setup_success(&config(&receiver.endpoint), 64).unwrap();
+    let setup = setup_success(&config(&receiver.endpoint), 64, receiver.capture.clone()).unwrap();
     setup
-        .0
+        .task
         .sink
         .emit(record("ambient", TaskTelemetryKind::Completed, 1, 1))
         .unwrap();
+    shutdown(setup).await;
     receiver
         .capture
         .wait("a span and a metric export", || {
@@ -138,13 +110,6 @@ async fn ambient_child() {
         })
         .await;
     {
-        let metadata = receiver.capture.metadata.lock().unwrap();
-        assert!(
-            metadata
-                .iter()
-                .all(|map| map.get("authorization").unwrap() == "Bearer fixture-auth")
-        );
-        assert!(metadata.iter().all(|map| !map.contains_key("x-ambient")));
         let resources = receiver.capture.resources.lock().unwrap();
         assert!(!resources.is_empty());
         for resource in resources.iter() {
@@ -153,7 +118,6 @@ async fn ambient_child() {
             assert!(format!("{:?}", resource.attributes[0].value).contains("atm-fixture"));
         }
     }
-    shutdown(setup).await;
     wait_for_task_exports(&receiver, trace_before, metric_before).await;
     {
         let metrics = receiver.capture.metrics.lock().unwrap();

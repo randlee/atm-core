@@ -8,6 +8,12 @@ use opentelemetry_proto::tonic::collector::{
     logs::v1 as logs, metrics::v1 as metrics, trace::v1 as traces,
 };
 use opentelemetry_proto::tonic::{logs::v1::LogRecord, metrics::v1::Metric, trace::v1::Span};
+use opentelemetry_sdk::logs::{LogBatch, LogExporter};
+use opentelemetry_sdk::metrics::{
+    Temporality, data::ResourceMetrics, exporter::PushMetricExporter,
+};
+use opentelemetry_sdk::trace::{SpanData, SpanExporter};
+use opentelemetry_sdk::{Resource, error::OTelSdkError};
 use tokio::sync::{Notify, oneshot};
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::codec::CompressionEncoding;
@@ -50,6 +56,8 @@ pub(super) struct Capture {
     /// test calls `release`, and never completes if the test does not.
     pub release: Arc<Notify>,
     pub stall: bool,
+    failure: Arc<Mutex<Option<String>>>,
+    receiver_closed: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Capture {
@@ -83,16 +91,129 @@ impl Capture {
 
     /// Waits until `condition` holds, re-checking on every capture change.
     /// Wakes only when the test-owned receiver observes a state change.
-    pub async fn wait(&self, _what: &str, condition: impl Fn() -> bool) {
+    pub async fn wait(&self, what: &str, condition: impl Fn() -> bool) {
+        self.wait_result(what, condition)
+            .await
+            .unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    pub async fn wait_result(
+        &self,
+        what: &str,
+        condition: impl Fn() -> bool,
+    ) -> Result<(), String> {
         loop {
             let changed = self.changed.notified();
             tokio::pin!(changed);
             changed.as_mut().enable();
             if condition() {
-                return;
+                return Ok(());
+            }
+            if let Some(failure) = self.failure.lock().unwrap().clone() {
+                return Err(format!("{what}: exporter failed: {failure}"));
+            }
+            if self.receiver_closed.load(Ordering::SeqCst) {
+                return Err(format!(
+                    "{what}: receiver exited before the requested event"
+                ));
             }
             changed.await;
         }
+    }
+
+    fn fail(&self, message: impl Into<String>) {
+        *self.failure.lock().unwrap() = Some(message.into());
+        self.changed.notify_waiters();
+    }
+
+    fn receiver_exited(&self) {
+        self.receiver_closed.store(true, Ordering::SeqCst);
+        self.changed.notify_waiters();
+    }
+
+    fn check_export(&self, signal: Signal) -> Result<(), OTelSdkError> {
+        if let Some(message) = self.failure.lock().unwrap().clone() {
+            return Err(OTelSdkError::InternalFailure(message));
+        }
+        self.started[signal as usize].fetch_add(1, Ordering::SeqCst);
+        self.changed.notify_waiters();
+        self.finished[signal as usize].fetch_add(1, Ordering::SeqCst);
+        self.changed.notify_waiters();
+        Ok(())
+    }
+
+    pub fn fail_exports(&self, message: impl Into<String>) {
+        self.fail(message);
+    }
+
+    pub fn capture_metrics(&self, metrics: &ResourceMetrics) -> Result<(), OTelSdkError> {
+        let request: opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequest = metrics.into();
+        self.metrics.lock().unwrap().extend(
+            request
+                .resource_metrics
+                .into_iter()
+                .flat_map(|resource| resource.scope_metrics)
+                .flat_map(|scope| scope.metrics),
+        );
+        self.check_export(Signal::Metric)
+    }
+}
+
+/// Fast, test-owned exporters used by successful telemetry tests. They convert
+/// SDK data into the same OTLP records captured by the network receiver, then
+/// publish completion as an event without a transport or export deadline.
+#[derive(Clone)]
+pub(super) struct TestExporters(pub Capture);
+
+impl std::fmt::Debug for TestExporters {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TestExporters").finish_non_exhaustive()
+    }
+}
+
+impl SpanExporter for TestExporters {
+    async fn export(&self, batch: Vec<SpanData>) -> Result<(), OTelSdkError> {
+        self.0
+            .spans
+            .lock()
+            .unwrap()
+            .extend(batch.into_iter().map(Into::into));
+        self.0.check_export(Signal::Trace)
+    }
+
+    fn set_resource(&mut self, resource: &Resource) {
+        self.0.resources.lock().unwrap().push(resource.into());
+    }
+}
+
+impl LogExporter for TestExporters {
+    async fn export(&self, batch: LogBatch<'_>) -> Result<(), OTelSdkError> {
+        self.0
+            .logs
+            .lock()
+            .unwrap()
+            .extend(batch.iter().map(|(record, _)| record.into()));
+        self.0.check_export(Signal::Log)
+    }
+
+    fn set_resource(&mut self, resource: &Resource) {
+        self.0.resources.lock().unwrap().push(resource.into());
+    }
+}
+
+impl PushMetricExporter for TestExporters {
+    async fn export(&self, metrics: &ResourceMetrics) -> Result<(), OTelSdkError> {
+        self.0.capture_metrics(metrics)
+    }
+
+    fn force_flush(&self) -> Result<(), OTelSdkError> {
+        Ok(())
+    }
+    fn shutdown_with_timeout(&self, _: Duration) -> Result<(), OTelSdkError> {
+        Ok(())
+    }
+    fn temporality(&self) -> Temporality {
+        Temporality::Cumulative
     }
 }
 
@@ -208,8 +329,14 @@ impl Receiver {
                     let _ = stopped.await;
                 }),
         );
+        let task_capture = capture.clone();
         let task = tokio::spawn(async move {
-            task.await.unwrap().unwrap();
+            match task.await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => task_capture.fail(format!("receiver server failed: {error}")),
+                Err(error) => task_capture.fail(format!("receiver task join failed: {error}")),
+            }
+            task_capture.receiver_exited();
         });
         Self {
             endpoint,
@@ -221,9 +348,8 @@ impl Receiver {
 
     pub async fn stop(self) {
         let _ = self.stop.send(());
-        tokio::time::timeout(Duration::from_secs(3), self.task)
+        self.task
             .await
-            .unwrap()
-            .unwrap();
+            .unwrap_or_else(|error| panic!("receiver task failed while stopping: {error}"));
     }
 }
