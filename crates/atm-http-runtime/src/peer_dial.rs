@@ -372,25 +372,19 @@ impl reqwest::dns::Resolve for OrderedPeerResolver {
         let name = name.as_str().to_owned();
         Box::pin(async move {
             let resolved = tokio::net::lookup_host((name.as_str(), 0)).await?;
-            Ok(ordered_resolver_addresses(&name, resolved))
+            let candidates = order_connect_candidates(resolved);
+            if candidates.skipped_link_local > 0 || candidates.truncated > 0 {
+                tracing::debug!(
+                    %name,
+                    skipped_link_local = candidates.skipped_link_local,
+                    truncated = candidates.truncated,
+                    "resolved peer addresses filtered before dial"
+                );
+            }
+            let addresses: reqwest::dns::Addrs = Box::new(candidates.usable.into_iter());
+            Ok(addresses)
         })
     }
-}
-
-fn ordered_resolver_addresses(
-    name: &str,
-    resolved: impl IntoIterator<Item = SocketAddr>,
-) -> reqwest::dns::Addrs {
-    let candidates = order_connect_candidates(resolved);
-    if candidates.skipped_link_local > 0 || candidates.truncated > 0 {
-        tracing::debug!(
-            %name,
-            skipped_link_local = candidates.skipped_link_local,
-            truncated = candidates.truncated,
-            "resolved peer addresses filtered before dial"
-        );
-    }
-    Box::new(candidates.usable.into_iter())
 }
 
 #[cfg(test)]
@@ -407,7 +401,7 @@ mod tests {
 
     use super::{
         ConnectCandidates, MAX_DIAL_CANDIDATES, PeerAddressCache, STALE_ADDRESS_DIAL_CAP,
-        dial_candidates, order_connect_candidates, ordered_resolver_addresses,
+        dial_candidates, order_connect_candidates,
     };
 
     fn deadline(duration: Duration) -> RequestDeadline {
@@ -812,16 +806,17 @@ mod tests {
     }
 
     #[test]
-    fn reqwest_resolver_returns_ordered_routable_addresses() {
-        let addresses: Vec<SocketAddr> = ordered_resolver_addresses(
-            "peer.example",
-            [
-                v6("fe80::1", 0, 0),
-                v6("2001:db8::1", 0, 0),
-                v4("192.0.2.1", 0),
-            ],
-        )
-        .collect();
-        assert_eq!(addresses, vec![v4("192.0.2.1", 0), v6("2001:db8::1", 0, 0)]);
+    fn resolver_candidates_are_ordered_and_routable() {
+        let candidates = order_connect_candidates([
+            v6("fe80::1", 0, 0),
+            v6("2001:db8::1", 0, 0),
+            v4("192.0.2.1", 0),
+        ]);
+        assert_eq!(
+            candidates.usable,
+            vec![v4("192.0.2.1", 0), v6("2001:db8::1", 0, 0)]
+        );
+        assert_eq!(candidates.skipped_link_local, 1);
+        assert_eq!(candidates.truncated, 0);
     }
 }
