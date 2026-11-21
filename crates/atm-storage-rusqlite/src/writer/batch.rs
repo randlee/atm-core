@@ -212,35 +212,76 @@ pub(crate) async fn collect_batch(
     shutting_down: &mut bool,
     budget: Duration,
 ) {
+    collect_batch_with_probe(receiver, batch, shutting_down, budget, |_| {}, |_| {}).await;
+}
+
+pub(super) async fn collect_batch_with_probe(
+    receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
+    batch: &mut Vec<QueuedWrite>,
+    shutting_down: &mut bool,
+    budget: Duration,
+    after_snapshot: impl FnOnce(usize),
+    mut before_wait: impl FnMut(usize),
+) {
     let deadline = tokio::time::Instant::now() + budget;
-    // Drain an already-queued bounded burst without delay. Between arrivals,
-    // yield cooperatively until the fixed deadline instead of parking on an OS
-    // timer: the batching contract stays platform-neutral and a one-millisecond
-    // window is not expanded by host scheduler granularity.
-    loop {
+    let queued_at_entry = receiver.len();
+    after_snapshot(queued_at_entry);
+
+    for _ in 0..queued_at_entry {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { op, reply, timing }) => {
                 batch.push(QueuedWrite { op, reply, timing });
-                continue;
             }
-            Ok(WriterMessage::Shutdown) => {
-                *shutting_down = true;
-                continue;
-            }
-            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+            Ok(WriterMessage::Shutdown) => *shutting_down = true,
+            Err(
+                tokio::sync::mpsc::error::TryRecvError::Empty
+                | tokio::sync::mpsc::error::TryRecvError::Disconnected,
+            ) => {
                 *shutting_down = true;
                 return;
             }
-            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
-                if *shutting_down {
-                    return;
-                }
-                if tokio::time::Instant::now() >= deadline {
-                    return;
-                }
-                tokio::task::yield_now().await;
+        }
+    }
+
+    if *shutting_down {
+        return;
+    }
+
+    loop {
+        if tokio::time::Instant::now() >= deadline {
+            return;
+        }
+        before_wait(batch.len());
+        match receive_batch_window_event(receiver, deadline).await {
+            BatchWindowEvent::Deadline => return,
+            BatchWindowEvent::Message(Some(WriterMessage::Submit { op, reply, timing })) => {
+                batch.push(QueuedWrite { op, reply, timing });
+            }
+            BatchWindowEvent::Message(Some(WriterMessage::Shutdown) | None) => {
+                *shutting_down = true;
+                return;
             }
         }
+    }
+}
+
+pub(super) enum BatchWindowEvent {
+    Deadline,
+    Message(Option<WriterMessage>),
+}
+
+#[sc_lint_attributes::sc_lint(
+    allow(SCB-RUNTIME-005),
+    reason = "ADR-070: bounded SQLite batch window; receive, shutdown, or disconnect cancels the wait."
+)]
+pub(super) async fn receive_batch_window_event(
+    receiver: &mut tokio::sync::mpsc::Receiver<WriterMessage>,
+    deadline: tokio::time::Instant,
+) -> BatchWindowEvent {
+    tokio::select! {
+        biased;
+        _ = tokio::time::sleep_until(deadline) => BatchWindowEvent::Deadline,
+        message = receiver.recv() => BatchWindowEvent::Message(message),
     }
 }
 

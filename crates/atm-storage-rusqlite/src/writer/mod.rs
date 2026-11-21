@@ -1063,28 +1063,68 @@ mod tests {
         QueuedWrite { op, reply, timing }
     }
 
+    #[derive(Debug, PartialEq, Eq)]
+    enum BatchProbeEvent {
+        Snapshot {
+            queued: usize,
+        },
+        Waiting {
+            batch_len: usize,
+            now: tokio::time::Instant,
+        },
+    }
+
     #[tokio::test(start_paused = true)]
-    async fn batch_collection_drains_all_currently_queued_writes() {
+    async fn batch_collection_drains_the_entry_snapshot_before_waiting() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(128);
-        sender.try_send(queued_write()).expect("first queued write");
-        for _ in 0..96 {
+        for _ in 0..97 {
             sender.try_send(queued_write()).expect("queued write");
         }
         let first = first_queued_write(&mut receiver);
+        let started_at = tokio::time::Instant::now();
+        let (events_tx, mut events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let snapshot_tx = events_tx.clone();
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(
+            batch::collect_batch_with_probe(
                 &mut receiver,
                 &mut batch,
                 &mut shutting_down,
                 BATCH_TIME_BUDGET,
+                move |queued| {
+                    snapshot_tx
+                        .send(BatchProbeEvent::Snapshot { queued })
+                        .expect("snapshot observed");
+                },
+                move |batch_len| {
+                    events_tx
+                        .send(BatchProbeEvent::Waiting {
+                            batch_len,
+                            now: tokio::time::Instant::now(),
+                        })
+                        .expect("waiting state observed");
+                },
             )
             .await;
             (batch, shutting_down)
         });
 
-        tokio::task::yield_now().await;
+        assert_eq!(
+            events_rx.recv().await.expect("entry snapshot"),
+            BatchProbeEvent::Snapshot { queued: 96 }
+        );
+        assert_eq!(
+            events_rx
+                .recv()
+                .await
+                .expect("initial batch before waiting"),
+            BatchProbeEvent::Waiting {
+                batch_len: 97,
+                now: started_at,
+            }
+        );
+        assert_eq!(tokio::time::Instant::now(), started_at);
         tokio::time::advance(BATCH_TIME_BUDGET).await;
         let (batch, shutting_down) = collection.await.expect("collection task");
 
@@ -1093,29 +1133,69 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn batch_collection_includes_write_received_before_deadline() {
+    async fn batch_collection_includes_write_received_at_deadline_minus_one_nanosecond() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
         sender.try_send(queued_write()).expect("first queued write");
         let first = first_queued_write(&mut receiver);
+        let started_at = tokio::time::Instant::now();
+        let (events_tx, mut events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let snapshot_tx = events_tx.clone();
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(
+            batch::collect_batch_with_probe(
                 &mut receiver,
                 &mut batch,
                 &mut shutting_down,
                 BATCH_TIME_BUDGET,
+                move |queued| {
+                    snapshot_tx
+                        .send(BatchProbeEvent::Snapshot { queued })
+                        .expect("snapshot observed");
+                },
+                move |batch_len| {
+                    events_tx
+                        .send(BatchProbeEvent::Waiting {
+                            batch_len,
+                            now: tokio::time::Instant::now(),
+                        })
+                        .expect("waiting state observed");
+                },
             )
             .await;
             (batch, shutting_down)
         });
 
-        tokio::task::yield_now().await;
+        assert_eq!(
+            events_rx.recv().await.expect("entry snapshot"),
+            BatchProbeEvent::Snapshot { queued: 0 }
+        );
+        assert_eq!(
+            events_rx.recv().await.expect("initial waiting state"),
+            BatchProbeEvent::Waiting {
+                batch_len: 1,
+                now: started_at,
+            }
+        );
+        tokio::time::advance(BATCH_TIME_BUDGET - Duration::from_nanos(1)).await;
+        assert_eq!(
+            tokio::time::Instant::now(),
+            started_at + BATCH_TIME_BUDGET - Duration::from_nanos(1)
+        );
         sender
             .try_send(queued_write())
-            .expect("write within window");
-        tokio::task::yield_now().await;
-        tokio::time::advance(BATCH_TIME_BUDGET).await;
+            .expect("write at deadline minus one nanosecond");
+        assert_eq!(
+            events_rx
+                .recv()
+                .await
+                .expect("message selected before deadline"),
+            BatchProbeEvent::Waiting {
+                batch_len: 2,
+                now: started_at + BATCH_TIME_BUDGET - Duration::from_nanos(1),
+            }
+        );
+        tokio::time::advance(Duration::from_nanos(1)).await;
         let (batch, shutting_down) = collection.await.expect("collection task");
 
         assert_eq!(batch.len(), 2);
@@ -1123,30 +1203,17 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn batch_collection_leaves_write_received_after_deadline_for_next_transaction() {
+    async fn batch_deadline_wins_when_a_message_is_ready_at_the_same_instant() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
-        sender.try_send(queued_write()).expect("first queued write");
-        let first = first_queued_write(&mut receiver);
-        let collection = tokio::spawn(async move {
-            let mut batch = vec![first];
-            let mut shutting_down = false;
-            collect_batch(
-                &mut receiver,
-                &mut batch,
-                &mut shutting_down,
-                BATCH_TIME_BUDGET,
-            )
-            .await;
-            (batch, shutting_down, receiver)
-        });
+        let deadline = tokio::time::Instant::now();
+        sender
+            .try_send(queued_write())
+            .expect("message at deadline");
 
-        tokio::task::yield_now().await;
-        tokio::time::advance(BATCH_TIME_BUDGET).await;
-        let (batch, shutting_down, mut receiver) = collection.await.expect("collection task");
-        sender.try_send(queued_write()).expect("write after window");
-
-        assert_eq!(batch.len(), 1);
-        assert!(!shutting_down);
+        assert!(matches!(
+            batch::receive_batch_window_event(&mut receiver, deadline).await,
+            batch::BatchWindowEvent::Deadline
+        ));
         assert!(matches!(
             receiver.try_recv(),
             Ok(WriterMessage::Submit { .. })
@@ -1154,31 +1221,59 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn batch_collection_stops_waiting_when_shutdown_arrives() {
+    async fn batch_collection_selects_a_post_snapshot_message_after_draining_the_snapshot() {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
-        sender.try_send(queued_write()).expect("first queued write");
-        let first = first_queued_write(&mut receiver);
+        sender
+            .try_send(queued_write())
+            .expect("entry snapshot write");
+        let (events_tx, mut events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let snapshot_sender = sender.clone();
+        let snapshot_tx = events_tx.clone();
         let collection = tokio::spawn(async move {
-            let mut batch = vec![first];
+            let mut batch = Vec::new();
             let mut shutting_down = false;
-            collect_batch(
+            batch::collect_batch_with_probe(
                 &mut receiver,
                 &mut batch,
                 &mut shutting_down,
                 BATCH_TIME_BUDGET,
+                move |queued| {
+                    snapshot_sender
+                        .try_send(queued_write())
+                        .expect("send after the entry snapshot");
+                    snapshot_tx
+                        .send(BatchProbeEvent::Snapshot { queued })
+                        .expect("snapshot observed");
+                },
+                move |batch_len| {
+                    events_tx
+                        .send(BatchProbeEvent::Waiting {
+                            batch_len,
+                            now: tokio::time::Instant::now(),
+                        })
+                        .expect("waiting state observed");
+                },
             )
             .await;
-            (batch, shutting_down)
+            (batch, shutting_down, receiver)
         });
 
-        tokio::task::yield_now().await;
-        sender
-            .try_send(queued_write())
-            .expect("queued write before shutdown");
+        assert_eq!(
+            events_rx.recv().await.expect("entry snapshot"),
+            BatchProbeEvent::Snapshot { queued: 1 }
+        );
+        assert!(matches!(
+            events_rx.recv().await.expect("snapshot batch is drained"),
+            BatchProbeEvent::Waiting { batch_len: 1, .. }
+        ));
+        assert!(matches!(
+            events_rx.recv().await.expect("late message selected"),
+            BatchProbeEvent::Waiting { batch_len: 2, .. }
+        ));
         sender
             .try_send(WriterMessage::Shutdown)
             .expect("shutdown signal");
-        let (batch, shutting_down) = collection.await.expect("collection task");
+        let (batch, shutting_down, _receiver) = collection.await.expect("collection task");
 
         assert_eq!(batch.len(), 2);
         assert!(shutting_down);
@@ -1210,25 +1305,96 @@ mod tests {
         let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
         sender.try_send(queued_write()).expect("first queued write");
         let first = first_queued_write(&mut receiver);
+        let (events_tx, mut events_rx) = tokio::sync::mpsc::unbounded_channel();
         let collection = tokio::spawn(async move {
             let mut batch = vec![first];
             let mut shutting_down = false;
-            collect_batch(
+            batch::collect_batch_with_probe(
                 &mut receiver,
                 &mut batch,
                 &mut shutting_down,
                 BATCH_TIME_BUDGET,
+                |_| {},
+                move |batch_len| {
+                    events_tx
+                        .send(BatchProbeEvent::Waiting {
+                            batch_len,
+                            now: tokio::time::Instant::now(),
+                        })
+                        .expect("waiting state observed");
+                },
             )
             .await;
             (batch, shutting_down)
         });
 
-        tokio::task::yield_now().await;
+        assert!(matches!(
+            events_rx.recv().await.expect("waiting state"),
+            BatchProbeEvent::Waiting { batch_len: 1, .. }
+        ));
         drop(sender);
         let (batch, shutting_down) = collection.await.expect("collection task");
 
         assert_eq!(batch.len(), 1);
         assert!(shutting_down);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn batch_collection_finishes_current_batch_at_shutdown_and_preserves_order() {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(8);
+        sender.try_send(queued_write()).expect("first queued write");
+        let first = first_queued_write(&mut receiver);
+        let (events_tx, mut events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let collection = tokio::spawn(async move {
+            let mut batch = vec![first];
+            let mut shutting_down = false;
+            batch::collect_batch_with_probe(
+                &mut receiver,
+                &mut batch,
+                &mut shutting_down,
+                BATCH_TIME_BUDGET,
+                |_| {},
+                move |batch_len| {
+                    events_tx
+                        .send(BatchProbeEvent::Waiting {
+                            batch_len,
+                            now: tokio::time::Instant::now(),
+                        })
+                        .expect("waiting state observed");
+                },
+            )
+            .await;
+            (batch, shutting_down, receiver)
+        });
+
+        assert!(matches!(
+            events_rx.recv().await.expect("waiting state"),
+            BatchProbeEvent::Waiting { batch_len: 1, .. }
+        ));
+        sender
+            .try_send(queued_write())
+            .expect("write before shutdown");
+        sender
+            .try_send(WriterMessage::Shutdown)
+            .expect("shutdown signal");
+        sender
+            .try_send(queued_write())
+            .expect("write after shutdown");
+        assert!(matches!(
+            events_rx
+                .recv()
+                .await
+                .expect("write received before shutdown"),
+            BatchProbeEvent::Waiting { batch_len: 2, .. }
+        ));
+
+        let (batch, shutting_down, mut receiver) = collection.await.expect("collection task");
+        assert_eq!(batch.len(), 2);
+        assert!(shutting_down);
+        assert!(matches!(
+            receiver.try_recv(),
+            Ok(WriterMessage::Submit { .. })
+        ));
     }
 
     #[test]
