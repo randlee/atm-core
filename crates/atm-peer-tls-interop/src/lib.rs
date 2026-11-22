@@ -5,22 +5,30 @@
 //! accepts one connection, and exits; it has no sender, route, retry, resolver,
 //! worker, or daemon lifecycle API.
 
+#[cfg(test)]
 use std::io::{Read, Write};
 #[cfg(test)]
 use std::net::SocketAddr;
+#[cfg(test)]
 use std::net::{Shutdown, TcpListener, TcpStream};
+#[cfg(test)]
 use std::sync::Arc;
+#[cfg(test)]
 use std::time::Duration;
 
+#[cfg(test)]
 use atm_core::api::RequestDeadline;
 use atm_core::error::AtmError;
-use atm_storage::{
-    LocalCertificate, PinnedClientVerifier, TlsIdentity, TrustedPeer, install_tls_provider,
-};
+use atm_storage::{LocalCertificate, TlsIdentity, TrustedPeer};
+#[cfg(test)]
+use atm_storage::{PinnedClientVerifier, install_tls_provider};
+#[cfg(test)]
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
 
+#[cfg(test)]
 const CURL_HTTP_RESPONSE: &[u8] =
     b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+#[cfg(test)]
 const MAX_CURL_REQUEST_BYTES: usize = 16 * 1024;
 
 /// TLS provisioning values retained for the isolated interoperability proof.
@@ -46,21 +54,23 @@ impl TlsInteropConfig {
 
 /// Result of one bounded curl mTLS receiver exchange.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(test)]
 pub enum CurlMtlsFixtureOutcome {
     Accepted,
     RejectedClientCertificate,
 }
 
 /// A synchronous, one-shot receiver used only by the curl mTLS fixture.
+#[cfg(test)]
 pub struct CurlMtlsReceiverFixture {
     listener: TcpListener,
     config: TlsInteropConfig,
 }
 
+#[cfg(test)]
 impl CurlMtlsReceiverFixture {
     /// Bind an ephemeral loopback fixture and retain its listener for the
     /// one-shot exchange. Retaining the listener avoids a probe/rebind race.
-    #[cfg(test)]
     pub(crate) fn new(config: TlsInteropConfig) -> Result<(Self, SocketAddr), AtmError> {
         let listener = TcpListener::bind("127.0.0.1:0").map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
@@ -140,6 +150,7 @@ impl CurlMtlsReceiverFixture {
     }
 }
 
+#[cfg(test)]
 fn drain_request(
     stream: &mut StreamOwned<ServerConnection, TcpStream>,
     deadline: RequestDeadline,
@@ -170,6 +181,7 @@ fn drain_request(
     Ok(())
 }
 
+#[cfg(test)]
 fn server_config(
     identity: &TlsIdentity,
     trusted_peers: &[TrustedPeer],
@@ -187,6 +199,7 @@ fn server_config(
         })
 }
 
+#[cfg(test)]
 fn accept_with_deadline(
     listener: &TcpListener,
     deadline: RequestDeadline,
@@ -212,11 +225,13 @@ fn accept_with_deadline(
     }
 }
 
+#[cfg(test)]
 enum HandshakeFailure {
     Deadline,
     RejectedClientCertificate,
 }
 
+#[cfg(test)]
 fn complete_server_handshake(
     stream: &mut StreamOwned<ServerConnection, TcpStream>,
     deadline: RequestDeadline,
@@ -234,6 +249,7 @@ fn complete_server_handshake(
     Ok(())
 }
 
+#[cfg(test)]
 fn apply_deadline(stream: &TcpStream, deadline: Duration) -> Result<(), AtmError> {
     stream.set_read_timeout(Some(deadline)).map_err(|source| {
         AtmError::daemon_unavailable_with_cause(
@@ -249,6 +265,7 @@ fn apply_deadline(stream: &TcpStream, deadline: Duration) -> Result<(), AtmError
     })
 }
 
+#[cfg(test)]
 fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
     deadline
         .remaining()
@@ -332,14 +349,8 @@ mod tests {
             .expect("client certificate config")
     }
 
-    fn connect_with_retry(addr: SocketAddr) -> TcpStream {
-        for _ in 0..500 {
-            if let Ok(stream) = TcpStream::connect(addr) {
-                return stream;
-            }
-            thread::yield_now();
-        }
-        panic!("fixture did not bind at {addr}");
+    fn connect_to_fixture(addr: SocketAddr) -> TcpStream {
+        TcpStream::connect(addr).expect("connect to already-bound fixture")
     }
 
     fn complete_client_handshake(
@@ -372,7 +383,7 @@ mod tests {
         let handle = thread::spawn(move || {
             fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
         });
-        let stream = connect_with_retry(addr);
+        let stream = connect_to_fixture(addr);
         let config = client_config(&client.tls, &server_certificate);
         let connection = ClientConnection::new(
             Arc::new(config),
@@ -421,7 +432,7 @@ mod tests {
         let handle = thread::spawn(move || {
             fixture.serve_one(RequestDeadline::after(Duration::from_secs(5)))
         });
-        let stream = connect_with_retry(addr);
+        let stream = connect_to_fixture(addr);
         let config = client_config(&client.tls, &server_certificate);
         let connection = ClientConnection::new(
             Arc::new(config),
