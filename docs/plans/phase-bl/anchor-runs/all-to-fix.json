@@ -1,0 +1,506 @@
+[
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-022",
+  "verdict": "contradicted",
+  "where": "Plugin scripts never import console implementation modules: they call `atm-bd-console enqueue-event --request <json>` and receive `{\"version\":1,\"status\":\"acknowledged|rejected\",\"request_id\":...,\"error\":...}`; fixture/CLI tests cover enqueue, sender, and deriver doubles.",
+  "change": "Replace the `atm-bd-console enqueue-event` invocation with the `atm-bd console` subcommand form (e.g. `atm-bd console enqueue-event --request <json>`); the standalone atm-bd-console command must not be named."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-092",
+  "verdict": "not_addressed",
+  "where": null,
+  "change": "State that the contract types keep collection (CollectorRecord), evaluation (StateSnapshot/Transition) and event firing (EventRequest/delivery) as three stage-separate persisted artifacts, or, if the anchor is another sprint's, run `exclude --id ANC-092 --item bl-1 --reason \"bl-1 only defines types; stage separation lands in bl-8/bl-12\"`."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-094",
+  "verdict": "not_addressed",
+  "where": "Lock, timer, and force behaviour are implementation work owned by bl-8.",
+  "change": "State that EventSender.send is invoked only by a delivery stage on its own schedule and that no collector/cron/TUI-refresh boundary type or double sends an ATM message, or exclude bl-1 with reason that delivery scheduling lands in bl-3."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-103",
+  "verdict": "not_addressed",
+  "where": null,
+  "change": "State that CollectorRecord keeps the last good payload with SourceStamp.last_success age and the typed last_error when a source has no new valid data (payload is never replaced by an error or None), and name a fixture case for it."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-021",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "Exclude if this sprint does not touch QA icon rendering: `exclude --id ANC-021 --item bl-1 --reason \"bl-1 defines QaState only; icon rendering lands in the UI sprint\"`."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-034",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "Exclude: `exclude --id ANC-034 --item bl-1 --reason \"bl-1 ships no status-table rendering\"`; or state that unknown/off/rate-limited GitHub data is a typed contract value rather than a missing one."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-047",
+  "verdict": "underspecified",
+  "where": "`class SourceErrorKind(str, Enum): TIMEOUT = \"timeout\"; RATE_LIMIT = \"rate_limit\"; API_FAILURE = \"api_failure\"`",
+  "change": "Say whether the contract carries a failure once (SourceStamp.last_error as cached status) and that logging is not per tick, or exclude bl-1 with reason that logging lands in the collector sprint."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-048",
+  "verdict": "underspecified",
+  "where": "Windows are contractual: BD/dolt 60 seconds, ATM 60 seconds, GitHub 600 seconds.",
+  "change": "State the GitHub 600-second window is the 10-minute default configurable in repository config and on the command line (and that paging past 100 is bl-n's), or exclude the config/paging parts; the current text fixes it as a constant, which Jev reads as conflicting."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-049",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State that the quota-pause status (paused, remaining numbers, local reset time) has a typed place in the contract (a SourceErrorKind.RATE_LIMIT stamp with fields), or exclude bl-1 with reason that quota gating lands in the GitHub collector sprint."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-073",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State that sanity/quality run rows (JEV and LLM pass/fail, elapsed, dev name) are carried by QaRunInput/JevInput/JevResultInput, or exclude: `exclude --id ANC-073 --item bl-1 --reason \"bl-1 types only; runs pages land in the UI sprint\"`."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-091",
+  "verdict": "underspecified",
+  "where": "class JevResultInput: request_id: str; state: JevState; retries: int; elapsed_s: float; error: SourceErrorKind | None",
+  "change": "State that `retries` counts API-busy retries only (max 3) and that SourceErrorKind has no other retried kind; note SourceErrorKind lacks an explicit API-busy member."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-093",
+  "verdict": "underspecified",
+  "where": "Supply versioned round-trip codec fixtures named `collector_record.v1.json`, `state_snapshot.v1.json`, `qa_run.v1.json`, `jev_results.v1.json`, `dag_input.v1.json`, and `event_request.v1.json`",
+  "change": "State that these JSON documents are the persisted collected data, evaluated state and event requests in the state directory and that no database is added."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-095",
+  "verdict": "underspecified",
+  "where": "debounce_key: str; attempt_state: RequestState",
+  "change": "State that debounce_key and due_at drive aggregation so repeated or related EventRequests reach the phase lead as one message, and name a fixture/test for it; otherwise exclude with reason that aggregation lands in bl-3."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-096",
+  "verdict": "underspecified",
+  "where": "class Transition: name: TransitionName; from_state: str; to_state: str; previous: StateSnapshot | None",
+  "change": "State that an EventRequest is only constructed from a Transition derived by comparing persisted snapshots, never from collection freshness, and add an acceptance test that rejects a request without a transition."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-097",
+  "verdict": "underspecified",
+  "where": "class CollectorRequest(Protocol):\n    def request(self, source: str, *, force: bool, clock: float) -> CollectorRecord | CollectorInProgress: ...",
+  "change": "State that bd, ATM, git and GitHub are separate collector modules each with its own window, timeout and failure handling; note the contract lists only BD, ATM and GitHub windows and no git source."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-099",
+  "verdict": "underspecified",
+  "where": "Lock, timer, and force behaviour are implementation work owned by bl-8.",
+  "change": "State that cron and console share one CollectorRequest path and produce the same persisted CollectorRecord, or exclude bl-1 with reason that shared-path behaviour is bl-8's."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-101",
+  "verdict": "underspecified",
+  "where": "class SourceStamp: last_success: float | None; last_attempt: float | None; last_error: SourceErrorKind | None; since: float | None",
+  "change": "State that only last_success counts as a refresh (a failed attempt updates last_attempt/last_error only) and add an acceptance test for it."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-102",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "Exclude: `exclude --id ANC-102 --item bl-1 --reason \"cron status printing lands in the cron sprint, not the contract\"`."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-105",
+  "verdict": "underspecified",
+  "where": "class QaReviewerInput: reviewer: str; state: QaState; detail: str | None",
+  "change": "Add elapsed time to the reviewer row (QaReviewerInput has no elapsed field) and state it feeds the QA pane, or exclude bl-1 with reason that pane layout is UI work."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-106",
+  "verdict": "underspecified",
+  "where": "class QaReviewerInput: reviewer: str; state: QaState; detail: str | None",
+  "change": "Exclude bl-1 as the pane renderer's anchor, or state that findings carry contributing reviewers once; no finding type exists in the contract."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-107",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "Exclude: `exclude --id ANC-107 --item bl-1 --reason \"bead writing by quality-mgr is outside the contract types\"`."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-109",
+  "verdict": "underspecified",
+  "where": "class DagNodeInput: sprint: str; state: DagState; label: str; pr_number: int | None",
+  "change": "Exclude bl-1 (cell rendering is UI), or state the DagNodeInput fields needed for agent icon, CI icon and PR number."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-110",
+  "verdict": "underspecified",
+  "where": "class DagNodeInput: sprint: str; state: DagState; label: str; pr_number: int | None",
+  "change": "Exclude: `exclude --id ANC-110 --item bl-1 --reason \"outline colour is DAG rendering, not contract\"`."
+ },
+ {
+  "sprint": "bl-1",
+  "anchor": "ANC-111",
+  "verdict": "underspecified",
+  "where": "class DagState(str, Enum): READY = \"ready\"; RUNNING = \"running\"; HELD = \"held\"; CLOSED = \"closed\"",
+  "change": "Exclude bl-1 (icon rendering is UI), or reconcile DagState with the blocked state (the enum has HELD, not blocked)."
+ },
+ {
+  "sprint": "bl-5",
+  "anchor": "ANC-073",
+  "verdict": "not_addressed",
+  "where": "Persist the exact JSONL/result array in the sanity-run log with typed error context (#365, #497).",
+  "change": "State that each sanity-run record carries pass/fail plus separate elapsed values for Jev (from the Jev client's return) and LLM (from a timer around the LLM subagent), and the checked dev's name and nerd icon, for the console runs page; or, if the console page belongs to another sprint, exclude --id ANC-073 --item bl-5 --reason \"console pages are owned by another sprint; bl-5 only records the row fields\" and name the owner."
+ },
+ {
+  "sprint": "bl-5",
+  "anchor": "ANC-091",
+  "verdict": "not_addressed",
+  "where": "Records retain ordered arrays, reject unknown error kinds, and sum only numeric elapsed/retry values.",
+  "change": "State the Jev busy-retry rule: retry only the API-busy error up to three times, report the retry count in the record, never retry other error kinds; or exclude if the Jev client belongs to another sprint."
+ },
+ {
+  "sprint": "bl-5",
+  "anchor": "ANC-022",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-022 --item bl-5 --reason \"bl-5 neither adds nor invokes an atm-bd subcommand or the old atm-bd-console command\" (scope is right; the sprint does not touch it)."
+ },
+ {
+  "sprint": "bl-5",
+  "anchor": "ANC-047",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-047 --item bl-5 --reason \"bl-5 does not touch per-tick error collection in the model or runner\"."
+ },
+ {
+  "sprint": "bl-5",
+  "anchor": "ANC-092",
+  "verdict": "underspecified",
+  "where": "Select deterministic sanity transitions and emit a contract-codec `EventRequest` through the named `enqueue_event_request` seam; bl-12 proves its arrival in bl-3's durable queue.",
+  "change": "State that sanity transition selection reads persisted state and writes an EventRequest, and that no single call collects, evaluates and fires; or exclude if bl-5 does not own those stages."
+ },
+ {
+  "sprint": "bl-5",
+  "anchor": "ANC-093",
+  "verdict": "underspecified",
+  "where": "Pack context for the LLM and write the `JevRequest[]` array into `dev-sanity.md`; persist the exact JSONL/result array in the sanity-run log with typed error context (#365, #497).",
+  "change": "State that the sanity run record and event requests are JSON/JSONL files in the state directory and that no database is added."
+ },
+ {
+  "sprint": "bl-5",
+  "anchor": "ANC-094",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-094 --item bl-5 --reason \"bl-5 only enqueues an EventRequest via the seam; delivery scheduling and cron/TUI sending are not changed here\"."
+ },
+ {
+  "sprint": "bl-5",
+  "anchor": "ANC-095",
+  "verdict": "underspecified",
+  "where": "It does not implement durable queue/delivery (bl-3) or prove cross-boundary arrival (bl-12).",
+  "change": "If debounce/aggregation is not in bl-5, exclude --id ANC-095 --item bl-5 --reason \"debounce and aggregation are outside bl-5\"; Jev answered unstably, so state explicitly which sprint owns it."
+ },
+ {
+  "sprint": "bl-5",
+  "anchor": "ANC-096",
+  "verdict": "underspecified",
+  "where": "Select deterministic sanity transitions and emit a contract-codec `EventRequest` through the named `enqueue_event_request` seam; bl-12 proves its arrival in bl-3's durable queue.",
+  "change": "State that an EventRequest is raised only when evaluation of the current persisted state shows a defined sanity transition, never because a collection run read fresh data, and name the transitions."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-034",
+  "verdict": "not_addressed",
+  "where": "Render header/status from persisted `content_at`, carried age, oldest typed error, and never-read state.",
+  "change": "State that the status table renders any unknown sprint, ci or pr state (including GitHub off, rate-limited or truncated) as the glyph ? in #2D81E0, never the no-PR dash or ci none glyph, and add a test for it."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "REQ-BI6-AC6",
+  "verdict": "not_addressed",
+  "where": null,
+  "change": "Add a deliverable and acceptance test (e.g. test_markdown_table_render_is_byte_identical_twice) stating that rendering the status table twice over one snapshot yields byte-identical output with no timestamp, dict-order or run-dependent values."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-019",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "Either state that show/status render the Claude model icon (haiku, sonnet, opus, fable) in its colour next to the agent name, with a test, or exclude --id ANC-019 --item bl-6 --reason \"icon rendering is owned by another sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-020",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "Either state that render shows the Codex class icon (sol, luna, terra, astra) in its colour next to the agent, with a test, or exclude --id ANC-020 --item bl-6 --reason \"icon rendering is owned by another sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-021",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "Either state that render shows the qa agent icon with running, pass and fail colours, with a test, or exclude --id ANC-021 --item bl-6 --reason \"qa icon rendering is owned by another sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-023",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State that wherever render, status or show prints an agent name, the agent icon is drawn immediately left of it, and add a test; otherwise exclude --id ANC-023 --item bl-6 --reason \"agent-name icon placement is owned by another sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-026",
+  "verdict": "underspecified",
+  "where": "`show.py` emits ANSI only on a TTY and plain text otherwise; document Nerd Font Mono alignment.",
+  "change": "State that every sanity agent renders with U+F01A6 in #E551BA regardless of harness or model, with a test."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-027",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State that the status renderer shows each BEAD_STATUS entry (blocked, in_progress, deferred, closed, pinned, hooked, accepted, planned, proposed, ready) with its icon and colour, with a per-status test."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-028",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State the glyph and colour for bead open, sprint not_ready, PR open, PR draft and CI none (U+F0766, U+F137C, U+F04C2, U+F0CB6, U+F01D8 with their hex colours) and test them in the render tests."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-030",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State the CI fail rule: one failing platform shows that platform icon in #F85149, more than one or a non-platform general action shows the bug U+F00E4 in #F85149; add a test, or exclude --id ANC-030 --item bl-6 --reason \"ci cell rendering is owned by another sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-033",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "If bl-6 renders the pr cell, state it links the PR number to PullRequest.url as returned by GitHub with no base-URL derivation or per-PR gh call, with a test; otherwise exclude --id ANC-033 --item bl-6 --reason \"pr cell rendering is owned by another sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-035",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State that the state cell shows the active agent's icon (dev, severity or QA) when one is active and the sprint state icon only when none is, so a blocked sprint with an agent shows the agent not the lock; add a test."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-036",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State that with several active agents the state cell draws one icon per agent, none collapsed or dropped, and add a test."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-037",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State the ci cell holds exactly one icon for the shown PR head (pass, running, none only when no CI run exists, fail per ANC-030, ? when unknown) with their glyphs and colours, and test it."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-040",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State that the emitted markdown table uses exactly the header | sprint | state | ci | pr | and alignment row |---|:-:|:-:|---|, one row per sprint, and add a test; otherwise exclude --id ANC-040 --item bl-6 --reason \"table layout is owned by another sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-041",
+  "verdict": "underspecified",
+  "where": "Render header/status from persisted `content_at`, carried age, oldest typed error, and never-read state.",
+  "change": "State that every time the header and status print is 24-hour local time from the one display formatter (UTC ISO-8601 Z only in files/logs), and add a test."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-047",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "State that a cached failure still displayed is shown as a status in the sheet and render never writes a log entry per tick; or exclude --id ANC-047 --item bl-6 --reason \"failure logging is owned by the collector sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-050",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "If bl-6 renders agent task rows, state they read '<sprint or fix id>: <bead title>' truncated to pane width, never '<phase>: <atm message text>', with a test; otherwise exclude --id ANC-050 --item bl-6 --reason \"task rows are owned by another sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-093",
+  "verdict": "underspecified",
+  "where": "Render persisted state only; do not collect, build a DAG, or deliver.",
+  "change": "Say that render reads the persisted JSON state files and adds no database; or exclude --id ANC-093 --item bl-6 --reason \"persistence is owned by the collector sprint\"."
+ },
+ {
+  "sprint": "bl-6",
+  "anchor": "ANC-108",
+  "verdict": "underspecified",
+  "where": "`show.py` emits ANSI only on a TTY and plain text otherwise; document Nerd Font Mono alignment.",
+  "change": "State that atm-bd show displays each icon in its anchored colour (ANSI only when stdout is a terminal) and test the colour output; the DAG, fallback list and Diagnostics parts belong to other sprints."
+ },
+ {
+  "sprint": "bl-2",
+  "anchor": "ANC-073",
+  "verdict": "not_addressed",
+  "where": "`index`, `request_sha256`, `success`, `data`, `receipt`, `error`,\n  `retries`, and `elapsed_s` are present on every line.",
+  "change": "State that `elapsed_s` per request line is the Jev elapsed value the sanity-runs page and the OTel rows read (the page itself being bl-5/bl-7), or, if the page is wholly out of this sprint, run `exclude --id ANC-073 --item bl-2 --reason \"bl-2 only emits elapsed_s; the runs pages belong to bl-5 and bl-7\"`."
+ },
+ {
+  "sprint": "bl-2",
+  "anchor": "ANC-017",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-017 --item bl-2 --reason \"bl-2 is the Jev client and sc-sanity-jev prompt; console agent icons belong to bl-7.\""
+ },
+ {
+  "sprint": "bl-2",
+  "anchor": "ANC-021",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-021 --item bl-2 --reason \"bl-2 is the Jev client; QA agent icon colours are console work outside this sprint.\""
+ },
+ {
+  "sprint": "bl-2",
+  "anchor": "ANC-022",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-022 --item bl-2 --reason \"bl-2 does not touch the atm-bd-console command or the atm-bd console subcommand.\""
+ },
+ {
+  "sprint": "bl-2",
+  "anchor": "ANC-047",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-047 --item bl-2 --reason \"bl-2 plans no logging of failures or cached sheet status.\""
+ },
+ {
+  "sprint": "bl-2",
+  "anchor": "ANC-091",
+  "verdict": "underspecified",
+  "where": "429/502/529 is today's set (`:181`).",
+  "change": "State the retry cap as a number (at most three busy retries, so `MAX_JEV_ATTEMPTS` is 4 and `retries` is at most 3) and settle whether 502 counts as busy, so only the API-busy status is retried and 429/502 are not retried by guesswork."
+ },
+ {
+  "sprint": "bl-2",
+  "anchor": "ANC-108",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-108 --item bl-2 --reason \"bl-2 draws nothing in the console, DAG or atm-bd show; icon colouring is bl-7.\""
+ },
+ {
+  "sprint": "bl-3",
+  "anchor": "ANC-092",
+  "verdict": "underspecified",
+  "where": "It implements durable enqueue, debounce/aggregation, due selection, separately scheduled delivery, and the production ATM sender schedule/recipient selection; it does not collect or render.",
+  "change": "State explicitly that derive_transitions reads only the persisted snapshot/previous state and writes only persisted requests, and that enqueue, due selection and deliver_due are each separate calls reading from and writing to events.v1.jsonl, so no single call performs more than one of evaluate, enqueue and fire."
+ },
+ {
+  "sprint": "bl-3",
+  "anchor": "ANC-093",
+  "verdict": "underspecified",
+  "where": "The durable v1 queue and history live at the configured console state path `events.v1.jsonl`, with one versioned request/history record per line.",
+  "change": "Say that the queue and history are JSON files in the atm-bd state directory (not only a configured console path) and that no database is introduced, and add an acceptance test asserting no database file or dependency."
+ },
+ {
+  "sprint": "bl-3",
+  "anchor": "ANC-097",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-097 --item bl-3 --reason \"bl-3 owns event dispatch and does not implement collectors; bl-8 owns them.\""
+ },
+ {
+  "sprint": "bl-4",
+  "anchor": "ANC-073",
+  "verdict": "not_addressed",
+  "where": null,
+  "change": "exclude --id ANC-073 --item bl-4 --reason \"console runs pages are bl-7\""
+ },
+ {
+  "sprint": "bl-4",
+  "anchor": "ANC-113",
+  "verdict": "not_addressed",
+  "where": null,
+  "change": "exclude --id ANC-113 --item bl-4 --reason \"Quality tab rendering is the bl-7 console half; bl-4 only produces metadata.reviewers\""
+ },
+ {
+  "sprint": "bl-4",
+  "anchor": "ANC-017",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-017 --item bl-4 --reason \"qa/sanity agent icons are console rendering, not reviewer metadata\""
+ },
+ {
+  "sprint": "bl-4",
+  "anchor": "ANC-021",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-021 --item bl-4 --reason \"QA agent icon colours are console rendering owned by bl-7\""
+ },
+ {
+  "sprint": "bl-4",
+  "anchor": "ANC-022",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-022 --item bl-4 --reason \"atm-bd-console replacement by the console subcommand is not touched by reviewer metadata\""
+ },
+ {
+  "sprint": "bl-4",
+  "anchor": "ANC-026",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-026 --item bl-4 --reason \"sanity agent icon is console rendering, not reviewer metadata\""
+ },
+ {
+  "sprint": "bl-4",
+  "anchor": "ANC-093",
+  "verdict": "underspecified",
+  "where": null,
+  "change": "exclude --id ANC-093 --item bl-4 --reason \"state-directory JSON persistence is not touched; bl-4 writes bead metadata via bd update\""
+ },
+ {
+  "sprint": "bl-4",
+  "anchor": "ANC-105",
+  "verdict": "underspecified",
+  "where": "Out: console (bl-7)",
+  "change": "State that bl-4's metadata.reviewers[] (reviewer, status, kind, elapsed_s) is the data the bottom-left pane's per-reviewer row renders from, naming bl-7 as the renderer."
+ },
+ {
+  "sprint": "bl-4",
+  "anchor": "ANC-106",
+  "verdict": "underspecified",
+  "where": "Finding bead (`finding-bead.json.j2`; `reviewer` stays the filing reviewer, which alone verifies the fix):",
+  "change": "State that finding beads carry metadata.reviewers listing every contributing reviewer, so a merged finding appears once with all of them; formatted rendering in the right pane is bl-7's."
+ }
+]
