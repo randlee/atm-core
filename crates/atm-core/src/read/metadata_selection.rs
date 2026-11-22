@@ -112,7 +112,7 @@ pub(crate) fn filter_metadata_backed_contains_candidates<R: RetainedMailboxRunti
         .map(|message| -> Result<Option<ClassifiedMessage>, AtmError> {
             let row = metadata_rows.get(message.source_index.get()).ok_or_else(|| {
                 AtmError::validation(format!(
-                    "sqlite mailbox metadata source index {} is out of range during contains filtering",
+                    "durable mailbox metadata source index {} is out of range during contains filtering",
                     message.source_index.get()
                 ))
 
@@ -160,7 +160,7 @@ pub(crate) fn load_durable_metadata_message<R: RetainedMailboxRuntime>(
         .get(selected_message.source_index.get())
         .ok_or_else(|| {
             AtmError::validation(format!(
-                "sqlite mailbox metadata source index {} is out of range during durable reload",
+                "durable mailbox metadata source index {} is out of range during durable reload",
                 selected_message.source_index.get()
             ))
         })?;

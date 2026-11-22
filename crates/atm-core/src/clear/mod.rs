@@ -172,7 +172,7 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
     let cutoff = cutoff_timestamp(query.older_than)?;
     let metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
-    let removable = sqlite_removable_messages(
+    let removable = durable_removable_messages(
         runtime,
         &query.home_dir,
         &target.team,
@@ -216,7 +216,7 @@ fn persist_deleted_messages<R: RetainedMailboxRuntime>(
     Ok(())
 }
 
-fn sqlite_removable_messages<R: RetainedMailboxRuntime>(
+fn durable_removable_messages<R: RetainedMailboxRuntime>(
     runtime: &R,
     home_dir: &std::path::Path,
     team: &TeamName,
@@ -238,7 +238,7 @@ fn sqlite_removable_messages<R: RetainedMailboxRuntime>(
         let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
         else {
             return Err(AtmError::validation(format!(
-                "sqlite mailbox metadata row {} could not be reloaded for clear",
+                "durable mailbox metadata row {} could not be reloaded for clear",
                 row.message_key
             )));
         };

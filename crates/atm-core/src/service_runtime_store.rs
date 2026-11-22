@@ -76,7 +76,7 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
         .cloned()
         .ok_or_else(|| {
             AtmError::daemon_unavailable(
-                "sqlite-backed retained runtime is unavailable because no default runtime factory is installed",
+                "durable retained runtime is unavailable because no default runtime factory is installed",
             )
 
         })
