@@ -68,6 +68,10 @@ their own prompts. The orchestration templates name this file as
 - `ceremony-finding-screen`: every sprint or plan QA round that has
   findings, over all of them, before the report is posted; never on fix
   verification, which files no new findings
+- `blastr`: every sprint or plan QA round that has findings, over all of
+  them, before filing; file a finding only as blastr's verdict allows
+  (fix-smaller files the smaller remedy, reject-out-of-diff files nothing
+  and lists the finding as pre-existing in the close)
 - Phase-end review: the initial implementation set plus `flaky-test-qa`
 - Run `flaky-test-qa` earlier when tests changed or instability is suspected
 - `schema-reviewer`: in plan review and phase-ending review whenever a
