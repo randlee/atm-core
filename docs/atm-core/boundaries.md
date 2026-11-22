@@ -154,33 +154,11 @@ Notes:
 
 ## MailStore
 
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/mail-store.toml](../../boundaries/atm-core/mail-store.toml)
-
-Transitional status:
-- active legacy compile bridge while retained production callers still route
-  through `atm-runtime::legacy_storage_adapters`
-- the authoritative long-term message contract lives in
-  `crates/atm-storage::MessageStore`
-
-Purpose:
-- Bridges legacy `atm-core::boundary::MailStore` callers onto the
-  storage-owned durable message lifecycle contract.
-
-Notes:
-- This stays the canonical durable truth behind send and receive workflows.
-- Retained command/runtime code now resolves mailbox durability only through the
-  installed store-backed runtime factory.
-- If that runtime factory is unavailable, ATM must fail closed with shared ATM
-  errors instead of selecting a second mailbox backend.
-- Compatibility inbox files remain ingress/export surfaces, not a parallel
-  durable mailbox implementation behind retained command logic.
-- After `Y.3`, retained `send` reaches compatibility rewrite only through the
-  post-commit runtime refresh owner; retained `ack` and `clear` no longer own
-  source-inbox compatibility rewrites.
-- `MailStoreDoctor` is the paired subsystem-owned diagnostics boundary for
-  path resolution, openability, schema/bootstrap/migration readiness, and
-  bounded store findings.
+Historical status:
+- The former `atm-core::boundary::MailStore` compile bridge is retired. The
+canonical durable mailbox contract is `atm_storage::MessageStore`; its
+[boundary record](../../boundaries/atm-storage/message-store.toml) owns the
+storage contract. Compatibility inbox files remain ingress/export surfaces.
 
 ## MailStoreDoctor
 
@@ -193,26 +171,11 @@ Purpose:
 
 ## RosterStore
 
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-core/roster-store.toml](../../boundaries/atm-core/roster-store.toml)
-
-Transitional status:
-- active legacy compile bridge while retained production callers still route
-  through `atm-runtime::legacy_storage_adapters`
-- the authoritative long-term roster contract lives in
-  `crates/atm-storage::RosterStore`
-
-Purpose:
-- Bridges legacy `atm-core::boundary::RosterStore` callers onto the
-  storage-owned durable roster state contract.
-
-Notes:
-- Runtime status remains outside durable roster ownership.
-- Durable roster truth is the canonical team/member model used for daemon
-  runtime hydration; `config.json` documents are ingress inputs and daemon-owned
-  live `pid` state stays outside this boundary.
-- `RosterStoreDoctor` is the paired subsystem-owned diagnostics boundary for
-  bounded roster-store findings.
+Historical status:
+- The former `atm-core::boundary::RosterStore` compile bridge is retired.
+Callers use the canonical `atm_storage::RosterStore` and its
+[boundary record](../../boundaries/atm-storage/roster-store.toml). Runtime
+status remains separate from durable roster ownership.
 
 ## RosterStoreDoctor
 
@@ -272,9 +235,8 @@ Owned shared contracts:
 Notes:
 - `RuntimeDoctorPorts` groups the installed storage-neutral doctor handles
   that callers consume after `atm-runtime` assembles the concrete backend.
-- `RuntimeAssembly` now carries the generic `StorageBackends<M, R>` seam plus
-  the legacy compile-bridge `MailStore` / `RosterStore` handles used during
-  AC.4 consumer cutover.
+- `RuntimeAssembly` provides the canonical storage-owned message and roster
+  contracts through its runtime assembly.
 - `AA.4` relies on these adjunct contracts to remove the direct
   `atm-daemon -> atm-storage-rusqlite` dependency while keeping shutdown finalization
   storage-neutral at the daemon boundary. Any retained lifecycle operation is

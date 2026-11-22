@@ -7,9 +7,9 @@ use tracing::warn;
 
 use super::BackupOutcome;
 use crate::address::validate_path_segment;
-use crate::boundary::RosterStore;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::persistence;
+use atm_storage::RosterStore;
 
 pub(super) fn backup_team_from_roster_store(
     roster_store: &dyn RosterStore,

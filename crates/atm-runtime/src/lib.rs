@@ -1,15 +1,11 @@
 #![forbid(unsafe_code)]
-#![allow(
-    deprecated,
-    reason = "Phase AC runtime composition still consumes the transitional shared storage traits while backend adoption settles"
-)]
 //! Backend-neutral runtime/store composition for ATM callers.
 
 mod composition;
 pub mod doctor_projection;
-mod legacy_storage_adapters;
 pub mod mailbox_runtime;
 mod peer_port;
+mod storage_backends;
 pub mod task_telemetry;
 
 pub use atm_storage::{
@@ -19,7 +15,7 @@ pub use atm_storage::{
 };
 pub use composition::{
     RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime, validate_enabled_peer_configuration,
-    validate_enabled_peer_configuration_for_reload, with_installed_roster_store,
+    validate_enabled_peer_configuration_for_reload,
 };
 pub use doctor_projection::{
     DoctorProjection, DoctorProjectionConfig, DoctorProjectionContext, StorageDoctorProjection,

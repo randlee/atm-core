@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "daemon bootstrap still forwards the legacy atm-core roster boundary while retained callers migrate to canonical storage seams"
-)]
-
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(unix)]
@@ -15,7 +10,7 @@ use std::time::Duration;
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::SERVER_REQUEST_BUDGET;
-use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
+use atm_core::boundary::{NonClaudeOutbound, TemplateComposer};
 use atm_core::error::{AtmError, AtmErrorCode};
 #[cfg(unix)]
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
@@ -36,6 +31,7 @@ use atm_http_runtime::{
     PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
+use atm_storage::RosterStore;
 use atm_storage_rusqlite::SqliteStorageFactory;
 use peer_tls::{LEGACY_LITERAL_IP_SKIP_ENV_VAR, LegacyLiteralIpPolicy, MtlsPeerStreamAdapter};
 use tokio::net::TcpStream;
@@ -1073,7 +1069,10 @@ fn default_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
 pub fn with_default_roster_store<T>(
     f: impl FnOnce(&(dyn RosterStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
-    atm_runtime::with_installed_roster_store(f)
+    atm_core::with_default_local_service_runtime(|runtime| {
+        let roster_store = runtime.shared_roster_store_arc();
+        f(roster_store.as_ref())
+    })
 }
 
 /// Open the default SQLite boundary and expose only the approved built-in

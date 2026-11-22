@@ -337,7 +337,7 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
 }
 
 struct ReadSelectionState {
-    metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+    metadata_rows: Vec<boundary::MailboxMetadataRow>,
     bucket_counts: BucketCounts,
     selected: Vec<ClassifiedMessage>,
     timed_out: bool,
@@ -453,7 +453,7 @@ fn resolve_read_display<R: RetainedMailboxRuntime>(
 }
 
 type WaitedSelection = Option<(
-    Vec<boundary::MailStoreMailboxMetadataRow>,
+    Vec<boundary::MailboxMetadataRow>,
     BucketCounts,
     Vec<ClassifiedMessage>,
 )>;
@@ -695,7 +695,7 @@ fn load_checked_read_metadata(
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
-) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+) -> Result<Vec<boundary::MailboxMetadataRow>, AtmError> {
     let metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
     Ok(metadata_rows)
 }
@@ -705,7 +705,7 @@ fn output_messages_from_metadata_selection<R: RetainedMailboxRuntime>(
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
-    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    metadata_rows: &[boundary::MailboxMetadataRow],
     selected: &[ClassifiedMessage],
     exact_message_id: Option<AtmMessageId>,
 ) -> Result<Vec<ClassifiedMessage>, AtmError> {
@@ -1359,8 +1359,8 @@ mod tests {
 
     struct ReadRuntime {
         roster_present: bool,
-        metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
-        metadata_row_batches: Option<Vec<Vec<boundary::MailStoreMailboxMetadataRow>>>,
+        metadata_rows: Vec<boundary::MailboxMetadataRow>,
+        metadata_row_batches: Option<Vec<Vec<boundary::MailboxMetadataRow>>>,
         message_records: HashMap<MessageKey, boundary::Message>,
         query_mailbox_metadata_rows_count: Arc<AtomicUsize>,
         load_message_record_count: Arc<AtomicUsize>,
@@ -1466,7 +1466,7 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _limit: Option<usize>,
-        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, crate::error::AtmError> {
+        ) -> Result<Vec<boundary::MailboxMetadataRow>, crate::error::AtmError> {
             if let Some(batches) = &self.metadata_row_batches {
                 let index = self
                     .query_mailbox_metadata_rows_count
@@ -1674,7 +1674,7 @@ mod tests {
         text: &str,
         summary: Option<&str>,
         from: &str,
-    ) -> (boundary::MailStoreMailboxMetadataRow, boundary::Message) {
+    ) -> (boundary::MailboxMetadataRow, boundary::Message) {
         let message_id = AtmMessageId::new();
         let message_key = MessageKey::new(format!("atm:{message_id}")).expect("message key");
         let envelope = InboxMessage {
@@ -1701,7 +1701,7 @@ mod tests {
             extra: serde_json::Map::new(),
         };
         (
-            boundary::MailStoreMailboxMetadataRow {
+            boundary::MailboxMetadataRow {
                 message_key: message_key.clone(),
                 message_id: Some(message_id),
                 parent_message_id: None,

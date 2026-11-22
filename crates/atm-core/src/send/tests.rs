@@ -14,9 +14,9 @@ use super::{
     persist_message, prepare_send_context, prepare_threaded_message,
 };
 use crate::boundary::{
-    HerdrNudgeTarget, LocalSteerTarget, LocalTmuxNudgeTarget, MailMessageState,
-    MailStoreMailboxMetadataRow, Message, MessageKey, NonClaudeOutboundDeliveryRequest,
-    PostSendBuiltInTarget, PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
+    HerdrNudgeTarget, LocalSteerTarget, LocalTmuxNudgeTarget, MailMessageState, MailboxMetadataRow,
+    Message, MessageKey, NonClaudeOutboundDeliveryRequest, PostSendBuiltInTarget,
+    PostSendHookEvent, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -179,7 +179,7 @@ pub(crate) struct TestRuntime {
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
     pub(crate) persisted_records: Mutex<Vec<Message>>,
-    pub(super) mailbox_rows: Mutex<Vec<MailStoreMailboxMetadataRow>>,
+    pub(super) mailbox_rows: Mutex<Vec<MailboxMetadataRow>>,
     pub(super) mailbox_metadata_queries: AtomicUsize,
     pub(super) persisted_states: Mutex<Vec<MailMessageState>>,
 }
@@ -413,7 +413,7 @@ impl RetainedMailboxRuntime for TestRuntime {
         _team: &TeamName,
         _agent: &AgentName,
         _limit: Option<usize>,
-    ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
+    ) -> Result<Vec<MailboxMetadataRow>, AtmError> {
         self.mailbox_metadata_queries
             .fetch_add(1, Ordering::Relaxed);
         Ok(self.mailbox_rows.lock().expect("mailbox rows lock").clone())

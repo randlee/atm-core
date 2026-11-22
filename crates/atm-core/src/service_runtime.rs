@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "the retained runtime bridge still consumes the transitional shared storage traits until the direct boundary fully replaces it"
-)]
-
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};

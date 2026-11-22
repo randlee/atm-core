@@ -111,7 +111,7 @@ pub fn clear_mail_with_origin(
 struct ClearRuntimeContext {
     actor: AgentName,
     target: ResolvedTarget,
-    metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+    metadata_rows: Vec<boundary::MailboxMetadataRow>,
     removable: Vec<(boundary::MessageKey, InboxMessage, MessageClass)>,
 }
 
@@ -221,7 +221,7 @@ fn durable_removable_messages<R: RetainedMailboxRuntime>(
     home_dir: &std::path::Path,
     team: &TeamName,
     agent: &AgentName,
-    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    metadata_rows: &[boundary::MailboxMetadataRow],
     cutoff: Option<DateTime<Utc>>,
     idle_only: bool,
 ) -> Result<Vec<(boundary::MessageKey, InboxMessage, MessageClass)>, AtmError> {
@@ -443,7 +443,7 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _limit: Option<usize>,
-        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+        ) -> Result<Vec<boundary::MailboxMetadataRow>, AtmError> {
             Ok(Vec::new())
         }
 

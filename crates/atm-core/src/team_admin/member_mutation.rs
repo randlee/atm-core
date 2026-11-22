@@ -4,7 +4,7 @@ use chrono::Utc;
 use serde::Serialize;
 use serde_json::json;
 
-use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
+use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
 use crate::caller_context::resolve_roster_alias;
 use crate::delivery_channel::{HerdrAgentName, HerdrSession, LocalMessageReceivedBackend};
 use crate::error::AtmError;
@@ -12,6 +12,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY};
 use crate::types::{AgentName, HostName, ModelName, PaneId, TeamName};
+use atm_storage::RosterStore;
 use atm_storage::task_state::{MAX_TASKS_METADATA_KEY, MaxTasks};
 
 use super::{filesystem, projection};
@@ -388,7 +389,7 @@ pub fn update_member_with_roster_store(
     apply_member_metadata_update(&mut existing_roster[member_index], &request);
     let proposed_member = existing_roster[member_index].clone();
     preflight_roster_unique_names(roster_store, &proposed_member, &existing_roster)?;
-    roster_store.replace_roster(&request.team, &existing_roster)?;
+    super::replace_roster(roster_store, &request.team, &existing_roster)?;
 
     Ok(UpdateMemberOutcome {
         action: "update-member",
@@ -415,7 +416,7 @@ pub fn remove_member_with_roster_store(
     validate_remove_member_caller(roster_store, &request)?;
     ensure_member_present(&existing_roster, &request.team, &request.member)?;
     existing_roster.retain(|entry| entry.agent_name != request.member);
-    roster_store.replace_roster(&request.team, &existing_roster)?;
+    super::replace_roster(roster_store, &request.team, &existing_roster)?;
 
     Ok(RemoveMemberOutcome {
         action: "remove-member",
@@ -607,7 +608,11 @@ fn validate_member_mutation_caller(
         )));
     }
 
-    let caller_entry = roster_store.query_membership(target_team, caller_identity)?;
+    let caller_entry = roster_store
+        .load_roster(target_team)?
+        .members
+        .into_iter()
+        .find(|member| member.agent_name == *caller_identity);
     if caller_entry.is_none() {
         return Err(AtmError::member_not_found(
             caller_identity.as_str(),
@@ -684,7 +689,7 @@ fn replace_roster_for_member_add(
     team: &TeamName,
     existing_roster: &[RosterEntry],
 ) -> Result<(), AtmError> {
-    roster_store.replace_roster(team, existing_roster)
+    super::replace_roster(roster_store, team, existing_roster)
 }
 
 fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMemberRequest) {
@@ -976,33 +981,20 @@ mod tests {
         }
     }
 
-    impl crate::boundary::sealed::Sealed for TestRosterStore {}
+    impl atm_storage::contract::sealed::Sealed for TestRosterStore {}
 
-    #[allow(
-        deprecated,
-        reason = "tests cover the retained member mutation boundary"
-    )]
     impl RosterStore for TestRosterStore {
-        fn replace_roster(&self, team: &TeamName, members: &[RosterEntry]) -> Result<(), AtmError> {
-            self.seed(team, members.to_vec());
+        fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
+            Ok(atm_storage::RosterSnapshot {
+                team_name: team.clone(),
+                members: self.members(team),
+                refreshed_at: None,
+            })
+        }
+        fn save_roster(&self, roster: &atm_storage::RosterSnapshot) -> Result<(), AtmError> {
+            self.seed(&roster.team_name, roster.members.clone());
             Ok(())
         }
-
-        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
-            Ok(self.members(team))
-        }
-
-        fn query_membership(
-            &self,
-            team: &TeamName,
-            member: &AgentName,
-        ) -> Result<Option<RosterEntry>, AtmError> {
-            Ok(self
-                .members(team)
-                .into_iter()
-                .find(|entry| entry.agent_name == *member))
-        }
-
         fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
             Ok(self
                 .teams
@@ -1011,18 +1003,6 @@ mod tests {
                 .keys()
                 .cloned()
                 .collect())
-        }
-
-        fn health_snapshot(
-            &self,
-            team: &TeamName,
-        ) -> Result<crate::boundary::RosterStoreHealthSnapshot, AtmError> {
-            Ok(crate::boundary::RosterStoreHealthSnapshot {
-                team: team.clone(),
-                member_count: self.members(team).len() as u64,
-                stale: false,
-                refreshed_at: None,
-            })
         }
     }
 
