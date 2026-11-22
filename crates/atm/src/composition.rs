@@ -13,7 +13,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
-use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
+use atm_core::observability::{CommandEvent, action_name, outcome_label};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::search::{SearchRequest, SearchResponse};
@@ -243,14 +243,6 @@ impl<'a> CliComposition<'a> {
         composition
     }
 
-    #[expect(
-        dead_code,
-        reason = "reserved for future phase that inspects the active transport variant"
-    )]
-    pub(crate) fn transport(&self) -> &(dyn DaemonApiClient + Send + Sync + 'a) {
-        self.async_transport.as_ref()
-    }
-
     pub(crate) async fn execute_request(
         &self,
         request: RequestEnvelope,
@@ -264,14 +256,6 @@ impl<'a> CliComposition<'a> {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
-    }
-
-    #[expect(
-        dead_code,
-        reason = "reserved for future phase that threads observability port into command helpers"
-    )]
-    pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
-        self.observability_port
     }
 
     pub(crate) async fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
@@ -465,10 +449,6 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(
-        dead_code,
-        reason = "AA.3 restores the direct local doctor path in DoctorCommand, but the daemon-routed doctor request seam remains covered by transport tests."
-    )]
     pub(crate) async fn doctor(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
         match self.execute_request(RequestEnvelope::Doctor(query)).await? {
             ResponseEnvelope::Doctor(mut report) => {

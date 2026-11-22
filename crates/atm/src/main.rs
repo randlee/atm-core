@@ -994,14 +994,7 @@ fn map_diagnostic_summary(
     }
 }
 
-#[allow(
-    unfulfilled_lint_expectations,
-    reason = "The adapter-port constructor is exercised in normal builds even though the dead-code expectation remains documented for narrower configurations."
-)]
-#[expect(
-    dead_code,
-    reason = "The adapter-port constructor remains part of the CLI observability surface even when specific test configurations do not call it directly."
-)]
+#[cfg(test)]
 pub(crate) fn new_adapter_port(
     home_dir: &std::path::Path,
     stderr_logs: bool,
@@ -1028,6 +1021,7 @@ pub(crate) fn new_adapter_port(
     )))
 }
 
+#[cfg(test)]
 fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
     match home::host_log_dir() {
         Ok(log_dir) => Ok(log_dir),
