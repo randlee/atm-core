@@ -17,13 +17,13 @@ impl ControlledHookDeadline {
     }
 
     /// Expires all waits already registered against this test-owned source.
-    #[allow(dead_code)] // Used by feature-gated timeout tests; composition only retains the source.
+    #[cfg(all(test, feature = "test-support"))]
     pub(crate) fn advance(&self) {
         self.generation
             .send_modify(|value| *value = value.wrapping_add(1));
     }
 
-    #[allow(dead_code)] // Used by feature-gated runner expiry tests.
+    #[cfg(all(test, feature = "test-support"))]
     pub(crate) async fn wait_for_process_registration(&self) {
         let mut registrations = self.process_registrations.subscribe();
         let observed = *registrations.borrow_and_update();
