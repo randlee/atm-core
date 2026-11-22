@@ -111,7 +111,7 @@ pub fn clear_mail_with_origin(
 struct ClearRuntimeContext {
     actor: AgentName,
     target: ResolvedTarget,
-    metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+    metadata_rows: Vec<boundary::MailboxMetadataRow>,
     removable: Vec<(boundary::MessageKey, InboxMessage, MessageClass)>,
 }
 
@@ -172,7 +172,7 @@ fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime
     let cutoff = cutoff_timestamp(query.older_than)?;
     let metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
-    let removable = sqlite_removable_messages(
+    let removable = durable_removable_messages(
         runtime,
         &query.home_dir,
         &target.team,
@@ -216,12 +216,12 @@ fn persist_deleted_messages<R: RetainedMailboxRuntime>(
     Ok(())
 }
 
-fn sqlite_removable_messages<R: RetainedMailboxRuntime>(
+fn durable_removable_messages<R: RetainedMailboxRuntime>(
     runtime: &R,
     home_dir: &std::path::Path,
     team: &TeamName,
     agent: &AgentName,
-    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    metadata_rows: &[boundary::MailboxMetadataRow],
     cutoff: Option<DateTime<Utc>>,
     idle_only: bool,
 ) -> Result<Vec<(boundary::MessageKey, InboxMessage, MessageClass)>, AtmError> {
@@ -238,7 +238,7 @@ fn sqlite_removable_messages<R: RetainedMailboxRuntime>(
         let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
         else {
             return Err(AtmError::validation(format!(
-                "sqlite mailbox metadata row {} could not be reloaded for clear",
+                "durable mailbox metadata row {} could not be reloaded for clear",
                 row.message_key
             )));
         };
@@ -443,7 +443,7 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             _limit: Option<usize>,
-        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+        ) -> Result<Vec<boundary::MailboxMetadataRow>, AtmError> {
             Ok(Vec::new())
         }
 

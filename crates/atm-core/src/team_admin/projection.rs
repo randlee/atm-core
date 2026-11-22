@@ -2,17 +2,19 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::boundary::{RosterEntry, RosterStore};
+use crate::boundary::RosterEntry;
 use crate::delivery_channel::local_message_received_backend;
 use crate::error::AtmError;
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
 #[cfg(test)]
 use crate::schema::{AgentMember, TeamConfig};
 use crate::schema::{HOME_DIR_METADATA_KEY, canonical_home_dir};
 #[cfg(test)]
 use crate::types::AgentId;
 use crate::types::AgentName;
+use atm_storage::RosterStore;
+
+const LEGACY_CWD_METADATA_KEY: &str = "cwd";
 
 use super::{MemberSummary, MembersList, MembersQuery};
 
@@ -39,7 +41,9 @@ pub(super) fn load_team_roster(
     roster_store: &dyn RosterStore,
     team: &crate::types::TeamName,
 ) -> Result<Vec<RosterEntry>, AtmError> {
-    roster_store.load_roster(team)
+    roster_store
+        .load_roster(team)
+        .map(|snapshot| snapshot.members)
 }
 
 #[cfg(test)]
@@ -153,10 +157,6 @@ fn agent_member_from_roster_record(record: &RosterEntry) -> Result<AgentMember, 
             extra.remove("agentId");
             extra.remove("joinedAt");
             extra.remove(HOME_DIR_METADATA_KEY);
-            #[allow(
-                deprecated,
-                reason = "Phase AD obsolete: derived compatibility field only"
-            )]
             extra.remove(LEGACY_CWD_METADATA_KEY);
             extra
         },
@@ -182,10 +182,6 @@ fn compatibility_extra_fields(
     extra.remove("agentId");
     extra.remove("joinedAt");
     extra.remove(HOME_DIR_METADATA_KEY);
-    #[allow(
-        deprecated,
-        reason = "Phase AD obsolete: derived compatibility field only"
-    )]
     extra.remove(LEGACY_CWD_METADATA_KEY);
     extra
 }

@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "the retained runtime bridge still consumes the transitional shared storage traits until the direct boundary fully replaces it"
-)]
-
 use std::path::Path;
 use std::sync::Arc;
 
@@ -76,7 +71,7 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
         .cloned()
         .ok_or_else(|| {
             AtmError::daemon_unavailable(
-                "sqlite-backed retained runtime is unavailable because no default runtime factory is installed",
+                "durable retained runtime is unavailable because no default runtime factory is installed",
             )
 
         })
@@ -102,7 +97,7 @@ pub(crate) trait RetainedMailboxRuntime {
         team: &TeamName,
         agent: &AgentName,
         limit: Option<usize>,
-    ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError>;
+    ) -> Result<Vec<boundary::MailboxMetadataRow>, AtmError>;
     fn query_mailbox_bucket_counts(
         &self,
         _team: &TeamName,
@@ -179,7 +174,7 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         team: &TeamName,
         agent: &AgentName,
         limit: Option<usize>,
-    ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+    ) -> Result<Vec<boundary::MailboxMetadataRow>, AtmError> {
         self.message_store
             .list_messages(&MessageQuery {
                 team: team.clone(),
@@ -321,9 +316,9 @@ fn shared_message_to_record(message: SharedMessage) -> boundary::Message {
     }
 }
 
-fn shared_message_to_metadata_row(message: SharedMessage) -> boundary::MailStoreMailboxMetadataRow {
+fn shared_message_to_metadata_row(message: SharedMessage) -> boundary::MailboxMetadataRow {
     let ack_requirement = derive_ack_requirement(&message.envelope);
-    boundary::MailStoreMailboxMetadataRow {
+    boundary::MailboxMetadataRow {
         message_key: message.message_key.clone(),
         message_id: message.envelope.message_id,
         parent_message_id: message.envelope.parent_message_id,

@@ -21,6 +21,17 @@ use std::sync::Mutex;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
 
+// Keep this SQLite-specific timeout beside its backend implementation rather
+// than in the backend-neutral storage contract. Reserve time within the
+// server's request budget for the transaction body, received-message hook,
+// and response encoding after a writer-lock wait.
+const BUSY_TIMEOUT_MARGIN: std::time::Duration = std::time::Duration::from_millis(500);
+const SQLITE_BUSY_TIMEOUT: std::time::Duration =
+    atm_storage::request_budget::SERVER_REQUEST_BUDGET.saturating_sub(BUSY_TIMEOUT_MARGIN);
+const _: () = assert!(
+    SQLITE_BUSY_TIMEOUT.as_nanos() < atm_storage::request_budget::SERVER_REQUEST_BUDGET.as_nanos()
+);
+
 // Search projection writes touch several B-trees and FTS segments inside the
 // sole durable writer transaction.  The SQLite default is only 2 MiB, which
 // churns cache pages under a concurrent admission burst.  This setting applies
@@ -613,13 +624,13 @@ pub(crate) fn configure_connection(
 ) -> Result<(), AtmError> {
     // Bound SQLite lock waits so contention returns an actionable ATM timeout
     // instead of hanging an adapter thread indefinitely. This is derived
-    // from `atm_storage::request_budget::SERVER_REQUEST_BUDGET` so a
+    // from the neutral `atm_storage::request_budget::SERVER_REQUEST_BUDGET` so a
     // writer-lock wait can never by itself consume the entire per-request
     // budget the Tokio/Axum server enforces around this call; a busy
     // timeout at or above that budget would mean a lock wait could never
     // succeed inside it.
     connection
-        .busy_timeout(atm_storage::request_budget::SQLITE_BUSY_TIMEOUT)
+        .busy_timeout(SQLITE_BUSY_TIMEOUT)
         .map_err(|error| sqlite_error(target, "failed to configure sqlite busy timeout", error))?;
     connection
         .pragma_update(None, "foreign_keys", "ON")
@@ -1296,6 +1307,11 @@ mod tests {
     }
     #[test]
     fn configured_busy_timeout_never_reaches_the_server_request_budget() {
+        assert_eq!(
+            SQLITE_BUSY_TIMEOUT,
+            atm_storage::request_budget::SERVER_REQUEST_BUDGET - BUSY_TIMEOUT_MARGIN
+        );
+
         let target = SharedDbTarget::InMemory {
             uri: format!(
                 "file:atm-storage-rusqlite-busy-timeout-{}?mode=memory&cache=shared",
@@ -1309,8 +1325,7 @@ mod tests {
             .expect("read configured sqlite busy_timeout");
 
         let expected_ms =
-            i64::try_from(atm_storage::request_budget::SQLITE_BUSY_TIMEOUT.as_millis())
-                .expect("busy timeout millis fit in i64");
+            i64::try_from(SQLITE_BUSY_TIMEOUT.as_millis()).expect("busy timeout millis fit in i64");
         assert_eq!(
             configured_ms, expected_ms,
             "sqlite busy_timeout must stay derived from the shared request budget"

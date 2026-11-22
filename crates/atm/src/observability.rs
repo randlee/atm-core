@@ -7,19 +7,8 @@ use atm_core::observability::{
 use atm_core::types::{AgentName, TeamName};
 
 use crate::constants::ATM_SERVICE_NAME;
-/// Structured CLI-owned observability construction options.
-///
-/// L.5 intentionally keeps the release surface narrow: one explicit
-/// construction entry point without introducing a broader builder or unified
-/// observer abstraction.
-#[allow(
-    unfulfilled_lint_expectations,
-    reason = "This release-surface options type is live in normal builds even though the dead-code expectation remains documented for narrower test configurations."
-)]
-#[expect(
-    dead_code,
-    reason = "CliObservabilityOptions is a release-surface construction option even when some binaries do not exercise every field."
-)]
+/// Options for constructing the CLI observability adapter in tests.
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CliObservabilityOptions {
     pub stderr_logs: bool,
@@ -46,8 +35,7 @@ impl CliObservability {
         Self { inner }
     }
 
-    /// Test-bootstrap escape hatch; production paths must use
-    /// `CliObservability::new`.
+    /// Test-bootstrap escape hatch for a no-op observability port.
     pub fn fallback() -> Self {
         Self {
             inner: Box::new(atm_core::observability::NullObservability),
@@ -119,14 +107,7 @@ impl CliObservability {
         }
     }
 
-    #[allow(
-        unfulfilled_lint_expectations,
-        reason = "The explicit constructor remains part of the production surface even when the dead-code expectation is not triggered in this build graph."
-    )]
-    #[expect(
-        dead_code,
-        reason = "CliObservability::new is retained as the explicit production constructor even when some tests bootstrap through alternate seams."
-    )]
+    #[cfg(test)]
     pub fn new(
         home_dir: &std::path::Path,
         options: CliObservabilityOptions,

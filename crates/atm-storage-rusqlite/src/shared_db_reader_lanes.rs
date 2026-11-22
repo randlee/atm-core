@@ -68,10 +68,7 @@ impl SharedDb {
         Self::assemble(target, observability, reader_lanes)
     }
 
-    #[allow(
-        dead_code,
-        reason = "Production construction delegates through SharedReadPoolConfig; this direct observability constructor remains a backend test seam."
-    )]
+    #[cfg(test)]
     pub(crate) fn open_with_observability(
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,

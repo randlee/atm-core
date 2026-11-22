@@ -4,9 +4,7 @@ use atm_storage::AtmError;
 use atm_storage::contract::MessageKey;
 use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName};
-use atm_storage::{AckRequirementState, InboxMessage, derive_ack_requirement};
 use rusqlite::params;
-use serde_json::Map;
 
 type MetadataQueryRow = (
     String,
@@ -141,68 +139,26 @@ fn decode_mailbox_metadata_row(
         source_chat_id,
         destination_chat_id,
         from_agent,
-        summary,
+        _summary,
         message_at,
-        read,
-        requires_ack,
+        _read,
+        _requires_ack,
         acknowledged_at,
         expires_at,
         task_id,
     ) = row;
-    let parsed_message_key = parse_message_key(&message_key)?;
-    let parsed_message_id = parse_optional_message_id(message_id, "message_id")?;
-    let parsed_parent_message_id =
-        parse_optional_message_id(parent_message_id, "parent_message_id")?;
-    let parsed_thread_mode = parse_thread_mode(thread_mode)?;
-    let parsed_from_agent = parse_from_agent(&from_agent, &message_key)?;
-    let parsed_source_chat_id = parse_optional_chat_id(source_chat_id, "source_chat_id")?;
-    let parsed_destination_chat_id =
-        parse_optional_chat_id(destination_chat_id, "destination_chat_id")?;
-    let parsed_message_at = parse_message_at(&message_at)?;
-    let parsed_acknowledged_at =
-        parse_optional_timestamp(acknowledged_at, "acknowledged_at timestamp")?;
-    let parsed_expires_at = parse_optional_timestamp(expires_at, "expires_at timestamp")?;
-    let parsed_task_id = parse_task_id(task_id, &message_key)?;
-    let ack_requirement = derive_ack_requirement(&InboxMessage {
-        from: parsed_from_agent.clone(),
-        source_chat_id: parsed_source_chat_id.clone(),
-        text: String::new(),
-        timestamp: parsed_message_at,
-        read: read != 0,
-        source_team: None,
-        destination_chat_id: parsed_destination_chat_id.clone(),
-        summary: summary.clone(),
-        message_id: parsed_message_id,
-        requires_ack: requires_ack != 0,
-        pending_ack_at: None,
-        acknowledged_at: parsed_acknowledged_at,
-        acknowledges_message_id: None,
-        parent_message_id: parsed_parent_message_id,
-        thread_mode: parsed_thread_mode,
-        expires_at: parsed_expires_at,
-        task_id: parsed_task_id.clone(),
-        placement: None,
-        task_op: None,
-        task_complete: None,
-        extra: Map::new(),
-    });
-    Ok(SqliteMailboxMetadataRow {
-        message_key: parsed_message_key,
-        message_id: parsed_message_id,
-        parent_message_id: parsed_parent_message_id,
-        thread_mode: parsed_thread_mode,
-        from_agent: parsed_from_agent,
-        source_chat_id: parsed_source_chat_id,
-        destination_chat_id: parsed_destination_chat_id,
-        summary,
-        message_at: parsed_message_at,
-        read: read != 0,
-        requires_ack: !matches!(ack_requirement, AckRequirementState::NotRequired),
-        pending_ack: matches!(ack_requirement, AckRequirementState::RequiredPending),
-        acknowledged_at: parsed_acknowledged_at,
-        expires_at: parsed_expires_at,
-        task_id: parsed_task_id,
-    })
+    parse_message_key(&message_key)?;
+    parse_optional_message_id(message_id, "message_id")?;
+    parse_optional_message_id(parent_message_id, "parent_message_id")?;
+    parse_thread_mode(thread_mode)?;
+    parse_from_agent(&from_agent, &message_key)?;
+    parse_optional_chat_id(source_chat_id, "source_chat_id")?;
+    parse_optional_chat_id(destination_chat_id, "destination_chat_id")?;
+    parse_message_at(&message_at)?;
+    parse_optional_timestamp(acknowledged_at, "acknowledged_at timestamp")?;
+    parse_optional_timestamp(expires_at, "expires_at timestamp")?;
+    parse_task_id(task_id, &message_key)?;
+    Ok(SqliteMailboxMetadataRow)
 }
 
 pub(crate) fn query_mailbox_metadata_rows(

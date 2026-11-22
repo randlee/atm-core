@@ -1613,6 +1613,59 @@ constructor = \"none\"""",
                 rendered,
             )
 
+    def test_retired_trait_distinguishes_same_named_foreign_trait(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            manifest = repo_root / "Cargo.toml"
+            manifest.write_text(manifest.read_text(encoding="utf-8").replace(
+                '"crates/atm-daemon"]', '"crates/atm-daemon", "crates/atm-storage"]'
+            ), encoding="utf-8")
+            storage = repo_root / "crates/atm-storage"
+            (storage / "src").mkdir(parents=True)
+            (storage / "Cargo.toml").write_text('[package]\nname = "atm-storage"\n', encoding="utf-8")
+            boundary = (
+                BASE_BOUNDARY_TOML.replace('trait = "MailStore"', 'trait = "RosterStore"')
+                .replace('owner_package = "atm-storage-rusqlite"', 'owner_package = "atm-core"')
+                .replace('owner_crate_path = "atm_storage_rusqlite"', 'owner_crate_path = "atm_core"')
+                .replace('state = "planned"', 'state = "retired"')
+                .replace('''[implementation]
+type = "SqliteMailStore"
+module = "atm_storage_rusqlite::mail_store"
+visibility = "private"
+constructor = "private"''', '''[implementation]
+visibility = "trait_only"
+constructor = "none"''')
+            )
+            boundary += "\n[extensions.atm]\nno_in_repo_implementation = true\n"
+            self.write_toml_record(repo_root, "atm-core", text=boundary)
+            source = repo_root / "crates/atm-storage-rusqlite/src/lib.rs"
+            source.write_text(
+                "use atm_storage::{RosterSnapshot, RosterStore};\n"
+                "impl RosterStore for ImportedStore {}\n"
+                "impl atm_storage::RosterStore for QualifiedStore {}\n",
+                encoding="utf-8",
+            )
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            self.assertEqual(collect_io_forbidden_source_violations(repo_root, records), [])
+            source.write_text(source.read_text(encoding="utf-8") +
+                              "impl atm_core::boundary::RosterStore for ForbiddenStore {}\n",
+                              encoding="utf-8")
+            rendered = [v.render() for v in collect_io_forbidden_source_violations(repo_root, records)]
+            self.assertTrue(any("declares no_in_repo_implementation" in v for v in rendered), rendered)
+            for declaration in (
+                "use atm_core as atm_storage;\n",
+                "extern crate atm_core as atm_storage;\n",
+            ):
+                source.write_text(
+                    declaration + "impl atm_storage::RosterStore for AliasedWorkspaceCrateStore {}\n",
+                    encoding="utf-8",
+                )
+                rendered = [v.render() for v in collect_io_forbidden_source_violations(repo_root, records)]
+                self.assertTrue(any("declares no_in_repo_implementation" in v for v in rendered), rendered)
+
     def test_no_in_repo_implementation_ignores_cfg_test_impl(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

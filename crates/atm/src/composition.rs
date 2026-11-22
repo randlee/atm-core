@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "the retained CLI composition still seeds and bridges legacy atm-core boundary stores during the Phase AC transition"
-)]
-
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -18,7 +13,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
-use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
+use atm_core::observability::{CommandEvent, action_name, outcome_label};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::search::{SearchRequest, SearchResponse};
@@ -248,14 +243,6 @@ impl<'a> CliComposition<'a> {
         composition
     }
 
-    #[expect(
-        dead_code,
-        reason = "reserved for future phase that inspects the active transport variant"
-    )]
-    pub(crate) fn transport(&self) -> &(dyn DaemonApiClient + Send + Sync + 'a) {
-        self.async_transport.as_ref()
-    }
-
     pub(crate) async fn execute_request(
         &self,
         request: RequestEnvelope,
@@ -269,14 +256,6 @@ impl<'a> CliComposition<'a> {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
-    }
-
-    #[expect(
-        dead_code,
-        reason = "reserved for future phase that threads observability port into command helpers"
-    )]
-    pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
-        self.observability_port
     }
 
     pub(crate) async fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
@@ -470,10 +449,6 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(
-        dead_code,
-        reason = "AA.3 restores the direct local doctor path in DoctorCommand, but the daemon-routed doctor request seam remains covered by transport tests."
-    )]
     pub(crate) async fn doctor(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
         match self.execute_request(RequestEnvelope::Doctor(query)).await? {
             ResponseEnvelope::Doctor(mut report) => {
@@ -775,7 +750,7 @@ pub(crate) mod tests {
 
         fn seed_sqlite_roster(&self, recipient: &str) {
             let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
-            let roster_store = assembly.roster_store_arc();
+            let roster_store = assembly.shared_roster_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let members = [TEST_SENDER, recipient, TEST_LEAD]
                 .into_iter()
@@ -791,7 +766,11 @@ pub(crate) mod tests {
                 })
                 .collect::<Vec<_>>();
             roster_store
-                .replace_roster(&team, &members)
+                .save_roster(&atm_storage::RosterSnapshot {
+                    team_name: team.clone(),
+                    members: members.clone(),
+                    refreshed_at: None,
+                })
                 .expect("seed sqlite roster");
         }
 
@@ -817,21 +796,20 @@ pub(crate) mod tests {
         pub(crate) fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
             if self.home_dir.join("runtime").join("mail.sqlite3").exists() {
                 let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
-                let mail_store = assembly.mail_store_arc();
+                let mail_store = assembly.message_store_arc();
                 let team = TEST_TEAM.parse::<TeamName>().expect("team");
                 let agent_name = agent.parse::<AgentName>().expect("agent");
-                let metadata_rows = mail_store
-                    .query_mailbox_metadata(&team, &agent_name, None)
-                    .expect("mailbox rows");
-                return metadata_rows
-                    .into_iter()
-                    .map(|row| {
-                        mail_store
-                            .load_message(&team, &agent_name, &row.message_key)
-                            .expect("message record")
-                            .expect("stored message")
-                            .envelope
+                return mail_store
+                    .list_messages(&atm_storage::MessageQuery {
+                        team,
+                        agent: agent_name,
+                        sender: None,
+                        task_id: None,
+                        limit: None,
                     })
+                    .expect("mailbox rows")
+                    .into_iter()
+                    .map(|message| message.envelope)
                     .collect();
             }
 
@@ -865,7 +843,7 @@ pub(crate) mod tests {
 
         fn seed_sqlite_mailbox(&self, agent: &str, messages: &[InboxMessage]) {
             let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
-            let mail_store = assembly.mail_store_arc();
+            let mail_store = assembly.message_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let agent_name = agent.parse::<AgentName>().expect("agent");
 
@@ -876,32 +854,13 @@ pub(crate) mod tests {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
                 mail_store
-                    .upsert_message(boundary::Message {
+                    .save_message(&boundary::Message {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         message_key: message_key.clone(),
                         envelope: message.clone(),
                     })
                     .expect("seed sqlite message");
-                mail_store
-                    .upsert_message_state(boundary::UpsertMailMessageStateRequest {
-                        team: team.clone(),
-                        agent: agent_name.clone(),
-                        actor: agent_name.clone(),
-                        state: boundary::MailMessageState {
-                            team: team.clone(),
-                            agent: agent_name.clone(),
-                            actor: agent_name.clone(),
-                            message_key,
-                            read: message.read,
-                            pending_ack_at: message.pending_ack_at,
-                            acknowledged_at: message.acknowledged_at,
-                            expires_at: message.expires_at,
-                            deleted_at: None,
-                            updated_at: Some(message.timestamp),
-                        },
-                    })
-                    .expect("seed sqlite message state");
             }
         }
 

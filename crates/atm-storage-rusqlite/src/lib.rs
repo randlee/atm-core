@@ -1,8 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(
-    deprecated,
-    reason = "Phase AC keeps the shared storage traits as a transitional contract while the backend boundary settles"
-)]
 
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
@@ -409,10 +405,7 @@ impl SqliteStorageFactory {
         self
     }
 
-    #[allow(
-        dead_code,
-        reason = "The composition root uses the default shared read-pool configuration until it is exposed through config-file parsing; this builder seam is intentionally testable now."
-    )]
+    #[cfg(test)]
     pub(crate) fn with_read_pool_config(
         mut self,
         read_pool_config: reader_pool::SharedReadPoolConfig,

@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "team_admin restore still uses the legacy atm-core roster boundary until the retained admin flows finish migrating to canonical shared storage seams"
-)]
-
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,11 +5,11 @@ use std::path::{Path, PathBuf};
 use chrono::Utc;
 use tracing::warn;
 
-use crate::boundary::RosterStore;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
+use atm_storage::RosterStore;
 
 use super::{RestoreOutcome, RestorePlan, RestoreRequest, RestoreResult};
 
@@ -525,15 +520,14 @@ mod tests {
         clear_restore_marker, prepare_restore_workspace, restore_marker_path, restore_staging_dir,
         restore_task_state_from_backup, restore_team_with_roster_store,
     };
-    use crate::boundary::{
-        self, RosterEntry, RosterHarness, RosterMemberKind, RosterStore, RosterStoreHealthSnapshot,
-    };
+    use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::TeamConfig;
     use crate::team_admin::{RestoreRequest, RestoreResult};
     use crate::test_support::{TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, TeamName};
+    use crate::types::TeamName;
+    use atm_storage::RosterStore;
 
     #[derive(Default)]
     struct RecordingRosterStore {
@@ -549,45 +543,29 @@ mod tests {
         }
     }
 
-    impl boundary::sealed::Sealed for RecordingRosterStore {}
+    impl atm_storage::contract::sealed::Sealed for RecordingRosterStore {}
 
     impl RosterStore for RecordingRosterStore {
-        fn replace_roster(&self, team: &TeamName, members: &[RosterEntry]) -> Result<(), AtmError> {
+        fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
+            Ok(atm_storage::RosterSnapshot {
+                team_name: team.clone(),
+                members: self
+                    .teams
+                    .lock()
+                    .expect("roster store lock")
+                    .get(team)
+                    .cloned()
+                    .unwrap_or_default(),
+                refreshed_at: None,
+            })
+        }
+        fn save_roster(&self, roster: &atm_storage::RosterSnapshot) -> Result<(), AtmError> {
             self.teams
                 .lock()
                 .expect("roster store lock")
-                .insert(team.clone(), members.to_vec());
+                .insert(roster.team_name.clone(), roster.members.clone());
             Ok(())
         }
-
-        fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
-            Ok(self
-                .teams
-                .lock()
-                .expect("roster store lock")
-                .get(team)
-                .cloned()
-                .unwrap_or_default())
-        }
-
-        fn query_membership(
-            &self,
-            team: &TeamName,
-            member: &AgentName,
-        ) -> Result<Option<RosterEntry>, AtmError> {
-            Ok(self
-                .teams
-                .lock()
-                .expect("roster store lock")
-                .get(team)
-                .and_then(|members| {
-                    members
-                        .iter()
-                        .find(|existing| existing.agent_name == *member)
-                        .cloned()
-                }))
-        }
-
         fn list_teams(&self) -> Result<Vec<TeamName>, AtmError> {
             Ok(self
                 .teams
@@ -596,22 +574,6 @@ mod tests {
                 .keys()
                 .cloned()
                 .collect())
-        }
-
-        fn health_snapshot(&self, team: &TeamName) -> Result<RosterStoreHealthSnapshot, AtmError> {
-            let member_count = self
-                .teams
-                .lock()
-                .expect("roster store lock")
-                .get(team)
-                .map(|members| members.len() as u64)
-                .unwrap_or_default();
-            Ok(RosterStoreHealthSnapshot {
-                team: team.clone(),
-                member_count,
-                stale: false,
-                refreshed_at: None,
-            })
         }
     }
 

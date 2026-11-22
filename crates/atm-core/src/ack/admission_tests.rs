@@ -300,10 +300,6 @@ struct InMemoryAsyncStore {
 
 impl atm_storage::contract::sealed::Sealed for InMemoryAsyncStore {}
 
-#[allow(
-    deprecated,
-    reason = "admission entry tests intentionally exercise the transitional shared storage traits"
-)]
 impl atm_storage::MessageStore for InMemoryAsyncStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError> {
         self.records
@@ -405,10 +401,6 @@ struct SingleMemberRoster;
 
 impl atm_storage::contract::sealed::Sealed for SingleMemberRoster {}
 
-#[allow(
-    deprecated,
-    reason = "admission entry tests intentionally exercise the transitional shared storage traits"
-)]
 impl atm_storage::RosterStore for SingleMemberRoster {
     fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
         Ok(atm_storage::RosterSnapshot {

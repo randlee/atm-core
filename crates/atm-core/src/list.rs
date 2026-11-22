@@ -816,12 +816,12 @@ mod tests {
     }
 
     enum TestMetadataRows {
-        Static(Vec<boundary::MailStoreMailboxMetadataRow>),
+        Static(Vec<boundary::MailboxMetadataRow>),
         Generated(usize),
     }
 
     impl TestMetadataRows {
-        fn query(&self, limit: Option<usize>) -> Vec<boundary::MailStoreMailboxMetadataRow> {
+        fn query(&self, limit: Option<usize>) -> Vec<boundary::MailboxMetadataRow> {
             match self {
                 Self::Static(rows) => rows
                     .iter()
@@ -928,7 +928,7 @@ mod tests {
             _team: &TeamName,
             _agent: &AgentName,
             limit: Option<usize>,
-        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+        ) -> Result<Vec<boundary::MailboxMetadataRow>, AtmError> {
             self.metadata_query_limits
                 .lock()
                 .expect("metadata query limits lock")
@@ -983,7 +983,7 @@ mod tests {
         text: &str,
         summary: Option<&str>,
         from: &str,
-    ) -> (boundary::MailStoreMailboxMetadataRow, boundary::Message) {
+    ) -> (boundary::MailboxMetadataRow, boundary::Message) {
         let message_id = AtmMessageId::new();
         let message_key = MessageKey::new(format!("atm:{message_id}")).expect("message key");
         let envelope = InboxMessage {
@@ -1010,7 +1010,7 @@ mod tests {
             extra: Map::new(),
         };
         (
-            boundary::MailStoreMailboxMetadataRow {
+            boundary::MailboxMetadataRow {
                 message_key: message_key.clone(),
                 message_id: Some(message_id),
                 parent_message_id: None,
@@ -1038,11 +1038,11 @@ mod tests {
 
     const LARGE_MAILBOX_ROW_COUNT: usize = 500_000;
 
-    fn generated_metadata_row(index: usize) -> boundary::MailStoreMailboxMetadataRow {
+    fn generated_metadata_row(index: usize) -> boundary::MailboxMetadataRow {
         let pending_ack =
             (LARGE_MAILBOX_ROW_COUNT - 4..LARGE_MAILBOX_ROW_COUNT - 2).contains(&index);
         let read = index >= LARGE_MAILBOX_ROW_COUNT - 2;
-        boundary::MailStoreMailboxMetadataRow {
+        boundary::MailboxMetadataRow {
             message_key: MessageKey::new(format!("atm:scale-{index}")).expect("message key"),
             message_id: None,
             parent_message_id: None,
@@ -1063,7 +1063,7 @@ mod tests {
 
     fn runtime_with_messages(
         _tempdir: &tempfile::TempDir,
-        rows_and_messages: Vec<(boundary::MailStoreMailboxMetadataRow, boundary::Message)>,
+        rows_and_messages: Vec<(boundary::MailboxMetadataRow, boundary::Message)>,
         roster_present: bool,
     ) -> (ListRuntime, Arc<AtomicUsize>) {
         let load_message_record_count = Arc::new(AtomicUsize::new(0));

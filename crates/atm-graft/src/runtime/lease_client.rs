@@ -63,13 +63,6 @@ pub(crate) trait GraftReceiverLeaseClient: Send + Sync {
 }
 
 pub(crate) const GRAFT_LEASE_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
-#[expect(
-    dead_code,
-    reason = "ADR-056-reserved lease TTL window; retained as documentation for \
-              the intended lease staleness bound until a consumer (e.g. a \
-              window-gated fallback path) is implemented"
-)]
-pub(crate) const ACTIVE_LEASE_WINDOW: Duration = Duration::from_secs(15);
 /// Caps how long one blocking lease announce/refresh/unregister client call is
 /// allowed to hold up the caller before this loop gives up waiting on it and
 /// moves on. A stalled (not merely slow) daemon must not compound across the

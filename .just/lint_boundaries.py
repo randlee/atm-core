@@ -283,9 +283,8 @@ SCB_CONFIG_SEND_PATTERNS = (
     "load_claude_team_config_document(",
     ".load_team_config(",
 )
-SCB_CONFIG_BOUNDARY_FILES = (
-    Path("crates/atm-core/src/boundary_support.rs"),
-)
+# The former config-ingress helper was removed with its dead-code cleanup.
+SCB_CONFIG_BOUNDARY_FILES: tuple[Path, ...] = ()
 # Guard the retired duplicate if it is reintroduced, without requiring it to exist.
 SCB_CONFIG_RETIRED_HELPER_FILE = Path("crates/atm-core/src/direct_boundaries.rs")
 SCB_CONFIG_CANONICAL_HELPER_FILE = Path("crates/atm-core/src/boundary_support.rs")
@@ -1186,7 +1185,7 @@ def resolve_module_file(repo_root: Path, module_path: str) -> list[Path]:
     return [path for path in candidates if path.exists()]
 
 
-def trait_implementation_source_files(repo_root: Path, trait: str | None) -> list[Path]:
+def trait_implementation_source_files(repo_root: Path, trait: str | None, owner: str | None) -> list[Path]:
     """Return production source files that implement a trait-only boundary.
 
     This supports both the explicit ``no_in_repo_implementation`` assertion
@@ -1198,18 +1197,55 @@ def trait_implementation_source_files(repo_root: Path, trait: str | None) -> lis
     if trait is None:
         return []
     pattern = re.compile(
-        rf"\bimpl(?:\s*<[^>{{;]*>)?\s+(?:[A-Za-z0-9_:<> ,]+::)?{re.escape(trait)}"
+        rf"\bimpl(?:\s*<[^>{{;]*>)?\s+(?P<trait_path>(?:[A-Za-z0-9_]+::)*{re.escape(trait)})"
         r"(?:\s*<[^>{{;]*>)?\s+for\b"
     )
     paths: list[Path] = []
+    workspace_aliases = manifest_by_alias(repo_root)
     for info in manifest_info(repo_root):
         for path in source_files_for_crate(info):
             lines = path.read_text(encoding="utf-8").splitlines()
             test_scope = rust_file_test_scope(path, lines)
-            if any(
-                not test_scope[index] and not is_comment_line(line) and pattern.search(line)
-                for index, line in enumerate(lines)
-            ):
+            matches = [
+                match for index, line in enumerate(lines)
+                if not test_scope[index] and not is_comment_line(line)
+                and (match := pattern.search(line)) is not None
+            ]
+            if not matches:
+                continue
+            # Resolve explicit use declarations when an impl uses a bare name.
+            # Unknown or ambiguous imports remain matches, preserving the
+            # conservative check for potentially unauthorized implementations.
+            production = "\n".join(
+                line for index, line in enumerate(lines)
+                if not test_scope[index] and not is_comment_line(line)
+            )
+            # A declared alias can shadow a workspace crate name. Keep only
+            # the alias names; this check does not resolve Rust paths.
+            declared_aliases = set(re.findall(
+                r"\b(?:use\s+[A-Za-z_][A-Za-z0-9_]*|extern\s+crate\s+[A-Za-z_][A-Za-z0-9_]*)"
+                r"\s+as\s+([A-Za-z_][A-Za-z0-9_]*)\b",
+                production,
+            ))
+            imports = set()
+            for use in re.finditer(r"\buse\s+([A-Za-z_][A-Za-z0-9_]*)::([^;]+);", production, re.DOTALL):
+                if re.search(rf"\b{re.escape(trait)}\b(?!\s+as\s+\w+)", use.group(2)):
+                    imports.add(use.group(1))
+
+            def matches_owner(match: re.Match[str]) -> bool:
+                if owner is None:
+                    return True
+                components = match.group("trait_path").split("::")
+                if len(components) > 1:
+                    prefix = components[0]
+                    return (
+                        prefix not in workspace_aliases
+                        or prefix == owner
+                        or prefix in declared_aliases and prefix in workspace_aliases
+                    )
+                return len(imports) != 1 or not imports.issubset(workspace_aliases) or owner in imports
+
+            if any(matches_owner(match) for match in matches):
                 paths.append(path)
     return paths
 
@@ -1336,7 +1372,10 @@ def collect_io_forbidden_source_violations(
             )
             derived_source_paths = [path for path, _ in derived_source_regions]
             implementation_source_paths = (
-                trait_implementation_source_files(repo_root, record.public_trait)
+                trait_implementation_source_files(
+                    repo_root, record.public_trait,
+                    record.owner_crate_path if record.no_in_repo_implementation else None,
+                )
                 if record.implementation_visibility == "trait_only"
                 else []
             )

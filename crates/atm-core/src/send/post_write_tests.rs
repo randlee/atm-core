@@ -6,7 +6,7 @@ use super::tests::{
 use super::{
     DuplicateWriteDisposition, SendMessageSource, persist_message, write_mail_with_runtime_impl,
 };
-use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
+use crate::boundary::{MailboxMetadataRow, Message, MessageKey};
 use crate::caller_context::ActivityObservation;
 use crate::delivery_policy::DeliveryHarnessPath;
 use crate::error_codes::AtmErrorCode;
@@ -233,7 +233,7 @@ fn authenticated_peer_ack_message_uses_the_shared_write_pipeline() {
         .mailbox_rows
         .lock()
         .expect("mailbox rows")
-        .push(MailStoreMailboxMetadataRow {
+        .push(MailboxMetadataRow {
             message_key: source.message_key,
             message_id: Some(acknowledged_message_id),
             parent_message_id: None,
@@ -337,7 +337,7 @@ fn failed_peer_route_leaves_acknowledgement_source_pending() {
         .mailbox_rows
         .lock()
         .expect("mailbox rows lock")
-        .push(MailStoreMailboxMetadataRow {
+        .push(MailboxMetadataRow {
             message_key: source_key.clone(),
             message_id: Some(source_id),
             parent_message_id: None,
