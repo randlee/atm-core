@@ -283,9 +283,8 @@ SCB_CONFIG_SEND_PATTERNS = (
     "load_claude_team_config_document(",
     ".load_team_config(",
 )
-SCB_CONFIG_BOUNDARY_FILES = (
-    Path("crates/atm-core/src/boundary_support.rs"),
-)
+# The former config-ingress helper was removed with its dead-code cleanup.
+SCB_CONFIG_BOUNDARY_FILES: tuple[Path, ...] = ()
 # Guard the retired duplicate if it is reintroduced, without requiring it to exist.
 SCB_CONFIG_RETIRED_HELPER_FILE = Path("crates/atm-core/src/direct_boundaries.rs")
 SCB_CONFIG_CANONICAL_HELPER_FILE = Path("crates/atm-core/src/boundary_support.rs")

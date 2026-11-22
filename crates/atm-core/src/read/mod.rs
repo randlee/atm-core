@@ -816,14 +816,12 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        BucketCounts, ClassifiedMessage, PeekQuery, ReadQuery, canonicalize_roster_aliases,
-        metadata_selection, peek_mail_with_runtime_impl, read_mail_with_runtime_impl, state,
+        ClassifiedMessage, PeekQuery, ReadQuery, canonicalize_roster_aliases, metadata_selection,
+        peek_mail_with_runtime_impl, read_mail_with_runtime_impl, state,
     };
     use crate::boundary::{self, MessageKey, RosterEntry, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
-    use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
-    use crate::mailbox::surface::dedupe_message_id_surface;
     use crate::observability::NullObservability;
     use crate::read::selection;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -832,10 +830,7 @@ mod tests {
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::threading::ThreadIndex;
-    use crate::types::{
-        AgentName, ChatId, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
-        TaskId, TeamName,
-    };
+    use crate::types::{AgentName, ChatId, CommandAction, IsoTimestamp, ReadSelection, TeamName};
 
     #[test]
     fn read_ingress_canonicalizes_alias_caller_target_and_from_filter() {
@@ -1073,53 +1068,6 @@ mod tests {
         );
     }
 
-    fn selection_state_for_source_files(
-        source_files: &[SourceFile],
-        query: &ReadQuery,
-        seen_watermark: Option<IsoTimestamp>,
-    ) -> (BucketCounts, Vec<ClassifiedMessage>) {
-        let classified_all =
-            classify_all(apply_idle_notification_dedup(dedupe_message_id_surface(
-                merged_surface(source_files),
-                |message: &SourcedMessage| message.envelope.message_id,
-                |message: &SourcedMessage| message.envelope.timestamp,
-            )));
-        if let Some(message_id) = query.mailbox.message_id_filter {
-            let selected = classified_all
-                .iter()
-                .filter(|message| message.envelope.message_id == Some(message_id))
-                .filter(|message| {
-                    crate::read::filters::matches_participant_filter(
-                        message,
-                        query.mailbox.participant_filter.as_ref(),
-                    )
-                })
-                .cloned()
-                .collect();
-            let logical_current = selection::logical_current_messages(classified_all);
-            let bucket_counts = selection::bucket_counts_for(&logical_current);
-            return (bucket_counts, selected);
-        }
-        let logical_current = selection::logical_current_messages(classified_all);
-        let bucket_counts = selection::bucket_counts_for(&logical_current);
-        let filtered = crate::read::filters::apply_contains_filter(
-            metadata_selection::apply_metadata_only_filters(
-                logical_current,
-                query.mailbox.sender_filter.as_ref(),
-                query.mailbox.participant_filter.as_ref(),
-                query.mailbox.timestamp_filter,
-                query.mailbox.task_filter.as_ref(),
-            ),
-            query.mailbox.contains_filter.as_deref(),
-        );
-        let selected = selection::select_classified_messages(
-            &filtered,
-            query.mailbox.selection_mode,
-            seen_watermark,
-        );
-        (bucket_counts, selected)
-    }
-
     fn selected_after_filters(
         messages: &[SourcedMessage],
         query: &ReadQuery,
@@ -1155,124 +1103,6 @@ mod tests {
         )
     }
 
-    fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
-        source_files
-            .iter()
-            .flat_map(|source| {
-                source
-                    .messages
-                    .iter()
-                    .cloned()
-                    .enumerate()
-                    .map(|(source_index, envelope)| SourcedMessage {
-                        envelope,
-                        source_path: source.path.clone(),
-                        source_index: source_index.into(),
-                    })
-            })
-            .collect()
-    }
-
-    fn apply_idle_notification_dedup(deduped: Vec<SourcedMessage>) -> Vec<SourcedMessage> {
-        let latest_idle_for_sender = messages_from_idle_sender(&deduped);
-
-        deduped
-            .into_iter()
-            .enumerate()
-            .filter_map(|(index, message)| {
-                dedupe_idle_notifications(index, &message, &latest_idle_for_sender)
-                    .then_some(message)
-            })
-            .collect()
-    }
-
-    fn dedupe_idle_notifications(
-        index: usize,
-        message: &SourcedMessage,
-        latest_idle_for_sender: &HashMap<AgentName, usize>,
-    ) -> bool {
-        if !is_unread_idle_notification(&message.envelope) {
-            return true;
-        }
-
-        idle_sender(&message.envelope)
-            .and_then(|sender| latest_idle_for_sender.get(&sender))
-            .map(|keep_index| *keep_index == index)
-            .unwrap_or(true)
-    }
-
-    fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<AgentName, usize> {
-        let mut latest_idle_for_sender = HashMap::new();
-
-        for (index, message) in messages.iter().enumerate() {
-            if !is_unread_idle_notification(&message.envelope) {
-                continue;
-            }
-
-            if let Some(sender) = idle_sender(&message.envelope) {
-                latest_idle_for_sender
-                    .entry(sender)
-                    .and_modify(|keep_index| *keep_index = index)
-                    .or_insert(index);
-            }
-        }
-
-        latest_idle_for_sender
-    }
-
-    fn is_unread_idle_notification(message: &InboxMessage) -> bool {
-        !message.read && idle_notification_sender(message).is_some()
-    }
-
-    fn idle_sender(message: &InboxMessage) -> Option<AgentName> {
-        idle_notification_sender(message)
-    }
-
-    fn idle_notification_sender(message: &InboxMessage) -> Option<AgentName> {
-        let value = match serde_json::from_str::<Value>(&message.text) {
-            Ok(value) => value,
-            Err(error) => {
-                if message.text.contains("idle_notification") {
-                    tracing::debug!(
-                        %error,
-                        recovery = "Repair or remove the malformed Claude idle-notification JSON. ATM will continue treating the record as a normal mailbox message.",
-                        message_text = %message.text,
-                        "ignoring malformed idle-notification JSON while classifying read surface"
-                    );
-                }
-                return None;
-            }
-        };
-
-        if value.get("type").and_then(Value::as_str) != Some("idle_notification") {
-            return None;
-        }
-
-        match value.get("from").and_then(Value::as_str) {
-            Some(sender) => match sender.parse() {
-                Ok(sender) => Some(sender),
-                Err(error) => {
-                    tracing::debug!(
-                        %error,
-                        recovery = "Ensure Claude idle-notification payloads include a valid ATM agent name in `from`. ATM will continue treating the record as a normal mailbox message.",
-                        sender,
-                        message_text = %message.text,
-                        "ignoring malformed idle-notification payload with invalid `from`"
-                    );
-                    None
-                }
-            },
-            None => {
-                tracing::debug!(
-                    recovery = "Ensure Claude idle-notification payloads include a string `from` field. ATM will continue treating the record as a normal mailbox message.",
-                    message_text = %message.text,
-                    "ignoring malformed idle-notification payload missing string `from`"
-                );
-                None
-            }
-        }
-    }
-
     fn classify_all(messages: Vec<SourcedMessage>) -> Vec<ClassifiedMessage> {
         let projected = messages
             .iter()
@@ -1297,14 +1127,6 @@ mod tests {
                 }
             })
             .collect()
-    }
-
-    fn sourced_message(index: usize, text: &str) -> SourcedMessage {
-        SourcedMessage {
-            envelope: message(text, AtmMessageId::new(), None, None, false),
-            source_path: PathBuf::from(format!("{TEST_SENDER}.json")),
-            source_index: index.into(),
-        }
     }
 
     fn message_at(
@@ -1728,48 +1550,6 @@ mod tests {
     }
 
     #[test]
-    fn idle_notification_sender_returns_none_for_malformed_json() {
-        let malformed = format!(
-            r#"{{"type":"idle_notification","from":"{}""#,
-            ROLE_TEAM_LEAD
-        );
-        let message = sourced_message(0, &malformed);
-
-        assert_eq!(idle_notification_sender(&message.envelope), None);
-    }
-
-    #[test]
-    fn malformed_idle_notification_adjacent_to_valid_records_remains_readable_and_classifiable() {
-        let malformed = format!(
-            r#"{{"type":"idle_notification","from":"{}""#,
-            ROLE_TEAM_LEAD
-        );
-        let messages = vec![
-            sourced_message(0, &malformed),
-            sourced_message(1, "normal unread"),
-        ];
-        let query = base_read_query();
-
-        let selected = std::panic::catch_unwind(|| selected_after_filters(&messages, &query, None))
-            .expect("malformed idle notification should not panic");
-
-        assert_eq!(selected.len(), 2);
-        let valid = selected
-            .iter()
-            .find(|message| message.envelope.text == "normal unread")
-            .expect("valid record");
-        assert_eq!(valid.class, MessageClass::Unread);
-        assert_eq!(valid.bucket, DisplayBucket::Unread);
-
-        let malformed = selected
-            .iter()
-            .find(|message| message.envelope.text == malformed)
-            .expect("malformed record");
-        assert_eq!(malformed.class, MessageClass::Unread);
-        assert_eq!(malformed.bucket, DisplayBucket::Unread);
-    }
-
-    #[test]
     fn read_query_new_rejects_invalid_target_before_command_execution() {
         let tempdir = tempdir().expect("tempdir");
         let error = ReadQuery::new(
@@ -1791,218 +1571,6 @@ mod tests {
         .expect_err("invalid target");
 
         assert!(error.message().contains("agent name"));
-    }
-
-    #[test]
-    fn actionable_selection_prefers_terminal_thread_message() {
-        let root_id = AtmMessageId::new();
-        let terminal_id = AtmMessageId::new();
-        let root_at =
-            IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::seconds(1));
-        let terminal_at = IsoTimestamp::now();
-        let source_files = vec![SourceFile {
-            path: PathBuf::from("recipient.json"),
-            messages: vec![
-                message_at("root", root_id, None, None, false, root_at),
-                message_at(
-                    "detail",
-                    terminal_id,
-                    Some(root_id),
-                    Some(ThreadMode::AddDetails),
-                    false,
-                    terminal_at,
-                ),
-            ],
-        }];
-        let mut query = base_read_query();
-        query.mailbox.selection_mode = ReadSelection::Actionable;
-
-        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
-
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].envelope.message_id, Some(terminal_id));
-    }
-
-    #[test]
-    fn actionable_selection_preserves_parent_context_for_add_details() {
-        let root_id = AtmMessageId::new();
-        let detail_id = AtmMessageId::new();
-        let source_files = vec![SourceFile {
-            path: PathBuf::from("recipient.json"),
-            messages: vec![
-                message("root context", root_id, None, None, false),
-                message(
-                    "follow-up detail",
-                    detail_id,
-                    Some(root_id),
-                    Some(ThreadMode::AddDetails),
-                    false,
-                ),
-            ],
-        }];
-        let mut query = base_read_query();
-        query.mailbox.selection_mode = ReadSelection::Actionable;
-        query.mailbox.contains_filter = Some("root context".to_string());
-
-        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
-
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].envelope.message_id, Some(detail_id));
-        assert_eq!(
-            selected[0].envelope.text,
-            "root context\n\nfollow-up detail"
-        );
-    }
-
-    #[test]
-    fn list_read_and_peek_share_hidden_envelope_and_bucket_selection_rules() {
-        let root_id = AtmMessageId::new();
-        let detail_id = AtmMessageId::new();
-        let ephemeral_id = AtmMessageId::new();
-        let source_files = vec![SourceFile {
-            path: PathBuf::from("recipient.json"),
-            messages: vec![
-                message("root context", root_id, None, None, false),
-                message(
-                    "follow-up detail",
-                    detail_id,
-                    Some(root_id),
-                    Some(ThreadMode::AddDetails),
-                    false,
-                ),
-                InboxMessage {
-                    expires_at: Some(IsoTimestamp::from_datetime(
-                        chrono::Utc::now() + chrono::Duration::minutes(30),
-                    )),
-                    ..message("ephemeral", ephemeral_id, None, None, true)
-                },
-            ],
-        }];
-        let mut query = base_read_query();
-        query.mailbox.selection_mode = ReadSelection::Actionable;
-
-        let (read_counts, read_selected) =
-            selection_state_for_source_files(&source_files, &query, None);
-
-        let (mut root_row, _) = metadata_row("root context", None, TEST_SENDER);
-        root_row.message_id = Some(root_id);
-        let (mut detail_row, _) = metadata_row("follow-up detail", None, TEST_SENDER);
-        detail_row.message_id = Some(detail_id);
-        detail_row.parent_message_id = Some(root_id);
-        detail_row.thread_mode = Some(ThreadMode::AddDetails);
-        let (mut ephemeral_row, _) = metadata_row("ephemeral", None, TEST_SENDER);
-        ephemeral_row.message_id = Some(ephemeral_id);
-        ephemeral_row.read = true;
-        ephemeral_row.expires_at = Some(IsoTimestamp::from_datetime(
-            chrono::Utc::now() + chrono::Duration::minutes(30),
-        ));
-        let rows = vec![root_row, detail_row, ephemeral_row];
-
-        // `peek` takes the metadata projection through the same retained
-        // read-selection seam. `list` consumes the canonical selection module
-        // directly; compare all three forms on one hidden/threaded fixture.
-        let (peek_counts, peek_selected) =
-            metadata_selection::selection_state_for_mailbox_metadata_rows(&rows, &query, None);
-        let list_classified = metadata_selection::classify_mailbox_metadata_rows(&rows);
-        let list_current = selection::logical_current_messages(list_classified);
-        let list_counts = selection::bucket_counts_for(&list_current);
-        let list_selected = selection::select_classified_messages(
-            &list_current,
-            query.mailbox.selection_mode,
-            None,
-        );
-
-        for selected in [&read_selected, &peek_selected, &list_selected] {
-            assert_eq!(selected.len(), 1);
-            assert_eq!(selected[0].envelope.message_id, Some(detail_id));
-            assert_eq!(selected[0].bucket, DisplayBucket::Unread);
-        }
-        assert_eq!(read_counts.unread, 1);
-        assert_eq!(peek_counts.unread, 1);
-        assert_eq!(list_counts.unread, 1);
-        assert_eq!(read_counts.history, 0);
-        assert_eq!(peek_counts.history, 0);
-        assert_eq!(list_counts.history, 0);
-    }
-
-    #[test]
-    fn actionable_selection_does_not_preserve_parent_context_for_supersede() {
-        let root_id = AtmMessageId::new();
-        let supersede_id = AtmMessageId::new();
-        let source_files = vec![SourceFile {
-            path: PathBuf::from("recipient.json"),
-            messages: vec![
-                message("root context", root_id, None, None, false),
-                message(
-                    "replacement instruction",
-                    supersede_id,
-                    Some(root_id),
-                    Some(ThreadMode::Supersede),
-                    false,
-                ),
-            ],
-        }];
-        let mut query = base_read_query();
-        query.mailbox.selection_mode = ReadSelection::Actionable;
-        query.mailbox.contains_filter = Some("root context".to_string());
-
-        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
-
-        assert!(selected.is_empty());
-    }
-
-    #[test]
-    fn successor_after_read_stays_actionable_for_add_details() {
-        let root_id = AtmMessageId::new();
-        let detail_id = AtmMessageId::new();
-        let source_files = vec![SourceFile {
-            path: PathBuf::from("recipient.json"),
-            messages: vec![
-                message("root context", root_id, None, None, true),
-                message(
-                    "follow-up detail",
-                    detail_id,
-                    Some(root_id),
-                    Some(ThreadMode::AddDetails),
-                    false,
-                ),
-            ],
-        }];
-        let mut query = base_read_query();
-        query.mailbox.selection_mode = ReadSelection::Actionable;
-
-        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
-
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].envelope.message_id, Some(detail_id));
-        assert_eq!(selected[0].bucket, DisplayBucket::Unread);
-    }
-
-    #[test]
-    fn successor_after_read_stays_actionable_for_supersede() {
-        let root_id = AtmMessageId::new();
-        let supersede_id = AtmMessageId::new();
-        let source_files = vec![SourceFile {
-            path: PathBuf::from("recipient.json"),
-            messages: vec![
-                message("root context", root_id, None, None, true),
-                message(
-                    "replacement instruction",
-                    supersede_id,
-                    Some(root_id),
-                    Some(ThreadMode::Supersede),
-                    false,
-                ),
-            ],
-        }];
-        let mut query = base_read_query();
-        query.mailbox.selection_mode = ReadSelection::Actionable;
-
-        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
-
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].envelope.message_id, Some(supersede_id));
-        assert_eq!(selected[0].bucket, DisplayBucket::Unread);
     }
 
     #[test]
@@ -2047,69 +1615,6 @@ mod tests {
 
         assert!(selected_after_filters(&messages, &actionable, None).is_empty());
         assert!(selected_after_filters(&messages, &all, None).is_empty());
-    }
-
-    #[test]
-    fn task_filter_matches_logical_current_terminal_message_only() {
-        let root_id = AtmMessageId::new();
-        let terminal_id = AtmMessageId::new();
-        let task_id: TaskId = "TASK-77".parse().expect("task id");
-        let root_at =
-            IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::seconds(1));
-        let terminal_at = IsoTimestamp::now();
-        let source_files = vec![SourceFile {
-            path: PathBuf::from("recipient.json"),
-            messages: vec![
-                InboxMessage {
-                    task_id: Some(task_id.clone()),
-                    ..message_at("root", root_id, None, None, false, root_at)
-                },
-                InboxMessage {
-                    task_id: Some(task_id.clone()),
-                    ..message_at(
-                        "terminal",
-                        terminal_id,
-                        Some(root_id),
-                        Some(ThreadMode::AddDetails),
-                        false,
-                        terminal_at,
-                    )
-                },
-            ],
-        }];
-        let mut query = base_read_query();
-        query.mailbox.task_filter = Some(task_id);
-
-        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
-
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].envelope.message_id, Some(terminal_id));
-    }
-
-    #[test]
-    fn exact_message_id_bypasses_logical_current_collapse() {
-        let root_id = AtmMessageId::new();
-        let terminal_id = AtmMessageId::new();
-        let source_files = vec![SourceFile {
-            path: PathBuf::from("recipient.json"),
-            messages: vec![
-                message("root", root_id, None, None, false),
-                message(
-                    "terminal",
-                    terminal_id,
-                    Some(root_id),
-                    Some(ThreadMode::AddDetails),
-                    false,
-                ),
-            ],
-        }];
-        let mut query = base_read_query();
-        query.mailbox.message_id_filter = Some(root_id);
-
-        let (_counts, selected) = selection_state_for_source_files(&source_files, &query, None);
-
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].envelope.message_id, Some(root_id));
     }
 
     #[test]

@@ -72,32 +72,6 @@ pub fn canonical_graft_root(metadata_json: &Map<String, Value>) -> Option<HomeDi
     None
 }
 
-#[allow(
-    deprecated,
-    reason = "Phase AD obsolete: bounded fallback remains only to read pre-AD compatibility metadata."
-)]
-pub fn compatible_home_dir(metadata_json: &Map<String, Value>) -> Option<HomeDirPath> {
-    if let Some(home_dir) = canonical_home_dir(metadata_json) {
-        tracing::debug!(
-            compatible_home_dir_source = "home_dir",
-            "resolved compatible home directory from home_dir metadata"
-        );
-        return Some(home_dir);
-    }
-    if let Some(legacy_cwd) = metadata_home_dir(metadata_json, LEGACY_CWD_METADATA_KEY) {
-        tracing::debug!(
-            compatible_home_dir_source = "legacy_cwd_fallback",
-            "resolved compatible home directory from legacy cwd fallback"
-        );
-        return Some(legacy_cwd);
-    }
-    tracing::debug!(
-        compatible_home_dir_source = "missing",
-        "compatible home directory is absent"
-    );
-    None
-}
-
 fn metadata_home_dir(metadata_json: &Map<String, Value>, key: &str) -> Option<HomeDirPath> {
     metadata_json
         .get(key)
@@ -174,7 +148,7 @@ mod tests {
 
     use super::{
         AgentMember, AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY,
-        canonical_graft_root, canonical_home_dir, compatible_home_dir,
+        canonical_graft_root, canonical_home_dir,
     };
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
@@ -376,42 +350,5 @@ mod tests {
             "graft_root_source",
             "home_dir_fallback"
         ));
-    }
-
-    #[test]
-    #[allow(
-        deprecated,
-        reason = "The test covers the retained pre-AD compatibility fallback."
-    )]
-    fn compatible_home_dir_logs_legacy_fallback_source() {
-        let metadata = Map::from_iter([(
-            super::LEGACY_CWD_METADATA_KEY.to_string(),
-            Value::from("/legacy/cwd"),
-        )]);
-        let events = capture_fields(|| compatible_home_dir(&metadata));
-        assert!(contains_field(
-            &events,
-            "compatible_home_dir_source",
-            "legacy_cwd_fallback"
-        ));
-    }
-
-    #[test]
-    #[allow(
-        deprecated,
-        reason = "Phase AD obsolete: bounded fallback remains only for pre-AD compatibility metadata."
-    )]
-    fn compatible_home_dir_falls_back_to_legacy_cwd() {
-        let metadata = Map::from_iter([(
-            super::LEGACY_CWD_METADATA_KEY.to_string(),
-            Value::from("/repo/cwd"),
-        )]);
-
-        assert_eq!(
-            compatible_home_dir(&metadata)
-                .as_ref()
-                .map(HomeDirPath::as_path),
-            Some(Path::new("/repo/cwd"))
-        );
     }
 }

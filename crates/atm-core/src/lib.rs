@@ -11,10 +11,6 @@ pub mod atm_temp;
 pub mod atm_temp_sweeper;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
-/// Hidden daemon-private ingress/export helpers used by concrete boundary
-/// adapter crates.
-#[doc(hidden)]
-pub mod boundary_support;
 /// Shared caller-context resolution and ATM-owned environment parsing helpers.
 pub mod caller_context;
 /// Mailbox cleanup workflows for read and acknowledged messages.
@@ -45,8 +41,6 @@ pub mod herdr_configured;
 /// Public ATM home and team-path resolution helpers.
 pub mod home;
 pub mod hook;
-/// Internal identity resolution and hook lookup helpers.
-pub(crate) mod identity;
 /// Bounded metadata queue query workflows and output models.
 pub mod list;
 /// Runtime-local endpoint metadata and capability validation for local HTTP.

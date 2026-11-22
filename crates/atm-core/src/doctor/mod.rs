@@ -1532,10 +1532,6 @@ mod tests {
         }
     }
 
-    #[allow(
-        deprecated,
-        reason = "doctor tests intentionally exercise the transitional shared storage traits"
-    )]
     impl atm_storage::MessageStore for UnusedMailStore {
         fn save_message(&self, _message: &atm_storage::Message) -> Result<(), AtmError> {
             unreachable!("doctor tests do not touch the mail store boundary")
@@ -1576,10 +1572,6 @@ mod tests {
         }
     }
 
-    #[allow(
-        deprecated,
-        reason = "doctor tests intentionally exercise the transitional shared storage traits"
-    )]
     impl atm_storage::RosterStore for TestRosterStore {
         fn load_roster(&self, team: &TeamName) -> Result<atm_storage::RosterSnapshot, AtmError> {
             Ok(atm_storage::RosterSnapshot {
