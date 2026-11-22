@@ -54,6 +54,74 @@
             "plan_questions": "atm-te91.1",
             "dev_questions": "atm-te91.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:36+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)"
         }
       ]
     },
@@ -115,12 +183,78 @@
             "plan_questions": "atm-d42v.1",
             "dev_questions": "atm-d42v.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:36+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)"
         }
       ]
     },
@@ -175,6 +309,74 @@
             "plan_questions": "atm-u194.1",
             "dev_questions": "atm-u194.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:36+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)"
         }
       ]
     },
@@ -236,6 +438,74 @@
             "plan_questions": "atm-w53l.1",
             "dev_questions": "atm-w53l.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:12+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:36+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 adds bead models and the size check; the child-bead planning guidance is bt-2's (atm-bt-2.sub-1)"
         }
       ]
     },
@@ -290,6 +560,63 @@
             "plan_questions": "atm-w0y3.1",
             "dev_questions": "atm-w0y3.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
         }
       ]
     },
@@ -351,12 +678,78 @@
             "plan_questions": "atm-umb4.1",
             "dev_questions": "atm-umb4.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -418,12 +811,67 @@
             "plan_questions": "atm-66vl.1",
             "dev_questions": "atm-66vl.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:13+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
         }
       ]
     },
@@ -485,12 +933,78 @@
             "plan_questions": "atm-kha6.1",
             "dev_questions": "atm-kha6.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -552,12 +1066,78 @@
             "plan_questions": "atm-plmh.1",
             "dev_questions": "atm-plmh.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:14+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:59:46+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -619,12 +1199,78 @@
             "plan_questions": "atm-ff88.1",
             "dev_questions": "atm-ff88.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -693,12 +1339,78 @@
             "plan_questions": "atm-m1dj.1",
             "dev_questions": "atm-m1dj.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:15+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -760,12 +1472,78 @@
             "plan_questions": "atm-q2b3.1",
             "dev_questions": "atm-q2b3.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch how a dev runs, merges, tests, rebases or closes child beads; that is atm-bt-2.sub-2"
         }
       ]
     },
@@ -827,12 +1605,78 @@
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938) and plans no sanity beads; sprint sanity beads are atm-bt-2 scope",
           "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:16+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:59:46+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938) and plans no sanity beads; sprint sanity beads are atm-bt-2 scope"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3"
         }
       ]
     },
@@ -887,6 +1731,74 @@
             "plan_questions": "atm-ggaq.1",
             "dev_questions": "atm-ggaq.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:59:46+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the sanity bead or commit recording; that is atm-bt-2.sub-3"
         }
       ]
     },
@@ -955,12 +1867,78 @@
             "plan_questions": "atm-p2kg.1",
             "dev_questions": "atm-p2kg.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the QA bead or QA run; that is atm-bt-2.sub-3",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 does not touch the QA bead or QA run; that is atm-bt-2.sub-3"
         }
       ]
     },
@@ -1015,6 +1993,63 @@
             "plan_questions": "atm-nmob.1",
             "dev_questions": "atm-nmob.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:17+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:18+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:18+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:18+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:18+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
         }
       ]
     },
@@ -1083,12 +2118,1166 @@
             "plan_questions": "atm-eynt.1",
             "dev_questions": "atm-eynt.2"
           }
+        },
+        {
+          "at": "2026-11-16T07:31:18+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:18+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:18+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:18+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:18+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-18T03:57:37+00:00",
+          "event": "excluded",
+          "item": "atm-bt-8",
+          "reason": "bt-8 writes no subtask prompts or task text; its planning.md edit is two sentences",
+          "replaced": false
         }
       ],
       "exclude": [
         {
           "item": "atm-bt-1",
           "reason": "atm-bt-1 ships the ceremony screen (#938); child-bead planning, dev and QA flow is atm-bt-2"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 fixes named bugs and does not touch child-bead planning, dev, sanity or QA flow"
+        },
+        {
+          "item": "atm-bt-8",
+          "reason": "bt-8 writes no subtask prompts or task text; its planning.md edit is two sentences"
+        }
+      ]
+    },
+    {
+      "id": "ANC-018",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Every sprint and subtask bead's deliverable text must fit within jev_client's 96,000-byte Jev request limit (MAX_REQUEST_BYTES).",
+      "quote": "I don't want sprints larger than Jev context.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "summary": "Sprint fits one Jev call",
+      "scope": "edits validate-plan, bead_schema.py, or the plan size rule in planning.md",
+      "deterministic_check": "validate-plan test: an oversized sprint bead fails with the typed oversize code",
+      "fixtures": {
+        "pass": [
+          "Every phase-bt sprint and subtask bead's deliverable text fits within MAX_REQUEST_BYTES: `validate-plan --phase bt` passes, and test_validate_plan_oversized_sprint shows an oversized sprint is refused."
+        ],
+        "fail": [
+          "A sprint's deliverable text may exceed the Jev request limit; sanity splits it."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-u5h6",
+        "plan_questions": "atm-u5h6.1",
+        "dev_questions": "atm-u5h6.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-16T07:30:15+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-16T07:30:15+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:30:42+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-u5h6",
+            "plan_questions": "atm-u5h6.1",
+            "dev_questions": "atm-u5h6.2"
+          }
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:55:17+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        }
+      ]
+    },
+    {
+      "id": "ANC-019",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "A sprint larger than the Jev context must be reduced by splitting it into subtask beads or by moving its code samples or reference documentation into reference beads.",
+      "quote": "I don't want sprints larger than Jev context.  Sub-tasks OR reference beads with code samples (or reference documentation) which would be skipped by Jev.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "summary": "Subtask or reference split",
+      "scope": "edits the oversize refusal text in validate-plan or jev_client, or the size rule in planning.md",
+      "deterministic_check": "grep the refusal fix text and planning.md for both remedies",
+      "fixtures": {
+        "pass": [
+          "The oversize refusal tells the planner to split the sprint into subtask beads or move its code samples into reference beads; test_oversize_refusal_names_both_remedies asserts both remedies."
+        ],
+        "fail": [
+          "The oversize refusal tells the planner to trim the deliverable text until it fits."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-opat",
+        "plan_questions": "atm-opat.1",
+        "dev_questions": "atm-opat.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-16T07:30:16+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-16T07:30:16+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:30:44+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-opat",
+            "plan_questions": "atm-opat.1",
+            "dev_questions": "atm-opat.2"
+          }
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:07+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        }
+      ]
+    },
+    {
+      "id": "ANC-020",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The content of a reference bead (a bead holding code samples or reference documentation for a sprint) must never be included in a request sent to the Jev sanity judge.",
+      "quote": "I don't want sprints larger than Jev context.  Sub-tasks OR reference beads with code samples (or reference documentation) which would be skipped by Jev.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "summary": "Jev skips reference beads",
+      "scope": "edits jev_client.py request building or the reference bead model",
+      "deterministic_check": "test: a deliverable with a linked reference bead produces a Jev request that omits the reference text",
+      "fixtures": {
+        "pass": [
+          "jev_client builds the Jev request from the deliverable text and diff only; test_reference_bead_not_in_jev_request asserts the request omits every linked reference bead's text."
+        ],
+        "fail": [
+          "jev_client appends each linked reference bead's text to the Jev request evidence."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-zazu",
+        "plan_questions": "atm-zazu.1",
+        "dev_questions": "atm-zazu.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-16T07:30:16+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-16T07:30:16+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:30:46+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-zazu",
+            "plan_questions": "atm-zazu.1",
+            "dev_questions": "atm-zazu.2"
+          }
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:08+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        }
+      ]
+    },
+    {
+      "id": "ANC-021",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Work too large for one 96,000-byte Jev request must be split into subtask beads when the plan is written; jev_client must never cut it into diff slices.",
+      "quote": "This won't work. We need to split into sub-tasks",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "summary": "No diff slicing",
+      "scope": "edits jev_client.py oversize handling or part evaluation",
+      "deterministic_check": "grep jev_client.py: no split_request or part evaluation; test: oversized request returns the typed refusal",
+      "fixtures": {
+        "pass": [
+          "Work too large for one Jev request is split into subtask beads in the plan; split_request is deleted from jev_client, and test_oversized_request_refused shows an oversized request returns the typed refusal."
+        ],
+        "fail": [
+          "An oversized request is cut by file and hunk into parts that are judged separately."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-v6qf",
+        "plan_questions": "atm-v6qf.1",
+        "dev_questions": "atm-v6qf.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-16T07:30:16+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-16T07:30:16+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:30:47+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-v6qf",
+            "plan_questions": "atm-v6qf.1",
+            "dev_questions": "atm-v6qf.2"
+          }
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:59+00:00",
+          "event": "updated",
+          "fields": [
+            "statement"
+          ],
+          "previous_statement": "Work too large for one 96,000-byte Jev request must be split into subtask beads."
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        }
+      ]
+    },
+    {
+      "id": "ANC-022",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The bead schema (bead_schema.py) must define a dedicated checked model for the stage:subtask bead stage.",
+      "quote": "subtask and reference should both show up.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "summary": "Subtask stage typed",
+      "scope": "edits bead_schema.py stage models",
+      "deterministic_check": "MODELS_BY_STAGE maps both labels to dedicated models; schema test rejects a malformed subtask and reference bead",
+      "fixtures": {
+        "pass": [
+          "MODELS_BY_STAGE maps stage:subtask to SubtaskBead, which checks its parent and difficulty; test_subtask_bead_model rejects a subtask bead without a parent."
+        ],
+        "fail": [
+          "stage:subtask stays mapped to the plain Bead model."
+        ]
+      },
+      "question_overrides": {},
+      "version": 3,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-eb8i",
+        "plan_questions": "atm-eb8i.1",
+        "dev_questions": "atm-eb8i.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-16T07:30:16+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-16T07:30:16+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:30:49+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-eb8i",
+            "plan_questions": "atm-eb8i.1",
+            "dev_questions": "atm-eb8i.2"
+          }
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:09+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "kind",
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        }
+      ]
+    },
+    {
+      "id": "ANC-023",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each sprint's diff must add only the code its named issues require, with no new scripts, checks or process steps.",
+      "quote": "Keep them short and focused.  This repo already has 10x more code than it should.",
+      "kind": "prohibition",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "summary": "Short focused sprints",
+      "scope": "every bt-3..bt-8 sprint diff",
+      "deterministic_check": "diff review: every added file and function traces to a named issue's deliverable",
+      "fixtures": {
+        "pass": [
+          "`git diff --stat main...HEAD` lists only sanity-split and tests/test_sanity_split.py: the two functions issue #986 names and their tests, with no new script, check or process step."
+        ],
+        "fail": [
+          "The sprint also adds a helper script and a new lint check for related cases."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-uav5",
+        "plan_questions": "atm-uav5.1",
+        "dev_questions": "atm-uav5.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-16T07:30:17+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-16T07:30:17+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:30:51+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-uav5",
+            "plan_questions": "atm-uav5.1",
+            "dev_questions": "atm-uav5.2"
+          }
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:55:17+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling"
+        },
+        {
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling"
+        }
+      ]
+    },
+    {
+      "id": "ANC-024",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "Each of issues #938, #937, #979, #986, #928, #922, #907, #906, #904, #932 and #935 must be named by at least one sprint in the phase-bt plan.",
+      "quote": "Create sprints for all these items as outlined above.  Keep them short and focused.",
+      "kind": "structural",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "summary": "Only named issues",
+      "scope": "the phase-bt plan: the titles of its atm-bt-* sprint beads",
+      "deterministic_check": "every issue in the release list (#979 #986 #928 #922 #907 #906 #904 #932 #935 #937 #938) appears in at least one atm-bt-* sprint bead title",
+      "fixtures": {
+        "pass": [
+          "`bd list --label phase-bt --type task` shows a sprint naming each issue: bt-1 #938; bt-2 and bt-8 #937; bt-3 #979 #986; bt-4 #928; bt-5 #922 #907 #906; bt-6 #904 #932; bt-7 #935."
+        ],
+        "fail": [
+          "No phase-bt sprint names #935."
+        ]
+      },
+      "question_overrides": {},
+      "version": 9,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-sozk",
+        "plan_questions": "atm-sozk.1",
+        "dev_questions": "atm-sozk.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-16T07:30:17+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-16T07:30:17+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:30:53+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-sozk",
+            "plan_questions": "atm-sozk.1",
+            "dev_questions": "atm-sozk.2"
+          }
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:11+00:00",
+          "event": "excluded",
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "kind",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:55:18+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:55:52+00:00",
+          "event": "updated",
+          "fields": [
+            "deterministic_check",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:56:08+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:56:22+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-17T01:41:16+00:00",
+          "event": "updated",
+          "fields": [
+            "statement",
+            "fixtures"
+          ],
+          "previous_statement": "Each issue in the release list must have a sprint in the phase-bt plan that names it."
+        },
+        {
+          "at": "2026-11-18T03:50:35+00:00",
+          "event": "updated",
+          "fields": [
+            "scope"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling"
+        },
+        {
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 was planned 2026-11-07 under ANC-001..017, before the 2026-11-15 release-list ruling"
+        }
+      ]
+    },
+    {
+      "id": "ANC-025",
+      "source_type": "ANC",
+      "source_ref": null,
+      "statement": "The bead schema (bead_schema.py) must define a dedicated checked model for the stage:reference bead stage.",
+      "quote": "subtask and reference should both show up.",
+      "kind": "directive",
+      "stated_by": "Rand",
+      "stated_at": "2026-11-15",
+      "context": "planning session 2026-11-15 (phase-bt release scope)",
+      "summary": "Reference stage typed",
+      "scope": "edits bead_schema.py stage models",
+      "deterministic_check": "MODELS_BY_STAGE maps stage:reference to a dedicated model; schema test rejects a malformed reference bead",
+      "fixtures": {
+        "pass": [
+          "MODELS_BY_STAGE maps stage:reference to ReferenceBead, which checks the bead it is linked from; test_reference_bead_model rejects an unlinked reference bead."
+        ],
+        "fail": [
+          "bead_schema.py has no stage:reference model; reference material is stored as a plain stage:plan bead."
+        ]
+      },
+      "question_overrides": {},
+      "version": 4,
+      "status": "locked",
+      "promoted_to": null,
+      "beads": {
+        "anchor": "atm-8sxr",
+        "plan_questions": "atm-8sxr.1",
+        "dev_questions": "atm-8sxr.2"
+      },
+      "history": [
+        {
+          "at": "2026-11-16T07:30:31+00:00",
+          "event": "created",
+          "status": "locked"
+        },
+        {
+          "at": "2026-11-16T07:30:32+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:30:54+00:00",
+          "event": "beads_set",
+          "beads": {
+            "anchor": "atm-8sxr",
+            "plan_questions": "atm-8sxr.1",
+            "dev_questions": "atm-8sxr.2"
+          }
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:31:10+00:00",
+          "event": "excluded",
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8",
+          "replaced": false
+        },
+        {
+          "at": "2026-11-16T07:52:31+00:00",
+          "event": "updated",
+          "fields": [
+            "kind",
+            "fixtures"
+          ]
+        },
+        {
+          "at": "2026-11-16T07:55:18+00:00",
+          "event": "updated",
+          "fields": [
+            "fixtures"
+          ]
+        }
+      ],
+      "exclude": [
+        {
+          "item": "atm-bt-1",
+          "reason": "atm-bt-1 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-2",
+          "reason": "atm-bt-2 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-3",
+          "reason": "atm-bt-3 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-4",
+          "reason": "atm-bt-4 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-5",
+          "reason": "atm-bt-5 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-6",
+          "reason": "atm-bt-6 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
+        },
+        {
+          "item": "atm-bt-7",
+          "reason": "atm-bt-7 does not touch sprint sizing, bead stages or jev_client; that work is atm-bt-8"
         }
       ]
     }
