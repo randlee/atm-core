@@ -204,9 +204,10 @@ python .claude/skills/daemon-switch/scripts/daemon-switch.py switch `
 `windows-provision` creates an on-logon, interactive-user task whose only
 executable action is `C:\\atm-active\\atm-daemon.exe`. `switch`, `restart`,
 and `quiesce` refuse a task whose action names a worktree or any other direct
-binary. Corporate policy may require running only `windows-provision` from an
-elevated terminal; do not work around that policy by registering an SCM service
-or launching a second daemon.
+binary. Creating or replacing a task owned by the current user does not require
+an elevated terminal. Replacing a task created by an administrator may require
+elevation; do not work around that policy by registering an SCM service or
+launching a second daemon.
 
 The typed `temporary-launch` overlay is not supported by this task backend.
 It fails closed instead of modifying a task action outside its scoped

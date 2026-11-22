@@ -2106,6 +2106,88 @@ class HerdrRestartTests(unittest.TestCase):
             ],
         )
 
+    def test_default_aliases_compare_endpoint_fields_and_ignore_group_metadata(self) -> None:
+        default = {
+            "session": None,
+            "provenance": "herdr_default",
+            "transport": "socket",
+            "endpoint": r"\\.\pipe\%APPDATA%/herdr/herdr.sock",
+            "binary": r"C:\herdr\herdr.exe",
+            "state": {"kind": "ok", "version": "0.9.5", "protocol": 22},
+            "capabilities": {"live_handoff": False},
+            "members": ["implicit-a"],
+            "findings": [],
+        }
+        alias = {**default, "session": "default", "provenance": "session", "members": ["explicit-b"], "findings": [{"code": "group-only"}]}
+        payload = self.doctor_payload(default, alias)
+
+        self.assertEqual(len(DAEMON_SWITCH.herdr_restart_endpoints(self.cli, doctor_payload=payload)), 1)
+        with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=payload):
+            self.assertEqual([entry.name for entry in DAEMON_SWITCH.herdr_entry_endpoints(self.cli, install=True)], ["default"])
+
+        conflicting_updates = [
+            {"state": {**default["state"], "version": "0.9.6"}},
+            {"state": {**default["state"], "protocol": 23}},
+            {"state": {**default["state"], "kind": "error"}},
+            {"capabilities": {"live_handoff": True}},
+            {"transport": "tcp"},
+            {"endpoint": r"\\.\pipe\%APPDATA%/herdr/other.sock"},
+        ]
+        for update in conflicting_updates:
+            with self.subTest(update=update):
+                conflicting_alias = {**alias, **update}
+                with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "duplicate default endpoints disagree"):
+                    DAEMON_SWITCH.herdr_restart_endpoints(self.cli, doctor_payload=self.doctor_payload(default, conflicting_alias))
+                with mock.patch.object(DAEMON_SWITCH, "doctor", return_value=self.doctor_payload(default, conflicting_alias)):
+                    with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "duplicate default endpoints disagree"):
+                        DAEMON_SWITCH.herdr_entry_endpoints(self.cli, install=True)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+class CrossPlatformProvisionRegressionTests(unittest.TestCase):
+    def test_default_doctor_projection_on_each_platform(self) -> None:
+        for system, address in (("Windows", r"\\\\.\\pipe\\%APPDATA%/herdr/herdr.sock"), ("Darwin", "/tmp/herdr.sock"), ("Linux", "/run/user/1000/herdr.sock")):
+            endpoint = {"session": None, "provenance": "herdr_default", "transport": "socket", "endpoint": address, "state": {"kind": "ok"}, "capabilities": {}}
+            payload = {"herdr": {"configured": True, "endpoints": [endpoint, dict(endpoint, session="default", provenance="session")]}}
+            with self.subTest(system=system), mock.patch.object(DAEMON_SWITCH.platform, "system", return_value=system), mock.patch.object(DAEMON_SWITCH, "doctor", return_value=payload):
+                self.assertEqual([e.name for e in DAEMON_SWITCH.herdr_entry_endpoints(Path("atm"), install=True)], ["default"])
+                self.assertEqual([e.name for e in DAEMON_SWITCH.herdr_restart_endpoints(Path("atm"))], ["default"])
+                self.assertEqual(DAEMON_SWITCH.herdr_restart_pending_endpoints(Path("atm")), [])
+                endpoint["provenance"] = "socket_path"
+                with self.assertRaisesRegex(DAEMON_SWITCH.HerdrEntryError, "externally owned"):
+                    DAEMON_SWITCH.select_herdr_restart_endpoint(Path("atm"), "default")
+
+    def test_windows_provision_xml_and_non_windows_refusal(self) -> None:
+        import service_control
+        from xml.etree import ElementTree
+        args = argparse.Namespace(yes=True, service="atm-daemon")
+        daemon = Path("selector & daemon.exe")
+        links = lambda _args: (Path("atm.exe"), daemon)
+        captured = []
+        def run(command, **_kwargs):
+            captured.append(ElementTree.parse(command[command.index("/XML") + 1]).getroot())
+            return subprocess.CompletedProcess(command, 0, "ok", "")
+        with mock.patch.object(service_control.platform, "system", return_value="Windows"), mock.patch.dict(os.environ, {"USERDOMAIN": "DOMAIN", "USERNAME": "user"}), mock.patch.object(service_control, "require_executable"), mock.patch.object(service_control, "require_windows_task_selector") as check, mock.patch.object(service_control, "run", side_effect=run):
+            service_control.provision_windows_task(args, links)
+            check.assert_called_once_with(args, links)
+        root = captured[0]
+        def value(path):
+            return root.findtext("/".join("{*}" + part for part in path.split("/")))
+        self.assertIsNotNone(root.find("{*}Triggers/{*}LogonTrigger"))
+        self.assertEqual(value("Triggers/LogonTrigger/UserId"), r"DOMAIN\user")
+        self.assertEqual(value("Principals/Principal/UserId"), r"DOMAIN\user")
+        self.assertEqual(value("Principals/Principal/LogonType"), "InteractiveToken")
+        self.assertEqual(value("Principals/Principal/RunLevel"), "LeastPrivilege")
+        self.assertEqual(value("Settings/ExecutionTimeLimit"), "PT0S")
+        self.assertEqual(value("Settings/RestartOnFailure/Interval"), "PT1M")
+        self.assertEqual(value("Settings/RestartOnFailure/Count"), "3")
+        self.assertEqual(value("Settings/DisallowStartIfOnBatteries"), "false")
+        self.assertEqual(value("Settings/StopIfGoingOnBatteries"), "false")
+        self.assertEqual(len(root.findall("{*}Actions/*")), 1)
+        self.assertEqual(value("Actions/Exec/Command"), str(daemon))
+        for system in ("Darwin", "Linux"):
+            with self.subTest(system=system), mock.patch.object(service_control.platform, "system", return_value=system):
+                with self.assertRaisesRegex(service_control.SwitchError, "only available on Windows"):
+                    service_control.provision_windows_task(args, links)
