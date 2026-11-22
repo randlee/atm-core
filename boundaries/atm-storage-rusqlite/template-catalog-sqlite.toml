@@ -37,9 +37,5 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["connection_escape"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TEMPLATE-CATALOG-SQLITE"]
-review_gates = ["single_writer_atomicity", "private_adapter"]
-
 [status]
 state = "concrete_landed"

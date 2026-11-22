@@ -106,7 +106,9 @@ struct BlockingEmit {
 
 /// Unblocks every blocked thread when dropped, so the test runtime's
 /// shutdown can join the blocked sweep and flush threads.
-struct Release(#[allow(dead_code)] std::sync::mpsc::Sender<()>);
+struct Release {
+    _sender: std::sync::mpsc::Sender<()>,
+}
 
 impl atm_core::boundary::sealed::Sealed for BlockingEmit {}
 
@@ -206,7 +208,7 @@ async fn every_stalled_shutdown_step_shares_one_cumulative_deadline() {
     // it makes only with a launch team and identity.
     let (entered, mut emit_entered) = unbounded_channel();
     let (release, blocked) = std::sync::mpsc::channel();
-    let _release = Release(release);
+    let _release = Release { _sender: release };
     let blocked: Blocked = Arc::new(Mutex::new(blocked));
     let sweep_root = daemon.root.path().join("atm-temp-stalled");
     std::fs::create_dir_all(&sweep_root).expect("sweep root");
@@ -279,7 +281,7 @@ async fn a_stalled_logger_flush_ends_at_the_earlier_of_deadline_and_bound() {
         Daemon::bootstrap(atm_core::test_support::FakeEnvSource::new([])).await;
     let (entered, mut flush_entered) = unbounded_channel();
     let (release, blocked) = std::sync::mpsc::channel();
-    let _release = Release(release);
+    let _release = Release { _sender: release };
     let blocked: Blocked = Arc::new(Mutex::new(blocked));
     let probe = Probe::new();
     probe.stall_logger_flush(move || {

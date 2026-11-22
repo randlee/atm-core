@@ -9,16 +9,17 @@ required_variables:
   - completion_recipient
 ---
 <sc-lint-adoption repository="{{ repository }}">
-  <goal>Install the managed sc-lint consumer contract without deleting consumer-owned files.</goal>
+  <goal>Seed missing sc-lint consumer contract files without changing existing consumer destinations.</goal>
   <input>{{ install_json }}</input>
+  <ownership>Existing files, directories, and symlinks are left untouched. The installer does not merge, update, or remove consumer content.</ownership>
   <procedure>
     <step id="1">Collect workspace members, Just recipes, CI platforms, and Rust toolchain facts.</step>
     <step id="2">Write and validate install.json from those facts.</step>
-    <step id="3">Run the installer with --dry-run and record its exit code and diff.</step>
-    <step id="4">Apply the reviewed managed-file change.</step>
+    <step id="3">Run the installer with --dry-run and record its exit code and the missing destinations it would seed.</step>
+    <step id="4">Run the installer with the same input to seed missing destinations only.</step>
     <step id="5">Run just setup, just lint, and just test.</step>
     <step id="6">List any consumer-local scaffolding removed in the consumer PR; never let the kit delete it.</step>
-    <step id="7">Open a consumer PR containing facts, dry-run evidence, validation output, and remaining drift.</step>
+    <step id="7">Open a consumer PR containing facts, dry-run evidence, validation output, and the paths seeded.</step>
   </procedure>
   <completion-recipient>{{ completion_recipient }}</completion-recipient>
 </sc-lint-adoption>

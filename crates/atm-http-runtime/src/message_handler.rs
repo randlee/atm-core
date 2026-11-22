@@ -1019,7 +1019,7 @@ fn json_response<T: Serialize>(
 mod tests {
     use std::num::NonZeroUsize;
     use std::sync::{Arc, Condvar, Mutex, MutexGuard};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use atm_core::api::{ApiRequest, HttpRequest};
     use atm_core::doctor::DoctorQuery;
@@ -1140,19 +1140,17 @@ mod tests {
         scheduler_progressed: bool,
     }
 
-    const GATE_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
-
     impl Gate {
         fn wait_until_released(&self) {
             let mut state = self.state.lock().expect("lock gate");
             state.entered = true;
             self.changed.notify_all();
-            self.wait_until(state, "release", |state| state.released);
+            self.wait_until(state, |state| state.released);
         }
 
         fn wait_until_entered(&self) {
             let state = self.state.lock().expect("lock gate");
-            self.wait_until(state, "entry", |state| state.entered);
+            self.wait_until(state, |state| state.entered);
         }
 
         fn release(&self) {
@@ -1167,35 +1165,15 @@ mod tests {
 
         fn wait_until_scheduler_progresses(&self) {
             let state = self.state.lock().expect("lock gate");
-            self.wait_until(state, "scheduler progress", |state| {
-                state.scheduler_progressed
-            });
+            self.wait_until(state, |state| state.scheduler_progressed);
         }
 
-        fn wait_until(
-            &self,
-            mut state: MutexGuard<'_, GateState>,
-            condition: &str,
-            ready: impl Fn(&GateState) -> bool,
-        ) {
-            let deadline = Instant::now() + GATE_WAIT_TIMEOUT;
-            while !ready(&state) {
-                let remaining = deadline.saturating_duration_since(Instant::now());
-                assert!(
-                    !remaining.is_zero(),
-                    "test gate timed out waiting for {condition} after {GATE_WAIT_TIMEOUT:?}"
-                );
-                let (next_state, wait_result) = self
-                    .changed
-                    .wait_timeout(state, remaining)
-                    .expect("wait gate");
-                state = next_state;
-                if wait_result.timed_out() && !ready(&state) {
-                    panic!(
-                        "test gate timed out waiting for {condition} after {GATE_WAIT_TIMEOUT:?}"
-                    );
-                }
-            }
+        fn wait_until(&self, state: MutexGuard<'_, GateState>, ready: impl Fn(&GateState) -> bool) {
+            drop(
+                self.changed
+                    .wait_while(state, |state| !ready(state))
+                    .expect("wait gate"),
+            );
         }
     }
 

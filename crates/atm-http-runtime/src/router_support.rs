@@ -81,6 +81,8 @@ enum BlockingStallCounter {
 pub struct BoundedBlockingBridge {
     permits: Arc<tokio::sync::Semaphore>,
     runtime_health: RuntimeHealth,
+    #[cfg(test)]
+    clock: Option<Arc<dyn Fn() -> std::time::Instant + Send + Sync>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,6 +116,35 @@ impl BoundedBlockingBridge {
         Self {
             permits: Arc::new(tokio::sync::Semaphore::new(capacity.get())),
             runtime_health,
+            #[cfg(test)]
+            clock: None,
+        }
+    }
+
+    #[cfg(test)]
+    fn now(&self) -> std::time::Instant {
+        if let Some(clock) = &self.clock {
+            return clock();
+        }
+        std::time::Instant::now()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_test_clock(
+        &mut self,
+        clock: Arc<dyn Fn() -> std::time::Instant + Send + Sync>,
+    ) {
+        self.clock = Some(clock);
+    }
+
+    #[cfg(test)]
+    fn remaining(&self, deadline: RequestDeadline) -> Option<std::time::Duration> {
+        match &self.clock {
+            Some(clock) => {
+                let millis = deadline.remaining_ms_at(clock());
+                (millis != 0).then(|| std::time::Duration::from_millis(millis))
+            }
+            None => deadline.remaining(),
         }
     }
 
@@ -154,6 +185,11 @@ impl BoundedBlockingBridge {
         T: Send + 'static,
         F: FnOnce() -> Result<T, AtmError> + Send + 'static,
     {
+        #[cfg(test)]
+        let remaining = self
+            .remaining(deadline)
+            .ok_or(BlockingBridgeError::DeadlineBeforeStart)?;
+        #[cfg(not(test))]
         let remaining = deadline
             .remaining()
             .ok_or(BlockingBridgeError::DeadlineBeforeStart)?;
@@ -161,15 +197,30 @@ impl BoundedBlockingBridge {
             .await
             .map_err(|_| BlockingBridgeError::DeadlineBeforeStart)?
             .map_err(|_| BlockingBridgeError::Closed)?;
+        #[cfg(test)]
+        if self.remaining(deadline).is_none() {
+            return Err(BlockingBridgeError::DeadlineBeforeStart);
+        }
+        #[cfg(not(test))]
         if deadline.expired() {
             return Err(BlockingBridgeError::DeadlineBeforeStart);
         }
+        #[cfg(test)]
+        let started_at = self.now();
+        #[cfg(not(test))]
         let started_at = std::time::Instant::now();
         match policy {
             BlockingCompletionPolicy::AwaitCompletion => {
                 let outcome = tokio::task::spawn_blocking(job)
                     .await
                     .map_err(BlockingBridgeError::Join)?;
+                #[cfg(test)]
+                let elapsed = self.now().saturating_duration_since(started_at);
+                #[cfg(test)]
+                if elapsed > remaining {
+                    self.record_stall(stall_counter, elapsed, remaining);
+                }
+                #[cfg(not(test))]
                 if started_at.elapsed() > remaining {
                     self.record_stall(stall_counter, started_at.elapsed(), remaining);
                 }
@@ -185,6 +236,11 @@ impl BoundedBlockingBridge {
                     Ok(Ok(result)) => result.map_err(BlockingBridgeError::Operation),
                     Ok(Err(source)) => Err(BlockingBridgeError::Join(source)),
                     Err(_) => {
+                        #[cfg(test)]
+                        let elapsed = self.now().saturating_duration_since(started_at);
+                        #[cfg(test)]
+                        self.record_stall(stall_counter, elapsed, remaining);
+                        #[cfg(not(test))]
                         self.record_stall(stall_counter, started_at.elapsed(), remaining);
                         Err(BlockingBridgeError::DeadlineAfterStart)
                     }
@@ -333,6 +389,14 @@ impl ControlPathSyncBridge {
         Self {
             bridge: BoundedBlockingBridge::new(capacity, runtime_health),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_test_clock(
+        &mut self,
+        clock: Arc<dyn Fn() -> std::time::Instant + Send + Sync>,
+    ) {
+        self.bridge.set_test_clock(clock);
     }
 
     pub(crate) fn blocking_bridge(&self) -> &BoundedBlockingBridge {

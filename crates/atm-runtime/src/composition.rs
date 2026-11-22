@@ -15,11 +15,9 @@ use atm_storage::{
     RosterStore as SharedRosterStore, StorageFactory, StorageHandles,
 };
 
-use crate::legacy_storage_adapters::{
-    StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
-};
 use crate::mailbox_runtime::StorageAsyncMailboxRuntime;
 use crate::peer_port::PeerPortResolver;
+use crate::storage_backends::{StorageBackends, runtime_doctor_ports};
 use crate::task_telemetry::{TaskTelemetryRuntime, TaskTelemetrySetup};
 
 #[derive(Clone)]
@@ -293,24 +291,13 @@ impl RuntimeAssembly {
         self.storage_backends.messages.clone()
     }
 
-    pub fn mail_store_arc(&self) -> Arc<dyn boundary::MailStore + Send + Sync> {
-        boundary_mail_store_view(self.storage_backends.messages.clone())
-    }
-
     /// Returns the write-through, RAM-backed roster boundary view.
     ///
     /// This must go through [`LocalServiceRuntime::shared_roster_store_arc`]:
     /// the runtime's handle serves every read from the RAM roster mirror and
     /// writes every mutation through it in the same operation. The raw
     /// durable roster handle is deliberately absent from this assembly.
-    pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {
-        boundary_roster_store_view(self.service_runtime.shared_roster_store_arc())
-    }
-
-    /// Returns the write-through, RAM-backed roster store seam.
-    ///
-    /// See [`Self::roster_store_arc`] for why this is sourced from the
-    /// runtime's paired write-through roster.
+    /// Returns the write-through, RAM-backed roster store.
     pub fn shared_roster_store_arc(&self) -> Arc<dyn SharedRosterStore + Send + Sync> {
         self.service_runtime.shared_roster_store_arc()
     }
@@ -327,17 +314,6 @@ impl RuntimeAssembly {
     pub fn template_composer(&self) -> Option<Arc<dyn TemplateComposer>> {
         self.service_runtime.template_composer()
     }
-}
-
-/// Invoke the retained roster boundary through the runtime selected by
-/// atm-core. This preserves fixture-scoped runtime installation in tests.
-pub fn with_installed_roster_store<T>(
-    f: impl FnOnce(&(dyn boundary::RosterStore + Send + Sync)) -> Result<T, AtmError>,
-) -> Result<T, AtmError> {
-    atm_core::with_default_local_service_runtime(|runtime| {
-        let roster_store = boundary_roster_store_view(runtime.shared_roster_store_arc());
-        f(roster_store.as_ref())
-    })
 }
 
 #[cfg(test)]

@@ -35,10 +35,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-ATM-PROTOCOL-NAMING"]
-review_gates = ["no_daemon_shaped_protocol_types"]
-
 [status]
 state = "retired"
 notes = ["Historical custom-frame boundary retired by AI.6 in favor of ADR-033 HTTP/OpenAPI routing.", "Retained protocol DTOs in atm_core::protocol are data contracts, not a live AtmProtocol trait boundary."]

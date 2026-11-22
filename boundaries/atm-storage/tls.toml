@@ -38,10 +38,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["native_tls_sender", "production_listener", "peer_transport"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-STORAGE-TLS-HELPERS"]
-review_gates = ["no_socket_or_delivery_capability", "one_canonical_fingerprint_helper", "no_active_interop_dependent"]
-
 [status]
 state = "concrete_landed"
 notes = ["AK6 owns the shared TLS identity and protocol-verification surface, including TLS 1.2/1.3 signature checks; AO2.2 authorizes peer-tls as the sole production stream consumer while the interop crate remains inactive for production delivery."]

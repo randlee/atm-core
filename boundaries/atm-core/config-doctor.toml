@@ -37,10 +37,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["std::fs::read_to_string"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-CONFIGDOCTOR-REFERENCES"]
-review_gates = ["aggregate_only_doctor_model"]
-
 [status]
 state = "stub_landed"
 notes = ["shared doctor-trait contract landed in atm_core::boundary", "config diagnostics remain aggregate-only and must not bypass the owned config ingress seam"]

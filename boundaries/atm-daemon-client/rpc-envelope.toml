@@ -50,17 +50,6 @@ error_types = ["AtmError", "ATM_CLIENT_DAEMON_VERSION_INCOMPATIBLE"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = [
-  "LINT-BOUNDARY-RPC-ENVELOPE-DEPENDENCIES",
-  "LINT-BOUNDARY-RPC-ENVELOPE-REFERENCES",
-]
-review_gates = [
-  "no_daemon_client_to_sqlite_backend_edge",
-  "no_daemon_client_to_claude_backend_edge",
-  "transport_metadata_stays_in_header",
-]
-
 [status]
 state = "active"
 notes = [

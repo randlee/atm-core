@@ -38,10 +38,6 @@ error_types = ["TaskTelemetryError", "OTelSdkError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["per_event_force_flush", "collector_ack_from_admission"]
 
-[enforcement]
-lint_rules = ["SCB-OBSERVABILITY-002"]
-review_gates = ["native_sdk_tokio", "bounded_projection", "durable_times", "redaction", "observable_health", "standard_provider_ownership"]
-
 [status]
 state = "active"
 notes = ["ADR-064 accepts atm-observability -> atm-runtime solely for existing setup types; no reverse edge or seal relaxation.", "Native SDK processors own batching. Bootstrap owns the returned standard providers and the shared process shutdown deadline. Private SDK drop counts are unknown; admission is not collector acknowledgement."]

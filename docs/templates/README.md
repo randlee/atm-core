@@ -59,7 +59,6 @@ The YAML block is the authoritative machine-readable contract for:
 - visibility
 - composition roots
 - forbidden dependencies and references
-- lint/review enforcement
 
 Semantics:
 - `owner_package` is the Cargo package name, e.g. `atm-rusqlite`
@@ -100,8 +99,6 @@ cat > "$_VARS" <<'JSON'
   "error_types": "    - AtmError",
   "allowed_test_double_paths": "    - atm_core::test_support::InMemoryMailStore",
   "forbidden_test_bypasses": "    - rusqlite::Connection",
-  "lint_rules": "    - LINT-BOUNDARY-001\n    - LINT-BOUNDARY-002",
-  "review_gates": "    - no_public_impl\n    - no_public_constructor\n    - no_forbidden_imports",
   "state": "planned",
   "status_notes": "    - none",
   "purpose": "- Owns durable mailbox state access.",

@@ -40,10 +40,6 @@ notes = ["An injected hook error is returned to the receive path, which reports 
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["daemon_owned_graft_implementation"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-GRAFT-MESSAGE-RECEIVED-HOOK"]
-review_gates = ["receiver_owned", "no_daemon_dependency"]
-
 [status]
 state = "active"
 notes = ["AL.1 renamed the receiver sink from GraftNudgeSink to GraftReceiveHook."]

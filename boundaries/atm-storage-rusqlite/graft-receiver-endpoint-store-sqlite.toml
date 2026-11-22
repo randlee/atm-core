@@ -37,9 +37,5 @@ error_types = ["GraftEndpointStoreError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-GRAFT-RECEIVER-ENDPOINT-STORE-SQLITE"]
-review_gates = ["private_sqlite_impl", "local_ingress_only"]
-
 [status]
 state = "concrete_landed"

@@ -73,6 +73,9 @@ class ReadConcurrencyGateTests(unittest.TestCase):
             ops = root / "crates/atm-storage-rusqlite/src/writer/ops.rs"
             router.parent.mkdir(parents=True)
             ops.parent.mkdir(parents=True)
+            projection = root / "crates/atm-runtime/src/doctor_projection.rs"
+            projection.parent.mkdir(parents=True)
+            projection.write_text("", encoding="utf-8")
             router.write_text(
                 """struct AsyncMailboxRuntime;
 async fn list_messages() { BlockingCoreBridge::run(); }
@@ -94,14 +97,15 @@ async fn doctor() {}
             ops = root / "crates/atm-storage-rusqlite/src/writer/ops.rs"
             router.parent.mkdir(parents=True)
             ops.parent.mkdir(parents=True)
+            projection = root / "crates/atm-runtime/src/doctor_projection.rs"
+            projection.parent.mkdir(parents=True)
+            projection.write_text("#[tokio::test]\nasync fn doctor_projection_rejects_control_lane_overload_explicitly() {}\n", encoding="utf-8")
             router.write_text(
                 """struct AsyncMailboxRuntime;
 #[tokio::test]
 async fn mailbox_and_doctor_fanout_stays_live_while_the_legacy_bridge_is_occupied() {}
 #[tokio::test]
 async fn doctor_projection_serves_parallel_control_requests_without_the_read_bridge() {}
-#[tokio::test]
-async fn doctor_projection_rejects_control_lane_overload_explicitly() {}
 #[tokio::test]
 async fn read_family_uses_only_the_supervised_recording_writer_handoff() {}
 async fn list_messages() {}
@@ -116,8 +120,8 @@ async fn doctor() {}
                 encoding="utf-8",
             )
             self.assertEqual(check(root), [])
-            router.write_text(
-                router.read_text(encoding="utf-8").replace(
+            projection.write_text(
+                projection.read_text(encoding="utf-8").replace(
                     "#[tokio::test]\nasync fn doctor_projection_rejects",
                     "#[ignore]\n#[tokio::test]\nasync fn doctor_projection_rejects",
                 ),

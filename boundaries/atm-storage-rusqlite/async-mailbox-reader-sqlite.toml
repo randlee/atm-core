@@ -37,10 +37,6 @@ error_types = ["ReadLaneError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]
-review_gates = ["no_public_impl", "no_public_constructor", "no_public_reexport"]
-
 [status]
 state = "active"
 notes = ["MailboxReader owns independent defensive read-only SQLite worker connections."]

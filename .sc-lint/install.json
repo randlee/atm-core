@@ -26,7 +26,9 @@
         "SCB-MANIFEST-004",
         "SCB-MANIFEST-005",
         "SCB-MANIFEST-006",
-        "SCB-BOUNDARY-004"
+        "SCB-BOUNDARY-004",
+        "SCB-BOUNDARY-005",
+        "SCB-ENV-001"
       ],
       "global_dependency_ownership": [
         {
@@ -68,9 +70,9 @@
       "manifest_dependency_allowlists": [
         {
           "allowed_dependencies": [
+            "agent-team-mail-core",
             "anyhow",
             "async-trait",
-            "agent-team-mail-core",
             "atm-daemon-bootstrap",
             "atm-daemon-client",
             "atm-graft",
@@ -83,6 +85,7 @@
             "libc",
             "noyalib",
             "opentelemetry-proto",
+            "sc-lint-attributes",
             "sc-observability",
             "sc-observability-types",
             "serde",
@@ -90,9 +93,9 @@
             "serial_test",
             "tempfile",
             "time",
-            "toml",
             "tokio",
             "tokio-stream",
+            "toml",
             "tonic",
             "tracing",
             "tracing-subscriber",
@@ -207,7 +210,6 @@
             "agent-team-mail-core",
             "atm-http-runtime",
             "atm-storage",
-            "fs4",
             "interprocess",
             "sc-lint-attributes",
             "serde_json",
@@ -293,8 +295,8 @@
         },
         {
           "allowed_dependencies": [
-            "async-trait",
             "agent-team-mail-core",
+            "async-trait",
             "atm-runtime-test-support",
             "atm-storage",
             "sc-lint-attributes",
@@ -370,13 +372,14 @@
         },
         {
           "allowed_dependencies": [
-            "async-trait",
             "agent-team-mail-core",
+            "async-trait",
             "atm-runtime-test-support",
             "atm-storage",
             "chrono",
             "cron",
             "getrandom",
+            "sc-lint-attributes",
             "serde_json",
             "syn",
             "tokio",
@@ -441,11 +444,9 @@
           "owner_manifest_path": "crates/atm-core/Cargo.toml"
         },
         {
-          "allowed_sections": [
-            "dependencies"
-          ],
+          "allowed_sections": [],
           "dependency_package": "atm-storage-rusqlite",
-          "message": "atm-daemon may depend on atm-storage-rusqlite only through the documented runtime-owned SQLite boundaries",
+          "message": "atm-daemon must not depend on atm-storage-rusqlite",
           "owner_manifest_path": "crates/atm-daemon/Cargo.toml"
         },
         {
@@ -473,7 +474,30 @@
           "owner_manifest_path": "crates/atm-http-runtime/Cargo.toml"
         }
       ],
-      "reason": "Boundary inventory, crate cycles, forbidden crate edges, and composition-root policy for the atm-core workspace. SCB-CYCLE-001 alone is excluded for crates/atm-core/src/observability.rs: LogFieldValue and LogFieldMap intentionally represent recursive JSON values and maps; every other boundary rule still checks this file. Rule-scoped configuration replaces the source attributes now that randlee/sc-lint#385 has shipped."
+      "reason": "Boundary inventory, crate cycles, forbidden crate edges, and composition-root policy for the atm-core workspace. SCB-CYCLE-001 alone is excluded for crates/atm-core/src/observability.rs: LogFieldValue and LogFieldMap intentionally represent recursive JSON values and maps; every other boundary rule still checks this file.",
+      "env_var_boundary": [
+        {
+          "forbidden_env_vars": [
+            "ATM_TEAM",
+            "ATM_IDENTITY",
+            "ATM_CHAT_ID",
+            "ATM_SESSION_ID",
+            "ATM_PID",
+            "ATM_TEMP"
+          ],
+          "restricted_crate_roots": [
+            "crates/atm-core",
+            "crates/atm-daemon"
+          ],
+          "boundary_reader_functions": [
+            "agent_team_mail_core::caller_context::read_cli_identity_from_env",
+            "agent_team_mail_core::caller_context::read_cli_team_from_env",
+            "agent_team_mail_core::caller_context::read_cli_chat_id_from_env",
+            "agent_team_mail_core::caller_context::read_cli_session_id_from_env",
+            "agent_team_mail_core::caller_context::read_cli_pid_from_env"
+          ]
+        }
+      ]
     },
     "portability": {
       "config_home_env": "ATM_CONFIG_HOME",
@@ -491,14 +515,7 @@
       ]
     },
     "runtime": {
-      "enabled": true,
-      "exclude_paths_by_rule": {
-        "SCB-RUNTIME-003": [
-          "crates/atm/src/commands/internal_nudge.rs",
-          "crates/atm-daemon-client/src/lib.rs"
-        ]
-      },
-      "reason": "SCB-RUNTIME-003: internal_nudge.rs tmux delays and subprocess polling run on spawn_blocking, outside Tokio tasks. atm-daemon-client/src/lib.rs launch gate and publication polling are synchronous client APIs, with no production callers in the workspace. sc-lint 0.8.4 has no item-level runtime allow; retain the narrowest supported whole-file exclusion (randlee/sc-lint#836)."
+      "enabled": true
     }
   },
   "ci": {
@@ -572,6 +589,9 @@
       "peer-dial-seam-linux",
       "peer-dial-seam-macos",
       "peer-dial-seam-windows",
+      "python-dependency-pins-linux",
+      "python-dependency-pins-macos",
+      "python-dependency-pins-windows",
       "read-concurrency-gates-linux",
       "read-concurrency-gates-macos",
       "read-concurrency-gates-windows",
@@ -618,7 +638,7 @@
       "python-tests-windows"
     ]
   },
-  "minimum_version": "0.8.4",
+  "minimum_version": "0.8.9",
   "profiles": {
     "adr-index-linux": {
       "command": [
@@ -1105,6 +1125,27 @@
       ],
       "platform": "windows"
     },
+    "python-dependency-pins-linux": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_python_dependency_pins.py"
+      ],
+      "platform": "linux"
+    },
+    "python-dependency-pins-macos": {
+      "command": [
+        ".bootstrap-venv/bin/python",
+        ".just/check_python_dependency_pins.py"
+      ],
+      "platform": "macos"
+    },
+    "python-dependency-pins-windows": {
+      "command": [
+        ".bootstrap-venv\\Scripts\\python.exe",
+        ".just/check_python_dependency_pins.py"
+      ],
+      "platform": "windows"
+    },
     "python-tests-linux": {
       "command": [
         ".bootstrap-venv/bin/python",
@@ -1446,11 +1487,13 @@
     ]
   },
   "tools": {
-    "cargo": {
-      "cargo-xwin": "0.18.4"
-    },
-    "rustup_targets": [
-      "x86_64-pc-windows-msvc"
-    ]
+    "non_windows": {
+      "cargo": {
+        "cargo-xwin": "0.18.4"
+      },
+      "rustup_targets": [
+        "x86_64-pc-windows-msvc"
+      ]
+    }
   }
 }

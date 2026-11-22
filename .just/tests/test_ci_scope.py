@@ -32,6 +32,13 @@ class CiScopeTests(unittest.TestCase):
             "scripts/nested/check.py",
             "sc-lint.toml",
             ".sc-lint/install.json",
+            ".just/lint-config.toml",
+            "boundaries/atm-core/boundary.toml",
+            "policy/release-policy.toml",
+            "release/publish-artifacts.toml",
+            "tools/bootstrap.toml",
+            "deny.toml",
+            ".claude/skills/daemon-switch/SKILL.md",
         ):
             with self.subTest(path=path):
                 self.assertTrue(ci_scope.requires_runtime(["docs/readme.md", path]))
@@ -40,11 +47,17 @@ class CiScopeTests(unittest.TestCase):
         self.assertFalse(
             ci_scope.requires_runtime(
                 [
-                    "release/publish-artifacts.toml",
                     "docs/plan.md",
                     ".claude/agents/reviewer.md",
                     "site/index.html",
                     ".github/actions/setup-renderer/action.yml",
+                    "boundaries-not/README.md",
+                    "policy.md",
+                    "release-notes.md",
+                    "toolshed/script.py",
+                    ".just/lint-config.toml.example",
+                    "not-deny.toml",
+                    ".claude/skills/daemon-switching/SKILL.md",
                     "crates-not/README.md",
                     "nested/Cargo.toml",
                 ]

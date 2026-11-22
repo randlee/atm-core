@@ -1,4 +1,3 @@
-use super::SqliteNudgeTemplateOverrideStore;
 use crate::shared_db::SharedDb;
 use atm_storage::error::AtmError;
 use atm_storage::types::{IsoTimestamp, TeamName};
@@ -8,6 +7,11 @@ use atm_storage::{
 };
 use rusqlite::{OptionalExtension, params};
 use std::sync::Arc;
+
+#[derive(Debug)]
+pub(crate) struct SqliteNudgeTemplateOverrideStore {
+    pub(crate) db: Arc<SharedDb>,
+}
 
 impl SqliteNudgeTemplateOverrideStore {
     pub(crate) fn new(db: Arc<SharedDb>) -> Self {

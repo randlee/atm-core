@@ -37,10 +37,6 @@ error_types = ["ReadLaneError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TASK-LEDGER-READER-SQLITE-EDGES"]
-review_gates = ["no_public_impl", "no_public_constructor", "no_public_reexport"]
-
 [status]
 state = "concrete_landed"
 notes = ["TaskLedgerReader owns bounded read-only SQLite worker connections through the shared reader pool."]

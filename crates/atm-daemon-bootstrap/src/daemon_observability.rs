@@ -172,7 +172,7 @@ impl Export {
 /// standard SDK providers. The entrypoint bootstraps it once and passes it
 /// into daemon composition, which drains and shuts it down.
 #[derive(Clone)]
-pub struct DaemonObservability {
+pub(crate) struct DaemonObservability {
     // Keep one shared logger lifecycle behind a mutex so emit/health paths and
     // shutdown can coordinate a single transition into the stopped state.
     logger: Arc<Mutex<LoggerLifecycle>>,

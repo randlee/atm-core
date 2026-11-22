@@ -41,8 +41,8 @@ Phase-AA simplification direction:
 - each subsystem owns its own diagnostic trait and backend-specific diagnosis
 - top-level doctor code aggregates subsystem findings and daemon-owned runtime
   state, but must not reimplement backend-specific diagnosis logic
-- `MailStore` and `RosterStore` remain the primary storage-neutral capability
-  traits during this simplification line
+- Phase `AC` supersedes the transitional store traits: `MessageStore` and
+  `RosterStore` in `atm-storage` are the canonical shared storage contracts
 - `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` are the explicit
   subsystem doctor traits used by that aggregate-only health model
 - later SQLite-backed and Claude-JSON-backed implementations may satisfy that
@@ -51,9 +51,8 @@ Phase-AA simplification direction:
 
 Phase-AC supersession note:
 - the Phase `AA` simplification-line store traits above are transitional only
-- Phase `AC` replaces `MailStore` with canonical `MessageStore`, converges the
-  roster seam into `RosterStore`, and leaves task storage out of scope for the
-  initial shared `atm-storage` contract
+- Phase `AC` moved the canonical `MessageStore` and `RosterStore` contracts
+  into `atm-storage`; task storage remains out of scope for the shared contract
 - speculative task-store code was deleted in `AC.6` rather than preserved as a
   compatibility line
 - if task storage is approved later, the first canonical implementation starts

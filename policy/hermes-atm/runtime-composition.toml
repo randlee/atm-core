@@ -45,10 +45,6 @@ notes = ["Uses public atm_graft.PyGraftSession and GatewayRunner.inject_internal
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection", "reqwest::Client"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-HERMES-ATM-IMPORTS"]
-review_gates = ["no_second_atm_client", "no_hermes_code_in_atm_graft"]
-
 [status]
 state = "active"
 notes = ["AL.16 package boundary between generic atm-graft and Hermes session composition."]

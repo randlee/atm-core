@@ -9,6 +9,7 @@ trait = "RosterStore"
 [implementation]
 type = "SqliteRosterStore"
 module = "atm_storage_rusqlite::roster_store"
+# The crate root constructs the roster store for the storage backend.
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
@@ -55,17 +56,6 @@ error_types = ["AtmError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
-
-[enforcement]
-lint_rules = [
-  "LINT-BOUNDARY-ROSTERSTORE-SQLITE-EDGES",
-  "LINT-BOUNDARY-ROSTERSTORE-SQLITE-REFERENCES",
-]
-review_gates = [
-  "no_public_impl",
-  "no_public_constructor",
-  "no_public_reexport",
-]
 
 [status]
 state = "active"

@@ -1,10 +1,17 @@
 {
   "analyzer": "runtime",
   "families": {},
-  "own_keys": [],
+  "own_keys": [
+    "panic_rule_packages"
+  ],
   "rules": [
     "SCB-RUNTIME-001",
     "SCB-RUNTIME-002",
-    "SCB-RUNTIME-003"
+    "SCB-RUNTIME-003",
+    "SCB-RUNTIME-004",
+    "SCB-RUNTIME-005",
+    "SCB-RUNTIME-006",
+    "SCB-RUNTIME-007",
+    "SCB-RUNTIME-008"
   ]
 }

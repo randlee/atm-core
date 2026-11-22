@@ -9,6 +9,7 @@ trait = "AsyncMessageStore"
 [implementation]
 type = "SqliteMessageStore"
 module = "atm_storage_rusqlite::message_store"
+# The crate root constructs the message store and shares it with sibling storage modules.
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
@@ -36,10 +37,6 @@ error_types = ["AtmError"]
 [testing]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
-
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES"]
-review_gates = ["no_public_impl", "no_public_constructor", "no_public_reexport"]
 
 [status]
 state = "active"

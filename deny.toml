@@ -4,22 +4,10 @@ no-default-features = false
 
 [advisories]
 yanked = "deny"
-# sc-composer 1.7.0 (the published containment/render adapter required by
-# AN.3) pins quick-xml 0.38.4. Remove both entries when upstream releases an
-# advisory-compatible sc-composer; ATM carries no local quick-xml patch.
-# sc-composer still pins deprecated serde_yaml, the sole remaining source of
-# unsafe-libyaml after ATM's direct migration. randlee/sc-compose#817 tracks
-# the upstream remediation; delete when an sc-composer release without
-# serde_yaml is pinned.
 # chrono 0.4.45 is a direct dependency of six workspace crates and also
 # comes through cron 0.17. Replacement with jiff is tracked in
 # randlee/sc-runtime#151; remove this entry when chrono is gone from Cargo.lock.
-ignore = [
-  "RUSTSEC-2024-0449",
-  "RUSTSEC-2026-0194",
-  "RUSTSEC-2026-0195",
-  "RUSTSEC-2026-0543",
-]
+ignore = ["RUSTSEC-2026-0543"]
 
 [bans]
 multiple-versions = "allow"

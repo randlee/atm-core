@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "daemon bootstrap still forwards the legacy atm-core roster boundary while retained callers migrate to canonical storage seams"
-)]
-
 use std::io::Write;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(unix)]
@@ -15,7 +10,7 @@ use std::time::Duration;
 use atm_core::LocalFileNonClaudeOutbound;
 use atm_core::atm_temp::{ProcessEnvSource, is_atm_temp_unset};
 use atm_core::boundary::SERVER_REQUEST_BUDGET;
-use atm_core::boundary::{NonClaudeOutbound, RosterStore, TemplateComposer};
+use atm_core::boundary::{NonClaudeOutbound, TemplateComposer};
 use atm_core::error::{AtmError, AtmErrorCode};
 #[cfg(unix)]
 use atm_core::home::HOST_RUNTIME_SOCKET_FILE;
@@ -36,6 +31,7 @@ use atm_http_runtime::{
     PeerStreamFuture, RuntimeHealth, RuntimeLimits, RuntimeTimeouts, StorageAndNudgeRouter,
 };
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
+use atm_storage::RosterStore;
 use atm_storage_rusqlite::SqliteStorageFactory;
 use peer_tls::{LEGACY_LITERAL_IP_SKIP_ENV_VAR, LegacyLiteralIpPolicy, MtlsPeerStreamAdapter};
 use tokio::net::TcpStream;
@@ -72,7 +68,7 @@ use replacement_handler::{
 };
 use singleton_guard::SingletonGuards;
 
-pub use daemon_observability::DaemonObservability;
+use daemon_observability::DaemonObservability;
 pub use owner_gate::DaemonOwnerGuard;
 pub use peer_launch_config::{
     configured_direct_peer_port, parse_peer_pool_config, parse_peer_wire_mode,
@@ -97,17 +93,6 @@ pub const REPLACEMENT_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 /// remaining a bounded admission limit. The wire request's `max_message_bytes`
 /// can only lower the body policy; it cannot raise this server ceiling.
 const CANONICAL_WRITE_ENVELOPE_OVERHEAD_BYTES: usize = 64 * 1024;
-
-/// Build the retained-log adapter and the optional native OpenTelemetry export
-/// at the active Tokio/Axum composition boundary. The SDK providers are built
-/// on this runtime; filesystem readiness is synchronous, so the retained
-/// logger is built off a runtime worker and joined before the daemon starts.
-pub async fn bootstrap_replacement_observability() -> Result<DaemonObservability, AtmError> {
-    let observability = DaemonObservability::bootstrap().await?;
-    observability.install_tracing_bridge()?;
-    observability.report_export_config();
-    Ok(observability)
-}
 
 /// Identity values captured once at the daemon bootstrap boundary.
 ///
@@ -241,7 +226,7 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
 ///
 /// The supplied observability `owner` forwards its task telemetry setup here
 /// once; without an owner (or without an endpoint) the runtime is inert.
-pub fn assemble_daemon_runtime(
+pub(crate) fn assemble_daemon_runtime(
     owner: Option<&DaemonObservability>,
 ) -> Result<RuntimeAssembly, AtmError> {
     let tool_sender_configs = load_optional_protected_tool_sender_configs()?;
@@ -284,14 +269,9 @@ fn compose_daemon_assembly(
 /// harness selection. No legacy daemon server, dispatcher, worker, or framing
 /// module is referenced from this path.
 pub async fn run_replacement_daemon() -> Result<(), AtmError> {
-    run_replacement_daemon_with_owner(None).await
-}
-
-/// Starts the shipped replacement daemon with the observability owner
-/// bootstrapped by its binary entrypoint.
-pub async fn run_replacement_daemon_with_observability(
-    observability: DaemonObservability,
-) -> Result<(), AtmError> {
+    let observability = DaemonObservability::bootstrap().await?;
+    observability.install_tracing_bridge()?;
+    observability.report_export_config();
     run_replacement_daemon_with_owner(Some(observability)).await
 }
 
@@ -1089,7 +1069,10 @@ fn default_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
 pub fn with_default_roster_store<T>(
     f: impl FnOnce(&(dyn RosterStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
-    atm_runtime::with_installed_roster_store(f)
+    atm_core::with_default_local_service_runtime(|runtime| {
+        let roster_store = runtime.shared_roster_store_arc();
+        f(roster_store.as_ref())
+    })
 }
 
 /// Open the default SQLite boundary and expose only the approved built-in

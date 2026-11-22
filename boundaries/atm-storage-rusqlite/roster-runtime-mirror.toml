@@ -50,17 +50,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["rusqlite::Connection"]
 
-[enforcement]
-lint_rules = [
-  "LINT-BOUNDARY-ROSTERRUNTIMEMIRROR-EDGES",
-  "LINT-BOUNDARY-ROSTERRUNTIMEMIRROR-REFERENCES",
-]
-review_gates = [
-  "no_public_impl",
-  "no_public_constructor",
-  "single_write_through_impl_site",
-]
-
 [status]
 state = "active"
 notes = [

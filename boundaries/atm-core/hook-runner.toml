@@ -36,10 +36,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = ["crate::boundary::hook_runner::DummyHookRunner"]
 forbidden_test_bypasses = ["std::process::Command"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-HOOK-RUNNER-REFERENCES"]
-review_gates = ["sealed_trait", "typed_contract", "deterministic_test_doubles"]
-
 [status]
 state = "concrete_landed"
 notes = ["Phase BK core contract; ADR-001, ADR-068 and ADR-069 govern adapters."]

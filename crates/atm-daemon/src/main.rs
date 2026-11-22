@@ -27,8 +27,7 @@ fn version_string() -> String {
 }
 
 async fn run() -> Result<(), AtmError> {
-    let observability = atm_daemon_bootstrap::bootstrap_replacement_observability().await?;
-    atm_daemon_bootstrap::run_replacement_daemon_with_observability(observability).await
+    atm_daemon_bootstrap::run_replacement_daemon().await
 }
 
 fn replacement_exit_code(error: &AtmError) -> u8 {

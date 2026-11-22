@@ -80,7 +80,9 @@ pub struct StalledTaskTelemetrySink {
 
 /// Unblocks every stalled emit, now and later, when dropped.
 #[derive(Debug)]
-pub struct StallRelease(#[allow(dead_code)] mpsc::Sender<()>);
+pub struct StallRelease {
+    _release: mpsc::Sender<()>,
+}
 
 impl StalledTaskTelemetrySink {
     #[must_use]
@@ -97,7 +99,7 @@ impl StalledTaskTelemetrySink {
                 on_emit: Box::new(on_emit),
                 released: Mutex::new(released),
             },
-            StallRelease(release),
+            StallRelease { _release: release },
         )
     }
 }

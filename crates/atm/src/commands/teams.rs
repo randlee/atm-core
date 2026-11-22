@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "the retained CLI teams command still executes through the legacy atm-core roster boundary during the Phase AC transition"
-)]
-
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -826,8 +821,12 @@ mod tests {
                 },
             ];
             assembly
-                .roster_store_arc()
-                .replace_roster(&team, &members)
+                .shared_roster_store_arc()
+                .save_roster(&atm_storage::RosterSnapshot {
+                    team_name: team.clone(),
+                    members: members.clone(),
+                    refreshed_at: None,
+                })
                 .expect("seed roster");
 
             Self {

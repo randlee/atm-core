@@ -1,7 +1,7 @@
 {
   "schema": "plan-anchoring/anchors/1",
   "plan": "phase-bg",
-  "intent_ref": "doc/plan/phase-current/intent.md",
+  "intent_ref": "docs/plans/phase-bg/intent.md",
   "anchors": [
     {
       "id": "ANC-001",
@@ -457,10 +457,10 @@
       "deterministic_check": "",
       "fixtures": {
         "pass": [
-          "Install sc-lint 0.7.0 from its published release and delete the vendored sc-lint crates from the workspace."
+          "Install sc-lint 0.8.8 from its published release and delete the vendored sc-lint crates from the workspace."
         ],
         "fail": [
-          "Keep building the vendored sc-lint crates from the workspace and pin them at 0.7.0."
+          "Keep building the vendored sc-lint crates from the workspace and pin them at 0.8.8."
         ]
       },
       "question_overrides": {},

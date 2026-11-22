@@ -64,6 +64,25 @@ class HermesAtmBoundaryLintTests(unittest.TestCase):
             findings = collect_violations(root)
             self.assertTrue(any("forbidden package edge" in item.message for item in findings))
 
+    def test_stale_or_unpinned_graft_is_reported(self) -> None:
+        for dependency in ("atm-graft==1.4.0", "atm-graft"):
+            with self.subTest(dependency=dependency), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                self.copy_fixture(root)
+                package = root / "crates/hermes-atm/pyproject.toml"
+                original = package.read_text(encoding="utf-8")
+                package.write_text(re.sub(r'atm-graft==[^" ]+', dependency, original), encoding="utf-8")
+                self.assertTrue(any("exact workspace version" in item.message for item in collect_violations(root)))
+
+    def test_allowed_dependencies_must_be_complete(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self.copy_fixture(root)
+            boundary = root / "policy/hermes-atm/runtime-composition.toml"
+            original = boundary.read_text(encoding="utf-8")
+            boundary.write_text(original.replace('allowed_dependencies = ["atm-graft"]', 'allowed_dependencies = []'), encoding="utf-8")
+            self.assertTrue(any("allowed_dependencies" in item.message for item in collect_violations(root)))
+
 
 if __name__ == "__main__":
     unittest.main()

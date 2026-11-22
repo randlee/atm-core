@@ -1,8 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(
-    deprecated,
-    reason = "Phase AC keeps the shared storage traits as a transitional contract while the backend boundary settles"
-)]
 
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
@@ -290,11 +286,11 @@ pub fn install_task_update_failure_for_test(path: impl AsRef<Path>) -> Result<()
 pub(crate) use mailbox_metadata_types::SqliteMailboxMetadataRow;
 
 mod message_store;
-use message_store::{
-    SqliteMessageStore, SqliteNudgeTemplateOverrideStore, SqlitePeerConfigStore,
-    SqlitePendingNudgeStore, SqliteTaskStore,
-};
+use message_store::{SqliteMessageStore, SqlitePeerConfigStore};
+use nudge_template_override_store::SqliteNudgeTemplateOverrideStore;
+use pending_nudge_store::SqlitePendingNudgeStore;
 use roster_store::SqliteRosterStore;
+use task_store::SqliteTaskStore;
 
 #[derive(Clone)]
 pub struct SqliteStorageBackend {
@@ -409,10 +405,7 @@ impl SqliteStorageFactory {
         self
     }
 
-    #[allow(
-        dead_code,
-        reason = "The composition root uses the default shared read-pool configuration until it is exposed through config-file parsing; this builder seam is intentionally testable now."
-    )]
+    #[cfg(test)]
     pub(crate) fn with_read_pool_config(
         mut self,
         read_pool_config: reader_pool::SharedReadPoolConfig,
@@ -541,11 +534,7 @@ impl SqliteStorageBackend {
         tool_sender_registry_config: Option<ToolSenderRegistryConfig>,
         tool_sender_peer_admission_config: Option<ToolSenderPeerAdmissionConfig>,
     ) -> Result<Self, AtmError> {
-        let db = Arc::new(SharedDb::open_with_reader_lanes(
-            path,
-            observability,
-            read_pool_config,
-        )?);
+        let db = Arc::new(SharedDb::new(path, observability, read_pool_config)?);
         Ok(Self {
             diagnostic_timeline: Arc::new(SqliteDiagnosticTimeline::from_shared_db(Arc::clone(
                 &db,

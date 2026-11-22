@@ -63,13 +63,6 @@ pub(crate) trait GraftReceiverLeaseClient: Send + Sync {
 }
 
 pub(crate) const GRAFT_LEASE_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
-#[expect(
-    dead_code,
-    reason = "ADR-056-reserved lease TTL window; retained as documentation for \
-              the intended lease staleness bound until a consumer (e.g. a \
-              window-gated fallback path) is implemented"
-)]
-pub(crate) const ACTIVE_LEASE_WINDOW: Duration = Duration::from_secs(15);
 /// Caps how long one blocking lease announce/refresh/unregister client call is
 /// allowed to hold up the caller before this loop gives up waiting on it and
 /// moves on. A stalled (not merely slow) daemon must not compound across the
@@ -141,6 +134,16 @@ fn owner_generation(listener: &GraftReceiverListener) -> OwnerGeneration {
     listener.owner_generation().clone()
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_LEASE_TIMEOUTS: std::cell::RefCell<Option<Arc<super::TestDeadlineClock>>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(super) fn install_test_lease_timeouts(timeouts: Arc<super::TestDeadlineClock>) {
+    TEST_LEASE_TIMEOUTS.with(|slot| *slot.borrow_mut() = Some(timeouts));
+}
+
 /// Runs a possibly-blocking daemon client call on a helper thread and gives up
 /// waiting on it after `deadline` instead of blocking the caller indefinitely.
 ///
@@ -170,7 +173,22 @@ where
             "failed to spawn graft {action} helper"
         )));
     }
-    match result_rx.recv_timeout(deadline) {
+    #[cfg(test)]
+    let result = TEST_LEASE_TIMEOUTS.with(|slot| {
+        if deadline.is_zero() {
+            return result_rx.recv_timeout(deadline);
+        }
+        let slot = slot.borrow();
+        if matches!(action, "lease_refresh" | "lease_unregister")
+            && let Some(timeouts) = slot.as_ref()
+        {
+            return timeouts.wait_for_timeout(action, deadline);
+        }
+        result_rx.recv().map_err(|_| RecvTimeoutError::Disconnected)
+    });
+    #[cfg(not(test))]
+    let result = result_rx.recv_timeout(deadline);
+    match result {
         Ok(result) => result,
         Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
             AtmErrorCode::WaitTimeout,
@@ -337,12 +355,18 @@ pub(super) fn tick_lease_refresh(
     listener: &mut RegisteredGraftReceiver,
     lease_backoff: &mut LeaseRefreshBackoff,
 ) {
-    let now = Instant::now();
-    if !lease_backoff.due(now) {
+    #[cfg(test)]
+    let current = super::test_lease_now();
+    #[cfg(not(test))]
+    let current = Instant::now();
+    if !lease_backoff.due(current) {
         return;
     }
     match listener.refresh() {
         Ok(()) => {
+            #[cfg(test)]
+            lease_backoff.record_success(super::test_lease_now());
+            #[cfg(not(test))]
             lease_backoff.record_success(Instant::now());
             if let Ok(snapshot) = read_snapshot(&ctx.snapshot) {
                 ctx.observability
@@ -350,6 +374,9 @@ pub(super) fn tick_lease_refresh(
             }
         }
         Err(error) => {
+            #[cfg(test)]
+            lease_backoff.record_failure(super::test_lease_now());
+            #[cfg(not(test))]
             lease_backoff.record_failure(Instant::now());
             warn_runtime_error("refresh_graft_receiver", Some(&ctx.graft_root), &error);
             let outcome = if error.code() == AtmErrorCode::GraftReceiverNotOwner {
@@ -370,6 +397,24 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::{GRAFT_LEASE_REFRESH_INTERVAL, LeaseRefreshBackoff};
+
+    #[test]
+    fn bounded_lease_call_reports_immediate_timeout_for_a_blocked_helper() {
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(1);
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let (finished_tx, finished_rx) = std::sync::mpsc::sync_channel(1);
+        let error = super::run_bounded_lease_call("test", Duration::ZERO, move || {
+            started_tx.send(()).expect("helper starts");
+            release_rx.recv().expect("release helper");
+            finished_tx.send(()).expect("helper finished");
+            Ok(())
+        })
+        .expect_err("blocked helper must time out at zero budget");
+        assert_eq!(error.code(), atm_core::error::AtmErrorCode::WaitTimeout);
+        started_rx.recv().expect("helper started");
+        release_tx.send(()).expect("release helper");
+        finished_rx.recv().expect("helper finished");
+    }
 
     // rust-service-hardening RSH-002: the refresh backoff grows on repeated
     // failure and resets to the base cadence on the next success, so a

@@ -171,52 +171,6 @@ pub struct NonClaudeOutboundDeliveryResponse {
     pub delivered_messages: usize,
 }
 
-/// BOUNDARY-RosterStore — see docs/atm-core/boundaries.md.
-#[deprecated(note = "use canonical atm-storage types instead")]
-pub trait RosterStore: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when roster replacement cannot be applied safely.
-    fn replace_roster(&self, team: &TeamName, members: &[RosterEntry]) -> Result<(), AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one roster snapshot cannot be loaded.
-    fn load_roster(&self, team: &TeamName) -> Result<Vec<RosterEntry>, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when membership cannot be queried.
-    fn query_membership(
-        &self,
-        team: &TeamName,
-        member: &AgentName,
-    ) -> Result<Option<RosterEntry>, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when the canonical roster team set cannot be
-    /// enumerated safely.
-    fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
-    /// # Errors
-    ///
-    /// Returns every effective (alias-or-canonical) durable roster name for
-    /// preflight diagnostics. The durable store transaction remains the sole
-    /// authority for enforcing this invariant.
-    fn unique_names(&self) -> Result<Vec<atm_storage::RosterUniqueName>, AtmError> {
-        let mut names = Vec::new();
-        for team in self.list_teams()? {
-            names.extend(
-                self.load_roster(&team)?
-                    .iter()
-                    .map(atm_storage::RosterUniqueName::from_member),
-            );
-        }
-        Ok(names)
-    }
-    /// # Errors
-    ///
-    /// Returns `AtmError` when roster health cannot be collected.
-    fn health_snapshot(&self, team: &TeamName) -> Result<RosterStoreHealthSnapshot, AtmError>;
-}
-
 /// BOUNDARY-RosterStoreDoctor — see docs/atm-core/boundaries.md.
 pub trait RosterStoreDoctor: sealed::Sealed + Send + Sync {
     /// # Errors

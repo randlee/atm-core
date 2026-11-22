@@ -11,10 +11,6 @@ pub mod atm_temp;
 pub mod atm_temp_sweeper;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
-/// Hidden daemon-private ingress/export helpers used by concrete boundary
-/// adapter crates.
-#[doc(hidden)]
-pub mod boundary_support;
 /// Shared caller-context resolution and ATM-owned environment parsing helpers.
 pub mod caller_context;
 /// Mailbox cleanup workflows for read and acknowledged messages.
@@ -45,8 +41,6 @@ pub mod herdr_configured;
 /// Public ATM home and team-path resolution helpers.
 pub mod home;
 pub mod hook;
-/// Internal identity resolution and hook lookup helpers.
-pub(crate) mod identity;
 /// Bounded metadata queue query workflows and output models.
 pub mod list;
 /// Runtime-local endpoint metadata and capability validation for local HTTP.
@@ -154,21 +148,20 @@ pub use atm_temp_sweeper::{
     EntryAge, EntryAgeSource, RealEntryAgeSource, SweepConfig, SweepReport, SweeperError,
     sweep_once, sweep_once_cancellable, sweep_once_with_age_source, validate_sweep_config,
 };
-#[allow(deprecated)]
 pub use boundary::{
     AckTransition, AsyncMessageReceivedHookEmitter, BuiltInNudgeSinkTarget,
     BuiltInNudgeTemplateKind, ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest,
     ConfigLoadResponse, DoctorFinding, HerdrNudgeTarget, InternalNudgeEnvelope,
     LoadMailMessageStateRequest, LoadMailMessageStateResponse, LocalSteerTarget, MailMessageState,
-    MailStore, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
-    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore,
-    PostSendHookEvent, RenderedBody, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness,
-    RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
-    RosterStoreHealthSnapshot, RuntimeStatusSnapshot, SourceSpan, StatusSource, TaskState,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TemplateComposer,
-    TemplateInspection, TemplateReference, TemplateReferenceKind, TemplateRoot, TemplateSource,
-    UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
+    MailStoreMailboxMetadataCounts, MailboxMetadataRow, Message, MessageFingerprint, MessageKey,
+    MessageReceivedHookEmitter, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEvent,
+    RenderedBody, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
+    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
+    SourceSpan, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, TemplateComposer, TemplateInspection, TemplateReference,
+    TemplateReferenceKind, TemplateRoot, TemplateSource, UpsertMailMessageStateRequest,
+    UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;

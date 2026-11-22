@@ -21,6 +21,17 @@ use std::sync::Mutex;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
 
+// Keep this SQLite-specific timeout beside its backend implementation rather
+// than in the backend-neutral storage contract. Reserve time within the
+// server's request budget for the transaction body, received-message hook,
+// and response encoding after a writer-lock wait.
+const BUSY_TIMEOUT_MARGIN: std::time::Duration = std::time::Duration::from_millis(500);
+const SQLITE_BUSY_TIMEOUT: std::time::Duration =
+    atm_storage::request_budget::SERVER_REQUEST_BUDGET.saturating_sub(BUSY_TIMEOUT_MARGIN);
+const _: () = assert!(
+    SQLITE_BUSY_TIMEOUT.as_nanos() < atm_storage::request_budget::SERVER_REQUEST_BUDGET.as_nanos()
+);
+
 // Search projection writes touch several B-trees and FTS segments inside the
 // sole durable writer transaction.  The SQLite default is only 2 MiB, which
 // churns cache pages under a concurrent admission burst.  This setting applies
@@ -613,13 +624,13 @@ pub(crate) fn configure_connection(
 ) -> Result<(), AtmError> {
     // Bound SQLite lock waits so contention returns an actionable ATM timeout
     // instead of hanging an adapter thread indefinitely. This is derived
-    // from `atm_storage::request_budget::SERVER_REQUEST_BUDGET` so a
+    // from the neutral `atm_storage::request_budget::SERVER_REQUEST_BUDGET` so a
     // writer-lock wait can never by itself consume the entire per-request
     // budget the Tokio/Axum server enforces around this call; a busy
     // timeout at or above that budget would mean a lock wait could never
     // succeed inside it.
     connection
-        .busy_timeout(atm_storage::request_budget::SQLITE_BUSY_TIMEOUT)
+        .busy_timeout(SQLITE_BUSY_TIMEOUT)
         .map_err(|error| sqlite_error(target, "failed to configure sqlite busy timeout", error))?;
     connection
         .pragma_update(None, "foreign_keys", "ON")
@@ -1296,6 +1307,11 @@ mod tests {
     }
     #[test]
     fn configured_busy_timeout_never_reaches_the_server_request_budget() {
+        assert_eq!(
+            SQLITE_BUSY_TIMEOUT,
+            atm_storage::request_budget::SERVER_REQUEST_BUDGET - BUSY_TIMEOUT_MARGIN
+        );
+
         let target = SharedDbTarget::InMemory {
             uri: format!(
                 "file:atm-storage-rusqlite-busy-timeout-{}?mode=memory&cache=shared",
@@ -1309,8 +1325,7 @@ mod tests {
             .expect("read configured sqlite busy_timeout");
 
         let expected_ms =
-            i64::try_from(atm_storage::request_budget::SQLITE_BUSY_TIMEOUT.as_millis())
-                .expect("busy timeout millis fit in i64");
+            i64::try_from(SQLITE_BUSY_TIMEOUT.as_millis()).expect("busy timeout millis fit in i64");
         assert_eq!(
             configured_ms, expected_ms,
             "sqlite busy_timeout must stay derived from the shared request budget"
@@ -1333,83 +1348,56 @@ mod tests {
 
     #[test]
     fn serial_writer_queue_serializes_blocking_control_path_transactions() {
-        // The serial queue owns the only mutable SQLite connection. A
-        // blocking debug/control-path transaction must therefore wait for an
-        // existing borrower instead of opening a competing writer connection
-        // and relying on SQLite busy-lock retries.
         let tempdir = tempfile::tempdir().expect("create temporary database directory");
         let db_path = tempdir.path().join("busy-timeout-contract.db");
         let db = Arc::new(
             SharedDb::open_with_observability(&db_path, Arc::new(NullSqliteObservability))
                 .expect("open database"),
         );
-
-        let (holder_ready_tx, holder_ready_rx) = mpsc::channel::<()>();
-        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let (holder_ready_tx, holder_ready_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
         let holder_db = Arc::clone(&db);
+        let (holder_done_tx, holder_done_rx) = mpsc::channel();
         let holder = thread::spawn(move || {
             holder_db
                 .with_connection(|connection| {
                     let transaction = connection
                         .transaction_with_behavior(TransactionBehavior::Immediate)
-                        .expect("first writer acquires the immediate transaction lock");
-                    holder_ready_tx
-                        .send(())
-                        .expect("signal that the writer lock is held");
-                    release_rx
-                        .recv()
-                        .expect("wait for the test to release the writer lock");
-                    transaction.commit().expect("release the writer lock");
+                        .expect("acquire transaction");
+                    holder_ready_tx.send(()).expect("signal held lock");
+                    release_rx.recv().expect("test releases writer");
+                    transaction.commit().expect("commit holder");
                     Ok(())
                 })
                 .expect("holder transaction succeeds");
+            holder_done_tx.send(()).expect("holder finished");
         });
-
-        holder_ready_rx
-            .recv()
-            .expect("first writer must confirm it holds the lock before the second write starts");
-
-        let (contender_started_tx, contender_started_rx) = mpsc::channel::<()>();
-        let (result_tx, result_rx) = mpsc::channel();
+        holder_ready_rx.recv().expect("holder acquires lock");
+        let (blocked_tx, blocked_rx) = mpsc::channel();
+        db.writer_queue.signal_next_contention(blocked_tx);
+        let (entered_tx, entered_rx) = mpsc::channel();
         let contender_db = Arc::clone(&db);
+        let (contender_done_tx, contender_done_rx) = mpsc::channel();
         let contender = thread::spawn(move || {
-            contender_started_tx
-                .send(())
-                .expect("signal that the second control-path transaction started");
-            let started_at = std::time::Instant::now();
-            let result = contender_db.with_transaction(|_connection| Ok(()));
-            result_tx
-                .send((result, started_at.elapsed()))
-                .expect("report second control-path transaction result");
+            contender_db
+                .with_transaction(|_transaction| {
+                    entered_tx.send(()).expect("signal acquired queue");
+                    Ok(())
+                })
+                .expect("queued transaction succeeds");
+            contender_done_tx.send(()).expect("contender finished");
         });
-
-        contender_started_rx
-            .recv()
-            .expect("second control-path transaction must start");
+        blocked_rx.recv().expect("contender observes held queue");
         assert!(
-            result_rx
-                .recv_timeout(std::time::Duration::from_millis(25))
-                .is_err(),
-            "the second control-path transaction must remain queued while the first owns the sole writer connection"
+            matches!(entered_rx.try_recv(), Err(mpsc::TryRecvError::Empty)),
+            "contender cannot enter while holder owns queue"
         );
-
-        release_tx
-            .send(())
-            .expect("release the held writer lock so the holder thread can finish");
-        holder.join().expect("holder thread panicked");
-
-        let (result, elapsed) = result_rx
-            .recv()
-            .expect("queued control-path transaction must finish after release");
-        contender.join().expect("contender thread panicked");
-        assert!(
-            result.is_ok(),
-            "the queued control-path transaction must reuse the serial writer connection: {result:?}"
-        );
-        assert!(
-            elapsed >= std::time::Duration::from_millis(25),
-            "the second control-path transaction must wait for the queue owner: waited {elapsed:?}"
-        );
+        release_tx.send(()).expect("release holder");
+        entered_rx.recv().expect("contender enters after release");
+        holder_done_rx.recv().expect("holder completes");
+        contender_done_rx.recv().expect("contender completes");
+        holder.join().expect("holder thread completes");
+        contender.join().expect("contender thread completes");
     }
 
     #[test]

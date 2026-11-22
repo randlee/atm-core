@@ -8,7 +8,7 @@ pub mod team_config;
 
 pub use agent_member::{
     AgentMember, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY,
-    canonical_graft_root, canonical_home_dir, compatible_home_dir,
+    canonical_graft_root, canonical_home_dir,
 };
 pub use atm_storage::contract::AgentType;
 pub(crate) use inbox_message::{

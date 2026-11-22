@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "the retained runtime bridge still consumes the transitional shared storage traits until the direct boundary fully replaces it"
-)]
-
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -236,7 +231,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     ) -> Result<Option<crate::boundary::TeamNudgeTemplateOverrideRow>, AtmError> {
         Ok(None)
     }
-    #[allow(dead_code)]
     fn graft_receiver_lease(
         &self,
         _team: &TeamName,
@@ -245,7 +239,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
     ) -> Result<Option<GraftReceiverLease>, AtmError> {
         Ok(None)
     }
-    #[allow(dead_code)]
     fn mark_graft_receiver_unreachable(
         &self,
         _team: &TeamName,
@@ -1206,10 +1199,6 @@ mod tests {
 
     impl atm_storage::contract::sealed::Sealed for UnusedRuntimeStore {}
 
-    #[allow(
-        deprecated,
-        reason = "the task-store absence test only constructs the retained runtime"
-    )]
     impl atm_storage::MessageStore for UnusedRuntimeStore {
         fn save_message(
             &self,
@@ -1258,10 +1247,6 @@ mod tests {
         }
     }
 
-    #[allow(
-        deprecated,
-        reason = "the task-store absence test only constructs the retained runtime"
-    )]
     impl atm_storage::RosterStore for UnusedRuntimeStore {
         fn load_roster(
             &self,

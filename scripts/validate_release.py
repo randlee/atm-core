@@ -1542,6 +1542,7 @@ def write_findings(root: Path, version: str, findings_path: Path, findings: list
         "status": "fail" if any(f.blocks for f in findings) else "pass",
         "findings": [asdict(f) | {"blocks": f.blocks} for f in findings],
     }
+    findings_path.parent.mkdir(parents=True, exist_ok=True)
     findings_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
@@ -1569,7 +1570,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--version", help="Release version to validate; defaults to workspace.package.version")
-    parser.add_argument("--findings", default="release-findings.json", help="Path to findings JSON output")
+    parser.add_argument(
+        "--findings",
+        default="artifacts/findings/release-findings.json",
+        help="Path to findings JSON output",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",

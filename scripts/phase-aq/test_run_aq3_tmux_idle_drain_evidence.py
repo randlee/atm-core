@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 from pathlib import Path
-import subprocess
-import sys
+import queue
 import tempfile
-import time
 import unittest
 from types import SimpleNamespace
 
@@ -124,61 +123,65 @@ class Aq3TmuxIdleDrainEvidenceTests(unittest.TestCase):
         # `drained_counter` read reproducibly under-reads; polling must not.
         module = load_module()
         readings = iter([0, 0, 1])
+        sleeps = []
+        module.time = SimpleNamespace(monotonic=lambda: 0.0, sleep=sleeps.append)
         module.drained_counter = lambda atm, env, timeout: next(readings)
         result = module.wait_for_drained_counter_at_least(Path("/bin/atm"), {}, 5.0, minimum=1)
         self.assertEqual(result, 1)
+        self.assertEqual(sleeps, [0.05, 0.05])
 
     def test_wait_for_drained_counter_times_out_returning_the_last_observed_value(self) -> None:
         module = load_module()
-        module.drained_counter = lambda atm, env, timeout: 0
+        times = iter([0.0, 0.1, 0.2])
+        sleeps = []
+        readings = iter([0, 0])
+        module.time = SimpleNamespace(monotonic=lambda: next(times), sleep=sleeps.append)
+        module.drained_counter = lambda atm, env, timeout: next(readings)
         result = module.wait_for_drained_counter_at_least(Path("/bin/atm"), {}, 0.2, minimum=1)
         self.assertEqual(result, 0)
+        self.assertEqual(sleeps, [0.05])
 
     def test_drain_ready_lines_honors_timeout_when_child_writes_nothing(self) -> None:
-        # FTQ-001 regression: a plain blocking `readline()` ignores an
-        # overall deadline when the child process produces no output at
-        # all. `_drain_ready_lines` must still return at (approximately)
-        # `timeout`, not hang for the child's full runtime.
+        # The child reader remains pending; the queue supplies a controlled timeout.
         module = load_module()
-        with subprocess.Popen(
-            [sys.executable, "-c", "import time; time.sleep(5)"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        ) as process:
-            try:
-                started = time.monotonic()
-                lines, ready = module._drain_ready_lines(process, timeout=0.3)
-                elapsed = time.monotonic() - started
-            finally:
-                process.kill()
+        observed = []
+
+        class EmptyQueue:
+            def get(self, *, timeout):
+                observed.append(timeout)
+                raise queue.Empty
+
+        class PendingThread:
+            def __init__(self, *, target, daemon):
+                observed.append(("thread", daemon))
+
+            def start(self):
+                observed.append("started")
+
+        module.queue = SimpleNamespace(Queue=EmptyQueue, Empty=queue.Empty)
+        module.threading = SimpleNamespace(Thread=PendingThread)
+        module.time = SimpleNamespace(monotonic=lambda: 0.0)
+        lines, ready = module._drain_ready_lines(SimpleNamespace(stdout=io.StringIO()), timeout=0.3)
         self.assertFalse(ready)
         self.assertEqual(lines, [])
-        self.assertLess(elapsed, 4.0, "should return near the 0.3s deadline, not the child's 5s runtime")
+        self.assertEqual(observed, [("thread", True), "started", 0.3])
 
     def test_drain_ready_lines_detects_the_ready_marker_promptly(self) -> None:
         module = load_module()
-        with subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                "import sys; print('ATM_DAEMON_READY'); sys.stdout.flush(); "
-                "import time; time.sleep(5)",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        ) as process:
-            try:
-                lines, ready = module._drain_ready_lines(process, timeout=5.0)
-            finally:
-                process.kill()
+        class InlineThread:
+            def __init__(self, *, target, daemon):
+                self.target = target
+
+            def start(self):
+                self.target()
+
+        module.threading = SimpleNamespace(Thread=InlineThread)
+        module.time = SimpleNamespace(monotonic=lambda: 0.0)
+        lines, ready = module._drain_ready_lines(
+            SimpleNamespace(stdout=io.StringIO("starting\nATM_DAEMON_READY\n")), timeout=5.0
+        )
         self.assertTrue(ready)
-        self.assertEqual(lines, ["ATM_DAEMON_READY"])
+        self.assertEqual(lines, ["starting", "ATM_DAEMON_READY"])
 
     def test_message_kinds_map_to_the_expected_atm_verbs(self) -> None:
         # AQ1 D4 / NudgeMode: `atm queue` is always Deferred (pending-store

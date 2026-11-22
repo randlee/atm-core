@@ -39,10 +39,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = []
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-TOOL-SENDER-REGISTRY-REFERENCES"]
-review_gates = ["private_sqlite_impl", "explicit_local_trust_root", "atomic_signed_operations"]
-
 [status]
 state = "active"
 notes = ["No request, environment variable, repository configuration, or hook data can populate trusted installer keys or sender allowlists.", "Without ToolSenderRegistryConfig, signed installer and runtime operations fail closed."]

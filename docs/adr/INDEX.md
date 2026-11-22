@@ -76,6 +76,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-067 — One Structured Log Per Program; Viewers Read It, Never A Second File](./ADR-067-one-structured-log-viewers-read-it.md)
 - [ADR-068 — Task Hooks: One JSON Contract Per Hook, Run By The Daemon In A Fixed Environment](./ADR-068-task-hooks-one-json-contract-daemon-runner.md)
 - [ADR-069 — `atm cron`: Schedules Persist In The Daemon Store, One Daemon Worker Ticks Them](./ADR-069-atm-cron-schedules-in-daemon-store.md)
+- [ADR-070 — An Awaited `tokio::time::sleep` Is Not A Thread-Blocking Defect](./ADR-070-awaited-tokio-sleep-not-thread-blocking.md)
 
 ## Phase BB amendments
 

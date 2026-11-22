@@ -1,8 +1,3 @@
-#![allow(
-    deprecated,
-    reason = "the retained CLI composition still seeds and bridges legacy atm-core boundary stores during the Phase AC transition"
-)]
-
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -18,15 +13,13 @@ use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
-use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
+use atm_core::observability::{CommandEvent, action_name, outcome_label};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::search::{SearchRequest, SearchResponse};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
-#[cfg(test)]
-use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 use atm_daemon_client::{resolve_daemon_local_ipc_endpoint, unexpected_response};
 use atm_http_runtime::SAME_HOST_REQUEST_DEADLINE;
 #[cfg(test)]
@@ -250,14 +243,6 @@ impl<'a> CliComposition<'a> {
         composition
     }
 
-    #[expect(
-        dead_code,
-        reason = "reserved for future phase that inspects the active transport variant"
-    )]
-    pub(crate) fn transport(&self) -> &(dyn DaemonApiClient + Send + Sync + 'a) {
-        self.async_transport.as_ref()
-    }
-
     pub(crate) async fn execute_request(
         &self,
         request: RequestEnvelope,
@@ -271,14 +256,6 @@ impl<'a> CliComposition<'a> {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
-    }
-
-    #[expect(
-        dead_code,
-        reason = "reserved for future phase that threads observability port into command helpers"
-    )]
-    pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
-        self.observability_port
     }
 
     pub(crate) async fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
@@ -472,10 +449,6 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(
-        dead_code,
-        reason = "AA.3 restores the direct local doctor path in DoctorCommand, but the daemon-routed doctor request seam remains covered by transport tests."
-    )]
     pub(crate) async fn doctor(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
         match self.execute_request(RequestEnvelope::Doctor(query)).await? {
             ResponseEnvelope::Doctor(mut report) => {
@@ -547,6 +520,7 @@ pub(crate) mod tests {
     };
     use atm_core::error::AtmError;
     use atm_core::graft::AtmGraftClient;
+    use atm_core::home::HOST_RUNTIME_LAUNCH_LOCK_FILE;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::read::{PeekQuery, ReadQuery};
     use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
@@ -560,7 +534,7 @@ pub(crate) mod tests {
     };
     use atm_core::types::ReadSelection;
     use atm_core::types::{AgentName, ChatId, CommandAction, TeamName};
-    use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint};
+    use atm_daemon_client::DaemonLocalIpcEndpoint;
     use chrono::Utc;
     use serde_json::{Map, Value};
     use serial_test::serial;
@@ -568,8 +542,7 @@ pub(crate) mod tests {
     use tracing_subscriber::fmt::MakeWriter;
 
     use super::{
-        CliComposition, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
-        install_isolated_sqlite_runtime, open_isolated_sqlite_boundary,
+        CliComposition, install_isolated_sqlite_runtime, open_isolated_sqlite_boundary,
         resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
@@ -777,7 +750,7 @@ pub(crate) mod tests {
 
         fn seed_sqlite_roster(&self, recipient: &str) {
             let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
-            let roster_store = assembly.roster_store_arc();
+            let roster_store = assembly.shared_roster_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let members = [TEST_SENDER, recipient, TEST_LEAD]
                 .into_iter()
@@ -793,7 +766,11 @@ pub(crate) mod tests {
                 })
                 .collect::<Vec<_>>();
             roster_store
-                .replace_roster(&team, &members)
+                .save_roster(&atm_storage::RosterSnapshot {
+                    team_name: team.clone(),
+                    members: members.clone(),
+                    refreshed_at: None,
+                })
                 .expect("seed sqlite roster");
         }
 
@@ -819,21 +796,20 @@ pub(crate) mod tests {
         pub(crate) fn inbox_contents(&self, agent: &str) -> Vec<InboxMessage> {
             if self.home_dir.join("runtime").join("mail.sqlite3").exists() {
                 let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
-                let mail_store = assembly.mail_store_arc();
+                let mail_store = assembly.message_store_arc();
                 let team = TEST_TEAM.parse::<TeamName>().expect("team");
                 let agent_name = agent.parse::<AgentName>().expect("agent");
-                let metadata_rows = mail_store
-                    .query_mailbox_metadata(&team, &agent_name, None)
-                    .expect("mailbox rows");
-                return metadata_rows
-                    .into_iter()
-                    .map(|row| {
-                        mail_store
-                            .load_message(&team, &agent_name, &row.message_key)
-                            .expect("message record")
-                            .expect("stored message")
-                            .envelope
+                return mail_store
+                    .list_messages(&atm_storage::MessageQuery {
+                        team,
+                        agent: agent_name,
+                        sender: None,
+                        task_id: None,
+                        limit: None,
                     })
+                    .expect("mailbox rows")
+                    .into_iter()
+                    .map(|message| message.envelope)
                     .collect();
             }
 
@@ -867,7 +843,7 @@ pub(crate) mod tests {
 
         fn seed_sqlite_mailbox(&self, agent: &str, messages: &[InboxMessage]) {
             let assembly = open_isolated_sqlite_boundary(&self.home_dir).expect("sqlite db");
-            let mail_store = assembly.mail_store_arc();
+            let mail_store = assembly.message_store_arc();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let agent_name = agent.parse::<AgentName>().expect("agent");
 
@@ -878,32 +854,13 @@ pub(crate) mod tests {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
                 mail_store
-                    .upsert_message(boundary::Message {
+                    .save_message(&boundary::Message {
                         team: team.clone(),
                         agent: agent_name.clone(),
                         message_key: message_key.clone(),
                         envelope: message.clone(),
                     })
                     .expect("seed sqlite message");
-                mail_store
-                    .upsert_message_state(boundary::UpsertMailMessageStateRequest {
-                        team: team.clone(),
-                        agent: agent_name.clone(),
-                        actor: agent_name.clone(),
-                        state: boundary::MailMessageState {
-                            team: team.clone(),
-                            agent: agent_name.clone(),
-                            actor: agent_name.clone(),
-                            message_key,
-                            read: message.read,
-                            pending_ack_at: message.pending_ack_at,
-                            acknowledged_at: message.acknowledged_at,
-                            expires_at: message.expires_at,
-                            deleted_at: None,
-                            updated_at: Some(message.timestamp),
-                        },
-                    })
-                    .expect("seed sqlite message state");
             }
         }
 
@@ -1771,15 +1728,12 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn daemon_path_newtypes_reject_empty_paths_and_preserve_path_access() {
+    fn daemon_endpoint_rejects_empty_path_and_preserves_path_access() {
         let tempdir = TempDir::new().expect("tempdir");
         let socket_path = tempdir.path().join("atm.sock");
-        let daemon_path = tempdir.path().join("atm-daemon");
         let socket = DaemonLocalIpcEndpoint::new(socket_path.clone()).expect("socket path");
-        let daemon = DaemonBinaryPath::new(daemon_path.clone()).expect("daemon path");
 
         assert_eq!(socket.as_ref(), socket_path.as_path());
-        assert_eq!(daemon.as_ref(), daemon_path.as_path());
 
         let socket_error =
             DaemonLocalIpcEndpoint::new(std::path::PathBuf::new()).expect_err("empty");
@@ -1788,24 +1742,6 @@ pub(crate) mod tests {
                 .to_string()
                 .contains("daemon local IPC endpoint")
         );
-
-        let daemon_error = DaemonBinaryPath::new(std::path::PathBuf::new()).expect_err("empty");
-        assert!(daemon_error.to_string().contains("daemon binary path"));
-    }
-
-    #[test]
-    fn launch_gate_is_host_wide_across_different_socket_paths() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-        let first =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
-                .expect("first acquire");
-        assert!(first.is_some());
-        let second =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
-                .expect("second acquire");
-        assert!(second.is_none());
-        drop(first);
     }
 
     #[test]
@@ -1917,55 +1853,17 @@ pub(crate) mod tests {
         );
     }
 
-    #[test]
-    fn launch_gate_busy_maps_to_typed_rejection() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let runtime_dir = atm_core::home::host_runtime_dir_from_home(tempdir.path());
-        let _gate =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
-                .expect("acquire")
-                .expect("gate");
-        let socket_path =
-            DaemonLocalIpcEndpoint::new(tempdir.path().join("one.sock")).expect("socket");
-        let second =
-            LaunchGateGuard::try_acquire_at(runtime_dir.join(HOST_RUNTIME_LAUNCH_LOCK_FILE))
-                .expect("second acquire");
-
-        assert!(second.is_none());
-        let error = LaunchGateGuard::rejected_error(&socket_path);
-
-        assert_eq!(
-            error.code(),
-            atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
-        );
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn launch_gate_treats_windows_lock_and_sharing_violations_as_contention() {
-        assert!(atm_daemon_client::is_launch_gate_contention_error(
-            &std::io::Error::from_raw_os_error(32)
-        ));
-        assert!(atm_daemon_client::is_launch_gate_contention_error(
-            &std::io::Error::from_raw_os_error(33)
-        ));
-    }
-
     #[cfg(unix)]
     #[test]
     // ADR-003 Tier 2: Unix-only non-UTF-8 path construction uses OsStringExt, which does
     // not have a portable cross-platform equivalent for this exact boundary case.
-    fn daemon_path_newtypes_reject_non_utf8_paths_at_boundary() {
+    fn daemon_endpoint_rejects_non_utf8_path_at_boundary() {
         use std::os::unix::ffi::OsStringExt;
 
         let invalid = std::ffi::OsString::from_vec(vec![0x66, 0x6f, 0x80]);
 
-        let socket_error = DaemonLocalIpcEndpoint::new(std::path::PathBuf::from(invalid.clone()))
-            .expect_err("utf8");
+        let socket_error =
+            DaemonLocalIpcEndpoint::new(std::path::PathBuf::from(invalid)).expect_err("utf8");
         assert!(socket_error.to_string().contains("valid UTF-8"));
-
-        let daemon_error =
-            DaemonBinaryPath::new(std::path::PathBuf::from(invalid)).expect_err("utf8");
-        assert!(daemon_error.to_string().contains("valid UTF-8"));
     }
 }

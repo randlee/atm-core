@@ -45,7 +45,6 @@ FIXTURE_INPUT = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 # The fixture's three members: cipher (active), fenix (idle), offline (dead).
 ALL_MEMBER_IDS = "cipher@atm-dev,fenix@atm-dev,offline@atm-dev"
 ACTIVE_MEMBER_ID = "cipher@atm-dev"
-PICKER_COMMAND_TIMEOUT_SECONDS = 10
 
 
 def sh_command(script: Path) -> list[str]:
@@ -72,7 +71,6 @@ def run(command: list[str], extra_env: dict[str, str] | None = None) -> subproce
         text=True,
         env=env,
         capture_output=True,
-        timeout=PICKER_COMMAND_TIMEOUT_SECONDS,
     )
 
 
@@ -93,12 +91,15 @@ class PickerExclusionAssertions:
 
 
 class PickerSubprocessTests(unittest.TestCase):
-    def test_picker_runner_has_finite_timeout(self) -> None:
+    def test_picker_runner_passes_fixture_and_selection_without_a_deadline(self) -> None:
         completed = subprocess.CompletedProcess(args=[], returncode=0)
         with mock.patch("subprocess.run", return_value=completed) as run_mock:
             self.assertIs(run(["picker"]), completed)
 
-        self.assertEqual(run_mock.call_args.kwargs["timeout"], PICKER_COMMAND_TIMEOUT_SECONDS)
+        kwargs = run_mock.call_args.kwargs
+        self.assertNotIn("timeout", kwargs)
+        self.assertEqual(json.loads(kwargs["input"]), FIXTURE_INPUT)
+        self.assertEqual(kwargs["env"]["ATM_SEND_TO_SELECTION"], ALL_MEMBER_IDS)
 
 
 class PickerPyExclusionTests(PickerExclusionAssertions, unittest.TestCase):

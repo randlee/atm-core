@@ -15,21 +15,6 @@ pub(crate) struct SqliteMessageStore {
 }
 
 #[derive(Debug)]
-pub(crate) struct SqliteNudgeTemplateOverrideStore {
-    pub(crate) db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
-pub(crate) struct SqlitePendingNudgeStore {
-    pub(crate) db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
-pub(crate) struct SqliteTaskStore {
-    pub(crate) db: Arc<SharedDb>,
-}
-
-#[derive(Debug)]
 pub(crate) struct SqlitePeerConfigStore {
     pub(crate) db: Arc<SharedDb>,
 }

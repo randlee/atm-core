@@ -33,13 +33,10 @@ response_types = ["Message", "Vec<Message>", "CommittedTaskWrite<MessageAdmissio
 error_types = ["AtmError"]
 
 [testing]
-allowed_test_double_paths = []
+# These modules contain inert/counting message-store doubles for unit tests.
+allowed_test_double_paths = ["atm_core::ack::admission_tests", "atm_core::doctor::tests", "atm_core::service_runtime::tests", "atm_core::tests::nudge_mode", "atm_http_runtime::herdr_queue_wake::tests", "atm_runtime::mailbox_runtime::tests", "atm_runtime_test_support", "crate::contract"]
 forbidden_test_bypasses = []
-
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-MESSAGESTORE-REFERENCES"]
-review_gates = ["no_backend_specific_message_contract"]
 
 [status]
 state = "concrete_landed"
-notes = ["AC.1 created the shared audited message-storage trait in crates/atm-storage", "atm-core legacy MailStore remains compile-bridge surface only until AC.4 consumer cutover closes"]
+notes = ["AC.1 created the shared audited message-storage trait in crates/atm-storage", "Phase AC moved the canonical MessageStore contract into atm-storage; consumers use this shared trait directly"]

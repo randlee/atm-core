@@ -36,10 +36,6 @@ error_types = ["AtmError"]
 allowed_test_double_paths = []
 forbidden_test_bypasses = ["sqlite_connection", "raw_sql_outside_storage"]
 
-[enforcement]
-lint_rules = ["LINT-BOUNDARY-ANALYST-QUERY-STORE"]
-review_gates = ["only_local_python_consumer", "typed_contract_only", "no_sql_or_transport"]
-
 [status]
 state = "active"
 notes = ["AN.6 permits exactly one non-runtime consumer: the local Maturin analyst binding. This is a dedicated capability boundary, not a relaxation of MessageSearchStore."]

@@ -23,7 +23,7 @@ pub struct MetadataBackedReadSelection {
 }
 
 pub(crate) fn selection_state_for_mailbox_metadata_rows(
-    rows: &[boundary::MailStoreMailboxMetadataRow],
+    rows: &[boundary::MailboxMetadataRow],
     query: &ReadQuery,
     seen_watermark: Option<IsoTimestamp>,
 ) -> (BucketCounts, Vec<ClassifiedMessage>) {
@@ -33,7 +33,7 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
     select_classified_mailbox_candidates(candidates, &request)
 }
 
-fn metadata_candidate(row: &boundary::MailStoreMailboxMetadataRow) -> MailboxSelectionCandidate {
+fn metadata_candidate(row: &boundary::MailboxMetadataRow) -> MailboxSelectionCandidate {
     MailboxSelectionCandidate {
         message_key: row.message_key.to_string(),
         envelope: InboxMessage {
@@ -65,7 +65,7 @@ fn metadata_candidate(row: &boundary::MailStoreMailboxMetadataRow) -> MailboxSel
 }
 
 pub(crate) fn classify_mailbox_metadata_rows(
-    rows: &[boundary::MailStoreMailboxMetadataRow],
+    rows: &[boundary::MailboxMetadataRow],
 ) -> Vec<ClassifiedMessage> {
     classify_mailbox_candidates(rows.iter().map(metadata_candidate).collect())
 }
@@ -95,7 +95,7 @@ pub(crate) fn filter_metadata_backed_contains_candidates<R: RetainedMailboxRunti
     home_dir: &Path,
     team: &TeamName,
     agent: &crate::types::AgentName,
-    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    metadata_rows: &[boundary::MailboxMetadataRow],
     messages: Vec<ClassifiedMessage>,
     contains_needle: Option<&str>,
 ) -> Result<Vec<ClassifiedMessage>, AtmError> {
@@ -112,7 +112,7 @@ pub(crate) fn filter_metadata_backed_contains_candidates<R: RetainedMailboxRunti
         .map(|message| -> Result<Option<ClassifiedMessage>, AtmError> {
             let row = metadata_rows.get(message.source_index.get()).ok_or_else(|| {
                 AtmError::validation(format!(
-                    "sqlite mailbox metadata source index {} is out of range during contains filtering",
+                    "durable mailbox metadata source index {} is out of range during contains filtering",
                     message.source_index.get()
                 ))
 
@@ -148,7 +148,7 @@ pub(crate) fn load_durable_metadata_message<R: RetainedMailboxRuntime>(
     home_dir: &Path,
     team: &TeamName,
     agent: &crate::types::AgentName,
-    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    metadata_rows: &[boundary::MailboxMetadataRow],
     selected_message: &ClassifiedMessage,
     exact_message_id: Option<crate::schema::AtmMessageId>,
 ) -> Result<ClassifiedMessage, AtmError> {
@@ -160,7 +160,7 @@ pub(crate) fn load_durable_metadata_message<R: RetainedMailboxRuntime>(
         .get(selected_message.source_index.get())
         .ok_or_else(|| {
             AtmError::validation(format!(
-                "sqlite mailbox metadata source index {} is out of range during durable reload",
+                "durable mailbox metadata source index {} is out of range during durable reload",
                 selected_message.source_index.get()
             ))
         })?;
@@ -203,9 +203,9 @@ fn load_durable_message_text<R: RetainedMailboxRuntime>(
     home_dir: &Path,
     team: &TeamName,
     agent: &crate::types::AgentName,
-    row_by_id: &HashMap<crate::schema::AtmMessageId, &boundary::MailStoreMailboxMetadataRow>,
+    row_by_id: &HashMap<crate::schema::AtmMessageId, &boundary::MailboxMetadataRow>,
     selected_message: &ClassifiedMessage,
-    metadata_row: &boundary::MailStoreMailboxMetadataRow,
+    metadata_row: &boundary::MailboxMetadataRow,
 ) -> Result<String, AtmError> {
     let Some(record) =
         runtime.load_message_record(home_dir, team, agent, &metadata_row.message_key)?
@@ -235,7 +235,7 @@ fn load_logical_current_record<R: RetainedMailboxRuntime>(
     home_dir: &Path,
     team: &TeamName,
     agent: &crate::types::AgentName,
-    row_by_id: &HashMap<crate::schema::AtmMessageId, &boundary::MailStoreMailboxMetadataRow>,
+    row_by_id: &HashMap<crate::schema::AtmMessageId, &boundary::MailboxMetadataRow>,
     selected_message: &ClassifiedMessage,
     terminal_envelope: InboxMessage,
 ) -> Result<InboxMessage, AtmError> {
