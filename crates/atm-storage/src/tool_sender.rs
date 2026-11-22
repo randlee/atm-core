@@ -199,7 +199,6 @@ pub struct ToolRuntimeAdmission {
 /// key, generation, host, message id and digest that the registry committed.
 /// It is proof that a later consumer received an admission rather than an
 /// inspection result from [`ToolSenderRegistry::resolve`].
-#[allow(dead_code)]
 #[derive(Debug)]
 struct VerifiedRuntimeBinding {
     sender: PluginSenderId,
@@ -261,7 +260,6 @@ impl ToolRuntimeAdmission {
 
     #[must_use]
     pub fn sender(&self) -> &RegisteredToolSender {
-        let _ = &self.binding;
         &self.sender
     }
 
