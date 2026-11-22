@@ -1217,7 +1217,17 @@ def trait_implementation_source_files(repo_root: Path, trait: str | None, owner:
             # Resolve explicit use declarations when an impl uses a bare name.
             # Unknown or ambiguous imports remain matches, preserving the
             # conservative check for potentially unauthorized implementations.
-            production = "\n".join(line for index, line in enumerate(lines) if not test_scope[index])
+            production = "\n".join(
+                line for index, line in enumerate(lines)
+                if not test_scope[index] and not is_comment_line(line)
+            )
+            # A declared alias can shadow a workspace crate name. Keep only
+            # the alias names; this check does not resolve Rust paths.
+            declared_aliases = set(re.findall(
+                r"\b(?:use\s+[A-Za-z_][A-Za-z0-9_]*|extern\s+crate\s+[A-Za-z_][A-Za-z0-9_]*)"
+                r"\s+as\s+([A-Za-z_][A-Za-z0-9_]*)\b",
+                production,
+            ))
             imports = set()
             for use in re.finditer(r"\buse\s+([A-Za-z_][A-Za-z0-9_]*)::([^;]+);", production, re.DOTALL):
                 if re.search(rf"\b{re.escape(trait)}\b(?!\s+as\s+\w+)", use.group(2)):
@@ -1229,7 +1239,11 @@ def trait_implementation_source_files(repo_root: Path, trait: str | None, owner:
                 components = match.group("trait_path").split("::")
                 if len(components) > 1:
                     prefix = components[0]
-                    return prefix not in workspace_aliases or prefix == owner
+                    return (
+                        prefix not in workspace_aliases
+                        or prefix == owner
+                        or prefix in declared_aliases and prefix in workspace_aliases
+                    )
                 return len(imports) != 1 or not imports.issubset(workspace_aliases) or owner in imports
 
             if any(matches_owner(match) for match in matches):

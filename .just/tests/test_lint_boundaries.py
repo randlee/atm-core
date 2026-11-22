@@ -1655,6 +1655,16 @@ constructor = "none"''')
                               encoding="utf-8")
             rendered = [v.render() for v in collect_io_forbidden_source_violations(repo_root, records)]
             self.assertTrue(any("declares no_in_repo_implementation" in v for v in rendered), rendered)
+            for declaration in (
+                "use atm_core as atm_storage;\n",
+                "extern crate atm_core as atm_storage;\n",
+            ):
+                source.write_text(
+                    declaration + "impl atm_storage::RosterStore for AliasedWorkspaceCrateStore {}\n",
+                    encoding="utf-8",
+                )
+                rendered = [v.render() for v in collect_io_forbidden_source_violations(repo_root, records)]
+                self.assertTrue(any("declares no_in_repo_implementation" in v for v in rendered), rendered)
 
     def test_no_in_repo_implementation_ignores_cfg_test_impl(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
