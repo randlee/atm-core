@@ -152,10 +152,6 @@ impl ReaderLanesMetricsSnapshot {
 }
 
 #[derive(Debug)]
-#[allow(
-    dead_code,
-    reason = "AV.1b attaches this established reader-lane seam to doctor diagnostics."
-)]
 struct ReaderLaneMetrics {
     lane: &'static str,
     queue_depth: AtomicUsize,
@@ -174,10 +170,6 @@ struct ReaderLaneMetrics {
     current_wal_frames: AtomicU64,
 }
 
-#[allow(
-    dead_code,
-    reason = "AV.1b attaches this established reader-lane seam to doctor diagnostics."
-)]
 impl ReaderLaneMetrics {
     fn new(lane: &'static str, pool_size: usize) -> Self {
         Self {
