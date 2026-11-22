@@ -6,7 +6,9 @@
 //! worker, or daemon lifecycle API.
 
 use std::io::{Read, Write};
-use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+#[cfg(test)]
+use std::net::SocketAddr;
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -58,10 +60,7 @@ pub struct CurlMtlsReceiverFixture {
 impl CurlMtlsReceiverFixture {
     /// Bind an ephemeral loopback fixture and retain its listener for the
     /// one-shot exchange. Retaining the listener avoids a probe/rebind race.
-    #[allow(
-        dead_code,
-        reason = "the fixture is constructed by in-crate proof harnesses"
-    )]
+    #[cfg(test)]
     pub(crate) fn new(config: TlsInteropConfig) -> Result<(Self, SocketAddr), AtmError> {
         let listener = TcpListener::bind("127.0.0.1:0").map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
