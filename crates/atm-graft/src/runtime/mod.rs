@@ -2642,7 +2642,7 @@ mod tests {
 
     // AC5: displacement is immediate, not window-gated. A stale lease left by
     // a SIGKILLed receiver (which never runs another tick) is replaced by the
-    // very next bind's registration, not after ACTIVE_LEASE_WINDOW elapses.
+    // very next bind's registration, without waiting for the lease staleness window.
     #[test]
     fn ac5_new_bind_displaces_a_stale_lease_left_by_a_sigkilled_receiver_without_delay() {
         let paths = test_paths();
@@ -2666,7 +2666,7 @@ mod tests {
         assert_ne!(
             lease.owner_generation, stale_generation,
             "the successor bind must displace the stale generation immediately, \
-             not after ACTIVE_LEASE_WINDOW elapses"
+             without waiting for the lease staleness window"
         );
         assert_ne!(
             lease.endpoint, stale_lease.endpoint,
