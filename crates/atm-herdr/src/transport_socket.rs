@@ -1,11 +1,10 @@
 //! Direct Herdr NDJSON transport over the server's local socket.
 
-#![allow(dead_code)]
-
 use std::future::Future;
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
+#[cfg(any(windows, test))]
 use std::time::Duration;
 
 use atm_core::{EnvSource, HerdrSession, ProcessEnvSource, RequestDeadline};
@@ -17,6 +16,7 @@ use crate::HerdrError;
 use crate::transport::{HerdrClientConfig, HerdrEnvelope, HerdrErrorEnvelope, HerdrOp};
 
 const SOCKET_PERMITS: usize = 16;
+#[cfg(windows)]
 const PIPE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
 const HERDR_MAX_SOCKET_LINE_BYTES: usize = 1024 * 1024;
 
@@ -76,6 +76,7 @@ pub(crate) struct SocketIo {
     pub(crate) env: HerdrHostEnv,
     pub(crate) max_line_bytes: usize,
     pub(crate) in_flight: Arc<Semaphore>,
+    #[cfg(windows)]
     pub(crate) pipe_busy_retry_delay: Duration,
 }
 
@@ -86,6 +87,7 @@ impl SocketIo {
             env: HerdrHostEnv::capture(),
             max_line_bytes: HERDR_MAX_SOCKET_LINE_BYTES,
             in_flight: Arc::new(Semaphore::new(SOCKET_PERMITS)),
+            #[cfg(windows)]
             pipe_busy_retry_delay: PIPE_BUSY_RETRY_DELAY,
         }
     }
@@ -361,14 +363,7 @@ async fn connect_unix(
             message: "Windows Herdr endpoint selected on a Unix build".to_owned(),
         });
     };
-    connect_with_deadline(deadline, tokio::net::UnixStream::connect(path)).await
-}
-
-async fn connect_with_deadline<T>(
-    deadline: RequestDeadline,
-    future: impl Future<Output = io::Result<T>>,
-) -> Result<T, HerdrError> {
-    deadline_io(deadline, future).await
+    deadline_io(deadline, tokio::net::UnixStream::connect(path)).await
 }
 
 #[cfg(windows)]
@@ -604,7 +599,7 @@ mod tests {
     }
 
     #[test]
-    fn socket_variant_is_constructible_only_in_tests_until_ay9() {
+    fn socket_variant_is_constructible() {
         let socket = SocketIo::new(&HerdrClientConfig::default());
         let _io = crate::transport::HerdrIo::Socket(socket);
     }
@@ -645,7 +640,6 @@ mod tests {
             env: env(Platform::Unix),
             max_line_bytes: HERDR_MAX_SOCKET_LINE_BYTES,
             in_flight: Arc::new(Semaphore::new(SOCKET_PERMITS)),
-            pipe_busy_retry_delay: PIPE_BUSY_RETRY_DELAY,
         };
         let agent = HerdrAgentName::new("alice").expect("agent");
         let envelope = io
@@ -773,7 +767,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn stalled_connect_honors_the_absolute_deadline() {
-        let task = tokio::spawn(connect_with_deadline(
+        let task = tokio::spawn(deadline_io(
             RequestDeadline::after(Duration::from_secs(1)),
             std::future::pending::<io::Result<()>>(),
         ));
@@ -829,7 +823,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancelling_connect_write_and_read_futures_is_clean() {
-        let connect = tokio::spawn(connect_with_deadline(
+        let connect = tokio::spawn(deadline_io(
             RequestDeadline::after(Duration::from_secs(1)),
             std::future::pending::<io::Result<()>>(),
         ));
